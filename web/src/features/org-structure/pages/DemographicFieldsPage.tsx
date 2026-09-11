@@ -70,6 +70,10 @@ import {
  */
 const FLOOR = 5
 
+// UNROUTED since the per-role canvas (10 Sep): `/admin/companies/:companyId/demographic-fields`
+// mounts `next/DemographicsNextPage` (`next/admin/AdminDemographicFieldsView` for a company
+// administrator, `next/super/SuperDemographicFieldsView` for a super administrator). This file
+// stays in the tree as the wiring reference — the two reads and the create/update bodies.
 export default function DemographicFieldsPage() {
   // The per-role canvas (10 Sep): the super administrator's view of a tenant's fields is
   // its own, `../next/super/SuperDemographicFieldsView`. Read off the claim so this page

@@ -1108,7 +1108,105 @@
     "kpiUsable": "Cortes utilizables",
     "kpiUsableSub": "cortes activos que superan el umbral de {threshold}",
     "loading": "Cargando campos demográficos...",
-    "failedLoad": "No se pudieron cargar los campos demográficos. Por favor intenta nuevamente."
+    "failedLoad": "No se pudieron cargar los campos demográficos. Por favor intenta nuevamente.",
+    "next": {
+      "description": "Los cortes por los que se pueden desglosar los resultados. Cada uno reduce la muestra, así que cada uno se contrasta con el umbral de {floor} antes de ofrecerse.",
+      "newField": "Nuevo campo",
+      "forbidden": "Esta página es de la administración de la empresa: tu rol no gestiona sus campos.",
+      "loadFailed": "No se pudieron cargar los campos demográficos",
+      "tiles": {
+        "fields": "Campos",
+        "fieldsUnit": "definidos",
+        "fieldsNone": "ninguno todavía: el catálogo de abajo es un ejemplo",
+        "fieldsSome": "{active} activos · {inactive} inactivos",
+        "people": "Personas activas",
+        "peopleUnit": "la muestra",
+        "peopleSub": "la que dividiría cada corte",
+        "peopleUnavailable": "no se pudo leer: no se da ningún veredicto",
+        "cut": "Corte actual",
+        "cutUnitDepartments": "departamentos",
+        "cutSubDepartments": "el único corte mientras no haya campos",
+        "cutUnitUsable": "cortes utilizables",
+        "cutSubUsable": "además de los departamentos: listas cuya media supera {floor}"
+      },
+      "floor": {
+        "lead": "Un valor con menos de {floor} respuestas no muestra cifra en ningún lado.",
+        "text": "Se ve rayado en resultados, exportaciones, informes y enlaces públicos. «Personas por valor» es una media previa: sirve para descartar un corte antes de crearlo; los resultados cuentan cada valor por separado.",
+        "legend": "protegido, menos de {floor}"
+      },
+      "catalogue": {
+        "eyebrowSample": "Propuesta · datos de ejemplo",
+        "headingSample": "Catálogo de ejemplo",
+        "heading": "Catálogo",
+        "metaSample": "no existe en {company} · así se leería la lista",
+        "metaReal": "en el orden en que se preguntan",
+        "textSample": "{company} no tiene campos demográficos: hoy sus resultados solo se dividen por departamento. Estos {count} campos y sus valores son un ejemplo de punto de partida; «Personas por valor» sí sale de sus {people} personas activas, como la calcula esta pantalla.",
+        "colField": "Campo",
+        "colType": "Tipo",
+        "colValues": "Valores",
+        "colPerValue": "Personas por valor",
+        "colCut": "Como corte",
+        "required": "Obligatorio",
+        "inactive": "Inactivo",
+        "typeSelect": "Lista",
+        "typeText": "Texto",
+        "typeNumber": "Número",
+        "typeDate": "Fecha",
+        "noLimit": "Sin límite",
+        "perValueSub": "{people} entre {values} valores",
+        "perValueProtectedSub": "entre {values} valores",
+        "belowFloor": "menos de {floor}",
+        "notCountable": "No contable",
+        "unknown": "sin dato",
+        "usable": "Utilizable",
+        "usableSub": "la media supera {floor}",
+        "narrow": "Demasiado estrecho",
+        "narrowSub": "no se ofrece · con {ranges} rangos serían {perValue} por valor",
+        "narrowSubNone": "no se ofrece · ninguna lista supera el umbral con esta muestra",
+        "notACut": "No verificable",
+        "notACutSub": "fecha, texto y número no dividen resultados",
+        "notOffered": "No se ofrece",
+        "notOfferedSub": "campo inactivo",
+        "edit": "Editar",
+        "editNamed": "Editar {label}",
+        "useNamed": "Empezar un campo nuevo a partir de {label}"
+      },
+      "types": {
+        "heading": "Tipos de campo",
+        "listLead": "Lista.",
+        "listText": "Valores fijos; cada persona elige uno. Es el único tipo que se contrasta con el umbral y se ofrece como corte.",
+        "otherLead": "Texto, número y fecha.",
+        "otherText": "Se guardan en la cuenta de cada persona; no dividen resultados.",
+        "keyLead": "La clave no cambia.",
+        "keyText": "Es el identificador estable del campo: la etiqueta se puede traducir sin partir los resultados en dos."
+      },
+      "sample": {
+        "tenure": "Antigüedad",
+        "tenureUnder1": "Menos de 1 año",
+        "tenure1to3": "1 a 3 años",
+        "tenure3to5": "3 a 5 años",
+        "tenureOver5": "Más de 5 años",
+        "shift": "Tipo de jornada",
+        "shiftDay": "Diurna",
+        "shiftMixed": "Mixta",
+        "shiftNight": "Nocturna",
+        "age": "Rango de edad",
+        "age18": "18 a 24",
+        "age25": "25 a 29",
+        "age30": "30 a 34",
+        "age35": "35 a 39",
+        "age40": "40 a 44",
+        "age45": "45 a 49",
+        "age50": "50 a 54",
+        "age55": "55 a 59",
+        "age60": "60 o más",
+        "startDate": "Fecha de ingreso",
+        "level": "Nivel de puesto",
+        "levelOperational": "Operativo",
+        "levelProfessional": "Profesional",
+        "levelManagement": "Jefatura"
+      }
+    }
   },
   "errors": {
     "generic": "Ocurrió un error. Por favor intenta nuevamente.",
@@ -1606,7 +1704,49 @@
     "typeAiInsightAlert": "Hallazgo",
     "typeSystemNotification": "Sistema",
     "emptyTitle": "Todavía no ha llegado nada",
-    "emptyBody": "Aquí le avisaremos cuando se abra una encuesta para usted, cuando cierre y cuando se publiquen sus resultados."
+    "emptyBody": "Aquí le avisaremos cuando se abra una encuesta para usted, cuando cierre y cuando se publiquen sus resultados.",
+    "next": {
+      "prefs": {
+        "description": "Qué correos te envía la plataforma. La bandeja dentro de la aplicación no se apaga: solo el correo se configura.",
+        "discard": "Descartar",
+        "save": "Guardar",
+        "savedLine": "Guardado en tu cuenta: {summary}.",
+        "nothingChanges": "Nada cambia hasta que guardes.",
+        "unsaved": "Tienes cambios sin guardar.",
+        "allOn": "los {count} correos configurables activados",
+        "allOff": "ningún correo configurable activado",
+        "someOn": "{on} de {total} correos configurables activados",
+        "summary": "{emails} y {digest}",
+        "digestDaily": "resumen diario",
+        "digestWeekly": "resumen semanal",
+        "digestMonthly": "resumen mensual",
+        "digestNever": "sin resumen",
+        "tableHeading": "Qué te llega y por dónde",
+        "tableMeta": "solo el correo se configura",
+        "colAviso": "Aviso",
+        "colEmail": "Correo",
+        "colInApp": "En la aplicación",
+        "surveys": "Encuestas",
+        "microclimates": "Microclimas",
+        "actionPlans": "Planes de acción",
+        "reminders": "Recordatorios",
+        "receives": "Recibes",
+        "doesNotReceive": "No recibes",
+        "inAppAlways": "No se apaga",
+        "systemName": "Cuenta, seguridad y avisos del sistema",
+        "systemDescription": "Inicio de sesión, contraseña, invitaciones y alertas de la plataforma. Apagarlos te dejaría sin forma de recuperar tu cuenta.",
+        "alwaysSent": "Siempre se envía",
+        "howHeading": "Cómo se decide",
+        "howSendLead": "Se consulta al enviar, no al programar.",
+        "howSendText": "Un recordatorio de la semana que viene sigue lo que tengas guardado ese día.",
+        "howOneLead": "Apagar uno detiene ese correo y ningún otro.",
+        "howInboxLead": "La bandeja recibe todo.",
+        "howInboxText": "Lo que no te llega por correo lo ves al entrar, en Notificaciones.",
+        "howPushLead": "Sin push ni SMS.",
+        "howPushText": "La plataforma no envía avisos al teléfono.",
+        "howConsent": "Es el único consentimiento que cambias tú; el resto de lo que consta sobre ti está en"
+      }
+    }
   },
   "profile": {
     "title": "Tu perfil",
@@ -1653,7 +1793,49 @@
     "activityFailed": "Fallido",
     "activityProfileUpdate": "Perfil actualizado",
     "activityPasswordChange": "Cambio de contraseña",
-    "activityPreferencesUpdate": "Preferencias actualizadas"
+    "activityPreferencesUpdate": "Preferencias actualizadas",
+    "next": {
+      "description": "Tu nombre, el idioma y la zona horaria de tus correos, y tu contraseña. Cada bloque se guarda por separado.",
+      "tabs": {
+        "label": "Cuenta",
+        "profile": "Tu perfil",
+        "notifications": "Notificaciones",
+        "privacy": "Privacidad"
+      },
+      "save": "Guardar",
+      "details": {
+        "meta": "tu nombre es lo único que cambias aquí",
+        "preview": "Así te ven en la bitácora de cada plan y en lo que creas. La barra lateral toma un nombre nuevo la próxima vez que entras.",
+        "noDepartment": "Sin departamento"
+      },
+      "preferences": {
+        "meta": "se aplican al guardar",
+        "languageHelper": "El de los correos que te enviamos y el de esta pantalla después de guardar.",
+        "theme": "Tema",
+        "themeLight": "Claro",
+        "themeDark": "Oscuro",
+        "themeSystem": "Como el sistema",
+        "timezoneHelper": "Un nombre IANA, como America/Costa_Rica.",
+        "storedLead": "Guardado en tu cuenta: {language} y {timezone}.",
+        "storedDiffers": "Esta pantalla está en {screen}, pero tus correos salen en {language}: elige y guarda para que coincidan.",
+        "languageName": {
+          "en": "English",
+          "es": "Español"
+        },
+        "languageNoun": {
+          "en": "inglés",
+          "es": "español"
+        }
+      },
+      "password": {
+        "meta": "escribe la actual para elegir una nueva",
+        "signsOut": "Cambiarla cierra tu sesión en todos los demás dispositivos. Esta sigue abierta."
+      },
+      "activity": {
+        "meta": "cambios en tu propia cuenta, del más reciente al más antiguo",
+        "empty": "Aún no ha ocurrido nada en tu cuenta. Cada cambio de nombre, de preferencias o de contraseña queda aquí, con su fecha y si se aplicó."
+      }
+    }
   },
   "reports": {
     "newReport": "Nuevo informe",
@@ -3101,7 +3283,119 @@
     "invitationTypeCompanyAdminSetup": "Alta de administrador de empresa",
     "invitationTypeEmployeeSelfSignup": "Autorregistro",
     "closeInvite": "Cerrar",
-    "bulkImportDescription": "Pegue o cargue un CSV para invitar a muchas personas a la vez."
+    "bulkImportDescription": "Pegue o cargue un CSV para invitar a muchas personas a la vez.",
+    "next": {
+      "description": "Quién está en la empresa, en qué departamento y quién no ha entrado todavía. Para sumar personas se invita o se importa un CSV.",
+      "bulkImport": "Importación masiva",
+      "invite": "Invitar persona",
+      "forbidden": "Esta página es de la administración de la empresa: tu rol no gestiona a sus personas.",
+      "loadFailed": "No se pudo cargar la lista de personas",
+      "panel": {
+        "inviteMeta": "por correo, o con un enlace compartible",
+        "importMeta": "se revisa fila por fila antes de escribir nada",
+        "close": "Cerrar"
+      },
+      "tiles": {
+        "people": "Personas",
+        "peopleUnit": "activas",
+        "noneDeactivated": "ninguna desactivada",
+        "deactivatedOne": "1 desactivada",
+        "deactivatedMany": "{count} desactivadas",
+        "never": "Nunca han entrado",
+        "neverUnit": "de {total}",
+        "neverLeaders": "entre ellas {never} de los {leaders} líderes",
+        "neverNoLeaders": "ningún líder entre ellas",
+        "neverNone": "todas han entrado al menos una vez",
+        "departments": "Departamentos",
+        "departmentsUnit": "con personas",
+        "withoutDepartment": "{count} sin departamento",
+        "inactiveEmpty": "{count} inactivos vacíos",
+        "activeEmpty": "{count} activos sin personas",
+        "departmentsUnavailable": "no se pudo leer la lista de departamentos",
+        "invitations": "Invitaciones",
+        "invitationsUnit": "pendientes",
+        "invitationsNone": "nadie espera aceptar una invitación",
+        "invitationsSome": "{count} por aceptar; se reenvían abajo",
+        "invitationsUnavailable": "no se pudo leer la lista de invitaciones"
+      },
+      "rail": {
+        "heading": "Por departamento",
+        "meta": "filtra la lista",
+        "all": "Todas las personas",
+        "signedIn": "{signedIn} de {total} han entrado",
+        "allSub": "{count} departamentos y la administración",
+        "allSubOnly": "{count} departamentos",
+        "allSubOthers": "{count} departamentos y {none} sin departamento",
+        "leader": "Líder:",
+        "supervisor": "supervisión:",
+        "noLeader": "sin líder",
+        "neverEntered": "nunca entró",
+        "none": "Sin departamento",
+        "unnamed": "Departamento sin nombre",
+        "memberRole": "{name}, {role}",
+        "inactiveLink": "{count} departamentos inactivos, sin personas",
+        "inactiveLinkOne": "1 departamento inactivo, sin personas"
+      },
+      "edit": {
+        "title": "Editar a {name}",
+        "metaNever": "nunca ha entrado · cuenta creada el {created}",
+        "metaLast": "último acceso el {last} · cuenta creada el {created}",
+        "name": "Nombre",
+        "department": "Departamento",
+        "departmentHelper": "Decide en qué equipo lo ve su líder.",
+        "role": "Rol",
+        "roleLocked": "Solo un super administrador cambia roles.",
+        "account": "Cuenta",
+        "active": "Activa",
+        "inactive": "Desactivada",
+        "accountHelper": "Desactivarla cierra sus sesiones abiertas de inmediato.",
+        "accountLocked": "Solo un super administrador desactiva a un administrador.",
+        "save": "Guardar cambios",
+        "saveFailed": "No se pudieron guardar los cambios"
+      },
+      "roster": {
+        "sub": "ordenadas por rol y nombre · {never} nunca han entrado",
+        "subNone": "ordenadas por rol y nombre · todas han entrado",
+        "search": "Buscar por nombre o correo",
+        "shown": "{shown} de {total}",
+        "colPerson": "Persona",
+        "colRole": "Rol",
+        "colLast": "Última actividad",
+        "never": "Nunca entró",
+        "edit": "Editar",
+        "editNamed": "Editar a {name}",
+        "deactivated": "Desactivada",
+        "tableLabel": "Personas de {company}",
+        "empty": "Nadie coincide con esta búsqueda.",
+        "noteLead": "Una cuenta desactivada lleva",
+        "noteTailNone": "junto al nombre y deja de entrar. Hoy no hay ninguna en {company}.",
+        "noteTailSome": "junto al nombre y deja de entrar. Hoy hay {count} en {company}.",
+        "roleAdmin": "Administrador"
+      },
+      "invitations": {
+        "heading": "Invitaciones pendientes",
+        "meta": "se reenvían desde aquí hasta que se aceptan",
+        "colEmail": "Correo",
+        "colRole": "Rol",
+        "colSent": "Enviada",
+        "colExpires": "Vence",
+        "colReminders": "Recordatorios",
+        "empty": "Ninguna invitación pendiente. Las que envíes aparecen aquí hasta que se acepten, con su vencimiento y la opción de reenviar.",
+        "unavailable": "No se pudo leer la lista de invitaciones.",
+        "link": "Enlace compartible",
+        "resend": "Reenviar"
+      },
+      "how": {
+        "heading": "Cómo entra alguien",
+        "emailTitle": "Invitación por correo",
+        "emailText": "Llega con el rol que elijas: empleado, líder o supervisor.",
+        "linkTitle": "Enlace compartible",
+        "linkText": "Para cuando aún no tienes la dirección. Se acepta una sola vez y lleva el rol elegido.",
+        "importTitle": "Importación masiva",
+        "importText": "Un CSV con nombre, correo, rol y departamento. Se revisa fila por fila antes de escribir nada.",
+        "note": "Ninguna de las tres crea administradores: eso lo hace un super administrador."
+      }
+    }
   },
   "companySettings": {
     "description": "Identidad, reglas de reporte y el umbral de anonimato. El umbral deliberadamente no se puede editar por debajo de {threshold}.",
@@ -4047,7 +4341,61 @@
       "bitacoraLastOn": "último registro el {date}",
       "latestAvanceRow": "Avance registrado: {percent} %",
       "cumplidoRow": "Plan marcado como cumplido",
-      "earlierNotListed": "Se muestra el último registro; los anteriores quedan en la bitácora del servicio de seguimiento, que esta pantalla todavía no recibe."
+      "earlierNotListed": "Se muestra el último registro; los anteriores quedan en la bitácora del servicio de seguimiento, que esta pantalla todavía no recibe.",
+      "planesTitle": "Planes de acción",
+      "planesDescription": "Cada plan de seguimiento con su nodo, su responsable y su semáforo, del más urgente al que vence más tarde.",
+      "planesConsolidado": "Vista consolidada",
+      "planesNoneWithProgress": "ninguno con avance",
+      "planesWithProgress": "{count} con avance",
+      "planesNoneCumplido": "ninguno cumplido",
+      "planesCumplidoOne": "1 cumplido",
+      "planesCumplidoMany": "{count} cumplidos",
+      "planesTileRojo": "vencido sin avance",
+      "planesTileAmarillo": "próximo a vencer y por debajo de lo esperado, o sin novedades",
+      "planesTileVerde": "dentro de fecha",
+      "planesAllNodos": "Todos los nodos",
+      "planesNodoFilter": "Filtrar por nodo",
+      "planesEstadoFilter": "Filtrar por estado",
+      "planesCoverage": "{plans} planes en {with} de {total} nodos",
+      "planesCoverageOne": "1 plan en {with} de {total} nodos",
+      "planesCoverageBare": "{plans} planes en {with} nodos",
+      "planesCoverageBareOne": "1 plan en {with} nodos",
+      "planesWithout": "{names} sin plan",
+      "planesAllCovered": "todos los nodos con plan",
+      "planesNoteRojo": "vencido, sin avance a mitad de plazo o abandonado · se registra avance o se reprograma",
+      "planesNoteAmarillo": "próximo a vencer y por debajo de lo esperado, o sin novedades",
+      "planesNoteVerde": "dentro de fecha y con novedades recientes · ordenados por compromiso",
+      "planesEmptyRojo": "Ningún plan atrasado hoy. Pasa aquí un plan vencido, sin avance a mitad de plazo o abandonado.",
+      "planesEmptyAmarillo": "Ningún plan en riesgo hoy. Pasa aquí un plan próximo a vencer que va por debajo de lo esperado, o que lleva tiempo sin novedades.",
+      "planesEmptyVerde": "Ningún plan al día hoy. Pasa aquí un plan dentro de fecha y con novedades recientes.",
+      "planesSinEstado": "Sin semáforo",
+      "planesSinEstadoNote": "el servicio no dio un estado que esta pantalla conozca",
+      "planesColCodigo": "Código",
+      "planesColQue": "Qué se hará",
+      "planesColNodo": "Nodo",
+      "planesColResponsable": "Responsable",
+      "planesColAvance": "Avance",
+      "planesColCompromiso": "Compromiso",
+      "planesPercent": "{value} %",
+      "planesYou": "· tú",
+      "planesOverdueOne": "vencido hace 1 día",
+      "planesDueToday": "vence hoy",
+      "planesInOneDay": "en 1 día",
+      "planesInDays": "en {days} días",
+      "planesRegistrarAvance": "Registrar avance",
+      "planesAbrir": "Abrir",
+      "planesOpenNamed": "Abrir {code}",
+      "planesCumplidos": "Cumplidos",
+      "planesCumplidosNone": "ningún plan se ha marcado como cumplido todavía",
+      "planesCumplidosSome": "marcados como cumplidos, del compromiso más reciente al más antiguo",
+      "planesLegendRojo": "vencido, sin avance a mitad de plazo o abandonado",
+      "planesLegendAmarillo": "próximo a vencer y por debajo de lo esperado, o sin novedades",
+      "planesLegendVerde": "dentro de fecha y con novedades recientes",
+      "planesAsOf": "Semáforo al {date} · el código abre el plan",
+      "planesWhoWrites": "Registran avance la jefatura del nodo y la administración. El responsable y los involucrados leen. Nada aquí enlaza a respuestas individuales.",
+      "planesEmptyAll": "Todavía no hay planes de seguimiento. El primero se crea con «Nuevo plan».",
+      "planesEmptyMine": "Ningún plan de seguimiento te incluye todavía.",
+      "planesFilterEmpty": "Ningún plan coincide con estos filtros."
     }
   },
   "privacy": {
@@ -4141,7 +4489,131 @@
     "referenceName": "Nombre",
     "referenceCopy": "Copiar datos",
     "referenceCopied": "Copiado.",
-    "referenceCopyFailed": "Se bloqueó la copia; selecciona el texto de arriba."
+    "referenceCopyFailed": "Se bloqueó la copia; selecciona el texto de arriba.",
+    "next": {
+      "title": "Privacidad",
+      "description": "Qué guarda la plataforma sobre ti, qué consentimiento consta en tu cuenta y cómo pedir un borrado. Tu copia completa se descarga en un archivo.",
+      "download": "Descargar mis datos",
+      "downloading": "Preparando tu archivo…",
+      "downloadFailed": "No se pudieron preparar tus datos.",
+      "held": {
+        "heading": "Qué se guarda sobre ti",
+        "meta": "cuántos registros de cada uno lo dice tu archivo",
+        "text": "Cada descarga queda registrada en la auditoría, porque entregar los datos de una persona es un hecho que merece constancia. Por eso los registros se cuentan en el archivo y no en esta pantalla.",
+        "colWhat": "Qué es",
+        "colLink": "Cómo te vincula",
+        "colBasis": "Base jurídica",
+        "colKept": "Se conserva",
+        "account": {
+          "name": "Tu cuenta",
+          "what": "tu nombre, correo, rol, departamento y preferencias",
+          "link": "Es tu cuenta.",
+          "basis": "Prestar el servicio",
+          "kept": "Mientras exista la cuenta; al borrarla se seudonimiza y no se restaura."
+        },
+        "responses": {
+          "name": "Tus respuestas",
+          "what": "lo que respondiste y los datos demográficos que acompañan cada respuesta",
+          "link": "Llevan tu identificador. Las anónimas no lo llevan y no entran.",
+          "basis": "Prestar el servicio",
+          "kept": "Sin plazo; al borrarla se anonimiza."
+        },
+        "demographics": {
+          "name": "Tus datos demográficos",
+          "what": "lo que consta sobre ti y sus instantáneas históricas",
+          "link": "Llevan tu identificador.",
+          "basis": "Servicio e interés legítimo",
+          "kept": "Mientras exista la cuenta; las instantáneas históricas no vencen."
+        },
+        "notices": {
+          "name": "Avisos e invitaciones",
+          "what": "tus avisos y tus invitaciones a encuestas, microclimas y a la plataforma",
+          "link": "Van dirigidos a ti: llevan tu identificador o tu correo.",
+          "basis": "Prestar el servicio",
+          "kept": "Los avisos se borran al cumplir su plazo; las invitaciones se sobrescriben al borrar."
+        },
+        "drafts": {
+          "name": "Borradores de encuesta",
+          "what": "las encuestas que empezaste y no publicaste",
+          "link": "Llevan tu identificador.",
+          "basis": "Prestar el servicio",
+          "kept": "30 días desde el último guardado."
+        },
+        "activity": {
+          "name": "Tu actividad",
+          "what": "lo que hiciste en la plataforma y en cada encuesta",
+          "link": "Te registra como quien actuó.",
+          "basis": "Interés legítimo",
+          "kept": "Lo que dure la empresa o la encuesta; no vence sola."
+        },
+        "authored": {
+          "name": "Lo que creaste o te nombra",
+          "what": "encuestas, informes, planes de acción y otros {kinds} tipos de registro",
+          "link": "Te nombra como autora o responsable; el archivo trae solo identificador y título.",
+          "basis": "Interés legítimo",
+          "kept": "Mientras exista el registro; la autoría sobrevive al borrado."
+        }
+      },
+      "tracking": {
+        "lead": "Tu archivo no incluye el servicio de seguimiento.",
+        "text": "Los planes de acción de seguimiento y sus avances viven en otra base que esta plataforma no lee;",
+        "responsible": "eres responsable de {codes}, así que esa parte se pide a mano.",
+        "askByHand": "si un plan te nombra, esa parte se pide a mano."
+      },
+      "consent": {
+        "heading": "Consentimiento en tu cuenta",
+        "meta": "{count} consentimientos",
+        "essential": "Esencial",
+        "analytics": "Analítica",
+        "marketing": "Marketing",
+        "personalization": "Personalización",
+        "thirdParties": "Terceros",
+        "demographics": "Datos demográficos",
+        "inFile": "— en tu archivo",
+        "why": "Su valor está en tu archivo y no en esta pantalla, porque leerlo queda registrado en la auditoría, igual que cada descarga. Ninguna pantalla de este producto los cambia: conservan el valor que tenían al crearse tu cuenta.",
+        "emailsLabel": "El que sí cambias: tus correos",
+        "emailsValue": "{on} de {total} activados · {digest}",
+        "emailsUnknown": "no se pudo leer"
+      },
+      "erasure": {
+        "heading": "Borrado de tus datos",
+        "meta": "irreversible",
+        "lead": "El borrado no es un botón de esta página.",
+        "text": "Es irreversible, así que nadie borra su propia cuenta, ni empleados ni administradores. Lo pides tú; lo ejecuta quien administra tu organización.",
+        "removed": {
+          "title": "Se elimina",
+          "sub": "desaparece del todo",
+          "notices": "tus avisos",
+          "activity": "tu actividad en cada encuesta",
+          "drafts": "tus borradores de encuesta",
+          "demographics": "tus datos demográficos",
+          "invitationDemographics": "los datos demográficos de tus invitaciones"
+        },
+        "unlinked": {
+          "title": "Se conserva sin vínculo",
+          "sub": "el registro queda sin tu nombre",
+          "responses": "tus respuestas, que siguen contando en los resultados",
+          "account": "tu cuenta, sin nombre ni correo"
+        },
+        "overwritten": {
+          "title": "Se sobrescribe",
+          "sub": "se reemplazan tu correo y tu enlace personal",
+          "surveyInvitations": "tus invitaciones a encuestas",
+          "microclimateInvitations": "tus invitaciones a microclimas",
+          "platformInvitations": "tus invitaciones a la plataforma"
+        },
+        "notErased": "No elimina la auditoría general, la autoría de lo que creaste, el texto libre, las instantáneas históricas ni lo que guarda el servicio de seguimiento."
+      },
+      "request": {
+        "heading": "Datos para tu solicitud",
+        "id": "Identificador de cuenta",
+        "email": "Correo",
+        "name": "Nombre",
+        "copy": "Copiar datos",
+        "copied": "Copiado.",
+        "copyRefused": "El portapapeles no lo permitió: cópialos a mano."
+      }
+    }
   },
   "questionLibrary": {
     "title": "Biblioteca de preguntas",

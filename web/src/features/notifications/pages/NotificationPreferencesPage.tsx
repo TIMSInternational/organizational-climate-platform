@@ -21,6 +21,8 @@ import {
  * default and correcting it on load would flash preferences the user never chose, which
  * on a consent surface is exactly the thing to avoid.
  */
+// UNROUTED since the per-role canvas (10 Sep): `/settings/notifications` mounts `notifications/next/NotificationPreferencesNextPage`. This file stays in the
+// tree as the wiring reference — the reads and writes the redesign kept.
 export default function NotificationPreferencesPage() {
   const { t } = useTranslation()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string

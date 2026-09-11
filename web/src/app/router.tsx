@@ -12,10 +12,10 @@ import RouteErrorBoundary from './RouteErrorBoundary'
 import DashboardPage from '../features/dashboard/pages/DashboardPage'
 import CompaniesListNextPage from '../features/org-structure/next/super/CompaniesListNextPage'
 import CompanyDetailPage from '../features/org-structure/pages/CompanyDetailPage'
-import UsersListPage from '../features/org-structure/pages/UsersListPage'
+import UsersNextPage from '../features/org-structure/next/UsersNextPage'
 import SystemSettingsPage from '../features/org-structure/pages/SystemSettingsPage'
 import SystemHealthPage from '../features/org-structure/pages/SystemHealthPage'
-import DemographicFieldsPage from '../features/org-structure/pages/DemographicFieldsPage'
+import DemographicsNextPage from '../features/org-structure/next/DemographicsNextPage'
 import DepartmentsPage from '../features/org-structure/pages/DepartmentsPage'
 import ActionPlansListNextPage from '../features/action-plans/next/ActionPlansListNextPage'
 import ActionPlanDetailPage from '../features/action-plans/pages/ActionPlanDetailPage'
@@ -31,9 +31,9 @@ import SurveyRespondPage from '../features/surveys/pages/SurveyRespondPage'
 import PublicSurveyRespondPage from '../features/surveys/pages/PublicSurveyRespondPage'
 import PublicSurveyLinkPage from '../features/surveys/pages/PublicSurveyLinkPage'
 import SurveyInvitationPage from '../features/surveys/pages/SurveyInvitationPage'
-import NotificationPreferencesPage from '../features/notifications/pages/NotificationPreferencesPage'
-import ProfilePage from '../features/profile/pages/ProfilePage'
-import PrivacySettingsPage from '../features/profile/pages/PrivacySettingsPage'
+import NotificationPreferencesNextPage from '../features/notifications/next/NotificationPreferencesNextPage'
+import ProfileNextPage from '../features/profile/next/ProfileNextPage'
+import PrivacyNextPage from '../features/profile/next/PrivacyNextPage'
 import NotificationsInboxPage from '../features/notifications/pages/NotificationsInboxPage'
 import SurveyDistributionPage from '../features/surveys/pages/SurveyDistributionPage'
 import BenchmarksNextPage from '../features/analytics/next/benchmarks/BenchmarksNextPage'
@@ -147,9 +147,11 @@ const trackingRoutes: RouteObject[] = [
     }),
   },
   {
+    // The redesigned Planes de acción (TrackingPlanesList, 10 Sep) replaced `PlanesAccionListPage`
+    // here; the old page stays in the tree unrouted, as the wiring reference.
     path: '/tracking/planes',
     lazy: async () => ({
-      Component: (await import('../features/tracking/pages/PlanesAccionListPage')).default,
+      Component: (await import('../features/tracking/next/PlanesListNextPage')).default,
     }),
   },
   {
@@ -316,8 +318,12 @@ export const router = createBrowserRouter([
               // reference. Super-only on the server, and the page says so to anyone else.
               { path: '/admin/companies', element: <CompaniesListNextPage /> },
               { path: '/admin/companies/:id', element: <CompanyDetailPage /> },
-              { path: '/admin/companies/:companyId/users', element: <UsersListPage /> },
-              { path: '/admin/companies/:companyId/demographic-fields', element: <DemographicFieldsPage /> },
+              // The per-role canvas's Usuarios replaced `UsersListPage` here (10 Sep); the old page
+              // stays in the tree unrouted, as the wiring reference. `UsersNextPage` dispatches on the role.
+              { path: '/admin/companies/:companyId/users', element: <UsersNextPage /> },
+              // The per-role canvas's Campos demográficos replaced `DemographicFieldsPage` here (10 Sep);
+              // the old page stays unrouted as the wiring reference. `DemographicsNextPage` dispatches on the role.
+              { path: '/admin/companies/:companyId/demographic-fields', element: <DemographicsNextPage /> },
               // The redesigned Informes replaced `ReportsListPage` here (ruled 10 Sep, the
               // same swap as `/surveys`); the old page stays unrouted as the wiring reference.
               { path: '/admin/companies/:companyId/reports', element: <ReportsListNextPage /> },
@@ -418,17 +424,21 @@ export const router = createBrowserRouter([
               // authenticated role — plain employees included — owns a profile, and
               // every endpoint behind this page resolves the caller from their own
               // token and takes no user id at all (#136).
-              { path: '/profile', element: <ProfilePage /> },
+              // The per-role canvas's Tu perfil replaced `ProfilePage` here (10 Sep); the old page
+              // stays unrouted as the wiring reference.
+              { path: '/profile', element: <ProfileNextPage /> },
               // Not under /admin: every authenticated role owns their own preferences,
               // and the API behind this page takes no user id at all (#103).
-              { path: '/settings/notifications', element: <NotificationPreferencesPage /> },
+              // Replaced `NotificationPreferencesPage` (10 Sep); the old page stays unrouted.
+              { path: '/settings/notifications', element: <NotificationPreferencesNextPage /> },
               // #137, and gated the same way for the same reason. `GET /gdpr/access` with
               // no `userId` is the self-service case and needs no role — the handler says
               // so — so every authenticated role reaches this page and none of them can
               // ask it about anybody else. Under `/settings` beside notification
               // preferences rather than under `/admin`: the erasure endpoint IS admin
               // surface, but nothing on this page calls it.
-              { path: '/settings/privacy', element: <PrivacySettingsPage /> },
+              // Replaced `PrivacySettingsPage` (10 Sep); the old page and its panels stay unrouted.
+              { path: '/settings/privacy', element: <PrivacyNextPage /> },
               // Self-service, so no role gate beyond RequireAuth: /notifications/mine
               // is scoped per user and every authenticated role can load it.
               { path: '/notifications', element: <NotificationsInboxPage /> },

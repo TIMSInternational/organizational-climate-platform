@@ -161,7 +161,7 @@ const STARTER_VALUES = [
   'superadmin.next.demographics.starter.overFive',
 ] as const
 
-function FieldForm({
+export function FieldForm({
   companyId,
   field,
   people,
@@ -588,7 +588,7 @@ function Catalogue({
   )
 }
 
-function FloorRules() {
+export function FloorRules() {
   const { t } = useTranslation()
   const rules = [
     { key: 'floor', icon: <Shield />, lead: t('superadmin.next.demographics.rules.floorLead', { floor: ANONYMITY_FLOOR }), text: t('superadmin.next.demographics.rules.floorText') },

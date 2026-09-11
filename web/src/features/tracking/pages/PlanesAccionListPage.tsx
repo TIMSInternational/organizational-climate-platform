@@ -1,3 +1,8 @@
+/**
+ * NOT ROUTED. `/tracking/planes` renders the redesigned Planes de acción
+ * (`../next/PlanesListNextPage`), which replaced this page on 10 Sep. It stays in the tree as
+ * the wiring reference — the scoped list, the directory read, the inline create form.
+ */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useCompanyScope } from '../../../company-context'
 import { PageTopBar } from '../../../components/layout'

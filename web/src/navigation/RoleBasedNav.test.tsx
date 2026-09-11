@@ -123,21 +123,40 @@ describe('RoleBasedNav nesting', () => {
     expect(screen.queryByRole('link', { name: children[0] })).toBeNull()
   })
 
-  it.each(DISCLOSURE_GROUPS)('opens $group on first render when the page is one of its children', ({ role, group, children, childPath }) => {
-    renderNav(buildNavSections(role, COMPANY), childPath)
+  /**
+   * The 10 Sep per-role canvas draws "Administración de Empresa" as ONE filled row, its
+   * children absent, on each of its three pages — CompanySettings on the group's own href,
+   * UsersList and DemographicFields on two of its children. The rail used to open the group
+   * on a child's page and fill the child under it (the admin-gaps refuter, 11 Sep).
+   */
+  it.each([
+    ['CompanySettings', `/admin/companies/${COMPANY}`],
+    ['UsersList', `/admin/companies/${COMPANY}/users`],
+    ['DemographicFields', `/admin/companies/${COMPANY}/demographic-fields`],
+  ])('draws Company Administration as the %s board does: closed, the group row itself filled', (_board, path) => {
+    renderNav(buildNavSections('company_admin', COMPANY), path)
 
-    expect(screen.getByRole('button', { name: group }).getAttribute('aria-expanded')).toBe('true')
-    for (const child of children) {
-      expect(screen.getByRole('link', { name: child })).toBeTruthy()
+    const group = screen.getByRole('button', { name: 'Company Administration' })
+    expect(group.getAttribute('aria-expanded')).toBe('false')
+    expect(group.getAttribute('data-nav-state')).toBe('selected')
+    expect(selectedRows()).toEqual([group])
+    // `.nav-row.active` on the boards changes the fill and the ink, not the weight: the
+    // filled group row keeps the weight every other row has.
+    expect(group.style.fontWeight).toBe('var(--admin-weight-medium)')
+    for (const child of ['Company Settings', 'Users', 'Demographic fields']) {
+      expect(screen.queryByRole('link', { name: child })).toBeNull()
     }
   })
 
-  it.each(GROUPS)('lights exactly one row for a child page of $group', ({ role, childPath }) => {
+  it.each(GROUPS)('lights exactly one row for a child page of $group, the child once it is a row', async ({ role, group, childPath }) => {
     // The defect this counts: `/admin/companies/c1` is a string prefix of
     // `/admin/companies/c1/users`, so a prefix test lit the parent AND the child.
     // Asserting the child is present would pass in both worlds; asserting there
-    // is one selected row is what fails.
+    // is one selected row is what fails. A disclosure group starts closed on a
+    // child's page (above), so the reader opens it here to make the child a row.
     renderNav(buildNavSections(role, COMPANY), childPath)
+    const toggle = screen.queryByRole('button', { name: group })
+    if (toggle) await userEvent.click(toggle)
 
     const selected = selectedRows()
     expect(selected).toHaveLength(1)
@@ -452,19 +471,27 @@ describe('RoleBasedNav row states', () => {
     ['button' as const, 'Company Administration', 'nav-row'],
     ['link' as const, 'Notifications', 'nav-row'],
     ['link' as const, 'Users', 'nav-sub-row'],
-  ])('gives the %s named %s the .%s its colours are keyed to', (role, name, className) => {
+  ])('gives the %s named %s the .%s its colours are keyed to', async (role, name, className) => {
     renderNav(buildNavSections('company_admin', COMPANY), `/admin/companies/${COMPANY}/users`)
+    // The group starts closed on a child's page; opened, all three branches are on screen.
+    await userEvent.click(screen.getByRole('button', { name: 'Company Administration' }))
 
     expect(screen.getByRole(role, { name }).classList.contains(className)).toBe(true)
   })
 
-  it('gives the row that wears the selection the class the fill hangs off', () => {
+  it('gives the row that wears the selection the class the fill hangs off, closed and open', async () => {
     renderNav(buildNavSections('company_admin', COMPANY), `/admin/companies/${COMPANY}/users`)
 
-    const selected = selectedRows()
-    expect(selected).toHaveLength(1)
     // Both halves on one element: the attribute the component sets and the class
-    // the stylesheet selects. Either alone paints nothing.
+    // the stylesheet selects. Either alone paints nothing. Closed, the group row
+    // wears the selection; opened, the child row takes it.
+    let selected = selectedRows()
+    expect(selected).toHaveLength(1)
+    expect(selected[0].classList.contains('nav-row')).toBe(true)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Company Administration' }))
+    selected = selectedRows()
+    expect(selected).toHaveLength(1)
     expect(selected[0].classList.contains('nav-sub-row')).toBe(true)
   })
 
