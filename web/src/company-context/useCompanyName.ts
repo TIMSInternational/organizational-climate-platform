@@ -33,44 +33,76 @@ import { getToken } from '../auth/token'
  * tenant at all (#191), so `companyName` is legitimately null for them and the eyebrow
  * stays empty, which is the honest answer rather than a placeholder.
  */
-const cache = new Map<string, Promise<string | null>>()
+/** The two names the shell and the page eyebrows read off `/profile`. */
+interface ProfileNames {
+  companyName: string | null
+  departmentName: string | null
+}
+
+const cache = new Map<string, Promise<ProfileNames | null>>()
 
 /** Exported for tests: a fresh module per test file would otherwise still share this Map. */
 export function clearCompanyNameCache(): void {
   cache.clear()
 }
 
-export function useCompanyName(): string | null {
+/** The caller's own `/profile`, read once per token — see the module comment. */
+function profileNames(token: string): Promise<ProfileNames | null> {
+  let pending = cache.get(token)
+  if (!pending) {
+    const baseUrl = import.meta.env.VITE_API_BASE_URL as string
+    pending = getProfile(baseUrl)
+      .then((profile) => ({ companyName: profile.companyName ?? null, departmentName: profile.departmentName ?? null }))
+      // A failed lookup is not worth an error state on a page whose actual content
+      // loaded fine: the eyebrow simply stays empty. Cached as a resolved null so a
+      // page that remounts does not retry on every navigation.
+      .catch(() => null)
+    cache.set(token, pending)
+  }
+  return pending
+}
+
+function useProfileName(pick: (names: ProfileNames) => string | null, enabled: boolean): string | null {
   const [name, setName] = useState<string | null>(null)
 
   useEffect(() => {
     const token = getToken()
-    if (!token) {
+    if (!token || !enabled) {
       setName(null)
       return
     }
 
     let cancelled = false
-    let pending = cache.get(token)
-    if (!pending) {
-      const baseUrl = import.meta.env.VITE_API_BASE_URL as string
-      pending = getProfile(baseUrl)
-        .then((profile) => profile.companyName)
-        // A failed lookup is not worth an error state on a page whose actual content
-        // loaded fine: the eyebrow simply stays empty. Cached as a resolved null so a
-        // page that remounts does not retry on every navigation.
-        .catch(() => null)
-      cache.set(token, pending)
-    }
-
-    pending.then((resolved) => {
-      if (!cancelled) setName(resolved)
+    void profileNames(token).then((resolved) => {
+      if (!cancelled) setName(resolved ? pick(resolved) : null)
     })
 
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [enabled, pick])
 
   return name
+}
+
+const pickCompany = (names: ProfileNames) => names.companyName
+const pickDepartment = (names: ProfileNames) => names.departmentName
+
+export function useCompanyName(): string | null {
+  return useProfileName(pickCompany, true)
+}
+
+/**
+ * The viewer's own department's name — the "· Ingeniería" the canvas's rail prints after a
+ * leader's, a supervisor's or an employee's role (LeaderDashboard, SupervisorDashboard,
+ * EmployeeDashboard and TrackingTablero, 10 Sep). Off the same cached `/profile` read as the
+ * company name, so a page that already names its company costs no second request. `null`
+ * while loading, when the caller has no department, and when `enabled` is false (the two
+ * administrator roles belong to no department).
+ */
+export function useOwnDepartmentName(enabled: boolean): string | null {
+  // The shell renders on every screen, including unit tests that mount it with no API
+  // configured; there it asks nothing rather than sending a request to nowhere.
+  const configured = Boolean(import.meta.env.VITE_API_BASE_URL)
+  return useProfileName(pickDepartment, enabled && configured)
 }

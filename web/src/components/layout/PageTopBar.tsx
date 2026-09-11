@@ -1,4 +1,5 @@
 import { Fragment, type ReactNode } from 'react'
+import { cn } from '../../lib/cn'
 import { Link, useLocation } from 'react-router'
 import { cn } from '../../lib/cn'
 import { useTranslation } from '../../i18n'
@@ -146,17 +147,31 @@ export interface PageTopBarProps {
   actions?: ReactNode
   /**
    * A line of chips and facts under the description — the redesign's status row
-   * ("Borrador · Encuesta de Clima Q1 2027 · 6 preguntas", "En vivo · abierta hasta el 11 de
-   * septiembre a las 21:06"). Optional and additive: a page that passes nothing renders
-   * exactly as before.
+   * ("Borrador · Encuesta de Clima Q1 2027 · 6 preguntas"), the plan detail's code,
+   * semáforo and date (the Main artboard of 10 Sep), and a microclimate's state ("En vivo ·
+   * abierta hasta el 11 de septiembre a las 21:06"). Optional and additive: a page that
+   * passes nothing renders exactly as before. Already translated.
    */
   meta?: ReactNode
+  /**
+   * Spacing for the `meta` line where an artboard sets it differently from the default
+   * 6px gap and 6px margin — the Main artboard's chips sit 10px apart and just under the
+   * title. Merged over the default through `cn` (tailwind-merge), so it replaces a class
+   * of the same group rather than adding a second one.
+   */
+  metaClassName?: string
+  /**
+   * 14px between the breadcrumb and the header instead of 38px — the Main (plan detail)
+   * artboard of 10 Sep, whose breadcrumb carries only its own margin.
+   */
+  tightBreadcrumb?: boolean
   /**
    * The admin-gaps boards of 10 Sep (Detalle de plan; Crear, Detalle, Analítica and
    * Resultados de microclima) nest the breadcrumb in the header block with a 14px margin
    * (`margin-bottom: 14px` in each `.dc.html`) instead of the first canvas's 38px, so the
    * crumb sits 32px above the eyebrow's centre, not 55px, and they set the meta row at the
-   * text column's own 6px gap, with no margin of its own. `compact` draws both.
+   * text column's own 6px gap, with no margin of its own. `compact` draws both: the
+   * `tightBreadcrumb` gap plus a meta row with no top margin.
    */
   compact?: boolean
 }
@@ -170,6 +185,8 @@ export function PageTopBar({
   badge,
   actions,
   meta,
+  metaClassName,
+  tightBreadcrumb = false,
   compact = false,
 }: PageTopBarProps) {
   const { t } = useTranslation()
@@ -185,7 +202,10 @@ export function PageTopBar({
     // `--admin-size-section-gap`. UI-0 had it at 8px / 14px / 16px.
     <div
       data-slot="page-top-bar"
-      className={cn('mb-section flex flex-col border-b border-line-light pb-4', compact ? 'gap-3.5' : 'gap-9.5')}
+      className={cn(
+        'mb-section flex flex-col border-b border-line-light pb-4',
+        tightBreadcrumb || compact ? 'gap-3.5' : 'gap-9.5',
+      )}
     >
       {breadcrumbs && breadcrumbs.length > 0 && (
         <Breadcrumb aria-label={breadcrumbLabel ?? t('shell.breadcrumb')}>
@@ -277,7 +297,11 @@ export function PageTopBar({
           {meta && (
             <div
               data-slot="page-meta"
-              className={cn('flex flex-wrap items-center gap-1.5 text-xs text-fg-secondary', !compact && 'mt-1.5')}
+              className={cn(
+                'flex flex-wrap items-center gap-1.5 text-xs text-fg-secondary',
+                !compact && 'mt-1.5',
+                metaClassName,
+              )}
             >
               {meta}
             </div>

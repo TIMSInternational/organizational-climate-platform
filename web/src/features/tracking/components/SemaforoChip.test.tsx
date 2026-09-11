@@ -66,6 +66,22 @@ describe('the semáforo chip', () => {
     expect(new Set([rojo, amarillo, verde]).size).toBe(3)
   })
 
+  it('draws the canvas glyphs: an octagon for Atrasado, a clock for En riesgo, a bare check for Al día', () => {
+    // The TrackingConsolidado and TrackingTablero artboards (10 Sep) draw En riesgo with a
+    // clock and Al día with a check. Rojo keeps the octagon so that no two states share a
+    // circle's silhouette (see `SemaforoShape`).
+    const glyphOf = (estado: string) => {
+      renderChip(estado)
+      const svg = document.querySelector('[data-slot="chip"] svg')
+      const glyph = [...(svg?.classList ?? [])].find((name) => name.startsWith('lucide-')) ?? null
+      cleanup()
+      return glyph
+    }
+    expect(glyphOf('Rojo')).toBe('lucide-octagon-alert')
+    expect(glyphOf('Amarillo')).toBe('lucide-clock')
+    expect(glyphOf('Verde')).toBe('lucide-check')
+  })
+
   it('gives each state a different tone as the THIRD signal', () => {
     const classes = SEMAFORO_ORDER.map((estado) => {
       renderChip(estado)

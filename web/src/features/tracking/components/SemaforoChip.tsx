@@ -1,4 +1,4 @@
-import { CircleCheck, CircleHelp, OctagonAlert, TriangleAlert } from 'lucide-react'
+import { Check, CircleHelp, Clock, OctagonAlert } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Chip } from '../../../components/ui'
 import { useTranslation } from '../../../i18n'
@@ -20,11 +20,14 @@ import {
  * SILHOUETTE plus a Spanish WORD, and the tone is the third signal rather than the
  * first:
  *
- * | state    | shape    | word      |
- * |----------|----------|-----------|
- * | Rojo     | octagon  | Atrasado  |
- * | Amarillo | triangle | En riesgo |
- * | Verde    | circle   | Al día    |
+ * | state    | shape      | word      |
+ * |----------|------------|-----------|
+ * | Rojo     | octagon    | Atrasado  |
+ * | Amarillo | clock      | En riesgo |
+ * | Verde    | bare check | Al día    |
+ *
+ * The clock and the check are the canvas's (10 Sep); see `SemaforoShape` for why Rojo
+ * keeps the octagon.
  *
  * Photocopy that in greyscale and all three are still distinguishable twice over.
  * A row of three coloured dots would not be, which is why `semaforo.ts` carries a
@@ -59,13 +62,15 @@ import {
 export interface SemaforoChipProps {
   /** The raw `estadoSemaforo` from the API — `"Rojo" | "Amarillo" | "Verde"` in practice. */
   estado: string
+  /** The long form — "Verde · al día" — for a plan card (the TrackingTablero artboard). */
+  long?: boolean
   className?: string
 }
 
 const SHAPE_ICONS: Record<SemaforoShape, ReactNode> = {
   octagon: <OctagonAlert />,
-  triangle: <TriangleAlert />,
-  circle: <CircleCheck />,
+  clock: <Clock />,
+  check: <Check />,
 }
 
 /**
@@ -88,13 +93,13 @@ const SHAPE_ICONS: Record<SemaforoShape, ReactNode> = {
  */
 export function SemaforoGlyph({ estado, className }: { estado: SemaforoEstado; className?: string }) {
   return (
-    <span aria-hidden="true" className={cn('inline-flex shrink-0 items-center', className)}>
+    <span aria-hidden="true" className={cn('inline-flex shrink-0 items-center [&>svg]:size-full', className)}>
       {SHAPE_ICONS[semaforoPresentation(estado).shape]}
     </span>
   )
 }
 
-export default function SemaforoChip({ estado, className }: SemaforoChipProps) {
+export default function SemaforoChip({ estado, long = false, className }: SemaforoChipProps) {
   const { t } = useTranslation()
   const known = toSemaforoEstado(estado)
 
@@ -117,7 +122,7 @@ export default function SemaforoChip({ estado, className }: SemaforoChipProps) {
     <Chip
       tone={presentation.tone}
       icon={SHAPE_ICONS[presentation.shape]}
-      label={t(presentation.labelKey)}
+      label={t(long ? presentation.longKey : presentation.labelKey)}
       className={className}
     />
   )

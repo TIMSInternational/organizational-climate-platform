@@ -185,7 +185,7 @@ describe('ActionPlanDetailNextPage', () => {
     const record = await screen.findByRole('button', { name: new RegExp(copy.recordProgress) })
     expect(record.className.split(' ')).toContain('h-control-canvas')
     expect(screen.getByRole('button', { name: new RegExp(copy.changeStatus) }).className.split(' ')).toContain('h-control-canvas')
-    expect(screen.getByRole('button', { name: copy.moreActions }).className.split(' ')).toContain('size-control-canvas')
+    expect(screen.getByRole('button', { name: copy.moreActions.replace('{title}', 'Reducir la carga de trabajo en Operaciones') }).className.split(' ')).toContain('size-control-canvas')
   })
 
   it('never claims the plan has no progress: the server does not return it, and the Bitácora says so', async () => {

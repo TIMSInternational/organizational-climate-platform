@@ -16,8 +16,8 @@ import { getUser } from '../../org-structure/api/users'
 import { listSurveys } from '../../surveys/api/surveys'
 import { DEPARTMENT_GROUP, getClimateTrends } from '../../surveys/api/climateTrends'
 import { CLIMATE_TARGET, latestClosedSurvey } from '../../dashboard/next/compose'
-import { planFinding, type PlanFinding } from './derive'
-import type { ActionPlanDetailModel, Settled } from './model'
+import { planFinding, type PlanFinding } from './planDetailDerive'
+import type { ActionPlanDetailModel, Settled } from './planDetailModel'
 
 export interface ActionPlanDetailState {
   status: 'loading' | 'ready' | 'error'

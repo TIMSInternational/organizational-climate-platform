@@ -1,10 +1,11 @@
-import { describe, it, expect, afterEach } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { describe, it, expect, afterEach, vi } from 'vitest'
+import { render, screen, cleanup, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { TranslationProvider } from '../../i18n'
 import { setToken, clearToken } from '../../auth/token'
 import { SidebarUserMenu } from './SidebarUserMenu'
 import { tokenFor } from '../../test/jwtFixture'
+import { clearCompanyNameCache } from '../../company-context/useCompanyName'
 import es from '../../i18n/es.json'
 
 afterEach(() => {
@@ -86,5 +87,51 @@ describe('the canvas’s foot of the rail', () => {
 
   it('writes the super administrator’s role in Spanish sentence case, as the canvas does', () => {
     expect(es.users.superAdmin).toBe('Super administrador')
+  })
+})
+
+describe('the role line', () => {
+  function renderMenuEs() {
+    render(
+      <TranslationProvider initialLocale="es">
+        <MemoryRouter>
+          <SidebarUserMenu onSignOut={() => {}} />
+        </MemoryRouter>
+      </TranslationProvider>,
+    )
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+    clearCompanyNameCache()
+  })
+
+  it('names a leader’s department after the role — "Líder · Ingeniería", as the canvas’s rail prints it', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', 'http://api.test')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(new Response(JSON.stringify({ companyName: 'Grupo Meridiano S.A.', departmentName: 'Ingeniería' }), { status: 200 }))),
+    )
+    setToken(tokenFor({ name: 'Luis Mora', role: 'leader', companyId: 'c1' }))
+    renderMenuEs()
+    await waitFor(() => expect(document.querySelector('[data-slot="sidebar-role"]')?.textContent).toBe(`${es.users.leader} · Ingeniería`))
+    expect(String(vi.mocked(fetch).mock.calls[0]?.[0])).toBe('http://api.test/profile')
+  })
+
+  it('keeps the role alone for a leader with no department, and for an administrator asks /profile nothing', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', 'http://api.test')
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(JSON.stringify({ companyName: 'x', departmentName: null }), { status: 200 }))))
+    setToken(tokenFor({ name: 'Luis Mora', role: 'leader', companyId: 'c1' }))
+    renderMenuEs()
+    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalled())
+    expect(document.querySelector('[data-slot="sidebar-role"]')?.textContent).toBe(es.users.leader)
+    cleanup()
+    clearCompanyNameCache()
+    vi.mocked(fetch).mockClear()
+    setToken(tokenFor({ name: 'Ana Rojas', role: 'company_admin', companyId: 'c1' }))
+    renderMenuEs()
+    expect(document.querySelector('[data-slot="sidebar-role"]')?.textContent).toBe(es.users.companyAdmin)
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled()
   })
 })

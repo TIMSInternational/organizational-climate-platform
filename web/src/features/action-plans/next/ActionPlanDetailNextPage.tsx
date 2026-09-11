@@ -36,8 +36,8 @@ import { reading, targetStanding } from '../../dashboard/next/derive'
 import { CLIMATE_TARGET } from '../../dashboard/next/compose'
 import ProgressUpdateForm from '../components/ProgressUpdateForm'
 import { ACTION_PLAN_PRIORITIES, ACTION_PLAN_STATUSES, kpiProgressPercent, priorityLabel, statusLabel } from '../actionPlanVocabulary'
-import { daysToDue, dueDay, elapsedShare, type PlanFinding } from './derive'
-import type { ActionPlanDetailModel, Settled } from './model'
+import { daysToDue, dueDay, elapsedShare, type PlanFinding } from './planDetailDerive'
+import type { ActionPlanDetailModel, Settled } from './planDetailModel'
 import { useActionPlanDetailModel, type ActionPlanDetailState } from './useActionPlanDetailModel'
 
 /**
@@ -205,7 +205,7 @@ function ActionPlanDetailView({ state, model }: { state: ActionPlanDetailState; 
               </DropdownMenu>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="icon-canvas" disabled={state.saving} aria-label={t('actionPlans.next.moreActions')}>
+                  <Button variant="outline" size="icon-canvas" disabled={state.saving} aria-label={t('actionPlans.next.moreActions', { title: plan.title })}>
                     <Ellipsis aria-hidden="true" />
                   </Button>
                 </DropdownMenuTrigger>

@@ -31,6 +31,8 @@ const BOOLEANS = [
   'canExport',
   'canManageOrg',
   'canUseDirectoryPickers',
+  'canViewConsolidado',
+  'leadsANodo',
 ] as const
 
 type Row = Record<(typeof BOOLEANS)[number], boolean>
@@ -46,6 +48,8 @@ const ALL_ADMIN: Row = {
   canExport: true,
   canManageOrg: true,
   canUseDirectoryPickers: true,
+  canViewConsolidado: true,
+  leadsANodo: false,
 }
 
 const NOTHING: Row = {
@@ -59,23 +63,32 @@ const NOTHING: Row = {
   canExport: false,
   canManageOrg: false,
   canUseDirectoryPickers: false,
+  canViewConsolidado: false,
+  leadsANodo: false,
 }
 
 const TEAM: Row = { ...NOTHING, seesTeam: true, canExport: true }
+const NODE_LEADER: Row = { ...TEAM, leadsANodo: true }
 const SELF: Row = { ...NOTHING, seesOnlySelf: true }
 
 const TABLE: Array<{ name: string; claims: ViewerClaims; selected?: string | null; expected: Row }> = [
   { name: 'super_admin with a company selected', claims: claimsFor('super_admin', { companyId: undefined }), selected: 'c9', expected: ALL_ADMIN },
   // A SuperAdmin's own claim is never their scope (companyContext.ts); with nothing
   // selected there is no companyId to put in any request, so every admin write is off.
-  { name: 'super_admin with nothing selected', claims: claimsFor('super_admin'), selected: null, expected: NOTHING },
+  // ...but the tracking consolidado is not company-scoped: `MatchingTenantRequirement` admits
+  // a super_admin whatever their claim, and `ConsolidadoAsync` takes no company parameter.
+  { name: 'super_admin with nothing selected', claims: claimsFor('super_admin'), selected: null, expected: { ...NOTHING, canViewConsolidado: true } },
   { name: 'company_admin', claims: claimsFor('company_admin'), expected: ALL_ADMIN },
   // A stored selection is ignored for this role, so it changes nothing.
   { name: 'company_admin with a stray selection', claims: claimsFor('company_admin'), selected: 'c9', expected: ALL_ADMIN },
   // `CanAccessCompany` compares the claim to the request; an empty claim never matches.
   { name: 'company_admin with no tenant claim', claims: claimsFor('company_admin', { companyId: undefined }), expected: NOTHING },
-  { name: 'leader', claims: claimsFor('leader', { nodoExternalId: 'n1' }), expected: TEAM },
-  { name: 'supervisor', claims: claimsFor('supervisor'), expected: TEAM },
+  { name: 'leader of a node', claims: claimsFor('leader', { nodoExternalId: 'n1' }), expected: NODE_LEADER },
+  // `unassigned-<companyId>` is the claim minted for a person with no department: no node.
+  { name: 'leader with the unassigned node claim', claims: claimsFor('leader', { nodoExternalId: 'unassigned-c1' }), expected: TEAM },
+  { name: 'leader with a blank node claim', claims: claimsFor('leader', { nodoExternalId: '' }), expected: TEAM },
+  // A supervisor with a real node claim still does not lead it: the board is the leader's.
+  { name: 'supervisor', claims: claimsFor('supervisor', { nodoExternalId: 'n1' }), expected: TEAM },
   { name: 'employee', claims: claimsFor('employee'), expected: SELF },
   { name: 'no role claim', claims: claimsFor(undefined), expected: SELF },
   { name: 'an unrecognised role', claims: claimsFor('department_admin'), expected: SELF },
