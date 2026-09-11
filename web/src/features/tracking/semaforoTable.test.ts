@@ -65,14 +65,16 @@ describe('the tracking module has ONE semáforo table', () => {
   })
 
   /**
-   * `OctagonAlert`, `TriangleAlert` and `CircleCheck` ARE the three silhouettes.
-   * A second module importing them is a second presentation table by definition —
-   * that is exactly the shape `SemaforoSummary` had, and it is what let the strip
-   * and the chips disagree about whether a state has a shape at all.
+   * `OctagonAlert` is the semáforo's own glyph — Rojo's silhouette, used for nothing else.
+   * A second module importing it is a second presentation table by definition — that is
+   * exactly the shape `SemaforoSummary` had, and it is what let the strip and the chips
+   * disagree about whether a state has a shape at all. (The canvas's clock and check,
+   * Amarillo's and Verde's since 10 Sep, are general lucide glyphs other controls use too,
+   * so this sweep cannot name them; `SemaforoChip.test.tsx` pins which glyph draws each state.)
    */
   it('imports the semáforo glyphs in exactly one component', () => {
     const importers = sourceFiles().filter((file) =>
-      /import\s*\{[^}]*\b(OctagonAlert|TriangleAlert)\b[^}]*\}\s*from\s*'lucide-react'/s.test(
+      /import\s*\{[^}]*\bOctagonAlert\b[^}]*\}\s*from\s*'lucide-react'/s.test(
         code(file),
       ),
     )

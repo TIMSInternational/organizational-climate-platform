@@ -1,3 +1,14 @@
+/**
+ * NOT ROUTED. `/tracking/planes/:id` renders the redesigned plan detail (`../next/PlanDetailNextPage`), which replaced
+ * this page — ruled 10 Sep: a redesigned screen takes its real route. Nothing in
+ * `router.tsx` reaches this file; `router.test.ts` pins that.
+ *
+ * It stays in the tree on purpose, as the wiring reference: `usePlanDetailModel` makes this page's requests and writes (`getPlanAccion`,
+ * `registrarAvance`, `marcarCumplido`, `agregarInvolucrado` in sequence), and the
+ * leader/involucrado split the comment below explains is the shape of the new screen too.
+ * Delete it when nothing reads it as a reference; until then its behaviour is pinned
+ * by `PlanDeAccionDetailPage.test.tsx`, which renders it directly.
+ */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router'
 import { useCompanyScope } from '../../../company-context'

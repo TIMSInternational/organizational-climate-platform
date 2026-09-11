@@ -1,3 +1,14 @@
+/**
+ * NOT ROUTED. `/tracking` renders the redesigned Vista Consolidada (`../next/ConsolidadoNextPage`), which replaced
+ * this page — ruled 10 Sep: a redesigned screen takes its real route. Nothing in
+ * `router.tsx` reaches this file; `router.test.ts` pins that.
+ *
+ * It stays in the tree on purpose, as the wiring reference: `useConsolidadoModel` makes this page's requests (`GET /api/consolidado`, the nodo
+ * names) plus the plans listing, and keeps its admin-only gate and its drill-in contract
+ * (a nodo row links to that nodo's aggregate board and nowhere deeper).
+ * Delete it when nothing reads it as a reference; until then its behaviour is pinned
+ * by `ConsolidadoPage.test.tsx`, which renders it directly.
+ */
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { getConsolidado, type ConsolidadoResponse, type NodoConsolidado } from '../api/trackingApi'
