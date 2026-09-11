@@ -308,22 +308,23 @@ describe('SurveyQuestionsEditorPage — the boards\' spacing, inks and type', ()
     }
   })
 
-  it("prints the add row's tail at 12px in the tertiary ink after the 13px label", async () => {
+  it("prints the add row's tail at 12px and weight 400 after the 13px label", async () => {
     arrangeSurvey('draft', 0)
     renderAt('/surveys/s1/questions')
     const tail = await screen.findByTestId('add-tail')
     expect(tail.textContent).toBe(a.addFromLibrary)
-    expect(tail.className.split(' ')).toEqual(expect.arrayContaining(['text-sm', 'font-normal', 'text-fg-tertiary']))
+    expect(tail.className.split(' ')).toEqual(expect.arrayContaining(['text-sm', 'font-normal', 'text-fg-secondary']))
   })
 
-  it("prints the boards' type: 20px card headings, 13px question text, 12px hints in the tertiary ink", async () => {
+  it("prints the boards' type: 20px card headings, 13px question text, 12px hints", async () => {
     arrangeSurvey('draft', 0)
     renderAt('/surveys/s1/questions')
     const card = (await screen.findAllByTestId('question-card'))[0]
     expect(screen.getByRole('heading', { name: new RegExp(`^${a.questions}`) }).className.split(' ')).toContain('text-2xl')
     expect(screen.getByRole('heading', { name: a.preview }).className.split(' ')).toContain('text-2xl')
     expect(within(card).getByText(/^First/, { selector: 'p' }).className.split(' ')).toContain('text-base')
-    expect(screen.getByText(a.dimensionHint).className.split(' ')).toEqual(expect.arrayContaining(['text-sm', 'text-fg-tertiary']))
+    // The board's #6e648b is the tertiary ink, which respondContrast.test.ts bans from features/surveys.
+    expect(screen.getByText(a.dimensionHint).className.split(' ')).toEqual(expect.arrayContaining(['text-sm', 'text-fg-secondary']))
   })
 
   it('paints the locked banner on the ground tint under a white tile, 20px above the panels', async () => {
