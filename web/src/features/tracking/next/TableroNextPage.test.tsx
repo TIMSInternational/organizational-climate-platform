@@ -116,13 +116,21 @@ describe('TableroNextPage — the leader of the nodo', () => {
   })
 
   it('names the nodo from the caller own department, and the card with its long semáforo word', async () => {
-    renderPage()
-    expect(await screen.findByText('Ingeniería · Nodo')).toBeTruthy()
-    const card = screen.getByRole('article')
-    expect(within(card).getByText('PA-2026-00002')).toBeTruthy()
-    expect(within(card).getByText(next.semaforoLargoVerde)).toBeTruthy()
-    expect(within(card).getByText(next.onTimeBoard)).toBeTruthy()
-    expect(within(card).getByRole('link', { name: new RegExp(next.viewPlan) }).getAttribute('href')).toBe(`/tracking/planes/${PLAN_ID}`)
+    // PA-2026-00002 is due 15 Sep, so "En fecha" holds only before that day. Read the board on the
+    // fixture's own 10 Sep, as the tests below do, never against the real clock.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 8, 10, 12, 0, 0))
+    try {
+      renderPage()
+      expect(await screen.findByText('Ingeniería · Nodo')).toBeTruthy()
+      const card = screen.getByRole('article')
+      expect(within(card).getByText('PA-2026-00002')).toBeTruthy()
+      expect(within(card).getByText(next.semaforoLargoVerde)).toBeTruthy()
+      expect(within(card).getByText(next.onTimeBoard)).toBeTruthy()
+      expect(within(card).getByRole('link', { name: new RegExp(next.viewPlan) }).getAttribute('href')).toBe(`/tracking/planes/${PLAN_ID}`)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('reads Avances registrados 0 off plans with no avance on record, and wears no sample chip anywhere', async () => {
