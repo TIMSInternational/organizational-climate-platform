@@ -1465,7 +1465,18 @@
     "invitationSignInNote": "Esta sesión registra quién participa, así que se le pedirá iniciar sesión en su cuenta antes de responder.",
     "invitationSignIn": "Iniciar sesión",
     "exportCsv": "Exportar CSV",
-    "exportCsvFailedTitle": "La exportación no se descargó"
+    "exportCsvFailedTitle": "La exportación no se descargó",
+    "next": {
+      "eyebrow": "Sesión en vivo · {count} preguntas",
+      "eyebrowOne": "Sesión en vivo · 1 pregunta",
+      "required": "obligatoria",
+      "optional": "opcional",
+      "wordNote": "Las palabras se muestran como frecuencias, nunca su texto completo, y solo cuando {floor} personas hayan respondido.",
+      "openUntil": "Abierta hasta el {date}",
+      "underAMinute": "menos de un minuto",
+      "aboutMinutes": "unos {minutes} minutos",
+      "wordPlaceholder": "Una palabra"
+    }
   },
   "navigation": {
     "sectionAdministration": "Administración",
@@ -3438,7 +3449,20 @@
     "happensResultsTitle": "Los resultados llegan a su departamento",
     "happensResultsBody": "Le avisaremos por correo cuando se publiquen, y en Inicio verá qué se hizo con ellos.",
     "noCopyNote": "Puede cerrar esta pestaña. No podemos volver a mostrarle sus respuestas: guardar una copia que usted pudiera abrir significaría mantener un vínculo entre usted y ellas.",
-    "backToHome": "Volver al inicio"
+    "backToHome": "Volver al inicio",
+    "next": {
+      "position": "{position} de {total}",
+      "previous": "Anterior",
+      "next": "Siguiente",
+      "required": "obligatoria",
+      "optional": "opcional",
+      "closesOn": "Cierra el {date}",
+      "aboutMinutes": "unos {minutes} minutos en total",
+      "underAMinute": "menos de un minuto en total",
+      "submittedAt": "Enviadas a las {time}.",
+      "submittedAtAnonymous": "Enviadas a las {time}. Se guardaron sin nada que lo identifique.",
+      "receiptOf": "de {total}"
+    }
   },
   "surveyResults": {
     "description": "Lo que encontró esta encuesta y a cuántas personas alcanzó.",
@@ -3710,7 +3734,22 @@
     "surveyMetaOneQuestion": "1 pregunta · menos de un minuto · cierra el {date}",
     "closedMeta": "Cerró el {date} · resultados publicados para su departamento",
     "notInAudienceMeta": "Cerró el {date} · usted no estaba en esta audiencia",
-    "seeWhatCameOfIt": "Ver qué pasó con ella"
+    "seeWhatCameOfIt": "Ver qué pasó con ella",
+    "next": {
+      "toAnswerHeading": "Para responder",
+      "toAnswerMetaOne": "una encuesta abierta",
+      "toAnswerMetaAndOneMore": "una encuesta abierta, y otra más",
+      "toAnswerMetaAndMore": "una encuesta abierta, y {count} más",
+      "openChip": "Abierta",
+      "closesOnDate": "el {date}",
+      "canSaveLater": "Puede guardar y terminar después.",
+      "alsoOpen": "También abierta:",
+      "previousMeta": "{survey} · cerrada",
+      "plansStillOpen": "Los {count} siguen abiertos; sus líderes también pueden verlos.",
+      "plansStillOpenOne": "Sigue abierto; sus líderes también pueden verlo.",
+      "resultsNote": "Los resultados de su departamento se publican cuando la encuesta cierra. Le avisaremos por correo, y aquí verá qué se hizo con ellos.",
+      "homeDescriptionMany": "Hay {count} encuestas abiertas para usted. Todo lo demás en esta página es lo que la empresa hizo con la anterior."
+    }
   },
   "systemHealth": {
     "title": "Estado del sistema",

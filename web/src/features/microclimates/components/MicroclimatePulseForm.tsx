@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { EyeOff, Info } from 'lucide-react'
+import { EyeOff, Info, Send } from 'lucide-react'
 import {
   getMicroclimatePublic,
   submitResponse,
@@ -8,8 +8,10 @@ import {
 } from '../api/microclimates'
 import { useTranslation } from '../../../i18n'
 import { detectLocale } from '../../../i18n/locale'
-import { Alert, AlertDescription, AlertTitle, Button, Textarea } from '../../../components/ui'
+import { Alert, AlertDescription, AlertTitle, Button, Input } from '../../../components/ui'
 import { SegmentedScale } from '../../../components/ui/SegmentedScale'
+import { MINIMUM_RESPONDENTS } from '../microclimatePrivacy'
+import { estimatedMinutes, formatDayMonth, isUnderAMinute } from '../../surveys/respondEstimate'
 import MicroclimateContentNotice from './MicroclimateContentNotice'
 
 /**
@@ -137,21 +139,35 @@ function QuestionInput({
       )
     case 'open_ended':
     default:
-      // A `<textarea>`, not the single-line `<input type="text">` this used to be:
-      // the design draws free text as the box under the scale ("Anything you want to
-      // add?"), and one 32px line for a sentence someone is invited to write is the
-      // control telling them not to bother.
+      // The canvas's open answer (RespondMicroclimatePhone, 10 Sep): one 44px line, and
+      // under it what happens to the words. A pulse's open question asks for a word or
+      // two ("En una palabra, ¿qué ayudaría más?"), and the line is the control saying so.
       //
       // `aria-labelledby` because a `<legend>` names the FIELDSET, not the control
       // inside it -- so this box had no accessible name at all before. Same fix
-      // `surveys/RespondQuestionField.tsx` already carries for its comment box.
+      // `surveys/RespondQuestionField.tsx` already carries for its comment box. The
+      // note is its description, so it is read with the box rather than after it.
       return (
-        <Textarea
-          aria-labelledby={legendId}
-          required={question.required}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-        />
+        <div className="flex flex-col gap-2">
+          <Input
+            aria-labelledby={legendId}
+            aria-describedby={`${legendId}-words`}
+            required={question.required}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            // "Una palabra", as the canvas draws it: the live page reads these answers as
+            // word counts (`LiveOpenAnswers`), so the line asks for words, not a paragraph.
+            placeholder={t('microclimates.next.wordPlaceholder')}
+            className="h-11 text-lg"
+          />
+          {/* What the live page does with what is typed here, stated as what it does:
+            `LiveOpenAnswers` draws a word panel — counts, never the text — and withholds
+            it until `MINIMUM_RESPONDENTS` people have answered. The floor is the
+            constant, never a typed 5. */}
+          <span id={`${legendId}-words`} className="text-xs text-fg-secondary">
+            {t('microclimates.next.wordNote', { floor: MINIMUM_RESPONDENTS })}
+          </span>
+        </div>
       )
   }
 }
@@ -329,24 +345,23 @@ function toPageError(err: unknown): PageError {
  * so the ban on the two AA-failing utilities followed it here rather than being left
  * behind on a file that no longer contains any classes.
  *
- * ## The pulse, drawn the way the approved design draws it
+ * ## The pulse, drawn the way the canvas draws it (RespondMicroclimatePhone, 10 Sep)
  *
- * The employee design's `pulse` screen is **one narrow centred column and nothing
- * else**: a small eyebrow, one large question, the segmented scale, an optional box
- * for free text, a single Send, and the anonymity line as a footnote under it. It is
- * a screen usually opened from a link in a meeting and answered in seconds, which is
- * a different act from working through a twelve-question climate survey.
+ * **One narrow centred column and nothing else**: the anonymity promise first, the
+ * eyebrow ("SESIÓN EN VIVO · 2 PREGUNTAS") over the session's name, one card per
+ * question with the segmented scale or a one-line word answer, a single full-width
+ * Send, and the session's readings at the foot. It is a screen usually opened from a
+ * link in a meeting and answered in seconds, which is a different act from working
+ * through a twelve-question climate survey.
  *
  * What was here until now was a three-column `lg:grid-cols-3` layout with a
  * `lg:sticky` right-hand rail carrying the anonymity promise and an answered-count
  * tile. **That rail was not a design decision — it was a test's.**
  * `components/layout/respondSticky.test.tsx` asserted a sticky panel on this route,
  * so the page kept one after the redesign had already cut the rail from the two
- * survey respond routes (their instrument moved to a bottom bar, which the design
- * does draw for a long form and does *not* draw here). The drawing has no rail and
- * no bar, so this page now has neither, and that test case was re-pointed at the
- * property that still holds on this route rather than left asserting a box that no
- * longer exists.
+ * survey respond routes. The drawing has no rail and no bar, so this page has neither
+ * — and since the canvas pages the survey routes one question at a time, neither do
+ * they; that test file now asserts nothing is pinned on any of the three.
  *
  * Three consequences worth stating plainly:
  *
@@ -354,9 +369,9 @@ function toPageError(err: unknown): PageError {
  *   draws no progress at all. A session with more than one question still numbers
  *   them (`1/2`, and the sentence beside it), which is the position information the
  *   tile was standing in for.
- * - **The anonymity note is now the footnote it is drawn as**, last in the column
- *   rather than beside the questions. On a one-question pulse the whole column is a
- *   screenful, so "last" is still in view; it no longer needs to stick to stay there.
+ * - **The anonymity note is the first block of the column**, where the canvas puts it
+ *   on all three respond screens: read before the first answer, not after the Send.
+ *   It no longer needs to stick to stay in view.
  * - **`RespondCaption` is not used here**, though the two survey routes use it. Its
  *   `<h1>` is `text-2xl` — the same size this design gives the *question* — so on a
  *   screen whose whole job is to ask one thing, the session's name would compete with
@@ -373,23 +388,35 @@ function toPageError(err: unknown): PageError {
  * guaranteed has been lost; but a client-side check is the honest next step, and it
  * needs copy this catalogue does not have yet.
  *
- * ## Why the anonymity statement is on this page at all
+ * ## Why the anonymity statement is on this page at all — and where it is not literally true
  *
  * `PublicMicroclimateDetail` carries no `anonymousResponses` flag, so this page
  * cannot report the session's configuration and does not try to. What it states
- * instead is what this client verifiably does: `submitResponse` in
- * `api/microclimates.ts` posts with `Content-Type` alone and attaches no bearer
- * token, so no name and no account leaves this page with the answers. That is a
- * description of the request, not a promise about the server, and the copy says
- * exactly that much.
+ * instead describes the request: no name and no account travels with the answers.
+ * That holds only while no session is stored. `submitResponse` in
+ * `api/microclimates.ts` posts with `Content-Type` alone when there is no token, and
+ * attaches the stored bearer whenever there is one — deliberately: a session with
+ * `anonymousResponses: false` answers 401 without it (the comment on `submitResponse`;
+ * pinned by `microclimates.test.ts`, "attaches an Authorization header so an identified
+ * session can be answered", and by `MicroclimateInvitationPage.test.tsx`, "withholds the
+ * bearer from the invitation routes and sends it with the answers"). So for an employee
+ * who opens `/microclimates/:id/respond` signed in, or an invitee who signed in before
+ * answering, the account's token DOES travel with the answers. On an anonymous session
+ * the server does not consult it (`SubmitResponseAsync` reads the caller only when
+ * `AnonymousResponses` is false) and stores no answer per respondent at all — the
+ * submission is folded into the session's aggregate (`MicroclimateEndpoints.cs`, the
+ * comment on the dropped `GET /{id}/responses`) — so what is STORED stays
+ * unattributable; what is SENT is not what the sentence says. The copy is main's and
+ * this build kept it (the lane was told "anonymity copy and behaviour unchanged"):
+ * saying what is stored instead, or sending no token on an anonymous session, is an
+ * open ruling.
  *
- * That statement stays exactly as true on the invitation route, and it is worth being
- * precise about why. `/microclimate-invitations/:token` does hold a per-person token —
- * but it is never attached to the SUBMISSION. It travels on the separate ladder calls,
- * which for an anonymous session the server refuses to record past `opened`
- * (`MicroclimateInvitationStatuses.AnonymityCeiling`). So the sentence below describes
- * the request that carries the answers, and the invitation page's own landing card
- * carries the fuller version — what is recorded about the person, before they start.
+ * The per-person token of `/microclimate-invitations/:token` is a separate credential
+ * and is never attached to the submission: it travels on the ladder calls only, which
+ * for an anonymous session the server refuses to record past `opened`
+ * (`MicroclimateInvitationStatuses.AnonymityCeiling`). The invitation page's landing
+ * card carries the fuller statement — what is recorded about the person, before they
+ * start.
  *
  * ## Submitting is unchanged, and there is no receipt to build
  *
@@ -401,9 +428,20 @@ function toPageError(err: unknown): PageError {
 export default function MicroclimatePulseForm({
   microclimateId,
   onSubmitted,
+  closesAt,
 }: {
   /** The session to load and answer. Undefined while a route parameter is missing. */
   microclimateId: string | undefined
+  /**
+   * When the session stops taking answers, for the foot's "Abierta hasta el …".
+   *
+   * A prop rather than a field read here because the payload this form loads,
+   * `PublicMicroclimateDetail`, carries no end time — `GET /microclimates/{id}` answers a
+   * respondent with the reduced view. `/microclimate-invitations/:token` has one on its
+   * token (`MicroclimateInvitationTokenDetail.endTime`) and passes it; the GUID route has
+   * none, and its foot states nothing rather than a guessed close.
+   */
+  closesAt?: string
   /**
    * Called once, after the server has accepted the answers.
    *
@@ -497,21 +535,26 @@ export default function MicroclimatePulseForm({
           <AlertDescription>{t('microclimates.notAcceptingResponses')}</AlertDescription>
         </Alert>
       ) : (
-        /* The whole screen: one column, capped at the prose measure and centred.
-         No grid, no rail, no bar — every part of the pulse is in reading order
-         down this one box, which is also why nothing on this page has to stick
-         to stay in view. */
-        <div data-slot="pulse-column" className="mx-auto grid w-full max-w-measure gap-panel-gap">
-          {/* The design's pulse heads the column with a small line naming the kind
-            of thing, then goes straight to the ask. So the eyebrow keeps the
-            shell's eyebrow treatment and the session's own name is set at
-            `text-lg` — an `<h1>` for the document outline, deliberately quieter
-            than the 20px question below it. */}
-          <header className="grid gap-1">
-            <span className="text-2xs font-semibold uppercase tracking-eyebrow text-fg-secondary">
-              {t('microclimates.respondEyebrow')}
+        /* The whole screen, in the canvas's order (RespondMicroclimatePhone, 10 Sep):
+         the promise first, then the kind of thing and its name, one card per
+         question, a single full-width Send, and the session's two readings at the
+         foot. No grid, no rail, no bar — every part of the pulse is in reading order
+         down this one column, which is also why nothing on this page has to stick to
+         stay in view. `flex-1` so the foot sits at the bottom of a short page. */
+        <div data-slot="pulse-column" className="flex flex-1 flex-col gap-4">
+          <AnonymityNote />
+
+          {/* The eyebrow names the kind of thing and how much is being asked —
+            "SESIÓN EN VIVO · 2 PREGUNTAS" — and the session's own name is the page's
+            `<h1>`, in the serif at 22px as the artboard sets it: context above the
+            cards, the question inside them. */}
+          <header className="flex flex-col gap-1">
+            <span className="text-2xs font-bold uppercase tracking-eyebrow text-fg-secondary">
+              {total === 1
+                ? t('microclimates.next.eyebrowOne')
+                : t('microclimates.next.eyebrow', { count: total })}
             </span>
-            <h1 className="text-lg font-semibold tracking-tight text-fg-primary">
+            <h1 className="m-0 text-reading">
               {microclimate.title ?? t('microclimates.respondUntitled')}
             </h1>
           </header>
@@ -533,68 +576,70 @@ export default function MicroclimatePulseForm({
             </Alert>
           ) : null}
 
-          <form onSubmit={handleSubmit} className="grid gap-section">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             {questions.map((question, index) => {
               const legendId = questionLegendId(question.id)
               return (
                 <fieldset
                   key={question.id}
-                  // `min-w-0` because this is a grid item, and a grid item's
+                  // The canvas's question card: the card surface with the hairline,
+                  // 8px corners, 16px in, the faint lift every `.card` carries.
+                  // `min-w-0` because this is a flex item of the column, and its
                   // automatic minimum size is its MIN-CONTENT width -- a long
                   // unbroken option label would otherwise widen the card, the
                   // column and the document, and send the Send button off the
                   // side of a phone. `respondSticky.test.tsx` measures it.
-                  className="min-w-0 rounded-xl border border-line-panel bg-surface-card p-panel transition-colors focus-within:border-accent-blue-ring"
+                  className="min-w-0 rounded-xl border border-line-default bg-surface-card p-panel shadow-sm transition-colors focus-within:border-accent-blue-ring"
                 >
                   {/* `float-left w-full` closes the card's frame: a `<legend>`
                     in its default flow is cut out of the fieldset's own
                     border, so the question straddles the top edge and the
                     card reads as a form group rather than as a panel. The
                     block below clears the float. */}
-                  <legend id={legendId} className="float-left w-full">
-                    {/* Nothing numbers a session that asks ONE question: "1/1"
-                      and "Question 1 of 1" are two ways of saying there is no
-                      position to keep track of, and the design's pulse screen
-                      draws neither. Both come back the moment there is a
-                      second question to be somewhere in — and with the rail's
-                      answered-count tile gone, this is now the only thing on
-                      the page reporting position. */}
-                    {total > 1 && (
-                      <>
-                        {/* The position as a reading: mono, tabular, and hidden
-                          from assistive tech because the sentence beside it is
-                          what "3/8" is supposed to say out loud. */}
-                        <span
-                          aria-hidden="true"
-                          className="mr-inline inline-flex items-center rounded-md bg-surface-icon-box px-2 py-0.5 font-mono text-xs font-semibold tabular-nums text-fg-secondary"
-                        >
-                          {`${index + 1}/${total}`}
-                        </span>
-                        <span className="sr-only">
-                          {t('microclimates.respondQuestionPosition', {
-                            position: index + 1,
-                            total,
-                          })}
-                        </span>
-                      </>
-                    )}
-                    {/* The one thing being asked, at the size the design gives it
-                      — 20px, and the largest type on the screen. This is the
-                      whole page for most respondents. */}
-                    <span className="text-2xl font-semibold tracking-tight text-fg-primary">
+                  <legend id={legendId} className="float-left m-0 w-full p-0">
+                    {/* The canvas's meta row: the `1/2` chip, then the word saying
+                      whether an answer is needed. */}
+                    <span className="flex flex-wrap items-center gap-2">
+                      {/* Nothing numbers a session that asks ONE question: "1/1"
+                        and "Question 1 of 1" are two ways of saying there is no
+                        position to keep track of. Both come back the moment there
+                        is a second question to be somewhere in. */}
+                      {total > 1 && (
+                        <>
+                          {/* The position as a reading: mono, tabular, and hidden
+                            from assistive tech because the sentence beside it is
+                            what "3/8" is supposed to say out loud. */}
+                          <span
+                            aria-hidden="true"
+                            data-slot="question-index"
+                            className="inline-flex h-5.5 items-center rounded-lg border border-line-default bg-surface-icon-box px-2 font-mono text-xs font-medium tabular-nums text-fg-secondary"
+                          >
+                            {`${index + 1}/${total}`}
+                          </span>
+                          <span className="sr-only">
+                            {t('microclimates.respondQuestionPosition', {
+                              position: index + 1,
+                              total,
+                            })}
+                          </span>
+                        </>
+                      )}
+                      {/* The WORD carries whether an answer is required, never a
+                        colour -- WCAG 1.4.1. Beside the chip, as the artboard draws
+                        "1/2 obligatoria" and "2/2 opcional". */}
+                      <span data-slot="question-requirement" className="text-xs font-normal text-fg-secondary">
+                        {question.required
+                          ? t('microclimates.next.required')
+                          : t('microclimates.next.optional')}
+                      </span>
+                    </span>
+                    {/* The one thing being asked, the largest sans type on the card.
+                      This is the whole page for most respondents. */}
+                    <span data-slot="question-text" className="mt-3.5 block text-question font-normal text-fg-primary">
                       {question.text}
                     </span>
-                    {/* The WORD carries whether an answer is required, never a
-                      colour -- WCAG 1.4.1, and the same rule the survey
-                      respond field keeps. On its own line under the question
-                      now: at 20px an inline marker read as part of the ask. */}
-                    <span className="mt-1 block text-sm font-normal text-fg-secondary">
-                      {question.required
-                        ? t('microclimates.respondRequiredMarker')
-                        : t('microclimates.respondOptionalMarker')}
-                    </span>
                   </legend>
-                  <div className="clear-both mt-panel-gap">
+                  <div className="clear-both pt-3.5">
                     <QuestionInput
                       question={question}
                       legendId={legendId}
@@ -606,20 +651,34 @@ export default function MicroclimatePulseForm({
               )
             })}
 
-            {/* One action. The design draws a single Send and no second control:
-              there is no draft to save on a session whose responses are not
+            {/* One action, the full width of the column and 44px tall, with the send
+              glyph after the word. The design draws a single Send and no second
+              control: there is no draft to save on a session whose responses are not
               persisted against a respondent. */}
-            <div className="flex flex-wrap gap-inline">
-              <Button type="submit" variant="primary" size="lg" disabled={submitting}>
-                {submitting ? t('common.submitting') : t('common.submit')}
-              </Button>
-            </div>
+            <Button type="submit" variant="primary" disabled={submitting} className="h-11 w-full">
+              {submitting ? t('common.submitting') : t('common.submit')}
+              <Send aria-hidden="true" />
+            </Button>
           </form>
 
-          {/* The footnote, where the drawing puts it. It used to ride the sticky
-            rail; on a column this short it is on screen with the Send button
-            that precedes it, which is the moment it is actually read. */}
-          <AnonymityNote />
+          {/* The foot, as the canvas prints it: until when the session takes answers,
+            and how long it takes. The close is drawn only when this route was handed
+            one — `PublicMicroclimateDetail` carries no end time, so on the GUID route
+            there is nothing to state; the invitation route passes its token's
+            `endTime`. The estimate is the question count's, never a typed figure. */}
+          <footer
+            data-slot="pulse-footer"
+            className="mt-auto flex flex-wrap justify-between gap-2 text-xs text-fg-secondary"
+          >
+            <span>
+              {closesAt ? t('microclimates.next.openUntil', { date: formatDayMonth(closesAt, locale) }) : null}
+            </span>
+            <span>
+              {isUnderAMinute(total)
+                ? t('microclimates.next.underAMinute')
+                : t('microclimates.next.aboutMinutes', { minutes: estimatedMinutes(total) })}
+            </span>
+          </footer>
         </div>
       )}
     </Surface>
@@ -629,38 +688,47 @@ export default function MicroclimatePulseForm({
 /**
  * What this page does with the answers, stated as narrowly as it can be verified.
  *
- * Green plus the word: the chip spells out the state, so the colour is never the
- * only thing carrying it.
+ * The canvas's block (RespondMicroclimatePhone, 10 Sep), first on the page: the soft
+ * green box with the eye-off glyph, the state word as an uppercase label and one
+ * paragraph. The copy is unchanged — the label is `respondAnonymityChip`, which is the
+ * word the artboard prints, and the body is `respondAnonymityBody`. The title stays as
+ * the block's heading for assistive technology and is visually hidden, because the
+ * canvas draws no third line and the label already says it in a word.
+ *
+ * Green plus the word: the label spells out the state, so the colour is never the
+ * only thing carrying it. The label is `text-chip-good-ink`, not the artboard's
+ * `#0f7f4e`: `features/surveys/respondContrast.test.ts` measures the artboard's ink at
+ * 4.31:1 on this fill over the page ground, under AA, and measures this one over it in
+ * both palettes — the same ink `surveys/AnonymityNotice` uses.
  */
 function AnonymityNote() {
   const { t } = useTranslation()
 
   return (
-    <section className="grid gap-inline rounded-xl border border-accent-green-ring bg-accent-green-soft p-card">
-      <span className="flex items-center gap-inline">
-        <span className="grid size-icon-box shrink-0 place-items-center rounded-md text-accent-green">
-          <EyeOff aria-hidden="true" className="size-icon" />
-        </span>
-        {/* Secondary ink, not the accent: `text-accent-green` on the soft green
-            fill measures 3.49:1 in light, under AA for text this size. The accent
-            stays on the icon beside it. */}
-        <span className="text-2xs font-semibold uppercase tracking-label text-fg-secondary">
+    <section
+      data-slot="anonymity-notice"
+      className="flex gap-2.5 rounded-xl border border-accent-green-ring bg-accent-green-soft px-3.5 py-3"
+    >
+      <EyeOff aria-hidden="true" className="mt-px size-icon shrink-0 text-accent-green-ink" />
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <h2 className="sr-only">{t('microclimates.respondAnonymityTitle')}</h2>
+        <span className="text-2xs font-bold uppercase tracking-label text-chip-good-ink">
           {t('microclimates.respondAnonymityChip')}
         </span>
-      </span>
-      <h2 className="text-base font-semibold text-fg-primary">
-        {t('microclimates.respondAnonymityTitle')}
-      </h2>
-      <p className="text-sm text-fg-secondary">{t('microclimates.respondAnonymityBody')}</p>
+        <p className="m-0 text-sm text-fg-secondary">{t('microclimates.respondAnonymityBody')}</p>
+      </div>
     </section>
   )
 }
 
-/** The one panel on the page — every state renders inside it. */
+/**
+ * The column every state renders in.
+ *
+ * No panel of its own any more: the canvas draws the pulse as cards straight on the
+ * ground (RespondMicroclimatePhone), and a bordered panel around them read as a card
+ * holding cards. `flex-1` still fills the column `RespondShell`'s `<main>` gives it, so
+ * the footer can sit at the bottom of a short page rather than under the last card.
+ */
 function Surface({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex flex-1 flex-col gap-panel-gap rounded-xl border border-line-panel bg-surface-panel p-panel">
-      {children}
-    </div>
-  )
+  return <div className="flex flex-1 flex-col gap-4">{children}</div>
 }

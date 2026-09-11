@@ -13,7 +13,13 @@ import type { SurveyRespondView } from '../../features/surveys/api/surveyRespons
 import type { PublicMicroclimateDetail } from '../../features/microclimates/api/microclimates'
 
 /**
- * The respond instrument must actually stick.
+ * The respond instrument must actually stick — and, since the canvas redesign, that
+ * nothing is left to stick.
+ *
+ * **Canvas, 10 Sep.** The survey routes are one question per page now, with Anterior and
+ * Siguiente right under the card, so like the pulse they pin nothing; the two survey
+ * cases were re-pointed at that property. The history below explains the bar they used to
+ * measure, and why the same ancestor walk still matters for a column that must not be cut.
  *
  * ## The defect this exists to stop coming back
  *
@@ -422,20 +428,15 @@ function renderAt(path: string, pattern: string, element: React.ReactElement) {
 }
 
 /**
- * The bar, reached THROUGH the control the respondent finishes from.
- *
- * `closest` rather than a bare `querySelector('[data-slot=…]')`: the slot is an
- * attribute anyone can put on anything, and what this file is claiming is that the
- * box which sticks is the INSTRUMENT — the reading and the actions that used to be
- * in the rail. Reaching it from the submit button proves the containment by
- * construction, so if the actions ever move back out of the bar this stops finding
- * it rather than measuring an empty div.
+ * The column a survey page renders in, reached through the control the respondent
+ * finishes from — so what is claimed below is a property of the column the submit is IN,
+ * proved by construction rather than by a lucky selector.
  */
-async function findSubmitBar(): Promise<HTMLElement> {
+async function findSurveyColumn(): Promise<HTMLElement> {
   const submit = await screen.findByRole('button', { name: 'Enviar mis respuestas' })
-  const bar = submit.closest('[data-slot="respond-submit-bar"]')
-  expect(bar, 'the submit action rides the sticky bar').toBeTruthy()
-  return bar as HTMLElement
+  const column = submit.closest('[data-slot="respond-surface"]')
+  expect(column, 'the submit action is inside the respond column').toBeTruthy()
+  return column as HTMLElement
 }
 
 describe('the respond instrument sticks', () => {
@@ -525,65 +526,66 @@ describe('the respond instrument sticks', () => {
     }
   })
 
-  it('is sticky with nothing above it that scrolls on /surveys/:id/respond', async () => {
+  /**
+   * One question per page (the canvas's RespondSurveyPhone, 10 Sep) put the pair right
+   * under the card it acts on, on every page — so the survey routes, like the pulse, now
+   * pin nothing. The bottom bar these two cases used to measure is gone; what survives is
+   * what the pulse case measures: nothing on the page computes `sticky`, not at happy-dom's
+   * 1024px and not on a phone, and no ancestor of the column would clip it.
+   */
+  it('pins nothing, and nothing above the column clips it, on /surveys/:id/respond', async () => {
     vi.mocked(fetch).mockResolvedValue(
       new Response(JSON.stringify(surveyView()), { status: 200 }),
     )
     installStylesheet()
-    renderAt('/surveys/s1/respond', '/surveys/:id/respond', <SurveyRespondPage />)
+    const { container } = renderAt('/surveys/s1/respond', '/surveys/:id/respond', <SurveyRespondPage />)
 
-    const bar = await findSubmitBar()
-    const computed = getComputedStyle(bar)
-    expect(computed.position, 'the bar is sticky').toBe('sticky')
-    expect(computed.bottom, 'and pinned to the bottom edge of its scrollport').toBe('0px')
-
-    // The walk has to have reached the shell, or "no scrollport" is a claim about
-    // nothing. `RespondShell` gives `<main>` the id it also uses as the skip target,
-    // and the bar is the last child of the `<form>` rather than a sibling of it.
-    const chain = ancestorsOf(bar)
-    expect(chain.some((element) => element.tagName === 'FORM')).toBe(true)
-    expect(chain.some((element) => element.tagName === 'MAIN')).toBe(true)
-    expect(chain.some((element) => element.tagName === 'HTML')).toBe(true)
-
+    const column = await findSurveyColumn()
     expect(
-      scrollportAncestors(bar),
-      'An `overflow` on ANY ancestor makes that ancestor the bar\'s scrollport, '
-        + 'and none of them scrolls — the document does — so the bar stops sticking '
-        + 'and the answered count and both actions scroll off the bottom. Put the '
-        + 'wide-content guard on the wide row itself (see RespondQuestionField\'s '
-        + 'ranking <ol>), never on a box the bar sits inside.',
+      stickyElements(container),
+      'The canvas draws the pair under the card; a bar pinned to the viewport is not on it.',
     ).toEqual([])
 
-    // The rail was cut because it drew nothing below `lg` — on a phone, which is
-    // where this page is mostly answered. `lg:sticky` would satisfy every assertion
-    // above, because happy-dom's window is exactly 1024px, and would reintroduce
-    // that defect at the bottom of the screen instead of the side. So the same box
-    // is re-read on a phone.
+    // `max-lg:sticky` would pass the sweep at 1024px and pin the pair on the phone the
+    // survey is answered on, so the pair is re-read there on a fresh probe.
+    const nav = column.querySelector('[data-slot="respond-nav"]')
+    expect(nav, 'the pair renders').toBeTruthy()
     setViewportWidth(PHONE_VIEWPORT_WIDTH)
-    const onPhone = stickinessAtCurrentViewport(bar)
-    expect(onPhone.position, 'the bar sticks on a phone too, not only from `lg` up').toBe('sticky')
-    expect(onPhone.bottom).toBe('0px')
+    expect(stickinessAtCurrentViewport(nav!).position).not.toBe('sticky')
+
+    // The walk has to have reached the shell, or "no scrollport" is a claim about nothing.
+    const chain = ancestorsOf(column)
+    expect(chain.some((element) => element.tagName === 'MAIN')).toBe(true)
+    expect(chain.some((element) => element.tagName === 'HTML')).toBe(true)
+    expect(
+      scrollportAncestors(column),
+      'An `overflow` on any ancestor makes that ancestor a scrollport, and none of them '
+        + 'scrolls — the document does — so the column would be CUT, the pair below the '
+        + 'cut. Put the wide-content guard on the wide row itself (RespondQuestionField\'s '
+        + 'ranking <ol>), never on a box the column sits inside.',
+    ).toEqual([])
+
+    const card = document.querySelector('form fieldset')
+    expect(card, 'the question renders in a fieldset inside the form').toBeTruthy()
+    expect(getComputedStyle(card!).minWidth).toBe('0px')
   })
 
-  it('is sticky with nothing above it that scrolls on the public /survey/:id', async () => {
+  it('pins nothing, and nothing above the column clips it, on the public /survey/:id', async () => {
     vi.mocked(fetch).mockResolvedValue(
       new Response(JSON.stringify(surveyView()), { status: 200 }),
     )
     installStylesheet()
-    renderAt('/survey/s1', '/survey/:id', <PublicSurveyRespondPage />)
+    const { container } = renderAt('/survey/s1', '/survey/:id', <PublicSurveyRespondPage />)
 
-    const bar = await findSubmitBar()
-    expect(getComputedStyle(bar).position).toBe('sticky')
-    expect(getComputedStyle(bar).bottom).toBe('0px')
+    const column = await findSurveyColumn()
+    expect(stickyElements(container)).toEqual([])
 
     // Same vacuity control as the authenticated route: this shell is assembled by a
-    // different page component, so "no scrollport" has to be a claim about a walk
-    // that actually reached one.
-    const chain = ancestorsOf(bar)
+    // different page component, so "no scrollport" has to be about a walk that reached it.
+    const chain = ancestorsOf(column)
     expect(chain.some((element) => element.tagName === 'MAIN')).toBe(true)
     expect(chain.some((element) => element.tagName === 'HTML')).toBe(true)
-
-    expect(scrollportAncestors(bar)).toEqual([])
+    expect(scrollportAncestors(column)).toEqual([])
   })
 
   /**

@@ -1,5 +1,5 @@
 import DepartmentAdminDashboardView from '../components/DepartmentAdminDashboardView'
-import EmployeeDashboardView from '../components/EmployeeDashboardView'
+import EmployeeHomeView from '../next/employee/EmployeeHomeView'
 import PlatformDashboardView from '../next/super/PlatformDashboardView'
 import DashboardState from '../components/DashboardState'
 import AdminDashboardNextView, { AdminDashboardNextSkeleton } from '../next/AdminDashboardNextView'
@@ -82,7 +82,12 @@ export default function DashboardPage() {
     return <DepartmentAdminDashboardView />
   }
 
-  return <EmployeeDashboardView />
+  // The redesigned employee Home (the canvas's EmployeeDashboard, 10 Sep), which replaced
+  // `EmployeeDashboardView`. The old view stays in the tree as the wiring reference only:
+  // nothing routes to it or imports it. `DepartmentAdminDashboardView`'s no-department
+  // fallback draws this same `EmployeeHomeView` — both dispatchers are pinned in
+  // `router.test.ts`.
+  return <EmployeeHomeView />
 }
 
 /**

@@ -187,6 +187,22 @@ describe('MicroclimateInvitationPage', () => {
   })
 
   /**
+   * The canvas's foot prints "Abierta hasta el …", and only this route can: the token
+   * carries the session's `endTime`, while `PublicMicroclimateDetail` — all the GUID route
+   * has — carries none.
+   */
+  it('prints until when the session is open, from the invitation’s own end time', async () => {
+    serve()
+    renderPage()
+
+    await screen.findByRole('heading', { name: 'Pulso semanal' })
+    await userEvent.click(screen.getByRole('button', { name: 'Participar' }))
+    await screen.findByText('¿Cómo te sientes hoy?')
+    const foot = document.querySelector('[data-slot="pulse-footer"]')
+    expect(foot?.textContent).toContain('Abierta hasta el 26 de agosto')
+  })
+
+  /**
    * `completed` means THE ANSWERS ARE IN. Nothing else it could mean is worth recording.
    *
    * <p>The rung is not decoration: on a non-anonymous session `Advances` is strictly
@@ -301,8 +317,8 @@ describe('MicroclimateInvitationPage', () => {
   })
 
   /**
-   * The anonymity chip and the notice are a promise about how a response is stored, and this
-   * page has no basis for making it until the payload says so.
+   * The notice is a promise about how a response is stored, and this page has no basis for
+   * making it until the payload says so.
    */
   it('states the anonymity contract the payload actually reports', async () => {
     serve()
@@ -333,21 +349,16 @@ describe('MicroclimateInvitationPage', () => {
   })
 
   /**
-   * The OTHER anonymity claim on this page, and the more prominent of the two.
-   *
-   * `RespondShell` draws a green "Anónima" chip beside the lockup, above the fold — the first
-   * privacy statement a respondent reads, before the notice tested above. Its own doc calls
-   * the default-off "the one promise it is least entitled to guess at", and this route is its
-   * only microclimate caller. Inverting what gets passed shows the chip on an identified
-   * session and hides it on an anonymous one, which is the worst direction for it to be
-   * wrong in, and the whole test suite stayed green.
-   *
-   * Both directions, because the chip's absence is as load-bearing as its presence.
+   * One promise, made once. `RespondShell` used to draw a green "Anónima" chip beside the
+   * lockup on this route — the promise the landing card's notice makes a few pixels under it,
+   * in a second wording. The canvas's strip (RespondMicroclimatePhone, 10 Sep) draws no chip,
+   * so the header carries none for either kind of session, and the notice — which follows the
+   * payload's flag in both directions (the test above) — is the one statement on the card.
    */
   it.each([
-    ['an anonymous session', true, true],
-    ['a session that records who participates', false, false],
-  ])('shows the shell anonymity chip for %s only when the payload says so', async (_what, anonymous, expected) => {
+    ['an anonymous session', true, 'Sus respuestas no se asocian a usted'],
+    ['a session that records who participates', false, 'Esta sesión registra quién participa'],
+  ])('draws no anonymity chip in the header for %s, and states the promise once', async (_what, anonymous, statement) => {
     serve({
       resolve: () =>
         new Response(
@@ -364,16 +375,35 @@ describe('MicroclimateInvitationPage', () => {
           { status: 200 },
         ),
     })
-    renderPage()
+    const { container } = renderPage()
 
     await screen.findByRole('heading', { name: 'Pulso semanal' })
-    expect(screen.queryByText('Anónima') !== null).toBe(expected)
+    expect(container.querySelector('header [data-slot="chip"]')).toBeNull()
+    expect(screen.queryByText('Anónima')).toBeNull()
+    expect(screen.getAllByText(statement)).toHaveLength(1)
   })
 
   /**
-   * And it is off before the payload has said anything. A page still resolving the token has
-   * no basis for a privacy claim, and a chip that renders optimistically would be making one
-   * on a link that is about to come back revoked.
+   * After Participar the pulse's own block takes over from the card's: still no chip over it,
+   * and one block on the page.
+   */
+  it('keeps the header clear once the respondent begins, with the pulse’s one block under it', async () => {
+    serve()
+    const { container } = renderPage()
+
+    await screen.findByRole('heading', { name: 'Pulso semanal' })
+    await userEvent.click(screen.getByRole('button', { name: 'Participar' }))
+    await screen.findByText('¿Cómo te sientes hoy?')
+
+    expect(container.querySelector('header [data-slot="chip"]')).toBeNull()
+    expect(container.querySelectorAll('[data-slot="anonymity-notice"]')).toHaveLength(1)
+    expect(screen.getByText('No se asocia a usted')).toBeTruthy()
+  })
+
+  /**
+   * And nothing is claimed while the token is still being resolved. A page still resolving the
+   * token has no basis for a privacy claim, and one rendered optimistically would be made on a
+   * link that is about to come back revoked.
    */
   it('makes no anonymity claim while the token is still being resolved', async () => {
     let release: (() => void) | undefined
@@ -396,12 +426,14 @@ describe('MicroclimateInvitationPage', () => {
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         ),
     })
-    renderPage()
+    const { container } = renderPage()
 
-    expect(screen.queryByText('Anónima')).toBeNull()
+    expect(container.querySelector('header [data-slot="chip"]')).toBeNull()
+    expect(screen.queryByText('Sus respuestas no se asocian a usted')).toBeNull()
 
     release!()
-    expect(await screen.findByText('Anónima')).toBeTruthy()
+    expect(await screen.findByText('Sus respuestas no se asocian a usted')).toBeTruthy()
+    expect(container.querySelector('header [data-slot="chip"]')).toBeNull()
   })
 
   /**

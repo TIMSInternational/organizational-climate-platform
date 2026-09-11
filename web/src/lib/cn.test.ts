@@ -59,5 +59,8 @@ describe('cn', () => {
     expect(cn('text-3xl', 'text-kpi-hero')).toBe('text-kpi-hero')
     // The one that needs registering: not a t-shirt size, so unregistered it reads as a colour.
     expect(cn('text-reading', 'text-fg-primary')).toBe('text-reading text-fg-primary')
+    // The respond card's 17px question step (`text-question`), beside an ink and over another size.
+    expect(cn('text-question', 'text-fg-primary')).toBe('text-question text-fg-primary')
+    expect(cn('text-xl', 'text-question')).toBe('text-question')
   })
 })

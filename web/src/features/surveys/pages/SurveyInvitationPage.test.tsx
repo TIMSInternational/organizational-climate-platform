@@ -450,6 +450,27 @@ describe('SurveyInvitationPage', () => {
   })
 
   /**
+   * One promise, made once. `RespondShell` used to draw an "Anónima" chip beside the lockup
+   * on this route, over the landing card's anonymity block — the same promise twice, in two
+   * wordings. The canvas's strip (RespondSurveyPhone, 10 Sep) draws none; the block is the one
+   * statement, on the card and then on the form.
+   */
+  it('draws no anonymity chip in the header, and states the promise once on the card and once on the form', async () => {
+    serve()
+    const { container } = renderPage()
+
+    await screen.findByText('Esta encuesta es anónima')
+    expect(container.querySelector('header [data-slot="chip"]')).toBeNull()
+    expect(container.querySelectorAll('[data-slot="anonymity-notice"]')).toHaveLength(1)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Comenzar la encuesta' }))
+    await screen.findByRole('radio', { name: 'Bien' })
+
+    expect(container.querySelector('header [data-slot="chip"]')).toBeNull()
+    expect(container.querySelectorAll('[data-slot="anonymity-notice"]')).toHaveLength(1)
+  })
+
+  /**
    * Checked against `ResolveRespondentAsync`, not guessed: an unauthenticated caller is
    * served only when the survey is anonymous AND open. An invitee to a named survey with
    * no session is about to meet a 401 they would read as the link being broken.

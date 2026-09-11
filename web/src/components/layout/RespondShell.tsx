@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
-import { EyeOff, Waves } from 'lucide-react'
-import { LanguageSwitcher, useTranslation } from '../../i18n'
-import { Chip, SkipLink } from '../ui'
+import { Waves } from 'lucide-react'
+import { LanguageSwitcher } from '../../i18n'
+import { SkipLink } from '../ui'
 import { ThemeSwitcher } from './ShellControls'
 
 /**
@@ -41,18 +41,27 @@ const BRAND_TAIL = 'TE'
  * `AuthShell`: `ShellControls` is the only other place it has ever lived, and that
  * is inside the authenticated shell.
  *
- * ## The header carries the brand and the anonymity state, and nothing else
+ * ## The header carries the brand and the two pickers, and nothing else
  *
  * It used to carry the words "Organizational Climate Platform" in plain grey, with
  * the two pickers floating beside them — no mark, no wordmark, nothing that says
  * this is the same product that emailed the respondent. For most employees this is
  * the *only* screen of this product they ever see, so it now opens on the lockup
- * the signed-in rail opens on, and (when the survey is anonymous) on the chip that
- * states it before the first question is read.
+ * the signed-in rail opens on.
+ *
+ * ## No anonymity chip up here
+ *
+ * The two invitation routes used to pass an `anonymous` flag that put an "Anónima"
+ * chip beside the lockup. The canvas's respond strip (RespondSurveyPhone,
+ * RespondMicroclimatePhone, 10 Sep) draws none, and the chip was the promise the
+ * page's green block makes a few pixels under it — the landing card's, then the
+ * form's — said a second time, in a second wording, one word long. The promise is
+ * made once, by the block that has room to say what is and is not stored.
  *
  * Still no navigation and no account: somebody who followed a link out of an email
- * needs to know what site they are on and that nobody can trace the answers back to
- * them. Anything else here would be a claim about a tenant.
+ * needs to know what site they are on, and the page under this strip tells them
+ * whether the answers can come back to them. Anything else here would be a claim
+ * about a tenant.
  */
 export interface RespondShellProps {
   /** Already-translated label for the skip link, e.g. "Skip to the survey". */
@@ -62,50 +71,32 @@ export interface RespondShellProps {
    * `/survey/:id` passes `survey`, which is the anchor its own test pins.
    */
   contentId?: string
-  /**
-   * Whether responses to the thing being answered are anonymous. Puts the
-   * "Anonymous" chip beside the lockup when it is.
-   *
-   * Defaults to **off**, deliberately. Anonymity is a per-survey setting the shell
-   * cannot know, and a chip that appears by default would be this page making the
-   * one promise it is least entitled to guess at. Callers that have the flag pass
-   * it; the ones that do not are unaffected.
-   */
-  anonymous?: boolean
   children: ReactNode
 }
 
-export function RespondShell({
-  skipLabel,
-  contentId = 'respond',
-  anonymous = false,
-  children,
-}: RespondShellProps) {
-  const { t } = useTranslation('surveyRespond')
-
+export function RespondShell({ skipLabel, contentId = 'respond', children }: RespondShellProps) {
   return (
     <div className="flex min-h-dvh flex-col bg-surface-outer">
       {/* First focusable thing on the page, so a keyboard user is not made to Tab
           through the language and theme pickers on the way to the questions. */}
       <SkipLink href={`#${contentId}`}>{skipLabel}</SkipLink>
 
-      {/* Transparent and unruled, like the shell's own top strip: the card below
-          is the only panel, and a filled bar here would read as a second surface
-          with a seam between them. */}
-      <header className="mx-auto flex w-full max-w-content flex-wrap items-center justify-between gap-inline px-gutter py-inline">
+      {/* Transparent and unruled, like the shell's own top strip: the cards below
+          are the only surfaces, and a filled bar here would read as a second one
+          with a seam between them.
+
+          The canvas's respond strip (RespondSurveyPhone and its two siblings, 10 Sep):
+          16px in from the edge and 14px down, the small lockup on the left and the two
+          pickers drawn as 22px chips on the right. Capped at the same width as the
+          column under it, so on a wide screen the lockup sits over the questions rather
+          than stranded at the window's edge. */}
+      <header className="mx-auto flex w-full max-w-field flex-wrap items-center justify-between gap-inline px-4 py-3.5">
         <span className="flex flex-wrap items-center gap-inline">
-          <BrandLockup />
-          {/* Beside the lockup rather than inside the form, because it is the
-              answer to the question a respondent asks before they read anything:
-              can this come back to me. `Chip` requires the word, so the tint is
-              never the only carrier of it. */}
-          {anonymous ? (
-            <Chip tone="accent" label={t('anonymousChip')} icon={<EyeOff aria-hidden="true" />} />
-          ) : null}
+          <BrandLockup size="compact" />
         </span>
-        <span className="flex flex-wrap items-center gap-inline">
-          <LanguageSwitcher compact />
-          <ThemeSwitcher compact />
+        <span className="flex flex-wrap items-center gap-1.5">
+          <LanguageSwitcher variant="chip" />
+          <ThemeSwitcher variant="chip" />
         </span>
       </header>
 
@@ -129,7 +120,13 @@ export function RespondShell({
         // it a short state — the thank-you card, a closed survey — renders as a
         // stub stranded at the top of a large empty field, which reads as content
         // that failed to load rather than as a page with little on it.
-        className="mx-auto flex w-full max-w-content flex-1 flex-col px-gutter pb-section"
+        //
+        // `max-w-field` (32rem), not `max-w-content`: the canvas draws this surface as a
+        // phone — one column of cards 358px across at 390 — and on a wide screen the
+        // same column centred, with the lockup over it. A question card stretched to
+        // 1280px put the five scale boxes 250px apart. 16px in and 24px of floor, the
+        // artboard's own padding.
+        className="mx-auto flex w-full max-w-field flex-1 flex-col px-4 pb-6 pt-2"
       >
         {children}
       </main>
@@ -173,20 +170,41 @@ export function RespondShell({
  * which is also why `features/surveys/respondContrast.test.ts` measures the chip
  * word and the prose but not this. Nothing else in either shell inks with it.
  */
-export function BrandLockup() {
+export function BrandLockup({
+  size = 'default',
+}: {
+  /**
+   * `compact` is the respond strip's lockup as the canvas draws it (RespondSurveyPhone
+   * and its siblings, 10 Sep): a 24px tile on the recessed surface with the mark in the
+   * secondary ink, and a 13px wordmark. The sign-in card keeps `default`, the rail's
+   * 28px tile and 16px wordmark — it is a destination page, not a strip over a form.
+   */
+  size?: 'default' | 'compact'
+} = {}) {
+  const compact = size === 'compact'
   return (
-    <span data-slot="brand-lockup" className="flex items-center gap-inline">
+    <span data-slot="brand-lockup" data-size={size} className="flex items-center gap-inline">
       {/* `aria-hidden` for `SidebarBrand`'s reason: the wordmark beside it already
           names the product, and an announced "Waves" would be noise. */}
       <span
         aria-hidden="true"
-        className="grid size-icon-box shrink-0 place-items-center rounded-md bg-accent-blue-soft text-accent-blue"
+        className={
+          compact
+            ? 'grid size-6 shrink-0 place-items-center rounded-lg bg-surface-icon-box text-fg-secondary'
+            : 'grid size-icon-box shrink-0 place-items-center rounded-md bg-accent-blue-soft text-accent-blue'
+        }
       >
-        <Waves className="size-icon" />
+        <Waves className={compact ? 'size-3.5' : 'size-icon'} />
       </span>
       {/* One `<span>`, two coloured halves — not two words with a space, which is
           what a screen reader would otherwise announce. */}
-      <span className="whitespace-nowrap text-xl font-bold tracking-tight">
+      <span
+        className={
+          compact
+            ? 'whitespace-nowrap text-base font-bold'
+            : 'whitespace-nowrap text-xl font-bold tracking-tight'
+        }
+      >
         <span className="text-fg-primary">{BRAND_LEAD}</span>
         <span className="text-accent-blue">{BRAND_TAIL}</span>
       </span>

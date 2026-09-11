@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router'
 import DepartmentAdminDashboardView from './DepartmentAdminDashboardView'
 import { TranslationProvider } from '../../../i18n'
 import { setToken } from '../../../auth/token'
+import { CompanyContextProvider } from '../../../company-context'
 import { canReach } from '../../../navigation/roleCapabilities'
 import {
   NO_DEPARTMENT_MESSAGE,
@@ -141,7 +142,12 @@ function renderView(locale: 'en' | 'es' = 'en') {
   return render(
     <TranslationProvider initialLocale={locale}>
       <MemoryRouter initialEntries={['/dashboard']}>
-        <DepartmentAdminDashboardView />
+        {/* The company context the app shell provides around every dashboard: the
+            no-department fallback is the redesigned Home, which reads the viewer's role
+            from it for its eyebrow. */}
+        <CompanyContextProvider>
+          <DepartmentAdminDashboardView />
+        </CompanyContextProvider>
       </MemoryRouter>
     </TranslationProvider>,
   )
@@ -398,6 +404,9 @@ describe('DepartmentAdminDashboardView', () => {
 
       // The employee view's greeting, addressed to them by name — i.e. a page that loaded.
       expect(await screen.findByText('Pulso de incorporación')).toBeTruthy()
+      // The redesigned Home — the screen `/dashboard` draws for an employee — not the view
+      // it replaced: one per-user page, one look, whoever lands on it.
+      expect(document.querySelector('[data-slot="home-lead"]')).toBeTruthy()
 
       expect(screen.queryByText('Unable to fetch dashboard data')).toBeNull()
       expect(
