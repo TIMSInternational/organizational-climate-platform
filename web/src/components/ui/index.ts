@@ -207,3 +207,14 @@ export { DatePicker, type DatePickerProps } from './date-picker'
 // respond form and the microclimate page both reached for it before it was in the
 // barrel, which is the moment a primitive has earned its place in one.
 export { SegmentedScale, type SegmentedScaleProps } from './SegmentedScale'
+// The canvas's own button and chip glyphs (10 Sep artboards), for the screens drawn
+// from them; lucide stays for any glyph the canvas never drew.
+export {
+  CanvasArrowRightIcon,
+  CanvasClockIcon,
+  CanvasCopyIcon,
+  CanvasFileIcon,
+  CanvasLinkIcon,
+  CanvasLockIcon,
+  CanvasPlusIcon,
+} from './canvasGlyphs'

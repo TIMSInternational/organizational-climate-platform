@@ -8,6 +8,10 @@ import {
   AlertDescription,
   AlertTitle,
   Button,
+  CanvasClockIcon,
+  CanvasCopyIcon,
+  CanvasFileIcon,
+  CanvasLockIcon,
   Chip,
   ConfirmationDialog,
   EmptyState,
@@ -16,12 +20,6 @@ import {
   Progress,
   SkeletonText,
 } from '../../../components/ui'
-import {
-  CanvasClockIcon,
-  CanvasCopyIcon,
-  CanvasFileIcon,
-  CanvasLockIcon,
-} from '../../../components/ui/canvasGlyphs'
 import { PROTECTED_HATCH } from '../../../components/charts/suppression'
 import { cn } from '../../../lib/cn'
 import type { LiveResults, MicroclimateDetail } from '../api/microclimates'

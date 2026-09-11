@@ -5,6 +5,11 @@ import { useTranslation, type TranslateFn } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
 import {
   Button,
+  CanvasArrowRightIcon,
+  CanvasClockIcon,
+  CanvasFileIcon,
+  CanvasLinkIcon,
+  CanvasPlusIcon,
   Chip,
   EmptyState,
   LoadingRegion,
@@ -12,13 +17,6 @@ import {
   Progress,
   SkeletonText,
 } from '../../../components/ui'
-import {
-  CanvasArrowRightIcon,
-  CanvasClockIcon,
-  CanvasFileIcon,
-  CanvasLinkIcon,
-  CanvasPlusIcon,
-} from '../../../components/ui/canvasGlyphs'
 import { ProtectedCell } from '../../../components/charts'
 import { useViewerCapabilities } from '../../../auth/viewerCapabilities'
 import { RailMicroclimatesIcon } from '../../../navigation/railIcons'
