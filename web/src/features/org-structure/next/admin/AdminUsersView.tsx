@@ -269,6 +269,17 @@ export default function AdminUsersView() {
 
 type Translate = ReturnType<typeof useTranslation>['t']
 
+/**
+ * A role as the roster's chip prints it. The Rol column is the board's 120px, which holds its
+ * one-word chips (Líder, Supervisora, Empleado) but not «Administrador de empresa» — the chip
+ * clipped it to «Administrador d». An administrator's chip says «Administrador» beside the
+ * shield and carries the full role in its title; every other role keeps its own name.
+ */
+function rosterRole(t: Translate, role: string): { label: string; title?: string } {
+  const full = roleText(t, role)
+  return role === 'company_admin' ? { label: t('users.next.roster.roleAdmin'), title: full } : { label: full }
+}
+
 function groupName(t: Translate, entry: DepartmentGroup): string {
   if (entry.id === NO_DEPARTMENT) return t('users.next.rail.none')
   return entry.name ?? t('users.next.rail.unnamed')
@@ -631,11 +642,13 @@ function Roster({
                         </div>
                       </div>
                     </td>
-                    <td className="min-w-0 px-3 py-2.5">
+                    {/* No right padding: the chip gets the board's whole 120px, the next column's own
+                        12px keeping ÚLTIMA ACTIVIDAD on x=1166. */}
+                    <td className="min-w-0 py-2.5 pr-0 pl-3">
                       <CanvasChip
                         tone="neutral"
                         icon={isAdminRole(user.role) ? <Shield className="size-3" /> : undefined}
-                        label={roleText(t, user.role)}
+                        {...rosterRole(t, user.role)}
                         className="max-w-full truncate"
                       />
                     </td>

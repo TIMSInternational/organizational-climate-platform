@@ -138,17 +138,24 @@ describe('PrivacyNextPage', () => {
   })
 
   it('counts the kinds of record it does not name from the access export itself: «…y otros N tipos de registro»', async () => {
-    // SubjectAccessExport.cs builds one ExportTreatment.Reference section per call in its Actor
-    // block (lines 158-205 on 11 Sep: seventeen ReferencesAsync, QuestionLibraryAuthorshipAsync,
-    // ReportsAsync, ReportSharesAsync). The row names three of them and counts the rest, so a
-    // section added or removed there must fail here instead of falsifying the sentence.
+    // SubjectAccessExport.cs builds one ExportTreatment.Reference section per awaited call in its
+    // Actor block (lines 156-206 on 11 Sep: seventeen ReferencesAsync, QuestionLibraryAuthorshipAsync,
+    // ReportsAsync, ReportSharesAsync — twenty). The row names three of them and counts the rest,
+    // so a section added to or removed from that block must fail here instead of falsifying the
+    // sentence. Only that block is counted: the Subject block above it awaits fourteen sections of
+    // its own, which are not the reader's authorship.
     const source = readFileSync(
       join(process.cwd(), '..', 'src', 'ClimateProject.Infrastructure', 'Gdpr', 'SubjectAccessExport.cs'),
       'utf8',
     )
-    const sections = source.match(/await (?:ReferencesAsync|QuestionLibraryAuthorshipAsync|ReportsAsync|ReportSharesAsync)\(/g) ?? []
+    const start = source.indexOf('// --- Actor:')
+    expect(start).toBeGreaterThan(-1)
+    const end = source.indexOf('};', start)
+    expect(end).toBeGreaterThan(start)
+    const actor = source.slice(start, end)
+    const sections = actor.match(/await \w+Async\(/g) ?? []
     for (const named of ['ReferencesAsync("Survey",', 'ReferencesAsync("ActionPlan",', 'await ReportsAsync(']) {
-      expect(source).toContain(named)
+      expect(actor).toContain(named)
     }
     routeFetch()
     renderPage()

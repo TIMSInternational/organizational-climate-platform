@@ -3369,7 +3369,8 @@
         "empty": "Nadie coincide con esta búsqueda.",
         "noteLead": "Una cuenta desactivada lleva",
         "noteTailNone": "junto al nombre y deja de entrar. Hoy no hay ninguna en {company}.",
-        "noteTailSome": "junto al nombre y deja de entrar. Hoy hay {count} en {company}."
+        "noteTailSome": "junto al nombre y deja de entrar. Hoy hay {count} en {company}.",
+        "roleAdmin": "Administrador"
       },
       "invitations": {
         "heading": "Invitaciones pendientes",

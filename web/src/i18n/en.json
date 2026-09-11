@@ -3369,7 +3369,8 @@
         "empty": "Nobody matches this search.",
         "noteLead": "A deactivated account carries",
         "noteTailNone": "next to the name and can no longer sign in. Today there are none at {company}.",
-        "noteTailSome": "next to the name and can no longer sign in. Today there are {count} at {company}."
+        "noteTailSome": "next to the name and can no longer sign in. Today there are {count} at {company}.",
+        "roleAdmin": "Administrator"
       },
       "invitations": {
         "heading": "Pending invitations",

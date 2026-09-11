@@ -3,8 +3,8 @@
  * responsibility — the row «Lo que creaste o te nombra» on Privacidad.
  *
  * The source of truth is `src/ClimateProject.Infrastructure/Gdpr/SubjectAccessExport.cs`,
- * which builds one `ExportTreatment.Reference` section per call in its "Actor" block
- * (lines 158-205 on 11 Sep 2026): seventeen `ReferencesAsync`, plus
+ * which builds one `ExportTreatment.Reference` section per awaited call in its "Actor" block
+ * (lines 156-206 on 11 Sep 2026): seventeen `ReferencesAsync`, plus
  * `QuestionLibraryAuthorshipAsync`, `ReportsAsync` and `ReportSharesAsync` — twenty. The row
  * names three of them (surveys, reports, action plans) and counts the rest, as the
  * PrivacySettings artboard writes it: «…y otros 17 tipos de registro».

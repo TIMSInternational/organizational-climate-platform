@@ -266,4 +266,21 @@ describe('AdminUsersView (company administrator)', () => {
     await userEvent.click(within(cells[4]).getByRole('button', { name: T.invitations.resend }))
     await waitFor(() => expect(resend).toHaveBeenCalledTimes(1))
   })
+
+  it('names an administrator in one word inside the board’s 120px Rol column, the full role in its title', async () => {
+    vi.stubGlobal('fetch', fetchWith())
+    renderAt(ROUTE)
+    await waitFor(() => expect(rows().length).toBeGreaterThan(0))
+    const chipOf = (role: string) => {
+      const person = USERS.find((user) => user.role === role) as User
+      const row = document.querySelector(`tr[data-user-id="${person.id}"]`) as HTMLElement
+      return within(row).getAllByRole('cell')[1].querySelector('[data-slot="chip"]') as HTMLElement
+    }
+    const admin = chipOf('company_admin')
+    expect(admin.textContent).toBe(T.roster.roleAdmin)
+    expect(admin.getAttribute('title')).toBe(es.superadmin.next.users.roles.company_admin)
+    const leader = chipOf('leader')
+    expect(leader.textContent).toBe(es.superadmin.next.users.roles.leader)
+    expect(leader.hasAttribute('title')).toBe(false)
+  })
 })
