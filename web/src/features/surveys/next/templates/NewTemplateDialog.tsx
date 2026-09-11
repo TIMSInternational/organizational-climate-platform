@@ -118,13 +118,13 @@ export default function NewTemplateDialog({
         >
           <Field fieldLabel={t(`${K}.newFromSurvey`)} htmlFor={`${ids}-survey`} required helper={t(`${K}.newFromSurveyHelp`)}>
             {loadFailed ? (
-              <p role="alert" className="m-0 text-xs text-accent-red">
+              <p role="alert" className="m-0 text-xs text-accent-red-ink">
                 {t(`${K}.newSurveysFailed`)}
               </p>
             ) : surveys === null ? (
               <SkeletonText lines={1} />
             ) : surveys.length === 0 ? (
-              <p className="m-0 text-xs text-fg-tertiary">{t(`${K}.newNoSurveys`)}</p>
+              <p className="m-0 text-xs text-fg-secondary">{t(`${K}.newNoSurveys`)}</p>
             ) : (
               <CanvasSelect id={`${ids}-survey`} className="w-full" value={surveyId} onChange={(event) => pick(event.target.value)}>
                 <option value="" disabled>
@@ -154,7 +154,7 @@ export default function NewTemplateDialog({
             </CanvasSelect>
           </Field>
           {status === 'failed' && (
-            <p role="alert" className="m-0 text-sm text-accent-red">
+            <p role="alert" className="m-0 text-sm text-accent-red-ink">
               {t(`${K}.newFailed`)}
             </p>
           )}

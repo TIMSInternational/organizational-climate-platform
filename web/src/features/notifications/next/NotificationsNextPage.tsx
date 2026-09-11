@@ -48,7 +48,10 @@ export default function NotificationsNextPage() {
     () => state.notifications.map((notification) => rowOf(notification, capabilities.canOpenResults)),
     [state.notifications, capabilities],
   )
+  // Counts, the period and "mark all" exist only once the inbox has answered with rows: while it
+  // loads or after its request failed there is no count to print — never a 0 standing in for one.
   const empty = state.status === 'ready' && rows.length === 0
+  const hasRows = state.status === 'ready' && rows.length > 0
   const inPeriod = rows.filter((row) => withinPeriod(row, period, now))
   const counts = facetCounts(inPeriod)
   const shown = inPeriod.filter((row) => matchesFacet(row, facet))
@@ -66,9 +69,10 @@ export default function NotificationsNextPage() {
         description={t(`${K}.description`)}
         actions={
           <>
-            {/* Nothing to mark on an empty inbox, so the action is not offered there; with rows
-                it keeps the artboard's weight and is disabled only while none is unread. */}
-            {!empty && (
+            {/* Nothing to mark on an empty inbox, or before the inbox has answered, so the action
+                is not offered then; with rows it keeps the artboard's weight and is disabled only
+                while none is unread. */}
+            {hasRows && (
               <Button variant="outline" size="canvas" disabled={unread === 0} onClick={() => void state.markAllRead()}>
                 <Check aria-hidden="true" />
                 {t(`${K}.markAll`)}
@@ -86,7 +90,15 @@ export default function NotificationsNextPage() {
 
       <div className="-mt-1 grid gap-4 xl:grid-cols-[minmax(0,8fr)_minmax(0,4fr)]">
         <section aria-label={t(`${K}.inboxLabel`)} className="min-w-0 overflow-hidden rounded-xl border border-line-default bg-surface-card shadow-sm">
-          {empty ? (
+          {state.status === 'error' ? (
+            <div className="p-4">
+              <NetworkError title={t('notifications.loadFailed')} description={state.error ?? undefined} onRetry={state.reload} retryText={t('common.retry')} />
+            </div>
+          ) : state.status === 'loading' ? (
+            <div className="p-4">
+              <SkeletonText lines={6} />
+            </div>
+          ) : empty ? (
             <div data-slot="inbox-empty" className="px-4 py-6">
               <EmptyState icon={<Bell aria-hidden="true" className="size-6" />} title={t(`${K}.emptyTitle`)} description={t(`${K}.emptyBody`)} />
             </div>
@@ -127,36 +139,23 @@ export default function NotificationsNextPage() {
                   ))}
                 </CanvasSelect>
               </div>
-
-              {state.status === 'error' ? (
-                <div className="border-t border-line-light p-4">
-                  <NetworkError title={t('notifications.loadFailed')} description={state.error ?? undefined} onRetry={state.reload} retryText={t('common.retry')} />
-                </div>
-              ) : state.status === 'loading' ? (
-                <div className="border-t border-line-light p-4">
-                  <SkeletonText lines={6} />
-                </div>
-              ) : (
-                <>
-                  <ul className="m-0 list-none p-0">
-                    {shown.map((row) => (
-                      <Row
-                        key={row.id}
-                        row={row}
-                        date={day.format(new Date(row.createdAt)).replace('.', '')}
-                        onOpen={() => {
-                          if (row.unread) void state.markRead(row.id)
-                        }}
-                      />
-                    ))}
-                    {shown.length === 0 && <li className="border-t border-line-light px-4 py-3 text-xs text-fg-tertiary">{t(`${K}.nothingHere`)}</li>}
-                  </ul>
-                  {oldest && (
-                    <p className="m-0 border-t border-line-light px-4 py-2.5 text-xs text-fg-tertiary">
-                      {t(`${K}.nothingBefore`, { date: longDay.format(new Date(oldest)) })}
-                    </p>
-                  )}
-                </>
+              <ul className="m-0 list-none p-0">
+                {shown.map((row) => (
+                  <Row
+                    key={row.id}
+                    row={row}
+                    date={day.format(new Date(row.createdAt)).replace('.', '')}
+                    onOpen={() => {
+                      if (row.unread) void state.markRead(row.id)
+                    }}
+                  />
+                ))}
+                {shown.length === 0 && <li className="border-t border-line-light px-4 py-3 text-xs text-fg-tertiary">{t(`${K}.nothingHere`)}</li>}
+              </ul>
+              {oldest && (
+                <p className="m-0 border-t border-line-light px-4 py-2.5 text-xs text-fg-tertiary">
+                  {t(`${K}.nothingBefore`, { date: longDay.format(new Date(oldest)) })}
+                </p>
               )}
             </>
           )}

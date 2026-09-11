@@ -119,6 +119,14 @@ describe('SurveyTemplatesNextPage (/surveys/templates)', () => {
     expect(screen.getByText(copy.dimensionsUnavailable)).toBeTruthy()
   })
 
+  it('prints no category count while the list request has failed — never “All 0” for templates it could not read', async () => {
+    vi.mocked(listSurveyTemplates).mockRejectedValue(new Error('boom'))
+    renderAs({ role: 'company_admin', companyId: 'c1' })
+    expect(await screen.findByText(copy.loadFailed)).toBeTruthy()
+    expect(document.querySelectorAll('[data-slot="category-chip"]')).toHaveLength(0)
+    expect(screen.queryByRole('group', { name: copy.categoriesLabel })).toBeNull()
+  })
+
   it('counts in Spanish singulars: one “plantilla”, one “pregunta”', async () => {
     window.localStorage.setItem('preferredLocale', 'es')
     vi.mocked(listSurveyTemplates).mockResolvedValue([{ ...item('uno', 'Pulso corto', 'pulse', 0), questionCount: 1 }])

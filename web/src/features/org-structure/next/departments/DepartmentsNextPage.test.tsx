@@ -110,6 +110,17 @@ describe('DepartmentsNextPage (/departments)', () => {
     window.localStorage.removeItem(COMPANY_CONTEXT_STORAGE_KEY)
   })
 
+  it('contains the list: its box is the containing block of the table’s screen-reader spans, so they cannot widen the page at 390', async () => {
+    renderAs({ role: 'company_admin', companyId: 'c1' })
+    await screen.findByText('Ingeniería', { selector: 'td' })
+    const box = document.querySelector('[data-slot="departments-list"]') as HTMLElement
+    // `position: relative` + `overflow: hidden`: an absolutely positioned `sr-only` span inside
+    // the table is laid out against this box and clipped by it. Without `relative` they were
+    // placed against the page and widened the document to 649px at a 390 viewport (the shot).
+    expect(box.className.split(/\s+/)).toEqual(expect.arrayContaining(['relative', 'overflow-hidden']))
+    expect(box.querySelectorAll('.sr-only').length).toBeGreaterThan(0)
+  })
+
   it('prints "protected" and no number for a group the server suppressed, even when it sends a count at or over the floor', async () => {
     renderAs({ role: 'company_admin', companyId: 'c1' })
     const row = await screen.findByText('Ingeniería', { selector: 'td' })

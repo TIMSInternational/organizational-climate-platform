@@ -89,6 +89,17 @@ describe('NotificationsNextPage (/notifications)', () => {
     expect(screen.queryByRole('button', { name: copy.markAll })).toBeNull()
   })
 
+  it('prints no count, no period and nothing to mark while the inbox request has failed — never a 0 for a count it could not read', async () => {
+    vi.mocked(listMyNotifications).mockRejectedValue(new Error('boom'))
+    renderAs({ role: 'company_admin', companyId: 'c1' })
+    expect(await screen.findByText(en.notifications.loadFailed)).toBeTruthy()
+    const inboxBox = screen.getByRole('region', { name: copy.inboxLabel })
+    expect(inboxBox.querySelectorAll('[data-slot="facet-chip"]')).toHaveLength(0)
+    expect(inboxBox.textContent).not.toMatch(/\d/)
+    expect(screen.queryByRole('combobox', { name: copy.periodLabel })).toBeNull()
+    expect(screen.queryByRole('button', { name: copy.markAll })).toBeNull()
+  })
+
   it('counts only the rows the inbox returned, dates the footer from the oldest of them, and offers "Mark all as read" while one is unread', async () => {
     const rows = inbox()
     vi.mocked(listMyNotifications).mockResolvedValue(rows)

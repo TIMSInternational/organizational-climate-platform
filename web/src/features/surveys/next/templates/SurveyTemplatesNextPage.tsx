@@ -83,31 +83,36 @@ export default function SurveyTemplatesNextPage() {
           setQ(draft.trim())
         }}
       >
-        <div role="group" aria-label={t(`${K}.categoriesLabel`)} className="flex flex-wrap items-center gap-1.5">
-          {['', ...categoriesOf(state.templates)].map((value) => {
-            const selected = category === value
-            return (
-              <button
-                key={value || 'all'}
-                type="button"
-                aria-pressed={selected}
-                data-slot="category-chip"
-                onClick={() => setCategory(value)}
-                className={cn(
-                  chipVariants({ tone: selected ? 'critical' : 'neutral' }),
-                  'h-6.5 cursor-pointer px-2.5 text-sm',
-                  selected ? 'border-chip-critical-ink/20' : 'bg-surface-card hover:border-line-hover',
-                )}
-              >
-                {t(`${K}.chipCount`, {
-                  label: value ? categoryLabel(t, value) : t(`${K}.all`),
-                  count: value ? (counts.get(value) ?? 0) : state.templates.length,
-                })}
-              </button>
-            )
-          })}
-        </div>
-        <div className="flex items-center gap-2">
+        {/* The chips count templates, so they exist only once the list has answered: while it
+            loads or after it failed there is no count to print, and "Todas 0" would say the
+            company has no template. */}
+        {state.status === 'ready' && (
+          <div role="group" aria-label={t(`${K}.categoriesLabel`)} className="flex flex-wrap items-center gap-1.5">
+            {['', ...categoriesOf(state.templates)].map((value) => {
+              const selected = category === value
+              return (
+                <button
+                  key={value || 'all'}
+                  type="button"
+                  aria-pressed={selected}
+                  data-slot="category-chip"
+                  onClick={() => setCategory(value)}
+                  className={cn(
+                    chipVariants({ tone: selected ? 'critical' : 'neutral' }),
+                    'h-6.5 cursor-pointer px-2.5 text-sm',
+                    selected ? 'border-chip-critical-ink/20' : 'bg-surface-card hover:border-line-hover',
+                  )}
+                >
+                  {t(`${K}.chipCount`, {
+                    label: value ? categoryLabel(t, value) : t(`${K}.all`),
+                    count: value ? (counts.get(value) ?? 0) : state.templates.length,
+                  })}
+                </button>
+              )
+            })}
+          </div>
+        )}
+        <div className="ml-auto flex items-center gap-2">
           <Input
             type="search"
             aria-label={t(`${K}.searchPlaceholder`)}
