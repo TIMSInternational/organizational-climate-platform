@@ -136,10 +136,10 @@ function markSaving(previous: RespondSaveState): RespondSaveState {
  * ## What it honours rather than invents
  *
  * `Survey.Settings` already decides the shape of this page, so nothing here is a
- * product decision taken locally: `ShowProgress` gates the progress bar,
- * `AllowPartialResponses` gates the save-and-continue button, `RandomizeQuestions`
- * gates the shuffle — and, through `respondDimensions`, the dimension headings —
- * and `TimeLimitMinutes` gates the countdown. Each one is off unless the survey
+ * product decision taken locally: `ShowProgress` gates the position reading and the
+ * bar, `AllowPartialResponses` gates "Guardar y terminar después", `RandomizeQuestions`
+ * gates the shuffle — and, through `respondDimensions`, the dimension label on each
+ * card — and `TimeLimitMinutes` gates the countdown. Each one is off unless the survey
  * turned it on.
  *
  * **`AutoSave` was the exception, and #369 closed it.** The setting existed on
@@ -176,14 +176,17 @@ function markSaving(previous: RespondSaveState): RespondSaveState {
  * stores no user id, no IP and no user agent, and demographics are captured only on
  * completion.
  *
- * ## The shape the approved employee design asks for
+ * ## The shape the canvas draws (RespondSurveyPhone, 10 Sep)
  *
- * One column, not two. The anonymity promise is the first block on the page, the
- * questions run under dimension headings beneath it, and the answered count and the
- * two actions ride a bar stuck to the bottom of the viewport. The design's note says
- * why the instrument panel that used to hold all three moved: its position cost the
- * form a third of the width, left a column of white space below the fold, and did
- * not exist at all on a phone — which is where this page is mostly answered.
+ * One column, one question at a time — the triage's "one question at a time on small
+ * screens". The anonymity promise is the first block, once; then the survey's name
+ * with "2 de 6" over a 6px bar; the question card with its `2/6` chip and dimension;
+ * Anterior and Siguiente right under it (the submit on the last page); "Guardar y
+ * terminar después" and the save state under those; and the close date and the time
+ * it takes at the foot. Nothing is pinned to the viewport: with one question per page
+ * the pair is always under the card it acts on. Only the presentation is paged — the
+ * answer map, the autosave, the resume and the one POST that completes the response
+ * are the ones the long form had, over the whole survey.
  */
 export default function SurveyRespondForm({
   surveyId,
@@ -565,13 +568,13 @@ export default function SurveyRespondForm({
   /**
    * Where a resumed respondent is put.
    *
-   * The form is deliberately one page rather than a wizard, so "where they stopped" can
-   * only mean focus. It moves to the first question they have not answered — the same
-   * `questionFieldId` machinery a failed submit uses, which is already focusable
-   * (`tabIndex={-1}` on the fieldset) and already scrolls itself into view.
+   * One question per page, so "where they stopped" is a page and a focus: the page turns
+   * to the first question they have not answered and focus follows it once it has
+   * rendered — the same `questionFieldId` machinery a failed submit uses, which is
+   * already focusable (`tabIndex={-1}` on the fieldset).
    *
-   * Runs on the render after hydration, because the fieldsets have to exist to be
-   * focused. It also seeds `savedSignature` with what came back: the server already
+   * Runs on the render after hydration, because the questions have to exist to be
+   * turned to. It also seeds `savedSignature` with what came back: the server already
    * holds exactly these answers, and re-posting them on arrival would be a write per
    * resume that says nothing.
    *

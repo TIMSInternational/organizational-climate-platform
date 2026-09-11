@@ -24,8 +24,9 @@ export interface HomeSurvey {
   /** ISO timestamp the survey stops accepting answers. */
   closesAt: string
   /**
-   * Whole days from `asOf` to `closesAt`, floored at zero; `null` for an unparseable
-   * date, which draws no countdown at all rather than a guessed one.
+   * Calendar days from the reader's date at `asOf` to the UTC day `closesAt` falls on,
+   * floored at zero (`compose.ts` `daysUntil`); `null` for an unparseable date, which
+   * draws no countdown at all rather than a guessed one.
    */
   daysLeft: number | null
   /**

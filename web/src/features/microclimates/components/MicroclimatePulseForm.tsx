@@ -345,24 +345,23 @@ function toPageError(err: unknown): PageError {
  * so the ban on the two AA-failing utilities followed it here rather than being left
  * behind on a file that no longer contains any classes.
  *
- * ## The pulse, drawn the way the approved design draws it
+ * ## The pulse, drawn the way the canvas draws it (RespondMicroclimatePhone, 10 Sep)
  *
- * The employee design's `pulse` screen is **one narrow centred column and nothing
- * else**: a small eyebrow, one large question, the segmented scale, an optional box
- * for free text, a single Send, and the anonymity line as a footnote under it. It is
- * a screen usually opened from a link in a meeting and answered in seconds, which is
- * a different act from working through a twelve-question climate survey.
+ * **One narrow centred column and nothing else**: the anonymity promise first, the
+ * eyebrow ("SESIÓN EN VIVO · 2 PREGUNTAS") over the session's name, one card per
+ * question with the segmented scale or a one-line word answer, a single full-width
+ * Send, and the session's readings at the foot. It is a screen usually opened from a
+ * link in a meeting and answered in seconds, which is a different act from working
+ * through a twelve-question climate survey.
  *
  * What was here until now was a three-column `lg:grid-cols-3` layout with a
  * `lg:sticky` right-hand rail carrying the anonymity promise and an answered-count
  * tile. **That rail was not a design decision — it was a test's.**
  * `components/layout/respondSticky.test.tsx` asserted a sticky panel on this route,
  * so the page kept one after the redesign had already cut the rail from the two
- * survey respond routes (their instrument moved to a bottom bar, which the design
- * does draw for a long form and does *not* draw here). The drawing has no rail and
- * no bar, so this page now has neither, and that test case was re-pointed at the
- * property that still holds on this route rather than left asserting a box that no
- * longer exists.
+ * survey respond routes. The drawing has no rail and no bar, so this page has neither
+ * — and since the canvas pages the survey routes one question at a time, neither do
+ * they; that test file now asserts nothing is pinned on any of the three.
  *
  * Three consequences worth stating plainly:
  *
@@ -370,9 +369,9 @@ function toPageError(err: unknown): PageError {
  *   draws no progress at all. A session with more than one question still numbers
  *   them (`1/2`, and the sentence beside it), which is the position information the
  *   tile was standing in for.
- * - **The anonymity note is now the footnote it is drawn as**, last in the column
- *   rather than beside the questions. On a one-question pulse the whole column is a
- *   screenful, so "last" is still in view; it no longer needs to stick to stay there.
+ * - **The anonymity note is the first block of the column**, where the canvas puts it
+ *   on all three respond screens: read before the first answer, not after the Send.
+ *   It no longer needs to stick to stay in view.
  * - **`RespondCaption` is not used here**, though the two survey routes use it. Its
  *   `<h1>` is `text-2xl` — the same size this design gives the *question* — so on a
  *   screen whose whole job is to ask one thing, the session's name would compete with
