@@ -143,6 +143,12 @@ export interface PageTopBarProps {
   }
   /** Buttons, links, filters — whatever the page acts with. */
   actions?: ReactNode
+  /**
+   * The line under the title and description — a state chip and the sentences that date
+   * it ("En vivo · abierta hasta el 11 de septiembre a las 21:06"). The admin-gaps boards
+   * of 10 Sep draw it inside the header's text column, 6px under the description.
+   */
+  meta?: ReactNode
 }
 
 export function PageTopBar({
@@ -153,6 +159,7 @@ export function PageTopBar({
   breadcrumbLabel,
   badge,
   actions,
+  meta,
 }: PageTopBarProps) {
   const { t } = useTranslation()
   const derivedEyebrow = useSectionEyebrow()
@@ -256,6 +263,7 @@ export function PageTopBar({
           {description && (
             <p className="mb-0 max-w-measure break-words text-fg-secondary">{description}</p>
           )}
+          {meta}
         </div>
         {actions && <div className="flex flex-wrap items-center gap-inline">{actions}</div>}
       </div>

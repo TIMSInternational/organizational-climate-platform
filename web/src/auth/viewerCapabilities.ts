@@ -139,6 +139,24 @@ export interface ViewerCapabilities {
    * status, never their role.
    */
   canAssignRoles: boolean
+  /**
+   * Launch, close, re-schedule or invite to ONE existing microclimate: `PUT
+   * /microclimates/{id}` (`MicroclimateEndpoints.cs:751`, `Roles.Admin` and
+   * `CanAccessCompany(user, microclimate.CompanyId)`) and `POST
+   * /microclimates/{id}/invitations` (`MicroclimateInvitationEndpoints.cs:240`, the same
+   * admin helper). The company compared is the microclimate's own, not the selection, so a
+   * `super_admin` qualifies with nothing chosen and a `company_admin` only for a session of
+   * the tenant their claim names. Distinct from `canLaunchMicroclimate`, which is `POST
+   * /microclimates` and needs a company to put in the body.
+   */
+  canManageMicroclimate: (microclimate: { companyId: string }) => boolean
+  /**
+   * Change the status or priority of, or record progress on, ONE existing action plan:
+   * `PUT /action-plans/{id}` and `POST /action-plans/{id}/progress`, both
+   * `!Roles.Admin.Contains(role) || !CanAccessCompany(user, plan.CompanyId)` -> 403
+   * (`ActionPlanEndpoints.cs:300`, `:373`). Same shape as `canManageMicroclimate`.
+   */
+  canManageActionPlan: (plan: { companyId: string }) => boolean
 }
 
 const SUPER_ADMIN = 'super_admin'
@@ -149,6 +167,17 @@ const SUPERVISOR = 'supervisor'
 /** `Roles.Admin` — `super_admin` or `company_admin`. */
 function isAdminRole(role: string | undefined): boolean {
   return role === SUPER_ADMIN || role === COMPANY_ADMIN
+}
+
+/**
+ * `Roles.Admin.Contains(role) && CanAccessCompany(user, companyId)` for a resource that
+ * names its own company: a `super_admin` for any, a `company_admin` for their claim's.
+ */
+function administersCompany(claims: ViewerClaims, companyId: string): boolean {
+  return (
+    claims.role === SUPER_ADMIN ||
+    (claims.role === COMPANY_ADMIN && claims.companyId !== undefined && claims.companyId === companyId)
+  )
 }
 
 /**
@@ -183,6 +212,8 @@ export function capabilitiesFor(claims: ViewerClaims, scope: CompanyScope): View
       role === SUPER_ADMIN || (role === COMPANY_ADMIN && claims.companyId !== undefined && claims.companyId === survey.companyId),
     canManageCompanies: role === SUPER_ADMIN,
     canAssignRoles: role === SUPER_ADMIN,
+    canManageMicroclimate: (microclimate) => administersCompany(claims, microclimate.companyId),
+    canManageActionPlan: (plan) => administersCompany(claims, plan.companyId),
   }
 }
 
