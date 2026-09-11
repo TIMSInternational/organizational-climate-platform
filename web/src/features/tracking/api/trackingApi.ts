@@ -176,7 +176,12 @@ export async function exportPlanesAccionSheet(baseUrl: string = getTrackingApiBa
   return response.blob()
 }
 
-/** The name `TrackingSheetExportEndpoints.cs:58-60` gives the sheet, for a `DateOnly` day. */
+/**
+ * The sheet's file name: the pattern `TrackingSheetExportEndpoints.cs:58-60` writes, dated by
+ * the reader's own calendar day. The server dates its name in UTC, so in Costa Rica after
+ * 18:00 its header says tomorrow (measured on the local stack at 2026-09-10 evening:
+ * `seguimiento-planes-accion-2026-09-11.xlsx`); the reader's day is the one they will look for.
+ */
 export function trackingSheetFileName(day: string): string {
   return `seguimiento-planes-accion-${day}.xlsx`
 }

@@ -580,30 +580,28 @@ function PlanTable({
           </tr>
         </thead>
         <tbody>
-          {rows.length === 0 ? (
-            <tr>
-              <td colSpan={6} className="border-0 px-3 py-3.5">
-                <span className="flex items-center gap-2.5 text-xs text-fg-secondary">
-                  <Clock aria-hidden="true" className="size-3.5 shrink-0 text-fg-label" />
-                  {empty}
-                </span>
-              </td>
-            </tr>
-          ) : (
-            rows.map((row) => (
-              <PlanTableRow
-                key={row.id}
-                row={row}
-                asOf={model.asOf}
-                t={t}
-                locale={locale}
-                canManage={canManage && !demoted}
-                onCancel={onCancel}
-              />
-            ))
-          )}
+          {rows.map((row) => (
+            <PlanTableRow
+              key={row.id}
+              row={row}
+              asOf={model.asOf}
+              t={t}
+              locale={locale}
+              canManage={canManage && !demoted}
+              onCancel={onCancel}
+            />
+          ))}
         </tbody>
       </Table>
+      {rows.length === 0 && (
+        // Under the headings rather than in a row of the table: a cell spanning the six
+        // columns the artboard draws added two phantom columns below 1360px, where four are
+        // shown, and squeezed the Plan heading into its neighbour (the r1 shot at 1024).
+        <p data-slot="plan-group-empty" className="m-0 flex items-center gap-2.5 px-3 py-3.5 text-xs text-fg-secondary">
+          <Clock aria-hidden="true" className="size-3.5 shrink-0 text-fg-label" />
+          {empty}
+        </p>
+      )}
     </div>
   )
 }
@@ -758,8 +756,13 @@ function CancelledGroup({
   )
   return (
     <section aria-label={t(GROUP_HEADING.cancelled)} data-group="cancelled" className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line-default bg-surface-outer px-4 py-3">
-        <div className="flex min-w-0 items-center gap-2.5">
+      {/* One line at every width: the names give way (truncated, whole on the list below)
+          and "Mostrar" keeps its place at the end, where the artboard puts it. */}
+      <div
+        data-slot="cancelled-strip"
+        className="flex items-center justify-between gap-3 rounded-lg border border-line-default bg-surface-outer px-4 py-3"
+      >
+        <div className="flex min-w-0 flex-1 items-center gap-2.5">
           {open ? (
             <ChevronDown aria-hidden="true" className="size-3.5 shrink-0 text-fg-label" />
           ) : (
@@ -775,6 +778,7 @@ function CancelledGroup({
           type="button"
           variant="ghost"
           size="sm"
+          className="shrink-0"
           aria-expanded={open}
           onClick={() => setOpen((value) => !value)}
         >

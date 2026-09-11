@@ -107,3 +107,10 @@ describe('DatePicker — a screen that sets its own dates', () => {
     expect(trigger().querySelector('svg')).not.toBeNull()
   })
 })
+
+describe('DatePicker — the field', () => {
+  it('sets its value at the start of the field, as a text field does, not centred like a bare button', () => {
+    renderPicker({ value: AUGUST_2026 })
+    expect(trigger().className).toContain('justify-start')
+  })
+})

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { render, screen, cleanup, within } from '@testing-library/react'
+import { render, screen, cleanup, within, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import ActionPlansListNextPage from './ActionPlansListNextPage'
@@ -239,6 +239,40 @@ describe('ActionPlansListNextPage — company_admin', () => {
       'Reuniones abiertas con la dirección',
       'Plan de desarrollo de carrera en Ingeniería',
     ])
+  })
+
+  it('lays the timeline out at the width its card measures, so its type keeps its size at 1024', async () => {
+    class FixedWidthObserver {
+      callback: ResizeObserverCallback
+      constructor(callback: ResizeObserverCallback) {
+        this.callback = callback
+      }
+      observe(target: Element) {
+        this.callback([{ target, contentRect: { width: 686 } } as unknown as ResizeObserverEntry], this as unknown as ResizeObserver)
+      }
+      unobserve() {}
+      disconnect() {}
+    }
+    vi.stubGlobal('ResizeObserver', FixedWidthObserver)
+    renderPage()
+    await screen.findByText('Programa de reconocimiento entre pares')
+    await waitFor(() => expect(document.querySelector('[data-slot="due-timeline"]')?.getAttribute('viewBox')).toMatch(/^0 0 686 /))
+  })
+
+  it('says an empty group is empty under its headings, never in a cell spanning columns the table may not show', async () => {
+    renderPage()
+    await screen.findByText('Programa de reconocimiento entre pares')
+    const sentence = within(section(next.groupInProgress)).getByText(next.inProgressEmpty)
+    expect(sentence.closest('td')).toBeNull()
+    expect(section(next.groupInProgress).querySelectorAll('td[colspan]')).toHaveLength(0)
+  })
+
+  it('keeps Mostrar on the cancelled strip line, beside the names, at any width', async () => {
+    renderPage()
+    await screen.findByText('Programa de reconocimiento entre pares')
+    const strip = document.querySelector('[data-slot="cancelled-strip"]') as HTMLElement
+    expect(strip.className).not.toMatch(/flex-wrap/)
+    expect(within(strip).getByRole('button', { name: new RegExp(next.show) })).toBeTruthy()
   })
 
   it('offers the new plan and, per row, cancelling — which PUTs status cancelled after a confirmation', async () => {
