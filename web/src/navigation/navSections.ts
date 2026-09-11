@@ -1,29 +1,32 @@
 import {
-  BookOpen,
   CircleAlert,
   Copy,
-  Shield,
   Building2,
   Settings,
   Users,
   Tags,
-  Target,
-  Waves,
   Gauge,
-  Sparkles,
-  FileText,
-  ChartColumn,
-  Bell,
-  ClipboardList,
   Inbox,
-  LayoutDashboard,
-  LayoutTemplate,
-  Library,
   ListChecks,
-  Network,
-  SquareKanban,
-  TrendingUp,
 } from 'lucide-react'
+import {
+  RailAnalyticsIcon,
+  RailBenchmarksIcon,
+  RailConsolidatedIcon,
+  RailDashboardIcon,
+  RailDepartmentsIcon,
+  RailInsightsIcon,
+  RailMicroclimatesIcon,
+  RailNotificationsIcon,
+  RailPlansIcon,
+  RailQuestionBankIcon,
+  RailQuestionLibraryIcon,
+  RailReportsIcon,
+  RailShieldIcon,
+  RailSurveysIcon,
+  RailTemplatesIcon,
+  RailTrendsIcon,
+} from './railIcons'
 
 export interface NavItem {
   /**
@@ -43,7 +46,8 @@ export interface NavItem {
   // Typed as an SVG component rather than `{ className?: string }`: the sub-item
   // rows style their glyph inline (size and colour flip with the active state),
   // and the narrower type rejected `style` and `aria-hidden`. Every icon passed
-  // here is a lucide component, which takes the full SVG prop set.
+  // here is a lucide component or one of the canvas's rail glyphs (`railIcons.tsx`);
+  // both take the full SVG prop set.
   icon: React.ComponentType<React.SVGProps<SVGSVGElement>>
   badge?: string
   sub?: NavItem[]
@@ -111,7 +115,7 @@ export interface NavSection {
 const NOTIFICATIONS_ITEM: NavItem = {
   labelKey: 'notifications.title',
   href: '/notifications',
-  icon: Bell,
+  icon: RailNotificationsIcon,
 }
 
 // The landing page (#132), and the other entry every role gets — for the same
@@ -130,7 +134,7 @@ const NOTIFICATIONS_ITEM: NavItem = {
 const DASHBOARD_ITEM: NavItem = {
   labelKey: 'navigation.dashboard',
   href: '/dashboard',
-  icon: LayoutDashboard,
+  icon: RailDashboardIcon,
 }
 
 // "My surveys" (#109) is the second entry, after Notifications, that a non-admin role
@@ -157,7 +161,7 @@ const MY_SURVEYS_ITEM: NavItem = {
 const SURVEYS_ITEM: NavItem = {
   labelKey: 'navigation.surveys',
   href: '/surveys',
-  icon: ClipboardList,
+  icon: RailSurveysIcon,
 }
 
 // The template catalogue (#107's endpoints, #109's page). Admin-only, like the
@@ -169,7 +173,7 @@ const SURVEYS_ITEM: NavItem = {
 const SURVEY_TEMPLATES_ITEM: NavItem = {
   labelKey: 'navigation.surveyTemplates',
   href: '/surveys/templates',
-  icon: LayoutTemplate,
+  icon: RailTemplatesIcon,
 }
 
 // Climate over time. Admin-only for the same reason the listing above is: the endpoint
@@ -185,7 +189,7 @@ const SURVEY_TEMPLATES_ITEM: NavItem = {
 const CLIMATE_TRENDS_ITEM: NavItem = {
   labelKey: 'navigation.climateTrends',
   href: '/surveys/climate-trends',
-  icon: TrendingUp,
+  icon: RailTrendsIcon,
 }
 
 // The question bank (#114). Admin-only, and correct for BOTH admin branches with no
@@ -207,10 +211,9 @@ const QUESTION_BANK_ITEM: NavItem = {
   labelKey: 'navigation.questionBank',
   href: '/admin/question-bank',
   // Not ListChecks: TRACKING_MIS_TAREAS_ITEM already carries it, and two sidebar rows
-  // with one glyph is how a reader learns to stop trusting the glyphs. BookOpen is the
-  // open book the canvas draws for this row (10 Sep, on the super administrator's and the
-  // company administrator's rails alike).
-  icon: BookOpen,
+  // with one glyph is how a reader learns to stop trusting the glyphs. The canvas draws
+  // this open book on the super administrator's and the company administrator's rails alike.
+  icon: RailQuestionBankIcon,
 }
 
 // The question LIBRARY's authoring screen (#423). Sits beside the bank and is not the
@@ -222,10 +225,10 @@ const QUESTION_BANK_ITEM: NavItem = {
 const QUESTION_LIBRARY_ITEM: NavItem = {
   labelKey: 'navigation.questionLibrary',
   href: '/admin/question-library',
-  // Library, the leaning books the canvas draws for this row (10 Sep). The bank above it
-  // carries BookOpen: these two rows sit next to each other, so sharing a glyph would make
-  // the pair unreadable at exactly the place a reader most needs to tell them apart.
-  icon: Library,
+  // The canvas's shelf of books, NOT the open book QUESTION_BANK_ITEM above carries. These
+  // two rows sit next to each other, so sharing a glyph would make the pair unreadable at
+  // exactly the place a reader most needs to tell them apart.
+  icon: RailQuestionLibraryIcon,
 }
 
 // Departments (#142). Admin-only: `/admin/departments` allows a super_admin
@@ -244,7 +247,7 @@ const QUESTION_LIBRARY_ITEM: NavItem = {
 const DEPARTMENTS_ITEM: NavItem = {
   labelKey: 'navigation.departments',
   href: '/departments',
-  icon: Network,
+  icon: RailDepartmentsIcon,
 }
 
 // The generic action-plan listing, lifted out of both admin branches so the one
@@ -252,7 +255,7 @@ const DEPARTMENTS_ITEM: NavItem = {
 const ACTION_PLANS_ITEM: NavItem = {
   labelKey: 'navigation.actionPlans',
   href: '/action-plans',
-  icon: Target,
+  icon: RailPlansIcon,
 }
 
 // The tracking module's two dashboards (#125). Both labels already existed in the
@@ -265,7 +268,7 @@ const ACTION_PLANS_ITEM: NavItem = {
 const TRACKING_CONSOLIDADO_ITEM: NavItem = {
   labelKey: 'navigation.trackingConsolidado',
   href: '/tracking',
-  icon: SquareKanban,
+  icon: RailConsolidatedIcon,
 }
 
 // A node leader's own board. Deliberately NOT offered to either admin role even
@@ -289,7 +292,7 @@ const TRACKING_TABLERO_ITEM: NavItem = {
 const TRACKING_PLANES_ITEM: NavItem = {
   labelKey: 'navigation.trackingPlans',
   href: '/tracking/planes',
-  icon: Target,
+  icon: RailPlansIcon,
 }
 
 // The involucrado's view (#126). `MisTareasAsync` reads no role claim at all — it
@@ -368,7 +371,7 @@ export function buildNavSections(
           {
             labelKey: 'navigation.systemAdministration',
             href: '/admin/companies',
-            icon: Shield,
+            icon: RailShieldIcon,
             flat: true,
             sub: [
               // Copy: the stacked squares the canvas draws for Empresas, not a building.
@@ -396,7 +399,7 @@ export function buildNavSections(
           {
             labelKey: 'navigation.benchmarks',
             href: '/analytics/benchmarks',
-            icon: Gauge,
+            icon: RailBenchmarksIcon,
           },
           // Restored by #124 -- see the block comment above. Since #125 this slot
           // is Action Plans OR the tracking consolidado, never both; the swap is
@@ -405,12 +408,12 @@ export function buildNavSections(
           {
             labelKey: 'navigation.microclimates',
             href: '/microclimates',
-            icon: Waves,
+            icon: RailMicroclimatesIcon,
           },
           {
             labelKey: 'navigation.aiInsights',
             href: '/analytics/ai-insights',
-            icon: Sparkles,
+            icon: RailInsightsIcon,
           },
           // Appended after #124's three restored entries, not among them: that PR
           // pins a super_admin's first four leaves to Companies / System settings /
@@ -465,7 +468,7 @@ export function buildNavSections(
           {
             labelKey: 'navigation.companyAdministration',
             href: `/admin/companies/${companyId}`,
-            icon: Shield,
+            icon: RailShieldIcon,
             sub: [
               { labelKey: 'navigation.companySettings', href: `/admin/companies/${companyId}`, icon: Building2 },
               { labelKey: 'navigation.users', href: `/admin/companies/${companyId}/users`, icon: Users },
@@ -483,7 +486,7 @@ export function buildNavSections(
           {
             labelKey: 'navigation.microclimates',
             href: '/microclimates',
-            icon: Waves,
+            icon: RailMicroclimatesIcon,
           },
           // Placed after Microclimates -- a peer work surface -- rather than before
           // Action Plans, so the first four leaves are unchanged and Action Plans
@@ -494,7 +497,7 @@ export function buildNavSections(
           {
             labelKey: 'navigation.benchmarks',
             href: '/analytics/benchmarks',
-            icon: Gauge,
+            icon: RailBenchmarksIcon,
           },
           // AI Insights, for a CompanyAdmin, takes its company from their own
           // claim. `GET /admin/ai-insights` requires a company id, and this is the
@@ -504,7 +507,7 @@ export function buildNavSections(
           {
             labelKey: 'navigation.aiInsights',
             href: '/analytics/ai-insights',
-            icon: Sparkles,
+            icon: RailInsightsIcon,
           },
           // Reports and Analytics are top-level destinations rather than children of
           // "Company Administration", for two reasons. They are work surfaces like
@@ -522,12 +525,12 @@ export function buildNavSections(
           {
             labelKey: 'navigation.reports',
             href: `/admin/companies/${companyId}/reports`,
-            icon: FileText,
+            icon: RailReportsIcon,
           },
           {
             labelKey: 'navigation.analytics',
             href: `/admin/companies/${companyId}/analytics`,
-            icon: ChartColumn,
+            icon: RailAnalyticsIcon,
           },
           DEPARTMENTS_ITEM,
           QUESTION_BANK_ITEM,

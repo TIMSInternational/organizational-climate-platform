@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { BookOpen, CircleAlert, Copy, Library } from 'lucide-react'
+import { CircleAlert, Copy } from 'lucide-react'
 import { readFileSync, globSync } from 'node:fs'
 import { join, sep } from 'node:path'
 import {
@@ -11,6 +11,7 @@ import {
   withUnreadBadge,
   type NavSection,
 } from './navSections'
+import { RailQuestionBankIcon, RailQuestionLibraryIcon } from './railIcons'
 import { CATALOGUES, LOCALES } from '../i18n/locale'
 import { createTranslator } from '../i18n/translate'
 
@@ -659,7 +660,9 @@ describe('the super administrator’s rail glyphs', () => {
     const icon = (key: string) => rows.find((row) => row.labelKey === key)?.icon
     expect(icon('navigation.companies')).toBe(Copy)
     expect(icon('navigation.systemHealth')).toBe(CircleAlert)
-    expect(icon('navigation.questionBank')).toBe(BookOpen)
-    expect(icon('navigation.questionLibrary')).toBe(Library)
+    // Banco and Biblioteca are rows both rails share, so they carry the canvas glyphs
+    // railIcons.test.tsx pins for the company administrator: one item, one glyph.
+    expect(icon('navigation.questionBank')).toBe(RailQuestionBankIcon)
+    expect(icon('navigation.questionLibrary')).toBe(RailQuestionLibraryIcon)
   })
 })

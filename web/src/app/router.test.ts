@@ -284,6 +284,14 @@ describe('router', () => {
     const componentAt = (path: string) => (byPath.get(path) as { type?: unknown } | undefined)?.type
     expect(componentAt('/surveys')).toBe(SurveysListNextPage)
     expect(componentAt('/surveys/climate-trends')).toBe(ClimateTrendsNextPage)
+    // `/dashboard` is role-dispatched, so the route mounts the dispatcher and the
+    // dispatcher mounts the redesigned Panel de Control for a company administrator
+    // (`DashboardPage.test.tsx` renders that branch). The old company view stays in the
+    // tree as the wiring reference and must not be reachable from here.
+    expect(componentAt('/dashboard')).toBe(DashboardPage)
+    const dispatcher = readFileSync(join(process.cwd(), 'src', 'features', 'dashboard', 'pages', 'DashboardPage.tsx'), 'utf8')
+    expect(dispatcher).toMatch(/from '\.\.\/next\/AdminDashboardNextView'/)
+    expect(dispatcher).not.toMatch(/from '\.\.\/components\/CompanyAdminDashboardView'/)
     // #468 swapped the results the same way: pinned on the element here, not only by a
     // source regex in the page's own test.
     expect(componentAt('/surveys/:id/results')).toBe(SurveyResultsNextPage)

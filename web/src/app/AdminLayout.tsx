@@ -160,7 +160,8 @@ function AdminShell() {
               card below is the only panel. */}
           <header
             className="on-shell flex shrink-0 items-center justify-end gap-inline"
-            style={{ minHeight: 40, padding: '10px 12px 10px 16px' }}
+            // The canvas's strip: 52px, 20px in from the edge (every artboard).
+            style={{ minHeight: 52, padding: '0 20px' }}
           >
             {/* #124's company-context selector. Renders `null` for every role but
                 SuperAdmin, so the strip is unchanged for everyone else — the bell
@@ -239,7 +240,7 @@ function AdminShell() {
                 which reads as content that failed to load rather than as a page
                 with little on it. The panel is the page's surface, so it should be
                 the height of the page. */}
-            <div className="flex min-h-full w-full flex-col overflow-x-auto rounded-xl border border-line-panel bg-surface-panel p-panel pb-20 md:pb-panel">
+            <div className="flex min-h-full w-full flex-col overflow-x-auto rounded-xl border border-line-panel bg-surface-panel px-6 pb-20 pt-5 md:pb-8">
               <Outlet />
             </div>
           </main>

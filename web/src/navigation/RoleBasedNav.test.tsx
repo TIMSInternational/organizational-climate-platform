@@ -512,3 +512,17 @@ describe('RoleBasedNav flat group', () => {
     expect(document.querySelectorAll("[data-nav-state='selected']")).toHaveLength(1)
   })
 })
+
+describe('RoleBasedNav on the canvas rail', () => {
+  const source = readFileSync(join(process.cwd(), 'src', 'navigation', 'RoleBasedNav.tsx'), 'utf8')
+  it('heads each section as the canvas does: 8px above and below, 10px in', () => {
+    // `.nav-section { padding: 14px 10px 6px }` plus the nav's 2px gap; at 6px under the head
+    // every row under it sat 2px high on the shot, 6px by the rail's foot.
+    expect(source).toMatch(
+      /<div className="nav-section-title" data-slot="nav-section-title" style=\{\{ padding: 'var\(--admin-space-8\) var\(--admin-space-10\)' \}\}>/,
+    )
+  })
+  it('insets each row 10px, as `.nav-row { padding: 0 10px }` does', () => {
+    expect(source).toContain("padding: collapsed ? 'var(--admin-space-4)' : `var(--admin-space-4) var(--admin-space-10)`")
+  })
+})

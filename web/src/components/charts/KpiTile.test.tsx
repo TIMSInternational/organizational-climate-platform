@@ -132,6 +132,21 @@ describe('KpiTile', () => {
   })
 })
 
+describe('KpiTile sizes', () => {
+  it('sets the artboards’ two tiles: hero 28px under a .06em label, large 26px under a .12em label', () => {
+    render(<KpiTile label="Hero" value={24} size="hero" />)
+    expect(screen.getByText('24').className).toContain('text-kpi-hero')
+    expect(screen.getByText('Hero').className).toContain('tracking-label')
+    cleanup()
+    render(<KpiTile label="Large" value={3} size="large" />)
+    expect(screen.getByText('3').className).toContain('text-kpi-lg')
+    expect(screen.getByText('Large').className).toContain('tracking-kpi')
+    cleanup()
+    render(<KpiTile label="Default" value={7} />)
+    expect(screen.getByText('7').className).toContain('text-3xl')
+  })
+})
+
 describe('KpiTile eyebrow', () => {
   it('sets its label as the artboards do: the label ink, spaced .12em, findable by its slot', () => {
     const { container } = render(<KpiTile label="Clima · Q3" value={3.65} />)
@@ -153,3 +168,12 @@ describe('KpiTile valueText', () => {
   })
 })
 
+describe('KpiTile canvas line box', () => {
+  it('sets the hero and large labels in the 15px line box of the artboards’ `.label` and `.eyebrow`', () => {
+    render(<KpiTile label="Hero" value={24} size="hero" />)
+    expect(screen.getByText('Hero').className.split(/\s+/)).toContain('leading-normal')
+    cleanup()
+    render(<KpiTile label="Large" value={3} size="large" />)
+    expect(screen.getByText('Large').className.split(/\s+/)).toContain('leading-normal')
+  })
+})

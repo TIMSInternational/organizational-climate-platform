@@ -109,8 +109,8 @@ export function SidebarBrand({ collapsed, onToggleCollapsed }: SidebarBrandProps
             whiteSpace: 'nowrap',
           }}
         >
-          <span style={{ color: 'var(--admin-font-primary)' }}>{BRAND_LEAD}</span>
-          <span style={{ color: 'var(--admin-accent-blue)' }}>{BRAND_TAIL}</span>
+          <span style={{ color: 'var(--admin-brand-lead)' }}>{BRAND_LEAD}</span>
+          <span style={{ color: 'var(--admin-brand-tail)' }}>{BRAND_TAIL}</span>
         </span>
       </div>
       {toggle}

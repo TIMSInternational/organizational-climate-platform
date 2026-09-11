@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { calendarDay } from './calendarDay'
+import { calendarDay, instantDay } from './calendarDay'
 
 /**
  * The ambient zone, restored after every case.
@@ -85,5 +85,26 @@ describe('calendarDay', () => {
   /** A malformed date degrades rather than throwing, as it did before this existed. */
   it('does not throw on a date it cannot parse', () => {
     expect(() => calendarDay(Date.parse('not a date'), 'en', NOW)).not.toThrow()
+  })
+})
+
+describe('instantDay', () => {
+  // The demo tenant's weekly pulse stops taking answers at 20:06 on 11 Sep in Costa Rica.
+  const PULSE_ENDS = Date.parse('2026-09-12T02:06:08.992Z')
+
+  it('reads an instant in the reader’s zone, where calendarDay reads the UTC day', () => {
+    process.env.TZ = 'America/Costa_Rica'
+    expect(instantDay(PULSE_ENDS, 'es', { now: NOW })).toBe('11 sept')
+    expect(calendarDay(PULSE_ENDS, 'es', NOW)).toBe('12 sept')
+  })
+
+  it('follows the zone it is given, so the same instant is the 12th in UTC', () => {
+    expect(instantDay(PULSE_ENDS, 'es', { now: NOW, timeZone: 'UTC' })).toBe('12 sept')
+    expect(instantDay(PULSE_ENDS, 'en', { now: NOW, timeZone: 'America/Costa_Rica' })).toBe('Sep 11')
+  })
+
+  it('adds the year only outside the reader’s current year', () => {
+    process.env.TZ = 'America/Costa_Rica'
+    expect(instantDay(Date.parse('2025-12-01T15:00:00Z'), 'es', { now: NOW })).toBe('1 dic 2025')
   })
 })

@@ -91,7 +91,24 @@ export interface KpiTileProps {
   valueText?: string
   /** BCP-47 locale. Defaults to the document's language. */
   locale?: string
+  /**
+   * How large the reading is set. The artboards (10 Sep) draw two beside the default:
+   * `hero`, the Panel de Control's 28px reading under a label spaced .06em, and `large`,
+   * Clima en el tiempo's (and SurveyResults') 26px reading under a label spaced .12em —
+   * both at the regular weight and a line height of 1. `default` is the 24px tile the
+   * list pages keep.
+   */
+  size?: KpiTileSize
   className?: string
+}
+
+export type KpiTileSize = 'default' | 'hero' | 'large'
+
+/** The reading's size and weight and the label's tracking, per `size`. */
+const SIZES: Record<KpiTileSize, { value: string; label: string }> = {
+  default: { value: 'text-3xl font-medium tracking-tight', label: 'tracking-tile' },
+  hero: { value: 'text-kpi-hero font-normal tracking-normal', label: 'tracking-label leading-normal' },
+  large: { value: 'text-kpi-lg font-normal tracking-normal', label: 'tracking-kpi leading-normal' },
 }
 
 export default function KpiTile({
@@ -105,6 +122,7 @@ export default function KpiTile({
   unit,
   valueText,
   locale,
+  size = 'default',
   className,
 }: KpiTileProps) {
   // A tile with no reading has no change either: there is no number to have moved.
@@ -135,7 +153,9 @@ export default function KpiTile({
       )}
     >
       {/* The artboards' tile eyebrow (Dashboard and SurveyResults, 10 Sep): 10px, bold,
-          uppercase, spaced .12em (`tracking-tile`), in the label ink `text-fg-label`.
+          uppercase, in the label ink `text-fg-label`, spaced per `size`: .12em by default
+          (`tracking-tile`, SurveyResults' `.eyebrow`), .06em for `hero` (Dashboard's `.label`),
+          .12em for `large` (ClimateTrends' `.eyebrow`).
 
           Never `text-fg-tertiary`, and that is a contrast rule, not a preference:
           `--admin-font-tertiary` #818181 measured 3.42:1 (light) and 3.68:1 (dark) on
@@ -148,13 +168,13 @@ export default function KpiTile({
 
           `data-slot="kpi-label"` is how a test finds a tile by its label: "Completed"
           is also a badge and a filter option on the list pages, so text alone is not. */}
-      <div data-slot="kpi-label" className="text-2xs font-bold uppercase tracking-tile text-fg-label">
+      <div data-slot="kpi-label" className={cn('text-2xs font-bold uppercase text-fg-label', SIZES[size].label)}>
         {label}
       </div>
       {/* The unit shares the value's baseline, as the artboards draw it — never a
           second line, which is what `sub` is for. */}
       <div className="mt-1.5 flex flex-wrap items-baseline gap-2">
-        <span className="font-mono text-3xl font-medium tracking-tight tabular-nums">
+        <span data-slot="kpi-value" className={cn('font-mono tabular-nums', SIZES[size].value)}>
           {valueText ?? (value === null ? EM_DASH : formatMetric(value, format, locale))}
         </span>
         {unit && <span className="text-sm text-fg-secondary">{unit}</span>}
