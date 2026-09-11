@@ -183,11 +183,11 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
       )}
 
       <Card className="mt-5 flex flex-wrap items-center gap-6 px-5 py-3.5" data-testid="builder-rail">
-        <ol aria-label={t('surveys.wizardStepList')} className="m-0 flex min-w-0 flex-1 list-none items-center gap-3.5 p-0">
+        <ol aria-label={t('surveys.wizardStepList')} className="m-0 flex min-w-0 flex-1 list-none flex-wrap items-center gap-x-3.5 gap-y-2 p-0">
           {SURVEY_WIZARD_STEPS.map((id, index) => {
             const state = index < stepIndex ? (errors[id].length === 0 ? 'done' : 'open') : index === stepIndex ? 'current' : 'pending'
             return (
-              <li key={id} className={cn('flex min-w-0 items-center gap-3.5', index < SURVEY_WIZARD_STEPS.length - 1 && 'flex-1')}>
+              <li key={id} className={cn('flex min-w-0 items-center gap-3.5', index < SURVEY_WIZARD_STEPS.length - 1 && 'xl:flex-1')}>
                 <button
                   type="button"
                   aria-current={state === 'current' ? 'step' : undefined}
@@ -207,7 +207,7 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                   >
                     {state === 'done' ? <Check /> : index + 1}
                   </span>
-                  <span className="flex min-w-0 flex-col leading-tight">
+                  <span className="flex min-w-0 flex-col whitespace-nowrap leading-tight">
                     <span className={cn('text-sm', state === 'current' ? 'font-semibold text-fg-primary' : state === 'pending' ? 'font-medium text-fg-label' : 'font-medium text-fg-secondary')}>
                       {t(`surveys.step${id.charAt(0).toUpperCase()}${id.slice(1)}`)}
                     </span>
@@ -225,7 +225,7 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                   </span>
                 </button>
                 {index < SURVEY_WIZARD_STEPS.length - 1 && (
-                  <span aria-hidden="true" className={cn('h-px min-w-6 flex-1', index < stepIndex ? 'bg-accent-green' : 'bg-line-default')} />
+                  <span aria-hidden="true" className={cn('hidden h-px min-w-6 flex-1 xl:block', index < stepIndex ? 'bg-accent-green' : 'bg-line-default')} />
                 )}
               </li>
             )
@@ -250,7 +250,7 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
         </div>
       </Card>
 
-      <div className="mt-5 grid items-start gap-4 lg:grid-cols-2">
+      <div className="mt-5 grid items-start gap-4 xl:grid-cols-2">
         <Card className="flex min-w-0 flex-col gap-3 px-5 pb-4.5 pt-4" data-testid="builder-step">
           {step === 'questions' ? (
             <>
@@ -296,7 +296,11 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                           type="button"
                           aria-pressed={isSelected}
                           onClick={() => setSelected(index)}
-                          className="flex min-w-0 flex-1 flex-col items-start gap-1.5 border-0 bg-transparent p-0 text-left shadow-none"
+                          // `h-auto` and `whitespace-normal`: `index.css` gives every bare button
+                          // the 32px control height and nowrap, which clipped the two-line text of
+                          // the selected row and hid the text of every other row (measured in the
+                          // first shot of this screen).
+                          className="flex h-auto min-h-0 min-w-0 flex-1 flex-col items-start gap-1.5 whitespace-normal border-0 bg-transparent p-0 text-left shadow-none"
                         >
                           <span className={cn('block w-full text-base text-fg-primary', isSelected ? 'font-semibold' : 'truncate font-medium')}>
                             {question.text?.trim() ? question.text : copy('noText')}
@@ -435,8 +439,8 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                 {copy('answeredOf', { count: previewQuestions.length })}
               </span>
               <span className="inline-flex gap-2">
-                <span className="inline-flex h-7 items-center rounded border border-line-default px-3 text-sm text-fg-primary">{copy('saveLater')}</span>
-                <span className="inline-flex h-7 items-center rounded border border-accent-red-ring bg-chip-critical-fill px-3 text-sm text-chip-critical-ink">
+                <span className="inline-flex h-7 items-center whitespace-nowrap rounded border border-line-default px-3 text-sm text-fg-primary">{copy('saveLater')}</span>
+                <span className="inline-flex h-7 items-center whitespace-nowrap rounded border border-accent-red-ring bg-chip-critical-fill px-3 text-sm text-chip-critical-ink">
                   {copy('submitAnswers')}
                 </span>
               </span>
@@ -524,11 +528,11 @@ function QuestionsFooter({
   if (questions.length === 0) return null
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-light pt-2.5 text-sm text-fg-secondary" data-testid="questions-footer">
-      <span>
+      <span className="min-w-0 flex-1 basis-56">
         {copy('coverage', { dimensions, required })} · {open === 0 ? copy('noOpen') : copy('someOpen', { count: open })}
       </span>
       {missing === 0 ? (
-        <span className="inline-flex items-center gap-1.5 text-chip-good-ink">
+        <span className="inline-flex max-w-60 items-start gap-1.5 text-chip-good-ink [&>svg]:mt-0.5">
           <Check aria-hidden="true" className="size-3.5" />
           {copy('everyDimension')}
         </span>

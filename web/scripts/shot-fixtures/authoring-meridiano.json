@@ -1,5 +1,5 @@
 {
-  "_comment": "Authoring lane (SurveyBuilder, SurveyDetail, Distribution). Every body is a payload the local API returned to ana.rojas@meridiano.test on 10 Sep 2026 (GET only), except GET /survey-drafts/latest, which the local tenant had none of (404): that one is SurveyDraftDetail filled from real rows (template, departments) so the builder can open on its questions step.",
+  "_comment": "Authoring lane (SurveyBuilder, SurveyDetail, Distribution). Every body is a payload the local API returned to ana.rojas@meridiano.test on 10 Sep 2026 (GET only), except GET /surveys/drafts/latest, whose envelope and fields are the real draft ana.rojas holds, with its content replaced by a builder left on the questions step over real rows (template, departments) so the builder can open on its questions step.",
   "GET /notifications/mine": {
     "notifications": []
   },
@@ -954,47 +954,51 @@
     "createdAt": "2026-09-10T02:03:39.237783+00:00",
     "updatedAt": "2026-09-10T02:44:11.843492+00:00"
   },
-  "GET /survey-drafts/latest": {
-    "id": "b1d3a7e2-5c1f-4e0a-9a51-2d7f3c9e8a10",
-    "sessionId": "shot-session",
-    "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
-    "title": "Encuesta de Clima Q1 2027",
-    "description": "Quinta ola del instrumento estándar. Programada para el primer trimestre.",
-    "language": "both",
-    "resolvedLocale": "es",
-    "fallbackFields": [],
-    "missingTranslations": [],
-    "isTranslationComplete": true,
-    "content": {
-      "version": 1,
-      "templateId": "aa27170f-84b5-4e61-9c9e-2de7b060f895",
+  "GET /surveys/drafts/latest": {
+    "draft": {
+      "id": "fcce4b80-f676-445d-b5de-e6ab2962c42c",
+      "sessionId": "b2695738-35a6-4e62-b981-0ea0b0be1dd5",
+      "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+      "title": "Encuesta de Clima Q1 2027",
+      "description": "Quinta ola del instrumento estándar. Programada para el primer trimestre.",
       "language": "both",
-      "titleEn": "Climate Survey Q1 2027",
-      "titleEs": "Encuesta de Clima Q1 2027",
-      "descriptionEn": "Fifth wave of the standard instrument. Scheduled for the first quarter.",
-      "descriptionEs": "Quinta ola del instrumento estándar. Programada para el primer trimestre.",
-      "type": "periodic",
-      "startDate": "2027-01-11T09:00",
-      "endDate": "2027-02-01T17:00",
-      "departmentIds": [
-        "07f5a4d4-27d8-4df0-afdc-b50db1371062",
-        "0a9d7637-814c-4d4a-8407-45cfbca3f4e7",
-        "5bfdb04e-8847-4baa-89c8-d4411654a129",
-        "aac7e1b9-5af4-4e04-872b-c11df8f1d4bd",
-        "bff21fd0-422b-4f3b-8c89-d6bfbf5f19e9"
-      ],
-      "targetAudienceCount": "41",
-      "anonymous": true,
-      "allowPartialResponses": true,
-      "showProgress": true,
-      "questions": []
-    },
-    "currentStep": 4,
-    "lastEditedField": null,
-    "version": 3,
-    "autoSaveCount": 3,
-    "createdAt": "2026-09-10T15:02:11.000000+00:00",
-    "updatedAt": "2026-09-10T15:09:48.000000+00:00",
-    "expiresAt": "2026-10-10T15:09:48.000000+00:00"
+      "resolvedLocale": "es",
+      "fallbackFields": [],
+      "missingTranslations": [],
+      "isTranslationComplete": true,
+      "content": {
+        "version": 1,
+        "templateId": "aa27170f-84b5-4e61-9c9e-2de7b060f895",
+        "language": "both",
+        "titleEn": "Climate Survey Q1 2027",
+        "titleEs": "Encuesta de Clima Q1 2027",
+        "descriptionEn": "Fifth wave of the standard instrument. Scheduled for the first quarter.",
+        "descriptionEs": "Quinta ola del instrumento estándar. Programada para el primer trimestre.",
+        "type": "periodic",
+        "startDate": "2027-01-11T09:00",
+        "endDate": "2027-02-01T17:00",
+        "departmentIds": [
+          "07f5a4d4-27d8-4df0-afdc-b50db1371062",
+          "0a9d7637-814c-4d4a-8407-45cfbca3f4e7",
+          "5bfdb04e-8847-4baa-89c8-d4411654a129",
+          "aac7e1b9-5af4-4e04-872b-c11df8f1d4bd",
+          "bff21fd0-422b-4f3b-8c89-d6bfbf5f19e9"
+        ],
+        "targetAudienceCount": "41",
+        "anonymous": true,
+        "allowPartialResponses": true,
+        "showProgress": true,
+        "questions": []
+      },
+      "currentStep": 4,
+      "lastEditedField": null,
+      "version": 5,
+      "autoSaveCount": 4,
+      "isRecovered": false,
+      "lastAutosaveAt": "2026-09-10T14:21:05.472754+00:00",
+      "expiresAt": "2026-10-10T14:21:05.472754+00:00",
+      "createdAt": "2026-09-10T14:20:47.83751+00:00",
+      "updatedAt": "2026-09-10T15:09:48.000000+00:00"
+    }
   }
 }

@@ -72,7 +72,12 @@ function localeTag(locale: string): string {
 export function dayMonth(iso: string, locale: string): string {
   const at = new Date(iso)
   if (Number.isNaN(at.getTime())) return '—'
-  return new Intl.DateTimeFormat(localeTag(locale), { day: 'numeric', month: 'short' }).format(at).replace('.', '')
+  return shortMonth(new Intl.DateTimeFormat(localeTag(locale), { day: 'numeric', month: 'short' }).format(at))
+}
+
+/** The canvas prints "sep", not ICU's "sept.": three letters, no period, as every artboard does. */
+function shortMonth(text: string): string {
+  return text.replace('.', '').replace(/\bsept\b/, 'sep')
 }
 
 /** "10 sep 2026" — the fact sheet's reading. */
