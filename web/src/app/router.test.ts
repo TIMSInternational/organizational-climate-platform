@@ -7,7 +7,7 @@ import CompaniesListNextPage from '../features/org-structure/next/super/Companie
 import DashboardPage from '../features/dashboard/pages/DashboardPage'
 import CompanyDetailPage from '../features/org-structure/pages/CompanyDetailPage'
 import UsersNextPage from '../features/org-structure/next/UsersNextPage'
-import DemographicFieldsPage from '../features/org-structure/pages/DemographicFieldsPage'
+import DemographicsNextPage from '../features/org-structure/next/DemographicsNextPage'
 import ClimateTrendsNextPage from '../features/surveys/next/trends/ClimateTrendsNextPage'
 import SurveyResultsNextPage from '../features/surveys/next/SurveyResultsNextPage'
 import ActionPlansListNextPage from '../features/action-plans/next/ActionPlansListNextPage'
@@ -378,8 +378,8 @@ describe('router', () => {
       ['/admin/companies/:companyId/users', UsersNextPage, 'features/org-structure/next/UsersNextPage.tsx', 'SuperUsersView'],
       [
         '/admin/companies/:companyId/demographic-fields',
-        DemographicFieldsPage,
-        'features/org-structure/pages/DemographicFieldsPage.tsx',
+        DemographicsNextPage,
+        'features/org-structure/next/DemographicsNextPage.tsx',
         'SuperDemographicFieldsView',
       ],
       // #472 replaced this route's page with the redesigned AnalyticsNextPage, which carries the

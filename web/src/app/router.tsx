@@ -15,7 +15,7 @@ import CompanyDetailPage from '../features/org-structure/pages/CompanyDetailPage
 import UsersNextPage from '../features/org-structure/next/UsersNextPage'
 import SystemSettingsPage from '../features/org-structure/pages/SystemSettingsPage'
 import SystemHealthPage from '../features/org-structure/pages/SystemHealthPage'
-import DemographicFieldsPage from '../features/org-structure/pages/DemographicFieldsPage'
+import DemographicsNextPage from '../features/org-structure/next/DemographicsNextPage'
 import DepartmentsPage from '../features/org-structure/pages/DepartmentsPage'
 import ActionPlansListNextPage from '../features/action-plans/next/ActionPlansListNextPage'
 import ActionPlanDetailPage from '../features/action-plans/pages/ActionPlanDetailPage'
@@ -319,7 +319,9 @@ export const router = createBrowserRouter([
               // The per-role canvas's Usuarios replaced `UsersListPage` here (10 Sep); the old page
               // stays in the tree unrouted, as the wiring reference. `UsersNextPage` dispatches on the role.
               { path: '/admin/companies/:companyId/users', element: <UsersNextPage /> },
-              { path: '/admin/companies/:companyId/demographic-fields', element: <DemographicFieldsPage /> },
+              // The per-role canvas's Campos demográficos replaced `DemographicFieldsPage` here (10 Sep);
+              // the old page stays unrouted as the wiring reference. `DemographicsNextPage` dispatches on the role.
+              { path: '/admin/companies/:companyId/demographic-fields', element: <DemographicsNextPage /> },
               // The redesigned Informes replaced `ReportsListPage` here (ruled 10 Sep, the
               // same swap as `/surveys`); the old page stays unrouted as the wiring reference.
               { path: '/admin/companies/:companyId/reports', element: <ReportsListNextPage /> },

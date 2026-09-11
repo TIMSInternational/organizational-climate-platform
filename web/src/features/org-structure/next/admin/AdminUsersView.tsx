@@ -504,8 +504,8 @@ function DepartmentRail({
         ))}
       </ul>
       {tally.inactiveEmpty !== null && tally.inactiveEmpty > 0 && (
-        <div className="mx-3 mt-1 border-t border-line-light pt-2.5">
-          <Link to="/departments" className="inline-flex items-center gap-1 text-xs text-fg-secondary">
+        <div className="mx-1 mt-1 border-t border-line-light px-2 pt-2.5">
+          <Link to="/departments" className="inline-flex items-center gap-1 whitespace-nowrap text-xs text-fg-secondary">
             {tally.inactiveEmpty === 1
               ? t('users.next.rail.inactiveLinkOne')
               : t('users.next.rail.inactiveLink', { count: tally.inactiveEmpty })}
@@ -544,7 +544,9 @@ function Roster({
 }) {
   const { t, locale } = useTranslation()
   const never = people.filter((user) => !hasSignedIn(user)).length
-  const company = companyName ?? t('navigation.companyAdministration')
+  // The note ends on the company's name, and "Grupo Meridiano S.A." already carries the period
+  // the sentence would add — the sentence's own period stands in for it, not a second one.
+  const company = (companyName ?? t('navigation.companyAdministration')).replace(/\.$/, '')
   return (
     <section
       aria-labelledby="users-roster"
@@ -590,8 +592,8 @@ function Roster({
             <Table aria-label={t('users.next.roster.tableLabel', { company })} className="table-fixed">
               <colgroup>
                 <col />
-                <col className="w-40" />
-                <col className="w-40" />
+                <col className="w-52" />
+                <col className="w-36" />
                 <col className="w-24" />
               </colgroup>
               <thead>
@@ -619,11 +621,12 @@ function Roster({
                         </div>
                       </div>
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className="min-w-0 px-3 py-2.5">
                       <CanvasChip
                         tone="neutral"
                         icon={isAdminRole(user.role) ? <Shield className="size-3" /> : undefined}
                         label={roleText(t, user.role)}
+                        className="max-w-full truncate"
                       />
                     </td>
                     <td className="px-3 py-2.5">
@@ -739,7 +742,7 @@ function EditPerson({
           </AlertDescription>
         </Alert>
       )}
-      <div className="grid grid-cols-1 items-start gap-x-4 gap-y-3 md:grid-cols-2 2xl:grid-cols-4">
+      <div className="grid grid-cols-1 items-start gap-x-4 gap-y-3 md:grid-cols-2 xl:grid-cols-4">
         <Field fieldLabel={t('users.next.edit.name')} htmlFor={ids.name}>
           <Input id={ids.name} value={name} onChange={(event) => setName(event.target.value)} className="w-full" />
         </Field>
