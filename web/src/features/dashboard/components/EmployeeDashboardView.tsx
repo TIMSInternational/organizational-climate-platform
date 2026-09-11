@@ -271,10 +271,11 @@ function daysUntil(endDate: string): number | null {
  *
  * ## One direction only
  *
- * `anonymous === true` draws "Anonymous" with the eye-off glyph, exactly as `RespondShell`
- * draws it beside the brand lockup on the page this card leads to — same key, same icon,
- * same accent tone, because it is the same promise seen twice rather than two claims that
- * happen to agree. Anything else draws nothing.
+ * `anonymous === true` draws "Anonymous" with the eye-off glyph — the key and the icon the
+ * respond page's anonymity block (`surveys/components/AnonymityNotice`) opens with on the page
+ * this card leads to, because it is the same promise seen twice rather than two claims that
+ * happen to agree. Anything else draws nothing. (`RespondShell` also drew it as a header chip
+ * until the canvas's respond strip, which has none, replaced that header.)
  *
  * There is deliberately no `false` branch. `surveyRespond.identifiedChip` ("Not anonymous")
  * exists and is rendered on the respond page, where it sits under a heading and a paragraph

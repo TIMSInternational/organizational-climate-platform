@@ -388,23 +388,35 @@ function toPageError(err: unknown): PageError {
  * guaranteed has been lost; but a client-side check is the honest next step, and it
  * needs copy this catalogue does not have yet.
  *
- * ## Why the anonymity statement is on this page at all
+ * ## Why the anonymity statement is on this page at all — and where it is not literally true
  *
  * `PublicMicroclimateDetail` carries no `anonymousResponses` flag, so this page
  * cannot report the session's configuration and does not try to. What it states
- * instead is what this client verifiably does: `submitResponse` in
- * `api/microclimates.ts` posts with `Content-Type` alone and attaches no bearer
- * token, so no name and no account leaves this page with the answers. That is a
- * description of the request, not a promise about the server, and the copy says
- * exactly that much.
+ * instead describes the request: no name and no account travels with the answers.
+ * That holds only while no session is stored. `submitResponse` in
+ * `api/microclimates.ts` posts with `Content-Type` alone when there is no token, and
+ * attaches the stored bearer whenever there is one — deliberately: a session with
+ * `anonymousResponses: false` answers 401 without it (the comment on `submitResponse`;
+ * pinned by `microclimates.test.ts`, "attaches an Authorization header so an identified
+ * session can be answered", and by `MicroclimateInvitationPage.test.tsx`, "withholds the
+ * bearer from the invitation routes and sends it with the answers"). So for an employee
+ * who opens `/microclimates/:id/respond` signed in, or an invitee who signed in before
+ * answering, the account's token DOES travel with the answers. On an anonymous session
+ * the server does not consult it (`SubmitResponseAsync` reads the caller only when
+ * `AnonymousResponses` is false) and stores no answer per respondent at all — the
+ * submission is folded into the session's aggregate (`MicroclimateEndpoints.cs`, the
+ * comment on the dropped `GET /{id}/responses`) — so what is STORED stays
+ * unattributable; what is SENT is not what the sentence says. The copy is main's and
+ * this build kept it (the lane was told "anonymity copy and behaviour unchanged"):
+ * saying what is stored instead, or sending no token on an anonymous session, is an
+ * open ruling.
  *
- * That statement stays exactly as true on the invitation route, and it is worth being
- * precise about why. `/microclimate-invitations/:token` does hold a per-person token —
- * but it is never attached to the SUBMISSION. It travels on the separate ladder calls,
- * which for an anonymous session the server refuses to record past `opened`
- * (`MicroclimateInvitationStatuses.AnonymityCeiling`). So the sentence below describes
- * the request that carries the answers, and the invitation page's own landing card
- * carries the fuller version — what is recorded about the person, before they start.
+ * The per-person token of `/microclimate-invitations/:token` is a separate credential
+ * and is never attached to the submission: it travels on the ladder calls only, which
+ * for an anonymous session the server refuses to record past `opened`
+ * (`MicroclimateInvitationStatuses.AnonymityCeiling`). The invitation page's landing
+ * card carries the fuller statement — what is recorded about the person, before they
+ * start.
  *
  * ## Submitting is unchanged, and there is no receipt to build
  *

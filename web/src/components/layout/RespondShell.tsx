@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
-import { EyeOff, Waves } from 'lucide-react'
-import { LanguageSwitcher, useTranslation } from '../../i18n'
-import { Chip, SkipLink } from '../ui'
+import { Waves } from 'lucide-react'
+import { LanguageSwitcher } from '../../i18n'
+import { SkipLink } from '../ui'
 import { ThemeSwitcher } from './ShellControls'
 
 /**
@@ -41,18 +41,27 @@ const BRAND_TAIL = 'TE'
  * `AuthShell`: `ShellControls` is the only other place it has ever lived, and that
  * is inside the authenticated shell.
  *
- * ## The header carries the brand and the anonymity state, and nothing else
+ * ## The header carries the brand and the two pickers, and nothing else
  *
  * It used to carry the words "Organizational Climate Platform" in plain grey, with
  * the two pickers floating beside them — no mark, no wordmark, nothing that says
  * this is the same product that emailed the respondent. For most employees this is
  * the *only* screen of this product they ever see, so it now opens on the lockup
- * the signed-in rail opens on, and (when the survey is anonymous) on the chip that
- * states it before the first question is read.
+ * the signed-in rail opens on.
+ *
+ * ## No anonymity chip up here
+ *
+ * The two invitation routes used to pass an `anonymous` flag that put an "Anónima"
+ * chip beside the lockup. The canvas's respond strip (RespondSurveyPhone,
+ * RespondMicroclimatePhone, 10 Sep) draws none, and the chip was the promise the
+ * page's green block makes a few pixels under it — the landing card's, then the
+ * form's — said a second time, in a second wording, one word long. The promise is
+ * made once, by the block that has room to say what is and is not stored.
  *
  * Still no navigation and no account: somebody who followed a link out of an email
- * needs to know what site they are on and that nobody can trace the answers back to
- * them. Anything else here would be a claim about a tenant.
+ * needs to know what site they are on, and the page under this strip tells them
+ * whether the answers can come back to them. Anything else here would be a claim
+ * about a tenant.
  */
 export interface RespondShellProps {
   /** Already-translated label for the skip link, e.g. "Skip to the survey". */
@@ -62,27 +71,10 @@ export interface RespondShellProps {
    * `/survey/:id` passes `survey`, which is the anchor its own test pins.
    */
   contentId?: string
-  /**
-   * Whether responses to the thing being answered are anonymous. Puts the
-   * "Anonymous" chip beside the lockup when it is.
-   *
-   * Defaults to **off**, deliberately. Anonymity is a per-survey setting the shell
-   * cannot know, and a chip that appears by default would be this page making the
-   * one promise it is least entitled to guess at. Callers that have the flag pass
-   * it; the ones that do not are unaffected.
-   */
-  anonymous?: boolean
   children: ReactNode
 }
 
-export function RespondShell({
-  skipLabel,
-  contentId = 'respond',
-  anonymous = false,
-  children,
-}: RespondShellProps) {
-  const { t } = useTranslation('surveyRespond')
-
+export function RespondShell({ skipLabel, contentId = 'respond', children }: RespondShellProps) {
   return (
     <div className="flex min-h-dvh flex-col bg-surface-outer">
       {/* First focusable thing on the page, so a keyboard user is not made to Tab
@@ -101,13 +93,6 @@ export function RespondShell({
       <header className="mx-auto flex w-full max-w-field flex-wrap items-center justify-between gap-inline px-4 py-3.5">
         <span className="flex flex-wrap items-center gap-inline">
           <BrandLockup size="compact" />
-          {/* Beside the lockup rather than inside the form, because it is the
-              answer to the question a respondent asks before they read anything:
-              can this come back to me. `Chip` requires the word, so the tint is
-              never the only carrier of it. */}
-          {anonymous ? (
-            <Chip tone="accent" label={t('anonymousChip')} icon={<EyeOff aria-hidden="true" />} />
-          ) : null}
         </span>
         <span className="flex flex-wrap items-center gap-1.5">
           <LanguageSwitcher variant="chip" />

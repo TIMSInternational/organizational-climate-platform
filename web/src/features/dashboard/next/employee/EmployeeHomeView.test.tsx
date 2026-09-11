@@ -361,11 +361,15 @@ describe('EmployeeHomeView', () => {
   })
 
   /**
-   * At 390px "Responder" dropped onto a line of its own under the row's text
-   * (home-390-light.png, fix round 1). The row is one line at every width: the title wraps
-   * inside its own column, and the way in keeps its place at the right.
+   * Two measurements pull this row opposite ways. At 390px "Responder" dropped onto a line of
+   * its own under the row's text (home-390-light.png, fix round 1), so round 2 took the wrap
+   * away; then at 320px the title and its line were squeezed into a 117px column 207px tall,
+   * a word or two a line (home-320-light.png, fix round 3). The row wraps, but only below the
+   * text's 180px floor: beside it at 390 and wider, under it — at the right — at 375 and
+   * narrower. happy-dom has no layout, so this pins the three classes that decide it; the
+   * widths are measured in the lane's shots.
    */
-  it('keeps each other survey’s way in at the right of its row, never on a line of its own', async () => {
+  it('keeps each other survey’s way in beside its text while the text keeps 180px, and drops it under the text below that', async () => {
     serves({
       dashboard: home({
         pendingSurveyCount: 2,
@@ -382,11 +386,16 @@ describe('EmployeeHomeView', () => {
       if (!node) throw new Error('no row yet')
       return node
     })
-    expect(row.className.split(/\s+/)).not.toContain('flex-wrap')
+    // Wraps, so a narrow phone does not squeeze the title to a word a line…
+    expect(row.className.split(/\s+/)).toContain('flex-wrap')
     const [text, way] = [...row.children] as HTMLElement[]
-    expect(text.className.split(/\s+/)).toEqual(expect.arrayContaining(['min-w-0', 'flex-1']))
+    // …but only below the text's 180px floor. A zero basis (`flex-1`) never wraps; no basis at
+    // all wraps whenever the title is long, at 390 too.
+    expect(text.className.split(/\s+/)).toEqual(expect.arrayContaining(['min-w-0', 'grow', 'basis-45']))
+    expect(text.className.split(/\s+/)).not.toContain('flex-1')
     expect(way.tagName).toBe('A')
-    expect(way.className.split(/\s+/)).toContain('shrink-0')
+    // At the right of the row on either line.
+    expect(way.className.split(/\s+/)).toEqual(expect.arrayContaining(['shrink-0', 'ml-auto']))
   })
 
   it('answers an empty queue in words naming the department, and offers no way into a survey', async () => {

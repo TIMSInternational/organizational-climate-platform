@@ -305,14 +305,17 @@ function AlsoOpenRow({ survey }: { survey: HomeSurvey }) {
   const date = calendarDay(Date.parse(survey.closesAt), locale)
 
   return (
-    // One line at every width: the title wraps inside its own column, and the way in keeps
-    // its place at the right. With `flex-wrap`, at 390px "Responder" dropped onto a line of
-    // its own under the text.
+    // The way in sits beside its text while the text keeps 180px (`basis-45`), and drops under
+    // it — still at the right (`ml-auto`) — below that. Measured on the fixture's row: beside
+    // at 390px and wider, the canvas's phone, where round 2 kept "Responder" off a line of its
+    // own; under at 375px and narrower. With no wrap at all, 320px squeezed the title and its
+    // line into a 117px column 207px tall, a word or two a line (fix round 3). A zero basis
+    // (`flex-1`) would never wrap, and no basis at all would wrap a long title at 390 too.
     <li
       data-slot="home-also-open"
-      className="flex items-center justify-between gap-3 rounded-lg border border-line-light px-3.5 py-2.5"
+      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line-light px-3.5 py-2.5"
     >
-      <div className="flex min-w-0 flex-1 items-center gap-2.5">
+      <div className="flex min-w-0 grow basis-45 items-center gap-2.5">
         <span
           aria-hidden="true"
           className="grid size-7 shrink-0 place-items-center rounded-lg bg-surface-icon-box text-fg-secondary"
@@ -332,7 +335,7 @@ function AlsoOpenRow({ survey }: { survey: HomeSurvey }) {
       </div>
       <Link
         to={`/surveys/${survey.id}/respond`}
-        className="inline-flex shrink-0 items-center gap-1.5 text-base font-medium text-fg-primary no-underline hover:underline"
+        className="ml-auto inline-flex shrink-0 items-center gap-1.5 text-base font-medium text-fg-primary no-underline hover:underline"
       >
         {t('dashboard.respondNow')}
         <ArrowRight aria-hidden="true" className="size-3.5 text-fg-secondary" />

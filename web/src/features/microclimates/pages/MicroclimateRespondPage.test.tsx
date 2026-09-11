@@ -176,10 +176,13 @@ describe('MicroclimateRespondPage as a respondent surface', () => {
   /**
    * `PublicMicroclimateDetail` carries no `anonymousResponses` flag, so this page
    * cannot report the session's configuration and does not claim to. What it states
-   * is what `submitResponse` verifiably does: post with `Content-Type` alone and no
-   * bearer token.
+   * is what `submitResponse` does while no session is stored — the case this test runs:
+   * post with `Content-Type` alone and no bearer token. With a stored session it attaches
+   * the bearer (`microclimates.test.ts`, "attaches an Authorization header so an
+   * identified session can be answered"), which is where the sentence stops being
+   * literally true; see `MicroclimatePulseForm`'s docblock.
    */
-  it('states what leaves the page with the answers, and attaches no token', async () => {
+  it('states what leaves the page with the answers, and attaches no token while no session is stored', async () => {
     vi.mocked(fetch)
       .mockResolvedValueOnce(new Response(JSON.stringify(spanishMicroclimate()), { status: 200 }))
       .mockResolvedValueOnce(new Response(null, { status: 201 }))

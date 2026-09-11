@@ -153,49 +153,21 @@ describe('RespondShell', () => {
   })
 
   /**
-   * Default off. Anonymity is a per-survey setting the shell cannot know, and the
-   * microclimate route and `/survey/:id` both mounted this frame before the prop
-   * existed — a chip that appeared by default would be the shell making the one
-   * promise it is least entitled to guess at, on their pages.
+   * The canvas's respond strip (RespondSurveyPhone and its two siblings, 10 Sep) is the
+   * lockup and the two pickers, and nothing else. The anonymity promise is the green block
+   * the page opens on — the invitation landing card's, then the form's — so a chip up here
+   * was the same promise said twice, in two wordings, one of them a single word.
    */
-  it('makes no anonymity claim unless it is told to', () => {
-    window.localStorage.setItem(LOCALE_STORAGE_KEY, 'en')
-    renderShell()
-
-    expect(screen.queryByText('Anonymous')).toBeNull()
-  })
-
-  it('states anonymity beside the lockup when the survey is anonymous', () => {
-    window.localStorage.setItem(LOCALE_STORAGE_KEY, 'en')
-    const { container } = render(
-      <TranslationProvider>
-        <RespondShell skipLabel="Skip to the survey" anonymous>
-          <p>body</p>
-        </RespondShell>
-      </TranslationProvider>,
-    )
-
-    const chip = screen.getByText('Anonymous')
-    // The word, not only the tint: `Chip` requires the label for WCAG 1.4.1, and
-    // an icon-only anonymity signal is exactly what that rule exists to prevent.
-    expect(chip.getAttribute('data-slot')).toBe('chip')
-    // In the header beside the lockup, which is the point of moving it out of the
-    // form: it is read before the first question, not after it.
-    expect(container.querySelector('header')?.contains(chip)).toBe(true)
-  })
-
-  it('translates the anonymity chip rather than hardcoding the English word', () => {
+  it('draws the lockup and the two pickers in its header, and no anonymity chip', () => {
     window.localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
-    render(
-      <TranslationProvider>
-        <RespondShell skipLabel="Saltar" anonymous>
-          <p>body</p>
-        </RespondShell>
-      </TranslationProvider>,
-    )
+    const { container } = renderShell()
 
-    expect(screen.getByText('Anónima')).toBeTruthy()
-    expect(screen.queryByText('Anonymous')).toBeNull()
+    const header = container.querySelector('header')
+    expect(header).toBeTruthy()
+    expect(header!.querySelector('[data-slot="chip"]')).toBeNull()
+    expect(header!.textContent).not.toMatch(/Anónima|Anonymous/)
+    // The strip lost a chip, not its controls: both pickers are still in it.
+    expect(header!.querySelectorAll('select')).toHaveLength(2)
   })
 })
 
