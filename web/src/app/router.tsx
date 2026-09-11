@@ -13,8 +13,8 @@ import DashboardPage from '../features/dashboard/pages/DashboardPage'
 import CompaniesListPage from '../features/org-structure/pages/CompaniesListPage'
 import CompanyDetailPage from '../features/org-structure/pages/CompanyDetailPage'
 import UsersListPage from '../features/org-structure/pages/UsersListPage'
-import SystemSettingsPage from '../features/org-structure/pages/SystemSettingsPage'
-import SystemHealthPage from '../features/org-structure/pages/SystemHealthPage'
+import SystemSettingsNextPage from '../features/org-structure/next/system/SystemSettingsNextPage'
+import SystemHealthNextPage from '../features/org-structure/next/system/SystemHealthNextPage'
 import DemographicFieldsPage from '../features/org-structure/pages/DemographicFieldsPage'
 import DepartmentsPage from '../features/org-structure/pages/DepartmentsPage'
 import ActionPlansListPage from '../features/action-plans/pages/ActionPlansListPage'
@@ -315,8 +315,11 @@ export const router = createBrowserRouter([
               { path: '/admin/companies/:companyId/demographic-fields', element: <DemographicFieldsPage /> },
               { path: '/admin/companies/:companyId/reports', element: <ReportsListPage /> },
               { path: '/admin/companies/:companyId/analytics', element: <AnalyticsDashboardPage /> },
-              { path: '/admin/system-settings', element: <SystemSettingsPage /> },
-              { path: '/admin/system', element: <SystemHealthPage /> },
+              // The redesigned Configuración del Sistema and Estado del sistema (the per-role
+              // canvas, 10 Sep) replaced SystemSettingsPage and SystemHealthPage here; the old
+              // pages stay in the tree unrouted, as the wiring reference. Super-only on the server.
+              { path: '/admin/system-settings', element: <SystemSettingsNextPage /> },
+              { path: '/admin/system', element: <SystemHealthNextPage /> },
               // #114, the question BANK — not the question library, which is the
               // authoring repository and now has its own route just below (#423).
               // The two reach different tables on purpose; `questionBank.ts` and
