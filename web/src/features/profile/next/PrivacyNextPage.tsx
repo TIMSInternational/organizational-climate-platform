@@ -111,7 +111,7 @@ export default function PrivacyNextPage() {
             </h2>
             <span className="text-xs text-fg-tertiary">{t('privacy.next.held.meta')}</span>
           </div>
-          <p className="m-0 max-w-measure-wide text-xs leading-normal text-fg-secondary">{t('privacy.next.held.text')}</p>
+          <p className="m-0 max-w-measure text-xs leading-normal text-fg-secondary">{t('privacy.next.held.text')}</p>
         </div>
         <div className="overflow-x-auto">
           <div className="min-w-[48rem] [&_[data-slot=table-container]]:overflow-visible">
@@ -218,7 +218,7 @@ export default function PrivacyNextPage() {
             <div key={group.key} className="flex flex-col gap-1.5">
               <p className="m-0 text-sm font-semibold text-fg-primary">{t(`privacy.next.erasure.${group.key}.title`)}</p>
               <p className="m-0 text-2xs text-fg-tertiary">{t(`privacy.next.erasure.${group.key}.sub`)}</p>
-              <ul className="m-0 flex list-disc flex-col gap-1 pl-4 text-sm text-fg-secondary marker:text-fg-light">
+              <ul className="m-0 flex list-disc flex-col gap-1 pl-4 text-sm text-fg-secondary marker:text-fg-tertiary">
                 {group.items.map((item) => (
                   <li key={item}>{t(`privacy.next.erasure.${group.key}.${item}`)}</li>
                 ))}

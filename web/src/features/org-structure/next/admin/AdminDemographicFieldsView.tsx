@@ -272,7 +272,7 @@ function Catalogue({
           </span>
         </div>
         {isSample && people !== undefined && (
-          <p className="m-0 max-w-measure-wide text-xs leading-normal text-fg-secondary">
+          <p className="m-0 max-w-measure text-xs leading-normal text-fg-secondary">
             {t('demographicFields.next.catalogue.textSample', { company, people })}
           </p>
         )}

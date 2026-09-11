@@ -2,7 +2,7 @@ import { useEffect, useId, useState } from 'react'
 import { Link } from 'react-router'
 import { Check, Clock, Inbox, Lock, Mail, Smartphone } from 'lucide-react'
 import { PageTopBar } from '../../../components/layout'
-import { Alert, AlertDescription, Button, LoadingRegion, NetworkError, SkeletonText, Switch } from '../../../components/ui'
+import { Alert, AlertDescription, Button, LoadingRegion, NetworkError, SkeletonText, Switch, Table } from '../../../components/ui'
 import { useTranslation, type TranslateFn } from '../../../i18n'
 import { cn } from '../../../lib/cn'
 import { CanvasChip, CanvasSelect, IconBox, Panel } from '../../org-structure/next/super/parts'
@@ -173,7 +173,7 @@ function PreferencesTable({ draft, onChange }: { draft: NotificationPreferences;
         <span className="text-xs text-fg-tertiary">{t('notifications.next.prefs.tableMeta')}</span>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[40rem] border-collapse">
+        <Table className="min-w-[40rem]">
           <thead>
             <tr>
               <th className={TH}>{t('notifications.next.prefs.colAviso')}</th>
@@ -246,7 +246,7 @@ function PreferencesTable({ draft, onChange }: { draft: NotificationPreferences;
               </td>
             </tr>
           </tbody>
-        </table>
+        </Table>
       </div>
     </section>
   )

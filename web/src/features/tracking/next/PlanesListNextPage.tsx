@@ -417,7 +417,9 @@ function PlansTable({ rows, label, t, locale }: { rows: readonly ListRow[]; labe
   return (
     <div className="overflow-hidden rounded-xl border border-line-default bg-surface-card shadow-sm">
       <div className="overflow-x-auto">
-        <div className="min-w-[56rem] [&_[data-slot=table-container]]:overflow-visible">
+        {/* The six fixed columns take 54rem; the minimum leaves "Qué se hará" ~14rem at any width.
+            At 1024 the table scrolls inside this container rather than crushing that column. */}
+        <div className="min-w-[68rem] [&_[data-slot=table-container]]:overflow-visible">
           <Table aria-label={label} className="table-fixed">
             <colgroup>
               <col className="w-36" />
