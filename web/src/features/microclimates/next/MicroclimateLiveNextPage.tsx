@@ -265,7 +265,7 @@ function ArrivalsCard({ model }: { model: MicroclimateLiveNextModel }) {
               target: target.toLocaleString(locale),
             })}
           />
-          <div data-slot="live-scale" className="flex justify-between gap-3 font-mono text-xs text-fg-light">
+          <div data-slot="live-scale" className="flex justify-between gap-3 font-mono text-xs text-fg-tertiary">
             <span>{(0).toLocaleString(locale)}</span>
             <span>{t('microclimates.next.live.scaleFloor', { minimum: MINIMUM_RESPONDENTS })}</span>
             <span>{target.toLocaleString(locale)}</span>
@@ -335,7 +335,7 @@ function WordsBlock({ live, responses }: { live: LiveResults | null; responses: 
             PROTECTED_HATCH,
           )}
         >
-          <Lock aria-hidden="true" className="size-4.5 text-fg-light" />
+          <Lock aria-hidden="true" className="size-4.5 text-fg-tertiary" />
           <span className="text-sm text-fg-tertiary">
             {t('microclimates.next.live.hatchNote', { minimum: MINIMUM_RESPONDENTS })}
           </span>

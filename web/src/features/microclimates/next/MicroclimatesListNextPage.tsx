@@ -278,7 +278,7 @@ function DashedNote({ icon, title, body }: { icon: ReactNode; title: string; bod
       data-slot="dashed-note"
       className="flex items-center gap-3.5 rounded-xl border border-dashed border-line-default px-5 py-4.5"
     >
-      <span className="inline-flex size-9 flex-none items-center justify-center rounded-lg bg-surface-icon-box text-fg-light">
+      <span className="inline-flex size-9 flex-none items-center justify-center rounded-lg bg-surface-icon-box text-fg-tertiary">
         {icon}
       </span>
       <div className="flex flex-col gap-0.5">
