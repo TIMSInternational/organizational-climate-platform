@@ -50,9 +50,7 @@ export function clearCompanyNameCache(): void {
 function profileNames(token: string): Promise<ProfileNames | null> {
   let pending = cache.get(token)
   if (!pending) {
-    const baseUrl = import.meta.env.VITE_API_BASE_URL as string | undefined
-    // No API configured (a unit test that renders the shell alone): nothing to ask.
-    if (!baseUrl) return Promise.resolve(null)
+    const baseUrl = import.meta.env.VITE_API_BASE_URL as string
     pending = getProfile(baseUrl)
       .then((profile) => ({ companyName: profile.companyName ?? null, departmentName: profile.departmentName ?? null }))
       // A failed lookup is not worth an error state on a page whose actual content
@@ -103,5 +101,8 @@ export function useCompanyName(): string | null {
  * administrator roles belong to no department).
  */
 export function useOwnDepartmentName(enabled: boolean): string | null {
-  return useProfileName(pickDepartment, enabled)
+  // The shell renders on every screen, including unit tests that mount it with no API
+  // configured; there it asks nothing rather than sending a request to nowhere.
+  const configured = Boolean(import.meta.env.VITE_API_BASE_URL)
+  return useProfileName(pickDepartment, enabled && configured)
 }

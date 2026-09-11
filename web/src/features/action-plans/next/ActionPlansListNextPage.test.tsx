@@ -206,7 +206,8 @@ describe('ActionPlansListNextPage — company_admin', () => {
     // The one heading that keeps a chip keeps it on its own line.
     const heading = table.querySelector('th[data-col="finding"]') as HTMLElement
     expect(heading.className).toContain('whitespace-nowrap')
-    expect((heading.querySelector('[data-slot="sample-chip"]')?.parentElement as HTMLElement).className).not.toMatch(/flex-wrap/)
+    const chip = heading.querySelector('[data-slot="sample-chip"]') as HTMLElement
+    expect((chip.parentElement as HTMLElement).className).not.toMatch(/flex-wrap/)
   })
 
   it('folds the finding and owner into the plan cell below 1360px instead of scrolling a minimum width', async () => {
