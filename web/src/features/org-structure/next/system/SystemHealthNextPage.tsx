@@ -317,7 +317,7 @@ function HealthBody({ status, email }: { status: SystemStatusResponse; email: Sy
  * The cadence inside a sentence — "corre cada minuto", "cada 5 minutos", "cada hora" — where the
  * table's "Cada 1 min" lower-cased read "corre cada 1 min" (the fidelity refuter, 10 Sep).
  */
-export function intervalSentence(t: TranslateFn, seconds: number): string {
+function intervalSentence(t: TranslateFn, seconds: number): string {
   if (seconds <= 0) return '—'
   if (seconds % 3600 === 0) {
     const hours = seconds / 3600
