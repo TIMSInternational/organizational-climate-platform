@@ -1,7 +1,7 @@
 import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Switch } from '../../../../components/ui'
-import { CanvasChip, CanvasSelect, MiniBar, Note } from './parts'
+import { CanvasChip, CanvasSelect, EmptyNote, MiniBar, Note } from './parts'
 
 /**
  * Two marks the fidelity refuter found missing on screen while every behaviour test was
@@ -69,5 +69,16 @@ describe('the canvas’s type on chips and notes', () => {
     const note = container.querySelector('[data-slot="canvas-note"]') as HTMLElement
     expect(note.className.split(/\s+/)).toContain('text-sm')
     expect(note.className.split(/\s+/)).not.toContain('text-xs')
+  })
+
+  it('sets a dashed empty note’s sentence at the canvas’s 12px (text-sm), not 11px', () => {
+    const { container } = render(
+      <EmptyNote icon={null} heading="Sin referencias">
+        texto
+      </EmptyNote>,
+    )
+    const body = container.querySelector('[data-slot="canvas-empty-note"] p + div') as HTMLElement
+    expect(body.className.split(/\s+/)).toContain('text-sm')
+    expect(body.className.split(/\s+/)).not.toContain('text-xs')
   })
 })

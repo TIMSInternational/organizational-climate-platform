@@ -195,11 +195,11 @@ export function Note({ icon, lead, children }: { icon: ReactNode; lead?: ReactNo
 /** The dashed empty state inside a card: an honest sentence, not an empty grid. */
 export function EmptyNote({ icon, heading, children }: { icon: ReactNode; heading: string; children: ReactNode }) {
   return (
-    <div className="flex items-start gap-3.5 rounded-xl border border-dashed border-line-default p-3.5">
+    <div data-slot="canvas-empty-note" className="flex items-start gap-3.5 rounded-xl border border-dashed border-line-default p-3.5">
       <IconBox>{icon}</IconBox>
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <p className="m-0 text-base font-semibold text-fg-primary">{heading}</p>
-        <div className="m-0 text-xs text-fg-secondary">{children}</div>
+        <div className="m-0 text-sm text-fg-secondary">{children}</div>
       </div>
     </div>
   )
