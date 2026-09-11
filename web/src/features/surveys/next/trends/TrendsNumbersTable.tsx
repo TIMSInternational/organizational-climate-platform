@@ -46,7 +46,7 @@ export interface TrendsNumbersTableProps {
 // `hyphens-auto`: at 1024 a column is narrower than "RECONOCIMIENTO", and `index.css`'s
 // `overflow-wrap: break-word` split it as "RECONOCIMIE / NTO"; the document carries the
 // reader's `lang` (`TranslationProvider`), so the word breaks where the language breaks it.
-const HEAD = 'border-0 px-1 pb-1 align-bottom text-3xs font-bold uppercase leading-tight tracking-label text-fg-label hyphens-auto'
+const HEAD = 'border-0 px-1 pt-0 pb-1 align-bottom text-3xs font-bold uppercase leading-tight tracking-label text-fg-label hyphens-auto'
 
 export default function TrendsNumbersTable({
   waves,
@@ -158,7 +158,7 @@ export default function TrendsNumbersTable({
       {first && last && lastIndex > 0 && (
         <tfoot>
           <tr data-slot="trends-move-row">
-            <th scope="row" className="border-t border-b-0 border-line-light pt-1.5 pl-0 text-left text-sm font-semibold text-fg-primary">
+            <th scope="row" className="border-t border-b-0 border-line-light pt-1.5 pb-0 pl-0 text-left text-sm font-semibold text-fg-primary">
               {`${first.code} → ${last.code}`}
             </th>
             {dimensions.map((dimension) => {
@@ -166,7 +166,7 @@ export default function TrendsNumbersTable({
               const to = withheld[lastIndex] ? null : (dimension.values[lastIndex] ?? null)
               const move = from === null || to === null ? null : printedMove(to, from)
               return (
-                <td key={dimension.key} className="border-t border-b-0 border-line-light pt-1.5 text-center">
+                <td key={dimension.key} className="border-t border-b-0 border-line-light pt-1.5 pb-0 text-center">
                   {move === null ? (
                     <span className="text-fg-label">
                       <span aria-hidden="true">—</span>

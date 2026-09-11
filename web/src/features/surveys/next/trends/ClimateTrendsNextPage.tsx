@@ -359,7 +359,7 @@ function ClimateTrendsNextView({
                   department withheld in every wave says so in its own segment, where every
                   cell is hatched; the target is the Panel de Control's, and the subtitle
                   already names it. */}
-              <p data-slot="trends-footnote" className="m-0 text-xs text-fg-label">
+              <p data-slot="trends-footnote" className="m-0 -mt-1 text-xs leading-normal text-fg-label">
                 {t('surveys.next.trends.floorNote', { floor: model.floor })}
                 {!model.companyWithheld.some(Boolean) && <> {t('surveys.next.trends.companyNeverWithheld')}</>}
               </p>
@@ -402,7 +402,7 @@ function TrendCard({
     >
       <div className="flex items-center justify-between gap-2">
         <span className="min-w-0 truncate text-base font-semibold text-fg-primary">{dimension.name}</span>
-        {stand && <Chip tone={STANDING_TONE[stand]} label={t(`surveys.next.trends.standing.${stand}`)} />}
+        {stand && <Chip tone={STANDING_TONE[stand]} label={t(`surveys.next.trends.standing.${stand}`)} className="h-6" />}
       </div>
       {/* `leading-normal` is the canvas's line box: the artboard sets this 22px reading in a
           body of `line-height: 1.5`, so the row is 33px and the card 254px tall

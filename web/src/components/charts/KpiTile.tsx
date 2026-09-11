@@ -101,8 +101,8 @@ export type KpiTileSize = 'default' | 'hero' | 'large'
 /** The reading's size and weight and the label's tracking, per `size`. */
 const SIZES: Record<KpiTileSize, { value: string; label: string }> = {
   default: { value: 'text-3xl font-medium tracking-tight', label: 'tracking-tile' },
-  hero: { value: 'text-kpi-hero font-normal tracking-normal', label: 'tracking-label' },
-  large: { value: 'text-kpi-lg font-normal tracking-normal', label: 'tracking-kpi' },
+  hero: { value: 'text-kpi-hero font-normal tracking-normal', label: 'tracking-label leading-normal' },
+  large: { value: 'text-kpi-lg font-normal tracking-normal', label: 'tracking-kpi leading-normal' },
 }
 
 export default function KpiTile({

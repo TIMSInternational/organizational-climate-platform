@@ -66,7 +66,7 @@ export default function TrendSparkline({
   const below = lastValue !== undefined && isBelowTarget(lastValue, target)
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-1.5">
       <svg
         data-slot="trend-sparkline"
         role="img"
@@ -110,7 +110,7 @@ export default function TrendSparkline({
           />
         )}
       </svg>
-      <div data-slot="trend-labels" aria-hidden="true" className="flex justify-between font-mono text-2xs text-fg-label">
+      <div data-slot="trend-labels" aria-hidden="true" className="flex justify-between font-mono text-2xs leading-normal text-fg-label">
         {labels.map((text, index) => (
           <span key={`${index}-${text}`}>{text}</span>
         ))}

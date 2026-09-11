@@ -231,7 +231,7 @@ export default function ClimateMap({
   const reading = (value: number) => formatMetric(value, { kind: 'number', decimals }, locale)
 
   return (
-    <figure className="m-0 flex flex-col gap-2">
+    <figure className={cn('m-0 flex flex-col', canvas ? 'gap-3' : 'gap-2')}>
       {title ? (
         <figcaption className="text-lg font-medium text-fg-primary">{title}</figcaption>
       ) : null}
@@ -241,7 +241,7 @@ export default function ClimateMap({
       {/* `canvas`: the artboard's grid — a 120px label column, equal reading columns and
           4px between every cell — drawn by `table-fixed` + `border-spacing-1`, so it stays
           the real table the module note describes rather than becoming a CSS grid. */}
-      <Table className={canvas ? 'table-fixed border-separate border-spacing-1 text-sm' : 'text-sm'}>
+      <Table className={canvas ? 'table-fixed border-separate border-spacing-0 text-sm' : 'text-sm'}>
         <caption className="sr-only">{t('charts.tableCaption')}</caption>
         {canvas && (
           <colgroup>
@@ -258,7 +258,7 @@ export default function ClimateMap({
                 shrink-to-content column: the table's surplus width then goes to
                 the reading columns, which is where the design puts it. */}
             {/* `border-0` in the canvas: `index.css` rules every bare th/td, and the artboard's grid has no rules. */}
-            <td className={canvas ? 'border-0' : 'w-px'} />
+            <td className={canvas ? 'border-0 p-0' : 'w-px'} />
             {dimensions.map((dimension) => (
               <th
                 key={dimension.key}
@@ -276,7 +276,7 @@ export default function ClimateMap({
                 // measures the pair and bans the utility by name in this file.
                 className={cn(
                   canvas
-                    ? 'truncate border-0 px-0 pb-1 text-center align-bottom font-bold uppercase leading-tight tracking-label text-fg-label'
+                    ? 'truncate border-0 p-0 pb-0.5 pl-1 text-center align-bottom font-bold uppercase leading-tight tracking-label text-fg-label'
                     : 'px-1 pb-1.5 text-left font-semibold uppercase tracking-label text-fg-secondary',
                   density.header,
                 )}
@@ -312,7 +312,7 @@ export default function ClimateMap({
                   scope="row"
                   className={cn(
                     canvas
-                      ? 'truncate border-0 pr-2 text-left font-normal text-fg-primary'
+                      ? 'truncate border-0 p-0 pt-1 pr-2 text-left font-normal text-fg-primary'
                       : 'w-px whitespace-nowrap pr-2 text-left font-medium text-fg-secondary',
                     density.label,
                   )}
@@ -352,7 +352,7 @@ export default function ClimateMap({
                   // colour can be computed against a target that does not exist.
                   if (target === null || suppressed) {
                     return (
-                      <td key={dimension.key} className={canvas ? 'border-0 p-0' : 'p-px'}>
+                      <td key={dimension.key} className={canvas ? 'border-0 p-0 pt-1 pl-1' : 'p-px'}>
                         <ProtectedCell
                           // 0, not `row.responses`: the row-level decision above
                           // is the one that governs, and the withheld count has no
@@ -470,7 +470,7 @@ export default function ClimateMap({
                   )
 
                   return (
-                    <td key={dimension.key} className={canvas ? 'border-0 p-0' : 'p-px'}>
+                    <td key={dimension.key} className={canvas ? 'border-0 p-0 pt-1 pl-1' : 'p-px'}>
                       {onSelectCell ? (
                         // The button WRAPS the painted cell rather than being it.
                         // `severelyBelow` sets `outline` inline, and an inline

@@ -61,7 +61,10 @@ const FACET_KEY: Record<string, string> = {
   archived: 'surveys.next.list.facetArchived',
 }
 
-const HEAD = 'px-3 pt-2 pb-2 text-left text-2xs font-bold uppercase tracking-label text-fg-secondary whitespace-nowrap'
+// The canvas's `.label` head: 10px in a 15px line box, 8px above and below, over a rule in the
+// default hairline (`border-bottom: 1px solid #e0dbee`) — `index.css` rules every bare th in the
+// light one, and a cell's rule wins over its row's.
+const HEAD = 'px-3 pt-2 pb-2 text-left text-2xs font-bold uppercase leading-normal tracking-label text-fg-label whitespace-nowrap border-b border-line-default'
 /** Every cell after the first, from xl: its column's left edge is the canvas's gap. */
 const GAP_CELL = 'xl:pl-0'
 
@@ -146,7 +149,7 @@ export default function SurveysListNextPage() {
             className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-fg-label"
           />
           <select
-            className="w-full appearance-none pr-8"
+            className="block w-full appearance-none pr-8"
             value={state.draft.type}
             onChange={(event) => state.apply({ ...state.draft, type: event.target.value })}
           >
@@ -407,7 +410,7 @@ function SurveyTableRow({
           >
             {name}
           </Link>
-          <span className="truncate text-xs text-fg-label">{meta}</span>
+          <span className="truncate text-xs leading-normal text-fg-label">{meta}</span>
         </div>
       </td>
       <td className="px-3 py-3 xl:pl-0">
@@ -457,7 +460,7 @@ function SurveyTableRow({
               {calendarDay(Date.parse(row.endDate), locale)}
             </span>
             {closeLine && (
-              <span data-slot={section === 'closed' ? 'wave-move' : 'close-note'} className="text-xs text-fg-label">
+              <span data-slot={section === 'closed' ? 'wave-move' : 'close-note'} className="text-xs leading-normal text-fg-label">
                 {closeLine}
               </span>
             )}
