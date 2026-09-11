@@ -269,7 +269,11 @@ function SettingsForm({
             <Field
               fieldLabel={t(`${K}.retention`)}
               htmlFor={`${ids}-retention`}
-              helper={t(`${K}.retentionHelpPeriod`, { period: retentionLabel(t, locale, draft.dataRetentionDays) })}
+              // The period's number and unit never split across the helper's lines ("… cerradas. 7 /
+              // años hasta …" on the first shot): the first space becomes a no-break space.
+              helper={t(`${K}.retentionHelpPeriod`, {
+                period: retentionLabel(t, locale, draft.dataRetentionDays).replace(' ', '\u00a0'),
+              })}
             >
               <CanvasSelect
                 id={`${ids}-retention`}

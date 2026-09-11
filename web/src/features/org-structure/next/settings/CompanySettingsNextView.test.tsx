@@ -179,6 +179,15 @@ describe('CompanySettingsNextView (/admin/companies/:id for a company administra
     expect(vi.mocked(getSurvey).mock.calls.map((call) => call[1])).toEqual(['s-q4'])
     expect(screen.getByText('The Q4 survey was created as not anonymous; this value applies to new surveys only.')).toBeTruthy()
     expect(screen.getByText('How long closed responses are kept. 7 years until another period is set.')).toBeTruthy()
+    cleanup()
+
+    // The sentence follows the survey's own flag, not a fixed wording.
+    vi.mocked(getSurvey).mockImplementation(
+      async (_base, id) => ({ ...surveyDetail(id), settings: { anonymous: id === 's-q4' } }) as unknown as SurveyDetail,
+    )
+    renderAs({ role: 'company_admin', companyId: 'c1' })
+    await screen.findByLabelText(new RegExp(copy.language))
+    expect(screen.getByText('The Q4 survey was created as anonymous; this value applies to new surveys only.')).toBeTruthy()
   })
 
   it('says only that the anonymity applies to new surveys when no survey is running, and asks for none', async () => {
@@ -208,6 +217,9 @@ describe('CompanySettingsNextView (/admin/companies/:id for a company administra
     expect(within(readings).getByText('2 active · 1 inactive')).toBeTruthy()
     expect(within(readings).getByText('20')).toBeTruthy()
     expect(within(readings).getByText('5 · 1 active')).toBeTruthy()
+    // Why name and country cannot be edited here is said to a screen reader; the artboard
+    // draws no line for it.
+    expect(screen.getByText(copy.companyHelp).classList.contains('sr-only')).toBe(true)
     cleanup()
 
     vi.mocked(listDepartments).mockRejectedValue(new Error('boom'))
