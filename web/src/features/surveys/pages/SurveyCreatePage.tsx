@@ -225,8 +225,18 @@ export default function SurveyCreatePage() {
     if (!companyId) return
     let cancelled = false
     listDepartments(baseUrl, companyId)
+      // Active departments only, filtered once at the boundary so that every reading
+      // built on the catalogue -- the checkbox rows, the reach when nothing is selected,
+      // the review tile's "N departments" and its "of N" -- counts the same set. A
+      // deactivated department is one the administrator retired: `GET /admin/departments`
+      // still lists it so the departments page can show it behind "show inactive", and the
+      // results of surveys it answered still name it, but it is not a place a NEW survey
+      // can be aimed at. The tracking picker (`/tracking/picker/nodos`) and the company
+      // dashboard apply the same rule. Its remaining people are reached company-wide.
+      // A restored draft that names a since-retired department is handled by the
+      // "unlisted"/"partial" readings on the review step, exactly as a deleted one is.
       .then((result) => {
-        if (!cancelled) setDepartments(result)
+        if (!cancelled) setDepartments(result.filter((department) => department.isActive))
       })
       // A failed department list is not a reason to block the flow: the audience step
       // is optional, and an empty picker still means "every department".

@@ -435,6 +435,53 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
         Assert.Null(notification.SentAt);
     }
 
+    [Fact]
+    public async Task A_reminder_to_a_recipient_deactivated_since_it_was_raised_is_cancelled_not_sent()
+    {
+        // The membership rule, at the same layer as the consent rule and for the same reason.
+        // The reminder job, the digest and the scheduled-report runner all refuse to RAISE
+        // anything for a deactivated account (DeliveringScheduledReportRunner: "a deactivated
+        // account must not be mailed"). A notification raised while the account was active and
+        // delivered after it was deactivated went out anyway, because delivery consulted the
+        // recipient's opt-outs and never the recipient's own state -- the one window none of
+        // the raise-time filters can see.
+        await using var db = await FreshAsync();
+
+        var company = NewCompany();
+        var user = NewUser(company.Id);
+        db.Companies.Add(company);
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        var survey = NewActiveSurvey(company.Id, user.Id);
+        db.Surveys.Add(survey);
+        await db.SaveChangesAsync();
+
+        db.SurveyInvitations.Add(NewInvitation(survey, user, Now.AddDays(-7)));
+        await db.SaveChangesAsync();
+
+        await InvitationReminderJob.RunAsync(
+            db, NullLoggerFactory.Instance, Now, InvitationReminderJob.DefaultBatchSize, default);
+
+        // Deactivated AFTER the reminder was raised and BEFORE it is delivered.
+        user.IsActive = false;
+        await db.SaveChangesAsync();
+
+        await NotificationDelivery.ProcessDueAsync(
+            // A sender that WOULD deliver, as in the opt-out test above: the assertion is that
+            // the row is cancelled before any send is attempted.
+            db, new DeliveringNotificationSender(),
+            NullLoggerFactory.Instance, companyId: null, Now.AddMinutes(1),
+            NotificationDelivery.DefaultBatchSize, default);
+
+        await using var read = CreateContext();
+        var notification = await read.Notifications.SingleAsync(n => n.UserId == user.Id);
+
+        Assert.Equal(NotificationStatuses.Cancelled, notification.Status);
+        Assert.Null(notification.SentAt);
+        Assert.Contains("deactivated", notification.FailureReason, StringComparison.Ordinal);
+    }
+
     // -- digests ------------------------------------------------------------------------
 
     [Fact]

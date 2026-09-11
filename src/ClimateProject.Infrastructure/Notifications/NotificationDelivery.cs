@@ -185,6 +185,31 @@ public static class NotificationDelivery
         ArgumentNullException.ThrowIfNull(sender);
         ArgumentNullException.ThrowIfNull(loggerFactory);
 
+        // The membership rule, ahead of the consent rule and at the same layer for the same
+        // reason: this is the one place every caller passes through. Each raise-time path
+        // already refuses a deactivated account -- InvitationReminderJob and DigestJob filter
+        // on IsActive, DeliveringScheduledReportRunner says outright that "a deactivated
+        // account must not be mailed" -- but a row raised while the account was active and
+        // delivered after it was deactivated went out anyway, because delivery read the
+        // recipient's opt-outs off the users row and never the recipient's own state. The
+        // window between raising and sending is exactly the one no raise-time filter can see,
+        // so the check lives here, where the send happens.
+        //
+        // The in-app row is exempt for the reason NotificationDispatchPolicy exempts it from
+        // consent: nothing is transmitted, the row IS the artefact, and a person reactivated
+        // later would otherwise find their inbox missing what arrived while they were away.
+        // "cancelled", never "failed", as with an opt-out: nothing broke, and a failed row
+        // would go straight back into the retry sweep and mail them on the next tick.
+        if (!recipient.IsActive
+            && !string.Equals(notification.Channel, NotificationChannels.InApp, StringComparison.Ordinal))
+        {
+            notification.Status = NotificationStatuses.Cancelled;
+            notification.FailureReason = Truncate(
+                $"Recipient account is deactivated; {notification.Channel} notification of type '{notification.Type}' not delivered.");
+            notification.UpdatedAt = now;
+            return;
+        }
+
         var decision = NotificationDispatchPolicy.Decide(notification.Channel, notification.Type, recipient.Notifications);
         if (!decision.ShouldDeliver)
         {

@@ -143,6 +143,14 @@ function department(id: string, name: string) {
   }
 }
 
+/**
+ * A department the administrator retired. `GET /admin/departments` still lists it (the
+ * departments page shows it behind "show inactive"), with whatever people still point at it.
+ */
+function retiredDepartment(id: string, name: string, employeeCount: number) {
+  return { ...department(id, name), isActive: false, employeeCount }
+}
+
 /** A `SurveyTemplateQuestion`, including the option `value` the wizard must not invent. */
 function templateQuestion(overrides: Record<string, unknown> = {}) {
   return {
@@ -1196,8 +1204,8 @@ describe('SurveyCreatePage audience step', () => {
     department('dept-3', 'Engineering'),
   ]
 
-  async function toAudienceStep() {
-    routeFetch({ departments: catalogue })
+  async function toAudienceStep(departments: unknown[] = catalogue) {
+    routeFetch({ departments })
     renderPage()
     await settle()
     await typeInto(/Title/, 'Q4 Climate Survey')
@@ -1206,6 +1214,21 @@ describe('SurveyCreatePage audience step', () => {
     await typeInto(/End Date/, '2026-10-15T18:00')
     await press('Next')
   }
+
+  it('does not offer a department the administrator retired, nor count its people', async () => {
+    // A deactivated department is one the administrator retired. It stays on the
+    // departments page (behind "show inactive") and in the results of the surveys it
+    // answered, but it is not a place a NEW survey can be aimed at -- the rule the tracking
+    // picker (`/tracking/picker/nodos`) and the company dashboard already apply. Its four
+    // people are still reached by a company-wide survey; they are not a target by that name.
+    await toAudienceStep([...catalogue, retiredDepartment('dept-9', 'Telex', 4)])
+
+    expect(screen.queryByLabelText('Telex · 4 people')).toBeNull()
+    expect(screen.getByLabelText('Operations · 12 people')).toBeTruthy()
+    // 3 × 12, not 3 × 12 + 4: the reach counts the departments actually offered.
+    expect(screen.getByText('36')).toBeTruthy()
+    expect(screen.queryByText('40')).toBeNull()
+  })
 
   it('names each department with its headcount, and the empty selection in words', async () => {
     await toAudienceStep()
@@ -1316,5 +1339,22 @@ describe('SurveyCreatePage review dimension coverage', () => {
     expect(reading(review, 'Departments')).toBe('3')
     expect(review.textContent).toContain('Every department')
     expect(review.textContent).toContain('36')
+  })
+
+  it('does not count a retired department among those reached', async () => {
+    const review = await restoreOnReview(storedContent(), {
+      departments: [
+        department('dept-1', 'Operations'),
+        department('dept-2', 'Support'),
+        department('dept-3', 'Engineering'),
+        retiredDepartment('dept-9', 'Telex', 4),
+      ],
+    })
+
+    // Three departments and 36 people: the one the administrator retired is neither a
+    // department this survey reaches by name nor a headcount it is read against.
+    expect(reading(review, 'Departments')).toBe('3')
+    expect(review.textContent).toContain('36')
+    expect(review.textContent).not.toContain('40')
   })
 })
