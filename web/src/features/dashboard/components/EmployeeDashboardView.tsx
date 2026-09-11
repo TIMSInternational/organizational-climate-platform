@@ -12,6 +12,12 @@ import { PageTopBar } from '../../../components/layout'
 import { Button, Chip, EmptyState, type ChipTone } from '../../../components/ui'
 
 /**
+ * **Unreferenced since the redesign; kept as the wiring reference.** `/dashboard` draws
+ * `next/employee/EmployeeHomeView` for an employee (`DashboardPage.tsx`), and so does a
+ * leader or supervisor with no department (`DepartmentAdminDashboardView.tsx`). Nothing
+ * imports this file but its own test. It stays so the endpoint wiring, the empty state and
+ * the reasoning below remain readable beside the view that replaced it.
+ *
  * The evaluated user's Home — the landing experience for a plain employee.
  *
  * ## Scoped per user, not per role

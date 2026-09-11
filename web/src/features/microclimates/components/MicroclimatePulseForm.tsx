@@ -155,6 +155,9 @@ function QuestionInput({
             required={question.required}
             value={value}
             onChange={(e) => onChange(e.target.value)}
+            // "Una palabra", as the canvas draws it: the live page reads these answers as
+            // word counts (`LiveOpenAnswers`), so the line asks for words, not a paragraph.
+            placeholder={t('microclimates.next.wordPlaceholder')}
             className="h-11 text-lg"
           />
           {/* What the live page does with what is typed here, stated as what it does:
@@ -682,9 +685,10 @@ export default function MicroclimatePulseForm({
  * canvas draws no third line and the label already says it in a word.
  *
  * Green plus the word: the label spells out the state, so the colour is never the
- * only thing carrying it. The label is `text-accent-green-ink`, the ink the artboard
- * uses, which `features/surveys/respondContrast.test.ts` measures on this fill in both
- * palettes — not `text-accent-green`, which it measures at 3.49:1 and bans.
+ * only thing carrying it. The label is `text-chip-good-ink`, not the artboard's
+ * `#0f7f4e`: `features/surveys/respondContrast.test.ts` measures the artboard's ink at
+ * 4.31:1 on this fill over the page ground, under AA, and measures this one over it in
+ * both palettes — the same ink `surveys/AnonymityNotice` uses.
  */
 function AnonymityNote() {
   const { t } = useTranslation()
@@ -697,7 +701,7 @@ function AnonymityNote() {
       <EyeOff aria-hidden="true" className="mt-px size-icon shrink-0 text-accent-green-ink" />
       <div className="flex min-w-0 flex-col gap-0.5">
         <h2 className="sr-only">{t('microclimates.respondAnonymityTitle')}</h2>
-        <span className="text-2xs font-bold uppercase tracking-label text-accent-green-ink">
+        <span className="text-2xs font-bold uppercase tracking-label text-chip-good-ink">
           {t('microclimates.respondAnonymityChip')}
         </span>
         <p className="m-0 text-sm text-fg-secondary">{t('microclimates.respondAnonymityBody')}</p>

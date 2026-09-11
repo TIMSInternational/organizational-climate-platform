@@ -100,32 +100,26 @@ function lastSubmission(): Record<string, unknown> {
 }
 
 /**
- * The progress sentence, read off the sticky bar rather than matched as one string.
- *
- * `MonoReadings` sets the NUMERALS in mono and leaves the prose in the sans face, so
- * "0 de 2 respondidas" is spread across several elements and `getByText` with an exact
- * string cannot match it. Reading the bar's own `textContent` asserts the same fact and
- * is strictly stronger than the query it replaces: an exact-text query was satisfied by
- * the sentence appearing ANYWHERE on the page, which is what the old rail also did.
+ * The position reading at the head of the page — "2 de 6", the canvas's — or '' when the
+ * survey turned progress off and nothing is drawn there.
  */
-function progressSentence(): string {
-  const bar = document.querySelector('[data-slot="respond-submit-bar"]')
-  return (bar?.textContent ?? '').replace(/\s+/g, ' ').trim()
+function positionReading(): string {
+  return document.querySelector('[data-slot="respond-position"]')?.textContent ?? ''
 }
 
 /**
- * The numerals inside the bar, in order.
- *
- * "Every reading is `font-mono tabular-nums`, every piece of prose is not" is the rule
- * the redesign rests on — the countdown two readings away is asserted against it — so
- * the figures a respondent watches change are checked to BE readings, not merely to be
- * present.
+ * Every question's legend, met the way a respondent meets them: one page at a time,
+ * turned with "Siguiente" until the last page offers the submit instead.
  */
-function progressReadings(): string[] {
-  const bar = document.querySelector('[data-slot="respond-submit-bar"]')
-  return Array.from(bar?.querySelectorAll('.font-mono.tabular-nums') ?? []).map(
-    (node) => node.textContent ?? '',
-  )
+async function legendsAcrossPages(): Promise<string[]> {
+  const seen: string[] = []
+  for (let guard = 0; guard < 50; guard += 1) {
+    seen.push(document.querySelector('legend')?.textContent ?? '')
+    const next = screen.queryByRole('button', { name: 'Siguiente' })
+    if (next === null) return seen
+    await userEvent.click(next)
+  }
+  throw new Error('more than 50 pages: the walk is not turning')
 }
 
 beforeEach(() => {
@@ -323,57 +317,53 @@ describe('SurveyRespondPage required questions', () => {
 
 describe('SurveyRespondPage settings', () => {
   /**
-   * `ShowProgress` is the author's setting and it gates the whole progress cluster.
-   *
-   * The cluster moved: it was a tile in the right-hand rail, and the redesign put it
-   * in the bar stuck to the bottom of the viewport, beside the two actions. The gate
-   * did not move with it — a survey that turned progress off still gets no bar and no
-   * count, and this asserts BOTH halves so that "gated" cannot be satisfied by a page
-   * that simply never draws it.
-   *
-   * The presence half is scoped to the bar rather than to the document, because
-   * "somewhere on the page" is what the rail also satisfied.
+   * `ShowProgress` is the author's setting and it gates the position reading and the bar
+   * at the head of the page (the canvas's "2 de 6" over a 6px bar). Both halves are
+   * asserted, so "gated" cannot be satisfied by a page that simply never draws it.
    */
   it('shows progress only when the survey asks for it', async () => {
     respondWith(view({ showProgress: false }))
     const first = renderPage()
-    // The bar itself renders either way — otherwise the two nulls below would hold on
-    // a page that had not finished loading.
+    // The page has loaded either way — otherwise the two nulls below would hold on a page
+    // that had not finished loading.
     await screen.findByRole('button', { name: 'Enviar mis respuestas' })
     expect(screen.queryByRole('progressbar')).toBeNull()
-    expect(progressSentence()).not.toContain('respondidas')
+    expect(positionReading()).toBe('')
     first.unmount()
 
     respondWith(view({ showProgress: true }))
     const { container } = renderPage()
     await screen.findByRole('button', { name: 'Enviar mis respuestas' })
-    const bar = container.querySelector('[data-slot="respond-submit-bar"]') as HTMLElement | null
-    expect(bar, 'the form ends in the sticky bar the rail became').toBeTruthy()
-    expect(within(bar!).getByRole('progressbar')).toBeTruthy()
-    expect(progressSentence()).toContain('0 de 1 respondidas')
+    const head = container.querySelector('[data-slot="respond-progress"]') as HTMLElement | null
+    expect(head, 'the position heads the page').toBeTruthy()
+    expect(within(head!).getByRole('progressbar')).toBeTruthy()
+    expect(positionReading()).toBe('1 de 1')
   })
 
   /**
-   * And the figure counts up as answers are given — the fact the respondent is
-   * actually watching. Asserted in words and in the bar's own `aria-valuenow`, which
-   * is the half a screen reader gets.
+   * One question per page, so the figure a respondent watches is where they are — it
+   * moves with the page, not with an answer. Asserted in words and in the bar's own
+   * `aria-valuenow`, which is the half a screen reader gets.
    */
-  it('counts an answer into the progress figure', async () => {
-    respondWith(view({ showProgress: true }))
+  it('moves the progress figure with the page the respondent is on', async () => {
+    respondWith(
+      view({ showProgress: true, questions: [question(), question({ id: 'q2', text: 'Pregunta dos', order: 1 })] }),
+    )
     renderPage()
 
     await screen.findByRole('progressbar')
-    expect(progressSentence()).toContain('0 de 1 respondidas')
+    expect(positionReading()).toBe('1 de 2')
     await userEvent.click(screen.getByRole('radio', { name: 'En desacuerdo' }))
-    expect(progressSentence()).toContain('1 de 1 respondidas')
+    expect(positionReading()).toBe('1 de 2')
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+    expect(positionReading()).toBe('2 de 2')
     expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('100')
   })
 
   /**
-   * `AllowPartialResponses` gates the save button, which rides the bottom bar now
-   * rather than the rail. Same gate, same reason: offering "save and finish later" on
-   * a survey the server will not accept a partial write for is a promise the page
-   * cannot keep.
+   * `AllowPartialResponses` gates the save link — the canvas's underlined "Guardar y
+   * terminar después" under the pair. Offering it on a survey the server will not accept
+   * a partial write for is a promise the page cannot keep.
    */
   it('offers save-and-continue only when partial responses are allowed', async () => {
     respondWith(view({ allowPartialResponses: false }))
@@ -385,10 +375,11 @@ describe('SurveyRespondPage settings', () => {
     respondWith(view({ allowPartialResponses: true }))
     renderPage()
     const save = await screen.findByRole('button', { name: 'Guardar y terminar después' })
-    expect(
-      save.closest('[data-slot="respond-submit-bar"]'),
-      'the save action belongs to the bar the respondent finishes from, not to a rail',
-    ).toBeTruthy()
+    const row = save.closest('[data-slot="respond-save"]')
+    expect(row, 'the save link is its own line under the pair').toBeTruthy()
+    const nav = document.querySelector('[data-slot="respond-nav"]')
+    expect(nav).toBeTruthy()
+    expect(nav!.compareDocumentPosition(row!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('saves progress without completing the response, and says so', async () => {
@@ -414,13 +405,13 @@ describe('SurveyRespondPage settings', () => {
     respondWith(view({ randomizeQuestions: true, questions }))
     const first = renderPage()
     await screen.findByRole('heading', { name: 'Clima laboral 2026' })
-    const firstOrder = [...document.querySelectorAll('legend')].map((l) => l.textContent)
+    const firstOrder = await legendsAcrossPages()
     first.unmount()
 
     respondWith(view({ randomizeQuestions: true, questions }))
     renderPage()
     await screen.findByRole('heading', { name: 'Clima laboral 2026' })
-    const secondOrder = [...document.querySelectorAll('legend')].map((l) => l.textContent)
+    const secondOrder = await legendsAcrossPages()
 
     // The same order both times. A `Math.random` shuffle would move the question a
     // respondent was halfway through on every reload.
@@ -439,32 +430,31 @@ describe('SurveyRespondPage settings', () => {
     )
     renderPage()
 
-    const legends = await waitFor(() => {
-      const found = [...document.querySelectorAll('legend')]
-      expect(found).toHaveLength(2)
-      return found
-    })
-    expect(legends[0].textContent).toContain('Pregunta 1 de 2')
-    expect(legends[1].textContent).toContain('Pregunta 2 de 2')
+    await screen.findByText('Pregunta A')
+    const legends = await legendsAcrossPages()
+    expect(legends).toHaveLength(2)
+    expect(legends[0]).toContain('Pregunta 1 de 2')
+    expect(legends[1]).toContain('Pregunta 2 de 2')
   })
 
   /**
-   * The countdown moved out of an inline `Alert` in the run of the page and into
-   * the instrument panel, as a labelled reading. So the assertion is on the
-   * reading rather than on the old sentence — and on the typography, because
-   * "set every reading in mono with tabular figures" is the one rule the redesign
-   * rests on and a countdown that reflows a pixel every second is exactly what
-   * tabular figures exist to prevent.
+   * The countdown is a reading at the foot of the page, where the canvas prints the time a
+   * survey takes: set in mono with tabular figures — a countdown that reflows a pixel
+   * every second is exactly what tabular figures exist to prevent — and saying what it is,
+   * "Queda 10:00", so a bare "10:00" is never left to be guessed at.
    */
   it('shows a countdown when the survey sets a time limit, as a mono reading', async () => {
     respondWith(view({ timeLimitMinutes: 10 }))
     renderPage()
 
-    const countdown = await screen.findByText('10:00')
+    const countdown = await waitFor(() => {
+      const found = document.querySelector('[data-slot="respond-time-left"]')
+      expect(found).toBeTruthy()
+      return found as HTMLElement
+    })
+    expect(countdown.textContent).toBe('Queda 10:00')
     expect(countdown.className).toContain('font-mono')
     expect(countdown.className).toContain('tabular-nums')
-    // Labelled, so a bare "10:00" is never left to be guessed at.
-    expect(screen.getByText('Tiempo restante')).toBeTruthy()
   })
 
   it('replaces the countdown with an alert once the suggested time is up', async () => {
@@ -488,7 +478,7 @@ describe('SurveyRespondPage settings', () => {
     renderPage()
 
     expect(await screen.findByText('Se agotó el tiempo sugerido')).toBeTruthy()
-    expect(screen.queryByText('Tiempo restante')).toBeNull()
+    expect(document.querySelector('[data-slot="respond-time-left"]')).toBeNull()
   })
 })
 
@@ -947,10 +937,12 @@ describe('SurveyRespondPage autosave', () => {
     respondWith(autosaving({ questions: [question(), question({ id: 'q2', order: 1 })] }))
     renderPage()
 
-    const [first, second] = await screen.findAllByRole('radio', { name: 'Muy de acuerdo' })
-    await userEvent.click(first)
+    // One question per page: the second answer is on the second page, and turning to it
+    // is not an answer, so the turn itself neither saves nor re-arms anything.
+    await userEvent.click(await screen.findByRole('radio', { name: 'Muy de acuerdo' }))
     await new Promise((resolve) => setTimeout(resolve, 1300))
-    await userEvent.click(second)
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+    await userEvent.click(await screen.findByRole('radio', { name: 'Muy de acuerdo' }))
     await new Promise((resolve) => setTimeout(resolve, 600))
 
     // 1900ms after the first answer, 600ms after the second. A timer left armed by the
@@ -1202,17 +1194,21 @@ describe('SurveyRespondPage save state', () => {
     expect(saveState()).not.toContain('Guardado a las')
   }, 20000)
 
-  it('reports the save state in the bar the respondent finishes from', async () => {
+  /**
+   * The save state is the answer to the question the save link asks — "is my work
+   * anywhere but this screen" — so it sits under that link, below the pair the respondent
+   * presses on every page, which is the one place on screen on every page.
+   */
+  it('reports the save state under the save link, below the pair pressed on every page', async () => {
     respondWith(autosaving())
     renderPage()
 
     await userEvent.click(await screen.findByRole('radio', { name: 'Muy de acuerdo' }))
-    expect(
-      document
-        .querySelector('[data-slot="respond-save-state"]')
-        ?.closest('[data-slot="respond-submit-bar"]'),
-      'the save state belongs beside the progress reading and the two actions, not at the top of a page that scrolls away',
-    ).toBeTruthy()
+    const state = document.querySelector('[data-slot="respond-save-state"]')
+    expect(state?.closest('[data-slot="respond-save"]'), 'the state answers the link it sits under').toBeTruthy()
+    const nav = document.querySelector('[data-slot="respond-nav"]')
+    expect(nav).toBeTruthy()
+    expect(nav!.compareDocumentPosition(state!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   /**
@@ -1239,17 +1235,16 @@ describe('SurveyRespondPage save state', () => {
   })
 
   /**
-   * Found by rendering it, not by the suite.
+   * Found by rendering it, not by the suite — twice.
    *
-   * The first build put this alert under the last question, beside `submitError`. That
-   * is the right place for a failed SUBMIT — a submit is pressed from the bottom, and
-   * the respondent is already there. It is the wrong place for a failed save, which
-   * happens while somebody is on question 3 of 50: the screenshot showed the alert two
-   * thousand pixels below the reader, where it stayed unread for the rest of the
-   * survey. Every assertion above still passed, because the alert existed and said the
-   * right thing.
+   * The first build put this alert under the last question, beside `submitError`: the
+   * right place for a failed SUBMIT and the wrong one for a failed save, which happens
+   * while somebody is on question 3 of 50. The screenshot showed it two thousand pixels
+   * below the reader. One question per page (the canvas, 10 Sep) put the pair the
+   * respondent presses on every page right under the card, so the alert sits directly
+   * over that pair: on screen on every page, beside the action it concerns.
    */
-  it('keeps the failure inside the bar that follows the respondent down the form', async () => {
+  it('puts the failure directly over the pair the respondent presses on every page', async () => {
     vi.mocked(fetch).mockImplementation((_input: RequestInfo | URL, init?: RequestInit) =>
       Promise.resolve(
         init?.method === 'POST'
@@ -1263,9 +1258,9 @@ describe('SurveyRespondPage save state', () => {
     const alert = await screen.findByRole('alert', {}, { timeout: 4000 })
 
     expect(
-      alert.closest('[data-slot="respond-submit-bar"]'),
-      'the only box on this page that stays in view is the submit bar; an alert outside it is an alert nobody on question 3 of 50 will ever read',
-    ).toBeTruthy()
+      alert.nextElementSibling,
+      'the alert is the line directly over Anterior and Siguiente, not somewhere a respondent on question 3 of 50 will never scroll',
+    ).toBe(document.querySelector('[data-slot="respond-nav"]'))
   })
 
   /**
@@ -1427,12 +1422,15 @@ describe('SurveyRespondPage resume position', () => {
     )
     const { container } = renderPage()
 
-    await screen.findByText('Pregunta tres')
+    // The page does not turn either: the respondent is left on the first page, with the
+    // way on to the submit, rather than dropped onto a question they already answered.
+    await screen.findByText('Pregunta uno')
     await waitFor(() =>
       expect(container.querySelector('[data-slot="live-region"]')?.textContent).toContain(
         'todas las preguntas tienen respuesta',
       ),
     )
+    expect(document.querySelector('legend')?.textContent).toContain('Pregunta 1 de 3')
     expect(document.activeElement?.id).not.toMatch(/^question-/)
   })
 
@@ -1712,48 +1710,29 @@ describe('SurveyRespondPage as an instrument', () => {
   })
 
   /**
-   * The progress figure is the one reading a respondent watches change, so it is also
-   * the one a proportional face would reflow on every answer — which is what tabular
-   * figures exist to prevent. That half of the rule is unchanged by the redesign and
-   * is asserted below.
-   *
-   * **What changed.** The rail's tile printed the fraction TWICE: a glyph form
-   * (`0 / 2`) set in mono and `aria-hidden`, plus a sentence underneath for anyone
-   * listening, because "zero slash two" is not what "0 of 2 answered" says. The
-   * bottom bar prints it once, as the sentence, with tabular figures on it. So the
-   * assertion inverts rather than disappearing: there is no hidden glyph to check
-   * for, and the sentence — the accessible rendering, now the only one — must NOT be
-   * hidden from assistive technology. The `font-mono` half is not asserted here; see
-   * the note in the repair report, and `SurveyRespondForm.tsx`'s own comment, for why
-   * the sentence stays in the sans face.
-   *
-   * The bar's `aria-valuenow` is asserted beside it because it is the machine-
-   * readable copy of the same fact, and it is what a hidden glyph used to be for.
+   * The position is the one reading a respondent watches change, so it is set in mono with
+   * tabular figures — "1 de 6" to "10 de 12" must not reflow the row — and it is not
+   * hidden from assistive technology. The bar beside it carries the same fact in words
+   * (its `aria-label`) and as `aria-valuenow`.
    */
-  it('sets the progress figure in tabular figures, and keeps the sentence a screen reader hears', async () => {
+  it('sets the position in tabular figures, and gives the bar the sentence a screen reader hears', async () => {
     respondWith(view({ showProgress: true, questions: [question(), question({ id: 'q2' })] }))
     renderPage()
 
     await screen.findByRole('progressbar')
-    expect(progressSentence()).toContain('0 de 2 respondidas')
-    // The two figures are READINGS — mono with tabular figures — while the words
-    // around them stay in the sans face. Asserted as the numerals themselves rather
-    // than as a class on the sentence, because that is the rule: `10:00` two readings
-    // away in this same bar is checked the same way.
-    expect(progressReadings()).toEqual(['0', '2'])
-    // Announced, not hidden: this sentence is the only rendering of the fact now, so
-    // there is nothing for it to defer to.
-    const sentence = document.querySelector('[data-slot="respond-submit-bar"] span span')
-    expect(sentence?.closest('[aria-hidden="true"]')).toBeNull()
+    const reading = document.querySelector('[data-slot="respond-position"]') as HTMLElement
+    expect(reading.textContent).toBe('1 de 2')
+    expect(reading.className).toContain('font-mono')
+    expect(reading.className).toContain('tabular-nums')
+    expect(reading.closest('[aria-hidden="true"]')).toBeNull()
 
     const bar = screen.getByRole('progressbar')
-    expect(bar.getAttribute('aria-label')).toBe('Respuestas completadas')
-    expect(bar.getAttribute('aria-valuenow')).toBe('0')
+    expect(bar.getAttribute('aria-label')).toBe('Pregunta 1 de 2')
+    expect(bar.getAttribute('aria-valuenow')).toBe('50')
 
-    await userEvent.click(screen.getAllByRole('radio', { name: 'Muy de acuerdo' })[0])
-    expect(progressSentence()).toContain('1 de 2 respondidas')
-    expect(progressReadings()).toEqual(['1', '2'])
-    expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('50')
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+    expect(positionReading()).toBe('2 de 2')
+    expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('100')
   })
 
   /**
@@ -1784,7 +1763,9 @@ describe('SurveyRespondPage as an instrument', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Enviar mis respuestas' }))
 
     expect(await screen.findByText('Respuestas registradas')).toBeTruthy()
-    expect(screen.getByText('de 1 preguntas')).toBeTruthy()
+    // The server's count as a reading beside what it is out of — the canvas's "6 de 6".
+    const reading = document.querySelector('[data-slot="respond-receipt"] .font-mono.tabular-nums')
+    expect(reading?.textContent).toBe('1 de 1')
   })
 
   /**
@@ -1841,87 +1822,46 @@ describe('SurveyRespondPage as an instrument', () => {
   })
 
   /**
-   * Every reading gets a track of its own, and the track count follows the readings.
-   *
-   * The defect this was written for: the closing date used to sit in a `sm:grid-cols-2
-   * lg:grid-cols-1 xl:grid-cols-2` wrapper whose only other child renders when the
-   * survey turned progress OFF — the rarer case. With progress on, that grid held one
-   * child in two columns, so CLOSES rendered at half the panel width with a stranded
-   * empty cell beside it at every viewport from 640px up: measured in Chromium at
-   * 1440x900, a 197px tile under three 402px ones.
-   *
-   * **The shape it guards has changed, the defect has not.** The rail is gone and the
-   * readings row it left behind is horizontal from `sm` up, so "its own full-width
-   * row" is now true only on a phone; above that each reading is its own auto-sized
-   * COLUMN. What survives verbatim is the thing that produced the hole — a fixed
-   * track count with a conditional child — so this asserts the two halves of that a
-   * layout-free DOM can see: every reading is a direct child of the section (no
-   * intermediate track for one of them to be laid out inside), and the section has
-   * exactly as many cells as it has readings, in each configuration.
-   *
-   * `auto-cols-fr` versus `grid-cols-N` is a spelling check, like the `sticky` one
-   * this file used to carry. It is kept because it names the exact cause: happy-dom
-   * cannot measure a 197px tile, but it can read the class that produces one.
+   * The foot carries two readings and only two, as the canvas prints them: when the survey
+   * closes, and how long it takes — or, for a survey that sets a limit, how long is left.
+   * The old instrument panel's CLOSES and TIME LEFT tiles moved here; nothing was dropped,
+   * and no third cell is left empty in either configuration.
    */
-  it('gives every panel reading its own track, and never leaves an empty one', async () => {
-    respondWith(view({ showProgress: true }))
+  it('keeps the foot to the close and the time it takes, and swaps in the countdown under a limit', async () => {
+    respondWith(view({ questions: [question(), question({ id: 'q2' }), question({ id: 'q3' })] }))
     const first = renderPage()
-
-    const panel = await screen.findByRole('region', { name: 'Sobre esta encuesta' })
-    const closes = within(panel).getByText('Cierra').closest('div')
-    expect(closes, 'the CLOSES reading survived the rail it used to live in').toBeTruthy()
-    expect(
-      closes!.parentElement,
-      'A wrapper here is a second grid inside the panel, and the wrapper this '
-        + 'replaced held one child in two columns whenever `showProgress` was on — '
-        + 'a half-width tile with a hole beside it.',
-    ).toBe(panel)
-
-    // One reading, one cell. This is the case that produced the stranded column.
-    expect(panel.children.length, 'no cell without a reading in it').toBe(1)
-    expect(panel.className).toContain('auto-cols-fr')
-    expect(
-      panel.className,
-      'A fixed track count is the defect itself: the optional readings are absent in '
-        + 'the common case, and a track that does not count them strands a hole.',
-    ).not.toMatch(/grid-cols-\d/)
+    await screen.findByRole('radio', { name: 'Muy de acuerdo' })
+    let foot = document.querySelector('[data-slot="respond-footer"]') as HTMLElement
+    expect([...foot.children].map((node) => node.textContent)).toEqual([
+      'Cierra el 31 de diciembre',
+      // Three questions, two thirds of a minute each — computed, never typed.
+      'unos 2 minutos en total',
+    ])
     first.unmount()
 
-    // And with a second reading, both are direct children of the same section — two
-    // readings, two cells, no wrapper around either.
-    respondWith(view({ showProgress: true, timeLimitMinutes: 10 }))
+    respondWith(view({ timeLimitMinutes: 10 }))
     renderPage()
-
-    const withTime = await screen.findByRole('region', { name: 'Sobre esta encuesta' })
-    expect(within(withTime).getByText('Cierra').closest('div')!.parentElement).toBe(withTime)
-    expect(within(withTime).getByText('Tiempo restante').closest('div')!.parentElement).toBe(withTime)
-    expect(withTime.children.length).toBe(2)
+    await screen.findByRole('radio', { name: 'Muy de acuerdo' })
+    foot = document.querySelector('[data-slot="respond-footer"]') as HTMLElement
+    expect([...foot.children].map((node) => node.textContent)).toEqual([
+      'Cierra el 31 de diciembre',
+      'Queda 10:00',
+    ])
   })
 
   /**
-   * And the second reading appears in that same section when the survey turns
-   * progress off — the case the fixed two-column wrapper was built for, and the one
-   * that used to strand a cell. It is a track of the readings row like every other
-   * one now.
-   *
-   * The QUESTIONS reading exists only in this case, and that is the point: with
-   * progress on, the bottom bar's `0 of 12` already says how many questions there
-   * are, and two readings of one fact is what makes an instrument read as
-   * decoration. So the absence asserted here is the progress cluster's, page-wide —
-   * the count moving up is what replaces it, not something shown beside it.
+   * With progress off the head says nothing about position — that is the author's
+   * setting — and the card's chip still does: "1/2", with the sentence beside it for
+   * assistive technology. A survey that turned progress off still says how many there are.
    */
-  it('adds the question count as another reading when progress is off', async () => {
+  it('still says where the respondent is when progress is off, on the card', async () => {
     respondWith(view({ showProgress: false, questions: [question(), question({ id: 'q2' })] }))
     renderPage()
 
-    const panel = await screen.findByRole('region', { name: 'Sobre esta encuesta' })
-    const count = within(panel).getByText('Preguntas').closest('div')
-    expect(count!.parentElement).toBe(panel)
-    expect(within(count!).getByText('2')).toBeTruthy()
-
-    // Nowhere on the page, not just nowhere in this section: the progress cluster is
-    // off, and the question count is what stands in for it.
+    const chip = await screen.findByText('1/2')
+    expect(chip.getAttribute('aria-hidden')).toBe('true')
+    expect(chip.closest('legend')?.textContent).toContain('Pregunta 1 de 2')
     expect(screen.queryByRole('progressbar')).toBeNull()
-    expect(progressSentence()).not.toContain('respondidas')
+    expect(positionReading()).toBe('')
   })
 })

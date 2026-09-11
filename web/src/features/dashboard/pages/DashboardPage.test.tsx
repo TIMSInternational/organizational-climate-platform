@@ -404,6 +404,9 @@ describe('DashboardPage', () => {
     const hrefs = screen.getAllByRole('link').map((link) => link.getAttribute('href'))
     expect(hrefs).toContain('/surveys/s1/respond')
     expect(hrefs).toContain('/surveys/s2/respond')
+    // And it is the redesigned Home (the canvas's EmployeeDashboard): the task card that
+    // leads the page, not the view it replaced.
+    expect(document.querySelector('[data-slot="home-lead"]')).toBeTruthy()
   })
 
   /**
@@ -483,6 +486,10 @@ describe('DashboardPage', () => {
       .map((link) => link.getAttribute('href') ?? '')
       .filter((href) => href.includes('/respond'))
     expect(waysIn).toEqual([])
-    expect(screen.queryByText(/closes/i)).toBeNull()
+    // No task card and no countdown. Not `/closes/i` page-wide any more: the redesigned
+    // Home ends on the standing note "results are published when the survey closes",
+    // which is about how results work, not a deadline this reader owes.
+    expect(document.querySelector('[data-slot="home-lead"]')).toBeNull()
+    expect(screen.queryByText(/closes in|closes today|closes tomorrow/i)).toBeNull()
   })
 })

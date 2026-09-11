@@ -50,7 +50,16 @@ import type { EmployeeHomeModel, HomeOutcome, HomeSurvey } from './model'
  * lead survey's own `allowPartialResponses` says so. The anonymity block keeps the respond
  * page's copy, which this lane was told to leave unchanged.
  */
-export default function EmployeeHomeView() {
+export default function EmployeeHomeView({
+  notice,
+}: {
+  /**
+   * A standing sentence above the page — `DepartmentAdminDashboardView` passes one when a
+   * leader or supervisor has no department and lands here instead of on a team view. Drawn
+   * outside `DashboardState`, so it stays true on screen when the load below it fails.
+   */
+  notice?: ReactNode
+} = {}) {
   const { t } = useTranslation()
   const { role } = useCompanyScope()
   const { model, loading, failed, error, reload } = useEmployeeHomeModel()
@@ -73,6 +82,8 @@ export default function EmployeeHomeView() {
             : undefined
         }
       />
+
+      {notice ? <div className="mb-section">{notice}</div> : null}
 
       <DashboardState loading={loading} failed={failed} error={error} onRetry={reload}>
         {model && <HomeBody model={model} />}
@@ -243,7 +254,9 @@ function Reading({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex min-w-0 flex-col gap-0.5 rounded-lg bg-surface-outer px-3 py-2.5">
       <dt className="text-2xs font-bold uppercase tracking-label text-fg-secondary">{label}</dt>
-      <dd className="m-0 truncate font-mono text-lg tabular-nums text-fg-primary">{value}</dd>
+      {/* Wraps rather than truncates: at 390px the three tiles are ~70px inside, and an
+          ellipsised "unos 4…" is a different reading from "unos 4 min". */}
+      <dd className="m-0 break-words font-mono text-lg tabular-nums text-fg-primary">{value}</dd>
     </div>
   )
 }

@@ -9,19 +9,30 @@ import type { EmployeeHomeModel, HomeOutcome, HomeSurvey } from './model'
 const DAY_MS = 86_400_000
 
 /**
- * Whole days from `asOf` to a close date, floored at zero — or `null` when either date
- * is unusable.
+ * Whole calendar days from the reader's today to the day a survey closes, floored at
+ * zero — or `null` when either date is unusable.
  *
- * A deadline already past is not "-3 days left"; it is nothing left, and "Cierra hoy"
- * says so. `Math.ceil` rather than `floor`: a survey closing in eight hours has a day left
- * to the reader, not none. The same rule `EmployeeDashboardView.daysUntil` kept, measured
- * against the model's own clock rather than `Date.now()` so a test can pin it.
+ * Calendar days, not elapsed time, because the sentence prints a calendar day beside the
+ * count: "Cierra en 30 días · el 10 de octubre". The close is a calendar day stamped in
+ * UTC and printed in UTC (`lib/calendarDay.ts`, `formatDayMonth`); today is the reader's
+ * own date. Counted in milliseconds instead, Q4's close (02:03 UTC on 10 Oct) read from
+ * Costa Rica at 21:50 on 10 Sep is 28.9 days away and ceils to 29 — one fewer than the
+ * days between the two dates the same line prints, where the canvas says "30 días".
+ *
+ * A deadline already past is not "-3 days left"; it is nothing left, and "Cierra hoy" says
+ * so. Measured against the model's own clock rather than `Date.now()` so a test can pin it.
  */
 export function daysUntil(closesAt: string, asOf: string): number | null {
   const at = Date.parse(closesAt)
   const now = Date.parse(asOf)
   if (Number.isNaN(at) || Number.isNaN(now)) return null
-  return Math.max(0, Math.ceil((at - now) / DAY_MS))
+  const close = new Date(at)
+  const today = new Date(now)
+  const closeDay = Date.UTC(close.getUTCFullYear(), close.getUTCMonth(), close.getUTCDate())
+  const todayDay = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())
+  // `round`, not `floor`: both ends are UTC midnights, so the difference is a whole number
+  // of days and rounding only absorbs floating error.
+  return Math.max(0, Math.round((closeDay - todayDay) / DAY_MS))
 }
 
 function toSurvey(survey: DashboardPendingSurvey, asOf: string): HomeSurvey {

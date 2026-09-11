@@ -13,7 +13,7 @@ import { getDepartmentDashboardExport } from '../api/dashboardExport'
 import DashboardExportControl from './DashboardExportControl'
 import DashboardState from './DashboardState'
 import DashboardSurveyTable from './DashboardSurveyTable'
-import EmployeeDashboardView from './EmployeeDashboardView'
+import EmployeeHomeView from '../next/employee/EmployeeHomeView'
 import { KpiRow, MonoReadings, SectionHeading } from './dashboardGrammar'
 import { useTranslation } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
@@ -151,9 +151,12 @@ export default function DepartmentAdminDashboardView() {
   // answer. The notice says why they are looking at it, so a silent substitution cannot be
   // mistaken for a bug. Same reasoning `DashboardPage` gives for defaulting an unknown role
   // to this view, arrived at from the other direction.
+  //
+  // It is the redesigned Home (the canvas's EmployeeDashboard), the same screen `/dashboard`
+  // draws for an employee: one per-user page, one look, whoever reaches it.
   if (result?.kind === 'no-department') {
     return (
-      <EmployeeDashboardView
+      <EmployeeHomeView
         notice={
           // `variant="info"` and the default `role="status"`, both load-bearing. The screen
           // this replaced was a red error panel, and the substance of the fix is that

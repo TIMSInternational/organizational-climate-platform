@@ -29,10 +29,12 @@ import { useTranslation } from '../../../i18n'
  * Green means anonymous and blue means identified, but the label spells out which —
  * WCAG 1.4.1, and the same rule the rest of the redesign keeps.
  *
- * The anonymous label is inked `text-accent-green-ink` as the canvas draws it
- * (`#0f7f4e`), which `respondContrast.test.ts` measures on the soft green fill in both
- * palettes — unlike `text-accent-green`, the plain accent, which it measures at 3.49:1
- * and bans. The identified label stays in the secondary ink: there is no measured blue
+ * The anonymous label is green, as the canvas draws it, but not the canvas's `#0f7f4e`:
+ * `respondContrast.test.ts` measures that ink at 4.31:1 on the soft green fill over the
+ * respond page's ground — under AA for 10px text — and records it as rejected. The label
+ * takes `text-chip-good-ink` (`#0e7246` light, `#4ade80` dark), the ink the product's own
+ * green chip was measured onto, which the same file measures on this fill in both
+ * palettes, over the page ground and over a card. The identified label stays in the secondary ink: there is no measured blue
  * ink for the soft blue fill.
  *
  * ## One component for every place the promise is made
@@ -67,7 +69,7 @@ export function AnonymityNotice({ anonymous }: { anonymous: boolean }) {
           data-slot="anonymity-label"
           className={
             anonymous
-              ? 'text-2xs font-bold uppercase tracking-label text-accent-green-ink'
+              ? 'text-2xs font-bold uppercase tracking-label text-chip-good-ink'
               : 'text-2xs font-bold uppercase tracking-label text-fg-secondary'
           }
         >

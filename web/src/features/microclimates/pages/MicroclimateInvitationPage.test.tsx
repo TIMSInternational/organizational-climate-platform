@@ -187,6 +187,22 @@ describe('MicroclimateInvitationPage', () => {
   })
 
   /**
+   * The canvas's foot prints "Abierta hasta el …", and only this route can: the token
+   * carries the session's `endTime`, while `PublicMicroclimateDetail` — all the GUID route
+   * has — carries none.
+   */
+  it('prints until when the session is open, from the invitation’s own end time', async () => {
+    serve()
+    renderPage()
+
+    await screen.findByRole('heading', { name: 'Pulso semanal' })
+    await userEvent.click(screen.getByRole('button', { name: 'Participar' }))
+    await screen.findByText('¿Cómo te sientes hoy?')
+    const foot = document.querySelector('[data-slot="pulse-footer"]')
+    expect(foot?.textContent).toContain('Abierta hasta el 26 de agosto')
+  })
+
+  /**
    * `completed` means THE ANSWERS ARE IN. Nothing else it could mean is worth recording.
    *
    * <p>The rung is not decoration: on a non-anonymous session `Advances` is strictly

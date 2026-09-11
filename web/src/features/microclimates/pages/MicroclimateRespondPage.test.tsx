@@ -6,6 +6,7 @@ import MicroclimateRespondPage from './MicroclimateRespondPage'
 import { TranslationProvider } from '../../../i18n'
 import { LOCALE_STORAGE_KEY } from '../../../i18n/locale'
 import type { PublicMicroclimateDetail } from '../api/microclimates'
+import { MINIMUM_RESPONDENTS } from '../microclimatePrivacy'
 
 // The whole point of the stable-value option shape (#195): a respondent sees a label
 // in their own language but the submitted answer is locale-independent, so the same
@@ -207,9 +208,9 @@ describe('MicroclimateRespondPage as a respondent surface', () => {
    * The tile and the anonymity promise sat in a `lg:grid-cols-3` right-hand panel
    * that the design never drew — it survived the employee redesign only because
    * `components/layout/respondSticky.test.tsx` asserted a sticky panel on this
-   * route. The drawing is one column: eyebrow, question, scale, optional box, a
-   * single Send, and the anonymity line as the footnote under it. The two survey
-   * routes moved their instrument to a bottom bar; the pulse has no bar either.
+   * route. The canvas draws one column (RespondMicroclimatePhone, 10 Sep): the
+   * promise, the eyebrow and the session's name, one card per question, a single
+   * Send, and the session's two readings at the foot. Nothing is pinned.
    */
   it('draws one column with no rail beside it and no bar under it', async () => {
     vi.mocked(fetch).mockResolvedValue(
@@ -239,11 +240,12 @@ describe('MicroclimateRespondPage as a respondent surface', () => {
     expect(screen.queryByText('0 / 1')).toBeNull()
     expect(screen.queryByText('0 de 1 preguntas respondidas')).toBeNull()
 
-    // The anonymity line is the FOOTNOTE the design draws: last in the column,
-    // after the Send button rather than beside the questions.
+    // The canvas opens the page on the promise and ends it on the session's readings:
+    // the note first in the column, the foot last.
     const note = screen.getByText('Su nombre no se envía con sus respuestas').closest('section')
     expect(note, 'the anonymity note is its own section').toBeTruthy()
-    expect(column.lastElementChild, 'and it is the last thing in the column').toBe(note)
+    expect(column.firstElementChild, 'and it is the first thing in the column').toBe(note)
+    expect(column.lastElementChild?.getAttribute('data-slot'), 'and the foot is the last').toBe('pulse-footer')
   })
 
   /**
@@ -261,7 +263,22 @@ describe('MicroclimateRespondPage as a respondent surface', () => {
       expect(found).toBeTruthy()
       return found!
     })
-    expect(legend.textContent).toContain('(obligatoria)')
+    // The canvas's meta row: the word beside the chip, "1/2 obligatoria".
+    expect(legend.querySelector('[data-slot="question-requirement"]')?.textContent).toBe('obligatoria')
+  })
+
+  it('says an optional question is optional, in the same place', async () => {
+    const detail = spanishMicroclimate()
+    detail.questions[0].required = false
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify(detail), { status: 200 }))
+    renderPage()
+
+    const legend = await waitFor(() => {
+      const found = document.querySelector('legend')
+      expect(found).toBeTruthy()
+      return found!
+    })
+    expect(legend.querySelector('[data-slot="question-requirement"]')?.textContent).toBe('opcional')
   })
 
   /**
@@ -302,7 +319,7 @@ describe('MicroclimateRespondPage as a respondent surface', () => {
       expect(found).toBeTruthy()
       return found!
     })
-    expect(legend.textContent).toContain('(obligatoria)')
+    expect(legend.querySelector('[data-slot="question-requirement"]')?.textContent).toBe('obligatoria')
     expect(legend.textContent).not.toContain('Pregunta 1 de 1')
     expect(screen.queryByText('1/1')).toBeNull()
   })
@@ -372,12 +389,11 @@ describe('MicroclimateRespondPage as a respondent surface', () => {
   })
 
   /**
-   * "One question, large, centred, no scroll." The whole column — heading, form and
-   * footnote — is capped at the prose measure and centred, not just the form inside
-   * a wider grid. A pulse is answered in seconds and should not read like a
-   * twelve-question climate survey.
+   * The canvas draws the pulse as a phone column (RespondMicroclimatePhone, 10 Sep) and, on
+   * a wide screen, the same column centred. The cap is the respond shell's — the same
+   * `max-w-field` the survey routes get — and the form sits inside the one column.
    */
-  it('draws the question in a centred column at the prose measure', async () => {
+  it('draws the pulse in the respond shell’s centred phone column', async () => {
     vi.mocked(fetch).mockResolvedValue(
       new Response(JSON.stringify(pulseMicroclimate()), { status: 200 }),
     )
@@ -386,19 +402,19 @@ describe('MicroclimateRespondPage as a respondent surface', () => {
 
     const column = container.querySelector('[data-slot="pulse-column"]')
     expect(column).toBeTruthy()
-    expect(column!.className).toContain('max-w-measure')
-    expect(column!.className).toContain('mx-auto')
-    // And the form is inside it rather than beside it, so the cap applies to the
-    // questions too.
+    const main = column!.closest('main')
+    expect(main?.className.split(/\s+/)).toContain('max-w-field')
+    expect(main?.className).toContain('mx-auto')
     expect(container.querySelector('form')?.closest('[data-slot="pulse-column"]')).toBe(column)
   })
 
   /**
-   * The design's box under the scale — "Anything you want to add?" — is a textarea.
-   * This branch was a single-line `<input type="text">` with no accessible name at
-   * all: a `<legend>` names the FIELDSET, never the control inside it.
+   * The canvas's open answer is one 44px line with "Una palabra" in it and, under it, what
+   * happens to the words — counts, never the text, and only from the floor up. A `<legend>`
+   * names the FIELDSET, never the control inside it, so the line is named through
+   * `aria-labelledby` and the note is its description, read with it.
    */
-  it('answers an open question in a named textarea rather than a one-line input', async () => {
+  it('answers an open question on one named line, described by what happens to the words', async () => {
     const detail = pulseMicroclimate()
     detail.questions[0].type = 'open_ended'
     detail.questions[0].required = false
@@ -406,14 +422,32 @@ describe('MicroclimateRespondPage as a respondent surface', () => {
     const { container } = renderPage()
     await screen.findByRole('heading', { name: 'Pulso semanal' })
 
-    const box = container.querySelector('[data-slot="textarea"]')
-    expect(box, 'free text is the Textarea primitive').toBeTruthy()
-    expect(box!.tagName).toBe('TEXTAREA')
-    expect(container.querySelector('input[type="text"]')).toBeNull()
-    // Named by the question it answers, through the legend that holds it.
+    const line = container.querySelector('[data-slot="input"]') as HTMLInputElement | null
+    expect(line, 'free text is the Input primitive').toBeTruthy()
+    expect(container.querySelector('textarea')).toBeNull()
+    expect(line!.placeholder).toBe('Una palabra')
     const legend = container.querySelector('legend')
-    expect(box!.getAttribute('aria-labelledby')).toBe(legend!.id)
+    expect(line!.getAttribute('aria-labelledby')).toBe(legend!.id)
     expect(legend!.id.length).toBeGreaterThan(0)
+    const note = document.getElementById(line!.getAttribute('aria-describedby') ?? '')
+    expect(note?.textContent).toContain('frecuencias')
+    // The floor is the constant, never a typed 5.
+    expect(note?.textContent).toContain(`${MINIMUM_RESPONDENTS} personas`)
+  })
+
+  /** The eyebrow says how much is being asked and the foot how long it takes — both counted. */
+  it('counts the questions in the eyebrow and estimates the time from them', async () => {
+    const detail = spanishMicroclimate()
+    detail.questions.push({ ...detail.questions[0], id: 'q2', text: '¿Y esta semana?', order: 1 })
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify(detail), { status: 200 }))
+    const { container } = renderPage()
+    await screen.findByRole('heading', { name: 'Pulso semanal' })
+
+    expect(screen.getByText('Sesión en vivo · 2 preguntas')).toBeTruthy()
+    const foot = container.querySelector('[data-slot="pulse-footer"]') as HTMLElement
+    expect(foot.textContent).toContain('menos de un minuto')
+    // `PublicMicroclimateDetail` carries no end time, so this route states no close.
+    expect(foot.textContent).not.toMatch(/Abierta hasta/)
   })
 
   it('tells a respondent that a session is not taking answers, rather than showing a form', async () => {

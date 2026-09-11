@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import { RespondShell, RespondCaption, RespondReading, BrandLockup } from './RespondShell'
 import { SidebarBrand } from './SidebarBrand'
+import { CHIP_SELECT_STYLE } from './chipSelectStyle'
 import { TranslationProvider } from '../../i18n'
 import { LOCALE_STORAGE_KEY } from '../../i18n/locale'
 
@@ -83,12 +84,22 @@ describe('RespondShell', () => {
    * centred column to drift away from. The cap is the layout; without it the
    * questions run the full width of a 2560px monitor.
    */
-  it('caps and centres the content column', () => {
+  /**
+   * The canvas draws this surface as a phone (RespondSurveyPhone and its siblings, 10 Sep):
+   * one column of cards, and on a wide screen the same column centred with the lockup over
+   * it. `max-w-field` (32rem), not `max-w-content`: a question card stretched to 1280px put
+   * the five scale boxes 250px apart. The header is capped the same, so the lockup sits over
+   * the questions rather than at the window's edge.
+   */
+  it('caps and centres the content column at the phone column’s width, header included', () => {
     const { container } = renderShell()
 
     const main = container.querySelector('main')
-    expect(main?.className).toContain('max-w-content')
+    expect(main?.className.split(/\s+/)).toContain('max-w-field')
     expect(main?.className).toContain('mx-auto')
+    const header = container.querySelector('header')
+    expect(header?.className.split(/\s+/)).toContain('max-w-field')
+    expect(header?.className).toContain('mx-auto')
   })
 
   /**
@@ -97,6 +108,18 @@ describe('RespondShell', () => {
    * screen of this product they ever see, and it carried nothing that connects it
    * to the email that sent them here.
    */
+  /**
+   * The canvas's "Español" and "Claro" are 22px chips that hug their word. A native
+   * `<select>` is as wide as its widest option, which drew "Claro" in a chip with a blank
+   * tail the width of "Sistema"; `field-sizing: content` sizes it to what it shows.
+   * happy-dom keeps no unknown CSS property, so this reads the shared style both pickers
+   * spread — the screenshot at 390 is where the width itself was looked at.
+   */
+  it('sizes each picker chip to its word', () => {
+    expect(CHIP_SELECT_STYLE.fieldSizing).toBe('content')
+    expect(CHIP_SELECT_STYLE.appearance).toBe('none')
+  })
+
   it('opens on the brand lockup rather than on the product name in plain text', () => {
     const { container } = renderShell()
 

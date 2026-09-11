@@ -32,6 +32,10 @@ export const CHIP_SELECT_STYLE: CSSProperties = {
   fontWeight: 'var(--admin-weight-medium)',
   lineHeight: 1,
   appearance: 'none',
+  // Sized to the chosen option, not to the widest one: a native `<select>` is as wide as
+  // "Sistema" whatever it shows, which drew "Claro" in a chip with a blank tail. Chromium
+  // and Safari honour it; elsewhere the chip is simply as wide as it was.
+  fieldSizing: 'content',
   cursor: 'pointer',
 }
 

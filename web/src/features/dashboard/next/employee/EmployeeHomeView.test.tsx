@@ -117,7 +117,11 @@ function respondHrefs(): string[] {
 }
 
 describe('EmployeeHomeView', () => {
+  // The countdown is the reader's calendar days (`compose.ts`), so the zone is pinned to
+  // the tenant's: CI runs in UTC, where the canvas's evening is already the 11th.
+  const originalTz = process.env.TZ
   beforeEach(() => {
+    process.env.TZ = 'America/Costa_Rica'
     window.localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
     vi.stubGlobal('fetch', vi.fn())
     // The canvas's evening: 21:50 on 10 Sep in Costa Rica, 03:50 UTC on the 11th.
@@ -130,6 +134,7 @@ describe('EmployeeHomeView', () => {
     window.localStorage.clear()
     vi.unstubAllGlobals()
     vi.useRealTimers()
+    process.env.TZ = originalTz
   })
 
   it('leads with the survey owed, and its one way in is the respond route', async () => {
@@ -158,6 +163,28 @@ describe('EmployeeHomeView', () => {
     expect(screen.getByText('6')).toBeTruthy()
     expect(screen.getByText(es('employee.taskMinutes', { minutes: 4 }))).toBeTruthy()
     expect(screen.getByText('10 oct')).toBeTruthy()
+  })
+
+  /**
+   * At 390px the three tiles are ~70px inside, and "unos 4 min" does not fit on one line.
+   * An ellipsised "unos 4…" is a different reading, so a reading wraps; it never truncates.
+   * Found in the 390 screenshot, where DURACIÓN read "unos 4…".
+   */
+  it('wraps a reading rather than cutting it short', async () => {
+    serves()
+    renderHome()
+
+    const lead = await waitFor(() => {
+      const found = document.querySelector('[data-slot="home-lead"]')
+      expect(found).toBeTruthy()
+      return found as HTMLElement
+    })
+    const values = [...lead.querySelectorAll('dd')]
+    expect(values).toHaveLength(3)
+    for (const value of values) {
+      expect(value.className.split(/\s+/)).toContain('break-words')
+      expect(value.className.split(/\s+/)).not.toContain('truncate')
+    }
   })
 
   it('makes the anonymity promise beside an anonymous survey, in the respond page’s words', async () => {

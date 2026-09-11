@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import type { DashboardPendingSurvey, EmployeeDashboard, EmployeeLastOutcome } from '../../api/dashboard'
 import { composeEmployeeHome, composeOutcome, daysUntil } from './compose'
 
@@ -62,13 +62,35 @@ function outcome(overrides: Partial<EmployeeLastOutcome> = {}): EmployeeLastOutc
 /** 21:50 in Costa Rica on the canvas's date, 10 Sep — 03:50 UTC on the 11th. */
 const CANVAS_EVENING = '2026-09-11T03:50:00.000Z'
 
+/**
+ * The countdown counts the reader's CALENDAR days, so the reader's zone is part of the
+ * input. Pinned to Costa Rica — the tenant's zone, and the canvas's — because CI runs in
+ * UTC, where 03:50 UTC on the 11th is already the 11th and every case below would be read
+ * from the wrong evening. Node re-reads `TZ` on assignment, as `SurveyRespondForm.test.tsx`
+ * relies on too.
+ */
+const ORIGINAL_TZ = process.env.TZ
+beforeAll(() => {
+  process.env.TZ = 'America/Costa_Rica'
+})
+afterAll(() => {
+  process.env.TZ = ORIGINAL_TZ
+})
+
 describe('daysUntil', () => {
   it('reads the canvas’s "Cierra en 30 días" from the Q4 close on its own evening', () => {
+    // 10 Sep in Costa Rica to 10 Oct, the day `formatDayMonth` prints beside the count.
+    // Elapsed time says 28.9 days, which is how this read 29 against a printed date 30
+    // days away.
     expect(daysUntil('2026-10-10T02:03:39.148+00:00', CANVAS_EVENING)).toBe(30)
   })
 
-  it('counts a close later today as one day left, not none', () => {
+  it('counts the close’s calendar day, so tomorrow’s date is one day left however few hours remain', () => {
     expect(daysUntil('2026-09-11T20:00:00Z', CANVAS_EVENING)).toBe(1)
+  })
+
+  it('reads a close stamped with today’s date as closing today', () => {
+    expect(daysUntil('2026-09-10T23:59:59Z', CANVAS_EVENING)).toBe(0)
   })
 
   it('reads a deadline already past as nothing left, never a negative', () => {
