@@ -158,3 +158,13 @@ describe('KpiTile eyebrow', () => {
     )
   })
 })
+
+describe('KpiTile canvas line box', () => {
+  it('sets the hero and large labels in the 15px line box of the artboards’ `.label` and `.eyebrow`', () => {
+    render(<KpiTile label="Hero" value={24} size="hero" />)
+    expect(screen.getByText('Hero').className.split(/\s+/)).toContain('leading-normal')
+    cleanup()
+    render(<KpiTile label="Large" value={3} size="large" />)
+    expect(screen.getByText('Large').className.split(/\s+/)).toContain('leading-normal')
+  })
+})

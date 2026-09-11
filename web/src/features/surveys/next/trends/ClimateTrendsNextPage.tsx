@@ -234,7 +234,7 @@ function ClimateTrendsNextView({
                   locale={locale}
                   sub={
                     model.openWave ? (
-                      <span data-slot="open-wave">
+                      <span data-slot="open-wave" className="text-fg-label">
                         {t('surveys.next.trends.openEnters', {
                           wave: model.openWave.code,
                           date: calendarDay(Date.parse(model.openWave.closesAt), locale),
@@ -300,7 +300,7 @@ function ClimateTrendsNextView({
                         variant={selected ? 'default' : 'ghost'}
                         aria-pressed={selected}
                         data-group={group.key}
-                        className={cn('h-6.5 rounded px-2.5 text-sm font-medium', selected && 'shadow-sm')}
+                        className={cn('h-7 rounded px-2.5 text-sm font-medium', selected && 'shadow-sm')}
                         onClick={() => onSelectGroup(group.key)}
                       >
                         {group.name ?? t('surveys.next.trends.wholeCompany')}

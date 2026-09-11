@@ -337,3 +337,22 @@ describe('the shell rail', () => {
     expect(token('--admin-size-sidebar')).toBe('236px')
   })
 })
+
+/** A token's value with every `var()` followed and rem read at 16px — what the browser paints. */
+function paints(name: string): string {
+  let value = token(name).trim()
+  for (let hop = 0; hop < 6; hop++) {
+    const ref = /^var\((--[\w-]+)\)$/.exec(value)
+    if (!ref) break
+    value = token(ref[1]).trim()
+  }
+  const rem = /^([\d.]+)rem$/.exec(value)
+  return rem ? `${Number(rem[1]) * 16}px` : value
+}
+
+describe('the canvas section rhythm', () => {
+  it('leaves 24px between sections, as every artboard does (PageTopBar mb-section, the lists gap-section)', () => {
+    // A class test cannot see this: `mb-section` stays `mb-section` whatever the token says.
+    expect(paints('--admin-size-section-gap')).toBe('24px')
+  })
+})

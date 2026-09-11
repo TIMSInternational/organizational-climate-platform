@@ -276,7 +276,7 @@ export default function ClimateMap({
                 // measures the pair and bans the utility by name in this file.
                 className={cn(
                   canvas
-                    ? 'truncate border-0 p-0 pb-0.5 pl-1 text-center align-bottom font-bold uppercase leading-tight tracking-label text-fg-label'
+                    ? 'truncate border-0 p-0 pt-1 pb-0.25 pl-1 text-center align-bottom font-bold uppercase leading-tight tracking-label text-fg-label'
                     : 'px-1 pb-1.5 text-left font-semibold uppercase tracking-label text-fg-secondary',
                   density.header,
                 )}

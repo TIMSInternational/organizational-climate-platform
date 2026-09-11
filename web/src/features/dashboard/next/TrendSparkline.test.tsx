@@ -60,3 +60,12 @@ describe('TrendSparkline', () => {
     expect(shared.container.querySelector('line[data-slot="trend-target"]')?.getAttribute('y1')).not.toBe(own)
   })
 })
+
+describe('TrendSparkline in the canvas card', () => {
+  it('keeps 6px above its codes and sets them in the 15px line box the artboard draws', () => {
+    const { container } = render(<TrendSparkline values={[3.3, 3.7, 4.0]} target={3.7} labels={['Q1', 'Q2', 'Q3']} label="x" />)
+    const codes = container.querySelector('[data-slot="trend-labels"]') as HTMLElement
+    expect(codes.className.split(/\s+/)).toContain('leading-normal')
+    expect((codes.parentElement as HTMLElement).className.split(/\s+/)).toContain('gap-1.5')
+  })
+})

@@ -194,6 +194,14 @@ describe('ClimateTrendsNextPage', () => {
       const reading = card.querySelector('[data-slot="trend-reading"]')
       expect(reading?.className.split(/\s+/)).toContain('leading-normal')
     }
+    // The segments at the canvas's rendered 28px (26px + their borders): at 26px the control
+    // was 34px, the artboard's 36, and every card under it sat 2px high.
+    const segments = [...document.querySelectorAll('[data-slot="trends-segments"] button')]
+    expect(segments.length).toBeGreaterThan(0)
+    for (const segment of segments) expect(segment.className.split(/\s+/)).toContain('h-7')
+    // The footnote closes the table card in the artboard's 16.5px line, 12px under the last row.
+    const footnote = document.querySelector('[data-slot="trends-footnote"]') as HTMLElement
+    expect(footnote.className.split(/\s+/)).toEqual(expect.arrayContaining(['-mt-1', 'leading-normal']))
   })
 
   it('never counts an archived survey: the tiles, the charts and the table read the closed waves only', async () => {

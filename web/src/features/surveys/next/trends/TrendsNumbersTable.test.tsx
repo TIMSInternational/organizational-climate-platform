@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, it, expect, afterEach, beforeEach } from 'vitest'
 import { render, cleanup, within, screen } from '@testing-library/react'
 import { TranslationProvider } from '../../../../i18n'
@@ -104,5 +106,14 @@ describe('TrendsNumbersTable', () => {
     expect(notAsked.textContent).not.toMatch(/\d/)
     // Q1 → Q2 has a withheld end in both columns: no difference is printed.
     expect(rows[3].textContent).not.toMatch(/[+−-]\d/)
+  })
+})
+
+describe('TrendsNumbersTable on the artboard grid', () => {
+  const source = readFileSync(join(process.cwd(), 'src', 'features', 'surveys', 'next', 'trends', 'TrendsNumbersTable.tsx'), 'utf8')
+  it('takes no base padding over its heads and none under the Q1 → Q3 row, which sits 8px under its rule', () => {
+    // index.css pads every bare th 8px; above the heads it put the table 9px under the artboard's.
+    expect(/const HEAD = '[^']*\bpt-0\b/.test(source)).toBe(true)
+    expect(source.match(/border-line-light pt-2 pb-0/g)).toHaveLength(2)
   })
 })

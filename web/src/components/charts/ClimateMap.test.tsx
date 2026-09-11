@@ -500,3 +500,23 @@ describe('ClimateMap, drawn as the canvas', () => {
     expect((container.querySelector('td div') as HTMLElement).style.outline).toContain('--admin-chart-div-neg-2')
   })
 })
+
+describe('ClimateMap, the canvas grid', () => {
+  const band = (score: number): ClimateMapStep => (score < 3.7 ? 1 : 3)
+  it('is the artboard grid: 4px between rows and columns, none outside, no base cell padding', () => {
+    const { container } = render(
+      <ClimateMap variant="canvas" dimensions={DIMENSIONS} rows={rowsAt([3.0, 3.5])} target={3.7} tintStep={band} />,
+    )
+    const classes = (element: Element | null) => (element?.getAttribute('class') ?? '').split(/\s+/)
+    // border-spacing-1 put 4px outside the grid too, and index.css's 8px/12px th padding made
+    // each row 39.5px, not the artboard's 38.
+    expect(classes(container.querySelector('table'))).toEqual(expect.arrayContaining(['border-separate', 'border-spacing-0']))
+    expect(classes(container.querySelector('tbody th[scope="row"]'))).toEqual(expect.arrayContaining(['p-0', 'pt-1', 'pr-2']))
+    for (const cell of container.querySelectorAll('tbody td')) {
+      expect(classes(cell)).toEqual(expect.arrayContaining(['p-0', 'pt-1', 'pl-1']))
+    }
+    for (const head of container.querySelectorAll('thead th')) {
+      expect(classes(head)).toEqual(expect.arrayContaining(['p-0', 'pt-1', 'pl-1']))
+    }
+  })
+})

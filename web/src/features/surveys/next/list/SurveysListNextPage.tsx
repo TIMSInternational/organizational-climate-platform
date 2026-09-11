@@ -140,7 +140,9 @@ export default function SurveysListNextPage() {
           />
         </div>
         {/* A native <select> (ui/select.tsx says to prefer one for a plain list), drawn
-            as the artboard draws it: no platform arrow, the canvas's thin 14px chevron. */}
+            as the artboard draws it: no platform arrow, the canvas's thin 14px chevron.
+            `mt-0 block`: `index.css` gives a select in a label 4px above it, and an inline
+            one sits on the label's baseline; either made the filter row 36px, not 32. */}
         <label className="relative mb-0 w-full sm:w-42.5">
           <span className="sr-only">{t('surveys.typeLabel')}</span>
           <ChevronDown
@@ -149,7 +151,7 @@ export default function SurveysListNextPage() {
             className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-fg-label"
           />
           <select
-            className="block w-full appearance-none pr-8"
+            className="mt-0 block w-full appearance-none pr-8"
             value={state.draft.type}
             onChange={(event) => state.apply({ ...state.draft, type: event.target.value })}
           >

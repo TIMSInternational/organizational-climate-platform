@@ -149,6 +149,9 @@ describe('SurveysListNextPage', () => {
     const select = screen.getByRole('combobox')
     expect(select.tagName).toBe('SELECT')
     expect(select.className).toContain('appearance-none')
+    // A 32px filter row, as the artboard's: index.css's 4px over a labelled select and an
+    // inline select's baseline gap each made it 36px and set the search 2px low.
+    expect(select.className.split(/\s+/)).toEqual(expect.arrayContaining(['block', 'mt-0']))
     const chevron = select.closest('label')?.querySelector('svg[data-slot="type-chevron"]')
     expect(chevron?.getAttribute('aria-hidden')).toBe('true')
     // The label ink, the one that clears AA here (respondContrast.test.ts bans the tertiary).
@@ -171,6 +174,13 @@ describe('SurveysListNextPage', () => {
     const cells = [...(table.querySelector('tbody tr') as HTMLTableRowElement).children]
     expect(cells[0].className).not.toContain('xl:pl-0')
     for (const cell of cells.slice(1)) expect(cell.className).toContain('xl:pl-0')
+    // The canvas's head row: a 15px line box over a rule in the default hairline (index.css rules
+    // every th in the light one), and meta lines in a 16.5px box — the artboard's 61px rows.
+    for (const head of heads) {
+      expect(head.className.split(/\s+/)).toEqual(expect.arrayContaining(['leading-normal', 'border-b', 'border-line-default']))
+    }
+    const meta = (cells[0] as HTMLElement).querySelector('span.text-xs') as HTMLElement
+    expect(meta.className.split(/\s+/)).toContain('leading-normal')
   })
 
   it('narrows to a status on the client, without a second request, from pills that show only what exists', async () => {
