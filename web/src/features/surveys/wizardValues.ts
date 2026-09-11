@@ -282,10 +282,43 @@ export function questionFromLibrary(
 }
 
 /**
- * `language` is seeded from the company rather than defaulted to English, for the
- * reason the microclimate module records: the server's own default is
- * `company.Settings.Language`, and guessing differently in the form would silently
- * disagree with a request that omitted the field.
+ * The content language a fresh wizard starts with: the reader's own UI locale.
+ *
+ * Not the company's `Settings.Language`, and the reasons are measured rather than
+ * preferred. No `GET` returns it: of the five routes `CompanyEndpoints` maps, the only
+ * one that returns the settings is `PUT /{id}/settings` -- a write, which any admin
+ * may call for their own company -- and `GET /{id}` is SuperAdmin-only with a
+ * `CompanyDetail` that carries no settings. So the only read is the empty-body `PUT`:
+ * `CompanyDetailPage` sends `{}` to it, "a read dressed as a write", and a wizard
+ * doing the same would perform a write on every open. The
+ * default is `"en"` at both layers (`Company.cs`, `Language = "en"`; the
+ * `settings_language` column is required with a default of `'en'`), so a company
+ * nobody has configured is indistinguishable, in the database and on the wire, from
+ * one configured for English -- and `CompanySettingsForm` offers no language control,
+ * so today nobody *can* configure it from the product. Seeding from that field would
+ * preselect English on every Spanish tenant whose admin never touched a setting they
+ * cannot see, which is the defect this helper exists to remove. The microclimate
+ * wizard made the same call (`MicroclimateCreatePage`): the seed is what the admin is
+ * most likely to want, not a claim about the company.
+ *
+ * Whether the company setting should sit *ahead* of the reader's locale once it is
+ * readable and "unset" is observable is a product ruling, recorded as open in the
+ * pull request that introduced this function.
+ *
+ * `locale` is typed `string` rather than `Locale` on purpose: a third UI locale must
+ * land here as English, never as a content language the server would reject.
+ */
+export function defaultContentLanguage(locale: string): ContentLanguage {
+  return locale === 'es' ? 'es' : 'en'
+}
+
+/**
+ * `language` is whatever the page passes in -- `defaultContentLanguage` for a fresh
+ * wizard, or the fallback for a draft whose stored snapshot names no usable language.
+ * The server's own default when a request omits the field is
+ * `company.Settings.Language`, but this wizard always sends the field, so the seed
+ * here is the value that reaches the server; see `defaultContentLanguage` for why it
+ * is the reader's locale rather than that setting.
  */
 export function emptyWizardValues(language: ContentLanguage): SurveyWizardValues {
   return {

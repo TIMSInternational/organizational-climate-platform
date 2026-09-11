@@ -3,6 +3,7 @@ import {
   SURVEY_WIZARD_STEPS,
   buildCreateInput,
   chosenDimensions,
+  defaultContentLanguage,
   derivedOptionValue,
   emptyOption,
   emptyQuestion,
@@ -406,5 +407,19 @@ describe('surveyQuestionCount', () => {
       questions: [{ ...emptyQuestion('stale'), textEn: 'Left over from before' }],
     })
     expect(surveyQuestionCount(values, null)).toBe(0)
+  })
+})
+
+describe('defaultContentLanguage', () => {
+  it("is the reader's own locale for the two the product ships", () => {
+    expect(defaultContentLanguage('es')).toBe('es')
+    expect(defaultContentLanguage('en')).toBe('en')
+  })
+
+  it('lands a locale the product does not ship on English, never on itself', () => {
+    // `Survey.Language` accepts exactly en / es / both. A third UI locale must reach
+    // the wire as one of those, not as a content language the server answers 400 to.
+    expect(defaultContentLanguage('fr')).toBe('en')
+    expect(defaultContentLanguage('')).toBe('en')
   })
 })
