@@ -1,4 +1,4 @@
-import DepartmentAdminDashboardView from '../components/DepartmentAdminDashboardView'
+import TeamDashboardPage from '../next/team/TeamDashboardPage'
 import EmployeeHomeView from '../next/employee/EmployeeHomeView'
 import PlatformDashboardView from '../next/super/PlatformDashboardView'
 import DashboardState from '../components/DashboardState'
@@ -31,7 +31,7 @@ import { useCompanyScope } from '../../../company-context'
  * |-------------------|--------------------------|
  * | SuperAdmin        | `super_admin`            |
  * | CompanyAdmin      | `company_admin`          |
- * | DepartmentAdmin   | `leader`, `supervisor`   |
+ * | DepartmentAdmin   | `leader`, `supervisor` — `next/team/TeamDashboardPage`, one view per role |
  * | Evaluated user    | `employee`, and anything unrecognised |
  *
  * The **default is the employee view, deliberately**, and it is the one default that is
@@ -79,14 +79,16 @@ export default function DashboardPage() {
   }
 
   if (scope.role === 'leader' || scope.role === 'supervisor') {
-    return <DepartmentAdminDashboardView />
+    // The redesigned team panels (the canvas's LeaderDashboard and SupervisorDashboard,
+    // 10 Sep), which replaced `DepartmentAdminDashboardView` on this route; the old view
+    // stays in the tree as the wiring reference and nothing routes to it.
+    return <TeamDashboardPage role={scope.role} />
   }
 
   // The redesigned employee Home (the canvas's EmployeeDashboard, 10 Sep), which replaced
   // `EmployeeDashboardView`. The old view stays in the tree as the wiring reference only:
-  // nothing routes to it or imports it. `DepartmentAdminDashboardView`'s no-department
-  // fallback draws this same `EmployeeHomeView` — both dispatchers are pinned in
-  // `router.test.ts`.
+  // nothing routes to it or imports it. `TeamDashboardPage`'s no-department fallback draws
+  // this same `EmployeeHomeView` — both dispatchers are pinned in `router.test.ts`.
   return <EmployeeHomeView />
 }
 

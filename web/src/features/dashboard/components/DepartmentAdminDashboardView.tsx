@@ -57,6 +57,13 @@ function climateScores(climate: DashboardTeamClimate): number[] {
 }
 
 /**
+ * **Unrouted: the wiring reference.** Since the team redesign (the canvas's LeaderDashboard
+ * and SupervisorDashboard, 10 Sep) `DashboardPage` sends a `leader` and a `supervisor` to
+ * `next/team/TeamDashboardPage`, which reads the same `GET /dashboard/department-admin` and
+ * keeps this view's no-department and no-user-record branches. This file stays in the tree
+ * as the reference for that wiring; nothing may import it but its own test
+ * (`router.test.ts` pins that).
+ *
  * One department's overview, for the person who runs it.
  *
  * **No department id is sent.** A leader or supervisor's department comes from their own
