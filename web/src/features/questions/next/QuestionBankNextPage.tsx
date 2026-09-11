@@ -3,7 +3,7 @@ import { ArrowRight, Library, Search, SquareLibrary } from 'lucide-react'
 import { Link } from 'react-router'
 import { PageTopBar } from '../../../components/layout'
 import { Alert, AlertDescription, Button, Chip, ErrorState, Input, LoadingRegion, SkeletonText, Switch, Table } from '../../../components/ui'
-import { useViewerCapabilities } from '../../../auth/viewerCapabilities'
+import { readViewerClaims, useViewerCapabilities } from '../../../auth/viewerCapabilities'
 import { useCompanyScope } from '../../../company-context'
 import { useCompanyName } from '../../../company-context/useCompanyName'
 import { useTranslation } from '../../../i18n'
@@ -13,6 +13,7 @@ import { QUESTION_BANK_TYPES, type QuestionBankItem } from '../api/questionBank'
 import { EmptyRow, IconBox, TABLE_CARD_CLASS, TH_CLASS } from '../../shared-next/parts'
 import { LOW_RESPONSE_RATE, MIN_ASKINGS_FOR_A_VERDICT } from './model'
 import { useQuestionBankModel } from './useQuestionModels'
+import SuperQuestionBankView from './super/SuperQuestionBankView'
 
 /**
  * Banco de preguntas, redesigned (canvas board "QuestionBank") — the "explain the split"
@@ -29,6 +30,12 @@ export const SELECT_CLASS =
   'h-8 rounded-md border border-line-default bg-surface-card px-2 text-base text-fg-primary'
 
 export default function QuestionBankNextPage() {
+  // The per-role canvas (10 Sep): the super administrator's variant — the platform-wide bank with its owner column — is its own
+  // view, `super/SuperQuestionBankView`, read off the claim as the tenant pages dispatch. Everyone else keeps this page.
+  return readViewerClaims().role === 'super_admin' ? <SuperQuestionBankView /> : <QuestionBankForCompany />
+}
+
+function QuestionBankForCompany() {
   const { t, locale } = useTranslation()
   const scope = useCompanyScope()
   const caps = useViewerCapabilities()

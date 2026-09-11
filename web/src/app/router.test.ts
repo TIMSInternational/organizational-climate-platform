@@ -19,6 +19,8 @@ import QuestionBankNextPage from '../features/questions/next/QuestionBankNextPag
 import QuestionLibraryNextPage from '../features/questions/next/QuestionLibraryNextPage'
 import AIInsightsNextPage from '../features/analytics/next/AIInsightsNextPage'
 import AnalyticsNextPage from '../features/analytics/next/AnalyticsNextPage'
+import SystemSettingsNextPage from '../features/org-structure/next/system/SystemSettingsNextPage'
+import SystemHealthNextPage from '../features/org-structure/next/system/SystemHealthNextPage'
 
 /**
  * A construction guard for the router.
@@ -397,6 +399,49 @@ describe('router', () => {
       const source = readFileSync(join(process.cwd(), 'src', file), 'utf8')
       expect(source, file).toMatch(/role === 'super_admin'|\bisSuperAdmin\b/)
       expect(source, file).toMatch(new RegExp(`<${view}\\b`))
+    }
+  })
+
+  /**
+   * The super administrator's per-role canvas (10 Sep) replaced five more pages on their real
+   * routes: Información de IA, the question bank and library, Configuración del Sistema and
+   * Estado del sistema. `/surveys` stays `SurveysListNextPage`, which dispatches the super
+   * administrator to `SuperSurveysListView` by role. Pinned on the element, as above, and the
+   * old pages stay in the tree unreferenced by the router.
+   */
+  it('mounts the super administrator\'s five redesigned pages on their real routes, and routes no old one', () => {
+    const byPath = new Map<string, unknown>()
+    function walk(routes: typeof router.routes): void {
+      for (const route of routes) {
+        if (route.path) byPath.set(route.path, route.element)
+        if (route.children) walk(route.children as typeof router.routes)
+      }
+    }
+    walk(router.routes)
+    const componentAt = (path: string) => (byPath.get(path) as { type?: unknown } | undefined)?.type
+    expect(componentAt('/analytics/ai-insights')).toBe(AIInsightsNextPage)
+    expect(componentAt('/admin/question-bank')).toBe(QuestionBankNextPage)
+    expect(componentAt('/admin/question-library')).toBe(QuestionLibraryNextPage)
+    expect(componentAt('/admin/system-settings')).toBe(SystemSettingsNextPage)
+    expect(componentAt('/admin/system')).toBe(SystemHealthNextPage)
+
+    const source = readFileSync(join(process.cwd(), 'src', 'app', 'router.tsx'), 'utf8')
+    for (const old of ['AIInsightsPage', 'QuestionBankPage', 'QuestionLibraryPage', 'SystemSettingsPage', 'SystemHealthPage']) {
+      expect(source).not.toMatch(new RegExp(`pages/${old}'`))
+    }
+    const list = readFileSync(join(process.cwd(), 'src', 'features', 'surveys', 'next', 'list', 'SurveysListNextPage.tsx'), 'utf8')
+    expect(list).toMatch(/from '\.\.\/super\/SuperSurveysListView'/)
+    // #472 mounted the company administrator's pages at three of these routes; each carries ONE role
+    // branch to the super administrator's view (`next/super/`), which its own test renders through the page.
+    const dispatched: Array<[string[], string]> = [
+      [['analytics', 'next', 'AIInsightsNextPage.tsx'], 'SuperAIInsightsView'],
+      [['questions', 'next', 'QuestionBankNextPage.tsx'], 'SuperQuestionBankView'],
+      [['questions', 'next', 'QuestionLibraryNextPage.tsx'], 'SuperQuestionLibraryView'],
+    ]
+    for (const [file, view] of dispatched) {
+      const page = readFileSync(join(process.cwd(), 'src', 'features', ...file), 'utf8')
+      expect(page).toMatch(new RegExp(`from '\\./super/${view}'`))
+      expect(page).toMatch(new RegExp(`role === 'super_admin' \\? <${view} />`))
     }
   })
 

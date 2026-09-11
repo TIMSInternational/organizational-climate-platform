@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { calendarDay, instantDay } from './calendarDay'
+import { calendarDay, calendarDayOf, instantDay } from './calendarDay'
 
 /**
  * The ambient zone, restored after every case.
@@ -106,5 +106,19 @@ describe('instantDay', () => {
   it('adds the year only outside the reader’s current year', () => {
     process.env.TZ = 'America/Costa_Rica'
     expect(instantDay(Date.parse('2025-12-01T15:00:00Z'), 'es', { now: NOW })).toBe('1 dic 2025')
+  })
+})
+
+describe('calendarDayOf', () => {
+  it('is the UTC day of a survey date, whatever hour it carries and whatever the reader’s zone', () => {
+    process.env.TZ = 'America/Costa_Rica'
+    // Acme's open survey on the local API closes at 18:21 UTC on the 26th.
+    expect(calendarDayOf('2026-09-26T18:21:20.555+00:00')).toBe('2026-09-26')
+    expect(calendarDayOf('2026-10-10T02:03:39.148+00:00')).toBe('2026-10-10')
+    expect(calendarDayOf('2026-06-12T00:00:00Z')).toBe('2026-06-12')
+  })
+
+  it('hands back what it cannot parse', () => {
+    expect(calendarDayOf('not a date')).toBe('not a date')
   })
 })

@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router'
 import { Check, ChevronDown, Lock, Plus, Search, X } from 'lucide-react'
 import { PageTopBar } from '../../../components/layout'
 import { Alert, AlertDescription, Button, Chip, ErrorState, Input, LoadingRegion, SkeletonText, Textarea, Table } from '../../../components/ui'
-import { useViewerCapabilities } from '../../../auth/viewerCapabilities'
+import { readViewerClaims, useViewerCapabilities } from '../../../auth/viewerCapabilities'
 import { useCompanyScope } from '../../../company-context'
 import { useCompanyName } from '../../../company-context/useCompanyName'
 import { useTranslation } from '../../../i18n'
@@ -22,6 +22,7 @@ import { Eyebrow, TABLE_CARD_CLASS, TH_CLASS } from '../../shared-next/parts'
 import { categoryTree, flattenTree, libraryTypeLabel, matchesSearch, parseOptions, type CategoryNode } from './model'
 import { useQuestionLibraryModel } from './useQuestionModels'
 import { SELECT_CLASS } from './QuestionBankNextPage'
+import SuperQuestionLibraryView from './super/SuperQuestionLibraryView'
 
 /**
  * Biblioteca de preguntas, redesigned (canvas board "QuestionLibrary"): a browsable
@@ -68,6 +69,12 @@ interface ItemDraft {
 const EMPTY: ItemDraft = { categoryId: '', textEs: '', textEn: '', type: 'likert', dimension: '', minEs: '', maxEs: '', minEn: '', maxEn: '', tags: [], tagDraft: '', options: '', loadedOptions: null, loadedOptionsText: '' }
 
 export default function QuestionLibraryNextPage() {
+  // The per-role canvas (10 Sep): the super administrator's variant — the global catalogue it alone authors — is its own
+  // view, `super/SuperQuestionLibraryView`, read off the claim as the tenant pages dispatch. Everyone else keeps this page.
+  return readViewerClaims().role === 'super_admin' ? <SuperQuestionLibraryView /> : <QuestionLibraryForCompany />
+}
+
+function QuestionLibraryForCompany() {
   const { t, locale } = useTranslation()
   const scope = useCompanyScope()
   const caps = useViewerCapabilities()

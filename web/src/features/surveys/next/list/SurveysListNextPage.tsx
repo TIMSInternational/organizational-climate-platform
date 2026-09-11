@@ -21,7 +21,7 @@ import {
 } from '../../../../components/ui'
 import { useViewerCapabilities, type ViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { formatMetric } from '../../../../components/charts/formatMetric'
-import { calendarDay, todayCalendarDay } from '../../../../lib/calendarDay'
+import { calendarDay, calendarDayOf, todayCalendarDay } from '../../../../lib/calendarDay'
 import { cn } from '../../../../lib/cn'
 import { daysBetween, percentReading, signedReading } from '../../../dashboard/next/derive'
 import { statusLabel, typeLabel } from '../../surveyVocabulary'
@@ -37,6 +37,8 @@ import {
 } from './derive'
 import type { SurveyRow, SurveySection, WaveReading } from './model'
 import { useSurveysListModel } from './useSurveysListModel'
+import { readViewerClaims } from '../../../../auth/viewerCapabilities'
+import SuperSurveysListView from '../super/SuperSurveysListView'
 
 const ACTION_KEY: Record<PrimaryActionKind, string> = {
   distribution: 'surveys.distribution.title',
@@ -92,6 +94,13 @@ function sentenceCase(text: string, locale: string): string {
  * climate moves: `GET /surveys/climate-trends` would answer them 403.
  */
 export default function SurveysListNextPage() {
+  // The per-role canvas (10 Sep): the super administrator's platform-wide list is its own view,
+  // `../super/SuperSurveysListView` — an Empresa column and a company filter over the same
+  // `GET /surveys` — read off the claim, as the tenant pages dispatch. Everyone else keeps this page.
+  return readViewerClaims().role === 'super_admin' ? <SuperSurveysListView /> : <SurveysListForCompany />
+}
+
+function SurveysListForCompany() {
   const { t, locale } = useTranslation()
   const capabilities = useViewerCapabilities()
   const state = useSurveysListModel()
@@ -369,7 +378,7 @@ function SurveyTableRow({
   // Counted from TODAY AS A DAY (`todayCalendarDay`), as the Panel de Control counts:
   // from the instant, a close on 10 Oct read "en 29 días" here at three in the afternoon
   // while the dashboard said "a 30 días del cierre" for the same survey in the same minute.
-  const daysLeft = running ? daysBetween(todayCalendarDay(), row.endDate) : null
+  const daysLeft = running ? daysBetween(todayCalendarDay(), calendarDayOf(row.endDate)) : null
   const datePhrase =
     section === 'open'
       ? t('surveys.next.list.opened', { date: calendarDay(Date.parse(row.startDate), locale) })
