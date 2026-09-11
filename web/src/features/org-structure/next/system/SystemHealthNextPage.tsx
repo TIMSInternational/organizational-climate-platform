@@ -478,7 +478,9 @@ function JobsDisclosure({ jobs, checkedAt }: { jobs: readonly SystemJobStatus[];
 
   return (
     <section aria-labelledby="health-jobs" className="overflow-hidden rounded-lg border border-line-default bg-surface-card shadow-xs">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line-light px-4 py-3">
+      {/* 11px, not the board's 12: the ghost toggle keeps a transparent 1px border, so its label
+          still sits 12px from the edge and the bar is the board's 44px. */}
+      <div data-slot="jobs-bar" className="flex flex-wrap items-center justify-between gap-3 border-b border-line-light px-4 py-2.75">
         <Button
           type="button"
           variant="ghost"

@@ -132,6 +132,8 @@ describe('SystemHealthNextPage', () => {
     // The disclosure bar is one line tall: its toggle carries no button height.
     const toggle = screen.getByRole('button', { expanded: true })
     expect(toggle.className.split(/\s+/)).toEqual(expect.arrayContaining(['h-auto', 'py-0']))
+    // 11px around it: with the toggle's 1px border the label sits 12px in, and the bar is 44px.
+    expect((document.querySelector('[data-slot="jobs-bar"]') as HTMLElement).className.split(/\s+/)).toContain('py-2.75')
   })
 
   it('counts every chip that is not OK beside the verdict — the failing job, the dispatcher and the stored SMTP switch', async () => {
