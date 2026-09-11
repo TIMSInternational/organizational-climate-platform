@@ -92,3 +92,25 @@ describe('DatePicker', () => {
     expect(trigger().textContent).toContain('2026-08-03')
   })
 })
+
+describe('DatePicker — a screen that sets its own dates', () => {
+  it('prints the chosen date through formatValue when one is given', () => {
+    renderPicker({ value: AUGUST_2026, formatValue: () => '3 ago 2026' })
+    expect(trigger().textContent).toBe('3 ago 2026')
+  })
+
+  it('drops the calendar glyph only when showIcon is false', () => {
+    renderPicker({ value: AUGUST_2026, showIcon: false })
+    expect(trigger().querySelector('svg')).toBeNull()
+    cleanup()
+    renderPicker({ value: AUGUST_2026 })
+    expect(trigger().querySelector('svg')).not.toBeNull()
+  })
+})
+
+describe('DatePicker — the field', () => {
+  it('sets its value at the start of the field, as a text field does, not centred like a bare button', () => {
+    renderPicker({ value: AUGUST_2026 })
+    expect(trigger().className).toContain('justify-start')
+  })
+})

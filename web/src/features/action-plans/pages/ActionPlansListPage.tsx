@@ -1,3 +1,16 @@
+/**
+ * NOT ROUTED. `/action-plans` renders the redesigned Planes de Acción
+ * (`../next/ActionPlansListNextPage`), which replaced this page — ruled 10 Sep, the same
+ * swap `SurveysListPage` and `DashboardPage` made. Nothing in `router.tsx` reaches this
+ * file.
+ *
+ * It stays in the tree on purpose, as the wiring reference: `useActionPlansListModel`
+ * makes this page's requests (`GET /action-plans` for the scoped company, the department
+ * names, the template catalogue for the create form) and keeps its company-scoping rules,
+ * which the comment below explains. Delete it when nothing reads it as a reference; until
+ * then its behaviour is pinned by `ActionPlansListPage.test.tsx`, which renders it
+ * directly.
+ */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useCompanyName } from '../../../company-context/useCompanyName'
 import { Link } from 'react-router'

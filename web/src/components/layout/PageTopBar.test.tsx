@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
-import { createMemoryRouter, RouterProvider } from 'react-router'
+import { createMemoryRouter, MemoryRouter, RouterProvider } from 'react-router'
 import { TranslationProvider } from '../../i18n'
 import { PageTopBar, type PageTopBarProps } from './PageTopBar'
 
@@ -251,5 +251,21 @@ describe('PageTopBar', () => {
       expect(classes).toContain('grow')
       expect(classes).not.toContain('flex-1')
     })
+  })
+})
+
+describe('PageTopBar — the meta line', () => {
+  it('merges a caller metaClassName over the default spacing instead of adding a second class', () => {
+    render(
+      <TranslationProvider initialLocale="es">
+        <MemoryRouter>
+          <PageTopBar title="Plan" meta={<span>PA-1</span>} metaClassName="mt-0.5 gap-2.5" />
+        </MemoryRouter>
+      </TranslationProvider>,
+    )
+    const meta = document.querySelector('[data-slot="page-meta"]') as HTMLElement
+    expect(meta.className).toContain('gap-2.5')
+    expect(meta.className).toContain('mt-0.5')
+    expect(meta.className).not.toMatch(/(^|\s)(gap-1\.5|mt-1\.5)(\s|$)/)
   })
 })

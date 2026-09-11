@@ -1,0 +1,377 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { render, screen, cleanup, within, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router'
+import ActionPlansListNextPage from './ActionPlansListNextPage'
+import { TranslationProvider } from '../../../i18n'
+import { setToken, clearToken } from '../../../auth/token'
+import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../company-context'
+import { clearCompanyNameCache } from '../../../company-context/useCompanyName'
+import { tokenFor } from '../../../test/jwtFixture'
+import es from '../../../i18n/es.json'
+
+/**
+ * `/action-plans` — the redesigned Planes de Acción. The action plans, departments and
+ * tracking plans are the bodies the local stack answered for the Grupo Meridiano demo
+ * tenant on 10 Sep (the same as `scripts/shot-fixtures/plans-tracking-admin.json`).
+ */
+
+const API = 'http://api.test'
+const TRACKING = 'http://tracking.test'
+const COMPANY = '16c97c29-07f8-4522-86fc-e6cc56298829'
+const FINANZAS = 'bff21fd0-422b-4f3b-8c89-d6bfbf5f19e9'
+
+const ACTION_PLANS = {
+  actionPlans: [
+    { id: 'p1', title: 'Programa de reconocimiento entre pares', companyId: COMPANY, departmentId: 'd-personas', dueDate: '2026-09-30T02:05:50.251+00:00', status: 'not_started', priority: 'high', createdAt: '2026-09-10T02:05:50.263923+00:00' },
+    { id: 'c1', title: 'Buzón anónimo de sugerencias', companyId: COMPANY, departmentId: null, dueDate: '2026-10-10T00:00:00+00:00', status: 'cancelled', priority: 'medium', createdAt: '2026-09-10T02:12:06.466863+00:00' },
+    { id: 'c2', title: 'Almuerzos mensuales por departamento', companyId: COMPANY, departmentId: null, dueDate: '2026-10-10T00:00:00+00:00', status: 'cancelled', priority: 'medium', createdAt: '2026-09-10T02:13:38.941573+00:00' },
+    { id: 'c3', title: 'Piloto de horario flexible en Ventas', companyId: COMPANY, departmentId: null, dueDate: '2026-10-10T00:00:00+00:00', status: 'cancelled', priority: 'medium', createdAt: '2026-09-10T02:14:40.726189+00:00' },
+    { id: 'p2', title: 'Reducir la carga de trabajo en Operaciones', companyId: COMPANY, departmentId: 'd-ops', dueDate: '2026-10-15T02:05:50.278+00:00', status: 'not_started', priority: 'high', createdAt: '2026-09-10T02:05:50.280646+00:00' },
+    { id: 'p3', title: 'Reuniones abiertas con la dirección', companyId: COMPANY, departmentId: null, dueDate: '2026-10-25T02:05:50.292+00:00', status: 'not_started', priority: 'medium', createdAt: '2026-09-10T02:05:50.294635+00:00' },
+    { id: 'p4', title: 'Plan de desarrollo de carrera en Ingeniería', companyId: COMPANY, departmentId: 'd-ing', dueDate: '2026-11-09T03:05:50.285+00:00', status: 'not_started', priority: 'medium', createdAt: '2026-09-10T02:05:50.287727+00:00' },
+  ],
+}
+
+const DEPARTMENTS = {
+  departments: [
+    { id: 'd-personas', companyId: COMPANY, name: 'Personas', description: null, parentDepartmentId: null, isActive: true, employeeCount: 7 },
+    { id: 'd-ops', companyId: COMPANY, name: 'Operaciones', description: null, parentDepartmentId: null, isActive: true, employeeCount: 7 },
+    { id: 'd-ing', companyId: COMPANY, name: 'Ingeniería', description: null, parentDepartmentId: null, isActive: true, employeeCount: 14 },
+  ],
+}
+
+const TRACKING_PLANES = [
+  { id: 't1', planCode: 'PA-2026-00001', nodoExternalId: FINANZAS, liderExternalId: '', hallazgoExternalId: null, descripcionQue: 'Reponer la reunión de handover entre turnos', metodologiaComo: 'x', responsableEjecucionExternalId: 'p', fechaCreacion: '2026-09-10', fechaCompromiso: '2026-08-20', porcentajeAvance: 0, estadoSemaforo: 'Rojo', cicloEncuestaExternalId: null, fechaUltimaActualizacion: '2026-09-10', cumplido: false, involucradosExternalIds: [] },
+  { id: 't2', planCode: 'PA-2026-00002', nodoExternalId: 'n-ing', liderExternalId: '', hallazgoExternalId: null, descripcionQue: 'Publicar el rol de fines de semana con dos semanas de antelación', metodologiaComo: 'x', responsableEjecucionExternalId: 'p', fechaCreacion: '2026-09-10', fechaCompromiso: '2026-09-15', porcentajeAvance: 0, estadoSemaforo: 'Verde', cicloEncuestaExternalId: null, fechaUltimaActualizacion: '2026-09-10', cumplido: false, involucradosExternalIds: [] },
+]
+
+function calls(): Array<{ url: string; method: string; body: string | undefined }> {
+  return vi.mocked(fetch).mock.calls.map((call) => ({
+    url: String(call[0]),
+    method: (call[1] as RequestInit | undefined)?.method ?? 'GET',
+    body: (call[1] as RequestInit | undefined)?.body as string | undefined,
+  }))
+}
+
+function dataCalls() {
+  return calls().filter((call) => !/\/profile(\?|$)/.test(call.url))
+}
+
+function json(body: unknown, status = 200) {
+  return Promise.resolve(new Response(JSON.stringify(body), { status }))
+}
+
+function routeFetch() {
+  vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input)
+    if (url.startsWith(`${API}/action-plans/`) && init?.method === 'PUT') return json({ ...ACTION_PLANS.actionPlans[0], status: 'cancelled' })
+    if (url.startsWith(`${API}/action-plans?`)) return json(ACTION_PLANS)
+    if (url.startsWith(`${API}/admin/departments`)) return json(DEPARTMENTS)
+    if (url.includes('/action-plan-templates')) return json({ templates: [] })
+    if (url.startsWith(`${TRACKING}/api/planes-accion`)) return json(TRACKING_PLANES)
+    if (url.includes('/tracking/picker/nodos')) return json({ nodos: [{ id: FINANZAS, name: 'Finanzas' }] })
+    if (/\/profile(\?|$)/.test(url)) return json({ companyName: 'Grupo Meridiano S.A.' })
+    return json({}, 404)
+  })
+}
+
+function renderPage() {
+  return render(
+    <TranslationProvider initialLocale="es">
+      <MemoryRouter>
+        <CompanyContextProvider>
+          <ActionPlansListNextPage />
+        </CompanyContextProvider>
+      </MemoryRouter>
+    </TranslationProvider>,
+  )
+}
+
+const next = es.actionPlans.next
+
+function section(name: string): HTMLElement {
+  return screen.getByRole('heading', { name }).closest('section') as HTMLElement
+}
+
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date(2026, 8, 10, 12, 0, 0))
+  vi.stubEnv('VITE_API_BASE_URL', API)
+  vi.stubEnv('VITE_TRACKING_API_BASE_URL', TRACKING)
+  vi.stubGlobal('fetch', vi.fn())
+  clearCompanyNameCache()
+  routeFetch()
+})
+
+afterEach(() => {
+  cleanup()
+  clearToken()
+  localStorage.removeItem(COMPANY_CONTEXT_STORAGE_KEY)
+  vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
+  vi.useRealTimers()
+})
+
+describe('ActionPlansListNextPage — company_admin', () => {
+  beforeEach(() => {
+    setToken(tokenFor({ sub: 'u-ana', role: 'company_admin', companyId: COMPANY, nodoId: `unassigned-${COMPANY}`, isActive: 'true' }))
+  })
+
+  it('groups by state: En marcha empty with its sentence, the four No iniciados by due date', async () => {
+    renderPage()
+    await screen.findByRole('link', { name: 'Programa de reconocimiento entre pares' })
+    expect(within(section(next.groupInProgress)).getByText(next.inProgressEmpty)).toBeTruthy()
+    const names = within(section(next.groupNotStarted))
+      .getAllByRole('link')
+      .filter((link) => link.getAttribute('href')?.startsWith('/action-plans/') && link.textContent !== next.open)
+      .map((link) => link.textContent)
+    expect(names).toEqual([
+      'Programa de reconocimiento entre pares',
+      'Reducir la carga de trabajo en Operaciones',
+      'Reuniones abiertas con la dirección',
+      'Plan de desarrollo de carrera en Ingeniería',
+    ])
+  })
+
+  it('collapses the cancelled plans at the bottom until asked, and never among open work', async () => {
+    renderPage()
+    await screen.findByRole('link', { name: 'Programa de reconocimiento entre pares' })
+    const cancelled = document.querySelector('[data-group="cancelled"]') as HTMLElement
+    expect(within(cancelled).getByText(/Buzón anónimo de sugerencias/)).toBeTruthy()
+    expect(within(cancelled).queryByRole('table')).toBeNull()
+    expect(within(section(next.groupNotStarted)).queryByText('Buzón anónimo de sugerencias')).toBeNull()
+    await userEvent.click(within(cancelled).getByRole('button', { name: new RegExp(next.show) }))
+    expect(within(cancelled).getByRole('table')).toBeTruthy()
+  })
+
+  it('reads the tiles off the payload: 4 open, 1 due this month, none with progress', async () => {
+    renderPage()
+    const open = await screen.findByText(`${next.dueThisMonthOne} · ${next.noneWithProgress}`)
+    expect(open.closest('[data-slot="kpi-tile"]')?.textContent).toContain('4')
+    expect(screen.getByText('7 planes · 4 abiertos · 3 cancelados')).toBeTruthy()
+  })
+
+  it('reads the seguimiento tile from the tracking semáforo where a tracking service is configured', async () => {
+    renderPage()
+    const first = await screen.findByText('Finanzas · Reponer la reunión de handover entre turnos')
+    expect(first.getAttribute('data-source')).toBe('tracking')
+  })
+
+  it('reads the seguimiento tile from the plans past their date where there is no tracking service', async () => {
+    vi.stubEnv('VITE_TRACKING_API_BASE_URL', '')
+    renderPage()
+    const none = await screen.findByText(next.noneOverdue)
+    expect(none.getAttribute('data-source')).toBe('plans')
+    expect(calls().some((call) => call.url.startsWith(TRACKING))).toBe(false)
+  })
+
+  it('wears the sample chip only on the finding column and its tile — the owner is the real reading, unassigned', async () => {
+    renderPage()
+    await screen.findByRole('link', { name: 'Programa de reconocimiento entre pares' })
+    const chips = [...document.querySelectorAll('[data-slot="sample-chip"]')]
+    expect(chips.length).toBeGreaterThan(0)
+    for (const chip of chips) {
+      const tile = chip.closest('[data-slot="kpi-tile"]')
+      const header = chip.closest('th')
+      const where = tile?.querySelector('[data-slot="kpi-label"]')?.textContent ?? header?.textContent ?? ''
+      // Below 1360px the finding folds into the plan's cell, and its chip moves to the Plan
+      // heading with it, drawn there in that layout only.
+      const folded = where.startsWith(next.colPlan) && chip.className.includes('min-[1360px]:hidden')
+      expect(folded || [next.tileFinding, next.colFinding].some((name) => where.startsWith(name)), where).toBe(true)
+    }
+    expect(chips.filter((chip) => chip.closest('[data-slot="kpi-tile"]'))).toHaveLength(1)
+    // The entity has no owner (ActionPlan.cs), so "4 de 4 sin responsable" is a measurement.
+    const ownerTile = screen.getByText(next.tileOwner).closest('[data-slot="kpi-tile"]') as HTMLElement
+    expect(ownerTile.querySelector('[data-slot="sample-chip"]')).toBeNull()
+    expect(ownerTile.textContent).toContain(next.ofTotal.replace('{total}', '4'))
+    const table = section(next.groupNotStarted).querySelector('table') as HTMLTableElement
+    expect(table.querySelector('th[data-col="owner"] [data-slot="sample-chip"]')).toBeNull()
+  })
+
+  it('sets the columns on the artboard grid — the finding, the owner, Vence, Prioridad and the actions at 222, 162, 132, 92 and 144px — each cell padded on the left only', async () => {
+    renderPage()
+    await screen.findByRole('link', { name: 'Programa de reconocimiento entre pares' })
+    const table = section(next.groupNotStarted).querySelector('table') as HTMLTableElement
+    const width = (col: string) => (table.querySelector(`th[data-col="${col}"]`) as HTMLElement).className.match(/\bw-\[(\d+)px\]/)?.[1]
+    // The artboard's `210px 150px 120px 80px 120px` plus the 12px gap before each.
+    expect(['finding', 'owner', 'due', 'priority', 'actions'].map(width)).toEqual(['222', '162', '132', '92', '144'])
+    for (const cell of table.querySelectorAll('th, td')) {
+      expect(cell.className).toMatch(/(^|\s)pl-3(\s|$)/)
+      expect(cell.className).toMatch(/(^|\s)pr-0(\s|$)/)
+      expect(cell.className).toContain('last:pr-3')
+    }
+  })
+
+  it('hangs the sample chip UNDER the finding heading, so the heading keeps the artboard line and its 222px column', async () => {
+    renderPage()
+    await screen.findByRole('link', { name: 'Programa de reconocimiento entre pares' })
+    const table = section(next.groupNotStarted).querySelector('table') as HTMLTableElement
+    for (const th of table.querySelectorAll('th')) {
+      // Every heading at the top of its cell: the chip under one of them adds a line below the
+      // headings instead of pushing the others down to its middle.
+      expect(th.className).toMatch(/(^|\s)align-top(\s|$)/)
+    }
+    const heading = table.querySelector('th[data-col="finding"]') as HTMLElement
+    expect(heading.className).toContain('whitespace-nowrap')
+    const chip = heading.querySelector('[data-slot="sample-chip"]') as HTMLElement
+    const stack = chip.parentElement as HTMLElement
+    // A column, the heading's words first and the chip on the line under them.
+    expect(stack.className).toMatch(/(^|\s)flex-col(\s|$)/)
+    expect(stack.firstChild?.textContent).toBe(next.colFinding)
+    expect(stack.lastElementChild).toBe(chip)
+  })
+
+  it('folds the finding and owner into the plan cell below 1360px instead of scrolling a minimum width', async () => {
+    renderPage()
+    await screen.findByRole('link', { name: 'Programa de reconocimiento entre pares' })
+    const table = section(next.groupNotStarted).querySelector('table') as HTMLTableElement
+    expect(table.className).not.toMatch(/min-w-/)
+    const finding = [...table.querySelectorAll('th')].find((th) => th.textContent?.startsWith(next.colFinding)) as HTMLElement
+    expect(finding.className).toContain('hidden')
+    expect(finding.className).toContain('min-[1360px]:table-cell')
+    const folded = table.querySelector('[data-plan-row="p2"] [data-slot="plan-row-folded"]') as HTMLElement
+    expect(folded.className).toContain('min-[1360px]:hidden')
+    expect(folded.textContent).toContain('Operaciones')
+    expect(folded.textContent).toContain(next.ownerInline.replace('{name}', next.unassigned))
+  })
+
+  it('draws the state and priority filters as the canvas select, and they still narrow the list', async () => {
+    renderPage()
+    await screen.findByRole('link', { name: 'Programa de reconocimiento entre pares' })
+    const selects = [...document.querySelectorAll('[data-slot="canvas-select"] select')]
+    expect(selects.map((select) => select.getAttribute('aria-label'))).toEqual([next.statusFilter, next.priorityFilter])
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: next.priorityFilter }), 'medium')
+    expect(screen.queryByRole('link', { name: 'Programa de reconocimiento entre pares' })).toBeNull()
+    expect(screen.getByRole('link', { name: 'Reuniones abiertas con la dirección' })).toBeTruthy()
+  })
+
+  it('prints the first plan behind on one line, cut after a whole word as the tile reads, with the whole of it in its title', async () => {
+    renderPage()
+    const first = await screen.findByText('Finanzas · Reponer la reunión de handover entre turnos')
+    // The line wraps at word boundaries and shows its first line only: "…de handover", never
+    // "…de handove…" (the CSS ellipsis cuts inside a word, the refuter's shot at 1440).
+    expect(first.className).toContain('max-h-[1lh]')
+    expect(first.className).toMatch(/(^|\s)overflow-hidden(\s|$)/)
+    expect(first.className).toMatch(/(^|\s)whitespace-normal(\s|$)/)
+    expect(first.className).not.toMatch(/(^|\s)(truncate|text-ellipsis|whitespace-nowrap)(\s|$)/)
+    expect(first.className).not.toContain('line-clamp')
+    // "la" and "de" are tied to the next word, so the line never stops on one of them.
+    expect(first.textContent).toBe('Finanzas · Reponer la\u00A0reunión de\u00A0handover entre turnos')
+    expect(first.getAttribute('title')).toBe('Finanzas · Reponer la reunión de handover entre turnos')
+  })
+
+  it('marks the seguimiento tile with the semáforo chip itself — the octagon the tracking screens draw', async () => {
+    renderPage()
+    const first = await screen.findByText('Finanzas · Reponer la reunión de handover entre turnos')
+    const tile = first.closest('[data-slot="kpi-tile"]') as HTMLElement
+    const chip = within(tile).getByText(es.tracking.semaforo.rojo).closest('[data-slot="chip"]') as HTMLElement
+    expect(chip.querySelector('svg')?.classList.contains('lucide-octagon-alert')).toBe(true)
+  })
+
+  it('labels the timeline on one line per plan: the whole title in the DOM, cut only by the room its neighbours leave', async () => {
+    renderPage()
+    await screen.findByRole('link', { name: 'Programa de reconocimiento entre pares' })
+    const labels = [...document.querySelectorAll('[data-slot="due-timeline-label"]')] as HTMLElement[]
+    // The plans' own titles, each short word tied to the next by a no-break space, so a label
+    // cut by its room stops at "…de trabajo" or "Reuniones abiertas", never on "en" or "la".
+    expect(labels.map((label) => label.textContent)).toEqual([
+      'Programa de\u00A0reconocimiento entre pares',
+      'Reducir la\u00A0carga de\u00A0trabajo en\u00A0Operaciones',
+      'Reuniones abiertas con\u00A0la\u00A0dirección',
+      'Plan de\u00A0desarrollo de\u00A0carrera en\u00A0Ingeniería',
+    ])
+    const align = { start: 'text-left', middle: 'text-center', end: 'text-right' } as const
+    for (const label of labels) {
+      // One line box, the title wrapping at word boundaries inside it: whatever does not fit
+      // stops after a whole word, never an ellipsis inside one ("…trabajo en …", r3).
+      expect(label.className).toContain('max-h-[1lh]')
+      expect(label.className).toMatch(/(^|\s)overflow-hidden(\s|$)/)
+      expect(label.className).toMatch(/(^|\s)whitespace-normal(\s|$)/)
+      expect(label.className).not.toMatch(/(^|\s)(truncate|text-ellipsis|whitespace-nowrap)(\s|$)/)
+      // The box is the room its neighbours leave, and the line sits in it as the date sits on its dot.
+      expect(Number.parseFloat(label.style.width)).toBeGreaterThan(100)
+      expect(label.className).toContain(align[label.getAttribute('data-anchor') as keyof typeof align])
+      expect(label.getAttribute('title')).toBe(label.textContent?.replaceAll('\u00A0', ' '))
+      expect(label.style.top).toBe('51px')
+    }
+    // One row of labels: the drawing keeps the artboard's 64px.
+    expect(document.querySelector('[data-slot="due-timeline"]')?.getAttribute('viewBox')).toMatch(/ 64$/)
+  })
+
+  it('lays the timeline out at the width its card measures, so its type keeps its size at 1024', async () => {
+    class FixedWidthObserver {
+      callback: ResizeObserverCallback
+      constructor(callback: ResizeObserverCallback) {
+        this.callback = callback
+      }
+      observe(target: Element) {
+        this.callback([{ target, contentRect: { width: 686 } } as unknown as ResizeObserverEntry], this as unknown as ResizeObserver)
+      }
+      unobserve() {}
+      disconnect() {}
+    }
+    vi.stubGlobal('ResizeObserver', FixedWidthObserver)
+    renderPage()
+    await screen.findByRole('link', { name: 'Programa de reconocimiento entre pares' })
+    await waitFor(() => expect(document.querySelector('[data-slot="due-timeline"]')?.getAttribute('viewBox')).toMatch(/^0 0 686 /))
+  })
+
+  it('says an empty group is empty under its headings, never in a cell spanning columns the table may not show', async () => {
+    renderPage()
+    await screen.findByRole('link', { name: 'Programa de reconocimiento entre pares' })
+    const sentence = within(section(next.groupInProgress)).getByText(next.inProgressEmpty)
+    expect(sentence.closest('td')).toBeNull()
+    expect(section(next.groupInProgress).querySelectorAll('td[colspan]')).toHaveLength(0)
+  })
+
+  it('keeps Mostrar on the cancelled strip line, beside the names, at any width', async () => {
+    renderPage()
+    await screen.findByRole('link', { name: 'Programa de reconocimiento entre pares' })
+    const strip = document.querySelector('[data-slot="cancelled-strip"]') as HTMLElement
+    expect(strip.className).not.toMatch(/flex-wrap/)
+    expect(within(strip).getByRole('button', { name: new RegExp(next.show) })).toBeTruthy()
+  })
+
+  it('offers the new plan and, per row, cancelling — which PUTs status cancelled after a confirmation', async () => {
+    renderPage()
+    expect(await screen.findByRole('button', { name: next.newPlan })).toBeTruthy()
+    await userEvent.click(screen.getByRole('button', { name: next.moreActions.replace('{title}', 'Programa de reconocimiento entre pares') }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: next.cancelPlan }))
+    expect(calls().some((call) => call.method === 'PUT')).toBe(false)
+    const dialog = await screen.findByRole('alertdialog')
+    await userEvent.click(within(dialog).getByRole('button', { name: next.cancelConfirm }))
+    const put = calls().find((call) => call.method === 'PUT')
+    expect(put?.url).toBe(`${API}/action-plans/p1`)
+    expect(JSON.parse(put?.body ?? '{}')).toEqual({ status: 'cancelled' })
+  })
+
+  it('narrows by title in the browser, without a request per keystroke', async () => {
+    renderPage()
+    await screen.findByRole('link', { name: 'Programa de reconocimiento entre pares' })
+    const before = dataCalls().length
+    await userEvent.type(screen.getByRole('searchbox', { name: next.searchPlaceholder }), 'carga')
+    expect(dataCalls().length).toBe(before)
+    expect(screen.queryByRole('link', { name: 'Programa de reconocimiento entre pares' })).toBeNull()
+    expect(screen.getByRole('link', { name: 'Reducir la carga de trabajo en Operaciones' })).toBeTruthy()
+  })
+})
+
+describe('ActionPlansListNextPage — the roles GET /action-plans refuses', () => {
+  for (const role of ['leader', 'supervisor', 'employee']) {
+    it(`tells a ${role} whose screen this is, offers nothing to create, and asks for no plan`, async () => {
+      setToken(tokenFor({ sub: 'u-x', role, companyId: COMPANY, nodoId: 'n', isActive: 'true' }))
+      renderPage()
+      expect(await screen.findByText(next.restrictedTitle)).toBeTruthy()
+      expect(screen.queryByRole('button', { name: next.newPlan })).toBeNull()
+      expect(calls().some((call) => call.url.includes('/action-plans'))).toBe(false)
+    })
+  }
+
+  it('asks a super_admin with nothing selected which company they mean, and fetches nothing', async () => {
+    setToken(tokenFor({ sub: 'u-s', role: 'super_admin', companyId: '', isActive: 'true' }))
+    renderPage()
+    expect(await screen.findByText(es.companyContext.chooseACompany)).toBeTruthy()
+    expect(dataCalls()).toEqual([])
+  })
+})

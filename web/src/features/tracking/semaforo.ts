@@ -43,7 +43,7 @@ import type { SemaforoCounts } from './api/trackingApi'
  * The client's spec §7 describes an audience with 30+ years' tenure and low
  * digital literacy, and the printed reports are greyscale. So a semáforo state
  * carries three things that survive a monochrome photocopy — a distinct SILHOUETTE
- * (octagon / triangle / circle), a Spanish WORD, and only then a tone. `tone`
+ * (octagon / clock / bare check), a Spanish WORD, and only then a tone. `tone`
  * alone is never enough, which is why this table pairs `icon` and `labelKey` with
  * it rather than exporting a colour map.
  */
@@ -56,10 +56,16 @@ export type SemaforoEstado = 'Rojo' | 'Amarillo' | 'Verde'
  * `.ts` value module — `SemaforoChip.tsx` maps them to lucide icons.
  *
  * The three silhouettes are deliberately different SHAPES rather than three
- * coloured dots: an octagon, a triangle and a circle are still three different
+ * coloured dots: an octagon, a clock face and a bare check are still three different
  * marks after the colour is gone.
+ *
+ * The clock and the check are the canvas's (the TrackingConsolidado and TrackingTablero
+ * artboards of 10 Sep draw "En riesgo" with a clock and "Al día" with a check). Rojo keeps
+ * the octagon rather than the artboards' circled "!": a circle beside the clock's circle
+ * would leave two states one silhouette apart, which is the one thing this table exists to
+ * prevent.
  */
-export type SemaforoShape = 'octagon' | 'triangle' | 'circle'
+export type SemaforoShape = 'octagon' | 'clock' | 'check'
 
 export interface SemaforoPresentation {
   estado: SemaforoEstado
@@ -78,6 +84,12 @@ export interface SemaforoPresentation {
    * the tests can sweep in every locale alongside `labelKey`.
    */
   subKey: string
+  /**
+   * Catalogue path for the long form the TrackingTablero artboard (10 Sep) prints on a
+   * plan card — the colour word AND the meaning, "Verde · al día" — so a board read aloud
+   * or photocopied still says both. Drawn by `SemaforoChip`'s `long` prop.
+   */
+  longKey: string
   /** The matching field on `SemaforoCounts`, which the API spells in lower case. */
   countKey: keyof SemaforoCounts
 }
@@ -89,22 +101,25 @@ const PRESENTATION: Record<SemaforoEstado, SemaforoPresentation> = {
     shape: 'octagon',
     labelKey: 'tracking.semaforo.rojo',
     subKey: 'tracking.semaforo.subRojo',
+    longKey: 'tracking.next.semaforoLargoRojo',
     countKey: 'rojo',
   },
   Amarillo: {
     estado: 'Amarillo',
     tone: 'warning',
-    shape: 'triangle',
+    shape: 'clock',
     labelKey: 'tracking.semaforo.amarillo',
     subKey: 'tracking.semaforo.subAmarillo',
+    longKey: 'tracking.next.semaforoLargoAmarillo',
     countKey: 'amarillo',
   },
   Verde: {
     estado: 'Verde',
     tone: 'good',
-    shape: 'circle',
+    shape: 'check',
     labelKey: 'tracking.semaforo.verde',
     subKey: 'tracking.semaforo.subVerde',
+    longKey: 'tracking.next.semaforoLargoVerde',
     countKey: 'verde',
   },
 }
