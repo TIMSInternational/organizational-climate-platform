@@ -284,5 +284,7 @@ describe('QuestionLibraryNextPage — the artboard\'s order, names and chips', (
       expect(cell.className.split(/\s+/)).toEqual(expect.arrayContaining(['pl-3', 'pr-0']))
     }
     expect(cells[5].className.split(/\s+/)).toContain('px-3')
+    // A 31px header row: the card's 8px above the labels, 8px below, nothing on the <th>.
+    for (const head of table.querySelectorAll('th')) expect(head.className.split(/\s+/)).toEqual(expect.arrayContaining(['pt-0', 'pb-2']))
   })
 })

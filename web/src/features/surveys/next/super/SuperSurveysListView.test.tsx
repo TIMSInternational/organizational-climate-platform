@@ -136,6 +136,10 @@ describe('SuperSurveysListView — the super administrator\'s /surveys', () => {
     const lines = [...document.querySelectorAll('tr[data-survey-id] [data-slot="row-meta"], tr[data-survey-id] [data-slot="wave-move"], tr[data-survey-id] [data-slot="close-note"]')]
     expect(lines.length).toBeGreaterThanOrEqual(document.querySelectorAll('tr[data-survey-id]').length)
     for (const line of lines) expect(line.className.split(/\s+/)).toContain('leading-normal')
+    // …and each header row is the board's 31px: the card's 8px above the labels, 8px below.
+    const heads = [...document.querySelectorAll('[data-section="open"] th')]
+    expect(heads.length).toBe(7)
+    for (const head of heads) expect(head.className.split(/\s+/)).toEqual(expect.arrayContaining(['pt-0', 'pb-2']))
   })
 
   it('leaves a company administrator on the company list, with no Empresa column', async () => {

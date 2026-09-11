@@ -461,7 +461,8 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
 // Each cell pads its left edge only — the artboard's 12px grid gap — so every column starts on
 // the board's x (Intervalo 673, Último intento 805, Último éxito 967) and a right-aligned value
 // ends on its column's edge. The last column also pads its right edge, as the grid's padding.
-const HEAD = 'pt-2 pb-2 pl-3 pr-0 text-left text-2xs font-bold uppercase leading-normal tracking-label text-fg-label whitespace-nowrap border-b border-line-default'
+// The header row pads only its bottom (the wrapper's `pt-2` is the board's 8px above it).
+const HEAD = 'pt-0 pb-2 pl-3 pr-0 text-left text-2xs font-bold uppercase leading-normal tracking-label text-fg-label whitespace-nowrap border-b border-line-default'
 
 function JobsDisclosure({ jobs, checkedAt }: { jobs: readonly SystemJobStatus[]; checkedAt: string }) {
   const { t, locale } = useTranslation()
@@ -485,9 +486,10 @@ function JobsDisclosure({ jobs, checkedAt }: { jobs: readonly SystemJobStatus[];
           aria-expanded={open}
           aria-controls="health-jobs-table"
           onClick={() => setOpen((value) => !value)}
-          className="-ml-2 gap-2.5 text-base font-semibold text-fg-primary"
+          // The board's bar is one 13px line with 12px around it (44px): the toggle adds no height.
+          className="-ml-2 h-auto gap-2.5 py-0 text-base font-semibold text-fg-primary"
         >
-          <ChevronDown aria-hidden="true" className={cn('size-4 transition-transform', !open && '-rotate-90')} />
+          <ChevronDown aria-hidden="true" className={cn('size-3.5 transition-transform', !open && '-rotate-90')} />
           <span id="health-jobs">{t('systemHealth.next.tileJobs')}</span>
           <span className="font-mono text-sm font-normal tabular-nums text-fg-tertiary">{jobs.length}</span>
         </Button>
@@ -528,14 +530,14 @@ function JobsDisclosure({ jobs, checkedAt }: { jobs: readonly SystemJobStatus[];
                 <tbody>
                   {jobs.map((job) => (
                     <tr key={job.jobName} data-job={job.jobName} className="border-b border-line-light">
-                      <td className="py-2.25 pr-0 pl-3 font-mono text-sm text-fg-primary">{job.jobName}</td>
-                      <td className="py-2.25 pr-0 pl-3 text-sm text-fg-secondary">{intervalText(t, job.intervalSeconds)}</td>
-                      <td className="py-2.25 pr-0 pl-3 font-mono text-sm tabular-nums text-fg-primary">{instant(job.lastAttemptAt)}</td>
-                      <td className="py-2.25 pr-0 pl-3 font-mono text-sm tabular-nums text-fg-primary">{instant(job.lastSuccessAt)}</td>
-                      <td className="py-2.25 pr-0 pl-3 text-right font-mono text-sm tabular-nums text-fg-tertiary">
+                      <td className="py-2.5 pr-0 pl-3 font-mono text-sm text-fg-primary">{job.jobName}</td>
+                      <td className="py-2.5 pr-0 pl-3 text-sm text-fg-secondary">{intervalText(t, job.intervalSeconds)}</td>
+                      <td className="py-2.5 pr-0 pl-3 font-mono text-sm tabular-nums text-fg-primary">{instant(job.lastAttemptAt)}</td>
+                      <td className="py-2.5 pr-0 pl-3 font-mono text-sm tabular-nums text-fg-primary">{instant(job.lastSuccessAt)}</td>
+                      <td className="py-2.5 pr-0 pl-3 text-right font-mono text-sm tabular-nums text-fg-tertiary">
                         {job.consecutiveFailures}
                       </td>
-                      <td className="px-3 py-2.25 text-right">
+                      <td className="px-3 py-2.5 text-right">
                         <StatusChip tone={componentTone(job.status)} label={statusWord(t, job.status)} />
                       </td>
                     </tr>

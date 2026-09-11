@@ -30,7 +30,8 @@ type EditorMode = 'item' | 'new-item' | 'new-category'
 // Each cell pads its left edge only — the artboard's 12px grid gap — so a column's text runs
 // the board's full measure (Spanish 257px, English 205px at 1440) and starts on its x; the
 // last column also pads its right edge, as the grid's padding.
-const HEAD = 'pt-2 pb-2 pl-3 pr-0 text-left text-2xs font-bold uppercase leading-normal tracking-label text-fg-label whitespace-nowrap border-b border-line-default'
+// The header row pads only its bottom (the card's `pt-2` is the board's 8px above it).
+const HEAD = 'pt-0 pb-2 pl-3 pr-0 text-left text-2xs font-bold uppercase leading-normal tracking-label text-fg-label whitespace-nowrap border-b border-line-default'
 
 /**
  * `/admin/question-library` — the redesigned Biblioteca de preguntas, which replaced

@@ -111,7 +111,7 @@ describe('SystemHealthNextPage', () => {
     expect(within(jobRow('digests')).getByText('2')).toBeTruthy()
   })
 
-  it('sets the jobs table on the artboard\'s grid — 120/150/150/140/110 plus a 12px gap, each row 9px above and below', async () => {
+  it('sets the jobs table on the artboard\'s grid — 120/150/150/140/110 plus a 12px gap, rows 43px, a 31px header', async () => {
     serve(status())
     renderPage()
     await screen.findByText('notification-dispatch')
@@ -124,7 +124,14 @@ describe('SystemHealthNextPage', () => {
     }
     expect(heads[5].className.split(/\s+/)).toContain('pr-3')
     expect(cells[5].className.split(/\s+/)).toContain('px-3')
-    for (const cell of cells) expect(cell.className.split(/\s+/)).toContain('py-2.25')
+    // 10px above and below the 22px chip is the board's 43px row (9px + its 24px chip).
+    for (const cell of cells) expect(cell.className.split(/\s+/)).toContain('py-2.5')
+    // The wrapper's 8px is the only space above the labels.
+    for (const head of heads) expect(head.className.split(/\s+/)).toEqual(expect.arrayContaining(['pt-0', 'pb-2']))
+    expect((document.querySelector('#health-jobs-table > div') as HTMLElement).className.split(/\s+/)).toContain('pt-2')
+    // The disclosure bar is one line tall: its toggle carries no button height.
+    const toggle = screen.getByRole('button', { expanded: true })
+    expect(toggle.className.split(/\s+/)).toEqual(expect.arrayContaining(['h-auto', 'py-0']))
   })
 
   it('counts every chip that is not OK beside the verdict — the failing job, the dispatcher and the stored SMTP switch', async () => {

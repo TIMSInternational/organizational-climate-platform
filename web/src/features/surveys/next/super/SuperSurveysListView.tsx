@@ -61,7 +61,9 @@ const FACET_KEY: Record<string, string> = {
 }
 
 // The canvas's `.label` head over the default hairline, as the company administrator's list draws it.
-const HEAD = 'px-3 pt-2 pb-2 text-left text-2xs font-bold uppercase leading-normal tracking-label text-fg-label whitespace-nowrap border-b border-line-default'
+// The header row pads only its bottom: the card's `pt-2` is the board's `padding: 8px 0 0`, and
+// the board's header row is `padding: 0 12px 8px` — 31px from the card's edge to the rule.
+const HEAD = 'px-3 pt-0 pb-2 text-left text-2xs font-bold uppercase leading-normal tracking-label text-fg-label whitespace-nowrap border-b border-line-default'
 
 /**
  * A super administrator acts on any tenant's survey: `CanAdminister` short-circuits on

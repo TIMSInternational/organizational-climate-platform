@@ -134,6 +134,17 @@ describe('QuestionBankNextPage (the old page\'s guarantees, on the redesigned sc
     expect(within(row).getByText('10')).toBeTruthy()
   })
 
+  it('sets its header row as the board does — the card\'s 8px above the labels, 8px below, 31px to the rule', async () => {
+    serve({ items: [item()], metrics: [effectiveness('q1', 40, 30)] })
+    renderPage()
+    await waitFor(() => expect(rowOf('q1')).not.toBeNull())
+    const table = rowOf('q1').closest('table') as HTMLElement
+    const heads = [...table.querySelectorAll('th')]
+    expect(heads.length).toBe(8)
+    for (const head of heads) expect(head.className.split(/\s+/)).toEqual(expect.arrayContaining(['pt-0', 'pb-2']))
+    expect((table.closest('section') as HTMLElement).className.split(/\s+/)).toContain('pt-2')
+  })
+
   it('still lists the corpus when the effectiveness read fails — dashes, never zeros', async () => {
     serve({ items: [item()], metrics: 'fail' })
     renderPage()
