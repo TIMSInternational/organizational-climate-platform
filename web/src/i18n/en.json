@@ -1617,7 +1617,8 @@
       "localMailBefore": "The server refuses to send to",
       "localMailAfter": " addresses, so in this environment notices exist only here, inside the app. In production they also arrive by email from the configured sender.",
       "eyebrow": "Communication",
-      "markAll": "Mark all as read"
+      "markAll": "Mark all as read",
+      "localMailDomain": ".test"
     }
   },
   "profile": {

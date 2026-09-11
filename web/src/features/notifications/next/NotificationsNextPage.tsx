@@ -211,7 +211,7 @@ export default function NotificationsNextPage() {
               <Mail aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
               <span>
                 <strong className="font-semibold">{t(`${K}.localMailLead`)}</strong> {t(`${K}.localMailBefore`)}{' '}
-                <span className="font-mono">.test</span>
+                <span className="font-mono">{t(`${K}.localMailDomain`)}</span>
                 {t(`${K}.localMailAfter`)}
               </span>
             </p>
@@ -237,7 +237,7 @@ function Row({ row, sample, date, onOpen }: { row: InboxRow; sample: boolean; da
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className={cn('text-base text-fg-primary', row.unread ? 'font-semibold' : 'font-medium')}>
-          {row.heading}
+          {row.name}
           <span className="sr-only"> · {row.unread ? t('notifications.unread') : t('notifications.read')}</span>
         </span>
         <span className="text-xs text-fg-secondary">{row.body}</span>

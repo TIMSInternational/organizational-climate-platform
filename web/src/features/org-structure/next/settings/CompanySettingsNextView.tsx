@@ -333,9 +333,9 @@ function SettingsForm({
                   <img src={logoUrl} alt={t(`${K}.logoAlt`, { company: name })} className="max-h-full max-w-full object-contain" />
                 ) : (
                   <>
-                    <FileText aria-hidden="true" className="size-4.5 text-fg-light" />
+                    <FileText aria-hidden="true" className="size-4.5 text-fg-tertiary" />
                     {t(`${K}.logo`)}
-                    <span className="text-fg-light">{t(`${K}.logoFormats`)}</span>
+                    <span className="text-fg-tertiary">{t(`${K}.logoFormats`)}</span>
                   </>
                 )}
               </div>

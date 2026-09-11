@@ -19,6 +19,7 @@ import {
   NetworkError,
   SkeletonText,
   Switch,
+  Table,
 } from '../../../../components/ui'
 import { useCompanyScope } from '../../../../company-context'
 import { useCompanyName } from '../../../../company-context/useCompanyName'
@@ -300,8 +301,7 @@ function DepartmentsView({
             <span className="text-xs text-fg-tertiary">{t(`${K}.listMeta`)}</span>
           </div>
           <div className="overflow-hidden rounded-lg border border-line-light">
-            <div className="overflow-x-auto">
-              <table className="m-0 w-full min-w-215 border-collapse text-xs">
+            <Table className="m-0 w-full min-w-215 border-collapse text-xs">
                 <thead className="bg-surface-icon-box">
                   <tr>
                     <th scope="col" className={HEAD}>{t(`${K}.colDepartment`)}</th>
@@ -359,8 +359,7 @@ function DepartmentsView({
                     </tr>
                   ))}
                 </tbody>
-              </table>
-            </div>
+            </Table>
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-light bg-surface-card-hover px-3 py-2.5 text-xs text-fg-tertiary">
               <span>
                 {summary.inactive === 0
@@ -412,7 +411,7 @@ function ClimateCell({ climate, t, locale }: { climate: ClimateReading; t: Trans
     return (
       <span
         data-slot="protected-cell"
-        className={cn('inline-flex h-5.5 w-17.5 items-center justify-center rounded bg-surface-panel font-mono text-2xs text-fg-light', PROTECTED_HATCH)}
+        className={cn('inline-flex h-5.5 w-17.5 items-center justify-center rounded bg-surface-panel font-mono text-2xs text-fg-tertiary', PROTECTED_HATCH)}
       >
         {t(`${K}.protected`)}
       </span>
@@ -446,5 +445,5 @@ function CardNoteLine({ row, wave, t, locale }: { row: DepartmentRow; wave: Wave
     )
   }
   if (note.kind === 'supervisor') return <span className={cn(base, 'text-fg-tertiary')}>{t(`${K}.noteSupervisor`, { names: note.names.join(', ') })}</span>
-  return <span className={cn(base, 'text-fg-light')}>{t(`${K}.noteNone`)}</span>
+  return <span className={cn(base, 'text-fg-tertiary')}>{t(`${K}.noteNone`)}</span>
 }

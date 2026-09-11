@@ -1617,7 +1617,8 @@
       "localMailBefore": "El servidor rechaza el envío a direcciones",
       "localMailAfter": ", así que en este entorno los avisos solo existen aquí, dentro de la aplicación. En producción también llegan por correo al remitente configurado.",
       "eyebrow": "Comunicación",
-      "markAll": "Marcar todo como leído"
+      "markAll": "Marcar todo como leído",
+      "localMailDomain": ".test"
     }
   },
   "profile": {
