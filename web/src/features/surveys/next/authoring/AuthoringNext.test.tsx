@@ -518,6 +518,8 @@ describe('Nueva encuesta (SurveyBuilder artboard)', () => {
     await within(await screen.findByTestId('builder-questions')).findByText('Confío en la dirección.')
     const language = screen.getByRole('combobox', { name: 'Idioma del contenido' })
     expect(language.textContent).toContain('Español')
+    // Not the template's own "Español e inglés": the reader's language, which the template covers.
+    expect(language.textContent).not.toContain('inglés')
     expect(language.hasAttribute('disabled')).toBe(false)
   })
 
