@@ -113,6 +113,9 @@ describe('PlanDetailNextPage — an administrator', () => {
     expect(within(meta).getByText(es.tracking.semaforo.rojo)).toBeTruthy()
     expect(within(meta).getByText('Venció el 20 de agosto, hace 21 días')).toBeTruthy()
     expect(within(meta).getByText(next.metaNoAvances)).toBeTruthy()
+    // The Main artboard's spacing, over the primitive's 6px status line.
+    expect(meta.className).toContain('gap-2.5')
+    expect(meta.className).not.toMatch(/(^|\s)gap-1\.5(\s|$)/)
   })
 
   it('prints the qué as a sentence in its card, while the title keeps it as written', async () => {

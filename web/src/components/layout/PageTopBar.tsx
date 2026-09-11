@@ -145,11 +145,19 @@ export interface PageTopBarProps {
   /** Buttons, links, filters — whatever the page acts with. */
   actions?: ReactNode
   /**
-   * A row of chips and short facts under the title — the Main (plan detail) artboard of
-   * 10 Sep prints the plan's code, its semáforo and how far its date is there. Already
-   * translated; rendered after the description, in the text column.
+   * A line of chips and facts under the description — the redesign's status row
+   * ("Borrador · Encuesta de Clima Q1 2027 · 6 preguntas"), and the plan detail's code,
+   * semáforo and date (the Main artboard of 10 Sep). Optional and additive: a page that
+   * passes nothing renders exactly as before. Already translated.
    */
   meta?: ReactNode
+  /**
+   * Spacing for the `meta` line where an artboard sets it differently from the default
+   * 6px gap and 6px margin — the Main artboard's chips sit 10px apart and just under the
+   * title. Merged over the default through `cn` (tailwind-merge), so it replaces a class
+   * of the same group rather than adding a second one.
+   */
+  metaClassName?: string
   /**
    * 14px between the breadcrumb and the header instead of 38px — the Main (plan detail)
    * artboard of 10 Sep, whose breadcrumb carries only its own margin.
@@ -166,6 +174,7 @@ export function PageTopBar({
   badge,
   actions,
   meta,
+  metaClassName,
   tightBreadcrumb = false,
 }: PageTopBarProps) {
   const { t } = useTranslation()
@@ -274,7 +283,10 @@ export function PageTopBar({
             <p className="mb-0 max-w-measure break-words text-fg-secondary">{description}</p>
           )}
           {meta && (
-            <div data-slot="page-meta" className="mt-0.5 flex flex-wrap items-center gap-2.5">
+            <div
+              data-slot="page-meta"
+              className={cn('mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-fg-secondary', metaClassName)}
+            >
               {meta}
             </div>
           )}

@@ -1,3 +1,7 @@
+/**
+ * NOT MOUNTED. The router serves the redesigned screen in `features/surveys/next/authoring/`
+ * at this route; this file stays in the tree as the wiring reference for it.
+ */
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import {

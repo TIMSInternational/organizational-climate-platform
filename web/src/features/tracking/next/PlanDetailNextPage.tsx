@@ -155,6 +155,9 @@ function PlanDetail({ model, state }: { model: PlanDetailModel; state: PlanDetai
         tightBreadcrumb
         eyebrow={model.nodoName ? t('tracking.next.detailEyebrow', { nodo: model.nodoName }) : t('tracking.detail.title')}
         title={plan.descripcionQue}
+        // The Main artboard: the code, the semáforo and the date 10px apart, just under the
+        // title — not the 6px status line the authoring boards draw.
+        metaClassName="mt-0.5 gap-2.5"
         meta={
           <>
             <Chip label={plan.planCode} className="font-mono" />
