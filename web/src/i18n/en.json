@@ -1580,7 +1580,42 @@
     "typeAiInsightAlert": "Insight",
     "typeSystemNotification": "System",
     "emptyTitle": "Nothing has come in yet",
-    "emptyBody": "You will be told here when a survey opens to you, when one closes, and when its results are published."
+    "emptyBody": "You will be told here when a survey opens to you, when one closes, and when its results are published.",
+    "next": {
+      "description": "What happened that you should know: survey closings, overdue plans, reminders sent and reports ready.",
+      "settings": "Settings",
+      "inboxLabel": "Inbox",
+      "facetsLabel": "Filter by kind",
+      "facetCount": "{label} {count}",
+      "facet": {
+        "all": "All",
+        "unread": "Unread",
+        "surveys": "Surveys",
+        "plans": "Plans",
+        "reports": "Reports",
+        "other": "Other"
+      },
+      "periodLabel": "Period",
+      "periodDays": "Last {days} days",
+      "periodAll": "All",
+      "nothingHere": "Nothing under this filter.",
+      "nothingBefore": "No notifications before {date}.",
+      "actionRespond": "Answer",
+      "actionResults": "See results",
+      "actionPlan": "Open plan",
+      "actionProgress": "Record progress",
+      "actionReport": "Open report",
+      "channelsHeading": "How they reach you",
+      "channelApp": "In the app",
+      "channelAppNote": "Always on: every notice is kept here.",
+      "channelEmail": "By email",
+      "channelDigest": "Weekly digest",
+      "preferencesUnavailable": "Your preferences could not be read.",
+      "byType": "Adjust by kind of notice",
+      "localMailLead": "Local mail.",
+      "localMailBefore": "The server refuses to send to",
+      "localMailAfter": " addresses, so in this environment notices exist only here, inside the app. In production they also arrive by email from the configured sender."
+    }
   },
   "profile": {
     "title": "Your profile",
@@ -2967,6 +3002,36 @@
           "onboarding": "Onboarding",
           "exit": "Exit"
         }
+      },
+      "templates": {
+        "eyebrow": "Library",
+        "description": "Instruments ready to create a survey without writing the questions again. Use opens the wizard with the questions already in place.",
+        "categoriesLabel": "Filter by category",
+        "all": "All",
+        "chipCount": "{label} {count}",
+        "category": {
+          "climate": "Climate",
+          "pulse": "Pulse",
+          "engagement": "Engagement",
+          "exit": "Exit"
+        },
+        "searchPlaceholder": "Search by name or description",
+        "loadFailed": "The templates could not be read.",
+        "count": "{count} templates",
+        "sortedByUse": "sorted by use",
+        "questions": "{count} questions",
+        "likert": "Likert {min}–{max}",
+        "global": "Global",
+        "company": "Company",
+        "noDimensions": "Dimensions not declared in the template",
+        "dimensionsUnavailable": "The template's questions could not be read",
+        "timesUsed": "Times used",
+        "preview": "Preview",
+        "use": "Use",
+        "libraryHeading": "PROCOMER instrument",
+        "libraryBody": "When the final instrument arrives it is imported into the Question library and appears here as one more template, with its dimensions and its scale. Until then this row stays empty on purpose.",
+        "libraryAction": "Import from the library",
+        "footnote": "A template brings the questions, with their dimensions, option values and scale labels intact. The survey created from it can be edited without touching the template."
       }
     }
   },

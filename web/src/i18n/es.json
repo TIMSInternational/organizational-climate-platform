@@ -1580,7 +1580,42 @@
     "typeAiInsightAlert": "Hallazgo",
     "typeSystemNotification": "Sistema",
     "emptyTitle": "Todavía no ha llegado nada",
-    "emptyBody": "Aquí le avisaremos cuando se abra una encuesta para usted, cuando cierre y cuando se publiquen sus resultados."
+    "emptyBody": "Aquí le avisaremos cuando se abra una encuesta para usted, cuando cierre y cuando se publiquen sus resultados.",
+    "next": {
+      "description": "Lo que pasó y requiere que lo sepa: cierres de encuesta, planes atrasados, recordatorios enviados e informes listos.",
+      "settings": "Ajustes",
+      "inboxLabel": "Bandeja",
+      "facetsLabel": "Filtrar por tipo",
+      "facetCount": "{label} {count}",
+      "facet": {
+        "all": "Todas",
+        "unread": "Sin leer",
+        "surveys": "Encuestas",
+        "plans": "Planes",
+        "reports": "Informes",
+        "other": "Otros"
+      },
+      "periodLabel": "Periodo",
+      "periodDays": "Últimos {days} días",
+      "periodAll": "Todo",
+      "nothingHere": "Nada en este filtro.",
+      "nothingBefore": "No hay notificaciones anteriores al {date}.",
+      "actionRespond": "Responder",
+      "actionResults": "Ver resultados",
+      "actionPlan": "Abrir plan",
+      "actionProgress": "Registrar avance",
+      "actionReport": "Abrir informe",
+      "channelsHeading": "Por dónde llegan",
+      "channelApp": "En la aplicación",
+      "channelAppNote": "Siempre activo: cada aviso queda aquí.",
+      "channelEmail": "Por correo",
+      "channelDigest": "Resumen semanal",
+      "preferencesUnavailable": "No se pudieron leer sus preferencias.",
+      "byType": "Ajustar por tipo de aviso",
+      "localMailLead": "Correo local.",
+      "localMailBefore": "El servidor rechaza el envío a direcciones",
+      "localMailAfter": ", así que en este entorno los avisos solo existen aquí, dentro de la aplicación. En producción también llegan por correo al remitente configurado."
+    }
   },
   "profile": {
     "title": "Tu perfil",
@@ -2967,6 +3002,36 @@
           "onboarding": "Incorporación",
           "exit": "Salida"
         }
+      },
+      "templates": {
+        "eyebrow": "Biblioteca",
+        "description": "Instrumentos listos para crear una encuesta sin volver a escribir las preguntas. Usar abre el asistente con las preguntas ya puestas.",
+        "categoriesLabel": "Filtrar por categoría",
+        "all": "Todas",
+        "chipCount": "{label} {count}",
+        "category": {
+          "climate": "Clima",
+          "pulse": "Pulso",
+          "engagement": "Compromiso",
+          "exit": "Salida"
+        },
+        "searchPlaceholder": "Buscar por nombre o descripción",
+        "loadFailed": "No se pudieron leer las plantillas.",
+        "count": "{count} plantillas",
+        "sortedByUse": "ordenadas por uso",
+        "questions": "{count} preguntas",
+        "likert": "Likert {min}–{max}",
+        "global": "Global",
+        "company": "Empresa",
+        "noDimensions": "Dimensiones no declaradas en la plantilla",
+        "dimensionsUnavailable": "No se pudieron leer las preguntas de la plantilla",
+        "timesUsed": "Veces usada",
+        "preview": "Vista previa",
+        "use": "Usar",
+        "libraryHeading": "Instrumento de PROCOMER",
+        "libraryBody": "Cuando el instrumento final llegue, se importa a la Biblioteca de preguntas y aparece aquí como una plantilla más, con sus dimensiones y su escala. Hasta entonces esta fila queda vacía a propósito.",
+        "libraryAction": "Importar desde la biblioteca",
+        "footnote": "Una plantilla aporta las preguntas, con sus dimensiones, valores de opción y etiquetas de escala intactos. La encuesta creada se puede editar sin tocar la plantilla."
       }
     }
   },
