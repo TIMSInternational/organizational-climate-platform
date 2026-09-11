@@ -263,15 +263,19 @@ export default function ReportsListNextPage() {
                         between columns, from xl. A table has no column gap, so each fixed column
                         carries the gap before it (+12px) and its cells drop their left padding.
                         Narrower than xl the columns tighten and Descargar folds to its icon, so
-                        the whole row fits 1024; narrower still, the table scrolls inside this
-                        card rather than pushing the page. */}
+                        the whole row fits 1024: "Contiene" is sized for its three lines at 11px
+                        (each on one line — at 176px they wrapped to six and rows grew to 141px),
+                        the format and status columns for their chips' words, and the title,
+                        which takes what is left, wraps rather than truncating, so two reports
+                        of one quarter can still be told apart. Narrower still, the table
+                        scrolls inside this card rather than pushing the page. */}
                     <Table className="min-w-180 table-fixed xl:min-w-230">
                       <colgroup>
                         <col />
-                        <col className="w-44 xl:w-78" />
-                        <col className="w-17 xl:w-20.5" />
-                        <col className="w-30 xl:w-30.5" />
-                        <col className="w-30 xl:w-35.5" />
+                        <col className="w-54 xl:w-78" />
+                        <col className="w-14 xl:w-20.5" />
+                        <col className="w-27 xl:w-30.5" />
+                        <col className="w-26 xl:w-35.5" />
                         <col className="w-21 xl:w-40.5" />
                       </colgroup>
                       <thead>
@@ -282,7 +286,9 @@ export default function ReportsListNextPage() {
                           <th className={cn(HEAD, GAP_CELL, 'whitespace-normal xl:whitespace-nowrap')}>
                             <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
                               {t('reports.next.colContains')}
-                              {sampleChip}
+                              {/* `-my-1`: the 22px chip rides in the head's 8px padding instead of
+                                  growing the row, which is the artboard's 32px with or without it. */}
+                              {sampleChip && <span className="-my-1 inline-flex">{sampleChip}</span>}
                             </span>
                           </th>
                           <th className={cn(HEAD, GAP_CELL)}>{t('reports.format')}</th>
@@ -436,21 +442,25 @@ function ReportTableRow({
     <tr data-report-id={row.id} data-status={row.status} className="border-b border-line-light last:border-b-0">
       <td className="px-3 py-3.5">
         <div className="flex min-w-0 flex-col">
-          <span title={row.title} className="truncate text-base font-semibold text-fg-primary">
+          <span
+            title={row.title}
+            data-slot="report-title"
+            className="text-base font-semibold text-fg-primary [overflow-wrap:anywhere] xl:truncate"
+          >
             {row.title}
           </span>
-          <span data-slot="report-meta" className="truncate text-xs leading-normal text-fg-label">
+          <span data-slot="report-meta" className="text-xs leading-normal text-fg-label xl:truncate">
             {meta}
           </span>
         </div>
       </td>
-      <td className="py-3.5 pr-3">
+      <td className="py-3.5 pr-3 pl-0">
         {row.contents ? <ContentsCell contents={row.contents} t={t} /> : null}
       </td>
-      <td className="py-3.5 pr-3">
+      <td className="py-3.5 pr-3 pl-0">
         <Chip tone="neutral" label={reportFormatLabel(t, row.format)} className="w-full justify-start" />
       </td>
-      <td className="py-3.5 pr-3">
+      <td className="py-3.5 pr-3 pl-0">
         <Chip
           tone={STATUS_TONE[row.status] ?? 'neutral'}
           label={reportStatusLabel(t, row.status)}
@@ -460,7 +470,7 @@ function ReportTableRow({
           className="w-full justify-start"
         />
       </td>
-      <td data-slot="report-links" className="py-3.5 pr-3">
+      <td data-slot="report-links" className="py-3.5 pr-3 pl-0">
         {links === null ? (
           <span className="text-sm text-fg-label">{mayShare && completed ? t('reports.next.linksNotRead') : t('reports.next.linksNone')}</span>
         ) : links.active === 0 || links.firstExpiry === null ? (
@@ -481,7 +491,7 @@ function ReportTableRow({
           </span>
         )}
       </td>
-      <td className="py-3.5 pr-3">
+      <td className="py-3.5 pr-3 pl-0">
         <div className="flex items-center justify-end gap-2">
           {/* The one visible action. Disabled, not hidden, for a report still generating:
               the server answers 400 until it is completed, and "not yet" is the truth. */}
@@ -533,7 +543,8 @@ function ContentsCell({ contents, t }: { contents: ReportContents; t: TranslateF
         ? t('reports.next.containsProtectedOne', { group: reading.protectedGroups[0] })
         : t('reports.next.containsProtectedMany', { count: reading.protectedGroups.length })
   return (
-    <div data-slot="report-contents" className="flex flex-col gap-0.5 text-sm text-fg-secondary">
+    // 11px below xl so each line stays one line in the 1024 column; the artboard's 12px from xl.
+    <div data-slot="report-contents" className="flex flex-col gap-0.5 text-xs text-fg-secondary xl:text-sm">
       <span>
         {reading.suppressed
           ? t('reports.next.containsSurveySuppressed', { survey: contents.surveyName })

@@ -107,7 +107,10 @@ export function useReportsListModel(companyId: string | undefined, access: Repor
       recurrencePattern: item.recurrencePattern,
       nextGeneration: item.nextGeneration,
       shares: shares[item.id] ?? null,
-      contents: sampleContents,
+      // Only a completed report has a document to contain anything: a generating one has
+      // none yet and a failed one never will, so the sample is not stamped on them — it
+      // would claim "24 respuestas · 4 de 5 grupos" for a file that does not exist.
+      contents: item.status === 'completed' ? sampleContents : null,
     }))
     return { isSample: rows.some((row) => row.contents === sampleContents), rows }
   }, [items, shares])

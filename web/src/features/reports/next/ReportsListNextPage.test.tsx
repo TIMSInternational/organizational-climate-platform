@@ -64,7 +64,9 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status })
 }
 
-function routeFetch(options: { list?: ReportListItem[]; listStatus?: number; download?: () => Response } = {}) {
+function routeFetch(
+  options: { list?: ReportListItem[]; listStatus?: number; download?: () => Response; sharesFail?: string[] } = {},
+) {
   vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input), 'http://test.local')
     const method = init?.method ?? 'GET'
@@ -72,6 +74,9 @@ function routeFetch(options: { list?: ReportListItem[]; listStatus?: number; dow
       return Promise.resolve(options.listStatus ? json({ message: 'nope' }, options.listStatus) : json(options.list ?? [csv, pdf]))
     }
     const shares = url.pathname.match(/\/admin\/reports\/([^/]+)\/shares$/)
+    if (method === 'GET' && shares && options.sharesFail?.includes(shares[1])) {
+      return Promise.resolve(json({ message: 'boom' }, 500))
+    }
     if (method === 'GET' && shares) return Promise.resolve(json(sharesByReport[shares[1]] ?? []))
     if (method === 'POST' && /\/download$/.test(url.pathname)) {
       return Promise.resolve(options.download ? options.download() : new Response(new Blob(['"section"\r\n']), { status: 200 }))
@@ -204,6 +209,39 @@ describe('ReportsListNextPage — what it reads', () => {
     expect(document.querySelector('[data-slot="floor-note"]')?.textContent).toContain('menos de 5 respuestas')
   })
 
+  it('prints no number on the links tile when a completed report\'s links could not be read — never "0 enlaces"', async () => {
+    routeFetch({ sharesFail: ['r-csv'] })
+    renderAs(ADMIN)
+    await screen.findByText('Datos de clima — T3 2026')
+    const tile = document.querySelectorAll('[data-slot="reports-tiles"] [data-slot="kpi-tile"]')[1]
+    expect(tile.textContent).toContain('no se pudieron leer los enlaces de todos los informes')
+    // The unread count is absent, not 0: "0" would say nobody can open a report without a
+    // login while one CSV still opens for anyone holding its link.
+    expect(tile.textContent).not.toMatch(/\d/)
+    expect(rowOf('r-csv').querySelector('[data-slot="report-links"]')?.textContent).toBe('Sin leer')
+    // The report whose links WERE read keeps its reading.
+    expect(rowOf('r-pdf').querySelector('[data-slot="report-links"]')?.textContent).toBe('Ninguno')
+  })
+
+  it('stamps no contents on a report that is not completed — there is no document to contain anything', async () => {
+    const failed = reportRow({ id: 'r-fail', title: 'Informe fallido', status: 'failed', format: 'csv' })
+    routeFetch({ list: [csv, generating, failed] })
+    const { unmount } = renderAs(ADMIN)
+    await screen.findByText('Resumen en curso')
+    expect(rowOf('r-csv').querySelector('[data-slot="report-contents"]')).not.toBeNull()
+    for (const id of ['r-gen', 'r-fail']) {
+      expect(rowOf(id).querySelector('[data-slot="report-contents"]'), id).toBeNull()
+      expect(rowOf(id).textContent, id).not.toContain('respuestas')
+    }
+    unmount()
+
+    // With no completed report, nothing is sample-fed, so no chip is worn anywhere.
+    routeFetch({ list: [generating] })
+    renderAs(ADMIN)
+    await screen.findByText('Resumen en curso')
+    expect(document.querySelector('[data-slot="sample-chip"]')).toBeNull()
+  })
+
   it('says so with a retry when the list cannot be read', async () => {
     routeFetch({ listStatus: 500 })
     renderAs(ADMIN)
@@ -325,6 +363,17 @@ describe('ReportsListNextPage — one test per role that matters', () => {
     expect(calls((url) => url.pathname.endsWith('/shares'))).toHaveLength(0)
     expect(screen.getByText('tu cuenta no puede ver los enlaces de esta empresa')).toBeTruthy()
     expect(await menuItems('r-csv')).toEqual(['Programar'])
+  })
+
+  it('super_admin with no company chosen: ?share=<id> opens no dialog, since the links are not theirs to list', async () => {
+    routeFetch()
+    renderAs({ role: 'super_admin', companyId: '' }, `/admin/companies/${CID}/reports?share=r-csv`)
+    await screen.findByText('Datos de clima — T3 2026')
+    // The report is completed and in the list, so only `mayShare` stands between the
+    // address and a dialog that would read and mint links `canShareReports` refuses.
+    expect(screen.queryByRole('heading', { name: 'Compartir con un enlace público' })).toBeNull()
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(calls((url) => url.pathname.endsWith('/shares'))).toHaveLength(0)
   })
 
   it('super_admin with the company chosen: the links too', async () => {

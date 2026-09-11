@@ -162,6 +162,17 @@ export function useBenchmarksModel(): BenchmarksState {
         }
         const analytics = await getSurveyAnalytics(baseUrl, latest.id)
         if (cancelled) return
+        // Under the floor the server has emptied `questions` (`SurveyAggregate.IsSuppressed`),
+        // so a read-out built from them would print "ninguna dimensión bajo la mediana" over
+        // an empty card — a comparison nobody made. The survey is named; its count is not.
+        if (analytics.isSuppressed) {
+          setReadout({
+            kind: 'under-floor',
+            survey: latest.title ?? t('surveys.untitled'),
+            floor: analytics.minimumGroupSize,
+          })
+          return
+        }
         const built = buildCohortReadout(analytics.questions ?? [], detail.metrics ?? [])
         setReadout({
           kind: 'ready',

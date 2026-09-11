@@ -68,5 +68,11 @@ export type ReadoutState =
   | { kind: 'ready'; readout: CohortReadoutModel }
   | { kind: 'no-cohort' }
   | { kind: 'no-survey' }
+  /**
+   * The latest closed survey is under the privacy floor: the server empties its questions
+   * (`SurveyAggregate.IsSuppressed`), so nothing is compared — not the index, not one
+   * dimension — and the page says so instead of "no dimension below the median".
+   */
+  | { kind: 'under-floor'; survey: string; floor: number }
   | { kind: 'pick-company' }
   | { kind: 'failed' }

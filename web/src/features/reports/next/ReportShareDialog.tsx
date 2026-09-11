@@ -81,6 +81,7 @@ export default function ReportShareDialog({ open, onOpenChange, baseUrl, report,
   const [busy, setBusy] = useState(false)
   const [copied, setCopied] = useState<boolean | null>(null)
   const [showInactive, setShowInactive] = useState(false)
+  const titleRef = useRef<HTMLHeadingElement>(null)
 
   // The page hands an inline callback; keeping it in a ref keeps `reload` stable, so the
   // opening effect runs once per opening and not once per parent render.
@@ -178,9 +179,20 @@ export default function ReportShareDialog({ open, onOpenChange, baseUrl, report,
       <DialogContent
         showCloseButton={false}
         data-slot="report-share-dialog"
-        // The artboard's dialog: 640px, 96px from the top, 20px by 24px of padding, 16px
-        // between its blocks, the card radius and a deep shadow.
-        className="top-24 max-h-[calc(100dvh-7rem)] max-w-160 translate-y-0 gap-4 overflow-y-auto rounded-xl px-6 py-5 shadow-2xl"
+        // The artboard's dialog: a 640px content box inside 20px by 24px of padding and a
+        // 1px border — 690px outside, 688 of white — 96px from the top, 16px between its
+        // blocks, the card radius and a deep shadow. `max-w` is the outer width here
+        // (border-box), so it carries the padding and the border the canvas adds outside.
+        className="top-24 max-h-[calc(100dvh-7rem)] max-w-[690px] translate-y-0 gap-4 overflow-y-auto rounded-xl px-6 py-5 shadow-2xl"
+        // Radix focuses the first control on open, which here is the close button — and a
+        // visit to `?share=<id>` has had no pointer interaction, so `:focus-visible` matches
+        // and the page opens with a red ring on "×". The dialog is announced by its title
+        // instead: focus lands on the heading (not a control, so no ring), and Tab from
+        // there reaches the close button first, exactly as before.
+        onOpenAutoFocus={(event) => {
+          event.preventDefault()
+          titleRef.current?.focus()
+        }}
       >
         <div className="flex items-start justify-between gap-3">
           <DialogHeader className="gap-1">
@@ -188,8 +200,15 @@ export default function ReportShareDialog({ open, onOpenChange, baseUrl, report,
               {t('reports.next.shareEyebrow', { title: report.title, format: reportFormatLabel(t, report.format) })}
             </p>
             {/* An `<h2>`, so the base rule sets it in the display serif; only the primitive's
-                sans weight and size are taken back. */}
-            <DialogTitle className="m-0 text-2xl font-normal leading-tight">{t('reports.next.shareHeading')}</DialogTitle>
+                sans weight and size are taken back. `tabIndex={-1}`: focusable by the
+                opening above, never a Tab stop; `outline-none` because it is not a control. */}
+            <DialogTitle
+              ref={titleRef}
+              tabIndex={-1}
+              className="m-0 text-2xl font-normal leading-tight outline-none"
+            >
+              {t('reports.next.shareHeading')}
+            </DialogTitle>
             <DialogDescription className="m-0 text-sm text-fg-secondary">{t('reports.next.shareSub')}</DialogDescription>
           </DialogHeader>
           <DialogClose asChild>

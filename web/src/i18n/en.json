@@ -3021,7 +3021,9 @@
       "noSurveyTitle": "There is no closed survey yet",
       "noSurveyDescription": "The company's index is read from its latest closed survey; once the first one closes, it appears here against the group.",
       "pickCompanyTitle": "Choose a company to read it against its group",
-      "pickCompanyDescription": "The index belongs to one company; the references below read the same without choosing one."
+      "pickCompanyDescription": "The index belongs to one company; the references below read the same without choosing one.",
+      "underFloorTitle": "The latest closed survey is under the floor of {floor} responses",
+      "underFloorDescription": "{survey} is below the privacy floor, so it is not compared with the group: not the index, not any dimension. Once a closed survey clears it, it appears here."
     }
   },
   "insights": {

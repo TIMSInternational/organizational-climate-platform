@@ -223,6 +223,20 @@ describe('ReportShareDialog', () => {
     expect(onSharesChange.mock.calls[1][0]).toHaveLength(7)
   })
 
+  it('opens with focus on its title rather than on "×", and Tab reaches "×" first', async () => {
+    // A visit to `?share=<id>` has had no pointer interaction, so a control focused on open
+    // wears the focus ring — the artboard shows none. The title is focused instead.
+    routeFetch()
+    renderDialog()
+    const heading = await screen.findByRole('heading', { name: 'Compartir con un enlace público' })
+    await waitFor(() => expect(document.activeElement).toBe(heading))
+    const [close] = screen.getAllByRole('button', { name: 'Cerrar' })
+    expect(close.closest('[data-slot="report-share-dialog"]')).not.toBeNull()
+    expect(heading.getAttribute('tabindex')).toBe('-1')
+    await userEvent.tab()
+    expect(document.activeElement).toBe(close)
+  })
+
   it('surfaces the refusal instead of an empty dialog when the links cannot be read', async () => {
     routeFetch({ list: () => json({ message: 'Forbidden' }, 403) })
     renderDialog()

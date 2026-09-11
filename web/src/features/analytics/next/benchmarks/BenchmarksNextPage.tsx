@@ -134,7 +134,9 @@ export default function BenchmarksNextPage() {
                   <p className="m-0 text-sm text-fg-label">{t('benchmarks.next.referencesHint')}</p>
                 </div>
                 <CollapsibleContent>
-                  <div className="pt-2">
+                  {/* No wrapper padding: the canvas's 8px above the head is the head cell's own
+                      `pt-2`, and a second 8px here put the head 7.5px lower than the artboard. */}
+                  <div>
                     {/* The canvas's grid, `minmax(0,1fr) 90px 90px 140px 70px 150px` with 12px
                         between columns from xl; each fixed column carries the gap before it.
                         Below xl the columns tighten so the score stays on screen at 1024. */}
@@ -242,6 +244,16 @@ function ReadoutRegion({ readout, t, locale }: { readout: ReadoutState; t: Trans
       )
     case 'no-survey':
       return <EmptyState title={t('benchmarks.next.noSurveyTitle')} description={t('benchmarks.next.noSurveyDescription')} />
+    case 'under-floor':
+      // No tiles and no bars: every one of them would be read off questions the server
+      // withheld. The floor is named; the survey's own count is not.
+      return (
+        <EmptyState
+          data-slot="readout-under-floor"
+          title={t('benchmarks.next.underFloorTitle', { floor: readout.floor })}
+          description={t('benchmarks.next.underFloorDescription', { survey: readout.survey })}
+        />
+      )
     default:
       // No cohort, or the read-out could not be built: the same honest sentence the old
       // section gave, and the references below still work.
@@ -251,8 +263,12 @@ function ReadoutRegion({ readout, t, locale }: { readout: ReadoutState; t: Trans
 
 function Readout({ readout, t, locale }: { readout: CohortReadoutModel; t: TranslateFn; locale: string }) {
   const below = belowSummary(readout.dimensions)
-  const summary =
-    below.count === 0 || below.widest === null
+  // "Ninguna dimensión bajo la mediana" is a claim about dimensions that WERE compared; with
+  // none compared (no dimension scored, or none the cohort carries a median for) the card
+  // says nothing rather than reporting a comparison nobody made.
+  const summary = !below.compared
+    ? null
+    : below.count === 0 || below.widest === null
       ? t('benchmarks.next.belowSummaryNone')
       : below.count === 1
         ? t('benchmarks.next.belowSummaryOne', { dimension: below.widest.name })
@@ -341,13 +357,15 @@ function ReferenceRow({
           <span className="truncate text-base text-fg-primary">{reference.name}</span>
         </div>
       </td>
-      <td className="py-3 pr-3 text-base text-fg-primary">{benchmarkTypeLabel(t, reference.type)}</td>
-      <td className="py-3 pr-3 text-base text-fg-primary">{benchmarkCategoryLabel(t, reference.category)}</td>
-      <td className="py-3 pr-3">
+      {/* Every cell after the first drops the base `td` rule's 12px left padding: its
+          column already carries the canvas's 12px gap, so the body starts where its head does. */}
+      <td className="py-3 pr-3 pl-0 text-base text-fg-primary">{benchmarkTypeLabel(t, reference.type)}</td>
+      <td className="py-3 pr-3 pl-0 text-base text-fg-primary">{benchmarkCategoryLabel(t, reference.category)}</td>
+      <td className="py-3 pr-3 pl-0">
         <Chip tone="neutral" label={t(scopeKey(reference.companyId, viewerCompanyId))} className="w-full justify-start" />
       </td>
-      <td className="py-3 pr-3 text-base text-fg-primary">{reference.isActive ? t('common.yes') : t('common.no')}</td>
-      <td data-slot="quality-score" className="py-3 pr-3 text-right">
+      <td className="py-3 pr-3 pl-0 text-base text-fg-primary">{reference.isActive ? t('common.yes') : t('common.no')}</td>
+      <td data-slot="quality-score" className="py-3 pr-3 pl-0 text-right">
         {quality.kind === 'unscored' ? (
           <span className="inline-flex items-center justify-end gap-1.5">
             <span aria-hidden="true" className="font-mono text-base text-fg-label">

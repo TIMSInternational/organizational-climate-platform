@@ -3021,7 +3021,9 @@
       "noSurveyTitle": "Todavía no hay una encuesta cerrada",
       "noSurveyDescription": "El índice de la empresa se lee de su última encuesta cerrada; cuando cierre la primera, aparece aquí frente al grupo.",
       "pickCompanyTitle": "Elige una empresa para leerla frente a su grupo",
-      "pickCompanyDescription": "El índice es de una empresa; las referencias de abajo se ven igual sin elegirla."
+      "pickCompanyDescription": "El índice es de una empresa; las referencias de abajo se ven igual sin elegirla.",
+      "underFloorTitle": "La última encuesta cerrada no llega al mínimo de {floor} respuestas",
+      "underFloorDescription": "{survey} queda bajo el umbral de privacidad, así que no se compara con el grupo: ni el índice ni ninguna dimensión. Cuando una encuesta cerrada lo supere, aparece aquí."
     }
   },
   "insights": {

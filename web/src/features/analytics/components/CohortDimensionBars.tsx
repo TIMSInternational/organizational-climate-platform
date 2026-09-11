@@ -128,7 +128,10 @@ export default function CohortDimensionBars({
                   <span className={cn('font-mono text-base font-semibold tabular-nums', chip.ink)}>
                     {signedDelta(delta, locale)}
                   </span>
-                  <Chip tone={chip.tone} label={t(chip.key)} />
+                  {/* The canvas's chip is 24px tall (22px plus its border, content-box); the
+                      primitive's is 22px, which put these rows 41px apart where the artboard's
+                      are 43 — the row's 9px padding is the artboard's own. */}
+                  <Chip tone={chip.tone} label={t(chip.key)} className="h-6" />
                 </span>
               ) : (
                 <span data-slot="cohort-no-median" className="whitespace-nowrap text-xs text-fg-label">

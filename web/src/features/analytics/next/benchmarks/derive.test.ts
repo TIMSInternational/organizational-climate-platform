@@ -70,7 +70,21 @@ describe('benchmarks derive — standing', () => {
       { key: 'b', name: 'B', score: 50, median: 54 },
     ])
     expect(tied.widest?.name).toBe('A')
-    expect(belowSummary([{ key: 'x', name: 'X', score: 80, median: 70 }])).toEqual({ count: 0, widest: null })
+    expect(belowSummary([{ key: 'x', name: 'X', score: 80, median: 70 }])).toEqual({ count: 0, widest: null, compared: true })
+  })
+
+  it('says nothing was compared when no dimension has both a score and a median', () => {
+    // Nothing scored (a survey under the floor, whose questions the server empties) and
+    // nothing the cohort carries a median for are the same fact for the card: "none below"
+    // would describe a comparison that did not happen.
+    expect(belowSummary([]).compared).toBe(false)
+    expect(
+      belowSummary([
+        { key: 'a', name: 'A', score: 60, median: null },
+        { key: 'b', name: 'B', score: null, median: 54 },
+      ]).compared,
+    ).toBe(false)
+    expect(belowSummary([{ key: 'a', name: 'A', score: 60, median: null }, { key: 'x', name: 'X', score: 80, median: 70 }]).compared).toBe(true)
   })
 })
 

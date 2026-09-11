@@ -209,6 +209,42 @@ describe('BenchmarksNextPage — the read-out', () => {
     expect(document.querySelector('[data-slot="cohort-readout"]')).toBeNull()
     expect(within(screen.getByRole('table')).getByText('Manufactura · 500–1000 personas')).toBeTruthy()
   })
+
+  it('says the latest closed survey is under the floor: no tiles, no bars, and no "ninguna dimensión bajo la mediana"', async () => {
+    // `SurveyAggregate.IsSuppressed`: under the floor the server empties `questions` and
+    // still sends the summary. The list's own count is under the floor too.
+    routeFetch([
+      [
+        new RegExp(`/surveys/${Q3}/analytics`),
+        () => ({ ...analytics, questions: [], isSuppressed: true, suppressionReason: 'below_minimum_respondents' }),
+      ],
+      [/\/surveys(\?|$)/, () => ({ surveys: [{ ...closedSurveys.surveys[1], responseCount: 3 }] })],
+    ])
+    renderAs({ role: 'company_admin', companyId: CID })
+
+    expect(await screen.findByText('La última encuesta cerrada no llega al mínimo de 5 respuestas')).toBeTruthy()
+    expect(screen.getByText(/^Encuesta de Clima Q3 queda bajo el umbral de privacidad/)).toBeTruthy()
+    expect(document.querySelector('[data-slot="cohort-readout"]')).toBeNull()
+    expect(document.querySelector('[data-slot="cohort-dimension-bars"]')).toBeNull()
+    expect(screen.queryByText('ninguna dimensión bajo la mediana')).toBeNull()
+    expect(document.body.textContent).not.toContain('3 respuestas')
+    // The references are still there to read.
+    expect(within(screen.getByRole('table')).getByText('Manufactura · 500–1000 personas')).toBeTruthy()
+  })
+
+  it('claims nothing about the median when no dimension could be compared with it', async () => {
+    // The cohort carries only its overall index: every bar is drawn, none has a tick, and
+    // "ninguna dimensión bajo la mediana" would report a comparison nobody made.
+    routeFetch([[new RegExp(`/admin/benchmarks/${COHORT}(\\?|$)`), () => ({ ...cohortDetail, metrics: [metric('overall_index', 68, 68)] })]])
+    renderAs({ role: 'company_admin', companyId: CID })
+    await readout()
+
+    const rows = [...document.querySelectorAll('[data-slot="cohort-dimension-row"]')]
+    expect(rows).toHaveLength(6)
+    expect(rows.every((row) => row.getAttribute('data-standing') === 'none')).toBe(true)
+    expect(document.querySelector('[data-slot="cohort-below-summary"]')).toBeNull()
+    expect(screen.queryByText('ninguna dimensión bajo la mediana')).toBeNull()
+  })
 })
 
 describe('BenchmarksNextPage — the references', () => {

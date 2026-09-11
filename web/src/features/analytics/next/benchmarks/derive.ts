@@ -28,16 +28,24 @@ export function dimensionStanding(score: number | null, median: number | null): 
   return { standing: delta < 0 ? 'below' : delta > 0 ? 'above' : 'at', delta }
 }
 
-/** How many dimensions sit below their median, and which sits furthest below. */
+/**
+ * How many dimensions sit below their median, and which sits furthest below.
+ *
+ * `compared` is false when not one dimension had both a score and a median: then "none
+ * below" would be a claim about a comparison nobody made, and the card must not print it.
+ */
 export function belowSummary(dimensions: readonly BenchmarkDimension[]): {
   count: number
   widest: BenchmarkDimension | null
+  compared: boolean
 } {
   let count = 0
   let widest: BenchmarkDimension | null = null
   let widestDelta = 0
+  let compared = false
   for (const dimension of dimensions) {
     const { standing, delta } = dimensionStanding(dimension.score, dimension.median)
+    if (standing !== 'none') compared = true
     if (standing !== 'below' || delta === null) continue
     count += 1
     // Strictly less: on a tie the dimension asked first keeps the title.
@@ -46,7 +54,7 @@ export function belowSummary(dimensions: readonly BenchmarkDimension[]): {
       widestDelta = delta
     }
   }
-  return { count, widest }
+  return { count, widest, compared }
 }
 
 /** "−8", "+3", "±0": an explicit sign both ways, and the real minus sign. */
