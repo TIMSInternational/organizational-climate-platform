@@ -8,6 +8,7 @@ import { PROTECTED_HATCH } from '../../../../components/charts/suppression'
 import { Button, EmptyState, LoadingRegion, NetworkError, SkeletonText, Table } from '../../../../components/ui'
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { cn } from '../../../../lib/cn'
+import { countWord } from '../../../../lib/countWord'
 import type { DemographicField } from '../../api/demographicFields'
 import { peoplePerValue } from '../../components/demographicReach'
 import { fieldVerdict, usableCuts } from '../super/demographics'
@@ -247,7 +248,7 @@ function Catalogue({
   people: number | undefined
   onEdit: (row: Row) => void
 }) {
-  const { t } = useTranslation()
+  const { t, locale } = useTranslation()
   return (
     <section
       aria-labelledby="demographics-catalogue"
@@ -277,7 +278,7 @@ function Catalogue({
         </div>
         {isSample && people !== undefined && (
           <p className="m-0 max-w-[110ch] text-sm leading-normal text-fg-secondary">
-            {t('demographicFields.next.catalogue.textSample', { company, people })}
+            {t('demographicFields.next.catalogue.textSample', { company, people, count: countWord(t, rows.length, locale) })}
           </p>
         )}
       </div>

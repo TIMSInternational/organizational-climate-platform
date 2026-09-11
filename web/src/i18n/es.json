@@ -1140,7 +1140,7 @@
         "heading": "Catálogo",
         "metaSample": "no existe en {company} · así se leería la lista",
         "metaReal": "en el orden en que se preguntan",
-        "textSample": "{company} no tiene campos demográficos: hoy sus resultados solo se dividen por departamento. Estos campos y sus valores son un ejemplo de punto de partida; «Personas por valor» sí sale de sus {people} personas activas, como la calcula esta pantalla.",
+        "textSample": "{company} no tiene campos demográficos: hoy sus resultados solo se dividen por departamento. Estos {count} campos y sus valores son un ejemplo de punto de partida; «Personas por valor» sí sale de sus {people} personas activas, como la calcula esta pantalla.",
         "colField": "Campo",
         "colType": "Tipo",
         "colValues": "Valores",

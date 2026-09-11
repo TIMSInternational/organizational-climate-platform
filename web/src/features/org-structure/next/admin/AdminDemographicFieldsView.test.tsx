@@ -103,6 +103,10 @@ describe('AdminDemographicFieldsView (company administrator)', () => {
     expect(screen.getByText(T.tiles.fieldsNone)).toBeTruthy()
     expect(within(row('antiguedad')).getByText(String(Math.floor(PEOPLE / 4)))).toBeTruthy()
     expect(within(row('tipo_jornada')).getByText(String(Math.floor(PEOPLE / 3)))).toBeTruthy()
+    // The intro counts the proposal's rows in words, as the board's «Estos cinco campos».
+    const count = document.querySelectorAll('tr[data-field]').length
+    const tail = fill(T.catalogue.textSample, { count: es.dashboard.next.countWord[String(count) as '5'], people: PEOPLE }).split('{company}')[1]
+    expect(document.querySelector('section[aria-labelledby="demographics-catalogue"]')?.textContent).toContain(tail)
   })
 
   it('never prints a mean under the floor: the narrow list reads "menos de 5" and says what would clear it', async () => {

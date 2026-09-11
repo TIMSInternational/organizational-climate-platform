@@ -1140,7 +1140,7 @@
         "heading": "Catalogue",
         "metaSample": "does not exist at {company} · this is how the list would read",
         "metaReal": "in the order people are asked",
-        "textSample": "{company} has no demographic fields: today its results divide only by department. These fields and their values are an example starting point; «People per value» does come from its {people} active people, as this screen computes it.",
+        "textSample": "{company} has no demographic fields: today its results divide only by department. These {count} fields and their values are an example starting point; «People per value» does come from its {people} active people, as this screen computes it.",
         "colField": "Field",
         "colType": "Type",
         "colValues": "Values",
