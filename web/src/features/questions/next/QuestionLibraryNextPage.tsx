@@ -379,7 +379,9 @@ export default function QuestionLibraryNextPage() {
           {drawer.mode !== 'closed' && (
             <aside
               aria-labelledby="library-drawer-title"
-              className="rounded-lg border border-line-default border-l-2 border-l-fg-primary bg-surface-card shadow-md"
+              // Below xl the grid has two columns; the drawer takes a full row under the list
+              // rather than the 14rem category column (library-new-light-1024.png).
+              className="rounded-lg border border-line-default border-l-2 border-l-fg-primary bg-surface-card shadow-md lg:col-span-2 xl:col-span-1"
             >
               <div className="flex items-start justify-between gap-2 border-b border-line-light p-4">
                 <div>

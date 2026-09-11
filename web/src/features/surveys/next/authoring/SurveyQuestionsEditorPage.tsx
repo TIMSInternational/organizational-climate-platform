@@ -301,7 +301,7 @@ export default function SurveyQuestionsEditorPage() {
                       </div>
                     </div>
                     {editable ? (
-                      <label className="inline-flex shrink-0 items-center gap-2 text-sm text-fg-secondary">
+                      <label className="mb-0 inline-flex shrink-0 items-center gap-2 text-sm text-fg-secondary">
                         <Switch className="data-[state=checked]:bg-chip-good-ink" checked={question.required} onCheckedChange={(value) => update(index, { required: value === true })} />
                         {copy('required')}
                       </label>
@@ -368,11 +368,11 @@ export default function SurveyQuestionsEditorPage() {
                           </EditorField>
                         ))}
                       <div className="flex flex-wrap items-center gap-4 border-t border-line-light pt-3">
-                        <label className="inline-flex items-center gap-2 text-sm text-fg-secondary">
+                        <label className="mb-0 inline-flex items-center gap-2 text-sm text-fg-secondary">
                           <Switch className="data-[state=checked]:bg-chip-good-ink" checked={question.required} onCheckedChange={(value) => update(index, { required: value === true })} />
                           {copy('answerRequired')}
                         </label>
-                        <label className="inline-flex items-center gap-2 text-sm text-fg-secondary">
+                        <label className="mb-0 inline-flex items-center gap-2 text-sm text-fg-secondary">
                           <Switch className="data-[state=checked]:bg-chip-good-ink" checked={question.commentRequired} onCheckedChange={(value) => update(index, { commentRequired: value === true })} />
                           {copy('commentRequired')}
                         </label>
@@ -400,7 +400,7 @@ export default function SurveyQuestionsEditorPage() {
           </ol>
           {editable && (
             <div data-testid="add-question" className="mt-2 flex h-10 w-full items-center justify-center gap-1 rounded-lg border border-dashed border-line-default text-sm">
-              <Button type="button" variant="ghost" className="h-8 px-2" onClick={() => setLibraryOpen(true)}>
+              <Button type="button" variant="ghost" className="h-8 pl-2 pr-0.5" onClick={() => setLibraryOpen(true)}>
                 <Plus aria-hidden="true" />
                 {copy('addQuestion')}
                 <span className="font-normal text-fg-secondary">{copy('addFromLibrary')}</span>
@@ -409,7 +409,7 @@ export default function SurveyQuestionsEditorPage() {
               <Button
                 type="button"
                 variant="ghost"
-                className="h-8 px-1.5 font-normal text-fg-secondary"
+                className="h-8 px-0.5 font-normal text-fg-secondary"
                 onClick={() => {
                   setQuestions((current) => [...current, blankQuestion(current.length, locales)])
                   setOpenIndex(questions.length)

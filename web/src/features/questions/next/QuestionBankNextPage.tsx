@@ -79,7 +79,7 @@ export default function QuestionBankNextPage() {
       </div>
 
       <div className="mb-3 flex flex-wrap items-center gap-3">
-        <label className="relative min-w-60 flex-1 basis-60 sm:max-w-75">
+        <label className="relative mb-0 min-w-60 flex-1 basis-60 sm:max-w-75">
           <span className="sr-only">{t('questionBank.next.searchPlaceholder')}</span>
           <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-fg-tertiary" />
           <Input
@@ -105,7 +105,7 @@ export default function QuestionBankNextPage() {
             </option>
           ))}
         </select>
-        <label className="ml-auto inline-flex items-center gap-2 text-sm text-fg-secondary">
+        <label className="mb-0 ml-auto inline-flex items-center gap-2 text-sm text-fg-secondary">
           <Switch checked={includeRetired} onCheckedChange={(value) => setIncludeRetired(value === true)} />
           {t('questionBank.next.showRetired')}
         </label>

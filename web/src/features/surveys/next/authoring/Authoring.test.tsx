@@ -249,6 +249,13 @@ describe('SurveyQuestionsEditorPage — scale, library and dimension check', () 
     expect(check).not.toBe(a.everyDimensionCovered)
   })
 
+  it('centres every toggle with the buttons beside it — no label margin in the row', async () => {
+    arrangeSurvey('draft', 0)
+    renderAt('/surveys/s1/questions')
+    const switches = await screen.findAllByRole('switch')
+    for (const control of switches) expect(control.closest('label')?.className.split(' ')).toContain('mb-0')
+  })
+
   it('prints the short scale name on the chips, as the board does', async () => {
     arrangeSurvey('active', 1)
     renderAt('/surveys/s1/questions')

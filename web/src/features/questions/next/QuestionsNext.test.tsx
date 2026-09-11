@@ -187,6 +187,8 @@ describe('QuestionLibraryNextPage — drawer link, multiple choice, vocabulary',
     arrange()
     renderLibraryAt('/admin/question-library?new=1')
     expect(await screen.findByRole('button', { name: lib.createQuestion })).toBeTruthy()
+    // Below xl the drawer spans both columns instead of the 14rem category column.
+    expect(screen.getByRole('complementary').className.split(' ')).toEqual(expect.arrayContaining(['lg:col-span-2', 'xl:col-span-1']))
   })
 
   it('opens nothing from ?new=1 for a role that cannot write', async () => {
@@ -235,6 +237,19 @@ describe('QuestionLibraryNextPage — drawer link, multiple choice, vocabulary',
       textEn: 'Own MC edited',
       options: [{ value: 'yes-key', labelEn: 'Yes', labelEs: 'Sí' }],
     })
+  })
+
+  it('keeps the bank search, both selects and the retired toggle on one line — no label margin under the flex row', async () => {
+    vi.mocked(listQuestionBankItems).mockResolvedValue({ items: [], total: 0 })
+    vi.mocked(listQuestionBankCategories).mockResolvedValue([])
+    vi.mocked(listQuestionBankEffectiveness).mockResolvedValue([])
+    arrange()
+    renderAs(<QuestionBankNextPage />)
+    await screen.findByText(bank.emptyTitle)
+    // index.css gives every <label> a 12px bottom margin; centred in the row, that lifted the
+    // search 6px above the selects (bank-light.png). happy-dom has no layout: the class is the pin.
+    expect(screen.getByPlaceholderText(bank.searchPlaceholder).closest('label')?.className.split(' ')).toContain('mb-0')
+    expect(screen.getByRole('switch').closest('label')?.className.split(' ')).toContain('mb-0')
   })
 
   it('names rating as the library board does, and every other type by the shared vocabulary', () => {
