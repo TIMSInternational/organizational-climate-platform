@@ -337,8 +337,8 @@ function SectionBlock({
         {/* The canvas's grid from xl — `minmax(0,1fr) 170px 96px 110px 160px 104px 140px`, 12px
             between — with each fixed column carrying the gap before it; narrower than that the
             table scrolls inside this card and never pushes the page. */}
-        <div className="overflow-x-auto">
-          <Table className="w-full min-w-230 table-fixed border-collapse">
+        <div className="relative overflow-x-auto">
+          <Table className="w-full min-w-268 table-fixed border-collapse">
             <colgroup>
               <col />
               <col className="w-45.5" />

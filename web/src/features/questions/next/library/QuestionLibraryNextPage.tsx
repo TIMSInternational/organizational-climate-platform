@@ -97,7 +97,7 @@ export default function QuestionLibraryNextPage() {
       ) : model.loading && model.categories.length === 0 ? (
         <SkeletonText lines={8} />
       ) : (
-        <div className="grid items-start gap-4 lg:grid-cols-[270px_minmax(0,1fr)]">
+        <div className="grid items-start gap-4 xl:grid-cols-[270px_minmax(0,1fr)]">
           <CategoryTreeCard model={model} onNewCategory={() => setMode('new-category')} onPick={() => setMode('item')} />
           <div className="flex min-w-0 flex-col gap-4">
             <CategoryQuestions model={model} onOpen={() => setMode('item')} />
@@ -271,7 +271,7 @@ function CategoryQuestions({ model, onOpen }: { model: QuestionLibraryModelState
         <span className="text-sm text-fg-tertiary">{meta}</span>
       </div>
       <div className="overflow-hidden rounded-lg border border-line-default bg-surface-card pt-2 shadow-xs">
-        <div className="overflow-x-auto">
+        <div className="relative overflow-x-auto">
           <Table className="w-full min-w-180 table-fixed border-collapse">
             <colgroup>
               <col className="w-[31%]" />

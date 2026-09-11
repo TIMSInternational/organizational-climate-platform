@@ -267,8 +267,8 @@ function BankTable({ model, onEdit }: { model: QuestionBankModelState; onEdit: (
 
   return (
     <section aria-label={t('navigation.questionBank')} className="overflow-hidden rounded-lg border border-line-default bg-surface-card pt-2 shadow-xs">
-      <div className="overflow-x-auto">
-        <Table className="w-full min-w-200 table-fixed border-collapse">
+      <div className="relative overflow-x-auto">
+        <Table className="w-full min-w-252 table-fixed border-collapse">
           <colgroup>
             <col />
             <col className="w-33" />

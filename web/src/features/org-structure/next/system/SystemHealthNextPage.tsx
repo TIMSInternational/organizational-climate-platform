@@ -485,8 +485,8 @@ function JobsDisclosure({ jobs, checkedAt }: { jobs: readonly SystemJobStatus[];
               {t('systemHealth.noJobsObserved')}
             </p>
           ) : (
-            <div className="overflow-x-auto pt-2">
-              <Table className="w-full min-w-180 table-fixed border-collapse">
+            <div className="relative overflow-x-auto pt-2">
+              <Table className="w-full min-w-233 table-fixed border-collapse">
                 <colgroup>
                   <col />
                   <col className="w-33" />
