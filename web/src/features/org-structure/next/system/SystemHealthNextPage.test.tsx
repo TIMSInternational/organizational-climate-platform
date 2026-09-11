@@ -111,6 +111,22 @@ describe('SystemHealthNextPage', () => {
     expect(within(jobRow('digests')).getByText('2')).toBeTruthy()
   })
 
+  it('sets the jobs table on the artboard\'s grid — 120/150/150/140/110 plus a 12px gap, each row 9px above and below', async () => {
+    serve(status())
+    renderPage()
+    await screen.findByText('notification-dispatch')
+    const table = jobRow('notification-dispatch').closest('table') as HTMLElement
+    expect([...table.querySelectorAll('col')].map((col) => col.className)).toEqual(['', 'w-33', 'w-40.5', 'w-40.5', 'w-38', 'w-33.5'])
+    const cells = [...jobRow('notification-dispatch').querySelectorAll('td')]
+    const heads = [...table.querySelectorAll('th')]
+    for (const cell of [...cells.slice(0, 5), ...heads.slice(0, 5)]) {
+      expect(cell.className.split(/\s+/)).toEqual(expect.arrayContaining(['pl-3', 'pr-0']))
+    }
+    expect(heads[5].className.split(/\s+/)).toContain('pr-3')
+    expect(cells[5].className.split(/\s+/)).toContain('px-3')
+    for (const cell of cells) expect(cell.className.split(/\s+/)).toContain('py-2.25')
+  })
+
   it('counts every chip that is not OK beside the verdict — the failing job, the dispatcher and the stored SMTP switch', async () => {
     serve(status())
     renderPage()

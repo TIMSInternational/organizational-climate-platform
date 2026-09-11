@@ -115,7 +115,8 @@ function ChooseCompany({ picks, error }: { picks: readonly CompanyPick[] | null;
         <h2 id="insights-choose" className="m-0 text-2xl">
           {t('insights.next.chooseTitle')}
         </h2>
-        <p className="m-0 max-w-prose text-base text-fg-secondary">{t('insights.next.chooseBody')}</p>
+        {/* The artboard's own measure (`max-width: 52ch`, ~410px at 13px): it wraps after "Elígela". */}
+        <p data-slot="choose-body" className="m-0 max-w-[52ch] text-base text-fg-secondary">{t('insights.next.chooseBody')}</p>
         <p className="m-0 text-sm text-fg-label">{t('insights.next.chooseNote')}</p>
       </div>
       <div className="flex flex-col">

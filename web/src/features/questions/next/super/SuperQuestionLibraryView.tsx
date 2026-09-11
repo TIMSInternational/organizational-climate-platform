@@ -27,7 +27,10 @@ import { useQuestionLibraryModel, type QuestionLibraryModelState } from './useQu
 type EditorMode = 'item' | 'new-item' | 'new-category'
 
 // The canvas's `.label` head over the default hairline, as the survey list draws its tables.
-const HEAD = 'px-3 pt-2 pb-2 text-left text-2xs font-bold uppercase leading-normal tracking-label text-fg-label whitespace-nowrap border-b border-line-default'
+// Each cell pads its left edge only — the artboard's 12px grid gap — so a column's text runs
+// the board's full measure (Spanish 257px, English 205px at 1440) and starts on its x; the
+// last column also pads its right edge, as the grid's padding.
+const HEAD = 'pt-2 pb-2 pl-3 pr-0 text-left text-2xs font-bold uppercase leading-normal tracking-label text-fg-label whitespace-nowrap border-b border-line-default'
 
 /**
  * `/admin/question-library` — the redesigned Biblioteca de preguntas, which replaced
@@ -277,12 +280,15 @@ function CategoryQuestions({ model, onOpen }: { model: QuestionLibraryModelState
         <div className="relative overflow-x-auto">
           <Table className="w-full min-w-180 table-fixed border-collapse">
             <colgroup>
-              <col className="w-[31%]" />
-              <col className="w-[25%]" />
+              {/* 12 + 1.25fr of the board's 856px table (268.8px); English takes what is left
+                  (217px there); Tipo, Dimensión, Propietario and the action are 12 + 84, 76, 84
+                  and 12 + 66 + 12. */}
+              <col className="w-[31.4%]" />
+              <col />
               <col className="w-24" />
               <col className="w-22" />
               <col className="w-24" />
-              <col className="w-19.5" />
+              <col className="w-22.5" />
             </colgroup>
             <thead>
               <tr>
@@ -334,8 +340,11 @@ function CopyNote({
   t: TranslateFn
 }) {
   const copy = copies[0]
-  // Named in passing — "Ver las de Acme" — without the legal form.
-  const company = copy.companyId ? companyShortName(model.companyNames.get(copy.companyId) ?? t('questionLibraryAdmin.next.otherCompany')) : ''
+  // The sentence names the tenant in full, as the artboard prints it ("…como copia de Acme
+  // Corporation, con su propia versión…"); the link names it in passing, without the legal
+  // form ("Ver las de Acme").
+  const company = copy.companyId ? (model.companyNames.get(copy.companyId) ?? t('questionLibraryAdmin.next.otherCompany')) : ''
+  const companyShort = company ? companyShortName(company) : ''
   const copyRows = itemsIn(copy.id, model.items)
   const texts = new Set(rows.map((item) => item.textEs.trim()))
   const same = copyRows.length === rows.length && copyRows.every((item) => texts.has(item.textEs.trim()))
@@ -353,7 +362,7 @@ function CopyNote({
         onClick={() => model.selectCategory(copy.id)}
         className="inline-flex h-auto shrink-0 items-center gap-1 whitespace-nowrap border-0 bg-transparent p-0 text-sm font-normal text-fg-secondary shadow-none hover:text-fg-primary hover:underline"
       >
-        {t('questionLibraryAdmin.next.copyLink', { company })}
+        {t('questionLibraryAdmin.next.copyLink', { company: companyShort })}
         <ArrowRight aria-hidden="true" className="size-3.5" />
       </button>
     </div>
@@ -377,17 +386,17 @@ function QuestionRow({
 }) {
   return (
     <tr data-library-item={item.id} aria-selected={selected} className={cn('border-b border-line-light', selected && 'bg-surface-icon-box')}>
-      <td className="px-3 py-3 align-middle">
+      <td className="py-3 pr-0 pl-3 align-middle">
         <span className={cn('block text-base leading-snug text-fg-primary', selected ? 'font-semibold' : 'font-medium')}>{item.textEs}</span>
       </td>
-      <td className="px-3 py-3 align-middle">
+      <td className="py-3 pr-0 pl-3 align-middle">
         <span lang="en" className="block text-sm leading-snug text-fg-secondary">
           {item.textEn}
         </span>
       </td>
-      <td className="px-3 py-3 align-middle text-sm text-fg-secondary">{t(`questionLibraryAdmin.type_${item.type}`)}</td>
-      <td className="px-3 py-3 align-middle text-sm text-fg-secondary">{item.dimension ?? '—'}</td>
-      <td className="px-3 py-3 align-middle">
+      <td className="py-3 pr-0 pl-3 align-middle text-sm text-fg-secondary">{t(`questionLibraryAdmin.type_${item.type}`)}</td>
+      <td className="py-3 pr-0 pl-3 align-middle text-sm text-fg-secondary">{item.dimension ?? '—'}</td>
+      <td className="py-3 pr-0 pl-3 align-middle">
         <OwnerChip companyId={item.companyId} model={model} t={t} />
       </td>
       <td className="px-3 py-3 text-right align-middle">

@@ -28,7 +28,7 @@ export default function CompanyContextBar({ note }: { note: string }) {
   const { scope, selectedCompanyId, selectCompany } = useCompanyContext()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const selectId = useId()
-  const [companies, setCompanies] = useState<Company[]>([])
+  const [companies, setCompanies] = useState<Company[] | null>(null)
   const [failed, setFailed] = useState(false)
   const isSuperAdmin = scope.isSuperAdmin
 
@@ -51,8 +51,19 @@ export default function CompanyContextBar({ note }: { note: string }) {
     }
   }, [baseUrl, isSuperAdmin])
 
+  // A stored or claimed id the list does not carry — a company since removed, a bogus claim —
+  // is no choice: the select cannot show it (it reads "Ninguna empresa seleccionada"), and a
+  // page scoped by it reads a company that is not there. `GET /admin/companies` lists every
+  // company (`CompanyEndpoints.cs` ListAsync has no filter), so the strip clears it and every
+  // page falls back to its choose-a-company state. A list that failed decides nothing.
+  const unlisted =
+    companies !== null && selectedCompanyId !== null && !companies.some((company) => company.id === selectedCompanyId)
+  useEffect(() => {
+    if (unlisted) selectCompany(null)
+  }, [unlisted, selectCompany])
+
   if (!isSuperAdmin) return null
-  const chosen = selectedCompanyId !== null
+  const chosen = selectedCompanyId !== null && !unlisted
 
   return (
     <div
@@ -88,7 +99,7 @@ export default function CompanyContextBar({ note }: { note: string }) {
           className={cn('mt-0 block w-full appearance-none pr-8', !chosen && 'text-fg-label')}
         >
           <option value="">{t('companyContext.noneSelected')}</option>
-          {companies.map((company) => (
+          {(companies ?? []).map((company) => (
             <option key={company.id} value={company.id}>
               {company.name}
             </option>

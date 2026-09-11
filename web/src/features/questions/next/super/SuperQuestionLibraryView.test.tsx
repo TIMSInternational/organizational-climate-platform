@@ -239,7 +239,7 @@ describe('QuestionLibraryNextPage — the artboard\'s order, names and chips', (
     await waitFor(() => expect(requests('GET', /\/admin\/question-library\/likert$/).length).toBeGreaterThan(0))
   })
 
-  it('names Acme without its legal form in passing, and counts the copy in words', async () => {
+  it('names Acme Corporation in full in the copy note, Acme in passing in its link and the categories line, and counts the copy in words', async () => {
     serveWithAcme()
     renderPage()
     const note = await waitFor(() => {
@@ -247,9 +247,12 @@ describe('QuestionLibraryNextPage — the artboard\'s order, names and chips', (
       expect(found).not.toBeNull()
       return found as HTMLElement
     })
-    expect(note.textContent).toContain(next.copyNoteSame.replace('{count}', 'two').replace('{company}', 'Acme'))
-    expect(within(note).getByRole('button', { name: next.copyLink.replace('{company}', 'Acme') })).toBeTruthy()
-    expect(note.textContent).not.toMatch(/Corporation/)
+    // The artboard: "Las mismas dos preguntas existen como copia de Acme Corporation, con su
+    // propia versión; editar una no toca la otra." — and the link "Ver las de Acme".
+    const sentence = note.querySelector('span') as HTMLElement
+    expect(sentence.textContent).toBe(next.copyNoteSame.replace('{count}', 'two').replace('{company}', 'Acme Corporation'))
+    const link = within(note).getByRole('button', { name: next.copyLink.replace('{company}', 'Acme') })
+    expect(link.textContent).not.toMatch(/Corporation/)
     expect(screen.getByText(next.categoriesMetaOne.replace('{global}', '1').replace('{tenant}', '1').replace('{company}', 'Acme'))).toBeTruthy()
   })
 
@@ -259,5 +262,27 @@ describe('QuestionLibraryNextPage — the artboard\'s order, names and chips', (
     const chip = await screen.findByRole('button', { name: next.removeTag.replace('{tag}', 'feedback') })
     expect(chip.textContent).toBe('feedback')
     expect(chip.querySelector('svg')).toBeNull()
+    // The chip IS the remove control: a click takes the tag off the editor…
+    await userEvent.click(chip)
+    expect(screen.queryByRole('button', { name: next.removeTag.replace('{tag}', 'feedback') })).toBeNull()
+    // …and the save writes the question without it.
+    await userEvent.click(screen.getByRole('button', { name: next.saveQuestion }))
+    await waitFor(() => expect(requests('PUT', /\/admin\/question-library\/[^/?]+$/)).toHaveLength(1))
+    const body = JSON.parse(String(requests('PUT', /\/admin\/question-library\/[^/?]+$/)[0][1]?.body)) as Record<string, unknown>
+    expect(body.tags).toEqual([])
+  })
+
+  it('draws the question table on the artboard\'s grid — Spanish 12 + 1.25fr, English the rest, each cell padded on its left only', async () => {
+    serveWithAcme()
+    renderPage()
+    await screen.findAllByRole('button', { name: next.editRow.replace('{text}', LIKERT.textEs) })
+    const table = (document.querySelector('tr[data-library-item]') as HTMLElement).closest('table') as HTMLElement
+    expect([...table.querySelectorAll('col')].map((col) => col.className)).toEqual(['w-[31.4%]', '', 'w-24', 'w-22', 'w-24', 'w-22.5'])
+    const cells = [...table.querySelectorAll('tbody tr:first-child td')]
+    expect(cells).toHaveLength(6)
+    for (const cell of [...cells.slice(0, 5), ...table.querySelectorAll('th')].slice(0, 10)) {
+      expect(cell.className.split(/\s+/)).toEqual(expect.arrayContaining(['pl-3', 'pr-0']))
+    }
+    expect(cells[5].className.split(/\s+/)).toContain('px-3')
   })
 })

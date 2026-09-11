@@ -450,7 +450,7 @@ function SuperRow({ row, model, t, locale }: { row: SurveyRow; model: SuperSurve
           <Link to={`/surveys/${row.id}`} aria-label={t('surveys.openNamed', { title: name })} className={cn('truncate text-base font-semibold', ink)}>
             {name}
           </Link>
-          <span className="truncate text-xs text-fg-label">{meta}</span>
+          <span data-slot="row-meta" className="truncate text-xs leading-normal text-fg-label">{meta}</span>
         </div>
       </td>
       <td className="py-3 pr-3 pl-0">
@@ -504,7 +504,7 @@ function SuperRow({ row, model, t, locale }: { row: SurveyRow; model: SuperSurve
           <span className="flex flex-col">
             <span className="font-mono text-base tabular-nums text-fg-primary">{calendarDay(Date.parse(row.endDate), locale)}</span>
             {line && (
-              <span data-slot={section === 'closed' ? 'wave-move' : 'close-note'} className="text-xs text-fg-label">
+              <span data-slot={section === 'closed' ? 'wave-move' : 'close-note'} className="text-xs leading-normal text-fg-label">
                 {line}
               </span>
             )}

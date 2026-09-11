@@ -1723,7 +1723,7 @@
       "smtpServer": "Servidor SMTP",
       "port": "Puerto",
       "notConfigured": "Sin configurar",
-      "mailNote": "El correo sale por el proveedor que fija el despliegue (Email:Provider), que no lee estos valores.",
+      "mailNote": "El correo sale por el proveedor que fija la configuración del despliegue, que no lee estos valores.",
       "privacyHeading": "Privacidad y datos",
       "privacyMeta": "hechos de la plataforma, no ajustes",
       "floorLead": "Umbral de privacidad: {floor} respuestas por grupo.",

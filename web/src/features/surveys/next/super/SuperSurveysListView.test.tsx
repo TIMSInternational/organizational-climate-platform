@@ -130,6 +130,14 @@ describe('SuperSurveysListView — the super administrator\'s /surveys', () => {
     expect(screen.getByText(copy.summary.replace('{count}', '5').replace('{companies}', '2'))).toBeTruthy()
   })
 
+  it('sets each row\'s 11px lines on the body\'s 1.5 leading, as the artboard\'s 61px rows do', async () => {
+    renderAs({ role: 'super_admin' })
+    await waitFor(() => expect(within(rowOf('a-q1')).getByText('Acme Corporation')).toBeTruthy())
+    const lines = [...document.querySelectorAll('tr[data-survey-id] [data-slot="row-meta"], tr[data-survey-id] [data-slot="wave-move"], tr[data-survey-id] [data-slot="close-note"]')]
+    expect(lines.length).toBeGreaterThanOrEqual(document.querySelectorAll('tr[data-survey-id]').length)
+    for (const line of lines) expect(line.className.split(/\s+/)).toContain('leading-normal')
+  })
+
   it('leaves a company administrator on the company list, with no Empresa column', async () => {
     vi.mocked(listSurveys).mockResolvedValue(PLATFORM.filter((survey) => survey.companyId === 'meridiano'))
     renderAs({ role: 'company_admin', companyId: 'meridiano' })

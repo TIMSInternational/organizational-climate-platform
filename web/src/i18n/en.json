@@ -1723,7 +1723,7 @@
       "smtpServer": "SMTP server",
       "port": "Port",
       "notConfigured": "Not configured",
-      "mailNote": "Email goes out through the provider the deployment sets (Email:Provider), which does not read these values.",
+      "mailNote": "Email goes out through the provider the deployment's configuration sets, which does not read these values.",
       "privacyHeading": "Privacy and data",
       "privacyMeta": "platform facts, not settings",
       "floorLead": "Privacy floor: {floor} responses per group.",

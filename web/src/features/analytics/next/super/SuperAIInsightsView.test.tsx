@@ -135,6 +135,36 @@ describe('AIInsightsNextPage — whose findings (moved and extended)', () => {
     expect(document.querySelector('[data-slot="insight-tiles"]')).toBeNull()
   })
 
+  it('sets the choose card\'s sentence to the artboard\'s measure (52ch) — it wraps after "Elígela", not after "selector"', async () => {
+    setToken(tokenFor({ role: 'super_admin' }))
+    routeFetch([
+      [/\/admin\/companies/, json({ companies: [] })],
+      [/\/surveys/, json({ surveys: [] })],
+    ])
+    renderPage()
+    await screen.findByRole('heading', { name: next.chooseTitle })
+    const body = document.querySelector('[data-slot="choose-body"]') as HTMLElement
+    expect(body.textContent).toBe(next.chooseBody)
+    expect(body.className.split(/\s+/)).toContain('max-w-[52ch]')
+  })
+
+  it('treats a stored company the platform does not list as no choice — the choose card, never a failed read', async () => {
+    setToken(tokenFor({ role: 'super_admin' }))
+    // The shot harness's default company: a claim and a stored selection no tenant owns.
+    localStorage.setItem(COMPANY_CONTEXT_STORAGE_KEY, '11111111-1111-1111-1111-111111111111')
+    routeFetch([
+      [/\/admin\/companies/, json({ companies: [{ id: 'acme', name: 'Acme Corporation', emailDomain: null, industry: null, size: null, country: null, subscriptionTier: null, createdAt: '2026-01-01T00:00:00Z' }] })],
+      [/\/surveys/, json({ surveys: [] })],
+      [/\/admin\/ai-insights\?companyId=acme/, json([])],
+    ])
+    renderPage()
+    expect(await screen.findByRole('heading', { name: next.chooseTitle })).toBeTruthy()
+    expect(localStorage.getItem(COMPANY_CONTEXT_STORAGE_KEY)).toBeNull()
+    expect(screen.queryByText(copy.loadFailed)).toBeNull()
+    expect(screen.getByText(en.companyContext.next.unchosen)).toBeTruthy()
+    expect(screen.queryByText(en.companyContext.next.active)).toBeNull()
+  })
+
   it('reads the company a super administrator chooses on the card', async () => {
     setToken(tokenFor({ role: 'super_admin' }))
     routeFetch([

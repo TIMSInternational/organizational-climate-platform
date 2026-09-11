@@ -97,6 +97,38 @@ describe('the header switcher stands down under a page that asks', () => {
     expect(screen.getByText(en.companyContext.next.active)).toBeTruthy()
   })
 
+  it('clears a stored company the list does not carry, and says nothing is chosen — never "Empresa activa" beside "Ninguna"', async () => {
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'en')
+    localStorage.setItem(COMPANY_CONTEXT_STORAGE_KEY, 'co-gone')
+    setToken(tokenFor({ role: 'super_admin' }))
+    stubCompanies()
+    renderShell('bar')
+    await screen.findByRole('option', { name: 'Acme Corporation' })
+    await waitFor(() => expect(localStorage.getItem(COMPANY_CONTEXT_STORAGE_KEY)).toBeNull())
+    expect(screen.getByText(en.companyContext.next.unchosen)).toBeTruthy()
+    expect(screen.queryByText(en.companyContext.next.active)).toBeNull()
+    expect((screen.getByLabelText(en.companyContext.label) as HTMLSelectElement).value).toBe('')
+  })
+
+  it('keeps a listed company chosen, and keeps any stored company when the list cannot be read', async () => {
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'en')
+    localStorage.setItem(COMPANY_CONTEXT_STORAGE_KEY, 'co-a')
+    setToken(tokenFor({ role: 'super_admin' }))
+    stubCompanies()
+    const listed = renderShell('bar')
+    await screen.findByRole('option', { name: 'Acme Corporation' })
+    expect(localStorage.getItem(COMPANY_CONTEXT_STORAGE_KEY)).toBe('co-a')
+    expect(screen.getByText(en.companyContext.next.active)).toBeTruthy()
+    listed.unmount()
+
+    localStorage.setItem(COMPANY_CONTEXT_STORAGE_KEY, 'co-gone')
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(new Response(null, { status: 500 }))))
+    renderShell('bar')
+    await screen.findByText(en.companyContext.loadFailed)
+    expect(localStorage.getItem(COMPANY_CONTEXT_STORAGE_KEY)).toBe('co-gone')
+    expect(screen.getByText(en.companyContext.next.active)).toBeTruthy()
+  })
+
   it('draws no strip for a company administrator and never asks for the company list', () => {
     setToken(tokenFor({ role: 'company_admin', companyId: 'co-a' }))
     const fetchMock = vi.fn()

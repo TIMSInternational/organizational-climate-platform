@@ -458,7 +458,10 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
 }
 
 // The canvas's `.label` head over a hairline, as the survey list draws its tables.
-const HEAD = 'px-3 pt-2 pb-2 text-left text-2xs font-bold uppercase leading-normal tracking-label text-fg-label whitespace-nowrap border-b border-line-default'
+// Each cell pads its left edge only — the artboard's 12px grid gap — so every column starts on
+// the board's x (Intervalo 673, Último intento 805, Último éxito 967) and a right-aligned value
+// ends on its column's edge. The last column also pads its right edge, as the grid's padding.
+const HEAD = 'pt-2 pb-2 pl-3 pr-0 text-left text-2xs font-bold uppercase leading-normal tracking-label text-fg-label whitespace-nowrap border-b border-line-default'
 
 function JobsDisclosure({ jobs, checkedAt }: { jobs: readonly SystemJobStatus[]; checkedAt: string }) {
   const { t, locale } = useTranslation()
@@ -510,7 +513,7 @@ function JobsDisclosure({ jobs, checkedAt }: { jobs: readonly SystemJobStatus[];
                   <col className="w-40.5" />
                   <col className="w-40.5" />
                   <col className="w-38" />
-                  <col className="w-30.5" />
+                  <col className="w-33.5" />
                 </colgroup>
                 <thead>
                   <tr>
@@ -519,20 +522,20 @@ function JobsDisclosure({ jobs, checkedAt }: { jobs: readonly SystemJobStatus[];
                     <th className={HEAD}>{t('systemHealth.next.colLastAttempt')}</th>
                     <th className={HEAD}>{t('systemHealth.next.colLastSuccess')}</th>
                     <th className={cn(HEAD, 'text-right')}>{t('systemHealth.next.colFailures')}</th>
-                    <th className={cn(HEAD, 'text-right')}>{t('systemHealth.next.colStatus')}</th>
+                    <th className={cn(HEAD, 'pr-3 text-right')}>{t('systemHealth.next.colStatus')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {jobs.map((job) => (
                     <tr key={job.jobName} data-job={job.jobName} className="border-b border-line-light">
-                      <td className="px-3 py-2 font-mono text-sm text-fg-primary">{job.jobName}</td>
-                      <td className="px-3 py-2 text-sm text-fg-secondary">{intervalText(t, job.intervalSeconds)}</td>
-                      <td className="px-3 py-2 font-mono text-sm tabular-nums text-fg-primary">{instant(job.lastAttemptAt)}</td>
-                      <td className="px-3 py-2 font-mono text-sm tabular-nums text-fg-primary">{instant(job.lastSuccessAt)}</td>
-                      <td className="px-3 py-2 text-right font-mono text-sm tabular-nums text-fg-tertiary">
+                      <td className="py-2.25 pr-0 pl-3 font-mono text-sm text-fg-primary">{job.jobName}</td>
+                      <td className="py-2.25 pr-0 pl-3 text-sm text-fg-secondary">{intervalText(t, job.intervalSeconds)}</td>
+                      <td className="py-2.25 pr-0 pl-3 font-mono text-sm tabular-nums text-fg-primary">{instant(job.lastAttemptAt)}</td>
+                      <td className="py-2.25 pr-0 pl-3 font-mono text-sm tabular-nums text-fg-primary">{instant(job.lastSuccessAt)}</td>
+                      <td className="py-2.25 pr-0 pl-3 text-right font-mono text-sm tabular-nums text-fg-tertiary">
                         {job.consecutiveFailures}
                       </td>
-                      <td className="px-3 py-2 text-right">
+                      <td className="px-3 py-2.25 text-right">
                         <StatusChip tone={componentTone(job.status)} label={statusWord(t, job.status)} />
                       </td>
                     </tr>

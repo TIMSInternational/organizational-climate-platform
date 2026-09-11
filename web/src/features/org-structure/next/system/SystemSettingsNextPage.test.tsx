@@ -119,6 +119,8 @@ describe('SystemSettingsNextPage', () => {
     renderPage()
     expect(await screen.findByText(next.passwordNote)).toBeTruthy()
     expect(screen.getByText(next.mailNote)).toBeTruthy()
+    // An operator screen names where mail is decided, never the raw configuration key.
+    expect(document.body.textContent).not.toMatch(/Email:Provider/)
     expect(screen.getByText(next.minLengthValue.replace('{count}', '8'))).toBeTruthy()
     // Read-only: no control edits either block.
     expect(screen.queryByRole('textbox', { name: next.fromAddress })).toBeNull()
