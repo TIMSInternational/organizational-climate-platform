@@ -30,7 +30,9 @@ export function ReadingTile({
       data-testid={testId}
       className="flex min-w-0 flex-col gap-1.5 rounded-lg border border-line-default bg-surface-card px-4 py-3.5 shadow-xs"
     >
-      <span className="text-2xs font-bold uppercase tracking-wider text-fg-label">{label}</span>
+      {/* `leading-normal`: the artboards' `.label` is 10px on the body's 1.5 (15px), not the type
+          scale's snug 13.5px. */}
+      <span data-slot="tile-label" className="text-2xs font-bold uppercase leading-normal tracking-wider text-fg-label">{label}</span>
       <div className="flex flex-wrap items-baseline gap-1.5">
         <span data-slot="reading" className="font-mono text-kpi-lg leading-none text-fg-primary tabular-nums">
           {value === null ? '—' : value}

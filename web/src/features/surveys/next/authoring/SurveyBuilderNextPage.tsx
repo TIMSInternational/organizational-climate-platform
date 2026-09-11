@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { ArrowRight, Check, EyeOff, FileText, GripVertical, Lock, MoreHorizontal, Plus, ShieldCheck, Trash2 } from 'lucide-react'
+import { ArrowRight, Check, EyeOff, FileIcon, GripVertical, Lock, MoreHorizontal, Plus, ShieldCheck, Trash2 } from 'lucide-react'
 import { PageTopBar } from '../../../../components/layout'
 import {
   Alert,
@@ -168,7 +168,8 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
         badge={{
           text: copy('draftBadge'),
           variant: 'secondary',
-          className: 'h-5.5 rounded border border-line-default bg-surface-icon-box px-2 font-serif text-xs font-normal text-fg-primary',
+          // `font-store-serif` is the headings' Goudy; `font-serif` is Tailwind's Georgia stack.
+          className: 'h-5.5 rounded border border-line-default bg-surface-icon-box px-2 font-store-serif text-xs font-normal text-fg-primary',
         }}
         tightBreadcrumb
         description={`${copy(`stepLine.${step}`)} ${copy('stepOf', { current: stepIndex + 1, total: SURVEY_WIZARD_STEPS.length })}`}
@@ -180,7 +181,9 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
             disabled={!hasDraftableContent(values) || draft.state.status === 'saving' || draft.state.status === 'conflict'}
             onClick={draft.saveNow}
           >
-            <FileText aria-hidden="true" className="size-icon" />
+            {/* The artboard's glyph is a plain folded-corner page (`M4 2h5l3 3v9H4z`), lucide's
+                File — not FileText, whose text lines the board does not draw. */}
+            <FileIcon aria-hidden="true" data-slot="save-draft-icon" className="size-icon" />
             {copy('saveDraft')}
           </Button>
         }
@@ -209,12 +212,15 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
         />
       )}
 
-      <Card className="mt-5 flex flex-wrap items-center gap-6 px-5 py-3.5" data-testid="builder-rail">
+      {/* `-mt-1`: the header's 24px bottom margin (`mb-section`) collapses with this one, and the
+          artboard puts the rail 20px under the hairline (measured: 198 → 218). */}
+      <Card className="-mt-1 flex flex-wrap items-center gap-x-6 gap-y-3 px-5 py-3.5" data-testid="builder-rail">
         <ol aria-label={t('surveys.wizardStepList')} className="m-0 flex min-w-0 flex-1 list-none flex-wrap items-center gap-x-3.5 gap-y-2 p-0">
           {SURVEY_WIZARD_STEPS.map((id, index) => {
             const state = index < stepIndex ? (errors[id].length === 0 ? 'done' : 'open') : index === stepIndex ? 'current' : 'pending'
             return (
-              <li key={id} className={cn('flex min-w-0 items-center gap-3.5', index < SURVEY_WIZARD_STEPS.length - 1 && 'xl:flex-1')}>
+              // `mb-0`: index.css gives every <li> a 4px bottom margin, which made the rail 4px taller.
+              <li key={id} className={cn('mb-0 flex min-w-0 items-center gap-3.5', index < SURVEY_WIZARD_STEPS.length - 1 && 'xl:flex-1')}>
                 <button
                   type="button"
                   aria-current={state === 'current' ? 'step' : undefined}
@@ -235,12 +241,13 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                     {state === 'done' ? <Check /> : index + 1}
                   </span>
                   <span className="flex min-w-0 flex-col whitespace-nowrap leading-tight">
-                    <span className={cn('text-sm', state === 'current' ? 'font-semibold text-fg-primary' : state === 'pending' ? 'font-medium text-fg-label' : 'font-medium text-fg-secondary')}>
+                    {/* The artboard's 1.25 line height (15px + 13.75px), not the type scale's 1.5 / 1.35. */}
+                    <span className={cn('text-sm leading-[1.25]', state === 'current' ? 'font-semibold text-fg-primary' : state === 'pending' ? 'font-medium text-fg-label' : 'font-medium text-fg-secondary')}>
                       {t(`surveys.step${id.charAt(0).toUpperCase()}${id.slice(1)}`)}
                     </span>
                     <span
                       className={cn(
-                        'text-xs',
+                        'text-xs leading-[1.25]',
                         state === 'done' && 'text-chip-good-ink',
                         state === 'open' && 'text-accent-amber-ink',
                         state === 'current' && 'text-chip-critical-ink',
@@ -258,14 +265,17 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
             )
           })}
         </ol>
-        <div className="flex flex-none items-center gap-2.5 border-l border-line-light pl-5">
+        {/* Below sm the block takes its own line and the select the rest of it: a fixed 150px
+            select beside the nowrap label ran past the card's right edge at 390px. From sm it is
+            the artboard's: a hairline, the label and a 150px select. */}
+        <div className="flex w-full min-w-0 items-center gap-2.5 sm:w-auto sm:flex-none sm:border-l sm:border-line-light sm:pl-5" data-testid="builder-language">
           <span id="builder-language" className="whitespace-nowrap text-sm font-semibold text-fg-secondary">
             {t('surveys.contentLanguage')}
           </span>
           {/* Live in both modes: `/use` honours a language (`buildInstantiateInput`). From a
               template, only the languages its questions are written in are offered. */}
           <Select value={values.language} onValueChange={(next) => patch({ language: next as ContentLanguage })}>
-            <SelectTrigger aria-labelledby="builder-language" className="w-38">
+            <SelectTrigger aria-labelledby="builder-language" className="min-w-0 flex-1 sm:w-37.5 sm:flex-none">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -289,7 +299,9 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                 count={values.questions.length}
                 aside={fromTemplate && template ? copy('fromTemplate', { name: template.name }) : undefined}
               />
-              <p className="-mt-2 mb-0 flex items-start gap-2 text-sm text-fg-secondary">
+              {/* `-mt-3` cancels the heading's own 12px margin, so the hint sits the card's 12px
+                  gap under it, as the artboard's does (it sat 16px under, measured). */}
+              <p className="-mt-3 mb-0 flex items-start gap-2 text-sm text-fg-secondary">
                 <GripVertical aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
                 {copy('dragHint')}
               </p>
@@ -298,6 +310,8 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                   <AlertDescription>{m.templateError}</AlertDescription>
                 </Alert>
               )}
+              {/* The rows and the add row share one 8px rhythm, as in the artboard's list column. */}
+              <div className="flex flex-col gap-2" data-testid="builder-list">
               <ol className="m-0 flex list-none flex-col gap-2 p-0" data-testid="builder-questions">
                 {previewQuestions.map((question, index) => {
                   const own = values.questions[index]
@@ -316,9 +330,18 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                         setDragFrom(null)
                       }}
                       data-selected={isSelected || undefined}
-                      className={cn('rounded-lg border', isSelected ? 'border-accent-blue bg-surface-icon-box' : 'border-line-default bg-surface-card')}
+                      // `mb-0`: index.css's 4px <li> margin put 12px between rows, not the artboard's 8.
+                      className={cn('mb-0 rounded-lg border', isSelected ? 'border-accent-blue bg-surface-icon-box' : 'border-line-default bg-surface-card')}
                     >
-                      <div className="flex items-center gap-2.5 py-2.5 pl-2 pr-3">
+                      {/* From sm, the artboard's single row: grip, number, text, then the switch and
+                          the menu. Below sm the controls take a second line under the text, so a
+                          390px row keeps its words (builder-390.png squeezed them to 3-4 letters
+                          and slid the dimension chip under the switch). `pb-2.75` with the 22px
+                          chip is the artboard's 70.5px row (10px + a 24px content-box chip + 10px). */}
+                      <div
+                        data-slot="question-row"
+                        className="grid grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-x-2.5 gap-y-2 pb-2.75 pl-2 pr-3 pt-2.5 sm:flex"
+                      >
                         <GripVertical aria-hidden="true" data-slot="drag-grip" className="size-4 shrink-0 cursor-grab text-fg-label" />
                         <span className="w-5.5 shrink-0 text-center font-mono text-sm text-fg-secondary tabular-nums">{index + 1}</span>
                         <button
@@ -331,7 +354,9 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                           // first shot of this screen).
                           className="flex h-auto min-h-0 min-w-0 flex-1 flex-col items-start gap-1.5 whitespace-normal border-0 bg-transparent p-0 text-left shadow-none"
                         >
-                          <span className={cn('block w-full text-base text-fg-primary', isSelected ? 'font-semibold' : 'truncate font-medium')}>
+                          {/* An unselected row truncates from sm, as the artboard's do; below sm the
+                              text wraps, because a phone's text column holds too few letters. */}
+                          <span className={cn('block w-full text-base text-fg-primary', isSelected ? 'font-semibold' : 'font-medium sm:truncate')}>
                             {question.text?.trim() ? question.text : copy('noText')}
                           </span>
                           <span className="flex flex-wrap items-center gap-1.5">
@@ -343,10 +368,16 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                             <Chip label={typeChip(t, question)} />
                           </span>
                         </button>
-                        <label className="mb-0 inline-flex shrink-0 items-center gap-2 text-sm text-fg-secondary">
+                        <div data-slot="question-controls" className="col-start-3 flex flex-none items-center justify-between gap-2.5 sm:justify-start">
+                        {/* `font-normal`: index.css sets every <label> in the medium weight, and the
+                            artboard's "Obligatoria" is regular — the extra weight cost the text
+                            column 1.7px. */}
+                        <label className="mb-0 inline-flex shrink-0 items-center gap-2 text-sm font-normal text-fg-secondary">
                           {/* The artboard's switch is #12945b (SurveyBuilder.dc.html), the accent
-                              green — the chip ink is a darker, text-weight green. */}
+                              green — the chip ink is a darker, text-weight green — on its 16×28
+                              track (`size="sm"`), 4px narrower than the default's. */}
                           <Switch
+                            size="sm"
                             className="data-[state=checked]:bg-accent-green"
                             checked={question.required}
                             onCheckedChange={(value) => patchQuestion(own.key, { required: value === true })}
@@ -372,6 +403,7 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
+                        </div>
                       </div>
                       {!copied && editing === own.key && (
                         <QuestionEditor
@@ -415,6 +447,7 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                 </DropdownMenu>
                 <span className="text-sm text-fg-label">{copy('addTail')}</span>
               </div>
+              </div>
               <QuestionsFooter t={t} values={values} questions={previewQuestions} />
               <QuestionLibraryBrowser
                 open={libraryOpen}
@@ -457,11 +490,13 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
               </span>
             }
           />
-          <p className="-mt-2 mb-0 text-sm text-fg-secondary">{copy('previewLine')}</p>
+          <p className="-mt-3 mb-0 text-sm text-fg-secondary">{copy('previewLine')}</p>
           <div className="flex flex-col gap-3.5 rounded-lg border border-line-default bg-surface-card px-4.5 pb-4.5 pt-4 shadow-xs">
             <div className="flex flex-col gap-1 border-b border-line-light pb-3">
-              <Eyebrow>{copy('surveyEyebrow')}</Eyebrow>
-              <p className="m-0 font-serif text-[1.125rem] text-fg-primary">{title || copy('untitled')}</p>
+              <Eyebrow className="leading-normal">{copy('surveyEyebrow')}</Eyebrow>
+              {/* The artboard's `.serif` at 18px: the headings' Goudy (`font-store-serif`, not
+                  Tailwind's Georgia `font-serif`) at their 1.2 line height. */}
+              <p className="m-0 font-store-serif text-[1.125rem] leading-tight text-fg-primary">{title || copy('untitled')}</p>
               {description && <p className="m-0 text-sm text-fg-secondary">{description}</p>}
             </div>
             {focusSection ? (
@@ -476,7 +511,8 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                 <span className="h-1.25 w-12 rounded-sm bg-surface-icon-box" />
                 {copy('answeredOf', { count: previewQuestions.length })}
               </span>
-              <span className="inline-flex gap-2">
+              {/* Wraps: the two nowrap chips are ~330px together, wider than a 390px preview. */}
+              <span className="flex flex-wrap gap-2" data-slot="preview-actions">
                 <span className="inline-flex h-7 items-center whitespace-nowrap rounded border border-line-default px-3 text-sm text-fg-primary">{copy('saveLater')}</span>
                 <span className="inline-flex h-7 items-center whitespace-nowrap rounded border border-accent-red-ring bg-chip-critical-fill px-3 text-sm text-chip-critical-ink">
                   {copy('submitAnswers')}
@@ -570,7 +606,8 @@ function QuestionsFooter({
         {copy('coverage', { dimensions, required })} · {open === 0 ? copy('noOpen') : copy('someOpen', { count: open })}
       </span>
       {missing === 0 ? (
-        <span className="inline-flex max-w-60 items-start gap-1.5 text-chip-good-ink [&>svg]:mt-0.5">
+        // 220px, the artboard's: "Cada dimensión tiene al menos / una pregunta" on two lines.
+        <span className="inline-flex max-w-55 items-start gap-1.5 text-chip-good-ink [&>svg]:mt-0.5">
           <Check aria-hidden="true" className="size-3.5" />
           {copy('everyDimension')}
         </span>

@@ -160,7 +160,9 @@ export function SurveyDetailView({
         </Alert>
       )}
 
-      <section aria-label={copy('readings')} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {/* `-mt-1`: the header's 24px bottom margin collapses with this one, and the artboard puts
+          the tiles 20px under the hairline (measured: 217.3 → 237.3). */}
+      <section aria-label={copy('readings')} className="-mt-1 grid gap-3 sm:grid-cols-2 xl:grid-cols-4" data-testid="detail-readings">
         <ReadingTile
           testId="tile-responses"
           label={copy('responses')}
@@ -220,7 +222,8 @@ export function SurveyDetailView({
               </span>
             }
           />
-          <p className="-mt-2 mb-0 text-sm text-fg-secondary">
+          {/* `-mt-3` cancels the heading's 12px margin: the line sits the card's 12px gap under it. */}
+          <p className="-mt-3 mb-0 text-sm text-fg-secondary">
             {editable
               ? copy('editableLine')
               : survey.responseCount > 0 && survey.isContentEditable
@@ -270,7 +273,8 @@ export function SurveyDetailView({
             ) : (
               <ul className="m-0 flex list-none flex-col gap-1.5 p-0 text-sm">
                 {targets.names.map((name) => (
-                  <li key={name} className="flex items-center justify-between gap-2">
+                  // `mb-0`: index.css's 4px <li> margin made the artboard's 24px rows 28px.
+                  <li key={name} className="mb-0 flex items-center justify-between gap-2">
                     <span>{name}</span>
                     {/* No count per group, ever, on this page: the floor applies to what a
                         group answered, and the only honest reading mid-run is none. */}
@@ -279,7 +283,7 @@ export function SurveyDetailView({
                 ))}
               </ul>
             )}
-            <p className="m-0 text-xs text-fg-secondary">{copy('departmentsNote', { floor: ANONYMITY_FLOOR })}</p>
+            <p className="m-0 text-xs leading-normal text-fg-secondary">{copy('departmentsNote', { floor: ANONYMITY_FLOOR })}</p>
           </Card>
           <Note icon={<ShieldCheck aria-hidden="true" />} className="border border-line-light">
             {copy('privacyNote', { floor: ANONYMITY_FLOOR })}
@@ -317,7 +321,7 @@ function StatusTile({
   const tone = survey.status === 'active' ? 'good' : survey.status === 'draft' || survey.status === 'scheduled' ? 'accent' : 'neutral'
   return (
     <div data-testid="tile-status" className="flex min-w-0 flex-col gap-2 rounded-lg border border-line-default bg-surface-card px-4 py-3.5 shadow-xs">
-      <span className="text-2xs font-bold uppercase tracking-wider text-fg-label">{copy('status')}</span>
+      <span className="text-2xs font-bold uppercase leading-normal tracking-wider text-fg-label">{copy('status')}</span>
       <div className="flex flex-wrap items-center gap-2">
         <Chip tone={tone} label={statusLabel(t, survey.status)} />
         <span className="text-sm text-fg-secondary">{copy(`meaning.${survey.status}`)}</span>
@@ -353,7 +357,7 @@ function LinkCard({ link }: { link: string | null }) {
   const copy = (key: string) => t(`surveys.next.detail.${key}`)
   return (
     <Card className="flex flex-col gap-2 px-4 py-3.5" data-testid="detail-link">
-      <span className="text-2xs font-bold uppercase tracking-wider text-fg-label">{copy('link')}</span>
+      <span className="text-2xs font-bold uppercase leading-normal tracking-wider text-fg-label">{copy('link')}</span>
       {link === null ? (
         <p className="m-0 text-sm text-fg-secondary">{copy('noLink')}</p>
       ) : (

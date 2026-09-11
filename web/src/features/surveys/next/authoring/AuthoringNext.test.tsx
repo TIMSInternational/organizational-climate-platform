@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
-import { MemoryRouter, Route, Routes } from 'react-router'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { MemoryRouter, Route, Routes, useParams } from 'react-router'
 import { LOCALE_STORAGE_KEY, TranslationProvider } from '../../../../i18n'
 import { clearToken, setToken } from '../../../../auth/token'
 import { COMPANY_CONTEXT_STORAGE_KEY, CompanyContextProvider } from '../../../../company-context'
@@ -107,6 +109,12 @@ const users = Array.from({ length: 6 }, (_, i) => ({
   id: `u${i}`, email: `persona${i}@meridiano.test`, name: `Persona ${i}`, role: 'employee', departmentId: i % 2 ? 'd2' : 'd1', isActive: true,
 })) as never[]
 
+/** Where a created survey lands: `/surveys/:id` prints the id it was sent to. */
+function Landed() {
+  const { id } = useParams()
+  return <p data-testid="landed">{id}</p>
+}
+
 function renderAs(role: string, element: ReactNode, companyId = 'c1', entry = '/x', path = '/x') {
   setToken(tokenFor({ role, companyId, sub: 'u-viewer', name: 'Ana Rojas' }))
   return render(
@@ -115,6 +123,7 @@ function renderAs(role: string, element: ReactNode, companyId = 'c1', entry = '/
         <MemoryRouter initialEntries={[entry]}>
           <Routes>
             <Route path={path} element={element} />
+            <Route path="/surveys/:id" element={<Landed />} />
           </Routes>
         </MemoryRouter>
       </CompanyContextProvider>
@@ -212,6 +221,18 @@ describe('Detalle de encuesta (SurveyDetail artboard)', () => {
       expect(card.getAttribute('class')).toContain('gap-2.5')
       expect(card.querySelector('h2')?.parentElement?.getAttribute('class')).not.toContain('mb-3')
     }
+  })
+
+  it("lays the rows and tiles on the artboard's rhythm: 24px department rows, tiles 20px under the header", () => {
+    // Measured: index.css's 4px <li> margin set the department rows 28px apart (the artboard's
+    // are 24), and the header's 24px margin put the tiles 24px under its hairline (20 on the
+    // board). The classes are the pin; the shots are the evidence.
+    detail(survey())
+    for (const row of within(screen.getByTestId('detail-departments')).getAllByRole('listitem')) {
+      expect(row.className.split(' ')).toContain('mb-0')
+    }
+    expect(screen.getByTestId('detail-readings').className.split(' ')).toContain('-mt-1')
+    expect(screen.getByTestId('tile-status').querySelector('span')?.className.split(' ')).toContain('leading-normal')
   })
 
   it('states when results are computed as the product computes them: at every read, never "al cerrar"', () => {
@@ -398,6 +419,46 @@ describe('Distribución (Distribution artboard)', () => {
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Texto de la invitación' }))
     expect(openCopy).toHaveBeenCalledTimes(1)
   })
+
+  it("puts a step's action under its body below sm, and stacks it in its own column from sm", () => {
+    // distribution-390.png: a flex-1 body shrank instead of wrapping — one word per line, a 10px
+    // sliver of table — and the buttons sat on the step titles. At 1440 the send button's "•••"
+    // beside it narrowed the table 24px. happy-dom has no layout: the classes are the pin.
+    distribution(invitationList(6))
+    const step = screen.getByTestId('step-invitations')
+    expect(step.className.split(' ')).toEqual(
+      expect.arrayContaining(['grid', 'grid-cols-[auto_minmax(0,1fr)]', 'sm:grid-cols-[auto_minmax(0,1fr)_auto]']),
+    )
+    const action = step.querySelector<HTMLElement>('[data-slot="step-action"]')
+    expect(action?.className.split(' ')).toEqual(expect.arrayContaining(['col-start-2', 'sm:col-start-3', 'sm:row-start-1', 'sm:flex-col']))
+    expect(within(action as HTMLElement).getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent)).toEqual([
+      'Enviar invitaciones',
+      'Más acciones de las invitaciones',
+    ])
+    // The artboard's 14px step title (`text-lg` in this scale; `text-base` is 13px).
+    expect(within(step).getByRole('heading', { level: 3 }).className.split(' ')).toContain('text-lg')
+    expect(screen.getByTestId('distribution-readings').className.split(' ')).toContain('-mt-1')
+  })
+
+  it("prints 'y n personas más' in the artboard's #6e648b: the label ink, which clears AA on the card in both palettes", () => {
+    distribution(invitationList(6))
+    const more = screen.getByTestId('invitations-more')
+    expect(more.textContent).toContain('y 2 personas más')
+    expect(more.className.split(' ')).toContain('text-fg-label')
+    expect(more.className.split(' ')).not.toContain('text-fg-secondary')
+    const [inkLight, inkDark] = tokenPair('admin-font-section-label')
+    const [cardLight, cardDark] = tokenPair('admin-bg-card')
+    expect(inkLight).toBe('#6e648b')
+    expect(contrast(inkLight, cardLight)).toBeGreaterThanOrEqual(4.5)
+    expect(contrast(inkDark, cardDark)).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it("sets the guarantee in the headings' Goudy, never Tailwind's Georgia font-serif", () => {
+    distribution(invitationList())
+    const sentence = screen.getByText('Frase del servidor sobre lo que se registra.')
+    expect(sentence.className.split(' ')).toEqual(expect.arrayContaining(['font-store-serif', 'leading-tight']))
+    expect(sentence.className.split(' ')).not.toContain('font-serif')
+  })
 })
 
 describe('Distribución — the role half of the rule, through the page model', () => {
@@ -424,6 +485,40 @@ describe('Distribución — the role half of the rule, through the page model', 
     expect(usersApi.listUsers).not.toHaveBeenCalled()
   })
 })
+
+/** What the question editor's `GET /surveys/{id}` returns for the copy `/use` made of `templateRead`. */
+function templateCopy(): Awaited<ReturnType<typeof questionAuthoring.getSurveyQuestionAuthoring>> {
+  const authored = (text: string) => ({ es: { text, authored: true }, en: { text: '', authored: false } })
+  const blank = { es: { text: '', authored: false }, en: { text: '', authored: false } }
+  const copied = (order: number, text: string): AuthoringQuestion => ({
+    id: `c${order}`, type: 'likert', order, category: order === 0 ? 'trust' : 'workload', required: true, commentRequired: false,
+    scaleMin: 1, scaleMax: 5, text: authored(text), scaleLabelMin: blank, scaleLabelMax: blank, commentPrompt: blank, options: null,
+  })
+  return {
+    surveyId: 'new-survey', title: 'Clima Q1', language: 'es', status: 'draft', locales: ['es'],
+    questions: [copied(0, 'Confío en la dirección.'), copied(1, 'Mi carga es sostenible.')],
+  }
+}
+
+/** WCAG contrast of two #rrggbb inks. */
+function contrast(a: string, b: string): number {
+  const luminance = (hex: string) => {
+    const [r, g, bl] = [1, 3, 5]
+      .map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+      .map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4))
+    return 0.2126 * r + 0.7152 * g + 0.0722 * bl
+  }
+  const [x, y] = [luminance(a), luminance(b)]
+  return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05)
+}
+
+/** A token's light and dark values from `tokens.css`, split at the dark palette's selector. */
+function tokenPair(name: string): [string, string] {
+  const css = readFileSync(join(process.cwd(), 'src', 'styles', 'tokens.css'), 'utf8')
+  const at = css.indexOf(":root[data-admin-theme='dark']")
+  const find = (text: string) => new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{6})`).exec(text)?.[1] ?? ''
+  return [find(css.slice(0, at)), find(css.slice(at))]
+}
 
 /** The Meridiano template's first two questions, read in `locale`. */
 function templateRead(locale: 'es' | 'en', language = 'es') {
@@ -523,31 +618,116 @@ describe('Nueva encuesta (SurveyBuilder artboard)', () => {
     expect(language.hasAttribute('disabled')).toBe(false)
   })
 
-  it('creates a survey from an untouched template with /use alone, in the language shown', async () => {
+  it('creates a survey from an untouched template with /use alone, in the language shown, and lands on it', async () => {
     vi.mocked(templatesApi.getSurveyTemplate).mockResolvedValue(templateRead('es'))
     vi.mocked(templatesApi.instantiateSurveyTemplate).mockResolvedValue({ id: 'new-survey' } as never)
+    // A readable copy, so a guard that stopped comparing the arrangement would reach the GET and
+    // the PUT and fail here — not throw on an undefined read before either. With a bare vi.fn()
+    // here the mutant `if (template !== null)` stayed green (the refuter's c2-guard-removed).
+    vi.mocked(questionAuthoring.getSurveyQuestionAuthoring).mockResolvedValue(templateCopy())
     restoreDraft(5)
     await openBuilder()
     await waitFor(() => expect(screen.getByTestId('builder-step').textContent).toContain('Preguntas2'))
     await userEvent.click(screen.getByRole('button', { name: 'Crear el borrador' }))
-    await waitFor(() => expect(templatesApi.instantiateSurveyTemplate).toHaveBeenCalledTimes(1))
+    expect((await screen.findByTestId('landed')).textContent).toBe('new-survey')
+    expect(templatesApi.instantiateSurveyTemplate).toHaveBeenCalledTimes(1)
     expect(vi.mocked(templatesApi.instantiateSurveyTemplate).mock.calls[0][2]).toMatchObject({ language: 'es', title: 'Clima Q1' })
+    expect(questionAuthoring.getSurveyQuestionAuthoring).not.toHaveBeenCalled()
     expect(questionAuthoring.replaceSurveyQuestions).not.toHaveBeenCalled()
+  })
+
+  it('keeps each question row readable at 390px: the controls drop under the text below sm, one row from sm', async () => {
+    // builder-390.png squeezed a row's text to 3-4 letters and slid the dimension chip under the
+    // switch. happy-dom has no layout, so the classes are the pin and the 390 shot the evidence.
+    vi.mocked(templatesApi.getSurveyTemplate).mockResolvedValue(templateRead('es'))
+    restoreDraft(4)
+    await openBuilder()
+    const list = await screen.findByTestId('builder-questions')
+    await within(list).findByText('Confío en la dirección.')
+    const rows = [...list.querySelectorAll<HTMLElement>('[data-slot="question-row"]')]
+    expect(rows).toHaveLength(2)
+    for (const row of rows) {
+      expect(row.className.split(' ')).toEqual(expect.arrayContaining(['grid', 'grid-cols-[auto_auto_minmax(0,1fr)]', 'sm:flex']))
+      const controls = row.querySelector<HTMLElement>('[data-slot="question-controls"]')
+      expect(controls?.className.split(' ')).toContain('col-start-3')
+      expect(within(controls as HTMLElement).getByRole('switch')).toBeTruthy()
+    }
+    // An unselected row truncates from sm only; below it the words wrap.
+    const unselected = within(list).getByText('Mi carga es sostenible.')
+    expect(unselected.className.split(' ')).toContain('sm:truncate')
+    expect(unselected.className.split(' ')).not.toContain('truncate')
+  })
+
+  it("draws the artboard's 16×28 switch beside a regular-weight Obligatoria", async () => {
+    // The default 18×32 track and index.css's medium <label> weight cost the text column 5.7px,
+    // and rows 2, 3 and 5 truncated where the artboard truncates row 5 only (measured).
+    vi.mocked(templatesApi.getSurveyTemplate).mockResolvedValue(templateRead('es'))
+    restoreDraft(4)
+    await openBuilder()
+    const list = await screen.findByTestId('builder-questions')
+    await within(list).findByText('Confío en la dirección.')
+    for (const toggle of within(list).getAllByRole('switch')) {
+      expect(toggle.getAttribute('data-size')).toBe('sm')
+      expect(toggle.className.split(' ')).toEqual(expect.arrayContaining(['h-4', 'w-7']))
+      expect(toggle.closest('label')?.className.split(' ')).toContain('font-normal')
+    }
+  })
+
+  it('sets the rows 8px apart with the add row in the same rhythm, and the hint 12px under the heading', async () => {
+    // index.css gives every <li> a 4px bottom margin: the rows sat 12px apart, the add row 16px
+    // under them and the hint 16px under the heading, so the panes ended 26px under the
+    // artboard's (measured 1044.8 against 1011.5; 1010.8 after).
+    vi.mocked(templatesApi.getSurveyTemplate).mockResolvedValue(templateRead('es'))
+    restoreDraft(4)
+    await openBuilder()
+    const list = await screen.findByTestId('builder-questions')
+    await within(list).findByText('Confío en la dirección.')
+    for (const item of list.querySelectorAll('li')) expect(item.className.split(' ')).toContain('mb-0')
+    const column = screen.getByTestId('builder-list')
+    expect(column.className.split(' ')).toContain('gap-2')
+    expect(column.contains(list)).toBe(true)
+    expect(column.contains(screen.getByTestId('add-question'))).toBe(true)
+    for (const row of list.querySelectorAll('[data-slot="question-row"]')) {
+      expect(row.className.split(' ')).toEqual(expect.arrayContaining(['pt-2.5', 'pb-2.75']))
+    }
+    expect(within(screen.getByTestId('builder-step')).getByText(/Arrastre para reordenar/).className.split(' ')).toContain('-mt-3')
+    expect(within(screen.getByTestId('builder-rail')).getAllByRole('listitem').every((item) => item.className.split(' ').includes('mb-0'))).toBe(true)
+  })
+
+  it('fits the content-language select inside the rail at 390px and lets the preview buttons wrap', async () => {
+    // builder-390.png: a fixed 152px select beside the nowrap label ran past the rail card's
+    // right edge, and "Enviar mis respuestas" was clipped at the preview card's.
+    renderAs('company_admin', <SurveyBuilderNextPage />)
+    const trigger = await screen.findByRole('combobox', { name: 'Idioma del contenido' })
+    expect(trigger.className.split(' ')).toEqual(expect.arrayContaining(['min-w-0', 'flex-1', 'sm:w-37.5', 'sm:flex-none']))
+    expect(trigger.className.split(' ')).not.toContain('w-38')
+    expect(screen.getByTestId('builder-language').className.split(' ')).toEqual(expect.arrayContaining(['w-full', 'sm:w-auto', 'sm:border-l']))
+    expect(document.querySelector('[data-slot="preview-actions"]')?.className.split(' ')).toContain('flex-wrap')
+  })
+
+  it("saves the draft under the artboard's plain page glyph, not a page of text lines", async () => {
+    renderAs('company_admin', <SurveyBuilderNextPage />)
+    const icon = (await screen.findByRole('button', { name: 'Guardar borrador' })).querySelector('[data-slot="save-draft-icon"]')
+    expect(icon?.getAttribute('class')?.split(' ')).toContain('lucide-file')
+    expect(icon?.getAttribute('class')).not.toContain('lucide-file-text')
+  })
+
+  it("sets the preview title and the draft chip in the headings' Goudy, never Tailwind's Georgia font-serif", async () => {
+    vi.mocked(templatesApi.getSurveyTemplate).mockResolvedValue(templateRead('es'))
+    restoreDraft(4)
+    await openBuilder()
+    const title = within(await screen.findByTestId('builder-preview')).getByText('Clima Q1')
+    expect(title.className.split(' ')).toEqual(expect.arrayContaining(['font-store-serif', 'leading-tight']))
+    expect(title.className.split(' ')).not.toContain('font-serif')
+    const chip = screen.getByText('Borrador')
+    expect(chip.className.split(' ')).toContain('font-store-serif')
+    expect(chip.className.split(' ')).not.toContain('font-serif')
   })
 
   it("writes a changed arrangement onto the template's copy: the copied question, the row's required flag", async () => {
     vi.mocked(templatesApi.getSurveyTemplate).mockResolvedValue(templateRead('es'))
     vi.mocked(templatesApi.instantiateSurveyTemplate).mockResolvedValue({ id: 'new-survey' } as never)
-    const authored = (text: string) => ({ es: { text, authored: true }, en: { text: '', authored: false } })
-    const blank = { es: { text: '', authored: false }, en: { text: '', authored: false } }
-    const copied = (order: number, text: string): AuthoringQuestion => ({
-      id: `c${order}`, type: 'likert', order, category: order === 0 ? 'trust' : 'workload', required: true, commentRequired: false,
-      scaleMin: 1, scaleMax: 5, text: authored(text), scaleLabelMin: blank, scaleLabelMax: blank, commentPrompt: blank, options: null,
-    })
-    vi.mocked(questionAuthoring.getSurveyQuestionAuthoring).mockResolvedValue({
-      surveyId: 'new-survey', title: 'Clima Q1', language: 'es', status: 'draft', locales: ['es'],
-      questions: [copied(0, 'Confío en la dirección.'), copied(1, 'Mi carga es sostenible.')],
-    })
+    vi.mocked(questionAuthoring.getSurveyQuestionAuthoring).mockResolvedValue(templateCopy())
     restoreDraft(4)
     await openBuilder()
     const list = await screen.findByTestId('builder-questions')

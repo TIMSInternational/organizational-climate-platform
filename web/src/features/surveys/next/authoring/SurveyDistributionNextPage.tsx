@@ -224,7 +224,9 @@ export function DistributionView({
         </p>
       )}
 
-      <section aria-label={copy('readings')} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {/* `-mt-1`: the header's 24px bottom margin collapses with this one, and the artboard puts
+          the tiles 20px under the hairline (measured: 197.8 → 217.8). */}
+      <section aria-label={copy('readings')} className="-mt-1 grid gap-3 sm:grid-cols-2 xl:grid-cols-4" data-testid="distribution-readings">
         <ReadingTile
           testId="tile-reach"
           label={copy('reach')}
@@ -453,14 +455,18 @@ export function DistributionView({
                 </TableBody>
               </Table>
               {invitations.invitations.length > INVITATION_PREVIEW_ROWS && (
-                <p className="m-0 border-t border-line-light px-3 py-2 text-sm text-fg-secondary">
+                // The artboard's #6e648b line: `text-fg-label` (`--admin-font-section-label`), which
+                // clears AA in both palettes — 5.44:1 on the light card, 6.34:1 on the dark
+                // #1f173b — unlike `text-fg-tertiary`, which `respondContrast.test.ts` bans here.
+                <p data-testid="invitations-more" className="m-0 border-t border-line-light px-3 py-2 text-sm text-fg-label">
                   {!showAll && `${copy('more', { count: invitations.invitations.length - INVITATION_PREVIEW_ROWS })} · `}
                   {/* The artboard's link ink — `a { color: #4a3d72 }` in Distribution.dc.html, the
-                      secondary ink (tokens.css) — not the accent blue of the link variant. */}
+                      secondary ink (tokens.css) — not the accent blue of the link variant; regular
+                      weight and no border, so the row is the artboard's 35px. */}
                   <Button
                     type="button"
                     variant="link"
-                    className="h-auto p-0 text-sm text-fg-secondary"
+                    className="h-auto border-0 p-0 text-sm font-normal text-fg-secondary"
                     onClick={() => setShowAll(!showAll)}
                   >
                     {showAll ? copy('seeFewer') : copy('seeAll', { count: invitations.invitations.length })}
@@ -510,10 +516,12 @@ export function DistributionView({
             <ShieldCheck data-slot="guarantee-shield" className="text-chip-good-ink" />
           </IconBox>
           <div className="flex min-w-0 flex-col gap-1.5">
-            <p className="m-0 text-2xs font-bold uppercase tracking-eyebrow text-chip-good-ink">
+            <p className="m-0 text-2xs font-bold uppercase leading-normal tracking-eyebrow text-chip-good-ink">
               {invitations.anonymity.anonymous ? copy('guaranteeAnonymous') : copy('guaranteeRecorded')}
             </p>
-            <p className="m-0 font-serif text-[1.125rem] leading-snug text-fg-primary">{invitations.anonymity.guarantee}</p>
+            {/* The artboard's `.serif` at 18px: the headings' Goudy (`font-store-serif`; `font-serif`
+                is Tailwind's Georgia stack) at their 1.2 line height. */}
+            <p className="m-0 font-store-serif text-[1.125rem] leading-tight text-fg-primary">{invitations.anonymity.guarantee}</p>
             <p className="m-0 text-sm text-fg-secondary">{copy('guaranteeSub', { floor: ANONYMITY_FLOOR })}</p>
           </div>
         </div>
@@ -679,7 +687,16 @@ function Step({
   testId: string
 }) {
   return (
-    <Card data-testid={testId} data-state={state} className="flex flex-wrap items-start gap-3.5 px-5 py-4 sm:flex-nowrap">
+    // A grid, not a wrapping flex row. Below sm the action takes its own row under the body: in
+    // distribution-390.png the flex-1 body shrank instead of wrapping, printed one word per line,
+    // collapsed the invitation table to a 10px sliver and let the buttons sit on the titles.
+    // From sm it is the artboard's icon · body · action row, and the action column stacks its
+    // controls, so a "•••" beside a button never narrows the body (it cost the table 24px).
+    <Card
+      data-testid={testId}
+      data-state={state}
+      className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3.5 gap-y-3 px-5 py-4 sm:grid-cols-[auto_minmax(0,1fr)_auto]"
+    >
       <span
         aria-hidden="true"
         className={cn(
@@ -691,11 +708,19 @@ function Step({
       >
         {state === 'done' ? <Check /> : state === 'missing' ? <AlertCircle /> : state === 'unknown' ? <HelpCircle /> : <Clock />}
       </span>
-      <div className="flex min-w-0 flex-1 flex-col gap-2">
-        <h3 className="m-0 text-base font-semibold text-fg-primary">{title}</h3>
+      <div className="flex min-w-0 flex-col gap-2" data-slot="step-body">
+        {/* 14px (`text-lg` in this scale), the artboard's step title — `text-base` is 13px. */}
+        <h3 className="m-0 text-lg font-semibold text-fg-primary">{title}</h3>
         {children}
       </div>
-      {action && <div className="flex flex-none items-center gap-2">{action}</div>}
+      {action && (
+        <div
+          data-slot="step-action"
+          className="col-start-2 flex flex-wrap items-center gap-2 sm:col-start-3 sm:row-start-1 sm:flex-col sm:flex-nowrap sm:items-end"
+        >
+          {action}
+        </div>
+      )}
     </Card>
   )
 }
