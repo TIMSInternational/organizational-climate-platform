@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router'
+import { useParams, useSearchParams } from 'react-router'
 import { listUsers, updateUser, updateUserRole, type User } from '../api/users'
 import { listDepartments, type Department } from '../api/departments'
 import { listInvitations, createInvitation, createShareableLink, resendInvitation, type Invitation } from '../api/invitations'
@@ -67,7 +67,10 @@ function UsersListPageForAdmins() {
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [invitations, setInvitations] = useState<Invitation[]>([])
   const [inviting, setInviting] = useState(false)
-  const [importing, setImporting] = useState(false)
+  // `?import=1` opens the bulk import at once: the Departments screen's "Importar personas"
+  // links here, because the import lives with the people it creates (redesign/org).
+  const [searchParams] = useSearchParams()
+  const [importing, setImporting] = useState(() => searchParams.get('import') === '1')
 
   async function reload() {
     if (!companyId) return

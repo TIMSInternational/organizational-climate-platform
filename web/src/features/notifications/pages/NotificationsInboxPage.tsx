@@ -45,6 +45,11 @@ const TYPE_LABEL_PATH: Record<string, string> = {
 }
 
 /**
+ * UNROUTED — kept as the wiring reference. `/notifications` now mounts
+ * `next/NotificationsNextPage` (the Notifications artboard); nothing in `app/router.tsx`
+ * imports this file. Its test still pins the behaviour it was wired with.
+ */
+/**
  * The caller's own notification inbox.
  *
  * Self-service, so there is no company picker and no role gate: `/notifications/mine`

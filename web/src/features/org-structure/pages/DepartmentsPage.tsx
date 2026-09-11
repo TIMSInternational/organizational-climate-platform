@@ -42,6 +42,11 @@ import {
 const FLOOR = 5
 
 /**
+ * UNROUTED — kept as the wiring reference. `/departments` now mounts
+ * `next/departments/DepartmentsNextPage` (the Departments artboard); nothing in
+ * `app/router.tsx` imports this file. Its test still pins the behaviour it was wired with.
+ */
+/**
  * Departments, as a destination of their own (#142).
  *
  * ## Why this page exists at all

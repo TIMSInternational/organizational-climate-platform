@@ -492,6 +492,34 @@ describe('RoleBasedNav row states', () => {
   })
 })
 
+/**
+ * The CompanySettings artboard (10 Sep) draws the rail on `/admin/companies/:id` with
+ * "Administración de Empresa" as ONE filled row: the group closed, its children absent. That
+ * href is also the group's first child's, so the rail used to open the group on it and fill the
+ * child — "Configuración de Empr…", cut by the ellipsis — under a bold, equally cut parent.
+ */
+describe('RoleBasedNav on a group’s own page', () => {
+  it('draws Company Administration as the CompanySettings artboard does: closed, the group row itself filled', () => {
+    renderNav(buildNavSections('company_admin', COMPANY), `/admin/companies/${COMPANY}`)
+
+    const group = screen.getByRole('button', { name: 'Company Administration' })
+    expect(group.getAttribute('aria-expanded')).toBe('false')
+    expect(group.getAttribute('data-nav-state')).toBe('selected')
+    expect(selectedRows()).toEqual([group])
+    expect(screen.queryByRole('link', { name: 'Company Settings' })).toBeNull()
+  })
+
+  it('keeps exactly one selected row when the reader closes the group over a child’s page', async () => {
+    renderNav(buildNavSections('company_admin', COMPANY), `/admin/companies/${COMPANY}/users`)
+    const group = screen.getByRole('button', { name: 'Company Administration' })
+
+    await userEvent.click(group)
+
+    expect(group.getAttribute('aria-expanded')).toBe('false')
+    expect(selectedRows()).toEqual([group])
+  })
+})
+
 describe('RoleBasedNav flat group', () => {
   it('draws System Administration as the canvas does: its row a link, its children plain rows, nothing to expand', () => {
     renderNav(buildNavSections('super_admin', COMPANY), '/admin/companies')
