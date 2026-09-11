@@ -136,15 +136,16 @@ export default function BenchmarksNextPage() {
                 <CollapsibleContent>
                   <div className="pt-2">
                     {/* The canvas's grid, `minmax(0,1fr) 90px 90px 140px 70px 150px` with 12px
-                        between columns; each fixed column carries the gap before it. */}
-                    <Table className="min-w-200 table-fixed">
+                        between columns from xl; each fixed column carries the gap before it.
+                        Below xl the columns tighten so the score stays on screen at 1024. */}
+                    <Table className="min-w-180 table-fixed xl:min-w-200">
                       <colgroup>
                         <col />
-                        <col className="w-25.5" />
-                        <col className="w-25.5" />
-                        <col className="w-38" />
-                        <col className="w-20.5" />
-                        <col className="w-40.5" />
+                        <col className="w-20 xl:w-25.5" />
+                        <col className="w-22 xl:w-25.5" />
+                        <col className="w-36 xl:w-38" />
+                        <col className="w-16 xl:w-20.5" />
+                        <col className="w-32 xl:w-40.5" />
                       </colgroup>
                       <thead>
                         <tr className="border-b border-line-default">

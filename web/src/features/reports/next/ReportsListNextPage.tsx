@@ -262,22 +262,25 @@ export default function ReportsListNextPage() {
                     {/* The canvas's grid, `minmax(0,1fr) 300px 70px 110px 130px 150px` with 12px
                         between columns, from xl. A table has no column gap, so each fixed column
                         carries the gap before it (+12px) and its cells drop their left padding.
-                        Narrower than xl the columns tighten and the table scrolls inside this
+                        Narrower than xl the columns tighten and Descargar folds to its icon, so
+                        the whole row fits 1024; narrower still, the table scrolls inside this
                         card rather than pushing the page. */}
-                    <Table className="min-w-230 table-fixed">
+                    <Table className="min-w-180 table-fixed xl:min-w-230">
                       <colgroup>
                         <col />
-                        <col className="w-60 xl:w-78" />
-                        <col className="w-19 xl:w-20.5" />
-                        <col className="w-30.5" />
-                        <col className="w-33 xl:w-35.5" />
-                        <col className="w-40.5" />
+                        <col className="w-44 xl:w-78" />
+                        <col className="w-17 xl:w-20.5" />
+                        <col className="w-30 xl:w-30.5" />
+                        <col className="w-30 xl:w-35.5" />
+                        <col className="w-21 xl:w-40.5" />
                       </colgroup>
                       <thead>
                         <tr className="border-b border-line-default">
                           <th className={HEAD}>{t('reports.next.colReport')}</th>
-                          <th className={cn(HEAD, GAP_CELL)}>
-                            <span className="inline-flex items-center gap-2">
+                          {/* Wraps below xl: at 1024 the column is too narrow for the head and
+                              its chip on one line, and a nowrap head would run into "Formato". */}
+                          <th className={cn(HEAD, GAP_CELL, 'whitespace-normal xl:whitespace-nowrap')}>
+                            <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
                               {t('reports.next.colContains')}
                               {sampleChip}
                             </span>
@@ -433,7 +436,9 @@ function ReportTableRow({
     <tr data-report-id={row.id} data-status={row.status} className="border-b border-line-light last:border-b-0">
       <td className="px-3 py-3.5">
         <div className="flex min-w-0 flex-col">
-          <span className="truncate text-base font-semibold text-fg-primary">{row.title}</span>
+          <span title={row.title} className="truncate text-base font-semibold text-fg-primary">
+            {row.title}
+          </span>
           <span data-slot="report-meta" className="truncate text-xs leading-normal text-fg-label">
             {meta}
           </span>
@@ -480,9 +485,18 @@ function ReportTableRow({
         <div className="flex items-center justify-end gap-2">
           {/* The one visible action. Disabled, not hidden, for a report still generating:
               the server answers 400 until it is completed, and "not yet" is the truth. */}
-          <Button type="button" variant="outline" disabled={!completed || downloading} onClick={onDownload}>
+          {/* Below xl the word folds into the icon, so the one action stays on screen at
+              1024 instead of behind the table's horizontal scroll; the name stays spoken. */}
+          <Button
+            type="button"
+            variant="outline"
+            disabled={!completed || downloading}
+            onClick={onDownload}
+            aria-label={t('reports.download')}
+            className="max-xl:size-control-lg max-xl:gap-0 max-xl:p-0"
+          >
             <Download aria-hidden="true" />
-            {t('reports.download')}
+            <span className="hidden xl:inline">{t('reports.download')}</span>
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
