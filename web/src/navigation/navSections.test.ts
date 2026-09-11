@@ -11,7 +11,7 @@ import {
   withUnreadBadge,
   type NavSection,
 } from './navSections'
-import { RailQuestionBankIcon, RailQuestionLibraryIcon } from './railIcons'
+import { RailConsolidatedIcon, RailQuestionBankIcon, RailQuestionLibraryIcon } from './railIcons'
 import { CATALOGUES, LOCALES } from '../i18n/locale'
 import { createTranslator } from '../i18n/translate'
 
@@ -609,6 +609,23 @@ describe('activeHref', () => {
 
   it('returns null where no row matches', () => {
     expect(activeHref('/dev/chart-gallery', sections)).toBeNull()
+  })
+
+  it('lights the tracking deployment’s Planes de Acción row on /action-plans too, while it still leads to the tracking listing', () => {
+    // The ActionPlansList artboard highlights "Planes de Acción" on /action-plans in a
+    // rail that also carries the Vista Consolidada, i.e. where tracking is on.
+    const tracking = buildNavSections('company_admin', 'company-1', { trackingEnabled: true })
+    expect(activeHref('/action-plans', tracking)).toBe('/tracking/planes')
+    expect(activeHref('/action-plans/p1', tracking)).toBe('/tracking/planes')
+    expect(activeHref('/tracking/planes/abc', tracking)).toBe('/tracking/planes')
+    expect(activeHref('/tracking', tracking)).toBe('/tracking')
+    // Where no tracking service is configured, the generic row is the one that lights.
+    expect(activeHref('/action-plans', buildNavSections('company_admin', 'company-1'))).toBe('/action-plans')
+  })
+
+  it('draws the tablero with the consolidado’s table glyph, as the TrackingTablero artboard does', () => {
+    const rows = buildNavSections('leader', 'company-1', { trackingEnabled: true }).flatMap((section) => section.items)
+    expect(rows.find((row) => row.href === '/tracking/tablero')?.icon).toBe(RailConsolidatedIcon)
   })
 })
 

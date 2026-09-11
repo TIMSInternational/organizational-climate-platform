@@ -1,4 +1,5 @@
 import { Fragment, type ReactNode } from 'react'
+import { cn } from '../../lib/cn'
 import { Link, useLocation } from 'react-router'
 import { useTranslation } from '../../i18n'
 import { getToken } from '../../auth/token'
@@ -145,10 +146,23 @@ export interface PageTopBarProps {
   actions?: ReactNode
   /**
    * A line of chips and facts under the description — the redesign's status row
-   * ("Borrador · Encuesta de Clima Q1 2027 · 6 preguntas"). Optional and additive: a
-   * page that passes nothing renders exactly as before.
+   * ("Borrador · Encuesta de Clima Q1 2027 · 6 preguntas"), and the plan detail's code,
+   * semáforo and date (the Main artboard of 10 Sep). Optional and additive: a page that
+   * passes nothing renders exactly as before. Already translated.
    */
   meta?: ReactNode
+  /**
+   * Spacing for the `meta` line where an artboard sets it differently from the default
+   * 6px gap and 6px margin — the Main artboard's chips sit 10px apart and just under the
+   * title. Merged over the default through `cn` (tailwind-merge), so it replaces a class
+   * of the same group rather than adding a second one.
+   */
+  metaClassName?: string
+  /**
+   * 14px between the breadcrumb and the header instead of 38px — the Main (plan detail)
+   * artboard of 10 Sep, whose breadcrumb carries only its own margin.
+   */
+  tightBreadcrumb?: boolean
 }
 
 export function PageTopBar({
@@ -160,6 +174,8 @@ export function PageTopBar({
   badge,
   actions,
   meta,
+  metaClassName,
+  tightBreadcrumb = false,
 }: PageTopBarProps) {
   const { t } = useTranslation()
   const derivedEyebrow = useSectionEyebrow()
@@ -174,7 +190,10 @@ export function PageTopBar({
     // `--admin-size-section-gap`. UI-0 had it at 8px / 14px / 16px.
     <div
       data-slot="page-top-bar"
-      className="mb-section flex flex-col gap-9.5 border-b border-line-light pb-4"
+      className={cn(
+        'mb-section flex flex-col border-b border-line-light pb-4',
+        tightBreadcrumb ? 'gap-3.5' : 'gap-9.5',
+      )}
     >
       {breadcrumbs && breadcrumbs.length > 0 && (
         <Breadcrumb aria-label={breadcrumbLabel ?? t('shell.breadcrumb')}>
@@ -266,7 +285,7 @@ export function PageTopBar({
           {meta && (
             <div
               data-slot="page-meta"
-              className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-fg-secondary"
+              className={cn('mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-fg-secondary', metaClassName)}
             >
               {meta}
             </div>

@@ -89,6 +89,15 @@ export interface KpiTileProps {
    * given, and is still set in the instrument face.
    */
   valueText?: string
+  /**
+   * A chip at the right end of the label row — the Planes de Acción and Vista
+   * Consolidada artboards (10 Sep) put the semáforo word there ("Atrasado", "Al día"),
+   * and a sample-fed tile wears its "Datos de muestra" chip in the same place.
+   * Already translated; the chip carries its own word, never colour alone.
+   */
+  aside?: React.ReactNode
+  /** A chip at the right end of the value row — where a sample-fed tile wears its chip. */
+  valueAside?: React.ReactNode
   /** BCP-47 locale. Defaults to the document's language. */
   locale?: string
   /**
@@ -121,6 +130,8 @@ export default function KpiTile({
   changeLabel,
   unit,
   valueText,
+  aside,
+  valueAside,
   locale,
   size = 'default',
   className,
@@ -168,9 +179,21 @@ export default function KpiTile({
 
           `data-slot="kpi-label"` is how a test finds a tile by its label: "Completed"
           is also a badge and a filter option on the list pages, so text alone is not. */}
-      <div data-slot="kpi-label" className={cn('text-2xs font-bold uppercase text-fg-label', SIZES[size].label)}>
-        {label}
-      </div>
+      {aside ? (
+        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+          <div
+            data-slot="kpi-label"
+            className={cn('whitespace-nowrap text-2xs font-bold uppercase text-fg-label', SIZES[size].label)}
+          >
+            {label}
+          </div>
+          {aside}
+        </div>
+      ) : (
+        <div data-slot="kpi-label" className={cn('text-2xs font-bold uppercase text-fg-label', SIZES[size].label)}>
+          {label}
+        </div>
+      )}
       {/* The unit shares the value's baseline, as the artboards draw it — never a
           second line, which is what `sub` is for. */}
       <div className="mt-1.5 flex flex-wrap items-baseline gap-2">
@@ -178,6 +201,7 @@ export default function KpiTile({
           {valueText ?? (value === null ? EM_DASH : formatMetric(value, format, locale))}
         </span>
         {unit && <span className="text-sm text-fg-secondary">{unit}</span>}
+        {valueAside && <span className="ml-auto self-center">{valueAside}</span>}
       </div>
       {/* Same measurement as the label above; this line is 12px, the canvas's sentence size. */}
       <div className="mt-1.5 flex items-center gap-1 text-sm text-fg-secondary">

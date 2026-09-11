@@ -1,3 +1,14 @@
+/**
+ * NOT ROUTED. `/tracking/tablero` renders the redesigned Tablero de Seguimiento (`../next/TableroNextPage`), which replaced
+ * this page — ruled 10 Sep: a redesigned screen takes its real route. Nothing in
+ * `router.tsx` reaches this file; `router.test.ts` pins that.
+ *
+ * It stays in the tree on purpose, as the wiring reference: `useTableroModel` makes this page's request (`GET /api/tablero-seguimiento` — the
+ * caller's own nodo, or `?nodoId=` for an administrator) and keeps the ways onto the
+ * screen the comment below explains.
+ * Delete it when nothing reads it as a reference; until then its behaviour is pinned
+ * by `TableroSeguimientoPage.test.tsx`, which renders it directly.
+ */
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { getTablero, type TableroResponse } from '../api/trackingApi'
