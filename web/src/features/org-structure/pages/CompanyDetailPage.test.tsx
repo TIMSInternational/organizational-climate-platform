@@ -107,7 +107,10 @@ function renderPage(locale: 'en' | 'es' = 'en') {
 
 beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn())
-  setToken(tokenFor({ role: 'super_admin', companyId: COMPANY, isActive: 'true' }))
+  // company_admin, not super_admin: a super administrator now gets
+  // `next/super/SuperCompanyDetailView` (the per-role canvas, 10 Sep), pinned by its own tests. This file
+  // pins the page every other admin still gets.
+  setToken(tokenFor({ role: 'company_admin', companyId: COMPANY, isActive: 'true' }))
 })
 
 afterEach(() => {

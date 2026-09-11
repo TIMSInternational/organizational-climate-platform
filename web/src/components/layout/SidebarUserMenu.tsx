@@ -133,18 +133,21 @@ export function SidebarUserMenu({ onSignOut, collapsed = false, onExpand }: Side
           fontFamily: 'inherit',
         }}
       >
+        {/* The canvas's `.avatar` (10 Sep, every role's rail): a 28px circle in the rail's
+            raised indigo with its strong ink, 11px at 600 — not an accent-filled tile. */}
         <span
+          data-slot="sidebar-avatar"
           style={{
             width: collapsed ? 24 : 28,
             height: collapsed ? 24 : 28,
-            borderRadius: 7,
-            background: 'var(--admin-accent-blue)',
-            color: 'var(--admin-font-on-accent)',
+            borderRadius: 999,
+            background: 'var(--admin-shell-bg-raised)',
+            color: 'var(--admin-shell-font-strong)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             fontSize: 11,
-            fontWeight: 700,
+            fontWeight: 600,
             flexShrink: 0,
           }}
         >
@@ -177,7 +180,8 @@ export function SidebarUserMenu({ onSignOut, collapsed = false, onExpand }: Side
                 </span>
               ) : null}
             </span>
-            <ChevronDown aria-hidden="true" style={{ width: 12, height: 12, color: 'var(--admin-font-section-label)', flexShrink: 0 }} />
+            {/* No disclosure chevron: the canvas draws none. The button still says it opens
+                a menu (`aria-haspopup`, `aria-expanded`). */}
           </>
         )}
       </button>

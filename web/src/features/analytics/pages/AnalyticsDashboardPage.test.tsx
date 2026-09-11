@@ -191,20 +191,9 @@ describe('AnalyticsDashboardPage', () => {
     )
   })
 
-  it('tells a super_admin that platform-wide benchmarks are excluded from this view', async () => {
-    // The backend filter is an exact match for a SuperAdmin, so globals drop out --
-    // whereas a CompanyAdmin always gets globals plus their own. Saying so beats
-    // letting an admin conclude the platform has no benchmarks.
-    setToken(tokenFor('super_admin'))
-    vi.mocked(fetch)
-      .mockResolvedValueOnce(jsonResponse([benchmarkRow()]))
-      .mockResolvedValueOnce(jsonResponse([]))
-    renderPage()
-
-    expect(
-      await screen.findByText(/Platform-wide benchmarks are not included/),
-    ).toBeTruthy()
-  })
+  // "Tells a super_admin that platform-wide benchmarks are excluded" moved to
+  // `../next/super/SuperAnalyticsView.test.tsx`: a super administrator now gets that view
+  // (the per-role canvas, 10 Sep), which names the global references in its empty state.
 
   it('shows no such notice to a company_admin, whose list already includes globals', async () => {
     vi.mocked(fetch)
