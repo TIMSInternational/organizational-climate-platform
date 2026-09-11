@@ -140,3 +140,35 @@ export function maskedLink(link: string, origin: string): string {
   const cut = full.lastIndexOf('/')
   return `${full.slice(0, cut + 1)}••••••••••••`
 }
+
+/* The dates the tiles and the fact sheet print, in the canvas's short form. */
+
+function localeTag(locale: string): string {
+  return locale === 'es' ? 'es-CR' : 'en-US'
+}
+
+/** "10 oct" — the tiles' reading. */
+export function dayMonth(iso: string, locale: string): string {
+  const at = new Date(iso)
+  if (Number.isNaN(at.getTime())) return '—'
+  return shortMonth(new Intl.DateTimeFormat(localeTag(locale), { day: 'numeric', month: 'short' }).format(at))
+}
+
+/** The canvas prints "sep", not ICU's "sept.": three letters, no period, as every artboard does. */
+function shortMonth(text: string): string {
+  return text.replace('.', '').replace(/\bsept\b/, 'sep')
+}
+
+/** "10 sep 2026" — the fact sheet's reading. */
+export function fullDay(iso: string, locale: string): string {
+  const at = new Date(iso)
+  if (Number.isNaN(at.getTime())) return '—'
+  return shortMonth(
+    new Intl.DateTimeFormat(localeTag(locale), { day: 'numeric', month: 'short', year: 'numeric' }).format(at).replace(/ de /g, ' '),
+  )
+}
+
+export function yearOf(iso: string): string {
+  const at = new Date(iso)
+  return Number.isNaN(at.getTime()) ? '' : String(at.getFullYear())
+}

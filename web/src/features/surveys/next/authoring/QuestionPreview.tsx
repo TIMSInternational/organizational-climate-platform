@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { useTranslation } from '../../../../i18n'
 import type { SurveyRespondQuestion } from '../../api/surveyResponses'
 import { dimensionLabel } from '../../dimensionLabel'
-import { DEFAULT_SCALE_MAX, DEFAULT_SCALE_MIN, NUMERIC_SCALE_TYPES, answerShapeOf, choicesFor } from '../../respondAnswers'
+import { NUMERIC_SCALE_TYPES, answerShapeOf, choicesFor } from '../../respondAnswers'
 
 /**
  * A question as the respondent will meet it, drawn the way the SurveyBuilder and SurveyDetail
@@ -103,9 +103,4 @@ export function PreviewQuestion({
       )}
     </div>
   )
-}
-
-/** The numeric ends the preview prints for a scale question, defaulted as the respond page does. */
-export function scaleEnds(question: { scaleMin: number | null; scaleMax: number | null }): [number, number] {
-  return [question.scaleMin ?? DEFAULT_SCALE_MIN, question.scaleMax ?? DEFAULT_SCALE_MAX]
 }

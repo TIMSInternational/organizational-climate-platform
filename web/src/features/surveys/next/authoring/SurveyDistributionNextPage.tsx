@@ -23,9 +23,10 @@ import { cn } from '../../../../lib/cn'
 import { canDistribute } from '../../api/surveyInvitationCopy'
 import { isKnownInvitationStatus } from '../../api/surveyDistribution'
 import { IconBox, TH_CLASS } from '../../../shared-next/parts'
-import { Card, Meter, ReadingTile, dayMonth } from './parts'
+import { Card, Meter, ReadingTile } from './parts'
 import {
   absoluteLink,
+  dayMonth,
   daysFrom,
   invitationBuckets,
   launchChecklist,

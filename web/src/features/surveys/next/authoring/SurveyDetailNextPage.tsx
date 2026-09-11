@@ -12,8 +12,19 @@ import type { SurveyDetail } from '../../api/surveys'
 import { languageLabel, statusLabel, typeLabel } from '../../surveyVocabulary'
 import { Note, PanelHeading } from '../../../shared-next/parts'
 import { PreviewQuestion, PreviewSection } from './QuestionPreview'
-import { Card, Meter, ReadingTile, dayMonth, fullDay, yearOf } from './parts'
-import { absoluteLink, daysFrom, dimensionSections, maskedLink, remindersSent, responseRate, targetedDepartments } from './launch'
+import { Card, Meter, ReadingTile } from './parts'
+import {
+  absoluteLink,
+  dayMonth,
+  daysFrom,
+  dimensionSections,
+  fullDay,
+  maskedLink,
+  remindersSent,
+  responseRate,
+  targetedDepartments,
+  yearOf,
+} from './launch'
 import { useSurveyDetailModel, type SurveyDetailModel } from './useSurveyDetailModel'
 
 /**
