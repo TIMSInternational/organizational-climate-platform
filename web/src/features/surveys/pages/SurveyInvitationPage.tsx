@@ -179,15 +179,11 @@ export default function SurveyInvitationPage() {
     void recordSurveyInvitationStep(baseUrl, token, 'completed').catch(ignoreTrackingFailure)
   }
 
-  // False until the payload says otherwise, and false again for a dead token. The chip
-  // in the header is a promise about how a response is stored, and a page that has not
-  // resolved the invitation yet has no basis for making it — `RespondShell` defaults it
-  // off for exactly this reason.
-  const resolved = state.status === 'landing' || state.status === 'answering'
-  const anonymous = resolved && state.detail.anonymity.anonymous
-
+  // No anonymity chip on the shell: the landing card's `AnonymityNotice`, then the form's,
+  // make the promise once, under the strip — the canvas's RespondSurveyPhone draws no chip
+  // in it. See `RespondShell`.
   return (
-    <RespondShell skipLabel={t('skipToSurvey')} contentId="survey" anonymous={anonymous}>
+    <RespondShell skipLabel={t('skipToSurvey')} contentId="survey">
       {state.status === 'answering' ? (
         // `publicEntry`, even though this visitor is named: it describes what the
         // browser holds, not what the server knows. Somebody who followed a link out of

@@ -1,0 +1,108 @@
+{
+  "_comment": "Leaders lane, leader (luis.mora@meridiano.test, Líder, nodo Ingeniería 5bfdb04e-8847-4baa-89c8-d4411654a129) on the Grupo Meridiano demo tenant. GET /notifications/mine, /profile, /dashboard/department-admin, /api/tablero-seguimiento and /api/planes-accion were captured read-only from the local stack on 11 Sep 2026 and are verbatim except where this note says otherwise. The directory pickers, /action-plans and /api/consolidado are refused to this role and answer 403 here. Shoot with --role leader --name 'Luis Mora' --company 16c97c29-07f8-4522-86fc-e6cc56298829 --nodo 5bfdb04e-8847-4baa-89c8-d4411654a129 --lang es. `climate` is verbatim too: the survey-level suppression the live stack answers today (isSuppressed, respondentCount 0, no dimensions).",
+  "GET /notifications/mine": {
+    "notifications": []
+  },
+  "GET /profile": {
+    "id": "64fa2a68-3cef-4644-a7b0-ee3a7315c671",
+    "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+    "companyName": "Grupo Meridiano S.A.",
+    "email": "luis.mora@meridiano.test",
+    "name": "Luis Mora",
+    "role": "leader",
+    "departmentId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+    "departmentName": "Ingeniería",
+    "managerId": null,
+    "isActive": true,
+    "hasPassword": true,
+    "lastLoginAt": "2026-09-11T14:24:55.507194+00:00",
+    "createdAt": "2026-09-10T01:58:55.206569+00:00",
+    "demographics": {}
+  },
+  "GET /api/tablero-seguimiento": {
+    "nodoExternalId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+    "conteos": {
+      "rojo": 0,
+      "amarillo": 0,
+      "verde": 1
+    },
+    "planes": [
+      {
+        "id": "01a08b9e-63d1-7f20-8a5d-62a31ac71d53",
+        "planCode": "PA-2026-00002",
+        "nodoExternalId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+        "liderExternalId": "",
+        "hallazgoExternalId": null,
+        "descripcionQue": "Publicar el rol de fines de semana con dos semanas de antelación",
+        "metodologiaComo": "Calendario compartido, actualizado los lunes por la jefatura del nodo.",
+        "responsableEjecucionExternalId": "1553edb1-e100-4bb1-a397-90882b3a3e9e",
+        "fechaCreacion": "2026-09-10",
+        "fechaCompromiso": "2026-09-15",
+        "porcentajeAvance": 0.0,
+        "estadoSemaforo": "Verde",
+        "cicloEncuestaExternalId": null,
+        "fechaUltimaActualizacion": "2026-09-10",
+        "cumplido": false,
+        "involucradosExternalIds": [
+          "1553edb1-e100-4bb1-a397-90882b3a3e9e"
+        ]
+      }
+    ]
+  },
+  "GET /api/planes-accion": [
+    {
+      "id": "01a08b9e-63d1-7f20-8a5d-62a31ac71d53",
+      "planCode": "PA-2026-00002",
+      "nodoExternalId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+      "liderExternalId": "",
+      "hallazgoExternalId": null,
+      "descripcionQue": "Publicar el rol de fines de semana con dos semanas de antelación",
+      "metodologiaComo": "Calendario compartido, actualizado los lunes por la jefatura del nodo.",
+      "responsableEjecucionExternalId": "1553edb1-e100-4bb1-a397-90882b3a3e9e",
+      "fechaCreacion": "2026-09-10",
+      "fechaCompromiso": "2026-09-15",
+      "porcentajeAvance": 0.0,
+      "estadoSemaforo": "Verde",
+      "cicloEncuestaExternalId": null,
+      "fechaUltimaActualizacion": "2026-09-10",
+      "cumplido": false,
+      "involucradosExternalIds": [
+        "1553edb1-e100-4bb1-a397-90882b3a3e9e"
+      ]
+    }
+  ],
+  "GET /tracking/picker/nodos 403": {},
+  "GET /tracking/picker/personas 403": {},
+  "GET /action-plans 403": {},
+  "GET /api/consolidado 403": {},
+  "GET /dashboard/department-admin": {
+    "departmentId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+    "departmentName": "Ingeniería",
+    "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+    "memberCount": 14,
+    "activeMemberCount": 14,
+    "activeSurveyCount": 1,
+    "completedResponseCount": 22,
+    "openActionPlanCount": 1,
+    "overdueActionPlanCount": 0,
+    "activeSurveys": [
+      {
+        "id": "4c9c8c8c-03e1-4033-8224-8c80b242c558",
+        "title": "Encuesta de Clima Q4 (abierta)",
+        "status": "active",
+        "startDate": "2026-09-03T02:03:39.148+00:00",
+        "endDate": "2026-10-10T02:03:39.148+00:00",
+        "responseCount": 3
+      }
+    ],
+    "climate": {
+      "surveyId": "801a81a4-3551-4f08-96f4-d465e05b1605",
+      "surveyTitle": "Encuesta de Clima Q4 (abierta) (Copia)",
+      "surveyEndDate": "2026-10-10T02:03:39.148+00:00",
+      "respondentCount": 0,
+      "isSuppressed": true,
+      "minimumGroupSize": 5,
+      "dimensions": []
+    }
+  }
+}

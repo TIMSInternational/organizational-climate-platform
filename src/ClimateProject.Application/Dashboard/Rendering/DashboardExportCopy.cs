@@ -1,3 +1,4 @@
+using System.Globalization;
 using ClimateProject.Application.Localization;
 using ClimateProject.Application.Reports.Rendering;
 
@@ -56,7 +57,8 @@ internal sealed record DashboardExportCopy(
     string SourceSurvey,
     string ClosedOn,
     string StartDate,
-    string EndDate)
+    string EndDate,
+    string TeamCountWithheldNotice)
 {
     private static readonly Dictionary<string, DashboardExportCopy> ByLocale = new(StringComparer.Ordinal)
     {
@@ -94,7 +96,12 @@ internal sealed record DashboardExportCopy(
             SourceSurvey: "Source survey",
             ClosedOn: "Closed on",
             StartDate: "Start date",
-            EndDate: "End date"),
+            EndDate: "End date",
+            TeamCountWithheldNotice:
+                "Surveys marked \"{1}\" have fewer than {0} responses from this team so far, so "
+                + "their count is not shown. The cell reads \"{1}\" and not a number: the team's "
+                + "count is shown from {0} responses on, as on the screen, so that nobody can tell "
+                + "who has answered."),
 
         [ContentLanguages.Spanish] = new DashboardExportCopy(
             Shared: ReportRenderCopy.For(ContentLanguages.Spanish),
@@ -131,8 +138,20 @@ internal sealed record DashboardExportCopy(
             SourceSurvey: "Encuesta de origen",
             ClosedOn: "Cerrada el",
             StartDate: "Fecha de inicio",
-            EndDate: "Fecha de cierre"),
+            EndDate: "Fecha de cierre",
+            TeamCountWithheldNotice:
+                "Las encuestas marcadas «{1}» tienen hasta ahora menos de {0} respuestas de este "
+                + "equipo, así que no se muestra su conteo. La celda dice «{1}» y no un número: el "
+                + "conteo del equipo se muestra a partir de {0} respuestas, como en la pantalla, "
+                + "para que nadie pueda saber quién respondió."),
     };
+
+    /// <summary>
+    /// Why an open survey's team count reads <see cref="ReportRenderCopy.Withheld"/>: the floor
+    /// it is held to, and the word the cell prints instead of the number.
+    /// </summary>
+    public string TeamCountWithheld(int floor)
+        => string.Format(CultureInfo.InvariantCulture, TeamCountWithheldNotice, floor, Shared.Withheld);
 
     /// <summary>
     /// The copy for a requested locale, falling back exactly as

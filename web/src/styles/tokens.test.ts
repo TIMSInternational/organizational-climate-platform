@@ -86,12 +86,17 @@ describe('type scale', () => {
     const sizes = [...tokensCss.matchAll(/^\s*--admin-text-[\w-]+:\s*([^;]+);/gm)].map((m) =>
       m[1].trim(),
     )
-    // The legacy eight, and the canvas's four named steps (10 Sep): 9, 22, 26 and 28px.
-    expect(sizes.length).toBe(12)
+    // The legacy eight, and the canvas's five named steps (10 Sep): 9, 17, 22, 26 and 28px.
+    expect(sizes.length).toBe(13)
     for (const size of sizes) expect(size).toMatch(/rem$/)
     expect([token('--admin-text-3xs'), token('--admin-text-reading'), token('--admin-text-kpi-lg'), token('--admin-text-kpi-hero')]).toEqual(
       ['0.5625rem', '1.375rem', '1.625rem', '1.75rem'],
     )
+    // The respond card's question and its scale points: 17px, line-height 1.4
+    // (RespondSurveyPhone.dc.html `font-size: 17px; line-height: 1.4`).
+    expect(token('--admin-text-question')).toBe('1.0625rem')
+    expect(themeCss).toMatch(/--text-question:\s*var\(--admin-text-question\)\s*;/)
+    expect(themeCss).toMatch(/--text-question--line-height:\s*1\.4\s*;/)
   })
 
   it('does not pin the root font size', () => {

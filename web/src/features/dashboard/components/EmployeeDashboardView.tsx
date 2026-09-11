@@ -12,6 +12,12 @@ import { PageTopBar } from '../../../components/layout'
 import { Button, Chip, EmptyState, type ChipTone } from '../../../components/ui'
 
 /**
+ * **Unreferenced since the redesign; kept as the wiring reference.** `/dashboard` draws
+ * `next/employee/EmployeeHomeView` for an employee (`DashboardPage.tsx`), and so does a
+ * leader or supervisor with no department (`DepartmentAdminDashboardView.tsx`). Nothing
+ * imports this file but its own test. It stays so the endpoint wiring, the empty state and
+ * the reasoning below remain readable beside the view that replaced it.
+ *
  * The evaluated user's Home — the landing experience for a plain employee.
  *
  * ## Scoped per user, not per role
@@ -265,10 +271,11 @@ function daysUntil(endDate: string): number | null {
  *
  * ## One direction only
  *
- * `anonymous === true` draws "Anonymous" with the eye-off glyph, exactly as `RespondShell`
- * draws it beside the brand lockup on the page this card leads to — same key, same icon,
- * same accent tone, because it is the same promise seen twice rather than two claims that
- * happen to agree. Anything else draws nothing.
+ * `anonymous === true` draws "Anonymous" with the eye-off glyph — the key and the icon the
+ * respond page's anonymity block (`surveys/components/AnonymityNotice`) opens with on the page
+ * this card leads to, because it is the same promise seen twice rather than two claims that
+ * happen to agree. Anything else draws nothing. (`RespondShell` also drew it as a header chip
+ * until the canvas's respond strip, which has none, replaced that header.)
  *
  * There is deliberately no `false` branch. `surveyRespond.identifiedChip` ("Not anonymous")
  * exists and is rendered on the respond page, where it sits under a heading and a paragraph

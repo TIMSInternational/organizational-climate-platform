@@ -19,6 +19,12 @@ import QuestionBankNextPage from '../features/questions/next/QuestionBankNextPag
 import QuestionLibraryNextPage from '../features/questions/next/QuestionLibraryNextPage'
 import AIInsightsNextPage from '../features/analytics/next/AIInsightsNextPage'
 import AnalyticsNextPage from '../features/analytics/next/AnalyticsNextPage'
+import SurveyRespondPage from '../features/surveys/pages/SurveyRespondPage'
+import PublicSurveyRespondPage from '../features/surveys/pages/PublicSurveyRespondPage'
+import PublicSurveyLinkPage from '../features/surveys/pages/PublicSurveyLinkPage'
+import SurveyInvitationPage from '../features/surveys/pages/SurveyInvitationPage'
+import MicroclimateRespondPage from '../features/microclimates/pages/MicroclimateRespondPage'
+import MicroclimateInvitationPage from '../features/microclimates/pages/MicroclimateInvitationPage'
 
 /**
  * A construction guard for the router.
@@ -335,6 +341,100 @@ describe('router', () => {
     expect(source).not.toMatch(/pages\/QuestionLibraryPage'/)
     expect(source).not.toMatch(/pages\/AIInsightsPage'/)
     expect(source).not.toMatch(/pages\/AnalyticsDashboardPage'/)
+  })
+
+  /**
+   * The people lane (the canvas's RespondSurveyPhone, RespondConfirmationPhone,
+   * RespondMicroclimatePhone and EmployeeDashboard) restyled the two forms behind the six
+   * respond routes instead of mounting new pages, so the pin has two halves: the element
+   * each respond route mounts, and the redesigned form that element renders. A route
+   * re-pointed at another page, or a page that stops rendering the form, fails here — the
+   * path assertions above stay green through both.
+   *
+   * The employee's Home is reached through two dispatchers: `/dashboard`'s own
+   * (`DashboardPage`, an employee or an unknown role) and `DepartmentAdminDashboardView`'s
+   * no-department fallback (a leader or supervisor with no department). Both must draw the
+   * redesigned `EmployeeHomeView`, and the view it replaced must be imported by nothing
+   * but its own test — unrouted means unreferenced, as for every other swapped page.
+   */
+  it('mounts every respond route on a page that renders the redesigned form, and draws the redesigned Home in both dispatchers', () => {
+    const byPath = new Map<string, unknown>()
+    function walk(routes: typeof router.routes): void {
+      for (const route of routes) {
+        if (route.path) byPath.set(route.path, route.element)
+        if (route.children) walk(route.children as typeof router.routes)
+      }
+    }
+    walk(router.routes)
+    const componentAt = (path: string) => (byPath.get(path) as { type?: unknown } | undefined)?.type
+    const src = join(process.cwd(), 'src')
+
+    const respondRoutes: ReadonlyArray<[string, unknown, string, string]> = [
+      ['/surveys/:id/respond', SurveyRespondPage, 'features/surveys/pages/SurveyRespondPage.tsx', 'SurveyRespondForm'],
+      ['/survey/:id', PublicSurveyRespondPage, 'features/surveys/pages/PublicSurveyRespondPage.tsx', 'SurveyRespondForm'],
+      ['/s/:token', PublicSurveyLinkPage, 'features/surveys/pages/PublicSurveyLinkPage.tsx', 'SurveyRespondForm'],
+      ['/survey-invitations/:token', SurveyInvitationPage, 'features/surveys/pages/SurveyInvitationPage.tsx', 'SurveyRespondForm'],
+      [
+        '/microclimates/:id/respond',
+        MicroclimateRespondPage,
+        'features/microclimates/pages/MicroclimateRespondPage.tsx',
+        'MicroclimatePulseForm',
+      ],
+      [
+        '/microclimate-invitations/:token',
+        MicroclimateInvitationPage,
+        'features/microclimates/pages/MicroclimateInvitationPage.tsx',
+        'MicroclimatePulseForm',
+      ],
+    ]
+    for (const [path, page, file, form] of respondRoutes) {
+      expect(componentAt(path), path).toBe(page)
+      expect(byPath.has(`${path}/next`), path).toBe(false)
+      const source = readFileSync(join(src, file), 'utf8')
+      expect(source, file).toMatch(new RegExp(`^import ${form}\\b[^;]*?from '\\.\\./components/${form}'$`, 'm'))
+      expect(source, file).toMatch(new RegExp(`<${form}\\b`))
+    }
+
+    expect(componentAt('/dashboard')).toBe(DashboardPage)
+    // The leaders lane moved the second dispatcher: a leader or supervisor with no
+    // department now reaches the Home through `next/team/TeamDashboardPage`, which replaced
+    // `DepartmentAdminDashboardView` on `/dashboard` (pinned in the next case).
+    for (const [file, from] of [
+      ['features/dashboard/pages/DashboardPage.tsx', '../next/employee/EmployeeHomeView'],
+      ['features/dashboard/next/team/TeamDashboardPage.tsx', '../employee/EmployeeHomeView'],
+    ] as const) {
+      const source = readFileSync(join(src, file), 'utf8')
+      expect(source, file).toMatch(new RegExp(`^import EmployeeHomeView from '${from.replace(/[./]/g, '\\$&')}'$`, 'm'))
+      expect(source, file).toMatch(/<EmployeeHomeView\b/)
+      expect(source, file).not.toMatch(/EmployeeDashboardView'/)
+    }
+    const importers = globSync('**/*.{ts,tsx}', { cwd: src })
+      .filter((file) => !/EmployeeDashboardView(\.test)?\.tsx$/.test(file))
+      .filter((file) => /from '[^']*\/EmployeeDashboardView'/.test(readFileSync(join(src, file), 'utf8')))
+    expect(importers).toEqual([])
+  })
+
+  /**
+   * The leaders lane (the canvas's LeaderDashboard and SupervisorDashboard, 10 Sep): a
+   * `leader` and a `supervisor` land on `/dashboard`, whose dispatcher now sends both to
+   * `next/team/TeamDashboardPage` — one redesigned view per role — instead of
+   * `DepartmentAdminDashboardView`. Pinned on the source of the two dispatchers: the element
+   * at `/dashboard` is the role dispatcher for every role, so the path alone would stay green
+   * with the old view restored behind it. The old view stays in the tree as the wiring
+   * reference, imported by nothing but its own test.
+   */
+  it('sends a leader and a supervisor to the redesigned team panels, and routes the old team view nowhere', () => {
+    const src = join(process.cwd(), 'src')
+    const dispatcher = readFileSync(join(src, 'features', 'dashboard', 'pages', 'DashboardPage.tsx'), 'utf8')
+    expect(dispatcher).toMatch(/^import TeamDashboardPage from '\.\.\/next\/team\/TeamDashboardPage'$/m)
+    expect(dispatcher).toMatch(/<TeamDashboardPage role=\{scope\.role\} \/>/)
+    const team = readFileSync(join(src, 'features', 'dashboard', 'next', 'team', 'TeamDashboardPage.tsx'), 'utf8')
+    expect(team).toMatch(/^import LeaderDashboardView from '\.\/LeaderDashboardView'$/m)
+    expect(team).toMatch(/^import SupervisorDashboardView from '\.\/SupervisorDashboardView'$/m)
+    const importers = globSync('**/*.{ts,tsx}', { cwd: src })
+      .filter((file) => !/DepartmentAdminDashboardView(\.test)?\.tsx$/.test(file))
+      .filter((file) => /from '[^']*\/DepartmentAdminDashboardView'/.test(readFileSync(join(src, file), 'utf8')))
+    expect(importers).toEqual([])
   })
 
   /**
