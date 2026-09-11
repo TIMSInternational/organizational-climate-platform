@@ -4547,7 +4547,7 @@
         },
         "authored": {
           "name": "What you created or what names you",
-          "what": "surveys, reports, action plans and other kinds of record",
+          "what": "surveys, reports, action plans and {kinds} other kinds of record",
           "link": "It names you as author or responsible; the file brings only the identifier and title.",
           "basis": "Legitimate interest",
           "kept": "While the record exists; authorship survives the erasure."

@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { TranslationProvider } from '../../../i18n'
@@ -133,5 +135,23 @@ describe('PrivacyNextPage', () => {
     fireEvent.click(screen.getByRole('button', { name: T.request.copy }))
     expect(await screen.findByText(T.request.copyRefused)).toBeTruthy()
     expect(screen.queryByText(T.request.copied)).toBeNull()
+  })
+
+  it('counts the kinds of record it does not name from the access export itself: «…y otros N tipos de registro»', async () => {
+    // SubjectAccessExport.cs builds one ExportTreatment.Reference section per call in its Actor
+    // block (lines 158-205 on 11 Sep: seventeen ReferencesAsync, QuestionLibraryAuthorshipAsync,
+    // ReportsAsync, ReportSharesAsync). The row names three of them and counts the rest, so a
+    // section added or removed there must fail here instead of falsifying the sentence.
+    const source = readFileSync(
+      join(process.cwd(), '..', 'src', 'ClimateProject.Infrastructure', 'Gdpr', 'SubjectAccessExport.cs'),
+      'utf8',
+    )
+    const sections = source.match(/await (?:ReferencesAsync|QuestionLibraryAuthorshipAsync|ReportsAsync|ReportSharesAsync)\(/g) ?? []
+    for (const named of ['ReferencesAsync("Survey",', 'ReferencesAsync("ActionPlan",', 'await ReportsAsync(']) {
+      expect(source).toContain(named)
+    }
+    routeFetch()
+    renderPage()
+    expect(await screen.findByText(T.held.authored.what.replace('{kinds}', String(sections.length - 3)))).toBeTruthy()
   })
 })

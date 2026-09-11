@@ -11,6 +11,7 @@ import { tokenFor } from '../../../../test/jwtFixture'
 import { LUIS_MORA_ID, MERIDIANO_ID, superMeridianoFetch } from '../../../../test/superMeridianoFetch'
 import type { Department } from '../../api/departments'
 import type { User } from '../../api/users'
+import type { Invitation } from '../../api/invitations'
 import es from '../../../../i18n/es.json'
 
 /**
@@ -206,5 +207,63 @@ describe('AdminUsersView (company administrator)', () => {
     expect(await screen.findByText(T.forbidden)).toBeTruthy()
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/admin/users'))).toBe(false)
     expect(screen.queryByRole('button', { name: T.invite })).toBeNull()
+  })
+
+  it('sets the breadcrumb 14px over the header, as the UsersList board does', async () => {
+    vi.stubGlobal('fetch', fetchWith())
+    renderAt(ROUTE)
+    await waitFor(() => expect(rows().length).toBeGreaterThan(0))
+    const bar = document.querySelector('[data-slot="page-top-bar"]') as HTMLElement
+    expect(bar.className).toContain('gap-3.5')
+    expect(bar.className).not.toContain('gap-9.5')
+  })
+
+  it('gives the roster the board’s columns: ROL 132px and ÚLTIMA ACTIVIDAD 153px beside the 96px action', async () => {
+    vi.stubGlobal('fetch', fetchWith())
+    renderAt(ROUTE)
+    await waitFor(() => expect(rows().length).toBeGreaterThan(0))
+    const table = rows()[0].closest('table') as HTMLTableElement
+    expect([...table.querySelectorAll('col')].map((col) => col.className)).toEqual(['', 'w-33', 'w-38.25', 'w-24'])
+  })
+
+  it('lays pending invitations on the board’s five columns, with Reenviar in the Recordatorios cell', async () => {
+    const pending: Invitation = {
+      id: 'inv-1',
+      email: 'nueva.persona@meridiano.test',
+      companyId: MERIDIANO_ID,
+      departmentId: null,
+      invitationType: 'platform',
+      role: 'employee',
+      status: 'pending',
+      token: 'x',
+      expiresAt: '2026-09-18T00:00:00Z',
+      sentAt: '2026-09-11T00:00:00Z',
+      acceptedAt: null,
+      reminderCount: 2,
+    }
+    const resend = vi.fn(() => new Response(JSON.stringify({ ...pending, reminderCount: 3 }), { status: 200 }))
+    vi.stubGlobal(
+      'fetch',
+      fetchWith({
+        'GET /admin/invitations': () => new Response(JSON.stringify({ invitations: [pending] }), { status: 200 }),
+        [`POST /admin/invitations/${pending.id}/resend`]: resend,
+      }),
+    )
+    renderAt(ROUTE)
+    const table = await screen.findByRole('table', { name: T.invitations.heading })
+    const email = await within(table).findByText(pending.email as string)
+    expect(within(table).getAllByRole('columnheader').map((th) => th.textContent)).toEqual([
+      T.invitations.colEmail,
+      T.invitations.colRole,
+      T.invitations.colSent,
+      T.invitations.colExpires,
+      T.invitations.colReminders,
+    ])
+    expect([...table.querySelectorAll('col')].map((col) => col.className)).toEqual(['', 'w-30.5', 'w-28', 'w-28', 'w-35.75'])
+    const cells = within(email.closest('tr') as HTMLElement).getAllByRole('cell')
+    expect(cells).toHaveLength(5)
+    expect(cells[4].textContent).toContain(String(pending.reminderCount))
+    await userEvent.click(within(cells[4]).getByRole('button', { name: T.invitations.resend }))
+    await waitFor(() => expect(resend).toHaveBeenCalledTimes(1))
   })
 })

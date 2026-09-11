@@ -4547,7 +4547,7 @@
         },
         "authored": {
           "name": "Lo que creaste o te nombra",
-          "what": "encuestas, informes, planes de acción y otros tipos de registro",
+          "what": "encuestas, informes, planes de acción y otros {kinds} tipos de registro",
           "link": "Te nombra como autora o responsable; el archivo trae solo identificador y título.",
           "basis": "Interés legítimo",
           "kept": "Mientras exista el registro; la autoría sobrevive al borrado."

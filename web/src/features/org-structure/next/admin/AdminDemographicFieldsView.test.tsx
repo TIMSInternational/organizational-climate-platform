@@ -196,4 +196,13 @@ describe('AdminDemographicFieldsView (company administrator)', () => {
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/admin/demographic-fields'))).toBe(false)
     expect(screen.queryByRole('button', { name: T.newField })).toBeNull()
   })
+
+  it('sets the breadcrumb 14px over the header, as the DemographicFields board does', async () => {
+    vi.stubGlobal('fetch', fetchWith())
+    renderAt()
+    expect(await screen.findByRole('heading', { name: T.catalogue.headingSample })).toBeTruthy()
+    const bar = document.querySelector('[data-slot="page-top-bar"]') as HTMLElement
+    expect(bar.className).toContain('gap-3.5')
+    expect(bar.className).not.toContain('gap-9.5')
+  })
 })

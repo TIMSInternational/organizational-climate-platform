@@ -90,11 +90,14 @@ export default function AdminDemographicFieldsView() {
   const active = state.fields.filter((field) => field.isActive).length
   const usable = state.people === undefined ? null : usableCuts(state.fields, state.people, ANONYMITY_FLOOR)
 
+  // The DemographicFields board sets the breadcrumb 14px over the header (its glyphs at y=76, the
+  // eyebrow's at y=110 at 1440), not the 38px of the other admin boards: `tightBreadcrumb`.
   const header = (
     <div className="-mb-6">
       <PageTopBar
         eyebrow={state.companyName ?? t('navigation.companyAdministration')}
         title={t('navigation.demographicFields')}
+        tightBreadcrumb
         description={t('demographicFields.next.description', { floor: ANONYMITY_FLOOR })}
         breadcrumbs={[
           { label: t('navigation.companyAdministration'), href: `/admin/companies/${companyId}` },

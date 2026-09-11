@@ -9,6 +9,7 @@ import { cn } from '../../../lib/cn'
 import { countWord } from '../../../lib/countWord'
 import { Panel } from '../../org-structure/next/super/parts'
 import AccountTabs from './AccountTabs'
+import { AUTHORED_OTHER_KINDS } from './authoredKinds'
 import { usePrivacyModel } from './usePrivacyModel'
 
 const TH = 'border-b border-line-default bg-transparent px-3 pb-2 pt-1 text-2xs font-bold uppercase tracking-label whitespace-nowrap text-fg-tertiary'
@@ -137,7 +138,7 @@ export default function PrivacyNextPage() {
                     <td className="px-3 py-3 align-middle">
                       <span className="flex flex-col gap-0.5">
                         <span className="text-sm font-semibold text-fg-primary">{t(`privacy.next.held.${key}.name`)}</span>
-                        <span className="text-xs leading-snug text-fg-tertiary">{t(`privacy.next.held.${key}.what`)}</span>
+                        <span className="text-xs leading-snug text-fg-tertiary">{t(`privacy.next.held.${key}.what`, { kinds: AUTHORED_OTHER_KINDS })}</span>
                       </span>
                     </td>
                     <td className="px-3 py-3 align-middle text-sm leading-snug text-fg-secondary">{t(`privacy.next.held.${key}.link`)}</td>

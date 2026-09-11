@@ -121,11 +121,14 @@ export default function AdminUsersView() {
     state.reload()
   }
 
+  // The UsersList board sets the breadcrumb 14px over the header (its glyphs at y=76, the
+  // eyebrow's at y=110 at 1440), not the 38px of the other admin boards: `tightBreadcrumb`.
   const header = (
     <div className="-mb-6">
       <PageTopBar
         eyebrow={companyName ?? t('navigation.companyAdministration')}
         title={t('navigation.users')}
+        tightBreadcrumb
         description={t('users.next.description')}
         breadcrumbs={[
           { label: t('navigation.companyAdministration'), href: `/admin/companies/${companyId}` },
@@ -218,7 +221,7 @@ export default function AdminUsersView() {
             <div className="flex flex-col gap-section">
               <Tiles tally={tally} invitations={state.invitations} />
 
-              <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[16.5rem_minmax(0,1fr)]">
+              <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[17rem_minmax(0,1fr)]">
                 <DepartmentRail
                   groups={groups}
                   tally={tally}
@@ -594,10 +597,13 @@ function Roster({
         <div className="overflow-x-auto">
           <div className="min-w-[40rem] [&_[data-slot=table-container]]:overflow-visible">
             <Table aria-label={t('users.next.roster.tableLabel', { company })} className="table-fixed">
+              {/* The board's grid (1fr / 120 / 130 / 84, 12px gaps and row ends) as cells padded 12px a
+                  side: ROL 132px and ÚLTIMA ACTIVIDAD 153px, so at 1440 their labels sit at x=1034 and
+                  x=1166, the board's. */}
               <colgroup>
                 <col />
-                <col className="w-52" />
-                <col className="w-36" />
+                <col className="w-33" />
+                <col className="w-38.25" />
                 <col className="w-24" />
               </colgroup>
               <thead>
@@ -824,8 +830,19 @@ function PendingInvitations({
         <span className="text-xs text-fg-tertiary">{t('users.next.invitations.meta')}</span>
       </div>
       <div className="overflow-x-auto">
-        <div className="min-w-[36rem] [&_[data-slot=table-container]]:overflow-visible">
-          <Table aria-label={t('users.next.invitations.heading')}>
+        <div className="min-w-[42rem] [&_[data-slot=table-container]]:overflow-visible">
+          <Table aria-label={t('users.next.invitations.heading')} className="table-fixed">
+            {/* The board's five columns (1.6fr / 110 / 100 / 100 / 120, 12px gaps) as cells padded 12px
+                a side, CORREO the flexible one: at 1440 the labels sit at x=274 / 534 / 656 / 768 / 880,
+                the board's. It draws no sixth column, so Reenviar rides in the Recordatorios cell, beside
+                the count it raises (`InvitationEndpoints.cs:252-256`). */}
+            <colgroup>
+              <col />
+              <col className="w-30.5" />
+              <col className="w-28" />
+              <col className="w-28" />
+              <col className="w-35.75" />
+            </colgroup>
             <thead>
               <tr>
                 <th className={TH}>{t('users.next.invitations.colEmail')}</th>
@@ -833,15 +850,12 @@ function PendingInvitations({
                 <th className={TH}>{t('users.next.invitations.colSent')}</th>
                 <th className={TH}>{t('users.next.invitations.colExpires')}</th>
                 <th className={TH}>{t('users.next.invitations.colReminders')}</th>
-                <th className={TH}>
-                  <span className="sr-only">{t('common.actions')}</span>
-                </th>
               </tr>
             </thead>
             <tbody>
               {rows === null || rows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-3 py-3">
+                  <td colSpan={5} className="px-3 py-3">
                     <span className="flex items-start gap-2 text-sm text-fg-secondary">
                       <Mail aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-fg-tertiary" />
                       {rows === null ? t('users.next.invitations.unavailable') : t('users.next.invitations.empty')}
@@ -863,21 +877,23 @@ function PendingInvitations({
                     <td className="px-3 py-2.5 font-mono text-xs tabular-nums text-fg-secondary">
                       {calendarDay(Date.parse(invitation.expiresAt), locale)}
                     </td>
-                    <td className="px-3 py-2.5 font-mono text-xs tabular-nums text-fg-secondary">{invitation.reminderCount}</td>
-                    <td className="px-3 py-2.5 text-right">
-                      {invitation.email && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          disabled={resending === invitation.id}
-                          onClick={() => {
-                            setResending(invitation.id)
-                            void onResend(invitation).finally(() => setResending(null))
-                          }}
-                        >
-                          {t('users.next.invitations.resend')}
-                        </Button>
-                      )}
+                    <td className="px-3 py-2.5">
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="font-mono text-xs tabular-nums text-fg-secondary">{invitation.reminderCount}</span>
+                        {invitation.email && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={resending === invitation.id}
+                            onClick={() => {
+                              setResending(invitation.id)
+                              void onResend(invitation).finally(() => setResending(null))
+                            }}
+                          >
+                            {t('users.next.invitations.resend')}
+                          </Button>
+                        )}
+                      </span>
                     </td>
                   </tr>
                 ))
