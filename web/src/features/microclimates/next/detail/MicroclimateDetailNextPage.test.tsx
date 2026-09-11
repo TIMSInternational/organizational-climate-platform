@@ -165,6 +165,34 @@ describe('MicroclimateDetailNextPage', () => {
     expect(sentences[0]!.textContent).not.toContain('·')
   })
 
+  it('offers more invitations at the canvas’s 34px once the list holds one', async () => {
+    vi.mocked(listMicroclimateInvitations).mockResolvedValue({
+      ...invitations,
+      invitations: [
+        {
+          id: 'i1',
+          microclimateId: 'm1',
+          userId: 'u-luis',
+          email: 'luis.mora@meridiano.test',
+          status: 'sent',
+          isExpired: false,
+          sentAt: '2026-09-10T03:00:00Z',
+          openedAt: null,
+          startedAt: null,
+          completedAt: null,
+          reminderCount: 0,
+          lastReminderSent: null,
+          expiresAt: '2026-09-17T03:00:00Z',
+          createdAt: '2026-09-10T03:00:00Z',
+        } as MicroclimateInvitationList['invitations'][number],
+      ],
+      summary: { ...invitations.summary, total: 1, sent: 1 },
+    })
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    const more = await screen.findByRole('button', { name: copy.detail.inviteMore })
+    expect(more.className.split(' ')).toContain('h-control-canvas')
+  })
+
   it('draws the anonymous ladder from the payload: up to opened, started and completed struck', async () => {
     renderAs({ role: 'company_admin', companyId: COMPANY })
     await screen.findByText(copy.detail.ladderTitle)
