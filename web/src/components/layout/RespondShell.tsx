@@ -89,12 +89,18 @@ export function RespondShell({
           through the language and theme pickers on the way to the questions. */}
       <SkipLink href={`#${contentId}`}>{skipLabel}</SkipLink>
 
-      {/* Transparent and unruled, like the shell's own top strip: the card below
-          is the only panel, and a filled bar here would read as a second surface
-          with a seam between them. */}
-      <header className="mx-auto flex w-full max-w-content flex-wrap items-center justify-between gap-inline px-gutter py-inline">
+      {/* Transparent and unruled, like the shell's own top strip: the cards below
+          are the only surfaces, and a filled bar here would read as a second one
+          with a seam between them.
+
+          The canvas's respond strip (RespondSurveyPhone and its two siblings, 10 Sep):
+          16px in from the edge and 14px down, the small lockup on the left and the two
+          pickers drawn as 22px chips on the right. Capped at the same width as the
+          column under it, so on a wide screen the lockup sits over the questions rather
+          than stranded at the window's edge. */}
+      <header className="mx-auto flex w-full max-w-field flex-wrap items-center justify-between gap-inline px-4 py-3.5">
         <span className="flex flex-wrap items-center gap-inline">
-          <BrandLockup />
+          <BrandLockup size="compact" />
           {/* Beside the lockup rather than inside the form, because it is the
               answer to the question a respondent asks before they read anything:
               can this come back to me. `Chip` requires the word, so the tint is
@@ -103,9 +109,9 @@ export function RespondShell({
             <Chip tone="accent" label={t('anonymousChip')} icon={<EyeOff aria-hidden="true" />} />
           ) : null}
         </span>
-        <span className="flex flex-wrap items-center gap-inline">
-          <LanguageSwitcher compact />
-          <ThemeSwitcher compact />
+        <span className="flex flex-wrap items-center gap-1.5">
+          <LanguageSwitcher variant="chip" />
+          <ThemeSwitcher variant="chip" />
         </span>
       </header>
 
@@ -129,7 +135,13 @@ export function RespondShell({
         // it a short state — the thank-you card, a closed survey — renders as a
         // stub stranded at the top of a large empty field, which reads as content
         // that failed to load rather than as a page with little on it.
-        className="mx-auto flex w-full max-w-content flex-1 flex-col px-gutter pb-section"
+        //
+        // `max-w-field` (32rem), not `max-w-content`: the canvas draws this surface as a
+        // phone — one column of cards 358px across at 390 — and on a wide screen the
+        // same column centred, with the lockup over it. A question card stretched to
+        // 1280px put the five scale boxes 250px apart. 16px in and 24px of floor, the
+        // artboard's own padding.
+        className="mx-auto flex w-full max-w-field flex-1 flex-col px-4 pb-6 pt-2"
       >
         {children}
       </main>
@@ -173,20 +185,41 @@ export function RespondShell({
  * which is also why `features/surveys/respondContrast.test.ts` measures the chip
  * word and the prose but not this. Nothing else in either shell inks with it.
  */
-export function BrandLockup() {
+export function BrandLockup({
+  size = 'default',
+}: {
+  /**
+   * `compact` is the respond strip's lockup as the canvas draws it (RespondSurveyPhone
+   * and its siblings, 10 Sep): a 24px tile on the recessed surface with the mark in the
+   * secondary ink, and a 13px wordmark. The sign-in card keeps `default`, the rail's
+   * 28px tile and 16px wordmark — it is a destination page, not a strip over a form.
+   */
+  size?: 'default' | 'compact'
+} = {}) {
+  const compact = size === 'compact'
   return (
-    <span data-slot="brand-lockup" className="flex items-center gap-inline">
+    <span data-slot="brand-lockup" data-size={size} className="flex items-center gap-inline">
       {/* `aria-hidden` for `SidebarBrand`'s reason: the wordmark beside it already
           names the product, and an announced "Waves" would be noise. */}
       <span
         aria-hidden="true"
-        className="grid size-icon-box shrink-0 place-items-center rounded-md bg-accent-blue-soft text-accent-blue"
+        className={
+          compact
+            ? 'grid size-6 shrink-0 place-items-center rounded-lg bg-surface-icon-box text-fg-secondary'
+            : 'grid size-icon-box shrink-0 place-items-center rounded-md bg-accent-blue-soft text-accent-blue'
+        }
       >
-        <Waves className="size-icon" />
+        <Waves className={compact ? 'size-3.5' : 'size-icon'} />
       </span>
       {/* One `<span>`, two coloured halves — not two words with a space, which is
           what a screen reader would otherwise announce. */}
-      <span className="whitespace-nowrap text-xl font-bold tracking-tight">
+      <span
+        className={
+          compact
+            ? 'whitespace-nowrap text-base font-bold'
+            : 'whitespace-nowrap text-xl font-bold tracking-tight'
+        }
+      >
         <span className="text-fg-primary">{BRAND_LEAD}</span>
         <span className="text-accent-blue">{BRAND_TAIL}</span>
       </span>

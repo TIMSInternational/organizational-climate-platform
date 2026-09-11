@@ -36,15 +36,25 @@ import { cn } from '../../lib/cn'
  * bare numeric scale — never a label. Submitting a label is what splits one answer
  * into two across languages (#195).
  *
+ * ## The canvas's drawing (RespondSurveyPhone, 10 Sep)
+ *
+ * Five boxes 52px tall on the card surface with a hairline border, the number in the
+ * ink, and the chosen one **filled with the ink** — `#110a29` behind white — rather than
+ * with an accent. A row of 6px ticks under the boxes, then the two anchors under the
+ * ends. `RespondMicroclimatePhone` inherits the same control, so both respond flows
+ * draw it from here.
+ *
  * ## Colour
  *
- * The selected segment sits on `bg-accent-blue-fill`, never on `bg-accent-blue`.
- * `styles/tokens.css` states the rule and `styles/accentContrast.test.ts` measures
- * it: the on-accent ink is 5.47:1 on the fill in both themes and 3.74:1 light /
- * 2.49:1 dark on the identity accent, which is the pairing tokens.css forbids. The
- * anchors are `text-fg-secondary`, the pair `features/surveys/respondContrast.test.ts`
- * measures for "scale end labels"; `text-fg-tertiary` is 3.90:1 on this surface and
- * is banned from this page by name.
+ * The chosen segment is `bg-fg-primary` with `text-surface-card`: the ink and the card
+ * swapped, which is what the artboard draws in light and what stays legible in dark,
+ * where the ink is the light end of the palette. It is NOT `bg-accent-blue-fill` any
+ * more: that fill is the red of the primary action (`tokens.css`), and a scale point
+ * drawn in the same red as "Siguiente" beside it read as a second call to action.
+ * `features/surveys/respondContrast.test.ts` measures the pair in both themes. The
+ * anchors are `text-fg-secondary`, the pair the same file measures for "scale end
+ * labels"; `text-fg-tertiary` is 3.90:1 on this surface and is banned from this page
+ * by name.
  *
  * The focus ring is the app's one global `:focus-visible` outline from `index.css`,
  * as every primitive here does — nothing sets `outline-none`, which is the only way
@@ -180,22 +190,21 @@ export function SegmentedScale({
               onClick={() => select(index)}
               onKeyDown={(event) => handleKeyDown(event, index)}
               className={cn(
-                // 44px, not the design's 46px: the density scale is a 4px grid and
-                // 46 is not on it, so it would have to be an arbitrary value that
-                // `tokenDiscipline.test.ts` rejects. 44px is the WCAG 2.5.5 target
-                // size, which is what the height is for.
-                'h-11 flex-1 rounded-lg border',
+                // 52px, the canvas's box — and on the 4px grid (13 × 4), so it needs no
+                // arbitrary value. Well past the 44px WCAG 2.5.5 target size, which is
+                // what the height is for.
+                'h-13 flex-1 rounded-lg border',
                 // The instrument rule: a reading is mono with tabular figures, so
-                // the row does not shift as points are chosen. 16px because 15px is
-                // not on the type scale.
+                // the row does not shift as points are chosen. 16px because the
+                // canvas's 17px is not on the type scale.
                 'font-mono text-xl tabular-nums',
                 'transition-[background-color,border-color,color] ease-out',
                 'disabled:cursor-not-allowed disabled:opacity-50',
                 checked
-                  ? 'border-transparent bg-accent-blue-fill font-semibold text-fg-on-accent'
+                  ? 'border-fg-primary bg-fg-primary text-surface-card'
                   : cn(
-                      'border-line-default bg-surface-input text-fg-secondary',
-                      'hover:not-disabled:border-accent-blue-ring hover:not-disabled:text-fg-primary',
+                      'border-line-default bg-surface-card text-fg-primary',
+                      'hover:not-disabled:border-line-hover',
                     ),
               )}
             >
@@ -203,6 +212,17 @@ export function SegmentedScale({
             </button>
           )
         })}
+      </div>
+      {/* The canvas's tick under each box: a 1px × 6px hairline centred on the segment,
+          so the row reads as a scale rather than as five unrelated buttons. Decoration,
+          so hidden from assistive technology — the radiogroup already says how many
+          points there are. */}
+      <div aria-hidden="true" data-slot="scale-ticks" className="mt-1.5 flex gap-1.5">
+        {points.map((point) => (
+          <span key={point} className="flex flex-1 justify-center">
+            <span className="h-1.5 w-px bg-line-default" />
+          </span>
+        ))}
       </div>
       {/* Under the ENDS of the row, which is the whole point of the treatment — the
           design's note calls out that the anchors floating under the first two

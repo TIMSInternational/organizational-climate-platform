@@ -1,5 +1,5 @@
 import DepartmentAdminDashboardView from '../components/DepartmentAdminDashboardView'
-import EmployeeDashboardView from '../components/EmployeeDashboardView'
+import EmployeeHomeView from '../next/employee/EmployeeHomeView'
 import PlatformDashboardView from '../next/super/PlatformDashboardView'
 import DashboardState from '../components/DashboardState'
 import AdminDashboardNextView, { AdminDashboardNextSkeleton } from '../next/AdminDashboardNextView'
@@ -82,7 +82,11 @@ export default function DashboardPage() {
     return <DepartmentAdminDashboardView />
   }
 
-  return <EmployeeDashboardView />
+  // The redesigned employee Home (the canvas's EmployeeDashboard, 10 Sep), which replaced
+  // `EmployeeDashboardView` on this branch. The old view stays in the tree — it is still
+  // the no-department fallback `DepartmentAdminDashboardView` draws for a leader, and the
+  // wiring reference for this one.
+  return <EmployeeHomeView />
 }
 
 /**

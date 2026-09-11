@@ -23,6 +23,13 @@ export interface RespondQuestionFieldProps {
   /** 1-based position as asked, which is not `question.order` once randomisation is on. */
   position: number
   total: number
+  /**
+   * The dimension the question is asked under, already translated — the canvas's
+   * "CARGA DE TRABAJO" beside the `2/6` chip (RespondSurveyPhone, 10 Sep). `null` when
+   * the form prints no dimensions, which is `respondDimensions`' decision (a randomised
+   * survey, or one with no categories), never this field's.
+   */
+  dimension?: string | null
   answer: AnswerState | undefined
   /** True once a submit attempt found this required question unanswered. */
   invalid: boolean
@@ -63,6 +70,7 @@ export default function RespondQuestionField({
   question,
   position,
   total,
+  dimension = null,
   answer,
   invalid,
   disabled,
@@ -78,22 +86,24 @@ export default function RespondQuestionField({
   return (
     <fieldset
       id={questionFieldId(question.id)}
-      // Focusable only programmatically: the page moves focus here when a submit
-      // attempt finds this required question unanswered, so the respondent lands on
-      // the question rather than on a summary they then have to hunt from.
+      // Focusable only programmatically: the page moves focus here when the respondent
+      // turns to this question, and when a submit finds it unanswered, so they land on
+      // the question rather than on a control they then have to hunt from.
       tabIndex={-1}
+      // The canvas's question card (RespondSurveyPhone, 10 Sep): the card surface with
+      // the hairline, 8px corners, 16px in, the faint lift every `.card` carries.
       // `focus-within` marks the question the respondent is on. Colour only, and
       // the browser's own focus ring still draws on the control inside it, so
       // nothing depends on seeing the tint. `index.css` reduces every transition
       // to 0.01ms under `prefers-reduced-motion`.
-      // `min-w-0` because this is a grid item of the question column, and a grid
-      // item's automatic minimum size is its MIN-CONTENT width — which for a
-      // ranking question is 300px (measured below), wider than the 262px the
-      // column has at a 320px viewport. Without it the card cannot shrink, so it
-      // widens the column, the column widens the page, and the document scrolls
-      // sideways: 9px at 320px, measured in Chromium. With it the card fits and the
-      // one row that is genuinely too wide scrolls inside its own container.
-      className="min-w-0 rounded-xl border border-line-panel bg-surface-card p-panel transition-colors focus-within:border-accent-blue-ring"
+      // `min-w-0` because this is a flex item of the question column, and its
+      // automatic minimum size is its MIN-CONTENT width — which for a ranking
+      // question is 300px (measured below), wider than the 262px the column has at a
+      // 320px viewport. Without it the card cannot shrink, so it widens the column,
+      // the column widens the page, and the document scrolls sideways: 9px at 320px,
+      // measured in Chromium. With it the card fits and the one row that is genuinely
+      // too wide scrolls inside its own container.
+      className="min-w-0 rounded-xl border border-line-default bg-surface-card p-panel shadow-sm transition-colors focus-within:border-accent-blue-ring"
     >
       {/* `float-left w-full` is not decoration. A `<legend>` in its default flow
           is cut out of the fieldset's own border, so the question text straddles
@@ -101,29 +111,52 @@ export default function RespondQuestionField({
           than as a panel — rendered in Chromium at 1440px, that is exactly what it
           looked like. Floating the legend takes it out of the border cut-out and
           the card's frame closes; the block below clears the float. */}
-      <legend id={legendId} className="float-left mb-2 w-full text-base font-medium text-fg-primary">
-        {/* The position, as a reading: mono with tabular figures, so a column of
-            them does not shift width from `1/24` to `10/24`. The glyph form is
-            `aria-hidden` and the sentence beside it is the accessible one —
+      <legend id={legendId} className="float-left m-0 w-full p-0">
+        {/* The canvas's meta row: the `2/6` chip, then the dimension in the label
+            face. The position is a reading — mono with tabular figures, so a column of
+            them does not shift width from `1/24` to `10/24` — and the glyph form is
+            `aria-hidden` with the sentence beside it as the accessible one, because
             "1/24" read aloud is not what "Question 1 of 24" says. */}
-        <span
-          aria-hidden="true"
-          className="mr-inline inline-flex items-center rounded-md bg-surface-icon-box px-2 py-0.5 font-mono text-xs font-semibold tabular-nums text-fg-secondary"
-        >
-          {`${position}/${total}`}
+        <span className="flex flex-wrap items-center gap-2">
+          <span
+            aria-hidden="true"
+            data-slot="question-index"
+            className="inline-flex h-5.5 items-center rounded-lg border border-line-default bg-surface-icon-box px-2 font-mono text-xs font-medium tabular-nums text-fg-secondary"
+          >
+            {`${position}/${total}`}
+          </span>
+          <span className="sr-only">{t('questionPosition', { position, total })}</span>
+          {dimension ? (
+            <span
+              data-slot="question-dimension"
+              className="min-w-0 truncate text-2xs font-bold uppercase tracking-label text-fg-secondary"
+              title={dimension}
+            >
+              {dimension}
+            </span>
+          ) : null}
+          {/* The WORD carries whether an answer is required, never a colour — WCAG
+              1.4.1. Optional questions say so on the row; a required one says so to
+              assistive technology and is announced `aria-required` by its control, so
+              the canvas's card, where every question is required, is drawn without a
+              word it does not draw. That is the "mark the optional ones" pattern, and
+              it is why `requiredMarker` survives here as a visually hidden clause. */}
+          {question.required ? null : (
+            <span data-slot="question-optional" className="text-xs font-normal text-fg-secondary">
+              {t('next.optional')}
+            </span>
+          )}
         </span>
-        <span className="sr-only">{t('questionPosition', { position, total })}</span>
-        {question.text ?? t('untitledQuestion')}{' '}
-        {/* The WORD carries whether an answer is required, not a colour. WCAG 1.4.1
-            wants that anyway, and `text-accent-red` measures 4.43:1 on the card
-            surface in the dark palette — under AA for text this size, and exactly
-            the light-passes/dark-fails asymmetry this project keeps shipping. */}
-        <span className="font-normal text-fg-secondary">
-          {question.required ? t('requiredMarker') : t('optionalMarker')}
+        <span
+          data-slot="question-text"
+          className="mt-3.5 block text-xl font-normal leading-snug text-fg-primary"
+        >
+          {question.text ?? t('untitledQuestion')}
+          {question.required ? <span className="sr-only"> {t('requiredMarker')}</span> : null}
         </span>
       </legend>
 
-      <div className="clear-both">
+      <div className="clear-both pt-3.5">
         {invalid && (
           // Soft red fill with primary ink, the treatment `alertVariants` already uses,
           // rather than red text on the card: measured, that pair clears AA in both

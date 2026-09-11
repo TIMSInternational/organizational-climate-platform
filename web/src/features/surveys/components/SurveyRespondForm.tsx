@@ -1,14 +1,17 @@
-import {
-  Fragment,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type FormEvent,
-} from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
-import { AlertCircle, Check, Clock, EyeOff, FileText, Info, Lock, ShieldCheck } from 'lucide-react'
+import {
+  AlertCircle,
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  Clock,
+  EyeOff,
+  FileText,
+  Info,
+  Lock,
+  ShieldCheck,
+} from 'lucide-react'
 import { useTranslation } from '../../../i18n'
 import {
   Alert,
@@ -24,9 +27,7 @@ import {
 // loads — reaching through the barrel would put every chart module in its import
 // graph to read a single integer.
 import { ANONYMITY_FLOOR } from '../../../components/charts/suppression'
-import { RespondCaption, RespondReading } from '../../../components/layout'
 import {
-  answeredCount,
   hydrateAnswers,
   missingRequired,
   orderQuestions,
@@ -34,6 +35,8 @@ import {
   type AnswerMap,
   type AnswerState,
 } from '../respondAnswers'
+import { estimatedMinutes, formatDayMonth, isUnderAMinute } from '../respondEstimate'
+import { AnonymityNotice } from './AnonymityNotice'
 import {
   RESPOND_AUTOSAVE_DELAY_MS,
   RESPOND_SAVE_IDLE,
@@ -44,7 +47,7 @@ import {
   respondAutosaveAllowed,
   type RespondSaveState,
 } from '../respondAutosave'
-import { respondDimensions, type RespondSection } from '../respondDimensions'
+import { respondDimensions } from '../respondDimensions'
 import { dimensionLabel } from '../dimensionLabel'
 import { clearSessionId, ensureSessionId } from '../respondSession'
 import {
@@ -57,10 +60,11 @@ import {
 } from '../api/surveyResponses'
 import { questionFieldId } from '../respondFieldIds'
 import RespondQuestionField from './RespondQuestionField'
-// Cross-feature, and the established pattern for this module: microclimates and
-// analytics both reach for the dashboard's grammar helpers. `MonoReadings` is where
-// "a translated sentence whose numbers are readings" is solved once.
-import { MonoReadings } from '../../dashboard/components/dashboardGrammar'
+
+// Re-exported because `/survey-invitations/:token`'s landing card has always imported the
+// promise from here; it moved to its own module so the employee's Home can draw the very
+// same block beside the survey it is about.
+export { AnonymityNotice }
 
 export interface SurveyRespondFormProps {
   surveyId: string
@@ -219,6 +223,24 @@ export default function SurveyRespondForm({
    * was dropped on the floor. This is the edge that makes the effect re-derive it.
    */
   const [savesLanded, setSavesLanded] = useState(0)
+  /**
+   * The question on screen, as an index into `questions`.
+   *
+   * The canvas asks one question at a time (RespondSurveyPhone, 10 Sep; the triage's
+   * "one question at a time on small screens"), with Anterior and Siguiente under the
+   * card. Only the presentation is paged: the answer map, the autosave, the resume and
+   * the one POST that completes the response are the same ones the single long form
+   * had, over the whole survey, whatever page is showing.
+   */
+  const [page, setPage] = useState(0)
+  /**
+   * The question whose fieldset takes focus once it is the one on screen.
+   *
+   * State rather than a direct `focus()` because a page turn has to render the new
+   * question before there is anything to focus — the fieldset of the next question does
+   * not exist while the current one is drawn.
+   */
+  const [focusTarget, setFocusTarget] = useState<string | null>(null)
 
   // The session id is minted before the first read, because it is both the resume
   // key on the way in and the idempotency key on the way out. Deriving it later
@@ -577,8 +599,10 @@ export default function SurveyRespondForm({
       return
     }
 
-    const node = document.getElementById(questionFieldId(target.id))
-    node?.focus()
+    // One question per page, so "where they stopped" is a page as well as a focus: the
+    // page turns to it, and the focus follows once that question has rendered.
+    setPage(questions.indexOf(target))
+    setFocusTarget(target.id)
     announce(
       t('resumedAtQuestion', {
         position: questions.indexOf(target) + 1,
@@ -665,18 +689,68 @@ export default function SurveyRespondForm({
     }
   }, [autosave])
 
+  /**
+   * Focus follows a page turn, once the new question has rendered.
+   *
+   * A page turn replaces the fieldset the focus was in, and focus left on a removed node
+   * falls to `<body>` — a keyboard or screen-reader respondent would be put back at the
+   * top of the document after every "Siguiente". So the target is named when the page is
+   * turned and focused here, on the commit in which it is the question on screen.
+   */
+  const currentId = questions[Math.min(page, Math.max(questions.length - 1, 0))]?.id ?? null
+  useEffect(() => {
+    if (focusTarget === null || focusTarget !== currentId) return
+    setFocusTarget(null)
+    document.getElementById(questionFieldId(focusTarget))?.focus()
+  }, [currentId, focusTarget])
+
+  /** Turns to a question and puts the respondent on it. */
+  function turnTo(index: number): void {
+    const target = questions[index]
+    if (target === undefined) return
+    setPage(index)
+    setFocusTarget(target.id)
+  }
+
+  /**
+   * Siguiente. A required question stops the respondent here rather than at the end.
+   *
+   * The same rule as the submit (`missingRequired`, over this one question), and the same
+   * inline error — found now, on the question they are looking at, instead of after the
+   * last page sends them back to it.
+   */
+  function goNext(index: number): void {
+    const current = questions[index]
+    if (current === undefined) return
+    const missing = missingRequired([current], answers)
+    if (missing.length > 0) {
+      setInvalidIds((ids) => (ids.includes(current.id) ? ids : [...ids, current.id]))
+      document.getElementById(questionFieldId(current.id))?.focus()
+      return
+    }
+    turnTo(index + 1)
+  }
+
   function handleSubmit(event: FormEvent): void {
     event.preventDefault()
     if (!view) return
+
+    // Enter in a text answer submits the form from any page. Before the last one that
+    // means "next", never "send": a respondent on question 2 has not asked to finish.
+    const index = Math.min(page, Math.max(questions.length - 1, 0))
+    if (index < questions.length - 1) {
+      goNext(index)
+      return
+    }
 
     const missing = missingRequired(questions, answers)
     if (missing.length > 0) {
       setInvalidIds(missing)
       announce(t('missingRequired', { count: missing.length }))
-      // Focus the first unanswered question rather than a summary at the top: the
-      // respondent has to reach the question anyway, and on a 40-question survey a
-      // summary leaves them scrolling for it.
-      document.getElementById(questionFieldId(missing[0]))?.focus()
+      // Turn to the first unanswered question rather than a summary: the respondent
+      // has to reach the question anyway, and on a 40-question survey a summary leaves
+      // them paging for it. `turnTo` focuses it once it is on screen.
+      turnTo(questions.findIndex((question) => question.id === missing[0]))
       return
     }
 
@@ -724,18 +798,29 @@ export default function SurveyRespondForm({
   if (!view) return null
 
   const total = questions.length
-  const answered = answeredCount(questions, answers)
+  const index = Math.min(page, Math.max(total - 1, 0))
+  const current = questions[index]
+  const position = total === 0 ? 0 : index + 1
+  const isLast = index >= total - 1
   const deadline =
     view.timeLimitMinutes === null ? null : startedAt.current + view.timeLimitMinutes * 60_000
   const remainingMs = deadline === null ? null : deadline - now
+  // The heading of the section this question is asked under, when the form prints
+  // sections at all — `respondDimensions`' decision, exactly as the headings were before
+  // the page was split: a randomised survey, or one with no categories, prints none.
+  const dimensionKey =
+    current && dimensions.sectioned
+      ? dimensions.sections.find((section) => section.questions.some((q) => q.id === current.id))?.key
+      : undefined
+  const currentDimension = dimensionKey === undefined ? null : dimensionLabel(dimensionKey, tRoot)
 
   return (
     <RespondSurface>
-      <RespondCaption
-        eyebrow={t('eyebrow')}
-        title={view.title ?? t('untitledSurvey')}
-        description={view.description}
-      />
+      {/* The promise, first and full width, once. The canvas opens the page on it
+          (RespondSurveyPhone, 10 Sep), and one question at a time is exactly why it has
+          to be here rather than beside a question: it is read before the first answer
+          and stays at the head of every page after it. */}
+      <AnonymityNotice anonymous={view.anonymous} />
 
       <ContentLanguageNotice
         requested={locale}
@@ -743,50 +828,51 @@ export default function SurveyRespondForm({
         fallbackCount={view.fallbackFields.length}
       />
 
-      {/* The promise, first and full width.
-          It used to be the top tile of a right-hand rail. The rail held the right
-          content and put it in the wrong place: a third of the width gone from the
-          form, a column of white space below the fold, and — because it collapsed at
-          `lg` — nothing at all on a phone until after the last question. Here it is
-          the first thing every respondent reads on every viewport, which is what a
-          promise that decides whether they answer honestly is worth. */}
-      <AnonymityNotice anonymous={view.anonymous} />
-
-      {/* The rail's readings, relocated rather than deleted: when the survey closes,
-          how long it suggests, and — only when the survey turned progress off — how
-          many questions there are.
-          `grid-flow-col` with `auto-cols-fr` from `sm` up, NOT `sm:grid-cols-2`.
-          A fixed track count strands an empty cell whenever the optional readings are
-          absent, which is the common case: the rail shipped exactly that defect, a
-          197px CLOSES tile beside a hole at every viewport from 640px up. Auto
-          columns are as wide as there are readings to put in them. */}
-      <section
-        aria-label={t('panelLabel')}
-        className="grid gap-panel-gap sm:grid-flow-col sm:auto-cols-fr"
-      >
-        <RespondReading label={t('closesReading')} value={formatDate(view.endDate, locale)} />
-        {remainingMs !== null && remainingMs > 0 && (
-          <RespondReading
-            label={t('timeReading')}
-            value={formatDuration(remainingMs)}
-            sub={t('timeLimitHelp', { minutes: view.timeLimitMinutes ?? 0 })}
+      {/* The canvas's progress: the survey's own name as the eyebrow — the page's
+          `<h1>`, set in the eyebrow face because what matters on this screen is the
+          question, not its container — where the respondent is, and a 6px bar. The
+          count and the bar are `ShowProgress`'s, as they always were; the `2/6` chip on
+          the card says the position either way. */}
+      <header data-slot="respond-progress" className="flex flex-col gap-1.5">
+        <div className="flex items-baseline justify-between gap-2">
+          <h1 className="m-0 min-w-0 font-sans text-2xs font-bold uppercase leading-snug tracking-eyebrow text-fg-secondary">
+            {view.title ?? t('untitledSurvey')}
+          </h1>
+          {view.showProgress && total > 0 ? (
+            <span
+              data-slot="respond-position"
+              className="shrink-0 font-mono text-xs tabular-nums text-fg-secondary"
+            >
+              {t('next.position', { position, total })}
+            </span>
+          ) : null}
+        </div>
+        {view.showProgress && total > 0 ? (
+          <Progress
+            value={Math.round((position / total) * 100)}
+            aria-label={t('questionPosition', { position, total })}
           />
-        )}
-        {/* Only when the survey turned progress OFF. With the count in the bottom
-            bar, `Questions 5` says the same thing the denominator of `0 of 5`
-            already said, and two readings of one fact is what makes an instrument
-            read as decoration. */}
-        {!view.showProgress && (
-          <RespondReading label={t('questionsReading')} value={String(total)} />
-        )}
-      </section>
+        ) : null}
+      </header>
+
+      {/* The author's description, on the first page only: it introduces the survey,
+          and repeated over every question it would push the question down the phone. */}
+      {index === 0 && view.description ? (
+        <p className="m-0 max-w-prose text-base text-fg-secondary">{view.description}</p>
+      ) : null}
+
+      {remainingMs !== null && remainingMs > 0 ? (
+        <p className="m-0 text-sm text-fg-secondary">
+          {t('timeLimitHelp', { minutes: view.timeLimitMinutes ?? 0 })}
+        </p>
+      ) : null}
 
       {/* `noValidate`: the browser's own required-field bubbles are untranslated,
           land on a radio rather than on the question, and cannot be announced.
           `missingRequired` does the same job with copy from the catalogue and moves
           focus onto the question itself. */}
-      <form onSubmit={handleSubmit} noValidate className="grid gap-panel-gap">
-        {/* The expired countdown stays with the questions: it is an alert about what
+      <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+        {/* The expired countdown stays with the question: it is an alert about what
             the respondent is doing right now, and `role="alert"` beside the form is
             where it will be read. */}
         {remainingMs !== null && remainingMs <= 0 && (
@@ -797,27 +883,22 @@ export default function SurveyRespondForm({
           </Alert>
         )}
 
-        {dimensions.sections.map((section) => (
-          <Fragment key={section.key}>
-            {dimensions.sectioned && <DimensionHeading section={section} total={total} />}
-            {section.questions.map((question, index) => (
-              <RespondQuestionField
-                key={question.id}
-                question={question}
-                // `firstIndex` is the section's 1-based place in READING order, so
-                // the numbering runs 1..n down the page across every heading rather
-                // than restarting inside each one.
-                position={section.firstIndex + index}
-                total={total}
-                answer={answers[question.id]}
-                invalid={invalidIds.includes(question.id)}
-                disabled={busy !== 'idle'}
-                onChange={(next) => updateAnswer(question.id, next)}
-                onAnnounce={announce}
-              />
-            ))}
-          </Fragment>
-        ))}
+        {current ? (
+          <RespondQuestionField
+            key={current.id}
+            question={current}
+            // The place in READING order, so the numbering is the order the questions
+            // are actually asked in — which is not `question.order` once randomised.
+            position={position}
+            total={total}
+            dimension={currentDimension}
+            answer={answers[current.id]}
+            invalid={invalidIds.includes(current.id)}
+            disabled={busy !== 'idle'}
+            onChange={(next) => updateAnswer(current.id, next)}
+            onAnnounce={announce}
+          />
+        ) : null}
 
         {submitError && (
           <Alert variant="destructive" role="alert">
@@ -826,16 +907,107 @@ export default function SurveyRespondForm({
           </Alert>
         )}
 
-        <SubmitBar
-          answered={answered}
-          total={total}
-          showProgress={view.showProgress}
-          allowPartialResponses={view.allowPartialResponses}
-          busy={busy}
-          saveState={saveState}
-          onSave={() => void send(false)}
-        />
+        {/* A save that is not happening is an alert; a save that is happening is a
+            line of text (#369). It sits directly over the two buttons the respondent
+            presses on every page, which is the one place that is on screen on every
+            page — a background save fails while somebody is on question 3 of 50, and
+            an alert anywhere else would be read by nobody. It stays until a save
+            succeeds. */}
+        {saveState.status === 'error' && (
+          <Alert variant="destructive" role="alert" data-slot="respond-save-failed">
+            <AlertCircle aria-hidden="true" />
+            <AlertTitle>{t('saveFailedTitle')}</AlertTitle>
+            <AlertDescription>
+              <span>
+                {saveState.savedAt === null
+                  ? t('saveFailedBody')
+                  : t('saveFailedSince', { time: formatTime(saveState.savedAt, locale) })}
+              </span>
+              {/* The server's own message names what it objected to, and "this survey
+                  has reached its response limit" is something a respondent can act on
+                  in a way that "not saved" is not. Additional to our sentence, never
+                  instead of it. */}
+              {saveState.message !== null && (
+                <span className="mt-inline block text-fg-secondary">{saveState.message}</span>
+              )}
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* The canvas's pair, 44px tall: Anterior outlined on the left, the way on in
+            red on the right and twice as wide. On the last question the way on is the
+            submit — the one POST that completes the response, unchanged. Anterior is
+            drawn on the first question too, disabled, so the primary action does not
+            jump sideways between the first page and the second. */}
+        <div data-slot="respond-nav" className="flex gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 flex-1"
+            disabled={index === 0 || busy !== 'idle'}
+            onClick={() => turnTo(index - 1)}
+          >
+            <ArrowLeft aria-hidden="true" />
+            {t('next.previous')}
+          </Button>
+          {isLast ? (
+            <Button type="submit" variant="primary" className="h-11 flex-2" disabled={busy !== 'idle'}>
+              {busy === 'submitting' ? tRoot('common.submitting') : t('submitResponse')}
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="primary"
+              className="h-11 flex-2"
+              disabled={busy !== 'idle'}
+              onClick={() => goNext(index)}
+            >
+              {t('next.next')}
+              <ArrowRight aria-hidden="true" />
+            </Button>
+          )}
+        </div>
+
+        {/* "Guardar y terminar después" as the canvas draws it — an underlined line under
+            the pair — and only where the survey allows partial responses. The save state
+            rides under it: it is the answer to the question this link asks, "is my work
+            anywhere but this screen", on every page of the survey. */}
+        {view.allowPartialResponses && (
+          <div data-slot="respond-save" className="flex flex-col items-center gap-1">
+            <Button
+              type="button"
+              variant="link"
+              disabled={busy !== 'idle'}
+              onClick={() => void send(false)}
+              className="p-2 text-base font-normal text-fg-secondary underline"
+            >
+              {busy === 'saving' ? t('savingProgress') : t('saveAndFinishLater')}
+            </Button>
+            <SaveState state={saveState} locale={locale} />
+          </div>
+        )}
       </form>
+
+      {/* The foot, as the canvas prints it: when the survey closes, and how long it
+          takes — or, for a survey that sets a limit, how long is left of it. At the
+          bottom of the column on a short page, under the form on a long one. */}
+      <footer
+        data-slot="respond-footer"
+        className="mt-auto flex flex-wrap justify-between gap-2 text-xs text-fg-secondary"
+      >
+        <span>{t('next.closesOn', { date: formatDayMonth(view.endDate, locale) })}</span>
+        {remainingMs !== null && remainingMs > 0 ? (
+          <span data-slot="respond-time-left" className="font-mono tabular-nums">
+            {t('timeLimitRemaining', { time: formatDuration(remainingMs) })}
+          </span>
+        ) : (
+          <span>
+            {isUnderAMinute(total)
+              ? t('next.underAMinute')
+              : t('next.aboutMinutes', { minutes: estimatedMinutes(total) })}
+          </span>
+        )}
+      </footer>
 
       <LiveRegion>{announcement}</LiveRegion>
     </RespondSurface>
@@ -843,9 +1015,12 @@ export default function SurveyRespondForm({
 }
 
 /**
- * The one panel on the page.
+ * The column every state of the page renders in.
  *
- * Every state this component can be in renders inside it — the form, the four
+ * No panel of its own since the canvas redesign (RespondSurveyPhone and
+ * RespondConfirmationPhone, 10 Sep): the cards sit straight on the ground, and a bordered
+ * panel around them read as a card holding cards. Every state this component can be in
+ * renders inside it — the form, the four
  * unavailable states, the confirmation — so a respondent who lands on a closed
  * survey gets a page rather than a sentence floating on a grey field. `flex-1`
  * fills the column `RespondShell`'s `<main>` gives it, for the same reason
@@ -859,241 +1034,8 @@ export default function SurveyRespondForm({
  */
 export function RespondSurface({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex flex-1 flex-col gap-panel-gap rounded-xl border border-line-panel bg-surface-panel p-panel">
+    <div data-slot="respond-surface" className="flex flex-1 flex-col gap-4">
       {children}
-    </div>
-  )
-}
-
-/**
- * The heading over one run of questions, with the range it covers.
- *
- * The design prints `PSYCHOLOGICAL SAFETY ———— 1–2 OF 12`: an eyebrow, a rule that
- * takes up the slack, and a reading of where in the form the respondent is. Its note
- * says why an ungrouped run of twelve questions is the thing being fixed — twelve on
- * one page is right, because a wizard makes "save and finish later" meaningless and
- * hides how much is left, but an unsectioned list tells the respondent nothing about
- * what is being asked.
- *
- * The rule is `aria-hidden` decoration. The range is not: it is the same fact the
- * question index gives, at the granularity of the section, and it is set in mono
- * with tabular figures like every other reading on this page.
- */
-function DimensionHeading({ section, total }: { section: RespondSection; total: number }) {
-  const { t } = useTranslation('surveyRespond')
-  const { t: tRoot } = useTranslation()
-
-  // "3 of 12" for a section of one, "1–2 of 12" for the rest. A range whose ends are
-  // equal reads as an error rather than as a single question.
-  const range =
-    section.firstIndex === section.lastIndex
-      ? t('dimensionPosition', { position: section.firstIndex, total })
-      : t('dimensionRange', { from: section.firstIndex, to: section.lastIndex, total })
-
-  const label = dimensionLabel(section.key, tRoot)
-
-  return (
-    /*
-      `min-w-0` on the ROW, not only on the eyebrow.
-
-      This row is a grid item of the `<form className="grid">` above, and a grid item's
-      automatic minimum size is its min-content width. The eyebrow below is `truncate`,
-      i.e. `white-space: nowrap`, so the row's min-content width is the whole category
-      on one line — and the track grows to fit it, carrying the page with it. Measured
-      before this class existed: a 100-character category rendered the respond page 983
-      CSS px wide inside a 390 px viewport, ellipsising the eyebrow nine hundred pixels
-      out and carrying the question cards past the viewport edge with it. `truncate` on
-      the child does not bound anything while its parent is free to grow.
-    */
-    <div className="flex min-w-0 items-center gap-inline pt-2">
-      {/*
-        `min-w-0 truncate`, and `title` so nothing is lost.
-
-        Until an uncatalogued category could reach this slot, only the catalogue's own
-        short strings could, and the row could not be overrun. Now the author's
-        own `varchar(100)` lands here: a hundred characters of eyebrow would either
-        squeeze the rule to nothing and push the range off the row, or — with
-        `min-w-0` alone — wrap the eyebrow to three lines and drag the rule and the
-        reading down with it. `truncate` keeps the design's one-line eyebrow and
-        `title` keeps the whole category reachable, which matters because it is the
-        author's text and not ours to discard.
-      */}
-      <h2
-        title={label}
-        className="min-w-0 truncate text-2xs font-semibold uppercase tracking-eyebrow text-fg-secondary"
-      >
-        {label}
-      </h2>
-      {/*
-        `min-w-8` so the rule is still a rule at the point the heading has taken the
-        row: `flex-1` is `flex: 1 1 0%`, whose basis is zero, so it is the first thing
-        a long heading shrinks away to nothing.
-      */}
-      <span aria-hidden="true" className="h-px min-w-8 flex-1 bg-line-light" />
-      {/*
-        `shrink-0`: the range is a reading, not decoration. An ellipsised `1–2 OF…` is
-        worse than an ellipsised heading, because a truncated number reads as a
-        different number.
-      */}
-      <span className="shrink-0 font-mono text-xs tabular-nums text-fg-secondary">{range}</span>
-    </div>
-  )
-}
-
-/**
- * The bar the respondent finishes from, stuck to the bottom of the viewport.
- *
- * It carries what the right-hand rail used to: how much is answered, and the two
- * things that can be done about it. The design's reasoning is that a respondent
- * eight questions into twelve should never have to scroll to find out how many are
- * left or to stop for the day — and on a phone, where this page is mostly answered,
- * the rail was not rendered at all.
- *
- * ## Why `sticky` and not `fixed`
- *
- * `fixed` takes the bar out of flow and it then overlaps the last question at the
- * end of the document, where there is nothing left to scroll. `sticky` is in flow:
- * it rides the viewport while there is content below it and comes to rest above the
- * panel's bottom edge when there is not.
- *
- * There is no negative bottom margin on it, deliberately. Sticky positioning
- * constrains the MARGIN box, so `-mb-panel` with `bottom-0` would push the bar's
- * border box that far below the viewport and clip it — the full bleed is horizontal
- * only.
- *
- * ## What stays gated
- *
- * `ShowProgress` is a survey setting, and it gates the whole progress cluster here
- * exactly as it gated the tile before. A survey that turned progress off gets a bar
- * of two buttons, and the question count moves up to the readings row.
- *
- * ## Why the save state is here and not somewhere calmer
- *
- * This is the one part of the page a respondent already looks at to decide whether to
- * carry on or stop: it holds how much is answered and both ways to leave. "Is my work
- * anywhere but this screen" is the third fact in that decision, and putting it at the
- * top of the page — where it would scroll away after question three — is how a
- * reassurance comes to be unavailable at the moment it is needed.
- *
- * It rides with the progress cluster inside one wrapper rather than becoming a third
- * child of the actions row. `justify-between` with three children pushes the middle one
- * to the centre of a row that is otherwise read left-to-right, and it moves the moment
- * `ShowProgress` is off.
- *
- * ## The failure is a row of this bar, not a panel in the form
- *
- * It was drawn under the last question first — beside `submitError`, which is the right
- * place for a SUBMIT that failed, because a submit is pressed from here and the
- * respondent is already at the bottom. Rendering it proved that wrong for a save: a
- * background save fails while somebody is on question 3 of 50, and the alert sat two
- * thousand pixels below them, unread, for the rest of the survey. Every test still
- * passed — the alert existed, carried the right copy and had `role="alert"`. It was
- * simply somewhere nobody was looking.
- *
- * Inside the sticky bar it follows them down the form, which is the entire property the
- * bar exists for. `respondSticky.test.tsx` asserts that `[data-slot="respond-submit-bar"]`
- * itself is the sticky box, so the alert is a ROW of it and the flex layout moved to an
- * inner row rather than the alert becoming a sibling that would scroll away.
- */
-function SubmitBar({
-  answered,
-  total,
-  showProgress,
-  allowPartialResponses,
-  busy,
-  saveState,
-  onSave,
-}: {
-  answered: number
-  total: number
-  showProgress: boolean
-  allowPartialResponses: boolean
-  busy: 'idle' | 'saving' | 'submitting'
-  saveState: RespondSaveState
-  onSave: () => void
-}) {
-  const { t, locale } = useTranslation('surveyRespond')
-  const { t: tRoot } = useTranslation()
-
-  return (
-    <div
-      data-slot="respond-submit-bar"
-      className="sticky bottom-0 -mx-panel border-t border-line-panel bg-surface-panel px-panel py-card"
-    >
-      {/* A save that is not happening is an alert; a save that is happening is a line of
-          text. The asymmetry is the whole reason #369 asks for the state to be visible:
-          a background save that has quietly stopped is worse than no background save at
-          all, because it buys trust it is no longer earning and the respondent stops
-          taking care not to lose their work. So it stays until a save succeeds. */}
-      {saveState.status === 'error' && (
-        <Alert
-          variant="destructive"
-          role="alert"
-          data-slot="respond-save-failed"
-          className="mb-panel-gap"
-        >
-          <AlertCircle aria-hidden="true" />
-          <AlertTitle>{t('saveFailedTitle')}</AlertTitle>
-          <AlertDescription>
-            <span>
-              {saveState.savedAt === null
-                ? t('saveFailedBody')
-                : t('saveFailedSince', { time: formatTime(saveState.savedAt, locale) })}
-            </span>
-            {/* The server's own message names what it objected to, and "this survey has
-                reached its response limit" is something a respondent can act on in a way
-                that "not saved" is not. Additional to our sentence, never instead of it. */}
-            {saveState.message !== null && (
-              <span className="mt-inline block text-fg-secondary">{saveState.message}</span>
-            )}
-          </AlertDescription>
-        </Alert>
-      )}
-
-      <div className="flex flex-wrap items-center justify-between gap-panel-gap">
-        <span className="flex min-w-0 flex-wrap items-center gap-panel-gap">
-          {showProgress && (
-            <span className="flex min-w-0 items-center gap-inline">
-              {/* The track is `bg-surface-icon-box` against the panel it sits on, which
-                  is `Progress`'s own default — unlike the tile this replaced, where the
-                  track and the tile were the same token and the bar vanished at zero. */}
-              <Progress
-                className="w-32"
-                value={total === 0 ? 0 : Math.round((answered / total) * 100)}
-                aria-label={t('progressLabel')}
-              />
-              {/* Numerals in mono, prose in sans — `MonoReadings` exists for exactly this
-                  sentence shape, and the rule is not decorative: the countdown two
-                  readings away is already asserted `font-mono tabular-nums`, so setting
-                  this one in the sans face made a single instrument print its two
-                  readings in two typefaces. Tabular figures come with it, which is what
-                  stops the line reflowing on every answer. */}
-              <span className="text-sm text-fg-secondary">
-                <MonoReadings
-                  t={t}
-                  messageKey="answeredOfTotal"
-                  params={{ answered, total }}
-                  locale={locale}
-                />
-              </span>
-            </span>
-          )}
-          <SaveState state={saveState} locale={locale} />
-        </span>
-
-        {/* Save first, submit last, which is the order the design draws and the order
-            the two actions are reached in: the destination is on the right. */}
-        <span className="flex flex-wrap gap-inline">
-          {allowPartialResponses && (
-            <Button type="button" variant="secondary" disabled={busy !== 'idle'} onClick={onSave}>
-              {busy === 'saving' ? t('savingProgress') : t('saveAndFinishLater')}
-            </Button>
-          )}
-          <Button type="submit" variant="primary" disabled={busy !== 'idle'}>
-            {busy === 'submitting' ? tRoot('common.submitting') : t('submitResponse')}
-          </Button>
-        </span>
-      </div>
     </div>
   )
 }
@@ -1146,88 +1088,6 @@ function SaveState({ state, locale }: { state: RespondSaveState; locale: string 
       )}
       <span>{text}</span>
     </span>
-  )
-}
-
-/**
- * The anonymity promise, stated precisely and in both directions.
- *
- * Telling someone a survey is anonymous is part of the consent, not decoration — and
- * the inverse matters just as much. A survey that records who answered must say so;
- * saying nothing lets a respondent assume the more private of the two.
- *
- * The wording tracks what the server actually does. An anonymous response is written
- * with no user id, no IP address and no user agent, and a demographic whose cohort is
- * too small is not recorded either, so "not linked to you" is a description of the
- * row rather than a promise about who looks at it.
- *
- * ## Why it is the first block on the page
- *
- * This is the only surface an ordinary employee ever sees, and it decides whether
- * they answer honestly. It was a plain `Alert` in the run of the page once — above
- * the fold and then out of sight for the rest of a forty-question survey — and then
- * the top tile of a sticky right-hand rail, which held it in view on a wide screen
- * and did not exist at all below `lg`. It is now the first full-width block under
- * the title on every viewport, which is the one placement that does not depend on
- * the width of the screen it is read on.
- *
- * ## The state is carried by a word, never by the colour
- *
- * Green means anonymous and blue means identified, but the chip beside the icon
- * spells out which — WCAG 1.4.1, and the same rule the rest of the redesign keeps:
- * colour does one job and never carries meaning alone.
- *
- * ## Why it is exported
- *
- * `/survey-invitations/:token` shows a landing card before the questions load, and the
- * moment a respondent decides whether to answer honestly is the moment they press
- * "start", not the moment the first question paints. The promise has to be on that card
- * — and it has to be *this* promise, character for character, because two blocks that
- * both claim to describe how a response is stored and disagree by a clause is worse
- * than one of them not existing.
- */
-export function AnonymityNotice({ anonymous }: { anonymous: boolean }) {
-  const { t } = useTranslation('surveyRespond')
-
-  return (
-    <section
-      className={
-        anonymous
-          ? 'grid gap-inline rounded-xl border border-accent-green-ring bg-accent-green-soft p-card'
-          : 'grid gap-inline rounded-xl border border-accent-blue-ring bg-accent-blue-soft p-card'
-      }
-    >
-      <span className="flex items-center gap-inline">
-        <span
-          className={
-            anonymous
-              ? 'grid size-icon-box shrink-0 place-items-center rounded-md text-accent-green'
-              : 'grid size-icon-box shrink-0 place-items-center rounded-md text-accent-blue'
-          }
-        >
-          {anonymous ? (
-            <EyeOff aria-hidden="true" className="size-icon" />
-          ) : (
-            <ShieldCheck aria-hidden="true" className="size-icon" />
-          )}
-        </span>
-        {/* The word is `text-fg-secondary`, NOT the accent. Measured against the
-            soft fill it sits on, `text-accent-green` is 3.49:1 in light and
-            `text-accent-blue` is 3.40:1 — both under AA for text this size, and
-            both perfectly legal classes that compile fine, which is the shape of
-            failure this feature's contrast guard exists for. The accent stays on
-            the icon, which is not text and does not carry the meaning. */}
-        <span className="text-2xs font-semibold uppercase tracking-label text-fg-secondary">
-          {anonymous ? t('anonymousChip') : t('identifiedChip')}
-        </span>
-      </span>
-      <h2 className="text-base font-semibold text-fg-primary">
-        {anonymous ? t('anonymousTitle') : t('identifiedTitle')}
-      </h2>
-      <p className="text-sm text-fg-secondary">
-        {anonymous ? t('anonymousBody') : t('identifiedBody')}
-      </p>
-    </section>
   )
 }
 
@@ -1393,7 +1253,9 @@ function Submitted({
   const closesOn = endDate === null ? null : formatDate(endDate, locale, 'long')
 
   return (
-    <div className="grid gap-panel-gap">
+    <div className="flex flex-col gap-4">
+      {/* The canvas's thank-you (RespondConfirmationPhone, 10 Sep) is the product's own
+          success alert — the soft green block with the shield — so it stays that. */}
       <Alert variant="success" role="status">
         <ShieldCheck aria-hidden="true" />
         <AlertTitle>
@@ -1404,25 +1266,34 @@ function Submitted({
         </AlertDescription>
       </Alert>
 
-      {justSubmitted && (
-        <p className="max-w-prose text-base text-fg-secondary">
-          {t('submittedSummary', {
-            count: result.answeredQuestionCount,
-            time: formatTime(submittedAt, locale),
-          })}
-        </p>
-      )}
-
-      {/* The receipt. A respondent who has just handed over forty answers with no
-          copy of them gets one reading back: how many of the questions were
-          recorded. It is the server's own count, not the form's — what was stored,
-          rather than what was typed. */}
-      <div className="max-w-field">
-        <RespondReading
-          label={t('receiptReading')}
-          value={String(result.answeredQuestionCount)}
-          sub={t('receiptSub', { total: result.questionCount })}
-        />
+      {/* The receipt row, as the canvas draws it: the tile, and beside it when and how.
+          A respondent who has just handed over forty answers with no copy of them gets
+          one reading back — how many of the questions were recorded, the server's own
+          count rather than the form's, what was stored rather than what was typed. The
+          count is the tile's, so the sentence beside it says only the rest. */}
+      <div data-slot="respond-receipt" className="flex items-center gap-3.5">
+        <div className="flex shrink-0 flex-col gap-0.5 rounded-lg bg-surface-icon-box px-3.5 py-2.5">
+          <span className="text-2xs font-bold uppercase tracking-label text-fg-secondary">
+            {t('receiptReading')}
+          </span>
+          <span className="font-mono text-reading leading-tight tabular-nums text-fg-primary">
+            {result.answeredQuestionCount}{' '}
+            <span className="text-sm font-normal text-fg-secondary">
+              {t('next.receiptOf', { total: result.questionCount })}
+            </span>
+          </span>
+        </div>
+        {justSubmitted && (
+          // "Se guardaron sin nada que lo identifique" is a sentence about how THIS
+          // response was stored, so it is said only when the server says the response is
+          // anonymous (`SurveySubmissionResult.isAnonymous`). On a survey that records who
+          // answered, the time is the whole of what is true.
+          <p className="m-0 min-w-0 flex-1 text-base text-fg-secondary">
+            {result.isAnonymous
+              ? t('next.submittedAtAnonymous', { time: formatTime(submittedAt, locale) })
+              : t('next.submittedAt', { time: formatTime(submittedAt, locale) })}
+          </p>
+        )}
       </div>
 
       {result.suppressedDemographics.length > 0 && (
@@ -1456,17 +1327,21 @@ function Submitted({
         </Alert>
       )}
 
+      {/* The canvas's card: the eyebrow over a hairline, then the three claims, each
+          separated by a lighter hairline. The heading is an `<h2>` for the outline and
+          drawn in the eyebrow face, as the artboard sets it, not in the page serif. */}
       <section
         aria-labelledby={WHAT_HAPPENS_HEADING_ID}
-        className="overflow-hidden rounded-xl border border-line-light"
+        data-slot="respond-what-happens"
+        className="flex flex-col rounded-xl border border-line-default bg-surface-card px-4 py-1 shadow-sm"
       >
         <h2
           id={WHAT_HAPPENS_HEADING_ID}
-          className="border-b border-line-light bg-surface-icon-box px-card py-2 text-2xs font-semibold uppercase tracking-label text-fg-secondary"
+          className="m-0 border-b border-line-light pb-1 pt-3 font-sans text-2xs font-bold uppercase leading-snug tracking-eyebrow text-fg-secondary"
         >
           {t('whatHappensNowTitle')}
         </h2>
-        <ul className="grid">
+        <ul className="m-0 flex list-none flex-col p-0">
           <WhatHappensRow
             icon={<Lock aria-hidden="true" className="size-icon" />}
             title={t('happensPooledTitle')}
@@ -1494,14 +1369,17 @@ function Submitted({
           there is a round trip through `RequireAuth` to a sign-in form nobody asked
           for. */}
       {!publicEntry && (
-        <p>
-          <Button asChild variant="secondary">
-            <Link to="/dashboard">{t('backToHome')}</Link>
-          </Button>
-        </p>
+        // The canvas's way back: an outlined button the width of the column, 44px, the
+        // arrow before the word.
+        <Button asChild variant="outline" className="h-11 w-full">
+          <Link to="/dashboard">
+            <ArrowRight aria-hidden="true" />
+            {t('backToHome')}
+          </Link>
+        </Button>
       )}
 
-      <p className="max-w-prose text-sm text-fg-secondary">{t('noCopyNote')}</p>
+      <p className="m-0 text-sm text-fg-secondary">{t('noCopyNote')}</p>
     </div>
   )
 }
@@ -1526,10 +1404,12 @@ function WhatHappensRow({
   body: string
 }) {
   return (
-    <li className="flex items-start gap-inline border-b border-line-light p-card last:border-b-0">
-      <span className="shrink-0 pt-0.5 text-fg-secondary">{icon}</span>
-      <span className="grid gap-0.5">
-        <span className="text-base font-medium text-fg-primary">{title}</span>
+    <li className="flex items-start gap-2.5 border-b border-line-light py-3 last:border-b-0">
+      <span aria-hidden="true" className="shrink-0 pt-px text-fg-secondary">
+        {icon}
+      </span>
+      <span className="flex min-w-0 flex-col gap-0.5">
+        <span className="text-base font-semibold text-fg-primary">{title}</span>
         <span className="text-sm text-fg-secondary">{body}</span>
       </span>
     </li>

@@ -1465,7 +1465,17 @@
     "invitationSignInNote": "This session records who takes part, so you will be asked to sign in to your account before you can answer.",
     "invitationSignIn": "Sign in",
     "exportCsv": "Export CSV",
-    "exportCsvFailedTitle": "The export did not download"
+    "exportCsvFailedTitle": "The export did not download",
+    "next": {
+      "eyebrow": "Live session · {count} questions",
+      "eyebrowOne": "Live session · 1 question",
+      "required": "required",
+      "optional": "optional",
+      "wordNote": "Words are shown as counts, never as your full text, and only once {floor} people have answered.",
+      "openUntil": "Open until {date}",
+      "underAMinute": "under a minute",
+      "aboutMinutes": "about {minutes} minutes"
+    }
   },
   "navigation": {
     "sectionAdministration": "Administration",
@@ -3438,7 +3448,20 @@
     "happensResultsTitle": "Results reach your department",
     "happensResultsBody": "You will be emailed when they are published, and Home will show what was done about them.",
     "noCopyNote": "You can close this tab. We cannot show you your answers again — keeping a copy you could open would mean keeping a link between you and them.",
-    "backToHome": "Back to Home"
+    "backToHome": "Back to Home",
+    "next": {
+      "position": "{position} of {total}",
+      "previous": "Previous",
+      "next": "Next",
+      "required": "required",
+      "optional": "optional",
+      "closesOn": "Closes on {date}",
+      "aboutMinutes": "about {minutes} minutes in all",
+      "underAMinute": "under a minute in all",
+      "submittedAt": "Sent at {time}.",
+      "submittedAtAnonymous": "Sent at {time}. They were saved without anything that identifies you.",
+      "receiptOf": "of {total}"
+    }
   },
   "surveyResults": {
     "description": "What this survey found, and how many people it reached.",
@@ -3710,7 +3733,20 @@
     "surveyMetaOneQuestion": "1 question · under a minute · closes {date}",
     "closedMeta": "Closed {date} · results published to your department",
     "notInAudienceMeta": "Closed {date} · you were not in this audience",
-    "seeWhatCameOfIt": "See what came of it"
+    "seeWhatCameOfIt": "See what came of it",
+    "next": {
+      "toAnswerHeading": "To answer",
+      "toAnswerMetaOne": "one open survey",
+      "toAnswerMetaMany": "{count} open surveys",
+      "openChip": "Open",
+      "closesOnDate": "on {date}",
+      "canSaveLater": "You can save and finish later.",
+      "alsoOpen": "Also open:",
+      "previousMeta": "{survey} · closed",
+      "plansStillOpen": "All {count} are still open; their leaders can see them too.",
+      "plansStillOpenOne": "It is still open; its leaders can see it too.",
+      "resultsNote": "Your department's results are published when the survey closes. We will let you know by email, and this page will show what was done with them."
+    }
   },
   "systemHealth": {
     "title": "System Health",

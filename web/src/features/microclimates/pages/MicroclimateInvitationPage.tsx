@@ -173,6 +173,9 @@ export default function MicroclimateInvitationPage() {
         <MicroclimatePulseForm
           microclimateId={state.detail.microclimateId}
           onSubmitted={reportCompleted}
+          // The token's own close, which the form's payload does not carry: the foot
+          // prints "Abierta hasta el …" from this and from nothing else.
+          closesAt={state.detail.endTime}
         />
       ) : (
         <div className="flex flex-1 flex-col gap-panel-gap rounded-xl border border-line-panel bg-surface-panel p-panel">
