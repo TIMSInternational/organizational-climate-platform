@@ -14,6 +14,14 @@ export interface CompanyContextValue {
   selectedCompanyId: string | null
   /** Sets (or, with `null`, clears) the SuperAdmin's company context. */
   selectCompany: (companyId: string | null) => void
+  /**
+   * True while at least one mounted page has asked the header's switcher to stand down
+   * (`useHeaderSwitcherStandDown`). Optional, with the registration below, so a value
+   * built by hand — a test's provider — need not know about it.
+   */
+  headerSwitcherStandsDown?: boolean
+  /** Registers one stand-down and returns its release. */
+  standDownHeaderSwitcher?: () => () => void
 }
 
 /**

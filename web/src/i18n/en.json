@@ -453,7 +453,11 @@
     "noneSelected": "No company selected",
     "chooseACompany": "Choose a company",
     "chooseACompanyDescription": "This page shows one company at a time. Pick one from the company selector at the top of the screen to continue.",
-    "loadFailed": "Companies could not be loaded"
+    "loadFailed": "Companies could not be loaded",
+    "next": {
+      "unchosen": "Not chosen",
+      "active": "Active company"
+    }
   },
   "dashboard": {
     "title": "Dashboard",

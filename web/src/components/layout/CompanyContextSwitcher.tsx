@@ -40,7 +40,7 @@ import { useTranslation } from '../../i18n'
  */
 export function CompanyContextSwitcher() {
   const { t } = useTranslation()
-  const { scope, selectedCompanyId, selectCompany } = useCompanyContext()
+  const { scope, selectedCompanyId, selectCompany, headerSwitcherStandsDown } = useCompanyContext()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const [companies, setCompanies] = useState<Company[]>([])
   const [failed, setFailed] = useState(false)
@@ -69,8 +69,11 @@ export function CompanyContextSwitcher() {
     }
   }, [baseUrl, isSuperAdmin])
 
-  // Below every hook, so the hook order is identical for every role.
-  if (!isSuperAdmin) return null
+  // Below every hook, so the hook order is identical for every role. It also stands down
+  // while the page below draws the canvas's own "Contexto de empresa" strip, or is a
+  // platform page no company scopes (`useHeaderSwitcherStandDown`): the per-role canvas
+  // (10 Sep) draws no switcher in the header on either.
+  if (!isSuperAdmin || headerSwitcherStandsDown) return null
 
   return (
     <div className="flex items-center gap-inline">

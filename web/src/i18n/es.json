@@ -453,7 +453,11 @@
     "noneSelected": "Ninguna empresa seleccionada",
     "chooseACompany": "Elija una empresa",
     "chooseACompanyDescription": "Esta página muestra una empresa a la vez. Elija una en el selector de empresa de la parte superior de la pantalla para continuar.",
-    "loadFailed": "No se pudieron cargar las empresas"
+    "loadFailed": "No se pudieron cargar las empresas",
+    "next": {
+      "unchosen": "Sin elegir",
+      "active": "Empresa activa"
+    }
   },
   "dashboard": {
     "title": "Panel de Control",
