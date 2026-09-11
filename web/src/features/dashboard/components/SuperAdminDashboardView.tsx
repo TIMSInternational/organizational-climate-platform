@@ -10,6 +10,12 @@ import { KpiTile } from '../../../components/charts'
 import { EmptyState, Table } from '../../../components/ui'
 
 /**
+ * **Unrouted since 10 Sep 2026 — kept as the wiring reference.** The super administrator's
+ * no-tenant `/dashboard` is now `../next/super/PlatformDashboardView` (the per-role canvas's
+ * *Panel de la plataforma*), which reads the same `GET /dashboard/super-admin` payload and
+ * more. Nothing imports this file; it stays until that view has shipped a release, for the
+ * notes below on how the payload's pairs fold into tiles.
+ *
  * The platform overview — every tenant, and the only dashboard that crosses tenant lines.
  *
  * There is no company filter and no company picker here on purpose: this is the one view

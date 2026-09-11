@@ -220,8 +220,20 @@ describe('DashboardPage', () => {
     renderDashboard()
 
     await waitFor(() => expect(fetch).toHaveBeenCalled())
-    expect(requestedPath()).toContain('/dashboard/super-admin')
-    expect(await screen.findByText('Acme Corporation')).toBeTruthy()
+    // The platform overview reads four more existing endpoints beside its own (companies,
+    // surveys, system status, system settings), so "one dashboard" is asked of the
+    // `/dashboard/*` requests alone: this role asks for its own, and for no other role's.
+    const dashboards = vi
+      .mocked(fetch)
+      .mock.calls.map(([input]) => String(input))
+      .filter((url) => url.includes('/dashboard/'))
+    expect(dashboards).toHaveLength(1)
+    expect(dashboards[0]).toContain('/dashboard/super-admin')
+    // The per-role canvas's Panel de la plataforma (`next/super/PlatformDashboardView`)
+    // replaced `SuperAdminDashboardView` on this branch. The tenant is named in the table
+    // and again in the headcount, so it is found by the link the table gives it.
+    expect(await screen.findByRole('heading', { level: 1, name: en.superadmin.next.dashboard.title })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Acme Corporation' }).getAttribute('href')).toBe('/admin/companies/c1')
   })
 
   /**

@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { CircleAlert, Copy } from 'lucide-react'
 import { readFileSync, globSync } from 'node:fs'
 import { join, sep } from 'node:path'
 import {
@@ -10,6 +11,7 @@ import {
   withUnreadBadge,
   type NavSection,
 } from './navSections'
+import { RailQuestionBankIcon, RailQuestionLibraryIcon } from './railIcons'
 import { CATALOGUES, LOCALES } from '../i18n/locale'
 import { createTranslator } from '../i18n/translate'
 
@@ -647,5 +649,20 @@ describe('withUnreadBadge', () => {
         ['/notifications', '2'],
       ])
     }
+  })
+})
+
+describe('the super administrator’s rail glyphs', () => {
+  it('draws Empresas, Estado del sistema, Banco and Biblioteca with the canvas’s glyphs (SuperDashboard.dc.html:51,63-65)', () => {
+    const rows = buildNavSections('super_admin', 'company-1').flatMap((section) =>
+      section.items.flatMap((item) => [item, ...(item.sub ?? [])]),
+    )
+    const icon = (key: string) => rows.find((row) => row.labelKey === key)?.icon
+    expect(icon('navigation.companies')).toBe(Copy)
+    expect(icon('navigation.systemHealth')).toBe(CircleAlert)
+    // Banco and Biblioteca are rows both rails share, so they carry the canvas glyphs
+    // railIcons.test.tsx pins for the company administrator: one item, one glyph.
+    expect(icon('navigation.questionBank')).toBe(RailQuestionBankIcon)
+    expect(icon('navigation.questionLibrary')).toBe(RailQuestionLibraryIcon)
   })
 })
