@@ -203,7 +203,12 @@ export default function ReportShareDialog({ open, onOpenChange, baseUrl, report,
       >
         <div className="flex items-start justify-between gap-3">
           <DialogHeader className="gap-1">
-            <p data-slot="share-eyebrow" className="m-0 text-2xs font-bold uppercase tracking-tile text-fg-label">
+            {/* `leading-normal`: the canvas sets its eyebrow on the body's 1.5 line (15px); the
+                theme's snug 2xs line made the header 1px short and lifted everything under it. */}
+            <p
+              data-slot="share-eyebrow"
+              className="m-0 text-2xs font-bold uppercase leading-normal tracking-tile text-fg-label"
+            >
               {t('reports.next.shareEyebrow', { title: report.title, format: reportFormatLabel(t, report.format) })}
             </p>
             {/* An `<h2>`, so the base rule sets it in the display serif; only the primitive's
