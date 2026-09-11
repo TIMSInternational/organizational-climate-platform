@@ -199,6 +199,33 @@ describe('ConsolidadoNextPage — company_admin', () => {
     expect(vi.mocked(downloadBlobFile)).not.toHaveBeenCalled()
   })
 
+  it('fits 1024 by folding Avance and Compromiso under the qué below 1360px, never with a minimum width', async () => {
+    renderPage()
+    await screen.findByRole('link', { name: 'Finanzas' })
+    const table = screen.getByRole('table')
+    expect(table.className).not.toMatch(/min-w-/)
+    const avance = [...table.querySelectorAll('th')].find((th) => th.textContent === es.tracking.columnAvance) as HTMLElement
+    expect(avance.className).toContain('hidden')
+    expect(avance.className).toContain('min-[1360px]:table-cell')
+    const folded = table.querySelector('[data-plan="PA-2026-00001"] [data-slot="plan-row-folded"]') as HTMLElement
+    expect(folded.className).toContain('min-[1360px]:hidden')
+    expect(within(folded).getByText(es.tracking.semaforo.rojo)).toBeTruthy()
+    expect(folded.textContent).toContain('20 ago')
+  })
+
+  it('spans six columns in every row of the folded sheet and eight in the wide one', async () => {
+    renderPage()
+    await screen.findByRole('link', { name: 'Finanzas' })
+    const span = (cell: Element) => Number(cell.getAttribute('colspan') ?? '1')
+    for (const row of screen.getByRole('table').querySelectorAll('tr')) {
+      const cells = [...row.children]
+      const folded = cells.filter((cell) => !cell.className.includes('min-[1360px]:table-cell')).reduce((sum, cell) => sum + span(cell), 0)
+      const wide = cells.reduce((sum, cell) => sum + span(cell), 0)
+      expect(folded, row.textContent ?? '').toBe(6)
+      expect(wide, row.textContent ?? '').toBe(8)
+    }
+  })
+
   it('keeps the counts when only the plans listing fails, and says the plans could not be read', async () => {
     routeFetch({ planes: 500 })
     renderPage()

@@ -20,6 +20,10 @@ import type { ConsolidadoModel, NodoBlock, PlanLine } from './model'
 import { useConsolidadoModel } from './useConsolidadoModel'
 
 const HEAD = 'h-auto bg-transparent px-3 pb-2 pt-0 text-2xs font-bold uppercase tracking-label text-fg-label whitespace-nowrap'
+/** Shown from 1360px, where Avance and Compromiso have columns of their own. */
+const WIDE_ONLY = 'hidden min-[1360px]:table-cell'
+/** Shown below 1360px, where Avance and Compromiso fold under the plan's qué. */
+const FOLDED_ONLY = 'min-[1360px]:hidden'
 
 /** The ink a state's figures and sentences take — the chip carries the word and shape. */
 const TONE_INK: Record<string, string> = {
@@ -219,29 +223,24 @@ function ByNodo({ model, t, locale }: { model: ConsolidadoModel; t: TranslateFn;
       </div>
 
       <div className="rounded-lg border border-line-default bg-surface-card pt-2 shadow-sm">
-        <Table className="min-w-[1000px] table-fixed">
-          <colgroup>
-            <col className="w-[162px]" />
-            <col className="w-[68px]" />
-            <col className="w-[92px]" />
-            <col className="w-[92px]" />
-            <col className="w-[92px]" />
-            <col />
-            <col className="w-[142px]" />
-            <col className="w-[136px]" />
-          </colgroup>
+        {/* No minimum width: at 1024 the sheet fits its card instead of scrolling inside it.
+            From 1360px Avance and Compromiso are columns, as the artboard draws them; below
+            that they fold under the plan's qué (`PlanRow`). Widths sit on the header cells,
+            because a `<col>` keeps a hidden column's width in the fixed layout, and every row
+            spans the same six columns in the folded layout and eight in the wide one. */}
+        <Table className="table-fixed">
           <thead>
             <tr className="border-b border-line-default">
-              <th className={HEAD}>{t('tracking.next.colNodoPlan')}</th>
-              <th className={cn(HEAD, 'text-right')}>{t('tracking.columnTotalPlanes')}</th>
+              <th className={cn(HEAD, 'w-[140px] min-[1360px]:w-[162px]')}>{t('tracking.next.colNodoPlan')}</th>
+              <th className={cn(HEAD, 'w-[68px] text-right')}>{t('tracking.columnTotalPlanes')}</th>
               {SEMAFORO_ORDER.map((estado) => (
-                <th key={estado} className={cn(HEAD, 'text-center')}>
+                <th key={estado} className={cn(HEAD, 'w-[92px] text-center')}>
                   {t(semaforoPresentation(estado).labelKey)}
                 </th>
               ))}
               <th className={HEAD}>{t('tracking.next.colQue')}</th>
-              <th className={HEAD}>{t('tracking.columnAvance')}</th>
-              <th className={HEAD}>{t('tracking.next.colCompromiso')}</th>
+              <th className={cn(HEAD, WIDE_ONLY, 'w-[142px]')}>{t('tracking.columnAvance')}</th>
+              <th className={cn(HEAD, WIDE_ONLY, 'w-[136px]')}>{t('tracking.next.colCompromiso')}</th>
             </tr>
           </thead>
           {model.nodos.map((nodo) => (
@@ -256,11 +255,12 @@ function ByNodo({ model, t, locale }: { model: ConsolidadoModel; t: TranslateFn;
               {SEMAFORO_ORDER.map((estado) => (
                 <CountCell key={estado} estado={estado} counts={model.conteos} />
               ))}
-              <td colSpan={3} className="border-0 px-3 py-2.5 text-xs text-fg-label">
+              <td className="border-0 px-3 py-2.5 text-xs text-fg-label">
                 {withoutPlans === null
                   ? t('tracking.next.nodosWithPlans', { count: withPlans })
                   : t('tracking.next.nodosWithAndWithout', { with: withPlans, without: withoutPlans })}
               </td>
+              <td colSpan={2} className={cn('border-0', WIDE_ONLY)} />
             </tr>
           </tfoot>
         </Table>
@@ -320,18 +320,68 @@ function NodoRows({ nodo, t, locale }: { nodo: NodoBlock; t: TranslateFn; locale
         {SEMAFORO_ORDER.map((estado) => (
           <CountCell key={estado} estado={estado} counts={nodo.conteos} />
         ))}
-        <td className="border-0" colSpan={3} />
+        <td className="border-0" />
+        <td className={cn('border-0', WIDE_ONLY)} colSpan={2} />
       </tr>
       {nodo.plans === null ? (
         <tr className="border-b border-line-light">
-          <td colSpan={8} className="border-0 px-3 py-2.5 pl-7 text-xs text-fg-secondary">
+          <td colSpan={6} className="border-0 px-3 py-2.5 pl-7 text-xs text-fg-secondary">
             {t('tracking.next.plansUnavailable')}
           </td>
+          <td colSpan={2} className={cn('border-0', WIDE_ONLY)} />
         </tr>
       ) : (
         nodo.plans.map((plan) => <PlanRow key={plan.id} plan={plan} t={t} locale={locale} />)
       )}
     </tbody>
+  )
+}
+
+/** The semáforo word and the progress bar — the Avance column, or its folded line. */
+function AvanceReading({ plan, overdue, stretch, t }: { plan: PlanLine; overdue: boolean; stretch: boolean; t: TranslateFn }) {
+  return (
+    <div className={cn('flex gap-1', stretch ? 'flex-col' : 'flex-row flex-wrap items-center gap-2')}>
+      <SemaforoChip estado={plan.estado} className={stretch ? 'w-full' : undefined} />
+      <div className="flex items-center gap-1.5">
+        <span className="inline-flex h-1.5 w-16 shrink-0 overflow-hidden rounded-full bg-surface-icon-box">
+          <span
+            className={cn('h-full rounded-full', overdue ? 'bg-accent-red' : 'bg-accent-green')}
+            style={{ width: `${plan.percent}%` }}
+          />
+        </span>
+        <span className="font-mono text-xs text-fg-secondary tabular-nums">{t('tracking.next.percentBig', { percent: plan.percent })}</span>
+      </div>
+    </div>
+  )
+}
+
+/** The compromiso day and where it stands — the Compromiso column, or its folded line. */
+function CompromisoReading({
+  plan,
+  overdue,
+  inline,
+  t,
+  locale,
+}: {
+  plan: PlanLine
+  overdue: boolean
+  inline: boolean
+  t: TranslateFn
+  locale: string
+}) {
+  return (
+    <div className={cn('flex', inline ? 'flex-row items-baseline gap-1.5' : 'flex-col')}>
+      <span className={cn('font-mono text-sm tabular-nums', overdue ? 'text-accent-red' : 'text-fg-primary')}>
+        {calendarDay(Date.parse(plan.fechaCompromiso), locale)}
+      </span>
+      <span className={cn('text-xs', overdue ? 'text-accent-red' : 'text-fg-label')}>
+        {plan.cumplido
+          ? t('tracking.detail.cumplido')
+          : overdue
+            ? t('tracking.next.overdueBy', { days: -plan.daysToCompromiso })
+            : t('tracking.next.withinDate')}
+      </span>
+    </div>
   )
 }
 
@@ -358,35 +408,17 @@ function PlanRow({ plan, t, locale }: { plan: PlanLine; t: TranslateFn; locale: 
                 ? t('tracking.next.responsableUnassigned')
                 : t('tracking.next.responsableUnnamed')}
           </span>
-        </div>
-      </td>
-      <td className="border-0 px-3 py-2.5">
-        <div className="flex flex-col gap-1">
-          <SemaforoChip estado={plan.estado} className="w-full" />
-          <div className="flex items-center gap-1.5">
-            <span className="inline-flex h-1.5 w-16 shrink-0 overflow-hidden rounded-full bg-surface-icon-box">
-              <span
-                className={cn('h-full rounded-full', overdue ? 'bg-accent-red' : 'bg-accent-green')}
-                style={{ width: `${plan.percent}%` }}
-              />
-            </span>
-            <span className="font-mono text-xs text-fg-secondary tabular-nums">{t('tracking.next.percentBig', { percent: plan.percent })}</span>
+          <div data-slot="plan-row-folded" className={cn('mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1.5', FOLDED_ONLY)}>
+            <AvanceReading plan={plan} overdue={overdue} stretch={false} t={t} />
+            <CompromisoReading plan={plan} overdue={overdue} inline t={t} locale={locale} />
           </div>
         </div>
       </td>
-      <td className="border-0 px-3 py-2.5">
-        <div className="flex flex-col">
-          <span className={cn('font-mono text-sm tabular-nums', overdue ? 'text-accent-red' : 'text-fg-primary')}>
-            {calendarDay(Date.parse(plan.fechaCompromiso), locale)}
-          </span>
-          <span className={cn('text-xs', overdue ? 'text-accent-red' : 'text-fg-label')}>
-            {plan.cumplido
-              ? t('tracking.detail.cumplido')
-              : overdue
-                ? t('tracking.next.overdueBy', { days: -plan.daysToCompromiso })
-                : t('tracking.next.withinDate')}
-          </span>
-        </div>
+      <td className={cn('border-0 px-3 py-2.5', WIDE_ONLY)}>
+        <AvanceReading plan={plan} overdue={overdue} stretch t={t} />
+      </td>
+      <td className={cn('border-0 px-3 py-2.5', WIDE_ONLY)}>
+        <CompromisoReading plan={plan} overdue={overdue} inline={false} t={t} locale={locale} />
       </td>
     </tr>
   )
