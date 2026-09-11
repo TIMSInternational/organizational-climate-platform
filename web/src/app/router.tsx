@@ -147,9 +147,11 @@ const trackingRoutes: RouteObject[] = [
     }),
   },
   {
+    // The redesigned Planes de acción (TrackingPlanesList, 10 Sep) replaced `PlanesAccionListPage`
+    // here; the old page stays in the tree unrouted, as the wiring reference.
     path: '/tracking/planes',
     lazy: async () => ({
-      Component: (await import('../features/tracking/pages/PlanesAccionListPage')).default,
+      Component: (await import('../features/tracking/next/PlanesListNextPage')).default,
     }),
   },
   {

@@ -483,8 +483,8 @@ describe('router', () => {
      * reference and must be reached by NO route — each carries a "NOT ROUTED" header
      * saying so. Everything else in `pages/`, and every page in `next/`, must be routed.
      */
-    const WIRING_REFERENCES = ['ConsolidadoPage', 'TableroSeguimientoPage', 'PlanDeAccionDetailPage']
-    const REDESIGNED = ['ConsolidadoNextPage', 'TableroNextPage', 'PlanDetailNextPage']
+    const WIRING_REFERENCES = ['ConsolidadoPage', 'TableroSeguimientoPage', 'PlanDeAccionDetailPage', 'PlanesAccionListPage']
+    const REDESIGNED = ['ConsolidadoNextPage', 'TableroNextPage', 'PlanDetailNextPage', 'PlanesListNextPage']
 
     it('routes the redesigned tracking screens and leaves the wiring references unrouted', () => {
       const source = readFileSync(join(process.cwd(), 'src', 'app', 'router.tsx'), 'utf8')
@@ -500,12 +500,12 @@ describe('router', () => {
 
     it('leaves no tracking page unrouted', () => {
       const pagesDir = join(process.cwd(), 'src', 'features', 'tracking', 'pages')
-      const pages = globSync('*.tsx', { cwd: pagesDir })
+      const found = globSync('*.tsx', { cwd: pagesDir })
         .filter((file) => !/\.test\.tsx$/.test(file))
         .map((file) => file.replace(/\.tsx$/, ''))
-        .filter((page) => !WIRING_REFERENCES.includes(page))
 
-      expect(pages.length, 'no tracking pages found — the glob is wrong').toBeGreaterThan(1)
+      expect(found.length, 'no tracking pages found — the glob is wrong').toBeGreaterThan(1)
+      const pages = found.filter((page) => !WIRING_REFERENCES.includes(page))
 
       const source = readFileSync(join(process.cwd(), 'src', 'app', 'router.tsx'), 'utf8')
       const unrouted = pages.filter(
@@ -545,7 +545,7 @@ describe('router', () => {
       const src = join(process.cwd(), 'src')
       const source = readFileSync(join(src, 'app', 'router.tsx'), 'utf8')
       const pageNames =
-        'ConsolidadoPage|TableroSeguimientoPage|PlanesAccionListPage|PlanDeAccionDetailPage|MisTareasPage|ConsolidadoNextPage|TableroNextPage|PlanDetailNextPage'
+        'ConsolidadoPage|TableroSeguimientoPage|PlanesAccionListPage|PlanDeAccionDetailPage|MisTareasPage|ConsolidadoNextPage|TableroNextPage|PlanDetailNextPage|PlanesListNextPage'
       expect(source).not.toMatch(new RegExp(`^import .*(${pageNames}).*$`, 'm'))
 
       const offenders = globSync('**/*.{ts,tsx}', { cwd: src })
