@@ -333,10 +333,10 @@ function WordsBlock({ live, responses }: { live: LiveResults | null; responses: 
       {words.isSuppressed ? (
         <div
           data-slot="words-hatch"
-          // `bg-surface-icon-box`, `ProtectedCell`'s ground: `--admin-hatch-stripe` is
-          // measured against it in both themes (`protectedHatch.test.ts`). The artboard's
-          // #f8f7fb is the outer ground, which in dark is far from the stripe's pair and
-          // turned the hatch into a loud texture.
+          // `PROTECTED_HATCH` paints its stripes and its gaps (`--admin-hatch-ground`: the
+          // artboard's #f8f7fb in light, this surface in dark), measured as a pair in both
+          // themes by `protectedHatch.test.ts`; `bg-surface-icon-box` is only what shows
+          // if the gradient does not.
           className={cn(
             'flex h-42 flex-col items-center justify-center gap-1.5 rounded-lg bg-surface-icon-box px-4 text-center',
             PROTECTED_HATCH,

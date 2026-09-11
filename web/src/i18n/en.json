@@ -1475,6 +1475,8 @@
         "launch": "Launch a microclimate",
         "flowTitle": "A microclimate is a short flow",
         "flowProgress": "“{session}” is at step {step}",
+        "flowProgressMasculine": "the {session} is at step {step}",
+        "flowProgressFeminine": "the {session} is at step {step}",
         "stepCreate": "Create",
         "stepCreateHint": "two questions, one team, a closing date",
         "stepShare": "Share",
@@ -1508,6 +1510,8 @@
         "pastAnalytics": "See the analytics",
         "pastEmptyTitle": "No closed sessions yet",
         "pastEmptyBodyNamed": "The first appears here when “{session}” closes on {date}: the scale’s average and word frequencies, if {minimum} people answered. A closed microclimate is read; it is not reopened.",
+        "pastEmptyBodyNamedMasculine": "The first appears here when the {session} closes on {date}: the scale’s average and word frequencies, if {minimum} people answered. A closed microclimate is read; it is not reopened.",
+        "pastEmptyBodyNamedFeminine": "The first appears here when the {session} closes on {date}: the scale’s average and word frequencies, if {minimum} people answered. A closed microclimate is read; it is not reopened.",
         "pastEmptyBody": "The first appears here when a microclimate closes: the scale’s average and word frequencies, if {minimum} people answered. A closed microclimate is read; it is not reopened.",
         "createdOn": "created {date}",
         "results": "Results"

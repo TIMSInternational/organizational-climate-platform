@@ -25,7 +25,15 @@ import { MonoReadings } from '../../dashboard/components/dashboardGrammar'
 import type { Microclimate } from '../api/microclimates'
 import { MINIMUM_RESPONDENTS } from '../microclimatePrivacy'
 import { statusLabel } from '../microclimateVocabulary'
-import { clock, dayMonth, dayMonthLong, fillPercent, respondUrl, shortTitle } from './derive'
+import {
+  clock,
+  dayMonth,
+  dayMonthLong,
+  fillPercent,
+  respondUrl,
+  sessionReference,
+  type SessionReference,
+} from './derive'
 import type { FlowStep, InProgressSession, MicroclimatesListNextModel } from './model'
 import { useCopyLink, type CopyOutcome } from './useCopyLink'
 import { useMicroclimatesListModel } from './useMicroclimatesListModel'
@@ -117,9 +125,9 @@ function ListBody({ model }: { model: MicroclimatesListNextModel }) {
   const { t, locale } = useTranslation()
   const { outcome, copy } = useCopyLink()
   const current = model.current
-  const currentTitle = current ? shortTitle(current.row.title ?? t('microclimates.untitled')) : null
+  const reference = current ? sessionReference(current.row.title ?? t('microclimates.untitled'), locale) : null
 
-  // "…cuando «Pulso semanal» cierre el 11 de septiembre": only an open session with a
+  // "…cuando el pulso semanal cierre el 11 de septiembre": only an open session with a
   // readable close date can be named; otherwise the note says it of any microclimate.
   const closing =
     current && current.row.status === 'active' && current.detail
@@ -128,7 +136,7 @@ function ListBody({ model }: { model: MicroclimatesListNextModel }) {
 
   return (
     <div className="flex flex-col">
-      <FlowCard step={model.step} session={currentTitle} />
+      <FlowCard step={model.step} session={reference} />
 
       <section aria-labelledby="mc-in-progress" className="mt-6 flex flex-col gap-2.5">
         <SectionHead
@@ -174,12 +182,8 @@ function ListBody({ model }: { model: MicroclimatesListNextModel }) {
             icon={<CanvasClockIcon strokeWidth={1.8} className="size-4" />}
             title={t('microclimates.next.list.pastEmptyTitle')}
             body={
-              closing && currentTitle
-                ? t('microclimates.next.list.pastEmptyBodyNamed', {
-                    session: currentTitle,
-                    date: closing,
-                    minimum: MINIMUM_RESPONDENTS,
-                  })
+              closing && reference
+                ? pastEmptyNamed(t, reference, closing)
                 : t('microclimates.next.list.pastEmptyBody', { minimum: MINIMUM_RESPONDENTS })
             }
           />
@@ -210,11 +214,34 @@ function SectionHead({ id, title, aside }: { id: string; title: string; aside: R
 }
 
 /**
+ * "el pulso semanal va por el paso 3", as the artboard writes it, when the title starts
+ * with a noun whose article is known; "«Check-in del lunes» va por el paso 3" otherwise
+ * (`sessionReference`). One literal key per form, so `keysExist.test.ts` checks each.
+ */
+function flowProgress(t: TranslateFn, session: SessionReference, step: FlowStep): string {
+  if (session.kind === 'title') return t('microclimates.next.list.flowProgress', { session: session.title, step })
+  return session.gender === 'masculine'
+    ? t('microclimates.next.list.flowProgressMasculine', { session: session.phrase, step })
+    : t('microclimates.next.list.flowProgressFeminine', { session: session.phrase, step })
+}
+
+/** The empty past note for a named session: "…cuando el pulso semanal cierre el 11 de septiembre…". */
+function pastEmptyNamed(t: TranslateFn, session: SessionReference, date: string): string {
+  const facts = { date, minimum: MINIMUM_RESPONDENTS }
+  if (session.kind === 'title') {
+    return t('microclimates.next.list.pastEmptyBodyNamed', { ...facts, session: session.title })
+  }
+  return session.gender === 'masculine'
+    ? t('microclimates.next.list.pastEmptyBodyNamedMasculine', { ...facts, session: session.phrase })
+    : t('microclimates.next.list.pastEmptyBodyNamedFeminine', { ...facts, session: session.phrase })
+}
+
+/**
  * "Un microclima es un flujo corto": the four steps, and where the session in progress
  * stands. A step reached is filled; the rule after it is solid up to the current step
  * and dashed past it, as the artboard draws 1 — 2 — 3 ┄ 4 for a session at step 3.
  */
-function FlowCard({ step, session }: { step: FlowStep | null; session: string | null }) {
+function FlowCard({ step, session }: { step: FlowStep | null; session: SessionReference | null }) {
   const { t } = useTranslation()
   const reached = step ?? 0
 
@@ -228,7 +255,7 @@ function FlowCard({ step, session }: { step: FlowStep | null; session: string | 
         </h2>
         {step !== null && session !== null && (
           <span className="text-sm text-fg-tertiary">
-            {t('microclimates.next.list.flowProgress', { session, step })}
+            {flowProgress(t, session, step)}
           </span>
         )}
       </div>

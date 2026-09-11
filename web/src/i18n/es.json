@@ -1475,6 +1475,8 @@
         "launch": "Lanzar un microclima",
         "flowTitle": "Un microclima es un flujo corto",
         "flowProgress": "«{session}» va por el paso {step}",
+        "flowProgressMasculine": "el {session} va por el paso {step}",
+        "flowProgressFeminine": "la {session} va por el paso {step}",
         "stepCreate": "Crear",
         "stepCreateHint": "dos preguntas, un equipo, una fecha de cierre",
         "stepShare": "Compartir",
@@ -1508,6 +1510,8 @@
         "pastAnalytics": "Ver la analítica",
         "pastEmptyTitle": "Todavía no hay sesiones cerradas",
         "pastEmptyBodyNamed": "La primera aparece aquí cuando «{session}» cierre el {date}: promedio de la escala y frecuencias de palabras, si {minimum} personas respondieron. Un microclima cerrado se lee; no se reabre.",
+        "pastEmptyBodyNamedMasculine": "La primera aparece aquí cuando el {session} cierre el {date}: promedio de la escala y frecuencias de palabras, si {minimum} personas respondieron. Un microclima cerrado se lee; no se reabre.",
+        "pastEmptyBodyNamedFeminine": "La primera aparece aquí cuando la {session} cierre el {date}: promedio de la escala y frecuencias de palabras, si {minimum} personas respondieron. Un microclima cerrado se lee; no se reabre.",
         "pastEmptyBody": "La primera aparece aquí cuando un microclima cierre: promedio de la escala y frecuencias de palabras, si {minimum} personas respondieron. Un microclima cerrado se lee; no se reabre.",
         "createdOn": "creado el {date}",
         "results": "Resultados"

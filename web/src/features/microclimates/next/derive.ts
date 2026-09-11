@@ -1,3 +1,4 @@
+import type { Locale } from '../../../i18n'
 import type { Microclimate, Question, WordCloudEntry } from '../api/microclimates'
 import { participationPercent, suppressWordCloud } from '../microclimatePrivacy'
 import type { FlowStep } from './model'
@@ -61,6 +62,52 @@ export function shortTitle(title: string): string {
   const [head] = title.split(/\s+[—–-]\s+/)
   const trimmed = head.trim()
   return trimmed === '' ? title : trimmed
+}
+
+/** The article a Spanish sentence sets before a session's noun: "el pulso", "la encuesta". */
+export type SessionGender = 'masculine' | 'feminine'
+
+/**
+ * The nouns a session title is known to start with, and the article each takes in
+ * Spanish. Closed on purpose: the payload carries a free `title` and nothing about its
+ * grammar (`GET /microclimates`, `GET /microclimates/{id}`), and an article guessed from
+ * a word's ending would write "la clima" in a climate product. Singular only: the
+ * sentences say "va por" and "cierre".
+ */
+const SESSION_NOUNS: Readonly<Record<string, SessionGender>> = {
+  pulso: 'masculine',
+  microclima: 'masculine',
+  clima: 'masculine',
+  sondeo: 'masculine',
+  encuesta: 'feminine',
+  consulta: 'feminine',
+  retro: 'feminine',
+  retrospectiva: 'feminine',
+}
+
+/** How a sentence names the session in progress — see `sessionReference`. */
+export type SessionReference =
+  | { kind: 'noun'; gender: SessionGender; phrase: string }
+  | { kind: 'title'; title: string }
+
+/**
+ * How a sentence names the session in progress. The artboard writes "el pulso semanal va
+ * por el paso 3" and "cuando el pulso semanal cierre" for the title "Pulso semanal —
+ * ¿cómo fue la semana?": the head (`shortTitle`) read as a common noun, its first letter
+ * lower-cased, behind its article. That is grammatical only in a Spanish sentence and
+ * only when the head's first word is a noun whose article is known, so it is done only
+ * then; any other title is named the way the product names a title inside a sentence,
+ * «Check-in del lunes». Only the first letter moves, so a department named later keeps
+ * its capital ("el pulso de Operaciones"), and a first word in capitals ("PULSO") does
+ * not match and keeps its title.
+ */
+export function sessionReference(title: string, locale: Locale): SessionReference {
+  const head = shortTitle(title)
+  if (locale !== 'es') return { kind: 'title', title: head }
+  const [first] = head.split(/\s+/)
+  const noun = first.charAt(0).toLocaleLowerCase('es') + first.slice(1)
+  if (!Object.hasOwn(SESSION_NOUNS, noun)) return { kind: 'title', title: head }
+  return { kind: 'noun', gender: SESSION_NOUNS[noun], phrase: noun + head.slice(first.length) }
 }
 
 /** The respond route — `/microclimates/:id/respond`, the public page. */

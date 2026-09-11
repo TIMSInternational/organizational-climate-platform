@@ -133,6 +133,36 @@ describe('the flow card', () => {
     const steps = document.querySelectorAll('[data-slot="flow-step"]')
     expect([...steps].map((step) => step.getAttribute('data-reached'))).toEqual(['true', 'false', 'false', 'false'])
   })
+
+  it('names the session in progress as the artboard does: its noun behind its article', async () => {
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
+    renderPage()
+
+    expect(await screen.findByText('el pulso semanal va por el paso 3')).toBeTruthy()
+    expect(screen.getByText(/cuando el pulso semanal cierre el 11 de septiembre:/)).toBeTruthy()
+    expect(screen.queryByText(/«Pulso semanal»/)).toBeNull()
+  })
+
+  it('sets the article a feminine noun takes', async () => {
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
+    const quick = row({ title: 'Encuesta relámpago — cierre de mes' })
+    routeFetch([quick], { m1: detailFor(quick) })
+    renderPage()
+
+    expect(await screen.findByText('la encuesta relámpago va por el paso 3')).toBeTruthy()
+    expect(screen.getByText(/cuando la encuesta relámpago cierre el 11 de septiembre:/)).toBeTruthy()
+  })
+
+  it('names a title whose article it cannot know in guillemets, never with a guessed one', async () => {
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
+    const other = row({ title: 'Check-in del lunes' })
+    routeFetch([other], { m1: detailFor(other) })
+    renderPage()
+
+    expect(await screen.findByText('«Check-in del lunes» va por el paso 3')).toBeTruthy()
+    expect(screen.getByText(/cuando «Check-in del lunes» cierre el 11 de septiembre:/)).toBeTruthy()
+    expect(screen.queryByText(/\b(el|la) check-in/i)).toBeNull()
+  })
 })
 
 describe('the sessions', () => {
@@ -190,7 +220,7 @@ describe('the sessions', () => {
     renderPage()
 
     expect(
-      await screen.findByText(/La primera aparece aquí cuando «Pulso semanal» cierre el 11 de septiembre: .* si 5 personas respondieron\./),
+      await screen.findByText(/La primera aparece aquí cuando el pulso semanal cierre el 11 de septiembre: .* si 5 personas respondieron\./),
     ).toBeTruthy()
     expect(screen.getByText('ninguna todavía')).toBeTruthy()
   })

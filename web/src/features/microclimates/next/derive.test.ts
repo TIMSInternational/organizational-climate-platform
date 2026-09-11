@@ -10,6 +10,7 @@ import {
   groupSessions,
   questionKinds,
   respondUrl,
+  sessionReference,
   shortTitle,
   stamp,
   wordBars,
@@ -75,6 +76,47 @@ describe('shortTitle', () => {
     expect(shortTitle('Sin guion')).toBe('Sin guion')
     // A title that starts with its dash keeps the whole title rather than naming nothing.
     expect(shortTitle('— sin nombre')).toBe('— sin nombre')
+  })
+})
+
+describe('sessionReference', () => {
+  it('names a session by its noun behind its article in Spanish, as the artboard does', () => {
+    expect(sessionReference('Pulso semanal — ¿cómo fue la semana?', 'es')).toEqual({
+      kind: 'noun',
+      gender: 'masculine',
+      phrase: 'pulso semanal',
+    })
+    expect(sessionReference('Encuesta relámpago — cierre de mes', 'es')).toEqual({
+      kind: 'noun',
+      gender: 'feminine',
+      phrase: 'encuesta relámpago',
+    })
+    // Only the first letter moves: a department named later keeps its capital.
+    expect(sessionReference('Pulso de Operaciones', 'es')).toEqual({
+      kind: 'noun',
+      gender: 'masculine',
+      phrase: 'pulso de Operaciones',
+    })
+  })
+
+  it('keeps the title for a first word whose article it does not know, rather than guessing one', () => {
+    expect(sessionReference('Check-in del lunes', 'es')).toEqual({ kind: 'title', title: 'Check-in del lunes' })
+    // Starts like a listed noun, and is not one.
+    expect(sessionReference('Retroalimentación trimestral', 'es')).toEqual({
+      kind: 'title',
+      title: 'Retroalimentación trimestral',
+    })
+    // A plural does not fit "va por el paso".
+    expect(sessionReference('Pulsos del trimestre', 'es')).toEqual({ kind: 'title', title: 'Pulsos del trimestre' })
+    // A first word in capitals is not lower-cased into a noun.
+    expect(sessionReference('PULSO SEMANAL', 'es')).toEqual({ kind: 'title', title: 'PULSO SEMANAL' })
+  })
+
+  it('keeps the title in an English sentence, whose article is not Spanish grammar', () => {
+    expect(sessionReference('Pulso semanal — ¿cómo fue la semana?', 'en')).toEqual({
+      kind: 'title',
+      title: 'Pulso semanal',
+    })
   })
 })
 

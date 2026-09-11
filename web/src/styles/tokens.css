@@ -328,12 +328,16 @@
   --admin-border-default: #e0dbee;
   /* One step darker than the line, as #d0d0d0 was to #e0e0e0. */
   --admin-border-hover: #cdc6e3;
-  /* The protected hatch's stripe (`PROTECTED_HATCH`), over the recessed surface
-     `ProtectedCell` paints it on. Every artboard of 10 Sep draws the hatch as faint
-     #e6e3f1 stripes on #f8f7fb, 1.18:1; this is the nearest violet that clears
-     protectedHatch.test.ts's floor of 1.2 on `--admin-bg-icon-box`: 1.22:1. It was
-     `--admin-border-hover`, 1.47:1, which read as a dark texture beside them. */
-  --admin-hatch-stripe: #dedaee;
+  /* The protected hatch (`PROTECTED_HATCH`): stripes in `--admin-hatch-stripe`, gaps in
+     `--admin-hatch-ground`, both painted by the gradient. Every artboard of 10 Sep (26 of
+     26) draws it as `repeating-linear-gradient(135deg, #e6e3f1 0 4px, #f8f7fb 4px 8px)`,
+     and the gaps here are that #f8f7fb, `--admin-bg-outer`. The canvas's stripe is
+     1.18:1 on it, under protectedHatch.test.ts's floor of 1.2; #e4e1f0 is the same
+     violet a tenth further from the ground, 1.206:1. It was #dedaee over the recessed
+     `--admin-bg-icon-box` #f3f1fa (1.22:1), a shade darker and bluer than the canvas,
+     and before that `--admin-border-hover`, 1.47:1, which read as a dark texture. */
+  --admin-hatch-stripe: #e4e1f0;
+  --admin-hatch-ground: #f8f7fb;
   --admin-border-light: #eeedf6;
   --admin-border-panel: #e0dbee;
 
@@ -731,6 +735,7 @@
   --admin-border-default: #2f235a;
   --admin-border-hover: #32245e;
   --admin-hatch-stripe: #32245e; /* 1.30:1 on #1b1433; the artboards draw no dark theme */
+  --admin-hatch-ground: #1b1433; /* `--admin-bg-icon-box`: the dark hatch shows what it always showed */
   /* Measured, not by eye: at #1f173b this hairline WAS the card (`--admin-bg-card`
      #1f173b), so every `border-line-light` / `divide-line-light` / `bg-line-light` drawn
      on a card -- the Panel de Control's sparkline cards and attention rules, the survey
