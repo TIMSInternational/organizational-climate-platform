@@ -1021,7 +1021,8 @@
         "participationUnderFloorLabel": "Protected: the team's count is shown from {floor} responses",
         "participationCount": "{count} of {members} answered",
         "participationNone": "No survey is open for the team right now.",
-        "surveyActive": "Active"
+        "surveyActive": "Active",
+        "responsesUnitNoDate": "completed"
       },
       "supervisor": {
         "proposal": "Proposal",

@@ -1021,7 +1021,8 @@
         "participationUnderFloorLabel": "Protegido: el conteo del equipo se muestra desde {floor} respuestas",
         "participationCount": "{count} de {members} respondieron",
         "participationNone": "No hay ninguna encuesta abierta para el equipo en este momento.",
-        "surveyActive": "Activa"
+        "surveyActive": "Activa",
+        "responsesUnitNoDate": "completadas"
       },
       "supervisor": {
         "proposal": "Propuesta",

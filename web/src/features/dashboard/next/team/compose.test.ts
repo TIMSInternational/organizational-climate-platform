@@ -196,6 +196,16 @@ describe('the team against the organisation', () => {
     expect(wave.dimensions.every((d) => d.team === null)).toBe(true)
   })
 
+  /**
+   * The live stack's "(Copia)" was archived on 9 Sep with an end date of 10 Oct: "cerró el 10
+   * oct" would be a sentence about a day that has not come.
+   */
+  it('prints no close date that is still ahead of the reader', () => {
+    const archivedEarly = climate([], { surveyEndDate: '2026-10-10T02:03:39Z', isSuppressed: true, respondentCount: 0, dimensions: [] })
+    expect(teamClosedWave(archivedEarly, ORGANIZATION_SAMPLE, AS_OF)?.closedOn).toBeNull()
+    expect(teamClosedWave(climate([4]), ORGANIZATION_SAMPLE, AS_OF)?.closedOn).toBe('2026-08-06T02:05:22.922+00:00')
+  })
+
   it('knows a survey under its own floor has no names to hatch', () => {
     const wave = teamClosedWave(climate([], { isSuppressed: true, respondentCount: 0, dimensions: [] }), ORGANIZATION_SAMPLE)!
     expect(wave.surveyWithheld).toBe(true)

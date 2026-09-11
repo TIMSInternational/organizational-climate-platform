@@ -108,7 +108,9 @@ function ResponsesTile({ wave, t, locale }: { wave: TeamClosedWave | null; t: Tr
       </NodoTile>
     )
   }
-  const date = wave.closedOn ? calendarDay(Date.parse(wave.closedOn), locale) : '—'
+  // `null` when the payload's end date is still ahead of the reader (`compose.teamClosedWave`):
+  // the tile then says nothing about when the survey closed rather than something untrue.
+  const date = wave.closedOn ? calendarDay(Date.parse(wave.closedOn), locale) : null
   return (
     <NodoTile label={t('dashboard.next.leader.responsesLabel', { wave: wave.code })}>
       {wave.respondents === null ? (
@@ -117,12 +119,16 @@ function ResponsesTile({ wave, t, locale }: { wave: TeamClosedWave | null; t: Tr
             text={t('dashboard.next.leader.responsesWithheld', { floor: wave.floor })}
             label={t('dashboard.next.leader.responsesWithheldLabel', { floor: wave.floor })}
           />
-          <span className="text-sm text-fg-label">{t('dashboard.next.leader.closedOn', { date })}</span>
+          {date !== null && <span className="text-sm text-fg-label">{t('dashboard.next.leader.closedOn', { date })}</span>}
         </>
       ) : (
         <>
           <span className="font-mono text-kpi-hero leading-none tabular-nums">{count(wave.respondents, locale)}</span>
-          <span className="text-sm text-fg-label">{t('dashboard.next.leader.responsesUnit', { date })}</span>
+          <span className="text-sm text-fg-label">
+            {date !== null
+              ? t('dashboard.next.leader.responsesUnit', { date })
+              : t('dashboard.next.leader.responsesUnitNoDate')}
+          </span>
         </>
       )}
     </NodoTile>
@@ -321,9 +327,15 @@ function DimensionCard({
             <span className="text-xs whitespace-nowrap text-fg-label">
               <span
                 data-slot="team-move"
-                className={cn('font-mono text-sm tabular-nums', move >= 0 ? 'text-accent-green-ink' : 'text-accent-red-ink')}
+                data-direction={move > 0 ? 'up' : move < 0 ? 'down' : 'level'}
+                className={cn(
+                  'font-mono text-sm tabular-nums',
+                  // No colour for no move: a green "+0,0" would claim an advantage the two
+                  // printed readings do not show. The sign carries direction; colour doubles it.
+                  move > 0 ? 'text-accent-green-ink' : move < 0 ? 'text-accent-red-ink' : 'text-fg-label',
+                )}
               >
-                {signedReading(move, locale)}
+                {move === 0 ? reading(0, locale) : signedReading(move, locale)}
               </span>{' '}
               {t('dashboard.next.leader.vsOrg')}
             </span>
@@ -502,7 +514,10 @@ function LeaderPlanRow({ plan, canOpen, t, locale }: { plan: TeamPlan; canOpen: 
           />
           <InfoBox
             label={t('tracking.next.boxResponsable')}
-            value={plan.responsable.name ?? t('tracking.next.personaUnnamed')}
+            // A dash, like the box beside it, when this reader cannot name the person: a
+            // leader has no directory (`TrackingPickerEndpoints.cs:19-21`). The sentence goes
+            // under it, where the artboard sets the box's second line.
+            value={plan.responsable.name ?? '—'}
             sub={plan.responsable.isViewer ? t('dashboard.next.leader.responsableIsYou') : t('tracking.next.personaUnnamedSub')}
           />
         </>

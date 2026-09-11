@@ -179,6 +179,17 @@ describe('LeaderDashboardView', () => {
     expect(within(dimensionCard('belonging')).getByText('+0.3', { selector: '[data-slot="team-move"]' })).toBeTruthy()
   })
 
+  it('gives no move a colour or a sign: level is level', () => {
+    // Desarrollo in Q2: the team's 3,83 and the organisation's 3,79 both print 3,8.
+    renderLeader({ dashboard: department({ climate: climate(Q2) }) })
+
+    const level = within(dimensionCard('growth')).getByText('0.0', { selector: '[data-slot="team-move"]' })
+    expect(level.dataset.direction).toBe('level')
+    expect(level.className).not.toMatch(/accent-(green|red)/)
+    const down = within(dimensionCard('belonging')).getByText('-0.2', { selector: '[data-slot="team-move"]' })
+    expect(down.className).toMatch(/accent-red/)
+  })
+
   it('judges every cell by the one target rule, and offers a plan only where the reading is below it', () => {
     renderLeader({ dashboard: department({ climate: climate(Q2) }) })
 

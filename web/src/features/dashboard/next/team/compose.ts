@@ -58,8 +58,18 @@ export function flooredCount(count: number, floor: number): number | null {
 export function teamClosedWave(
   climate: DashboardTeamClimate | null,
   organization: { readonly scores: Readonly<Record<string, number>> },
+  asOf?: string,
 ): TeamClosedWave | null {
   if (climate === null || climate.surveyId === null) return null
+  // `surveyEndDate` is the survey's END date, and an archived survey can be archived before
+  // it: the live stack's "(Copia)" was archived on 9 Sep with an end date of 10 Oct. "Cerró
+  // el 10 oct" would be a sentence about a day that has not come, so a close date after the
+  // reader's clock is not printed at all.
+  const endsAt = climate.surveyEndDate === null ? Number.NaN : Date.parse(climate.surveyEndDate)
+  const closedOn =
+    climate.surveyEndDate !== null && !Number.isNaN(endsAt) && (asOf === undefined || endsAt <= Date.parse(asOf))
+      ? climate.surveyEndDate
+      : null
   const floor = countFloor(climate)
   // Belt and braces: a disclosed reading whose own count is under the floor is withheld
   // here as well. The server never sends one, and a page that trusted it would print it.
@@ -73,7 +83,7 @@ export function teamClosedWave(
     surveyId: climate.surveyId,
     name: climate.surveyTitle,
     code: waveCode(climate.surveyTitle, '—'),
-    closedOn: climate.surveyEndDate,
+    closedOn,
     respondents: withheld ? null : climate.respondentCount,
     withheld,
     surveyWithheld: withheld && climate.dimensions.length === 0,
@@ -178,7 +188,7 @@ export function composeLeaderDashboard(input: LeaderInput): LeaderDashboardModel
   const { department, organization, tablero, asOf } = input
   const today = todayIso(new Date(asOf))
   const floor = countFloor(department.climate)
-  const closedWave = teamClosedWave(department.climate, organization)
+  const closedWave = teamClosedWave(department.climate, organization, asOf)
 
   let plans: LeaderPlans
   if (tablero === null) {
