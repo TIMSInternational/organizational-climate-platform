@@ -218,6 +218,11 @@ describe('SurveyTemplatesNextPage (/surveys/templates)', () => {
     await userEvent.type(within(dialog).getByLabelText(new RegExp(copy.newDescriptionLabel)), 'x')
     await userEvent.click(within(dialog).getByRole('button', { name: copy.newCreate }))
     expect(await within(dialog).findByText(copy.newFailed)).toBeTruthy()
+    // Still the open dialog, attached to the page — not a detached node that kept its last text
+    // (a dialog that closed on the refusal passed the line above).
+    expect(dialog.isConnected).toBe(true)
+    expect(screen.getByRole('dialog')).toBe(dialog)
+    expect((within(dialog).getByRole('button', { name: copy.newCreate }) as HTMLButtonElement).disabled).toBe(false)
     // The server's English sentence is not shown to a Spanish-speaking admin.
     expect(within(dialog).queryByText('Name, description, and category are required')).toBeNull()
   })

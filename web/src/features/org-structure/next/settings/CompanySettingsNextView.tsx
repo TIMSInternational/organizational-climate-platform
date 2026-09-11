@@ -327,7 +327,7 @@ function SettingsForm({
             meta={t(`${K}.brandMeta`)}
             className="gap-4 pb-5"
           >
-            <div className="flex items-start gap-4">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
               <div
                 data-slot="logo-box"
                 className="flex h-24 w-30 shrink-0 flex-col items-center justify-center gap-1.5 overflow-hidden rounded-lg border border-dashed border-line-default text-center text-2xs text-fg-tertiary"

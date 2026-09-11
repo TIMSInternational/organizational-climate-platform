@@ -242,23 +242,25 @@ function Row({ row, date, onOpen }: { row: InboxRow; date: string; onOpen: () =>
       className={cn('flex flex-wrap items-center gap-3.5 border-t border-line-light px-4 py-3 sm:flex-nowrap', row.unread ? 'bg-surface-card' : 'bg-surface-card-hover')}
     >
       <span aria-hidden="true" className={cn('size-2 shrink-0 rounded-full', row.unread ? 'bg-accent-red' : 'bg-transparent')} />
-      <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-surface-icon-box">
+      <span className="hidden size-8 shrink-0 items-center justify-center rounded-md bg-surface-icon-box sm:inline-flex">
         <Icon aria-hidden="true" className={cn('size-4', tone)} />
       </span>
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+      {/* Below sm the text takes the whole line after the unread dot (8px + the 14px gap);
+          the kind, the date and the action wrap to a second line under it. */}
+      <div className="flex min-w-0 flex-1 basis-[calc(100%-1.375rem)] flex-col gap-0.5 sm:basis-auto">
         <span className={cn('text-base text-fg-primary', row.unread ? 'font-semibold' : 'font-medium')}>
           {row.title}
           <span className="sr-only"> · {row.unread ? t('notifications.unread') : t('notifications.read')}</span>
         </span>
         <span className="text-sm text-fg-secondary">{row.body}</span>
       </div>
-      <span className="inline-flex shrink-0 flex-col items-end gap-1">
+      <span className="inline-flex shrink-0 items-center gap-2 pl-5.5 sm:flex-col sm:items-end sm:gap-1 sm:pl-0">
         <CanvasChip label={t(`${K}.facet.${row.kind}`)} />
         <time dateTime={row.createdAt} className="font-mono text-2xs text-fg-tertiary">
           {date}
         </time>
       </span>
-      <span className="inline-flex w-37.5 shrink-0 justify-end">
+      <span className="ml-auto inline-flex shrink-0 justify-end sm:ml-0 sm:w-37.5">
         {row.action && (
           <Button asChild variant="outline" size="sm">
             <Link to={row.action.href} onClick={onOpen}>

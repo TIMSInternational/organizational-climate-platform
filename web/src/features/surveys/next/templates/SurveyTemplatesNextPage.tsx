@@ -112,16 +112,16 @@ export default function SurveyTemplatesNextPage() {
             })}
           </div>
         )}
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex min-w-0 max-w-full items-center gap-2">
           <Input
             type="search"
             aria-label={t(`${K}.searchPlaceholder`)}
             placeholder={t(`${K}.searchPlaceholder`)}
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
-            className="h-control-lg w-70 max-w-full"
+            className="h-control-lg w-70 min-w-0 max-w-full"
           />
-          <Button type="submit" variant="outline" size="canvas">
+          <Button type="submit" variant="outline" size="canvas" className="shrink-0">
             <Filter aria-hidden="true" />
             {t('common.filter')}
           </Button>
