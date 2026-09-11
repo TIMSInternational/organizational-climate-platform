@@ -37,6 +37,8 @@ import {
 } from './derive'
 import type { SurveyRow, SurveySection, WaveReading } from './model'
 import { useSurveysListModel } from './useSurveysListModel'
+import { readViewerClaims } from '../../../../auth/viewerCapabilities'
+import SuperSurveysListView from '../super/SuperSurveysListView'
 
 const ACTION_KEY: Record<PrimaryActionKind, string> = {
   distribution: 'surveys.distribution.title',
@@ -92,6 +94,13 @@ function sentenceCase(text: string, locale: string): string {
  * climate moves: `GET /surveys/climate-trends` would answer them 403.
  */
 export default function SurveysListNextPage() {
+  // The per-role canvas (10 Sep): the super administrator's platform-wide list is its own view,
+  // `../super/SuperSurveysListView` — an Empresa column and a company filter over the same
+  // `GET /surveys` — read off the claim, as the tenant pages dispatch. Everyone else keeps this page.
+  return readViewerClaims().role === 'super_admin' ? <SuperSurveysListView /> : <SurveysListForCompany />
+}
+
+function SurveysListForCompany() {
   const { t, locale } = useTranslation()
   const capabilities = useViewerCapabilities()
   const state = useSurveysListModel()

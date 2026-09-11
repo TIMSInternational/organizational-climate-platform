@@ -336,8 +336,8 @@ function CopyNote({
   const texts = new Set(rows.map((item) => item.textEs.trim()))
   const same = copyRows.length === rows.length && copyRows.every((item) => texts.has(item.textEs.trim()))
   return (
-    <div data-slot="copy-note" className="flex flex-wrap items-center justify-between gap-3 border-t border-line-light px-3 py-2.5 text-sm text-fg-tertiary">
-      <span>
+    <div data-slot="copy-note" className="flex items-center justify-between gap-3 border-t border-line-light px-3 py-2.5 text-sm text-fg-tertiary">
+      <span className="min-w-0 flex-1">
         {same
           ? t('questionLibraryAdmin.next.copyNoteSame', { count: rows.length, company })
           : t('questionLibraryAdmin.next.copyNoteOther', { count: copyRows.length, company })}
@@ -345,7 +345,7 @@ function CopyNote({
       <button
         type="button"
         onClick={() => model.selectCategory(copy.id)}
-        className="inline-flex h-auto items-center gap-1 whitespace-nowrap border-0 bg-transparent p-0 text-sm font-normal text-fg-secondary shadow-none hover:text-fg-primary hover:underline"
+        className="inline-flex h-auto shrink-0 items-center gap-1 whitespace-nowrap border-0 bg-transparent p-0 text-sm font-normal text-fg-secondary shadow-none hover:text-fg-primary hover:underline"
       >
         {t('questionLibraryAdmin.next.copyLink', { company })}
         <ArrowRight aria-hidden="true" className="size-3.5" />
@@ -609,10 +609,10 @@ function ItemEditor({
           </CanvasSelect>
         </Field>
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-light pt-2.5">
-        <span className="text-xs text-fg-light">{readOnly ? t('questionLibraryAdmin.next.readOnlyNote') : t('questionLibraryAdmin.next.saveNote')}</span>
+      <div className="flex items-center justify-between gap-3 border-t border-line-light pt-2.5">
+        <span className="min-w-0 flex-1 text-xs text-fg-light">{readOnly ? t('questionLibraryAdmin.next.readOnlyNote') : t('questionLibraryAdmin.next.saveNote')}</span>
         {!readOnly && (
-          <div className="flex gap-2">
+          <div className="flex shrink-0 gap-2">
             <Button
               type="button"
               variant="outline"

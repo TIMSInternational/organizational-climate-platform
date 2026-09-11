@@ -328,6 +328,22 @@
       }
     ]
   },
+  "GET /profile": {
+    "id": "59ed9ace-f88b-51b6-82e4-7d1109715941",
+    "companyId": null,
+    "companyName": null,
+    "email": "rebeca.solis@meridiano.test",
+    "name": "Rebeca Solís",
+    "role": "super_admin",
+    "departmentId": null,
+    "departmentName": null,
+    "managerId": null,
+    "isActive": true,
+    "hasPassword": true,
+    "lastLoginAt": "2026-09-10T17:10:02.1+00:00",
+    "createdAt": "2026-07-31T20:40:11.3+00:00",
+    "demographics": {}
+  },
   "GET /surveys/climate-trends?companyId=16c97c29-07f8-4522-86fc-e6cc56298829": {
     "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
     "groupBy": null,
