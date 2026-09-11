@@ -88,4 +88,23 @@ describe('the breadcrumb trail sits flush', () => {
     expect(list.className.split(/\s+/)).toEqual(expect.arrayContaining(['m-0', 'p-0', 'list-none', 'text-base']))
     for (const item of container.querySelectorAll('li')) expect(item.className.split(/\s+/)).toContain('mb-0')
   })
+
+  it('sets the current crumb in the primary ink at regular weight, as the artboards draw it', () => {
+    render(
+      <Breadcrumb aria-label="Ruta">
+        <BreadcrumbList>
+          <BreadcrumbItem>
+            <BreadcrumbPage>Sesión en vivo</BreadcrumbPage>
+          </BreadcrumbItem>
+        </BreadcrumbList>
+      </Breadcrumb>,
+    )
+    // Every artboard of 10 Sep that draws a trail (CompanySettings, Distribution, Main,
+    // MicroclimateLive, ReportShare, ReportsList) sets the current crumb as
+    // `color: #110a29` with no weight of its own: the ink, not a heavier face, is what
+    // separates it from the links before it.
+    const classes = screen.getByText('Sesión en vivo').className.split(/\s+/)
+    expect(classes).toEqual(expect.arrayContaining(['text-fg-primary', 'font-normal']))
+    expect(classes).not.toContain('font-medium')
+  })
 })

@@ -10,8 +10,15 @@ import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../co
 import { tokenFor } from '../../../test/jwtFixture'
 
 /**
- * The redesigned listing surface: the KPI strip, the live panel and the rule that
- * both read the *unfiltered* set.
+ * The list `/microclimates` drew until the redesign replaced it with
+ * `../next/MicroclimatesListNextPage` (the MicroclimatesList artboard) — the module
+ * comment on the page says why it is still in the tree. Rendered directly, because
+ * nothing routes to it any more; the route's own guarantees (the company scope, who is
+ * answered, the launch gate, the floor on a past session's results link) are asserted
+ * against the new screen in `../next/MicroclimatesListNextPage.test.tsx`.
+ *
+ * What follows pins this page's own surface: the KPI strip, the live panel and the
+ * rule that both read the *unfiltered* set.
  *
  * That last one is the assertion worth having. The strip and the panel are drawn
  * from `microclimates`, not from `filtered`, and nothing but a test says so — a
