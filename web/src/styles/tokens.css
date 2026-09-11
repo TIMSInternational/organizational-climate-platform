@@ -145,6 +145,12 @@
   --admin-size-control-sm: 1.5rem; /* 24px — icon button */
   --admin-size-control-md: 1.75rem; /* 28px — nav row (Sidebar minHeight: 28) */
   --admin-size-control-lg: 2rem; /* 32px — button/input/select (h-8) */
+  /* 34px — the canvas's `.btn`. Every artboard of 10 Sep (26 of 26) declares it
+     `height: 32px` with a 1px border and no `box-sizing`, so it is 32px of content box
+     and 34px outside; the canvas's one `box-sizing: border-box` is on its text input,
+     which is why this is a token of its own and not a new `control-lg` (that one sizes
+     inputs and selects too, and they are 32 outside on the canvas as well). */
+  --admin-size-control-canvas: 2.125rem;
   --admin-size-icon: 16px; /* legacy `h-4 w-4`; an SVG box, so px */
   --admin-size-icon-box: 1.75rem; /* 28px — Sidebar avatar/icon tile */
 
@@ -293,6 +299,11 @@
   --admin-bg-input: #ffffff;
   --admin-bg-icon-box: #f3f1fa;
   --admin-bg-overlay: rgba(255, 255, 255, 0.8);
+  /* The scrim behind a dialog: the canvas's `rgba(17,10,41,.45)` (ReportShare, 10 Sep) —
+     the ink at 45%, which dims the page so the dialog is the one thing to read. Its own
+     token rather than a new value for `--admin-bg-overlay`: `.on-shell` re-points that
+     one for the rail's popovers (`styles/inkContrast.test.ts`), which must stay light. */
+  --admin-bg-scrim: rgba(17, 10, 41, 0.45);
   --admin-bg-hover: rgba(0, 0, 0, 0.04);
   --admin-bg-active: rgba(0, 0, 0, 0.08);
 
@@ -702,6 +713,7 @@
   --admin-bg-input: #1f173b;
   --admin-bg-icon-box: #1b1433;
   --admin-bg-overlay: rgba(0, 0, 0, 0.5);
+  --admin-bg-scrim: rgba(0, 0, 0, 0.5);
   --admin-bg-hover: rgba(255, 255, 255, 0.06);
   --admin-bg-active: rgba(255, 255, 255, 0.1);
 
