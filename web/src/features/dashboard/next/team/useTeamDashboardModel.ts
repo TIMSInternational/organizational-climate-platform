@@ -1,12 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from '../../../../i18n'
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
-import {
-  getDepartmentAdminDashboard,
-  getEmployeeDashboard,
-  type DepartmentAdminDashboardResult,
-} from '../../api/dashboard'
+import { getDepartmentAdminDashboard, type DepartmentAdminDashboardResult } from '../../api/dashboard'
 import { useDashboardData, type DashboardData } from '../../useDashboardData'
+import { listMySurveys } from '../../../surveys/api/surveys'
 import { getMisTareas, getTablero } from '../../../tracking/api/trackingApi'
 import { isTrackingEnabled } from '../../../tracking/api/config'
 import { readViewer } from '../../../tracking/next/viewer'
@@ -141,20 +138,22 @@ export function useLeaderDashboardModel(): TeamDashboardState<LeaderDashboardMod
  * |-------------------------------|-----------------------------------|
  * | "Cobertura de la encuesta abierta" | `GET /dashboard/department-admin` |
  * | "Los planes que ejecutas"     | `GET /api/mis-tareas`             |
- * | "Tus tareas" — the surveys owed | `GET /dashboard/employee`         |
+ * | "Tus tareas" — the surveys owed | `GET /surveys/my`                 |
  *
  * `mis-tareas` is exactly "the plans you execute": the service lists the plans whose
  * responsable or involucrados include the caller (`DashboardEndpoints.MisTareasAsync` in the
  * tracking service). Nothing here is sample-fed, so this page wears no sample chip.
  *
- * The employee read feeds only the task list, so its failure drops those tasks and says so
- * in a sentence; it never takes the coverage card down.
+ * The surveys she owes come from `/surveys/my`, her own self-service list, and not from
+ * `GET /dashboard/employee`: a role's page asks exactly one role dashboard endpoint, its
+ * own (`DashboardPage.test.tsx` guards that). That read feeds only the task list, so its
+ * failure drops those tasks and says so in a sentence; it never takes the coverage card down.
  */
 export function useSupervisorDashboardModel(): TeamDashboardState<SupervisorDashboardModel> {
   const department = useDepartment()
   const { locale } = useTranslation()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
-  const loadPending = useCallback(() => getEmployeeDashboard(baseUrl, locale), [baseUrl, locale])
+  const loadPending = useCallback(() => listMySurveys(baseUrl, locale), [baseUrl, locale])
   const pending = useDashboardData(loadPending)
   const capabilities = useViewerCapabilities()
   const trackingOn = isTrackingEnabled()
@@ -171,7 +170,7 @@ export function useSupervisorDashboardModel(): TeamDashboardState<SupervisorDash
     if (data?.kind !== 'department' || !pendingSettled || misTareas === null) return null
     return composeSupervisorDashboard({
       department: data.dashboard,
-      pending: pending.failed ? null : pending.data,
+      mySurveys: pending.failed ? null : pending.data,
       misTareas,
       trackingOn,
       mayRecord: canRecordProgress,

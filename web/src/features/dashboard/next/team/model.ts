@@ -5,7 +5,7 @@
  *
  * Every number either page prints is derived in `compose.ts` from the payloads the old
  * `DepartmentAdminDashboardView` already read — `GET /dashboard/department-admin` — plus
- * the tracking service's own reads and, for the supervisor's tasks, `GET /dashboard/employee`.
+ * the tracking service's own reads and, for the supervisor's tasks, `GET /surveys/my`.
  * The one region no endpoint answers for these roles is the organisation's side of the
  * comparison, which comes from `sampleModel.ts` and wears the "Datos de muestra" chip.
  *
@@ -158,7 +158,7 @@ export interface LeaderDashboardModel {
 
 /** One line of "Tus tareas". */
 export type SupervisorTask =
-  /** A survey the supervisor still owes an answer to (`GET /dashboard/employee`). */
+  /** A survey the supervisor still owes an answer to (`GET /surveys/my`). */
   | { kind: 'answer-survey'; id: string; name: string | null; dueOn: string }
   /** A plan she executes and may record progress on (`canRecordProgress`). */
   | { kind: 'record-progress'; id: string; code: string; firstAvance: boolean; dueOn: string }
@@ -197,7 +197,7 @@ export interface SupervisorDashboardModel {
   plans: SupervisorPlans
   /** Soonest first. */
   tasks: readonly SupervisorTask[]
-  /** `GET /dashboard/employee` failed, so the surveys she owes are not in the list. */
+  /** `GET /surveys/my` failed, so the surveys she owes are not in the list. */
   surveysUnread: boolean
   trackingOn: boolean
 }

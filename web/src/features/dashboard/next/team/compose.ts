@@ -1,4 +1,5 @@
-import type { DashboardTeamClimate, DepartmentAdminDashboard, EmployeeDashboard } from '../../api/dashboard'
+import type { DashboardTeamClimate, DepartmentAdminDashboard } from '../../api/dashboard'
+import type { MySurveyListItem } from '../../../surveys/api/surveys'
 import type { PlanAccion, TableroResponse } from '../../../tracking/api/trackingApi'
 import { toPercent } from '../../../tracking/semaforo'
 import { todayIso } from '../../../tracking/planDates'
@@ -216,8 +217,12 @@ export function composeLeaderDashboard(input: LeaderInput): LeaderDashboardModel
 
 export interface SupervisorInput {
   department: DepartmentAdminDashboard
-  /** `GET /dashboard/employee`, or `null` when that read failed. */
-  pending: EmployeeDashboard | null
+  /**
+   * `GET /surveys/my` — the surveys she still owes — or `null` when that read failed. Her
+   * own self-service list rather than `GET /dashboard/employee`: this page asks ONE role
+   * dashboard endpoint, its own, and `/surveys/my` is not one.
+   */
+  mySurveys: readonly MySurveyListItem[] | null
   /** `GET /api/mis-tareas`, or why it was not read. */
   misTareas: TrackingRead<PlanAccion[]>
   trackingOn: boolean
@@ -228,7 +233,7 @@ export interface SupervisorInput {
 }
 
 export function composeSupervisorDashboard(input: SupervisorInput): SupervisorDashboardModel {
-  const { department, pending, misTareas, asOf } = input
+  const { department, mySurveys, misTareas, asOf } = input
   const today = todayIso(new Date(asOf))
   const floor = countFloor(department.climate)
   const open = teamOpenSurveys(department, floor, asOf)
@@ -251,7 +256,7 @@ export function composeSupervisorDashboard(input: SupervisorInput): SupervisorDa
   }
 
   const tasks: SupervisorTask[] = [
-    ...(pending?.pendingSurveys ?? []).map(
+    ...(mySurveys ?? []).map(
       (survey): SupervisorTask => ({ kind: 'answer-survey', id: survey.id, name: survey.title, dueOn: survey.endDate }),
     ),
     ...(plans.source === 'tracking' ? plans.plans : []).map(
@@ -275,7 +280,7 @@ export function composeSupervisorDashboard(input: SupervisorInput): SupervisorDa
     floor,
     plans,
     tasks,
-    surveysUnread: pending === null,
+    surveysUnread: mySurveys === null,
     trackingOn: input.trackingOn,
   }
 }

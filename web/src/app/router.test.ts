@@ -396,18 +396,44 @@ describe('router', () => {
     }
 
     expect(componentAt('/dashboard')).toBe(DashboardPage)
-    for (const file of [
-      'features/dashboard/pages/DashboardPage.tsx',
-      'features/dashboard/components/DepartmentAdminDashboardView.tsx',
-    ]) {
+    // The leaders lane moved the second dispatcher: a leader or supervisor with no
+    // department now reaches the Home through `next/team/TeamDashboardPage`, which replaced
+    // `DepartmentAdminDashboardView` on `/dashboard` (pinned in the next case).
+    for (const [file, from] of [
+      ['features/dashboard/pages/DashboardPage.tsx', '../next/employee/EmployeeHomeView'],
+      ['features/dashboard/next/team/TeamDashboardPage.tsx', '../employee/EmployeeHomeView'],
+    ] as const) {
       const source = readFileSync(join(src, file), 'utf8')
-      expect(source, file).toMatch(/^import EmployeeHomeView from '\.\.\/next\/employee\/EmployeeHomeView'$/m)
+      expect(source, file).toMatch(new RegExp(`^import EmployeeHomeView from '${from.replace(/[./]/g, '\\$&')}'$`, 'm'))
       expect(source, file).toMatch(/<EmployeeHomeView\b/)
       expect(source, file).not.toMatch(/EmployeeDashboardView'/)
     }
     const importers = globSync('**/*.{ts,tsx}', { cwd: src })
       .filter((file) => !/EmployeeDashboardView(\.test)?\.tsx$/.test(file))
       .filter((file) => /from '[^']*\/EmployeeDashboardView'/.test(readFileSync(join(src, file), 'utf8')))
+    expect(importers).toEqual([])
+  })
+
+  /**
+   * The leaders lane (the canvas's LeaderDashboard and SupervisorDashboard, 10 Sep): a
+   * `leader` and a `supervisor` land on `/dashboard`, whose dispatcher now sends both to
+   * `next/team/TeamDashboardPage` — one redesigned view per role — instead of
+   * `DepartmentAdminDashboardView`. Pinned on the source of the two dispatchers: the element
+   * at `/dashboard` is the role dispatcher for every role, so the path alone would stay green
+   * with the old view restored behind it. The old view stays in the tree as the wiring
+   * reference, imported by nothing but its own test.
+   */
+  it('sends a leader and a supervisor to the redesigned team panels, and routes the old team view nowhere', () => {
+    const src = join(process.cwd(), 'src')
+    const dispatcher = readFileSync(join(src, 'features', 'dashboard', 'pages', 'DashboardPage.tsx'), 'utf8')
+    expect(dispatcher).toMatch(/^import TeamDashboardPage from '\.\.\/next\/team\/TeamDashboardPage'$/m)
+    expect(dispatcher).toMatch(/<TeamDashboardPage role=\{scope\.role\} \/>/)
+    const team = readFileSync(join(src, 'features', 'dashboard', 'next', 'team', 'TeamDashboardPage.tsx'), 'utf8')
+    expect(team).toMatch(/^import LeaderDashboardView from '\.\/LeaderDashboardView'$/m)
+    expect(team).toMatch(/^import SupervisorDashboardView from '\.\/SupervisorDashboardView'$/m)
+    const importers = globSync('**/*.{ts,tsx}', { cwd: src })
+      .filter((file) => !/DepartmentAdminDashboardView(\.test)?\.tsx$/.test(file))
+      .filter((file) => /from '[^']*\/DepartmentAdminDashboardView'/.test(readFileSync(join(src, file), 'utf8')))
     expect(importers).toEqual([])
   })
 

@@ -169,7 +169,11 @@ function dashboardRequests(): string[] {
   return vi
     .mocked(fetch)
     .mock.calls.map(([url]) => String(url))
-    .filter((url) => !url.includes('/last-outcome'))
+    // Role dashboard endpoints only. A page may read other clients beside its own
+    // `/dashboard/*` payload — the supervisor's panel reads `/surveys/my` for the surveys
+    // she owes — and none of those is another role's dashboard, which is the bug this
+    // guards against.
+    .filter((url) => url.includes('/dashboard/') && !url.includes('/last-outcome'))
 }
 
 /**
@@ -282,7 +286,8 @@ describe('DashboardPage', () => {
   /**
    * The gate `DashboardNextPage` drew around `/dashboard/next` before the redesign took
    * over `/dashboard`: the company view is for the two branches that name a tenant, and
-   * nobody else sees so much as its title. The cases above and below prove each of these
+   * nobody else sees its sections — the team panels share its title, as the canvas names
+   * every role's landing page "Panel de Control". The cases above and below prove each of these
    * roles reaches its own view; this one pins the negative, after that view has drawn.
    * (A SuperAdmin with no tenant chosen is the platform-overview case above.)
    */
@@ -294,8 +299,12 @@ describe('DashboardPage', () => {
 
       renderDashboard()
 
-      expect(await screen.findByText('Company-wide pulse')).toBeTruthy()
-      expect(screen.queryByRole('heading', { level: 1, name: nextCopy.title })).toBeNull()
+      expect((await screen.findAllByText(/Company-wide pulse/)).length).toBeGreaterThan(0)
+      // The company view's own sections: what tells it apart from the team panels, which
+      // carry the same title.
+      expect(screen.queryByRole('heading', { name: nextCopy.whereHeading })).toBeNull()
+      expect(screen.queryByRole('heading', { name: nextCopy.movedHeading })).toBeNull()
+      expect(screen.queryByRole('heading', { name: nextCopy.attentionHeading })).toBeNull()
       expect(screen.queryByText(nextCopy.sampleChip)).toBeNull()
     },
   )
@@ -309,15 +318,19 @@ describe('DashboardPage', () => {
       renderDashboard()
 
       await waitFor(() => expect(fetch).toHaveBeenCalled())
+      // The redesigned team panels (the canvas's LeaderDashboard and SupervisorDashboard):
+      // titled after what the page IS, as every screen is, with the department and the role
+      // in the eyebrow — and the supervisor's says first that it is a proposal. Before the
+      // first redesign a leader's document heading was "Engineering"; both halves are
+      // pinned so neither can quietly move back.
+      expect(await screen.findByRole('heading', { level: 1, name: nextCopy.title })).toBeTruthy()
       expect(requestedPath()).toContain('/dashboard/department-admin')
       expect(requestedPath()).not.toContain('departmentId')
-      // The redesign's header shape, matching every other screen: the page is titled after
-      // what it *is*, and the scope it is about sits in the eyebrow above. Before this, a
-      // leader's document heading was "Engineering" while all twelve other screens titled
-      // themselves after the screen — so the department name is asserted as the eyebrow,
-      // not as the `h1`, and both halves are pinned so neither can quietly move back.
-      expect(await screen.findByRole('heading', { level: 1, name: 'Dashboard' })).toBeTruthy()
-      expect(screen.getByText('Engineering')).toBeTruthy()
+      const eyebrow =
+        role === 'leader'
+          ? `Engineering · ${en.users.leader}`
+          : `${nextCopy.supervisor.proposal} · Engineering · ${en.users.supervisor}`
+      expect(screen.getByText(eyebrow)).toBeTruthy()
     },
   )
 
@@ -346,19 +359,17 @@ describe('DashboardPage', () => {
    * "Completed responses 5". The server now sends a department-scoped count and no target at
    * all, and the table must not print a column for the figure it was not given.
    */
-  it('shows a department leader no tenant-wide target column', async () => {
+  it("shows a department leader the team's own count and no tenant-wide target", async () => {
     setToken(tokenFor('leader', 'c1'))
     serves(departmentPayload())
 
     renderDashboard()
 
     expect(await screen.findByText('Company-wide pulse')).toBeTruthy()
-    expect(screen.getByRole('columnheader', { name: 'Responses' })).toBeTruthy()
-    expect(screen.queryByRole('columnheader', { name: 'Target' })).toBeNull()
-    // Every body row has one cell fewer than the header would need for a target.
-    const headers = screen.getAllByRole('columnheader').length
-    const cells = screen.getAllByRole('row')[1].querySelectorAll('td').length
-    expect(cells).toBe(headers)
+    // The department's own responses — 5, at the floor, so printed — against the team's own
+    // headcount. The payload carries no target, and the row prints none.
+    expect(screen.getByText('5 of 6 answered')).toBeTruthy()
+    expect(screen.queryByText(/Target|of 200/)).toBeNull()
   })
 
   /**
