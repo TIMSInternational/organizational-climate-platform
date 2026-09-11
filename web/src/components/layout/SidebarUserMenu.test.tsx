@@ -5,6 +5,7 @@ import { TranslationProvider } from '../../i18n'
 import { setToken, clearToken } from '../../auth/token'
 import { SidebarUserMenu } from './SidebarUserMenu'
 import { tokenFor } from '../../test/jwtFixture'
+import es from '../../i18n/es.json'
 
 afterEach(() => {
   cleanup()
@@ -67,5 +68,23 @@ describe('SidebarUserMenu, accented names', () => {
     // Guards the `?? '?'` branch, so the accented cases above cannot pass merely because
     // the component renders a placeholder for everything.
     expect(screen.getByText('?')).toBeTruthy()
+  })
+})
+
+describe('the canvas’s foot of the rail', () => {
+  it('draws the avatar as the canvas’s round indigo mark, with no disclosure chevron beside the name', () => {
+    setToken(tokenFor({ name: 'Rebeca Solís', role: 'super_admin', companyId: '' }))
+    renderMenu()
+    const avatar = document.querySelector('[data-slot="sidebar-avatar"]') as HTMLElement
+    expect(avatar.textContent).toBe('R')
+    expect(avatar.style.borderRadius).toBe('999px')
+    expect(avatar.style.background).toContain('--admin-shell-bg-raised')
+    const button = avatar.closest('button') as HTMLButtonElement
+    expect(button.querySelector('svg')).toBeNull()
+    expect(button.getAttribute('aria-haspopup')).toBe('menu')
+  })
+
+  it('writes the super administrator’s role in Spanish sentence case, as the canvas does', () => {
+    expect(es.users.superAdmin).toBe('Super administrador')
   })
 })

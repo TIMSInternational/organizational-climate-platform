@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Outlet, useNavigate } from 'react-router'
+import { Outlet, useLocation, useNavigate } from 'react-router'
 import RoleBasedNav from '../navigation/RoleBasedNav'
 import { buildNavSections, withUnreadBadge } from '../navigation/navSections'
 import { isTrackingEnabled } from '../features/tracking/api/config'
@@ -18,6 +18,8 @@ import {
 } from '../components/layout'
 import { CompanyContextProvider, writeSelectedCompanyId } from '../company-context'
 import { NotificationBell } from '../features/notifications/components/NotificationBell'
+import { useCompanyContext } from '../company-context'
+import { headerSwitcherStandsDown } from './headerScope'
 
 /**
  * The app shell: sidebar, mobile navigation, and the scrolling content column.
@@ -167,7 +169,7 @@ function AdminShell() {
                 `ShellControls` for the reason that block is hidden on a collapsed
                 rail and below `md`: a global scope switch that disappears while
                 the pages it scopes stay visible is worse than none. */}
-            <CompanyContextSwitcher />
+            <HeaderCompanySwitcher />
             {/* ForMaps puts the search glyph and its Cmd+K chip immediately before
                 the bell in this same strip, and so does this. It opens the palette
                 by dispatching a window event rather than by holding shared state —
@@ -253,4 +255,14 @@ function AdminShell() {
       <CommandPalette sections={sections} />
     </div>
   )
+}
+
+/**
+ * #124's header switcher, standing down where the page names its own company — the tenant
+ * list and pages, and the platform overview while nothing is chosen (`headerScope.ts`).
+ */
+function HeaderCompanySwitcher() {
+  const { pathname } = useLocation()
+  const { selectedCompanyId } = useCompanyContext()
+  return headerSwitcherStandsDown(pathname, selectedCompanyId) ? null : <CompanyContextSwitcher />
 }

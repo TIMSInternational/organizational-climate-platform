@@ -1,5 +1,6 @@
 import {
-  Activity,
+  CircleAlert,
+  Copy,
   Building2,
   Settings,
   Users,
@@ -50,6 +51,13 @@ export interface NavItem {
   icon: React.ComponentType<React.SVGProps<SVGSVGElement>>
   badge?: string
   sub?: NavItem[]
+  /**
+   * Draw this group flat: its own row and its children as plain rows beside it, with no
+   * chevron and nothing to expand — the super administrator's "Administración del Sistema",
+   * which the 10 Sep per-role canvas draws as four flat rows. Presentational only: the
+   * data (and so `leafNavItems` and the mobile tab bar) is the same as any group's.
+   */
+  flat?: boolean
 }
 
 export interface NavSection {
@@ -203,7 +211,8 @@ const QUESTION_BANK_ITEM: NavItem = {
   labelKey: 'navigation.questionBank',
   href: '/admin/question-bank',
   // Not ListChecks: TRACKING_MIS_TAREAS_ITEM already carries it, and two sidebar rows
-  // with one glyph is how a reader learns to stop trusting the glyphs.
+  // with one glyph is how a reader learns to stop trusting the glyphs. The canvas draws
+  // this open book on the super administrator's and the company administrator's rails alike.
   icon: RailQuestionBankIcon,
 }
 
@@ -363,8 +372,10 @@ export function buildNavSections(
             labelKey: 'navigation.systemAdministration',
             href: '/admin/companies',
             icon: RailShieldIcon,
+            flat: true,
             sub: [
-              { labelKey: 'navigation.companies', href: '/admin/companies', icon: Building2 },
+              // Copy: the stacked squares the canvas draws for Empresas, not a building.
+              { labelKey: 'navigation.companies', href: '/admin/companies', icon: Copy },
               { labelKey: 'navigation.systemSettings', href: '/admin/system-settings', icon: Settings },
             ],
           },
@@ -430,7 +441,7 @@ export function buildNavSections(
           {
             labelKey: 'navigation.systemHealth',
             href: '/admin/system',
-            icon: Activity,
+            icon: CircleAlert,
           },
           QUESTION_BANK_ITEM,
           QUESTION_LIBRARY_ITEM,

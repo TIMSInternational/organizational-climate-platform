@@ -14,6 +14,8 @@ import { ChartColumn, FileText, Tags, Users } from 'lucide-react'
 import { ANONYMITY_FLOOR } from '../../../components/charts'
 import { PageTopBar, QuickActions } from '../../../components/layout'
 import { Button, Card, CardContent, CardHeader, CardTitle } from '../../../components/ui'
+import { readViewerClaims } from '../../../auth/viewerCapabilities'
+import SuperCompanyDetailView from '../next/super/SuperCompanyDetailView'
 
 /**
  * Company Settings (UI redesign).
@@ -48,6 +50,14 @@ import { Button, Card, CardContent, CardHeader, CardTitle } from '../../../compo
  * page degrading to an error.
  */
 export default function CompanyDetailPage() {
+  // The per-role canvas (10 Sep): the super administrator's tenant detail is its own view,
+  // `../next/super/SuperCompanyDetailView`. `canManageCompanies` is exactly this role
+  // (`viewerCapabilities.ts`); read off the claim, not the hook, so this page still renders
+  // outside `CompanyContextProvider` as it always has. Everyone else keeps this page.
+  return readViewerClaims().role === 'super_admin' ? <SuperCompanyDetailView /> : <CompanyDetailPageForAdmins />
+}
+
+function CompanyDetailPageForAdmins() {
   const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
