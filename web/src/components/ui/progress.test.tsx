@@ -28,6 +28,22 @@ describe('Progress', () => {
     expect(indicator?.style.transform).toBe('translateX(-75%)')
   })
 
+  it('hides the indicator at 0 and when indeterminate, and shows it at any fill', () => {
+    // Translated fully out, the indicator still left an antialiased sliver of fill at
+    // the rounded left end of the track (the microclimate live bar at 2x, 11 Sep).
+    const hidden = (value: number | null) => {
+      const { container, unmount } = render(<Progress value={value} aria-label="Upload" />)
+      const indicator = container.querySelector<HTMLElement>('[data-slot=progress-indicator]')
+      const result = indicator?.classList.contains('invisible')
+      unmount()
+      return result
+    }
+    expect(hidden(0)).toBe(true)
+    expect(hidden(null)).toBe(true)
+    expect(hidden(1)).toBe(false)
+    expect(hidden(100)).toBe(false)
+  })
+
   it('treats a null value as empty for the transform', () => {
     const { container } = render(<Progress value={null} aria-label="Upload" />)
     const indicator = container.querySelector<HTMLElement>('[data-slot=progress-indicator]')

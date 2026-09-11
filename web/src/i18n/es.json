@@ -1539,6 +1539,7 @@
         "hatchNote": "Las barras de palabras aparecen aquí cuando {minimum} personas hayan respondido.",
         "wordsNote": "Las palabras pueden identificar a alguien en un grupo pequeño, así que se reservan hasta que al menos {minimum} personas hayan respondido. Se muestran como frecuencias, nunca como texto completo.",
         "wordsEmpty": "Todavía nadie escribió una palabra.",
+        "wordsNoReading": "Todavía no hay una lectura de las palabras.",
         "wordsWithheldOne": "{count} palabra poco frecuente se reserva.",
         "wordsWithheldOther": "{count} palabras poco frecuentes se reservan.",
         "respondTitle": "Para responder",

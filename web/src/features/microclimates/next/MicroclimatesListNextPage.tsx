@@ -1,6 +1,6 @@
 import { Fragment, type ReactNode } from 'react'
 import { Link } from 'react-router'
-import { ArrowRight, Check, Clock, File, Link as LinkIcon, Plus } from 'lucide-react'
+import { Check } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
 import {
@@ -12,6 +12,13 @@ import {
   Progress,
   SkeletonText,
 } from '../../../components/ui'
+import {
+  CanvasArrowRightIcon,
+  CanvasClockIcon,
+  CanvasFileIcon,
+  CanvasLinkIcon,
+  CanvasPlusIcon,
+} from '../../../components/ui/canvasGlyphs'
 import { ProtectedCell } from '../../../components/charts'
 import { useViewerCapabilities } from '../../../auth/viewerCapabilities'
 import { RailMicroclimatesIcon } from '../../../navigation/railIcons'
@@ -70,7 +77,7 @@ export default function MicroclimatesListNextPage() {
           capabilities.canLaunchMicroclimate ? (
             <Button asChild variant="primary" size="canvas">
               <Link to="/microclimates/new">
-                <Plus aria-hidden="true" />
+                <CanvasPlusIcon />
                 {t('microclimates.next.list.launch')}
               </Link>
             </Button>
@@ -166,7 +173,7 @@ function ListBody({ model }: { model: MicroclimatesListNextModel }) {
         />
         {model.past.length === 0 ? (
           <DashedNote
-            icon={<Clock aria-hidden="true" className="size-4" />}
+            icon={<CanvasClockIcon strokeWidth={1.8} className="size-4" />}
             title={t('microclimates.next.list.pastEmptyTitle')}
             body={
               closing && currentTitle
@@ -359,13 +366,13 @@ function InProgressRow({
       <div className="col-span-2 flex flex-wrap items-center gap-2 md:col-span-1 md:justify-end">
         {canShare && (
           <Button type="button" variant="outline" size="canvas" onClick={() => void onCopy(row.id, link)}>
-            {copied?.ok ? <Check aria-hidden="true" /> : <LinkIcon aria-hidden="true" />}
+            {copied?.ok ? <Check aria-hidden="true" /> : <CanvasLinkIcon />}
             {copied?.ok ? t('microclimates.next.list.linkCopied') : t('microclimates.next.list.share')}
           </Button>
         )}
         <Button asChild variant="outline" size="canvas">
           <Link to={isOpen ? `/microclimates/${row.id}/live` : `/microclimates/${row.id}`}>
-            <ArrowRight aria-hidden="true" />
+            <CanvasArrowRightIcon />
             {isOpen ? t('microclimates.next.list.viewLive') : t('microclimates.next.list.openDraft')}
           </Link>
         </Button>
@@ -499,7 +506,7 @@ function PastRow({ row, locale }: { row: Microclimate; locale: string }) {
         >
           <Button asChild variant="outline" size="canvas">
             <Link to={`/microclimates/${row.id}/results`}>
-              <File aria-hidden="true" />
+              <CanvasFileIcon />
               {t('microclimates.next.list.results')}
             </Link>
           </Button>

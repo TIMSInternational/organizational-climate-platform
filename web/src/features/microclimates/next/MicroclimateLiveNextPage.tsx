@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router'
-import { Check, Clock, Copy, File, Lock } from 'lucide-react'
+import { Check } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
 import {
@@ -16,6 +16,12 @@ import {
   Progress,
   SkeletonText,
 } from '../../../components/ui'
+import {
+  CanvasClockIcon,
+  CanvasCopyIcon,
+  CanvasFileIcon,
+  CanvasLockIcon,
+} from '../../../components/ui/canvasGlyphs'
 import { PROTECTED_HATCH } from '../../../components/charts/suppression'
 import { cn } from '../../../lib/cn'
 import type { LiveResults, MicroclimateDetail } from '../api/microclimates'
@@ -134,13 +140,13 @@ export default function MicroclimateLiveNextPage() {
           <>
             <Button asChild variant="outline" size="canvas">
               <Link to={`/microclimates/${detail.id}/results`}>
-                <File aria-hidden="true" />
+                <CanvasFileIcon />
                 {t('microclimates.next.live.results')}
               </Link>
             </Button>
             {state.mayClose && (
               <Button type="button" variant="outline" size="canvas" onClick={() => setConfirming(true)}>
-                <Clock aria-hidden="true" />
+                <CanvasClockIcon />
                 {t('microclimates.next.live.close')}
               </Button>
             )}
@@ -320,7 +326,7 @@ function WordsBlock({ live, responses }: { live: LiveResults | null; responses: 
         {words.isSuppressed && (
           <Chip
             tone="neutral"
-            icon={<Lock />}
+            icon={<CanvasLockIcon />}
             label={t('microclimates.next.live.protectedChip', { minimum: MINIMUM_RESPONDENTS })}
           />
         )}
@@ -338,10 +344,20 @@ function WordsBlock({ live, responses }: { live: LiveResults | null; responses: 
             PROTECTED_HATCH,
           )}
         >
-          <Lock aria-hidden="true" className="size-4.5 text-fg-tertiary" />
+          <CanvasLockIcon strokeWidth={1.6} className="size-4.5 text-fg-tertiary" />
           <span className="text-sm text-fg-tertiary">
             {t('microclimates.next.live.hatchNote', { minimum: MINIMUM_RESPONDENTS })}
           </span>
+        </div>
+      ) : live === null ? (
+        // No reading has landed — the first poll is in flight, or it failed. An absent
+        // word list is not an empty one: "nobody has written a word" would state a
+        // fact nobody read.
+        <div
+          data-slot="words-no-reading"
+          className="flex h-42 items-center justify-center rounded-lg border border-dashed border-line-default px-4 text-center text-sm text-fg-tertiary"
+        >
+          {t('microclimates.next.live.wordsNoReading')}
         </div>
       ) : words.bars.length === 0 ? (
         <div className="flex h-42 items-center justify-center rounded-lg border border-dashed border-line-default px-4 text-center text-sm text-fg-tertiary">
@@ -423,7 +439,7 @@ function RespondCard({ detail }: { detail: MicroclimateDetail }) {
                 {displayLink(origin, detail.id)}
               </span>
               <Button type="button" variant="outline" size="canvas" onClick={() => void copy(detail.id, link)}>
-                {copied?.ok ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+                {copied?.ok ? <Check aria-hidden="true" /> : <CanvasCopyIcon />}
                 {copied?.ok ? t('microclimates.next.live.copied') : t('microclimates.next.live.copy')}
               </Button>
             </div>

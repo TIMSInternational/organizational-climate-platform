@@ -247,6 +247,32 @@ describe('sharing the link', () => {
     expect(screen.queryByRole('button', { name: 'Share' })).toBeNull()
     expect(screen.getByRole('link', { name: 'Watch live' }).getAttribute('href')).toBe('/microclimates/m1/live')
   })
+
+  it('offers no public link for a draft, anonymous or not: it takes no answers until it opens', async () => {
+    const draft = row({ id: 'd1', status: 'draft' })
+    routeFetch([draft], { d1: detailFor(draft) })
+    renderPage()
+    const meta = await screen.findByText(
+      (_, node) => node?.getAttribute('data-slot') === 'session-meta' && /anonymous/.test(node.textContent ?? ''),
+    )
+
+    expect(meta.textContent).toMatch(/ · anonymous · /)
+    expect(screen.queryByRole('button', { name: 'Share' })).toBeNull()
+    expect(screen.getByRole('link', { name: 'Open' }).getAttribute('href')).toBe('/microclimates/d1')
+  })
+})
+
+describe('the glyphs', () => {
+  it('draws the artboard’s own button glyphs: the plus, the one diagonal link and the arrow', async () => {
+    renderPage()
+    const share = await screen.findByRole('button', { name: 'Share' })
+
+    expect(share.querySelector('path')?.getAttribute('d')).toMatch(/^M6\.5 9\.5l3-3/)
+    const launch = screen.getByRole('link', { name: 'Launch a microclimate' })
+    expect(launch.querySelector('path')?.getAttribute('d')).toBe('M8 3v10M3 8h10')
+    const watch = screen.getByRole('link', { name: 'Watch live' })
+    expect(watch.querySelector('path')?.getAttribute('d')).toBe('M3 8h10M9 4l4 4-4 4')
+  })
 })
 
 describe('by role', () => {

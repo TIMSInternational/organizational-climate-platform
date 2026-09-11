@@ -210,7 +210,9 @@ describe('what people wrote', () => {
 
   it('above the floor, is word frequencies: the rare words dropped and reported, never an answer', async () => {
     routeFetch(
-      detail(),
+      // The detail says 11, so a 12 on screen can only be the poll's — the reading the
+      // bars are drawn from. With both at 12 the wait passed before the poll landed.
+      detail({ responseCount: 11 }),
       results({
         responseCount: 12,
         wordCloud: [
@@ -230,6 +232,43 @@ describe('what people wrote', () => {
     expect(screen.queryByText('visa')).toBeNull()
     expect(screen.getByText('1 rare word is held back.')).toBeTruthy()
     expect(within(wordsBlock()).queryByText('Protected until 5 responses')).toBeNull()
+  })
+
+  it('before any reading lands, says there is none — not that nobody wrote', async () => {
+    // The detail alone is above the floor; the live read never settles.
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) =>
+      String(input).includes('/live-results')
+        ? new Promise<Response>(() => {})
+        : Promise.resolve(new Response(JSON.stringify(detail()), { status: 200 })),
+    )
+    renderPage()
+    await waitFor(() => expect(figure()).toBe('12'))
+
+    expect(within(wordsBlock()).getByText('No reading of the words yet.')).toBeTruthy()
+    expect(screen.queryByText('Nobody has written a word yet.')).toBeNull()
+  })
+
+  it('when the first reading fails, still says there is none — not that nobody wrote', async () => {
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) =>
+      String(input).includes('/live-results')
+        ? Promise.reject(new Error('offline'))
+        : Promise.resolve(new Response(JSON.stringify(detail()), { status: 200 })),
+    )
+    renderPage()
+    await waitFor(() => expect(liveCalls()).toBeGreaterThan(0))
+    await waitFor(() => expect(figure()).toBe('12'))
+
+    expect(within(wordsBlock()).getByText('No reading of the words yet.')).toBeTruthy()
+    expect(screen.queryByText('Nobody has written a word yet.')).toBeNull()
+  })
+
+  it('once a reading lands with no word in it, says nobody has written one', async () => {
+    routeFetch(detail({ responseCount: 11 }), results({ responseCount: 13, wordCloud: [] }))
+    renderPage()
+    await waitFor(() => expect(figure()).toBe('13'))
+
+    expect(within(wordsBlock()).getByText('Nobody has written a word yet.')).toBeTruthy()
+    expect(screen.queryByText('No reading of the words yet.')).toBeNull()
   })
 
   it('prints no sentiment, which the server hardcodes', async () => {
@@ -272,6 +311,21 @@ describe('to respond', () => {
     expect(screen.getByText('Named · disclosure floor 5')).toBeTruthy()
   })
 
+  it.each([
+    ['draft', /^The link is shared once the session opens, on /],
+    ['closed', /^The session has closed; the link no longer takes responses\.$/],
+  ] as const)('offers neither link nor QR for a %s session, anonymous or not: it takes no answers', async (status, hint) => {
+    routeFetch(detail({ status, anonymousResponses: true }), results())
+    renderPage()
+
+    expect(await screen.findByText(hint)).toBeTruthy()
+    expect(document.querySelector('[data-slot="respond-link"]')).toBeNull()
+    expect(screen.queryByRole('img', { name: 'QR code of the respond link' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Copy' })).toBeNull()
+    // Anonymous all the same — the facts say so — so the withheld link is the status's doing.
+    expect(screen.getByText('Anonymous · disclosure floor 5')).toBeTruthy()
+  })
+
   it('states the questions and the floor among the facts', async () => {
     renderPage()
     expect(await screen.findByText('2 · a scale from 1 to 5, one word (optional)')).toBeTruthy()
@@ -282,6 +336,22 @@ describe('to respond', () => {
     renderPage()
     await waitFor(() => expect(figure()).toBe('13'))
     expect(screen.queryByText('Sample data')).toBeNull()
+  })
+})
+
+describe('the glyphs', () => {
+  it('draws the artboard’s own glyphs: the solid page, the solid sheet, the clock and the padlock', async () => {
+    routeFetch(detail(), results({ responseCount: 3 }))
+    renderPage()
+    await waitFor(() => expect(figure()).toBe('3'))
+
+    const resultsLink = screen.getByRole('link', { name: 'Results' })
+    expect(resultsLink.querySelector('path[d="M4 2h5l3 3v9H4z"]')?.getAttribute('fill')).toBe('currentColor')
+    const copy = screen.getByRole('button', { name: 'Copy' })
+    expect(copy.querySelector('rect[x="5"][y="5"]')?.getAttribute('fill')).toBe('currentColor')
+    const close = screen.getByRole('button', { name: 'Close the session' })
+    expect(close.querySelector('path[d="M8 5v3l2 1.5"]')).toBeTruthy()
+    expect(wordsBlock().querySelector('[data-slot="words-hatch"] path[d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"]')).toBeTruthy()
   })
 })
 

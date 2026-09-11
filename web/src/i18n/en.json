@@ -1539,6 +1539,7 @@
         "hatchNote": "Word bars appear here once {minimum} people have answered.",
         "wordsNote": "Words can identify someone in a small group, so they are held back until at least {minimum} people have answered. They are shown as frequencies, never as full text.",
         "wordsEmpty": "Nobody has written a word yet.",
+        "wordsNoReading": "No reading of the words yet.",
         "wordsWithheldOne": "{count} rare word is held back.",
         "wordsWithheldOther": "{count} rare words are held back.",
         "respondTitle": "To respond",
