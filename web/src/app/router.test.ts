@@ -6,6 +6,8 @@ import SurveysListNextPage from '../features/surveys/next/list/SurveysListNextPa
 import ClimateTrendsNextPage from '../features/surveys/next/trends/ClimateTrendsNextPage'
 import DashboardPage from '../features/dashboard/pages/DashboardPage'
 import SurveyResultsNextPage from '../features/surveys/next/SurveyResultsNextPage'
+import ReportsListNextPage from '../features/reports/next/ReportsListNextPage'
+import BenchmarksNextPage from '../features/analytics/next/benchmarks/BenchmarksNextPage'
 
 /**
  * A construction guard for the router.
@@ -293,12 +295,20 @@ describe('router', () => {
     expect(byPath.has('/surveys/next')).toBe(false)
     expect(byPath.has('/surveys/climate-trends/next')).toBe(false)
     expect(byPath.has('/surveys/:id/results/next')).toBe(false)
+    // Informes and Puntos de Referencia were swapped the same way (reports-and-benchmarks):
+    // the sidebar's two links now reach the artboards, and no `/next` sibling exists.
+    expect(componentAt('/admin/companies/:companyId/reports')).toBe(ReportsListNextPage)
+    expect(componentAt('/analytics/benchmarks')).toBe(BenchmarksNextPage)
+    expect(byPath.has('/admin/companies/:companyId/reports/next')).toBe(false)
+    expect(byPath.has('/analytics/benchmarks/next')).toBe(false)
 
     // Unrouted means unreferenced: the router imports neither old page for any route.
     const source = readFileSync(join(process.cwd(), 'src', 'app', 'router.tsx'), 'utf8')
     expect(source).not.toMatch(/pages\/SurveysListPage'/)
     expect(source).not.toMatch(/pages\/ClimateTrendsPage'/)
     expect(source).not.toMatch(/pages\/SurveyResultsPage'/)
+    expect(source).not.toMatch(/pages\/ReportsListPage'/)
+    expect(source).not.toMatch(/pages\/BenchmarksPage'/)
   })
 
   /**

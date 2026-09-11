@@ -1,0 +1,724 @@
+{
+  "_comment": "Grupo Meridiano S.A., the demo tenant, as the local API answered on 10 Sep 2026 (read-only GETs after POST /auth/login as the company administrator): GET /admin/reports?companyId&lang=es, GET /admin/reports/{id}/shares for both reports (the CSV carries 1 active and 5 revoked links, the PDF none), GET /admin/benchmarks?lang=es, GET /admin/benchmarks/{id}?lang=es (validationStatus pending, qualityScore 0 -- main before PR #463), GET /surveys?companyId&status=closed&lang=es, GET /surveys/{Q3}/analytics, GET /profile, GET /notifications/mine. The report-specific share keys precede nothing wider: matchFixture takes the first key that matches, in this order.",
+  "GET /notifications/mine": {
+    "notifications": []
+  },
+  "GET /profile": {
+    "id": "7b34dd6e-3472-4180-9873-ec5cf7d2af65",
+    "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+    "companyName": "Grupo Meridiano S.A.",
+    "email": "ana.rojas@meridiano.test",
+    "name": "Ana Rojas",
+    "role": "company_admin",
+    "departmentId": null,
+    "departmentName": null,
+    "managerId": null,
+    "isActive": true,
+    "hasPassword": true,
+    "lastLoginAt": "2026-09-11T00:30:21.372994+00:00",
+    "createdAt": "2026-09-10T01:58:51.849247+00:00",
+    "demographics": {}
+  },
+  "GET /admin/reports": [
+    {
+      "id": "20eaebbc-9a52-410b-8df5-f8faf974e1d9",
+      "title": "Datos de clima — T3 2026",
+      "type": "climate_summary",
+      "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+      "status": "completed",
+      "format": "csv",
+      "createdAt": "2026-09-10T02:06:09.10143+00:00",
+      "isRecurring": false,
+      "recurrencePattern": null,
+      "nextGeneration": null
+    },
+    {
+      "id": "41c72c81-751e-4779-bb13-6980ae576232",
+      "title": "Clima organizacional — T3 2026",
+      "type": "climate_summary",
+      "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+      "status": "completed",
+      "format": "pdf",
+      "createdAt": "2026-09-10T02:06:09.032145+00:00",
+      "isRecurring": false,
+      "recurrencePattern": null,
+      "nextGeneration": null
+    }
+  ],
+  "GET /admin/reports/20eaebbc-9a52-410b-8df5-f8faf974e1d9/shares": [
+    {
+      "id": "d26c89f5-7d11-4356-961a-b16940286f35",
+      "createdAt": "2026-09-10T02:14:45.219345+00:00",
+      "expiresAt": "2026-10-10T02:14:45.219345+00:00",
+      "revokedAt": null,
+      "accessCount": 2,
+      "lastAccessedAt": "2026-09-10T02:14:47.060569+00:00",
+      "isActive": true
+    },
+    {
+      "id": "b782ab27-d0ae-4e5a-91c5-872059b8ac41",
+      "createdAt": "2026-09-10T02:13:43.466331+00:00",
+      "expiresAt": "2026-10-10T02:13:43.466331+00:00",
+      "revokedAt": "2026-09-10T02:55:09.655733+00:00",
+      "accessCount": 2,
+      "lastAccessedAt": "2026-09-10T02:13:45.315225+00:00",
+      "isActive": false
+    },
+    {
+      "id": "be9a9f29-db51-4448-8f41-b5dea8f0481a",
+      "createdAt": "2026-09-10T02:12:10.977987+00:00",
+      "expiresAt": "2026-10-10T02:12:10.977987+00:00",
+      "revokedAt": "2026-09-10T02:55:09.642755+00:00",
+      "accessCount": 2,
+      "lastAccessedAt": "2026-09-10T02:12:12.809576+00:00",
+      "isActive": false
+    },
+    {
+      "id": "8525e29b-4f02-428f-9f19-113847f1b12d",
+      "createdAt": "2026-09-10T02:10:49.673594+00:00",
+      "expiresAt": "2026-10-10T02:10:49.673594+00:00",
+      "revokedAt": "2026-09-10T02:55:09.629684+00:00",
+      "accessCount": 2,
+      "lastAccessedAt": "2026-09-10T02:10:51.571277+00:00",
+      "isActive": false
+    },
+    {
+      "id": "799f3ea6-6aeb-4ccd-a2c5-6f6da78a3174",
+      "createdAt": "2026-09-10T02:09:05.059655+00:00",
+      "expiresAt": "2026-10-10T02:09:05.059655+00:00",
+      "revokedAt": "2026-09-10T02:55:09.615611+00:00",
+      "accessCount": 2,
+      "lastAccessedAt": "2026-09-10T02:09:06.895432+00:00",
+      "isActive": false
+    },
+    {
+      "id": "5c3b7104-4c94-435c-b8d5-1cd30c680c2d",
+      "createdAt": "2026-09-10T02:06:37.885958+00:00",
+      "expiresAt": "2026-10-10T02:06:37.885958+00:00",
+      "revokedAt": "2026-09-10T02:55:09.58887+00:00",
+      "accessCount": 2,
+      "lastAccessedAt": "2026-09-10T02:06:39.748524+00:00",
+      "isActive": false
+    }
+  ],
+  "GET /admin/reports/41c72c81-751e-4779-bb13-6980ae576232/shares": [],
+  "GET /admin/benchmarks": [
+    {
+      "id": "d8c10838-d47a-413c-9b3b-0cfac7b413e7",
+      "name": "Manufactura · 500–1000 personas",
+      "type": "industry",
+      "category": "climate",
+      "companyId": null,
+      "isActive": true,
+      "qualityScore": 0,
+      "priorPeriodStatus": "unlinked"
+    }
+  ],
+  "GET /admin/benchmarks/*": {
+    "id": "d8c10838-d47a-413c-9b3b-0cfac7b413e7",
+    "name": "Manufactura · 500–1000 personas",
+    "description": "Cohorte de industria: empresas de manufactura de 500 a 1.000 personas, índice de clima por dimensión.",
+    "type": "industry",
+    "category": "climate",
+    "source": "Illustrative cohort, seeded for demonstration",
+    "industry": null,
+    "companySize": null,
+    "region": null,
+    "companyId": null,
+    "isActive": true,
+    "validationStatus": "pending",
+    "qualityScore": 0,
+    "priorPeriodBenchmarkId": null,
+    "metrics": [
+      {
+        "id": "9d0432b1-eed7-4b59-afa3-ca51f69a644b",
+        "metricName": "belonging",
+        "value": 72,
+        "unit": "index",
+        "percentile": null,
+        "sampleSize": 42
+      },
+      {
+        "id": "ef621fb5-f5c3-41ac-b8a0-2495c3feac35",
+        "metricName": "growth",
+        "value": 70,
+        "unit": "index",
+        "percentile": null,
+        "sampleSize": 42
+      },
+      {
+        "id": "a0fbebc9-bdbc-46b7-93e9-ae7b09440be9",
+        "metricName": "overall_index",
+        "value": 68,
+        "unit": "index",
+        "percentile": 68,
+        "sampleSize": 42
+      },
+      {
+        "id": "36e8d481-4dd4-4227-831d-a4e999eb051b",
+        "metricName": "recognition",
+        "value": 64,
+        "unit": "index",
+        "percentile": null,
+        "sampleSize": 42
+      },
+      {
+        "id": "4ca13104-5f34-43b0-8c74-10223a2a5c3b",
+        "metricName": "safety",
+        "value": 69,
+        "unit": "index",
+        "percentile": null,
+        "sampleSize": 42
+      },
+      {
+        "id": "54b7b230-55df-4108-84c9-c6b63e7e5169",
+        "metricName": "trust",
+        "value": 68,
+        "unit": "index",
+        "percentile": null,
+        "sampleSize": 42
+      },
+      {
+        "id": "67d0225a-07f6-4e5f-b141-099a07ef8a82",
+        "metricName": "workload",
+        "value": 66,
+        "unit": "index",
+        "percentile": null,
+        "sampleSize": 42
+      }
+    ],
+    "priorPeriodStatus": "unlinked",
+    "priorPeriod": null,
+    "fallbackFields": []
+  },
+  "GET /surveys": {
+    "surveys": [
+      {
+        "id": "38b2002f-66da-468d-b136-ec112ba3204b",
+        "title": "Encuesta de Clima Q3",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "type": "periodic",
+        "status": "closed",
+        "language": "both",
+        "startDate": "2026-07-16T02:05:22.92+00:00",
+        "endDate": "2026-08-06T02:05:22.922+00:00",
+        "responseCount": 24,
+        "targetAudienceCount": null,
+        "questionCount": 6,
+        "createdAt": "2026-09-10T02:05:22.928985+00:00"
+      },
+      {
+        "id": "7321a9bb-9e83-465a-a31d-73bdc186d626",
+        "title": "Encuesta de Clima Q2",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "type": "periodic",
+        "status": "closed",
+        "language": "both",
+        "startDate": "2026-04-22T02:03:12.138+00:00",
+        "endDate": "2026-05-13T02:03:12.138+00:00",
+        "responseCount": 24,
+        "targetAudienceCount": null,
+        "questionCount": 6,
+        "createdAt": "2026-09-10T02:03:12.144854+00:00"
+      },
+      {
+        "id": "f82beb53-29a0-45b6-b4e3-3d0b8b7173c3",
+        "title": "Encuesta de Clima Q1",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "type": "periodic",
+        "status": "closed",
+        "language": "both",
+        "startDate": "2026-01-22T03:02:44.908+00:00",
+        "endDate": "2026-02-12T03:02:44.911+00:00",
+        "responseCount": 24,
+        "targetAudienceCount": null,
+        "questionCount": 6,
+        "createdAt": "2026-09-10T02:02:44.947694+00:00"
+      }
+    ]
+  },
+  "GET /surveys/*/analytics": {
+    "surveyId": "38b2002f-66da-468d-b136-ec112ba3204b",
+    "title": "Q3 Climate Survey",
+    "status": "closed",
+    "language": "both",
+    "resolvedLocale": "en",
+    "fallbackFields": [],
+    "summary": {
+      "invitedCount": null,
+      "responseCount": 24,
+      "completedCount": 24,
+      "partialCount": 0,
+      "participationRate": null,
+      "completionRate": 100,
+      "averageCompletionSeconds": null,
+      "firstResponseAt": "2026-09-10T02:05:22.969968+00:00",
+      "lastResponseAt": "2026-09-10T02:05:48.757944+00:00",
+      "byLanguage": [
+        {
+          "language": "en",
+          "count": 24
+        }
+      ]
+    },
+    "questions": [
+      {
+        "questionId": "2233394c-b0c6-4f74-a3fb-7014c53c0d08",
+        "order": 0,
+        "type": "likert",
+        "text": "I feel safe raising concerns without fear of blame.",
+        "category": "psychological_safety",
+        "answeredCount": 24,
+        "distribution": [
+          {
+            "value": "2",
+            "label": null,
+            "count": 2,
+            "percentage": 8.33,
+            "averageRank": null
+          },
+          {
+            "value": "3",
+            "label": null,
+            "count": 7,
+            "percentage": 29.17,
+            "averageRank": null
+          },
+          {
+            "value": "4",
+            "label": null,
+            "count": 10,
+            "percentage": 41.67,
+            "averageRank": null
+          },
+          {
+            "value": "5",
+            "label": null,
+            "count": 5,
+            "percentage": 20.83,
+            "averageRank": null
+          }
+        ],
+        "average": 3.75,
+        "median": 4,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "words": [],
+        "suppressedWordCount": 0
+      },
+      {
+        "questionId": "c1efba3e-646c-4f35-b6ca-7b3b094755be",
+        "order": 1,
+        "type": "likert",
+        "text": "My workload is sustainable over the long term.",
+        "category": "workload",
+        "answeredCount": 24,
+        "distribution": [
+          {
+            "value": "2",
+            "label": null,
+            "count": 4,
+            "percentage": 16.67,
+            "averageRank": null
+          },
+          {
+            "value": "3",
+            "label": null,
+            "count": 9,
+            "percentage": 37.5,
+            "averageRank": null
+          },
+          {
+            "value": "4",
+            "label": null,
+            "count": 10,
+            "percentage": 41.67,
+            "averageRank": null
+          },
+          {
+            "value": "5",
+            "label": null,
+            "count": 1,
+            "percentage": 4.17,
+            "averageRank": null
+          }
+        ],
+        "average": 3.33,
+        "median": 3,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "words": [],
+        "suppressedWordCount": 0
+      },
+      {
+        "questionId": "a2eea1d5-3237-481f-95e9-ddbc3d2419bd",
+        "order": 2,
+        "type": "likert",
+        "text": "I trust the decisions leadership makes.",
+        "category": "trust",
+        "answeredCount": 24,
+        "distribution": [
+          {
+            "value": "2",
+            "label": null,
+            "count": 1,
+            "percentage": 4.17,
+            "averageRank": null
+          },
+          {
+            "value": "3",
+            "label": null,
+            "count": 9,
+            "percentage": 37.5,
+            "averageRank": null
+          },
+          {
+            "value": "4",
+            "label": null,
+            "count": 11,
+            "percentage": 45.83,
+            "averageRank": null
+          },
+          {
+            "value": "5",
+            "label": null,
+            "count": 3,
+            "percentage": 12.5,
+            "averageRank": null
+          }
+        ],
+        "average": 3.67,
+        "median": 4,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "words": [],
+        "suppressedWordCount": 0
+      },
+      {
+        "questionId": "a09ad6f7-c073-421e-8b5d-f514eaddaee5",
+        "order": 3,
+        "type": "likert",
+        "text": "Good work here is noticed and acknowledged.",
+        "category": "recognition",
+        "answeredCount": 24,
+        "distribution": [
+          {
+            "value": "2",
+            "label": null,
+            "count": 2,
+            "percentage": 8.33,
+            "averageRank": null
+          },
+          {
+            "value": "3",
+            "label": null,
+            "count": 11,
+            "percentage": 45.83,
+            "averageRank": null
+          },
+          {
+            "value": "4",
+            "label": null,
+            "count": 11,
+            "percentage": 45.83,
+            "averageRank": null
+          }
+        ],
+        "average": 3.38,
+        "median": 3,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "words": [],
+        "suppressedWordCount": 0
+      },
+      {
+        "questionId": "c2ea4e23-3d22-4021-9bad-186cd3dff0c4",
+        "order": 4,
+        "type": "likert",
+        "text": "I can see a path to grow in this organisation.",
+        "category": "growth",
+        "answeredCount": 24,
+        "distribution": [
+          {
+            "value": "2",
+            "label": null,
+            "count": 1,
+            "percentage": 4.17,
+            "averageRank": null
+          },
+          {
+            "value": "3",
+            "label": null,
+            "count": 8,
+            "percentage": 33.33,
+            "averageRank": null
+          },
+          {
+            "value": "4",
+            "label": null,
+            "count": 10,
+            "percentage": 41.67,
+            "averageRank": null
+          },
+          {
+            "value": "5",
+            "label": null,
+            "count": 5,
+            "percentage": 20.83,
+            "averageRank": null
+          }
+        ],
+        "average": 3.79,
+        "median": 4,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "words": [],
+        "suppressedWordCount": 0
+      },
+      {
+        "questionId": "274c312f-0e97-4a27-9edf-63d695b38953",
+        "order": 5,
+        "type": "likert",
+        "text": "I feel I belong on my team.",
+        "category": "belonging",
+        "answeredCount": 24,
+        "distribution": [
+          {
+            "value": "2",
+            "label": null,
+            "count": 1,
+            "percentage": 4.17,
+            "averageRank": null
+          },
+          {
+            "value": "3",
+            "label": null,
+            "count": 4,
+            "percentage": 16.67,
+            "averageRank": null
+          },
+          {
+            "value": "4",
+            "label": null,
+            "count": 13,
+            "percentage": 54.17,
+            "averageRank": null
+          },
+          {
+            "value": "5",
+            "label": null,
+            "count": 6,
+            "percentage": 25,
+            "averageRank": null
+          }
+        ],
+        "average": 4,
+        "median": 4,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "words": [],
+        "suppressedWordCount": 0
+      }
+    ],
+    "breakdowns": [
+      {
+        "dimension": "department",
+        "segments": [
+          {
+            "dimension": "department",
+            "key": "bff21fd0-422b-4f3b-8c89-d6bfbf5f19e9",
+            "label": "Finanzas",
+            "respondentCount": 0,
+            "participationRate": null,
+            "headcount": null,
+            "isSuppressed": true,
+            "questions": []
+          },
+          {
+            "dimension": "department",
+            "key": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+            "label": "Ingeniería",
+            "respondentCount": 6,
+            "participationRate": 42.86,
+            "headcount": 14,
+            "isSuppressed": false,
+            "questions": [
+              {
+                "questionId": "2233394c-b0c6-4f74-a3fb-7014c53c0d08",
+                "answeredCount": 6,
+                "average": 4
+              },
+              {
+                "questionId": "c1efba3e-646c-4f35-b6ca-7b3b094755be",
+                "answeredCount": 6,
+                "average": 3.67
+              },
+              {
+                "questionId": "a2eea1d5-3237-481f-95e9-ddbc3d2419bd",
+                "answeredCount": 6,
+                "average": 4
+              },
+              {
+                "questionId": "a09ad6f7-c073-421e-8b5d-f514eaddaee5",
+                "answeredCount": 6,
+                "average": 3.5
+              },
+              {
+                "questionId": "c2ea4e23-3d22-4021-9bad-186cd3dff0c4",
+                "answeredCount": 6,
+                "average": 4.17
+              },
+              {
+                "questionId": "274c312f-0e97-4a27-9edf-63d695b38953",
+                "answeredCount": 6,
+                "average": 4.33
+              }
+            ]
+          },
+          {
+            "dimension": "department",
+            "key": "0a9d7637-814c-4d4a-8407-45cfbca3f4e7",
+            "label": "Operaciones",
+            "respondentCount": 5,
+            "participationRate": 71.43,
+            "headcount": 7,
+            "isSuppressed": false,
+            "questions": [
+              {
+                "questionId": "2233394c-b0c6-4f74-a3fb-7014c53c0d08",
+                "answeredCount": 5,
+                "average": 2.6
+              },
+              {
+                "questionId": "c1efba3e-646c-4f35-b6ca-7b3b094755be",
+                "answeredCount": 5,
+                "average": 2.4
+              },
+              {
+                "questionId": "a2eea1d5-3237-481f-95e9-ddbc3d2419bd",
+                "answeredCount": 5,
+                "average": 3
+              },
+              {
+                "questionId": "a09ad6f7-c073-421e-8b5d-f514eaddaee5",
+                "answeredCount": 5,
+                "average": 2.8
+              },
+              {
+                "questionId": "c2ea4e23-3d22-4021-9bad-186cd3dff0c4",
+                "answeredCount": 5,
+                "average": 3
+              },
+              {
+                "questionId": "274c312f-0e97-4a27-9edf-63d695b38953",
+                "answeredCount": 5,
+                "average": 3.2
+              }
+            ]
+          },
+          {
+            "dimension": "department",
+            "key": "aac7e1b9-5af4-4e04-872b-c11df8f1d4bd",
+            "label": "Personas",
+            "respondentCount": 5,
+            "participationRate": 71.43,
+            "headcount": 7,
+            "isSuppressed": false,
+            "questions": [
+              {
+                "questionId": "2233394c-b0c6-4f74-a3fb-7014c53c0d08",
+                "answeredCount": 5,
+                "average": 4.4
+              },
+              {
+                "questionId": "c1efba3e-646c-4f35-b6ca-7b3b094755be",
+                "answeredCount": 5,
+                "average": 4
+              },
+              {
+                "questionId": "a2eea1d5-3237-481f-95e9-ddbc3d2419bd",
+                "answeredCount": 5,
+                "average": 4
+              },
+              {
+                "questionId": "a09ad6f7-c073-421e-8b5d-f514eaddaee5",
+                "answeredCount": 5,
+                "average": 3.6
+              },
+              {
+                "questionId": "c2ea4e23-3d22-4021-9bad-186cd3dff0c4",
+                "answeredCount": 5,
+                "average": 4.2
+              },
+              {
+                "questionId": "274c312f-0e97-4a27-9edf-63d695b38953",
+                "answeredCount": 5,
+                "average": 4.4
+              }
+            ]
+          },
+          {
+            "dimension": "department",
+            "key": "07f5a4d4-27d8-4df0-afdc-b50db1371062",
+            "label": "Ventas",
+            "respondentCount": 5,
+            "participationRate": 71.43,
+            "headcount": 7,
+            "isSuppressed": false,
+            "questions": [
+              {
+                "questionId": "2233394c-b0c6-4f74-a3fb-7014c53c0d08",
+                "answeredCount": 5,
+                "average": 4
+              },
+              {
+                "questionId": "c1efba3e-646c-4f35-b6ca-7b3b094755be",
+                "answeredCount": 5,
+                "average": 3.4
+              },
+              {
+                "questionId": "a2eea1d5-3237-481f-95e9-ddbc3d2419bd",
+                "answeredCount": 5,
+                "average": 3.8
+              },
+              {
+                "questionId": "a09ad6f7-c073-421e-8b5d-f514eaddaee5",
+                "answeredCount": 5,
+                "average": 3.6
+              },
+              {
+                "questionId": "c2ea4e23-3d22-4021-9bad-186cd3dff0c4",
+                "answeredCount": 5,
+                "average": 3.8
+              },
+              {
+                "questionId": "274c312f-0e97-4a27-9edf-63d695b38953",
+                "answeredCount": 5,
+                "average": 4
+              }
+            ]
+          }
+        ],
+        "suppressedSegmentCount": 1,
+        "suppressedRespondentCount": 3,
+        "unsegmentedRespondentCount": 0
+      }
+    ],
+    "isSuppressed": false,
+    "suppressionReason": null,
+    "minimumGroupSize": 5,
+    "generatedAt": "2026-09-11T00:30:21.470164+00:00"
+  }
+}

@@ -102,6 +102,21 @@ describe('reports api client', () => {
     expect(await result.text()).toBe('%PDF-1.4')
   })
 
+  it('asks for the document in the reader\'s language when given a locale', async () => {
+    // `DownloadAsync` heads the PDF/CSV for `lang` (ReportEndpoints.cs), as the survey export
+    // does. Without it a Spanish reader's copy of a bilingual report opened under an English
+    // heading.
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(new Blob(['%PDF-1.4'], { type: 'application/pdf' }), { status: 200 }),
+    )
+    await downloadReport(baseUrl, 'r1', 'es')
+    const [input, init] = vi.mocked(fetch).mock.calls[0]
+    const url = new URL(String(input), 'http://test.local')
+    expect(url.pathname).toBe('/admin/reports/r1/download')
+    expect(url.searchParams.get('lang')).toBe('es')
+    expect(init).toEqual(expect.objectContaining({ method: 'POST' }))
+  })
+
   it('names the file from the id and the row format', () => {
     // Not from `Content-Disposition`: it is not a CORS-safelisted response header and the
     // API does not expose it, so the browser reads `null` there in the deployed app.

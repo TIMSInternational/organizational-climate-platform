@@ -248,8 +248,15 @@ export interface PriorPeriodCandidate {
  * Same company scope, same category, same type, created earlier. A read, not a write: a
  * CompanyAdmin may ask this of a global benchmark they are not allowed to edit.
  */
-export async function listPriorPeriodCandidates(baseUrl: string, id: string): Promise<PriorPeriodCandidate[]> {
-  const response = await authFetch(`${baseUrl}/admin/benchmarks/${id}/prior-period/candidates`)
+export async function listPriorPeriodCandidates(
+  baseUrl: string,
+  id: string,
+  lang?: string,
+): Promise<PriorPeriodCandidate[]> {
+  // A candidate's `name` is a paired column since #210, resolved server-side for `lang`;
+  // without it the shortlist named every prior period in the server's fallback language.
+  const query = lang ? `?lang=${encodeURIComponent(lang)}` : ''
+  const response = await authFetch(`${baseUrl}/admin/benchmarks/${id}/prior-period/candidates${query}`)
   return response.json() as Promise<PriorPeriodCandidate[]>
 }
 

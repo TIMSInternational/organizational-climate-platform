@@ -1,3 +1,16 @@
+/**
+ * NOT ROUTED. `/admin/companies/:companyId/reports` renders the redesigned Informes
+ * (`../next/ReportsListNextPage`), which replaced this page — ruled 10 Sep, the same swap
+ * `/surveys` made. Nothing in `router.tsx` reaches this file.
+ *
+ * It stays in the tree on purpose, as the wiring reference: `useReportsListModel` makes
+ * this page's requests (the list with `lang`, scoped by the URL's company; the download as
+ * a blob), and what this file still pins is the table the redesign chose not to keep —
+ * `ReportList` with three buttons per row and `ReportSharePanel` listing every link ever
+ * made. Delete it when those have no other reader. Until then its behaviour is pinned by
+ * `ReportsListPage.test.tsx`, which renders it directly; the route's own guarantees are
+ * asserted against the new screen in `../next/ReportsListNextPage.test.tsx`.
+ */
 import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'react-router'
 import {

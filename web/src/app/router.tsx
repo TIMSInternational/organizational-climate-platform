@@ -36,9 +36,9 @@ import ProfilePage from '../features/profile/pages/ProfilePage'
 import PrivacySettingsPage from '../features/profile/pages/PrivacySettingsPage'
 import NotificationsInboxPage from '../features/notifications/pages/NotificationsInboxPage'
 import SurveyDistributionPage from '../features/surveys/pages/SurveyDistributionPage'
-import BenchmarksPage from '../features/analytics/pages/BenchmarksPage'
+import BenchmarksNextPage from '../features/analytics/next/benchmarks/BenchmarksNextPage'
 import AIInsightsPage from '../features/analytics/pages/AIInsightsPage'
-import ReportsListPage from '../features/reports/pages/ReportsListPage'
+import ReportsListNextPage from '../features/reports/next/ReportsListNextPage'
 import SharedReportPage from '../features/reports/pages/SharedReportPage'
 import SurveyResultsNextPage from '../features/surveys/next/SurveyResultsNextPage'
 import ClimateTrendsNextPage from '../features/surveys/next/trends/ClimateTrendsNextPage'
@@ -313,7 +313,9 @@ export const router = createBrowserRouter([
               { path: '/admin/companies/:id', element: <CompanyDetailPage /> },
               { path: '/admin/companies/:companyId/users', element: <UsersListPage /> },
               { path: '/admin/companies/:companyId/demographic-fields', element: <DemographicFieldsPage /> },
-              { path: '/admin/companies/:companyId/reports', element: <ReportsListPage /> },
+              // The redesigned Informes replaced `ReportsListPage` here (ruled 10 Sep, the
+              // same swap as `/surveys`); the old page stays unrouted as the wiring reference.
+              { path: '/admin/companies/:companyId/reports', element: <ReportsListNextPage /> },
               { path: '/admin/companies/:companyId/analytics', element: <AnalyticsDashboardPage /> },
               { path: '/admin/system-settings', element: <SystemSettingsPage /> },
               { path: '/admin/system', element: <SystemHealthPage /> },
@@ -425,7 +427,9 @@ export const router = createBrowserRouter([
               // Reached from a survey, not from the sidebar: distribution is an action on
               // one survey rather than a destination, so it gets a route and no nav entry.
               { path: '/surveys/:surveyId/distribution', element: <SurveyDistributionPage /> },
-              { path: '/analytics/benchmarks', element: <BenchmarksPage /> },
+              // The redesigned Puntos de Referencia replaced `BenchmarksPage` here (ruled
+              // 10 Sep); the old page stays unrouted as the wiring reference.
+              { path: '/analytics/benchmarks', element: <BenchmarksNextPage /> },
               { path: '/analytics/ai-insights', element: <AIInsightsPage /> },
               // The tracking module (#125, #126). Inside `AdminLayout` like every
               // other work surface — these are administration screens, not a
