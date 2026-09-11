@@ -110,6 +110,12 @@ export function retentionOptions(current: number): readonly number[] {
  * The survey the anonymity helper names — the artboard's "La encuesta Q4 sembrada se creó como
  * no anónima": of the surveys running now (`ongoingSurveys` on `GET /dashboard/company-admin`),
  * the one that started last; `null` when none is running.
+ *
+ * The helper keeps that sentence without "sembrada". Meridiano's Q4 does say it was seeded,
+ * but only in its free-text `description` ("… Sembrada para que las pantallas de respuesta y
+ * distribución tengan una encuesta viva.", `GET /surveys/{id}`); no field marks a survey as
+ * seeded, and the sentence is every tenant's, so it states only what `settings.anonymous`
+ * says rather than parse prose.
  */
 export function latestOngoing(surveys: readonly DashboardSurveySummary[]): DashboardSurveySummary | null {
   return surveys.reduce<DashboardSurveySummary | null>(

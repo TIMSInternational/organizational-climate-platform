@@ -1,6 +1,6 @@
 import { useId, useState, type ReactNode } from 'react'
 import { useParams } from 'react-router'
-import { Check, FileText, Upload } from 'lucide-react'
+import { ArrowDownToLine, Check, FileText } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
 import { ANONYMITY_FLOOR } from '../../../../components/charts'
@@ -374,7 +374,8 @@ function SettingsForm({
               </div>
             </div>
             <Button variant="outline" disabled title={t(`${K}.uploadUnavailable`)} className="w-full">
-              <Upload aria-hidden="true" />
+              {/* The artboard's glyph for this button: an arrow down onto a line (`M8 2v8M5 7l3 3 3-3M3 13h10`). */}
+              <ArrowDownToLine aria-hidden="true" />
               {t(`${K}.uploadLogo`)}
             </Button>
             <p className="sr-only">{t(`${K}.uploadUnavailable`)}</p>

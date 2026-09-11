@@ -10,13 +10,13 @@ export type NotificationKind = 'surveys' | 'plans' | 'reports' | 'other'
 export type Facet = 'all' | 'unread' | NotificationKind
 export type RowIcon = 'alert' | 'report' | 'survey' | 'reminder' | 'other'
 
-/** What the inbox draws for one row, real or sample. */
+/** What the inbox draws for one row of `GET /notifications/mine`. */
 export interface InboxRow {
   id: string
   kind: NotificationKind
   icon: RowIcon
   unread: boolean
-  /** The notification's own title and message, or a stand-in's catalogue copy (`sampleModel.ts`). */
+  /** The notification's own title and message, as its producer wrote them. */
   title: string
   body: string
   createdAt: string
