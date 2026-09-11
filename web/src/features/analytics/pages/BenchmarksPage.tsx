@@ -36,6 +36,21 @@ import { Button, EmptyState, ErrorState } from '../../../components/ui'
 import CohortReadoutSection from '../components/CohortReadoutSection'
 
 /**
+ * NOT ROUTED. `/analytics/benchmarks` renders the redesigned Puntos de Referencia
+ * (`../next/benchmarks/BenchmarksNextPage`), which replaced this page — ruled 10 Sep, the
+ * same swap `/surveys` made. Nothing in `router.tsx` reaches this file.
+ *
+ * It stays in the tree on purpose, as the wiring reference: `useBenchmarksModel` makes
+ * this page's requests (the list, the selected details, the prior-period walk, and the
+ * read-out `CohortReadoutSection` composes), and what this file still pins is the layout
+ * the redesign chose not to keep — the table first, the read-out inside a section of its
+ * own. Delete it when `CohortReadoutSection` and `BenchmarkList` have no other reader.
+ * Until then its behaviour is pinned by `BenchmarksPage.test.tsx`, which renders it
+ * directly; the route's guarantees are asserted against the new screen in
+ * `../next/benchmarks/BenchmarksNextPage.test.tsx`.
+ */
+
+/**
  * List, compare and trend the benchmarks the caller may read.
  *
  * ## Why this page ignores the company-context selector

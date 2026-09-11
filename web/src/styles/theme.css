@@ -31,6 +31,7 @@
   --color-surface-input: var(--admin-bg-input);
   --color-surface-icon-box: var(--admin-bg-icon-box);
   --color-surface-overlay: var(--admin-bg-overlay);
+  --color-surface-scrim: var(--admin-bg-scrim);
 
   /* -- Interaction states (translucent, layer over any surface) ---------- */
   --color-state-hover: var(--admin-bg-hover);
@@ -196,6 +197,7 @@
   --spacing-control-sm: var(--admin-size-control-sm);
   --spacing-control-md: var(--admin-size-control-md);
   --spacing-control-lg: var(--admin-size-control-lg);
+  --spacing-control-canvas: var(--admin-size-control-canvas);
   --spacing-icon: var(--admin-size-icon);
   --spacing-icon-box: var(--admin-size-icon-box);
   --spacing-sidebar: var(--admin-size-sidebar);

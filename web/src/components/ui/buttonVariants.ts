@@ -78,6 +78,15 @@ export const buttonVariants = cva(
         sm: 'h-control-md gap-1.5 px-2',
         lg: 'h-10 px-6',
         icon: 'size-control-lg p-0',
+        // The canvas's `.btn` (10 Sep): 34px outside — 32px of content box plus its 1px
+        // border — where `default` is 32 border-box. Same 12px padding and 1px border, so
+        // only the height moves; the widths already match the artboards. A variant and not
+        // a new `default`, because the default draws every button of every screen and
+        // flipping it is the integrator's call across lanes; the redesigned screens that
+        // are measured against an artboard opt in.
+        canvas: 'h-control-canvas px-3',
+        // The canvas's `.btn.icon`: `width: 32px` on the same content box, 34 square.
+        'icon-canvas': 'size-control-canvas p-0',
       },
     },
     defaultVariants: {
