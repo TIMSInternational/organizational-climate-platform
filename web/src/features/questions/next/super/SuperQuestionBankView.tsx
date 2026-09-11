@@ -1,6 +1,7 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { Link } from 'react-router'
-import { ArrowRight, BookOpen, Check, ChevronDown, Library, MoreHorizontal, Plus, Search } from 'lucide-react'
+import { ArrowRight, Check, ChevronDown, MoreHorizontal, Plus, Search } from 'lucide-react'
+import { RailQuestionBankIcon, RailQuestionLibraryIcon } from '../../../../navigation/railIcons'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
 import CompanyContextBar from '../../../../components/layout/CompanyContextBar'
@@ -109,7 +110,7 @@ function SplitCard({ model, t }: { model: QuestionBankModelState; t: TranslateFn
     >
       <div className="flex items-start gap-3">
         <IconBox>
-          <BookOpen />
+          <RailQuestionBankIcon />
         </IconBox>
         <div className="flex min-w-0 flex-col gap-0.5">
           <span className="text-base font-semibold text-fg-primary">{t('questionBank.next.splitBankTitle')}</span>
@@ -119,7 +120,7 @@ function SplitCard({ model, t }: { model: QuestionBankModelState; t: TranslateFn
       <span aria-hidden="true" className="hidden self-stretch bg-line-light md:block" />
       <div className="flex items-start gap-3">
         <IconBox>
-          <Library />
+          <RailQuestionLibraryIcon />
         </IconBox>
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="text-base font-semibold text-fg-primary">{t('questionBank.next.splitLibraryTitle')}</span>
@@ -387,7 +388,7 @@ function BankTable({ model, onEdit }: { model: QuestionBankModelState; onEdit: (
       ) : model.rows.length === 0 ? (
         <div data-slot="bank-empty" className="flex items-center gap-3.5 px-3 py-4.5">
           <IconBox>
-            <BookOpen />
+            <RailQuestionBankIcon />
           </IconBox>
           <div className="flex flex-col gap-0.5">
             <span className="text-base font-semibold text-fg-primary">

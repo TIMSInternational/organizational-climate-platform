@@ -29,6 +29,20 @@ export interface CompanyPick {
   insights: { total: number; acknowledged: number } | null
   /** Its surveys in `GET /surveys`, which a super administrator reads across every tenant. */
   surveys: number
+  /**
+   * When its findings were reviewed — "los dos revisados el 13 ago" — read from their details
+   * (`GET /admin/ai-insights/{id}`), because the list DTO carries no date: the latest
+   * acknowledgement and whether every one fell on that day. Absent or `null` while unread,
+   * when a detail could not be read, or when not every finding is reviewed.
+   */
+  reviewed?: ReviewedOn | null
+}
+
+export interface ReviewedOn {
+  /** The latest `acknowledgedAt`. */
+  latest: string
+  /** Every acknowledgement fell on the latest one's calendar day. */
+  sameDay: boolean
 }
 
 export interface InsightsTally {

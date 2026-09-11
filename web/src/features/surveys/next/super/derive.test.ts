@@ -6,8 +6,10 @@ import {
   closedOrdinal,
   companiesWithClosed,
   companyCount,
+  daysLeft,
   draftsNote,
   forCompany,
+  groupSuperSections,
   sharedOpenWave,
   upcomingKind,
 } from './derive'
@@ -85,5 +87,34 @@ describe('super surveys derive', () => {
   it('reads trends only for companies that have a closed survey', () => {
     expect(companiesWithClosed(ROWS).sort()).toEqual(['acme', 'meridiano'])
     expect(companiesWithClosed(ROWS.filter((r) => r.status !== 'closed'))).toEqual([])
+  })
+})
+
+describe('super surveys order and countdown (fix round)', () => {
+  it('counts the days to a close calendar day to calendar day, never the hours of its instant', () => {
+    // Acme's open survey on the local API closes at 18:21 UTC on 26 Sep; on 10 Sep, 16 days.
+    expect(daysLeft('2026-09-26T18:21:20.555+00:00', '2026-09-10')).toBe(16)
+    // Meridiano's closes at 02:03 UTC on 10 Oct; 30 days.
+    expect(daysLeft('2026-10-10T02:03:39.148+00:00', '2026-09-10')).toBe(30)
+    expect(daysLeft('2026-09-10T23:59:59+00:00', '2026-09-10')).toBe(0)
+  })
+
+  it('stacks open, closed, drafts and the archive, the latest first inside each — as the artboard reads', () => {
+    const platform: SurveyRow[] = [
+      row({ id: 'a-open', status: 'active', companyId: 'acme', endDate: '2026-09-26T18:21:20Z' }),
+      row({ id: 'arch', status: 'archived', endDate: '2026-10-10T02:03:39Z' }),
+      row({ id: 'm-open', status: 'active', endDate: '2026-10-10T02:03:39Z' }),
+      row({ id: 'a-q3', companyId: 'acme', endDate: '2026-08-05T23:59:59Z' }),
+      row({ id: 'm-q3', endDate: '2026-08-06T02:05:22Z' }),
+      row({ id: 'q3-pulse', status: 'draft', companyId: 'acme', endDate: '2026-09-15T22:00:00Z', createdAt: '2026-08-08T04:04:24Z' }),
+      row({ id: 'engagement', status: 'draft', companyId: 'acme', endDate: '2026-09-15T22:00:00Z', createdAt: '2026-08-08T04:30:13Z' }),
+      row({ id: 'onboarding', status: 'draft', companyId: 'acme', endDate: '2026-09-15T22:00:00Z', createdAt: '2026-08-08T04:06:46Z' }),
+    ]
+    expect(groupSuperSections(platform).map(({ section, rows }) => [section, rows.map((r) => r.id)])).toEqual([
+      ['open', ['m-open', 'a-open']],
+      ['closed', ['m-q3', 'a-q3']],
+      ['upcoming', ['engagement', 'onboarding', 'q3-pulse']],
+      ['archived', ['arch']],
+    ])
   })
 })

@@ -1,5 +1,6 @@
 import { Link } from 'react-router'
-import { BarChart3, Check, ChevronRight, Copy, Shield, Sparkles } from 'lucide-react'
+import { BarChart3, Check, ChevronRight, Copy, Shield } from 'lucide-react'
+import { RailInsightsIcon } from '../../../../navigation/railIcons'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
 import CompanyContextBar from '../../../../components/layout/CompanyContextBar'
@@ -96,7 +97,7 @@ function InsightsBody({ model }: { model: AIInsightsModelState }) {
 }
 
 function ChooseCompany({ picks, error }: { picks: readonly CompanyPick[] | null; error: string | null }) {
-  const { t } = useTranslation()
+  const { t, locale } = useTranslation()
   const { selectCompany } = useCompanyContext()
   return (
     <section
@@ -109,7 +110,7 @@ function ChooseCompany({ picks, error }: { picks: readonly CompanyPick[] | null;
           aria-hidden="true"
           className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg bg-surface-icon-box text-fg-secondary [&_svg]:size-4"
         >
-          <Sparkles />
+          <RailInsightsIcon />
         </span>
         <h2 id="insights-choose" className="m-0 text-2xl">
           {t('insights.next.chooseTitle')}
@@ -140,7 +141,7 @@ function ChooseCompany({ picks, error }: { picks: readonly CompanyPick[] | null;
               <div className="flex min-w-0 flex-1 flex-col">
                 <span className="text-base font-semibold text-fg-primary">{pick.name}</span>
                 <span data-slot="pick-line" className="text-xs text-fg-tertiary">
-                  {pickText(t, pickLine(pick))}
+                  {pickText(t, pickLine(pick), locale)}
                 </span>
               </div>
               <Button
@@ -159,7 +160,7 @@ function ChooseCompany({ picks, error }: { picks: readonly CompanyPick[] | null;
   )
 }
 
-function pickText(t: TranslateFn, line: PickLine): string {
+function pickText(t: TranslateFn, line: PickLine, locale: string): string {
   switch (line.kind) {
     case 'unreadable':
       return t('insights.next.pickUnreadable')
@@ -167,10 +168,18 @@ function pickText(t: TranslateFn, line: PickLine): string {
       return t('insights.next.pickNothing')
     case 'no-insights':
       return t('insights.next.pickNoInsights')
-    case 'all-acknowledged':
-      return line.total === 1
-        ? t('insights.next.pickAllOne')
-        : t(line.total === 2 ? 'insights.next.pickAllTwo' : 'insights.next.pickAll', { total: line.total })
+    case 'all-acknowledged': {
+      // Undated when a detail could not be read: "reviewed", never a date it was not given.
+      if (line.on === null) {
+        return line.total === 1
+          ? t('insights.next.pickAllOne')
+          : t(line.total === 2 ? 'insights.next.pickAllTwo' : 'insights.next.pickAll', { total: line.total })
+      }
+      const date = calendarDay(Date.parse(line.on), locale)
+      if (line.total === 1) return t('insights.next.pickAllOneOn', { date })
+      if (line.sameDay) return t(line.total === 2 ? 'insights.next.pickAllTwoOn' : 'insights.next.pickAllOn', { total: line.total, date })
+      return t(line.total === 2 ? 'insights.next.pickAllTwoLatest' : 'insights.next.pickAllLatest', { total: line.total, date })
+    }
     case 'none-acknowledged':
       return line.total === 1 ? t('insights.next.pickNoneOne') : t('insights.next.pickNone', { total: line.total })
     case 'some-acknowledged':
@@ -341,7 +350,7 @@ function InsightCard({
           aria-hidden="true"
           className="inline-flex size-7 shrink-0 items-center justify-center rounded-lg bg-surface-card text-fg-secondary [&_svg]:size-4"
         >
-          <Sparkles />
+          <RailInsightsIcon />
         </span>
         <span className="flex min-w-0 flex-1 flex-col gap-1.5">
           <InsightChips row={row} t={t} />

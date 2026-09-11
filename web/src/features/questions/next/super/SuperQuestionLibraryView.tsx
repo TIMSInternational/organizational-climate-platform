@@ -1,5 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
-import { ArrowRight, Check, ChevronDown, ChevronRight, Plus, X } from 'lucide-react'
+import { ArrowRight, Check, ChevronDown, ChevronRight, Plus } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
 import CompanyContextBar from '../../../../components/layout/CompanyContextBar'
@@ -7,6 +7,7 @@ import { Alert, AlertDescription, Button, Chip, ErrorState, Input, SkeletonText,
 import { useCompanyScope } from '../../../../company-context'
 import { readViewerClaims } from '../../../../auth/viewerCapabilities'
 import { cn } from '../../../../lib/cn'
+import { companyShortName } from '../../../../lib/companyShortName'
 import type { QuestionCategory, QuestionLibraryItem, QuestionLibraryItemDetail } from '../../api/questionLibrary'
 import { QUESTION_LIBRARY_TYPES, requiresOptions } from '../../api/questionLibraryAdmin'
 import {
@@ -137,7 +138,9 @@ function CategoryTreeCard({
   const [openCopies, setOpenCopies] = useState<ReadonlySet<string>>(() => new Set())
   const { tree } = model
   const tenantCount = tree.tenants.reduce((sum, group) => sum + group.copies.length + group.own.length, 0)
-  const soleTenant = tree.tenants.length === 1 ? model.companyNames.get(tree.tenants[0].companyId) : undefined
+  // Named in passing, as the canvas does — "6 globales · 6 de Acme" — without the legal form.
+  const soleTenantName = tree.tenants.length === 1 ? model.companyNames.get(tree.tenants[0].companyId) : undefined
+  const soleTenant = soleTenantName ? companyShortName(soleTenantName) : undefined
   const meta =
     tenantCount === 0
       ? t('questionLibraryAdmin.next.categoriesMetaGlobal', { global: tree.global.length })
@@ -331,7 +334,8 @@ function CopyNote({
   t: TranslateFn
 }) {
   const copy = copies[0]
-  const company = copy.companyId ? (model.companyNames.get(copy.companyId) ?? t('questionLibraryAdmin.next.otherCompany')) : ''
+  // Named in passing — "Ver las de Acme" — without the legal form.
+  const company = copy.companyId ? companyShortName(model.companyNames.get(copy.companyId) ?? t('questionLibraryAdmin.next.otherCompany')) : ''
   const copyRows = itemsIn(copy.id, model.items)
   const texts = new Set(rows.map((item) => item.textEs.trim()))
   const same = copyRows.length === rows.length && copyRows.every((item) => texts.has(item.textEs.trim()))
@@ -339,7 +343,9 @@ function CopyNote({
     <div data-slot="copy-note" className="flex items-center justify-between gap-3 border-t border-line-light px-3 py-2.5 text-sm text-fg-tertiary">
       <span className="min-w-0 flex-1">
         {same
-          ? t('questionLibraryAdmin.next.copyNoteSame', { count: rows.length, company })
+          ? rows.length === 1
+            ? t('questionLibraryAdmin.next.copyNoteSameOne', { company })
+            : t('questionLibraryAdmin.next.copyNoteSame', { count: countWord(t, rows.length), company })
           : t('questionLibraryAdmin.next.copyNoteOther', { count: copyRows.length, company })}
       </span>
       <button
@@ -549,12 +555,13 @@ function ItemEditor({
                 key={tag}
                 type="button"
                 disabled={readOnly}
+                // The canvas draws a plain chip: the chip itself is the remove control, named so.
                 aria-label={t('questionLibraryAdmin.next.removeTag', { tag })}
+                title={t('questionLibraryAdmin.next.removeTag', { tag })}
                 onClick={() => setDraft({ ...draft, tags: draft.tags.filter((entry) => entry !== tag) })}
                 className={cn(chipVariants({ tone: 'neutral' }), 'cursor-pointer hover:border-line-hover')}
               >
                 {tag}
-                <X aria-hidden="true" />
               </button>
             ))}
             <Input
@@ -719,4 +726,9 @@ function CategoryEditor({ model, onDone }: { model: QuestionLibraryModelState; o
       </div>
     </form>
   )
+}
+
+/** "Las mismas dos preguntas" — a count from two to ten in words, as the canvas writes it in a sentence. */
+function countWord(t: TranslateFn, count: number): string {
+  return count >= 2 && count <= 10 ? t(`questionLibraryAdmin.next.countWord${count}`) : String(count)
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { AIInsight, AIInsightListItem } from '../../api/insights'
-import { acknowledgerIds, defaultSelection, pickLine, priorityTone, tallyInsights } from './insightsDerive'
+import { acknowledgerIds, defaultSelection, pickLine, priorityTone, reviewedOn, tallyInsights } from './insightsDerive'
 import type { InsightRow } from './insightsModel'
 
 function item(over: Partial<AIInsightListItem> = {}): AIInsightListItem {
@@ -59,10 +59,31 @@ describe('insights derive', () => {
     expect(tally.latest).toBeNull()
   })
 
-  it('opens the first finding still waiting for review, else the first row', () => {
+  it('opens the most serious finding still waiting for review, else the most serious reviewed one', () => {
     expect(defaultSelection([item({ id: 'a', isAcknowledged: true }), item({ id: 'b' })])).toBe('b')
     expect(defaultSelection([item({ id: 'a', isAcknowledged: true }), item({ id: 'b', isAcknowledged: true })])).toBe('a')
     expect(defaultSelection([])).toBeNull()
+    // An open critical outranks an open high, and any open one outranks a reviewed critical.
+    expect(defaultSelection([item({ id: 'h' }), item({ id: 'c', priority: 'critical' })])).toBe('c')
+    expect(defaultSelection([item({ id: 'rc', priority: 'critical', isAcknowledged: true }), item({ id: 'l', priority: 'low' })])).toBe('l')
+  })
+
+  it('opens Acme\'s risk over its trend at the same priority, both reviewed — as the SuperAIInsightsSelected artboard does', () => {
+    const acme = [
+      item({ id: 'sales', type: 'trend', priority: 'high', isAcknowledged: true, title: 'Engagement is trending down in Sales' }),
+      item({ id: 'engineering', type: 'risk', priority: 'high', isAcknowledged: true, title: 'Engagement dipped in Engineering' }),
+    ]
+    expect(defaultSelection(acme)).toBe('engineering')
+  })
+
+  it('dates a company\'s reviews from the details: the latest, and whether they share its day', () => {
+    const at = (iso: string) => detail({ isAcknowledged: true, acknowledgedAt: iso })
+    expect(reviewedOn([at('2026-08-13T15:42:10Z'), at('2026-08-13T15:42:10Z')])).toEqual({ latest: '2026-08-13T15:42:10Z', sameDay: true })
+    expect(reviewedOn([at('2026-08-12T09:00:00Z'), at('2026-08-13T15:42:10Z')])).toEqual({ latest: '2026-08-13T15:42:10Z', sameDay: false })
+    // A detail that could not be read, or one with no date, dates nothing.
+    expect(reviewedOn([at('2026-08-13T15:42:10Z'), null])).toBeNull()
+    expect(reviewedOn([detail({ isAcknowledged: true })])).toBeNull()
+    expect(reviewedOn([])).toBeNull()
   })
 
   it('draws critical red, high amber, the rest quiet', () => {
@@ -78,7 +99,15 @@ describe('insights derive', () => {
     expect(pickLine({ id: 'c', name: 'C', insights: null, surveys: 3 })).toEqual({ kind: 'unreadable' })
     expect(pickLine({ id: 'c', name: 'C', insights: { total: 0, acknowledged: 0 }, surveys: 0 })).toEqual({ kind: 'nothing' })
     expect(pickLine({ id: 'c', name: 'C', insights: { total: 0, acknowledged: 0 }, surveys: 4 })).toEqual({ kind: 'no-insights' })
-    expect(pickLine({ id: 'c', name: 'C', insights: { total: 2, acknowledged: 2 }, surveys: 4 })).toEqual({ kind: 'all-acknowledged', total: 2 })
+    expect(pickLine({ id: 'c', name: 'C', insights: { total: 2, acknowledged: 2 }, surveys: 4 })).toEqual({
+      kind: 'all-acknowledged',
+      total: 2,
+      on: null,
+      sameDay: true,
+    })
+    expect(
+      pickLine({ id: 'c', name: 'C', insights: { total: 2, acknowledged: 2 }, surveys: 4, reviewed: { latest: '2026-08-13T15:42:10Z', sameDay: true } }),
+    ).toEqual({ kind: 'all-acknowledged', total: 2, on: '2026-08-13T15:42:10Z', sameDay: true })
     expect(pickLine({ id: 'c', name: 'C', insights: { total: 3, acknowledged: 0 }, surveys: 4 })).toEqual({ kind: 'none-acknowledged', total: 3 })
     expect(pickLine({ id: 'c', name: 'C', insights: { total: 3, acknowledged: 1 }, surveys: 4 })).toEqual({
       kind: 'some-acknowledged',

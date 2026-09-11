@@ -2927,7 +2927,8 @@
         "wave9": "ninth wave",
         "wave10": "tenth wave",
         "waveN": "wave {n}",
-        "otherCompany": "Another company"
+        "otherCompany": "Another company",
+        "draftCreatedOn": "created {date}"
       }
     }
   },
@@ -3255,7 +3256,12 @@
       "privacyNote": "This page shows no responses: only the finding, the evidence it names and who reviewed it.",
       "notForRole": "AI insights are for administrators",
       "notForRoleDescription": "Findings name departments and segments, so only an administrator reads them.",
-      "chooseFailed": "The companies could not be listed."
+      "chooseFailed": "The companies could not be listed.",
+      "pickAllOneOn": "1 finding · reviewed on {date}",
+      "pickAllTwoOn": "{total} findings · both reviewed on {date}",
+      "pickAllOn": "{total} findings · all reviewed on {date}",
+      "pickAllTwoLatest": "{total} findings · both reviewed, the latest on {date}",
+      "pickAllLatest": "{total} findings · all reviewed, the latest on {date}"
     }
   },
   "surveyRespond": {
@@ -3756,7 +3762,12 @@
       "colLastSuccess": "Last success",
       "colFailures": "Consecutive failures",
       "colStatus": "Status",
-      "jobsFootnote": "“Stale” appears once a job has gone three of its intervals without completing; “Failing” from its first consecutive failure."
+      "jobsFootnote": "“Stale” appears if a job has gone three of its intervals without completing; “Failing”, from the first consecutive failure.",
+      "everyMinuteSentence": "every minute",
+      "everyMinutesSentence": "every {count} minutes",
+      "everyHourSentence": "every hour",
+      "everyHoursSentence": "every {count} hours",
+      "everySecondsSentence": "every {count} seconds"
     }
   },
   "tracking": {
@@ -4376,7 +4387,7 @@
       "scaleMaxEnPlaceholder": "Strongly agree",
       "scaleMinLabel": "Lower end",
       "scaleMaxLabel": "Upper end",
-      "scaleHelp": "Optional. Left empty, the question sets no ends of its own.",
+      "scaleHelp": "Left empty: the survey shows the scale with no end words.",
       "fieldOptions": "Options (one per line)",
       "fieldOwner": "Ownership",
       "ownerOptionGlobal": "Global — every company",
@@ -4392,7 +4403,17 @@
       "descriptionEn": "Description (English)",
       "parent": "Parent category",
       "noParent": "None (top level)",
-      "saveCategory": "Save category"
+      "saveCategory": "Save category",
+      "copyNoteSameOne": "The same question exists as {company}'s copy, with its own version; editing one does not touch the other.",
+      "countWord2": "two",
+      "countWord3": "three",
+      "countWord4": "four",
+      "countWord5": "five",
+      "countWord6": "six",
+      "countWord7": "seven",
+      "countWord8": "eight",
+      "countWord9": "nine",
+      "countWord10": "ten"
     }
   }
 }

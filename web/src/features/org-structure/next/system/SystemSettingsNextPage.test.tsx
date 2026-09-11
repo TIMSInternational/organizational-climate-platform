@@ -125,3 +125,21 @@ describe('SystemSettingsNextPage', () => {
     expect(screen.queryByRole('spinbutton', { name: next.minLength })).toBeNull()
   })
 })
+
+// SystemSettings artboard: "60 minutos" on the left of the field, the unit after the digits.
+// happy-dom lays nothing out, so the placement is pinned as the offset the page computes.
+describe('SystemSettingsNextPage — the session timeout reads "60 minutos"', () => {
+  it('sets the unit right after the digits, one digit-width past them', async () => {
+    serve(() => new Response(JSON.stringify(settings({ sessionTimeoutMinutes: 60 })), { status: 200 }))
+    renderPage()
+    const unit = await waitFor(() => {
+      const found = document.querySelector('[data-slot="timeout-unit"]') as HTMLElement | null
+      expect(found).not.toBeNull()
+      return found as HTMLElement
+    })
+    expect(unit.textContent).toBe(next.minutesUnit)
+    expect(unit.style.getPropertyValue('--unit-offset')).toBe('3ch')
+    expect(unit.className).toMatch(/left-\[calc\(var\(--admin-space-12\)_\+_1px_\+_var\(--unit-offset\)\)\]/)
+    expect(unit.className).not.toMatch(/right-/)
+  })
+})

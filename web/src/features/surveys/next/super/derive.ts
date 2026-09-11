@@ -1,6 +1,8 @@
 import { waveCode } from '../../../dashboard/next/compose'
 import { sectionOf } from '../list/derive'
-import type { SurveyRow } from '../list/model'
+import type { SurveyRow, SurveySection } from '../list/model'
+import { calendarDayOf, todayCalendarDay } from '../../../../lib/calendarDay'
+import { daysBetween } from '../../../dashboard/next/derive'
 
 /**
  * The pure readings behind the super administrator's Todas las Encuestas (`/surveys`): the
@@ -104,4 +106,34 @@ export function closedOrdinal(row: SurveyRow, rows: readonly SurveyRow[]): numbe
 /** Companies with at least one closed survey — whose climate trends are worth reading. */
 export function companiesWithClosed(rows: readonly SurveyRow[]): string[] {
   return [...new Set(rows.filter((row) => sectionOf(row.status) === 'closed').map((row) => row.companyId))]
+}
+
+/**
+ * Whole days until a survey's close, counted calendar day to calendar day: today in the
+ * reader's calendar (`todayCalendarDay`) against the close's own day (`calendarDayOf`).
+ * Acme's open survey closes at 18:21 UTC on 26 Sep; on 10 Sep that is 16 days, where the
+ * count against the full instant rounded 16.76 up to 17.
+ */
+export function daysLeft(endDate: string, today: string = todayCalendarDay()): number {
+  return daysBetween(today, calendarDayOf(endDate))
+}
+
+/** The artboard's block order: what is open, what closed, the drafts, and the archive last. */
+export const SUPER_SECTIONS: readonly SurveySection[] = ['open', 'closed', 'upcoming', 'archived']
+
+/**
+ * The platform list cut into its blocks, "ordenadas por estado y fecha": the blocks in
+ * `SUPER_SECTIONS` order and, inside each, the latest first — by close, then by creation.
+ * The SuperSurveysList artboard reads that way in every block: Meridiano's wave closing
+ * 10 Oct above Acme's closing 26 Sep, the closed waves newest first, the drafts newest
+ * first. (The company administrator's list runs its open block closing-soonest; with one
+ * company's surveys that is one row.)
+ */
+export function groupSuperSections(rows: readonly SurveyRow[]): { section: SurveySection; rows: SurveyRow[] }[] {
+  const latestFirst = (a: SurveyRow, b: SurveyRow) =>
+    Date.parse(b.endDate) - Date.parse(a.endDate) || Date.parse(b.createdAt) - Date.parse(a.createdAt)
+  return SUPER_SECTIONS.map((section) => ({
+    section,
+    rows: rows.filter((row) => sectionOf(row.status) === section).sort(latestFirst),
+  })).filter((entry) => entry.rows.length > 0)
 }

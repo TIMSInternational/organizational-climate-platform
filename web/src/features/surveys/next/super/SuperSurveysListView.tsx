@@ -22,17 +22,27 @@ import {
   chipVariants,
   type ChipTone,
 } from '../../../../components/ui'
-import { useCompanyScope } from '../../../../company-context'
+import { useCompanyContext, useCompanyScope } from '../../../../company-context'
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { formatMetric } from '../../../../components/charts/formatMetric'
-import { calendarDay, calendarDayLong, todayCalendarDay } from '../../../../lib/calendarDay'
+import { calendarDay, calendarDayLong } from '../../../../lib/calendarDay'
 import { cn } from '../../../../lib/cn'
-import { daysBetween, signedReading } from '../../../dashboard/next/derive'
+import { companyShortName } from '../../../../lib/companyShortName'
+import { signedReading } from '../../../dashboard/next/derive'
 import { statusLabel, typeLabel } from '../../surveyVocabulary'
 import { surveyResponseReading } from '../../surveyListView'
-import { groupBySection, menuItemsFor, primaryActionFor, sectionOf, visibleFacets, type PrimaryActionKind, type RowCapabilities } from '../list/derive'
+import { menuItemsFor, primaryActionFor, sectionOf, visibleFacets, type PrimaryActionKind, type RowCapabilities } from '../list/derive'
 import type { SurveyRow, SurveySection, WaveReading } from '../list/model'
-import { closedNote, closedOrdinal, companyCount, draftsNote, sharedOpenWave, upcomingKind } from './derive'
+import {
+  closedNote,
+  closedOrdinal,
+  companyCount,
+  daysLeft,
+  draftsNote,
+  groupSuperSections,
+  sharedOpenWave,
+  upcomingKind,
+} from './derive'
 import { useSuperSurveysListModel, type SuperSurveysListModelState } from './useSuperSurveysListModel'
 
 const ACTION_KEY: Record<PrimaryActionKind, string> = {
@@ -67,9 +77,9 @@ const SUPER_ROW: RowCapabilities = { canAuthorSurveys: true, canOpenResults: () 
 /**
  * The SuperSurveysList artboard stacks what closed straight under what is open — the wave just
  * read sits under the wave being answered, across tenants — and the drafts after both; the
- * archived block stays last and demoted. The chip row follows the same reading order.
+ * archived block stays last and demoted (`groupSuperSections`). The chip row follows the same
+ * reading order.
  */
-const SUPER_SECTIONS: readonly SurveySection[] = ['open', 'closed', 'upcoming', 'archived']
 const FACET_ORDER: readonly string[] = ['active', 'closed', 'draft', 'scheduled', 'archived']
 
 function facetRank(status: string): number {
@@ -95,9 +105,7 @@ export default function SuperSurveysListView() {
   const capabilities = useViewerCapabilities()
   const model = useSuperSurveysListModel()
   const { base } = model
-  const sections = groupBySection(model.visible).sort(
-    (a, b) => SUPER_SECTIONS.indexOf(a.section) - SUPER_SECTIONS.indexOf(b.section),
-  )
+  const sections = groupSuperSections(model.visible)
   const facets = [
     { status: '', count: model.rows.length },
     ...visibleFacets(model.facets, base.statusFilter).sort((a, b) => facetRank(a.status) - facetRank(b.status)),
@@ -274,7 +282,9 @@ function sectionNote(
   if (section === 'upcoming') {
     const note = draftsNote(rows)
     if (!note) return null
-    const company = note.companyId ? model.companyNames.get(note.companyId) : undefined
+    const full = note.companyId ? model.companyNames.get(note.companyId) : undefined
+    // A sentence names the tenant as the canvas does, without its legal form: "Todos de Acme".
+    const company = full ? companyShortName(full) : undefined
     const parts = [
       ...(company ? [t('surveys.next.super.draftsSameCompany', { company })] : []),
       ...(note.oneQuestion ? [t('surveys.next.super.draftsOneQuestion')] : []),
@@ -388,7 +398,7 @@ function closeLine(
   locale: string,
 ): string | null {
   if (section === 'open') {
-    const days = daysBetween(todayCalendarDay(), row.endDate)
+    const days = daysLeft(row.endDate)
     return days > 0 ? t('surveys.next.list.inDays', { count: days }) : null
   }
   if (section === 'upcoming') return t('surveys.next.super.plannedClose')
@@ -417,11 +427,21 @@ function SuperRow({ row, model, t, locale }: { row: SurveyRow; model: SuperSurve
       ? t('surveys.next.list.opened', { date: calendarDay(Date.parse(row.startDate), locale) })
       : section === 'closed'
         ? t('surveys.next.list.closedOn', { date: calendarDay(Date.parse(row.endDate), locale) })
-        : t('surveys.next.list.createdOn', { date: calendarDay(Date.parse(row.createdAt), locale) })
+        : upcoming
+          ? // "creado el 8 ago" — the draft (el borrador), as the artboard writes it.
+            t('surveys.next.super.draftCreatedOn', { date: calendarDay(Date.parse(row.createdAt), locale) })
+          : t('surveys.next.list.createdOn', { date: calendarDay(Date.parse(row.createdAt), locale) })
   const meta = [questions, ...(upcoming && language ? [language] : []), when].join(' · ')
   const line = closeLine(row, section, model.readings.get(row.id) ?? null, model, t, locale)
   const ink = archived ? 'text-fg-label' : 'text-fg-primary'
   const company = model.companyNames.get(row.companyId) ?? t('surveys.next.super.otherCompany')
+  // Distribución scopes its audience to the company chosen in the strip and refuses until that
+  // is the survey's own (`SurveyDistributionPage.tsx`, `scopedToSurvey`), so with nothing — or
+  // another tenant — chosen, the row chooses its own company on the way there.
+  const { scope: chosen, selectCompany } = useCompanyContext()
+  const chooseOwnCompany = () => {
+    if (chosen.companyId !== row.companyId) selectCompany(row.companyId)
+  }
 
   return (
     <tr data-survey-id={row.id} data-status={row.status} className="border-b border-line-light last:border-b-0">
@@ -495,7 +515,12 @@ function SuperRow({ row, model, t, locale }: { row: SurveyRow; model: SuperSurve
         <div className="flex items-center justify-end gap-2">
           {action && (
             <Button asChild variant="outline">
-              <Link to={action.to} data-action={action.kind} aria-label={`${t(ACTION_KEY[action.kind])}: ${name}`}>
+              <Link
+                to={action.to}
+                data-action={action.kind}
+                aria-label={`${t(ACTION_KEY[action.kind])}: ${name}`}
+                onClick={action.kind === 'distribution' ? chooseOwnCompany : undefined}
+              >
                 {t(ACTION_KEY[action.kind])}
               </Link>
             </Button>

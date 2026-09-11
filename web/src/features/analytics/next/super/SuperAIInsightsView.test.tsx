@@ -178,7 +178,9 @@ describe('AIInsightsNextPage — reading and acknowledging (moved and extended)'
       ],
     ])
     renderPage()
-    await screen.findByText('Two')
+    // The panel opens the most serious finding still open — the critical "Two" — so its title
+    // is both a card and the panel's heading.
+    expect(await screen.findByRole('heading', { name: 'Two' })).toBeTruthy()
     const tiles = document.querySelector('[data-slot="insight-tiles"]') as HTMLElement
     const values = [...tiles.querySelectorAll('[data-slot="kpi-value"]')].map((node) => node.textContent)
     expect(values).toEqual(['2', '2', '1'])
@@ -292,5 +294,46 @@ describe('the route dispatches by role', () => {
     renderRoute()
     expect(await screen.findByText(next.emptyTitle)).toBeTruthy()
     expect(screen.queryByRole('heading', { name: next.chooseTitle })).toBeNull()
+  })
+})
+
+// SuperAIInsights artboard: "2 hallazgos · los dos revisados el 13 ago". The list DTO carries no
+// date, so the card reads the findings' details for a company whose every finding is reviewed.
+describe('the choose card dates the reviews', () => {
+  const ACME = { id: 'acme', name: 'Acme Corporation', emailDomain: null, industry: null, size: null, country: null, subscriptionTier: null, createdAt: '2026-01-01T00:00:00Z' }
+
+  it('prints the day both findings were reviewed, read from their details', async () => {
+    setToken(tokenFor({ role: 'super_admin' }))
+    routeFetch([
+      [/\/admin\/companies/, json({ companies: [ACME] })],
+      [/\/surveys/, json({ surveys: [] })],
+      [/\/admin\/ai-insights\/i1$/, json(insightDetail({ companyId: 'acme', isAcknowledged: true, acknowledgedAt: '2026-08-13T15:42:10Z' }))],
+      [/\/admin\/ai-insights\/i2$/, json(insightDetail({ id: 'i2', companyId: 'acme', isAcknowledged: true, acknowledgedAt: '2026-08-13T15:42:10Z' }))],
+      [/\/admin\/ai-insights\?companyId=acme/, json([listRow({ companyId: 'acme', isAcknowledged: true }), listRow({ id: 'i2', companyId: 'acme', isAcknowledged: true })])],
+    ])
+    renderPage()
+    const row = await waitFor(() => {
+      const found = document.querySelector('[data-company-id="acme"]') as HTMLElement | null
+      expect(found).not.toBeNull()
+      return found as HTMLElement
+    })
+    await waitFor(() => expect(within(row).getByText(next.pickAllTwoOn.replace('{total}', '2').replace('{date}', 'Aug 13'))).toBeTruthy())
+  })
+
+  it('says "reviewed" with no date when a detail cannot be read', async () => {
+    setToken(tokenFor({ role: 'super_admin' }))
+    routeFetch([
+      [/\/admin\/companies/, json({ companies: [ACME] })],
+      [/\/surveys/, json({ surveys: [] })],
+      [/\/admin\/ai-insights\/i1$/, json(insightDetail({ companyId: 'acme', isAcknowledged: true, acknowledgedAt: '2026-08-13T15:42:10Z' }))],
+      [/\/admin\/ai-insights\?companyId=acme/, json([listRow({ companyId: 'acme', isAcknowledged: true }), listRow({ id: 'i2', companyId: 'acme', isAcknowledged: true })])],
+    ])
+    renderPage()
+    const row = await waitFor(() => {
+      const found = document.querySelector('[data-company-id="acme"]') as HTMLElement | null
+      expect(found).not.toBeNull()
+      return found as HTMLElement
+    })
+    await waitFor(() => expect(within(row).getByText(next.pickAllTwo.replace('{total}', '2'))).toBeTruthy())
   })
 })

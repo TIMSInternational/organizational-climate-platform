@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { render, screen, cleanup, within } from '@testing-library/react'
+import { render, screen, cleanup, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import SystemHealthNextPage from './SystemHealthNextPage'
@@ -168,5 +168,66 @@ describe('SystemHealthNextPage', () => {
     serve(status())
     await userEvent.click(screen.getByRole('button', { name: en.common.retry }))
     expect(await screen.findByText('notification-dispatch')).toBeTruthy()
+  })
+})
+
+// The page-level half of "a job's day and clock are printed in one zone" (the refuter's R11:
+// `localDay` read in UTC whenever no zone is passed — the page's own call — and every helper
+// test still passed). The ambient zone is set here, as AdminDashboardNextView.test.tsx does.
+describe('SystemHealthNextPage — one zone for a job\'s day and hour', () => {
+  const AMBIENT = process.env.TZ
+
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn())
+    setToken(tokenFor({ role: 'super_admin' }))
+  })
+
+  afterEach(() => {
+    cleanup()
+    clearToken()
+    localStorage.clear()
+    vi.unstubAllGlobals()
+    if (AMBIENT === undefined) delete process.env.TZ
+    else process.env.TZ = AMBIENT
+  })
+
+  it('prints a job that ran at 03:01 UTC as "9 sept · 21:01" in Costa Rica, beside a check made on the 10th', async () => {
+    process.env.TZ = 'America/Costa_Rica'
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
+    serve(
+      status({
+        jobs: [
+          {
+            jobName: 'retention-cleanup',
+            intervalSeconds: 86400,
+            lastAttemptAt: '2026-09-10T03:01:00Z',
+            lastSuccessAt: '2026-09-10T03:01:00Z',
+            consecutiveFailures: 0,
+            status: 'ok',
+          },
+        ],
+      }),
+    )
+    renderPage()
+    const row = await waitFor(() => {
+      const found = jobRow('retention-cleanup')
+      expect(found).not.toBeNull()
+      return found
+    })
+    // Last attempt and last success, both on the viewer's clock and the viewer's day.
+    expect(within(row).getAllByText('9 sept · 21:01')).toHaveLength(2)
+  })
+
+  it('writes the dispatcher\'s cadence as a sentence — "corre cada minuto", never "cada 1 min"', async () => {
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
+    serve(status())
+    renderPage()
+    const note = await waitFor(() => {
+      const found = document.querySelector('[data-slot="dispatcher-note"]')
+      expect(found).not.toBeNull()
+      return found as HTMLElement
+    })
+    expect(note.textContent).toMatch(/notification-dispatch corre cada minuto;/)
+    expect(note.textContent).not.toMatch(/1 min/)
   })
 })

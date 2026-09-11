@@ -12,6 +12,7 @@ import { getClimateTrends, type ClimateTrendsResponse } from '../../api/climateT
 import { listCompanies } from '../../../org-structure/api/companies'
 import SurveysListNextPage from '../list/SurveysListNextPage'
 import en from '../../../../i18n/en.json'
+import es from '../../../../i18n/es.json'
 
 const copy = en.surveys.next.super
 
@@ -170,5 +171,74 @@ describe('SuperSurveysListView — the super administrator\'s /surveys', () => {
     expect(rowOf('m-q4')).toBeNull()
     expect(rowOf('a-q1')).toBeTruthy()
     expect(screen.getByRole('button', { name: `${en.surveys.next.list.facetAll} · 2` })).toBeTruthy()
+  })
+})
+
+// The fidelity round's findings on the SuperSurveysList artboard (10 Sep refuter, items 2-4 and 9).
+describe('SuperSurveysListView — the artboard\'s order, copy and the Distribución row action', () => {
+  const FIX_ROUND: SurveyListItem[] = [
+    row({ id: 'a-open', title: 'Acme Q4', companyId: 'acme', status: 'active', targetAudienceCount: 24, responseCount: 1, endDate: '2099-09-26T18:21:20Z' }),
+    row({ id: 'm-open', title: 'Meridiano Q4', status: 'active', targetAudienceCount: 24, responseCount: 3, endDate: '2099-10-10T02:03:39Z' }),
+    row({ id: 'd1', title: 'Engagement Check', companyId: 'acme', status: 'draft', language: 'en', questionCount: 1, responseCount: 0, endDate: '2026-09-15T22:00:00Z', createdAt: '2026-08-08T04:30:13Z' }),
+  ]
+
+  function renderWithDistribution(locale: 'en' | 'es' = 'en') {
+    window.localStorage.setItem('preferredLocale', locale)
+    setToken(tokenFor({ sub: 'u1', nodoId: '', role: 'super_admin' }))
+    return render(
+      <TranslationProvider>
+        <MemoryRouter initialEntries={['/surveys']}>
+          <CompanyContextProvider>
+            <Routes>
+              <Route path="/surveys" element={<SurveysListNextPage />} />
+              <Route path="/surveys/:surveyId/distribution" element={<p data-testid="distribution-route" />} />
+            </Routes>
+          </CompanyContextProvider>
+        </MemoryRouter>
+      </TranslationProvider>,
+    )
+  }
+
+  beforeEach(() => {
+    vi.mocked(listSurveys).mockReset()
+    vi.mocked(listSurveys).mockResolvedValue(FIX_ROUND)
+    vi.mocked(getClimateTrends).mockReset()
+    vi.mocked(getClimateTrends).mockRejectedValue(new Error('404'))
+    vi.mocked(listCompanies).mockReset()
+    vi.mocked(listCompanies).mockResolvedValue([
+      { id: 'meridiano', name: 'Grupo Meridiano S.A.', emailDomain: null, industry: null, size: null, country: null, subscriptionTier: null, createdAt: '2026-01-01T00:00:00Z' },
+      { id: 'acme', name: 'Acme Corporation', emailDomain: null, industry: null, size: null, country: null, subscriptionTier: null, createdAt: '2026-01-01T00:00:00Z' },
+    ])
+  })
+  afterEach(() => {
+    cleanup()
+    clearToken()
+    clearCompanyNameCache()
+    window.localStorage.clear()
+  })
+
+  it('lists the open surveys latest close first — Meridiano (10 Oct) above Acme (26 Sep)', async () => {
+    renderWithDistribution()
+    await screen.findByText('Acme Q4')
+    const open = [...document.querySelectorAll('[data-section="open"] tr[data-survey-id]')].map((el) => el.getAttribute('data-survey-id'))
+    expect(open).toEqual(['m-open', 'a-open'])
+  })
+
+  it('names the drafts\' one company without its legal form, and says each draft was "creado"', async () => {
+    renderWithDistribution('es')
+    await screen.findByText('Engagement Check')
+    const note = document.querySelector('[data-section="upcoming"] [data-slot="section-note"]')?.textContent ?? ''
+    expect(note.startsWith(es.surveys.next.super.draftsSameCompany.replace('{company}', 'Acme') + ',')).toBe(true)
+    expect(note).not.toMatch(/Corporation/)
+    expect(rowOf('d1').textContent).toMatch(/creado el 8 ago/)
+  })
+
+  it('chooses the survey\'s own company before opening its Distribución, so the audience section can load', async () => {
+    renderWithDistribution()
+    await screen.findByText('Meridiano Q4')
+    expect(window.localStorage.getItem(COMPANY_CONTEXT_STORAGE_KEY)).toBeNull()
+    await userEvent.click(rowOf('m-open').querySelector('[data-action="distribution"]') as HTMLElement)
+    expect(await screen.findByTestId('distribution-route')).toBeTruthy()
+    expect(window.localStorage.getItem(COMPANY_CONTEXT_STORAGE_KEY)).toBe('meridiano')
   })
 })

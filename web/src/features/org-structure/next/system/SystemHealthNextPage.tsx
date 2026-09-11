@@ -313,6 +313,23 @@ function HealthBody({ status, email }: { status: SystemStatusResponse; email: Sy
   )
 }
 
+/**
+ * The cadence inside a sentence — "corre cada minuto", "cada 5 minutos", "cada hora" — where the
+ * table's "Cada 1 min" lower-cased read "corre cada 1 min" (the fidelity refuter, 10 Sep).
+ */
+export function intervalSentence(t: TranslateFn, seconds: number): string {
+  if (seconds <= 0) return '—'
+  if (seconds % 3600 === 0) {
+    const hours = seconds / 3600
+    return hours === 1 ? t('systemHealth.next.everyHourSentence') : t('systemHealth.next.everyHoursSentence', { count: hours })
+  }
+  if (seconds % 60 === 0) {
+    const minutes = seconds / 60
+    return minutes === 1 ? t('systemHealth.next.everyMinuteSentence') : t('systemHealth.next.everyMinutesSentence', { count: minutes })
+  }
+  return t('systemHealth.next.everySecondsSentence', { count: seconds })
+}
+
 function dispatcherSentence(
   t: TranslateFn,
   locale: string,
@@ -330,7 +347,7 @@ function dispatcherSentence(
   const cadence = dispatchJob
     ? t('systemHealth.next.dispatcherJob', {
         job: dispatchJob.jobName,
-        interval: intervalText(t, dispatchJob.intervalSeconds).toLocaleLowerCase(locale),
+        interval: intervalSentence(t, dispatchJob.intervalSeconds),
       })
     : null
   const queue =

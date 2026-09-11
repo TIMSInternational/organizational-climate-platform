@@ -200,3 +200,64 @@ describe('QuestionLibraryNextPage — a company administrator', () => {
     expect(owner.value).toBe('company')
   })
 })
+
+// The SuperQuestionLibrary artboard's findings (10 Sep refuter, items 17-20).
+describe('QuestionLibraryNextPage — the artboard\'s order, names and chips', () => {
+  const ACME_COPY: QuestionCategory = { ...CATEGORY, id: 'cat-feedback-acme', companyId: 'acme' }
+  const LIKERT = libraryItem({ id: 'likert' })
+  const RATING = libraryItem({
+    id: 'rating',
+    type: 'rating',
+    textEs: '¿Cómo calificaría la frecuencia de la retroalimentación que recibe?',
+    textEn: 'How would you rate the frequency of feedback you receive?',
+  })
+
+  function serveWithAcme(itemDetail = detail()) {
+    // The API's own order: by the English text, so the rating question arrives first.
+    const items = [RATING, LIKERT, { ...RATING, id: 'rating-acme', companyId: 'acme', questionCategoryId: ACME_COPY.id }, { ...LIKERT, id: 'likert-acme', companyId: 'acme', questionCategoryId: ACME_COPY.id }]
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input)
+      const ok = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: 200 }))
+      if (/\/admin\/question-library\/[^/?]+$/.test(url)) return ok(itemDetail)
+      if (url.includes('/admin/question-library')) return ok({ items })
+      if (url.includes('/admin/question-categories')) return ok({ categories: [CATEGORY, ACME_COPY] })
+      if (url.includes('/admin/companies')) {
+        return ok({ companies: [{ id: 'acme', name: 'Acme Corporation', emailDomain: null, industry: null, size: null, country: null, subscriptionTier: null, createdAt: '2026-01-01T00:00:00Z' }] })
+      }
+      return Promise.resolve(new Response(null, { status: 404 }))
+    })
+  }
+
+  it('lists and opens the Likert question first, whatever order the server sent', async () => {
+    serveWithAcme()
+    renderPage()
+    const edit = await screen.findAllByRole('button', { name: next.editRow.replace('{text}', LIKERT.textEs) })
+    const rows = [...document.querySelectorAll('tbody tr')].map((row) => row.textContent ?? '')
+    expect(rows[0]).toContain(LIKERT.textEs)
+    expect(rows[1]).toContain(RATING.textEs)
+    expect(edit.length).toBe(1)
+    await waitFor(() => expect(requests('GET', /\/admin\/question-library\/likert$/).length).toBeGreaterThan(0))
+  })
+
+  it('names Acme without its legal form in passing, and counts the copy in words', async () => {
+    serveWithAcme()
+    renderPage()
+    const note = await waitFor(() => {
+      const found = document.querySelector('[data-slot="copy-note"]')
+      expect(found).not.toBeNull()
+      return found as HTMLElement
+    })
+    expect(note.textContent).toContain(next.copyNoteSame.replace('{count}', 'two').replace('{company}', 'Acme'))
+    expect(within(note).getByRole('button', { name: next.copyLink.replace('{company}', 'Acme') })).toBeTruthy()
+    expect(note.textContent).not.toMatch(/Corporation/)
+    expect(screen.getByText(next.categoriesMetaOne.replace('{global}', '1').replace('{tenant}', '1').replace('{company}', 'Acme'))).toBeTruthy()
+  })
+
+  it('draws each tag as a plain chip — the chip itself removes it, named so', async () => {
+    serveWithAcme()
+    renderPage()
+    const chip = await screen.findByRole('button', { name: next.removeTag.replace('{tag}', 'feedback') })
+    expect(chip.textContent).toBe('feedback')
+    expect(chip.querySelector('svg')).toBeNull()
+  })
+})

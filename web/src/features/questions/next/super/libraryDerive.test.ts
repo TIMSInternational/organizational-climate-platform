@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import type { QuestionCategory, QuestionLibraryItemDetail } from '../../api/questionLibrary'
+import type { QuestionCategory, QuestionLibraryItem, QuestionLibraryItemDetail } from '../../api/questionLibrary'
 import {
   bothLanguages,
   canWriteLibraryRow,
@@ -8,6 +8,7 @@ import {
   copiesOf,
   createBody,
   draftFromDetail,
+  itemsIn,
   updateBody,
 } from './libraryDerive'
 
@@ -118,5 +119,38 @@ describe('question library derive', () => {
     expect(canWriteLibraryRow({ companyId: null }, { role: 'super_admin', companyId: undefined })).toBe(true)
     expect(canWriteLibraryRow({ companyId: null }, { role: 'company_admin', companyId: 'acme' })).toBe(false)
     expect(canWriteLibraryRow({ companyId: 'acme' }, { role: 'company_admin', companyId: 'acme' })).toBe(true)
+  })
+})
+
+describe('a category\'s questions, in the artboard\'s order', () => {
+  const at = (id: string, type: string, textEs: string, textEn: string): QuestionLibraryItem => ({
+    id,
+    companyId: null,
+    questionCategoryId: 'feedback',
+    textEn,
+    textEs,
+    type,
+    dimension: 'Liderazgo',
+    usageCount: 0,
+    lastUsedAt: null,
+    isActive: true,
+    version: 1,
+    tags: [],
+  })
+
+  it('lists the Likert question before the rating one — the type select\'s order — whatever the server sent first', () => {
+    // The API orders by the English text, so "How would you rate…" arrives above "My manager…".
+    const served = [
+      at('rating', 'rating', '¿Cómo calificaría la frecuencia de la retroalimentación que recibe?', 'How would you rate the frequency of feedback you receive?'),
+      at('other', 'likert', 'Otra categoría', 'Other category'),
+      at('likert', 'likert', 'Mi jefatura me da retroalimentación útil sobre mi trabajo.', 'My manager gives me useful feedback on my work.'),
+    ]
+    served[1] = { ...served[1], questionCategoryId: 'other' }
+    expect(itemsIn('feedback', served).map((item) => item.id)).toEqual(['likert', 'rating'])
+  })
+
+  it('orders questions of one type by their Spanish text', () => {
+    const served = [at('b', 'likert', 'Tengo lo que necesito', 'B'), at('a', 'likert', 'Confío en mi equipo', 'A')]
+    expect(itemsIn('feedback', served).map((item) => item.id)).toEqual(['a', 'b'])
   })
 })

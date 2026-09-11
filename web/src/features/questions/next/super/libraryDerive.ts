@@ -1,5 +1,5 @@
 import type { QuestionCategory, QuestionLibraryItem, QuestionLibraryItemDetail } from '../../api/questionLibrary'
-import type { CreateQuestionLibraryItemInput, UpdateQuestionLibraryItemInput } from '../../api/questionLibraryAdmin'
+import { QUESTION_LIBRARY_TYPES, type CreateQuestionLibraryItemInput, type UpdateQuestionLibraryItemInput } from '../../api/questionLibraryAdmin'
 
 /**
  * The pure readings behind the redesigned Biblioteca de preguntas (`/admin/question-library`),
@@ -60,8 +60,21 @@ export function copiesOf(global: QuestionCategory, categories: readonly Question
   return categories.filter((category) => category.companyId !== null && sameName(category, global))
 }
 
+/**
+ * A category's questions in the order the type select offers the types
+ * (`QUESTION_LIBRARY_TYPES`: the Likert scale first), then by their Spanish text. The server
+ * sorts by the English text (`QuestionLibraryEndpoints.cs`, `OrderBy(i => i.TextEn)`), which put
+ * "How would you rate…" above "My manager gives me…"; the SuperQuestionLibrary artboard lists —
+ * and opens — the Likert question first.
+ */
 export function itemsIn(categoryId: string, items: readonly QuestionLibraryItem[]): QuestionLibraryItem[] {
-  return items.filter((item) => item.questionCategoryId === categoryId)
+  const rank = (type: string) => {
+    const index = (QUESTION_LIBRARY_TYPES as readonly string[]).indexOf(type)
+    return index === -1 ? QUESTION_LIBRARY_TYPES.length : index
+  }
+  return items
+    .filter((item) => item.questionCategoryId === categoryId)
+    .sort((a, b) => rank(a.type) - rank(b.type) || a.textEs.localeCompare(b.textEs, 'es'))
 }
 
 /** How many of a set of rows a survey has already asked (`usageCount` is counted server-side). */

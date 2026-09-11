@@ -1,5 +1,6 @@
-import { useId, type ReactNode } from 'react'
-import { Check, EyeOff, Mail, Shield, Sparkles, TriangleAlert } from 'lucide-react'
+import { useId, type CSSProperties, type ReactNode } from 'react'
+import { Check, CircleAlert, EyeOff, Mail, Shield, TriangleAlert } from 'lucide-react'
+import { RailInsightsIcon } from '../../../../navigation/railIcons'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
 import { ANONYMITY_FLOOR } from '../../../../components/charts'
@@ -167,18 +168,23 @@ function SettingsBody({
               </Field>
               <Field label={t('settings.next.timeout')}>
                 {(id) => (
+                  // "60 minutos" as the artboard sets it: the unit follows the digits in the same
+                  // mono face, inside the one native field — so the field keeps its own focus ring.
+                  // `ch` is one digit of that face; the field's own padding is `--admin-space-12`.
                   <span className="relative block">
                     <Input
                       id={id}
                       type="number"
                       min={1}
-                      className="pr-20 font-mono"
+                      className="font-mono"
                       value={draft.sessionTimeoutMinutes}
                       onChange={(event) => setDraft({ ...draft, sessionTimeoutMinutes: Number(event.target.value) })}
                     />
                     <span
                       aria-hidden="true"
-                      className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 font-mono text-base text-fg-secondary"
+                      data-slot="timeout-unit"
+                      className="pointer-events-none absolute top-1/2 left-[calc(var(--admin-space-12)_+_1px_+_var(--unit-offset))] -translate-y-1/2 font-mono text-base text-fg-primary"
+                      style={{ '--unit-offset': `${String(draft.sessionTimeoutMinutes).length + 1}ch` } as CSSProperties}
                     >
                       {t('settings.next.minutesUnit')}
                     </span>
@@ -231,7 +237,7 @@ function SettingsBody({
         <div className="grid gap-5 md:grid-cols-3">
           <PrivacyFact icon={<Shield />} lead={t('settings.next.floorLead', { floor: ANONYMITY_FLOOR })} rest={t('settings.next.floorRest')} />
           <PrivacyFact icon={<EyeOff />} lead={t('settings.next.openTextLead')} rest={t('settings.next.openTextRest')} />
-          <PrivacyFact icon={<Sparkles />} lead={t('settings.next.aiLead')} rest={t('settings.next.aiRest')} />
+          <PrivacyFact icon={<RailInsightsIcon />} lead={t('settings.next.aiLead')} rest={t('settings.next.aiRest')} />
         </div>
       </Panel>
 
@@ -360,7 +366,8 @@ function WarningNote({ children }: { children: ReactNode }) {
       data-slot="warning-note"
       className="flex items-start gap-2.5 rounded-lg bg-accent-amber-soft px-3.5 py-3 text-sm leading-normal text-fg-secondary"
     >
-      <TriangleAlert aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-accent-amber-ink" />
+      {/* The artboard's circled "!" — a note, not the lockout alarm's triangle. */}
+      <CircleAlert aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-accent-amber-ink" />
       <span>{children}</span>
     </div>
   )

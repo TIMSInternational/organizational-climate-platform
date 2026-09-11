@@ -6,7 +6,7 @@ import { acknowledgeAIInsight, getAIInsight, listAIInsights } from '../../api/in
 import { getUser } from '../../../org-structure/api/users'
 import { listCompanies } from '../../../org-structure/api/companies'
 import { listSurveys } from '../../../surveys/api/surveys'
-import { acknowledgerIds, defaultSelection } from './insightsDerive'
+import { acknowledgerIds, defaultSelection, reviewedOn } from './insightsDerive'
 import type { CompanyPick, InsightRow } from './insightsModel'
 
 /**
@@ -138,6 +138,15 @@ export function useAIInsightsModel(): AIInsightsModelState {
         listSurveys(baseUrl, {}, locale).catch(() => []),
       ])
       const lists = await Promise.allSettled(companies.map((company) => listAIInsights(baseUrl, company.id)))
+      // A company whose every finding is reviewed prints when ("los dos revisados el 13 ago"),
+      // and only a finding's detail carries that date — so those, and only those, are read.
+      const reviewed = await Promise.all(
+        lists.map(async (read) => {
+          if (read.status !== 'fulfilled' || read.value.length === 0 || read.value.some((item) => !item.isAcknowledged)) return null
+          const details = await Promise.allSettled(read.value.map((item) => getAIInsight(baseUrl, item.id)))
+          return reviewedOn(details.map((detail) => (detail.status === 'fulfilled' ? detail.value : null)))
+        }),
+      )
       setPicks(
         companies.map((company, index) => {
           const read = lists[index]
@@ -149,6 +158,7 @@ export function useAIInsightsModel(): AIInsightsModelState {
                 ? { total: read.value.length, acknowledged: read.value.filter((item) => item.isAcknowledged).length }
                 : null,
             surveys: surveys.filter((survey) => survey.companyId === company.id).length,
+            reviewed: reviewed[index],
           }
         }),
       )

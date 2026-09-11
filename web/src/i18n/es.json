@@ -2927,7 +2927,8 @@
         "wave9": "novena ola",
         "wave10": "décima ola",
         "waveN": "ola {n}",
-        "otherCompany": "Otra empresa"
+        "otherCompany": "Otra empresa",
+        "draftCreatedOn": "creado el {date}"
       }
     }
   },
@@ -3255,7 +3256,12 @@
       "privacyNote": "Esta página no muestra respuestas: solo el hallazgo, la evidencia que nombra y quién lo revisó.",
       "notForRole": "La información de IA es para administradores",
       "notForRoleDescription": "Los hallazgos nombran departamentos y segmentos, por eso solo los lee un administrador.",
-      "chooseFailed": "No se pudieron listar las empresas."
+      "chooseFailed": "No se pudieron listar las empresas.",
+      "pickAllOneOn": "1 hallazgo · revisado el {date}",
+      "pickAllTwoOn": "{total} hallazgos · los dos revisados el {date}",
+      "pickAllOn": "{total} hallazgos · todos revisados el {date}",
+      "pickAllTwoLatest": "{total} hallazgos · los dos revisados, el último el {date}",
+      "pickAllLatest": "{total} hallazgos · todos revisados, el último el {date}"
     }
   },
   "surveyRespond": {
@@ -3756,7 +3762,12 @@
       "colLastSuccess": "Último éxito",
       "colFailures": "Fallos consecutivos",
       "colStatus": "Estado",
-      "jobsFootnote": "«Sin actividad» aparece cuando una tarea lleva tres de sus intervalos sin completarse; «Con errores», desde su primer fallo consecutivo."
+      "jobsFootnote": "«Sin actividad» aparece si una tarea lleva tres de sus intervalos sin completarse; «Con errores», a partir del primer fallo consecutivo.",
+      "everyMinuteSentence": "cada minuto",
+      "everyMinutesSentence": "cada {count} minutos",
+      "everyHourSentence": "cada hora",
+      "everyHoursSentence": "cada {count} horas",
+      "everySecondsSentence": "cada {count} segundos"
     }
   },
   "tracking": {
@@ -4376,7 +4387,7 @@
       "scaleMaxEnPlaceholder": "Strongly agree",
       "scaleMinLabel": "Extremo inferior",
       "scaleMaxLabel": "Extremo superior",
-      "scaleHelp": "Opcionales. Vacíos, la pregunta no fija extremos propios.",
+      "scaleHelp": "Sin definir: la encuesta muestra la escala sin extremos escritos.",
       "fieldOptions": "Opciones (una por línea)",
       "fieldOwner": "Propiedad",
       "ownerOptionGlobal": "Global — todas las empresas",
@@ -4392,7 +4403,17 @@
       "descriptionEn": "Descripción (inglés)",
       "parent": "Categoría superior",
       "noParent": "Ninguna (primer nivel)",
-      "saveCategory": "Guardar categoría"
+      "saveCategory": "Guardar categoría",
+      "copyNoteSameOne": "La misma pregunta existe como copia de {company}, con su propia versión; editar una no toca la otra.",
+      "countWord2": "dos",
+      "countWord3": "tres",
+      "countWord4": "cuatro",
+      "countWord5": "cinco",
+      "countWord6": "seis",
+      "countWord7": "siete",
+      "countWord8": "ocho",
+      "countWord9": "nueve",
+      "countWord10": "diez"
     }
   }
 }
