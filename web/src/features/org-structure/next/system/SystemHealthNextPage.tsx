@@ -247,9 +247,9 @@ function HealthBody({ status, email }: { status: SystemStatusResponse; email: Sy
             <Facts labelWidth="build">
               <Fact label={t('systemHealth.commit')}>
                 {status.build.commit === 'unknown' ? (
-                  <span className="flex items-center gap-2">
+                  <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                     <span className="shrink-0 font-mono text-sm text-fg-label">{t('systemHealth.next.unknown')}</span>
-                    <span className="text-xs text-fg-label">{t('systemHealth.next.commitUnknownNote')}</span>
+                    <span className="min-w-0 text-xs text-fg-label">{t('systemHealth.next.commitUnknownNote')}</span>
                   </span>
                 ) : (
                   // The running commit appears nowhere else in the shell (#69).
@@ -286,7 +286,7 @@ function HealthBody({ status, email }: { status: SystemStatusResponse; email: Sy
               </Fact>
               <Fact label={t('systemHealth.next.poolerLabel')}>
                 {/* #220: the port is a fact on a page rather than a coin flip. */}
-                <span className="flex items-center gap-2">
+                <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                   <Chip
                     tone={db.usesTransactionPoolerPort ? 'critical' : 'good'}
                     label={t(
@@ -294,7 +294,7 @@ function HealthBody({ status, email }: { status: SystemStatusResponse; email: Sy
                       { port: db.port },
                     )}
                   />
-                  <span className="text-xs text-fg-label">{t('systemHealth.next.poolerNote')}</span>
+                  <span className="min-w-0 text-xs text-fg-label">{t('systemHealth.next.poolerNote')}</span>
                 </span>
               </Fact>
               <Fact label={t('systemHealth.next.maxPool')}>
