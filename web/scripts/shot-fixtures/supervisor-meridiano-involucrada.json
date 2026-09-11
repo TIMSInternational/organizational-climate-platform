@@ -1,5 +1,5 @@
 {
-  "_comment": "Leaders lane, supervisor (sofia.vargas@meridiano.test, Supervisora, Ingeniería) on the Grupo Meridiano demo tenant. EVERY BODY IS VERBATIM: GET /notifications/mine, /profile, /dashboard/department-admin, /surveys/my were captured read-only from the local stack on 11 Sep 2026 (14:24Z) and re-measured identical at 15:44Z with ?lang=es (only /profile's lastLoginAt moved, because the capture's own POST /auth/login writes it); GET /api/mis-tareas answers [] as she got it live at 15:44Z (she is neither the responsable nor an involucrada of any plan), and GET /api/planes-accion is her live list. So 'Los planes que ejecutas' is the empty state she sees today. The tablero is the node leader's screen and is not read for this role. supervisor-meridiano-involucrada.json is the constructed state with a plan on her list. Shoot with --role supervisor --name 'Sofía Vargas' --company 16c97c29-07f8-4522-86fc-e6cc56298829 --nodo 5bfdb04e-8847-4baa-89c8-d4411654a129 --lang es.",
+  "_comment": "Leaders lane, supervisor, CONSTRUCTED STATE (not reproducible on the local stack without a write): every body is supervisor-meridiano.json's verbatim capture except GET /api/mis-tareas, which live answers her []. Here it answers PA-2026-00002 exactly as GET /api/planes-accion answered her, with her own persona id (8006070f-…, the `sub` of her token) added to involucradosExternalIds — the state after an administrator makes her an involucrada through the plan form, which puts on her list the plan the artboard draws. Shot as a secondary state, never as the primary. Shoot with --role supervisor --name 'Sofía Vargas' --company 16c97c29-07f8-4522-86fc-e6cc56298829 --nodo 5bfdb04e-8847-4baa-89c8-d4411654a129 --lang es.",
   "GET /notifications/mine": {
     "notifications": []
   },
@@ -64,7 +64,29 @@
       }
     ]
   },
-  "GET /api/mis-tareas": [],
+  "GET /api/mis-tareas": [
+    {
+      "id": "01a08b9e-63d1-7f20-8a5d-62a31ac71d53",
+      "planCode": "PA-2026-00002",
+      "nodoExternalId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+      "liderExternalId": "",
+      "hallazgoExternalId": null,
+      "descripcionQue": "Publicar el rol de fines de semana con dos semanas de antelación",
+      "metodologiaComo": "Calendario compartido, actualizado los lunes por la jefatura del nodo.",
+      "responsableEjecucionExternalId": "1553edb1-e100-4bb1-a397-90882b3a3e9e",
+      "fechaCreacion": "2026-09-10",
+      "fechaCompromiso": "2026-09-15",
+      "porcentajeAvance": 0.0,
+      "estadoSemaforo": "Verde",
+      "cicloEncuestaExternalId": null,
+      "fechaUltimaActualizacion": "2026-09-10",
+      "cumplido": false,
+      "involucradosExternalIds": [
+        "1553edb1-e100-4bb1-a397-90882b3a3e9e",
+        "8006070f-a571-46bf-8e08-18ddfe95909e"
+      ]
+    }
+  ],
   "GET /api/planes-accion": [
     {
       "id": "01a08b9e-63d1-7f20-8a5d-62a31ac71d53",

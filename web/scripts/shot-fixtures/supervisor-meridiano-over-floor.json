@@ -1,5 +1,5 @@
 {
-  "_comment": "Leaders lane, supervisor (sofia.vargas@meridiano.test, Supervisora, Ingeniería) on the Grupo Meridiano demo tenant. GET /notifications/mine, /profile, /dashboard/department-admin, /surveys/my were captured read-only from the local stack on 11 Sep 2026 and are verbatim. ONE BODY IS NOT VERBATIM: GET /api/mis-tareas answered her [] live (she is neither the responsable nor an involucrada of any plan); here it answers PA-2026-00002 exactly as GET /api/planes-accion answered her, with her own persona id (8006070f-…, the `sub` of her token) added to involucradosExternalIds — the one change that puts a plan on the list the artboard draws. The tablero is the node leader's screen and is not read for this role. Shoot with --role supervisor --name 'Sofía Vargas' --company 16c97c29-07f8-4522-86fc-e6cc56298829 --nodo 5bfdb04e-8847-4baa-89c8-d4411654a129 --lang es. ALSO NOT VERBATIM: activeSurveys[0].responseCount is 9 instead of the live 3 — the state after the team passes the floor, when both counts are printed.",
+  "_comment": "Leaders lane, supervisor, over-the-floor STATE: every body is supervisor-meridiano.json's verbatim capture except ONE FIELD: GET /dashboard/department-admin activeSurveys[0].responseCount is 9 instead of the live 3 — the state after the team passes the floor, when both coverage counts are printed. GET /api/mis-tareas is her live []. Shoot with --role supervisor --name 'Sofía Vargas' --company 16c97c29-07f8-4522-86fc-e6cc56298829 --nodo 5bfdb04e-8847-4baa-89c8-d4411654a129 --lang es.",
   "GET /notifications/mine": {
     "notifications": []
   },
@@ -64,29 +64,7 @@
       }
     ]
   },
-  "GET /api/mis-tareas": [
-    {
-      "id": "01a08b9e-63d1-7f20-8a5d-62a31ac71d53",
-      "planCode": "PA-2026-00002",
-      "nodoExternalId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
-      "liderExternalId": "",
-      "hallazgoExternalId": null,
-      "descripcionQue": "Publicar el rol de fines de semana con dos semanas de antelación",
-      "metodologiaComo": "Calendario compartido, actualizado los lunes por la jefatura del nodo.",
-      "responsableEjecucionExternalId": "1553edb1-e100-4bb1-a397-90882b3a3e9e",
-      "fechaCreacion": "2026-09-10",
-      "fechaCompromiso": "2026-09-15",
-      "porcentajeAvance": 0.0,
-      "estadoSemaforo": "Verde",
-      "cicloEncuestaExternalId": null,
-      "fechaUltimaActualizacion": "2026-09-10",
-      "cumplido": false,
-      "involucradosExternalIds": [
-        "1553edb1-e100-4bb1-a397-90882b3a3e9e",
-        "8006070f-a571-46bf-8e08-18ddfe95909e"
-      ]
-    }
-  ],
+  "GET /api/mis-tareas": [],
   "GET /api/planes-accion": [
     {
       "id": "01a08b9e-63d1-7f20-8a5d-62a31ac71d53",

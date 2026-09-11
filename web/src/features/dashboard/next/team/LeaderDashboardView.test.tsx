@@ -104,6 +104,7 @@ interface Options {
   /** The `nodoId` claim: the department's id for a node leader, `unassigned-c1` for none. */
   nodoId?: string
   role?: string
+  organization?: { respondents: number; scores: Record<string, number> }
 }
 
 function renderLeader({
@@ -112,11 +113,12 @@ function renderLeader({
   trackingOn = true,
   nodoId = DEPARTMENT,
   role = 'leader',
+  organization = ORGANIZATION_SAMPLE,
 }: Options = {}) {
   setToken(tokenFor({ sub: 'luis', name: 'Luis Mora', role, companyId: 'c1', nodoId }))
   const model = composeLeaderDashboard({
     department: dashboard,
-    organization: ORGANIZATION_SAMPLE,
+    organization,
     tablero,
     trackingOn,
     viewer: { personaExternalId: 'luis', name: 'Luis Mora' },
@@ -309,14 +311,45 @@ describe('LeaderDashboardView', () => {
     expect(within(participation).queryByRole('img')).toBeNull()
   })
 
-  it("marks the organisation's side — the one region no endpoint gives a leader — and nothing else", () => {
+  it("marks the organisation's side on every card that draws it — the one region no endpoint gives a leader — and nothing else", () => {
     renderLeader()
 
-    const chips = screen.getAllByText(en.dashboard.next.sampleChip)
-    expect(chips).toHaveLength(1)
+    // One chip per card, inside the card whose org. bar and move come from the sample.
+    for (const key of KEYS) {
+      expect(within(dimensionCard(key)).getAllByText(en.dashboard.next.sampleChip), key).toHaveLength(1)
+    }
+    // And none anywhere else: the tiles, the plan and the participation are live.
+    expect(screen.getAllByText(en.dashboard.next.sampleChip)).toHaveLength(KEYS.length)
+    // The legend names the organisation and prints no count of the sample's: 24 is another
+    // reading's respondents, and a chip beside it pushed the plan rule onto a second line.
     const legend = document.querySelector('[data-slot="team-legend"]')
-    expect(legend?.contains(chips[0]!)).toBe(true)
-    expect(legend?.textContent).toContain(copy.legendOrg.replace('{count}', '24'))
+    expect(legend?.textContent).toContain(copy.legendOrgNoCount)
+    expect(legend?.textContent).not.toContain('24')
+    expect(legend?.textContent).toContain(copy.planRule)
+  })
+
+  it('marks no card whose organisation side is not drawn: a withheld reading, or a dimension the sample lacks', () => {
+    renderLeader({
+      dashboard: department({
+        climate: climate(Q3, {
+          isSuppressed: true,
+          respondentCount: 0,
+          dimensions: KEYS.map((dimension) => ({ dimension, averageScore: null })),
+        }),
+      }),
+    })
+    expect(screen.queryAllByText(en.dashboard.next.sampleChip)).toHaveLength(0)
+    cleanup()
+
+    renderLeader({
+      organization: {
+        respondents: ORGANIZATION_SAMPLE.respondents,
+        scores: Object.fromEntries(Object.entries(ORGANIZATION_SAMPLE.scores).filter(([key]) => key !== 'workload')),
+      },
+    })
+    expect(within(dimensionCard('workload')).queryByText(en.dashboard.next.sampleChip)).toBeNull()
+    expect(within(dimensionCard('workload')).queryByText(copy.vsOrg)).toBeNull()
+    expect(screen.getAllByText(en.dashboard.next.sampleChip)).toHaveLength(KEYS.length - 1)
   })
 
   it("lists the team's open plans from its own board, each opening the plan's page", () => {

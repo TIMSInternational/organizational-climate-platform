@@ -13,8 +13,10 @@
  * `GET /dashboard/department-admin` (`DashboardEndpoints.LoadDepartmentAdminAsync`), computed
  * by the same `SurveyAggregation` the team's own `climate` block already uses — the
  * company-wide mean is not a sub-floor disclosure, so nothing about it needs a new rule.
- * Until then the page says so with the "Datos de muestra" chip on the organisation's
- * legend, and nowhere else: the team's numbers beside it are live.
+ * Until then every dimension card that draws the organisation's bar and the move against
+ * it carries the "Datos de muestra" chip, and the legend names the organisation without the
+ * sample's respondent count; nothing else on the page is marked, because the team's numbers
+ * beside it are live.
  *
  * ## The values
  *

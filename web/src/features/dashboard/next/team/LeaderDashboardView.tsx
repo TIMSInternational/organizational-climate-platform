@@ -228,6 +228,7 @@ function CompareCard({
               department={model.departmentName}
               target={model.target}
               mayCreatePlan={mayCreatePlan}
+              sample={model.organizationIsSample}
               t={t}
               locale={locale}
             />
@@ -253,13 +254,13 @@ function CompareCard({
           {!wave.withheld && (
             <span className="inline-flex items-center gap-1.5">
               <span aria-hidden="true" className="h-2 w-3.5 rounded bg-chart-div-mid" />
-              {model.organizationRespondents === null
+              {/* The key and not a figure while the organisation's side is the sample: its
+                  respondent count is another reading's, and the numbers drawn from it are
+                  marked on the cards that draw them (`DimensionCard`). A chip here as well
+                  pushed the plan rule onto a second line the artboard does not have. */}
+              {model.organizationIsSample || model.organizationRespondents === null
                 ? t('dashboard.next.leader.legendOrgNoCount')
                 : t('dashboard.next.leader.legendOrg', { count: count(model.organizationRespondents, locale) })}
-              {/* The one sample-fed region of the page, marked where it is: the org side. */}
-              {model.organizationIsSample && (
-                <Chip data-slot="sample-chip" tone="warning" label={t('dashboard.next.sampleChip')} />
-              )}
             </span>
           )}
           {mayCreatePlan && !wave.withheld && <span>{t('dashboard.next.leader.planRule')}</span>}
@@ -275,6 +276,7 @@ function DimensionCard({
   department,
   target,
   mayCreatePlan,
+  sample,
   t,
   locale,
 }: {
@@ -283,6 +285,8 @@ function DimensionCard({
   department: string
   target: number
   mayCreatePlan: boolean
+  /** The organisation's side is `sampleModel.ts`: the move and the org. bar are marked. */
+  sample: boolean
   t: TranslateFn
   locale: string
 }) {
@@ -352,6 +356,14 @@ function DimensionCard({
               />
             )}
           </div>
+          {/* The org. bar and the move above it come from `sampleModel.ts`, so the card that
+              draws them says so: on any tenant but the one the sample was read from, they are
+              another organisation's numbers, and a reader must not take them for theirs. */}
+          {sample && dimension.organization !== null && (
+            <span className="inline-flex">
+              <Chip data-slot="sample-chip" tone="warning" label={t('dashboard.next.sampleChip')} />
+            </span>
+          )}
           <div className="mt-auto pt-0.5">
             {below ? (
               <div className="flex flex-col gap-2">
