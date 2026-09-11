@@ -1,5 +1,6 @@
-import { describe, it, expect, afterEach } from 'vitest'
-import { render, screen, cleanup, within } from '@testing-library/react'
+import { describe, it, expect, afterEach, vi } from 'vitest'
+import { render, screen, cleanup, within, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import LeaderDashboardView from './LeaderDashboardView'
 import { composeLeaderDashboard, type TrackingRead } from './compose'
@@ -11,6 +12,10 @@ import { CompanyContextProvider } from '../../../../company-context'
 import { setToken } from '../../../../auth/token'
 import { tokenFor } from '../../../../test/jwtFixture'
 import en from '../../../../i18n/en.json'
+import { downloadBlobFile } from '../../../../lib/downloadBlobFile'
+
+// The file is saved through a Blob; the test reads which URL was fetched, not the disk.
+vi.mock('../../../../lib/downloadBlobFile', () => ({ downloadBlobFile: vi.fn() }))
 
 /**
  * The leader's Panel de Control, drawn from a model composed the way the hook composes it,
@@ -341,10 +346,27 @@ describe('LeaderDashboardView', () => {
     expect(screen.getByText(copy.plansFailed.replace('{error}', 'Request failed: 503'))).toBeTruthy()
   })
 
-  it("offers the department's export to a leader", () => {
-    renderLeader()
+  it("offers the department's export to a leader, and it fetches the department's own file", async () => {
+    const fetchMock = vi.fn(async (_url: string | URL | Request) => new Response(new Blob(['csv']), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      renderLeader()
 
-    expect(screen.getByRole('button', { name: en.dashboard.next.export })).toBeTruthy()
+      await userEvent.click(screen.getByRole('button', { name: en.dashboard.next.export }))
+      await userEvent.click(await screen.findByRole('menuitem', { name: en.dashboard.exportCsv }))
+      await waitFor(() => expect(vi.mocked(downloadBlobFile)).toHaveBeenCalledTimes(1))
+
+      const urls = fetchMock.mock.calls.map(([url]) => String(url))
+      expect(urls).toHaveLength(1)
+      // The department's file, with no department id: the server reads the caller's own row.
+      expect(urls[0]).toContain('/dashboard/department-admin/export?format=csv')
+      expect(urls[0]).not.toContain('departmentId')
+      // `/dashboard/company-admin/export` answers a leader 403 (`DashboardEndpoints.cs:366`).
+      expect(urls[0]).not.toContain('company-admin')
+    } finally {
+      vi.unstubAllGlobals()
+      vi.mocked(downloadBlobFile).mockClear()
+    }
   })
 
   it('links nowhere a leader would be refused', () => {
