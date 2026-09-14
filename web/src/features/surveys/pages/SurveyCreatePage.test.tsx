@@ -924,9 +924,12 @@ describe('SurveyCreatePage template mode', () => {
     expect(body.title).toBe('Standard Climate Instrument')
     expect(body.companyId).toBe('company-1')
     expect(body.startDate).toEqual(expect.any(String))
-    // Each of these would be a silent downgrade if the wizard sent it.
+    // The questions would be a silent downgrade if the wizard sent them back.
     expect(body.questions).toBeUndefined()
-    expect(body.language).toBeUndefined()
+    // The language is sent — `UseSurveyTemplateRequest.Language` is honoured ahead of the
+    // inference (`SurveyTemplateEndpoints.UseAsync`) — and this wizard sends the template's own,
+    // the value the server would have inferred: never a language the template holds no text in.
+    expect(body.language).toBe('en')
     // And the blank path must not have run at all.
     expect(calls.some((call) => call.method === 'POST' && /\/surveys(\?|$)/.test(call.url))).toBe(
       false,
@@ -1316,5 +1319,77 @@ describe('SurveyCreatePage review dimension coverage', () => {
     expect(reading(review, 'Departments')).toBe('3')
     expect(review.textContent).toContain('Every department')
     expect(review.textContent).toContain('36')
+  })
+})
+
+/**
+ * The content language a new survey starts with.
+ *
+ * On the Spanish demo tenant, step 1 opened with "Idioma del contenido: Inglés" for a
+ * reader whose whole UI was Spanish: the page seeded the wizard with the literal `'en'`,
+ * and `useSurveyDraft` fell back to the same literal for a restored snapshot.
+ * `defaultContentLanguage` records why the reader's locale is the seed and why the
+ * company setting is not. Pinned here is each way into the wizard: a fresh one under
+ * each locale, and a restored draft with and without a language of its own.
+ *
+ * `combobox.textContent` is how a Radix `Select`'s current value is read in this suite
+ * (`PlanesAccionListPage.test.tsx` does the same): its listbox is not in the DOM until
+ * opened, so the trigger's text is the only rendering of the choice.
+ */
+describe('SurveyCreatePage content language default', () => {
+  function contentLanguage(label: RegExp): string {
+    return screen.getByRole('combobox', { name: label }).textContent ?? ''
+  }
+
+  it('starts in Spanish for a reader whose UI is Spanish', async () => {
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
+    renderPage()
+    await settle()
+
+    const shown = contentLanguage(/Idioma del contenido/)
+    expect(shown).toContain('Español')
+    expect(shown).not.toContain('Inglés')
+  })
+
+  it('starts in English for a reader whose UI is English', async () => {
+    renderPage()
+    await settle()
+
+    const shown = contentLanguage(/Content language/)
+    expect(shown).toContain('English')
+    expect(shown).not.toContain('Spanish')
+  })
+
+  it('restores the language a draft saved, whatever the reader now reads in', async () => {
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
+    routeFetch({ latest: draftResponse({ content: storedContent({ language: 'en' }) }) })
+    renderPage()
+    await settle()
+
+    await press('Restaurarla')
+    await settle()
+
+    // The draft was written in English; the reader's Spanish UI must not rewrite it.
+    const shown = contentLanguage(/Idioma del contenido/)
+    expect(shown).toContain('Inglés')
+    expect(shown).not.toContain('Español')
+  })
+
+  it("falls back to the reader's own default for a snapshot that names no language", async () => {
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
+    const snapshot: Record<string, unknown> = { ...storedContent() }
+    delete snapshot.language
+    routeFetch({ latest: draftResponse({ content: snapshot }) })
+    renderPage()
+    await settle()
+
+    await press('Restaurarla')
+    await settle()
+
+    // Not the literal `'en'` the hook used to hard-code: the same value a fresh wizard
+    // starts with, so the two doors into the wizard agree about "no choice yet".
+    const shown = contentLanguage(/Idioma del contenido/)
+    expect(shown).toContain('Español')
+    expect(shown).not.toContain('Inglés')
   })
 })

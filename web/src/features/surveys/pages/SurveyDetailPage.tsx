@@ -1,3 +1,8 @@
+/*
+ * UNROUTED since the redesign (ruled 10 Sep): `/surveys/:id` renders
+ * `next/authoring/SurveyDetailNextPage`. Kept as the wiring reference for its reads and writes
+ * (`useSurveyDetailModel` makes the same ones).
+ */
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import {

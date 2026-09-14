@@ -148,6 +148,21 @@ export interface SurveyQuestionValues {
    */
   scaleMin: number | null
   scaleMax: number | null
+  /**
+   * The `order` of the template question this row was copied from — set only by the builder's
+   * template mode (`next/authoring/useSurveyBuilderModel`), which draws a template's questions as
+   * rows the author can reorder, drop or make optional. `POST /survey-templates/{id}/use` still
+   * copies the questions whole (values, comment prompts and all); the rows' arrangement is then
+   * applied to that copy by `order`, so the payload of `/use` never changes. Absent on every row
+   * the author added.
+   */
+  templateOrder?: number
+  /**
+   * `CreateSurveyQuestionInput.SourceQuestionBankItemId` (#110): the question-bank item this row
+   * was picked from. Provenance, not a reference — it is what makes bank usage and effectiveness
+   * a count over real rows (`QuestionBankMetrics`). Absent on every row not picked from the bank.
+   */
+  sourceQuestionBankItemId?: string
 }
 
 export interface SurveyWizardValues {
@@ -282,10 +297,43 @@ export function questionFromLibrary(
 }
 
 /**
- * `language` is seeded from the company rather than defaulted to English, for the
- * reason the microclimate module records: the server's own default is
- * `company.Settings.Language`, and guessing differently in the form would silently
- * disagree with a request that omitted the field.
+ * The content language a fresh wizard starts with: the reader's own UI locale.
+ *
+ * Not the company's `Settings.Language`, and the reasons are measured rather than
+ * preferred. No `GET` returns it: of the five routes `CompanyEndpoints` maps, the only
+ * one that returns the settings is `PUT /{id}/settings` -- a write, which any admin
+ * may call for their own company -- and `GET /{id}` is SuperAdmin-only with a
+ * `CompanyDetail` that carries no settings. So the only read is the empty-body `PUT`:
+ * `CompanyDetailPage` sends `{}` to it, "a read dressed as a write", and a wizard
+ * doing the same would perform a write on every open. The
+ * default is `"en"` at both layers (`Company.cs`, `Language = "en"`; the
+ * `settings_language` column is required with a default of `'en'`), so a company
+ * nobody has configured is indistinguishable, in the database and on the wire, from
+ * one configured for English -- and `CompanySettingsForm` offers no language control,
+ * so today nobody *can* configure it from the product. Seeding from that field would
+ * preselect English on every Spanish tenant whose admin never touched a setting they
+ * cannot see, which is the defect this helper exists to remove. The microclimate
+ * wizard made the same call (`MicroclimateCreatePage`): the seed is what the admin is
+ * most likely to want, not a claim about the company.
+ *
+ * Whether the company setting should sit *ahead* of the reader's locale once it is
+ * readable and "unset" is observable is a product ruling, recorded as open in the
+ * pull request that introduced this function.
+ *
+ * `locale` is typed `string` rather than `Locale` on purpose: a third UI locale must
+ * land here as English, never as a content language the server would reject.
+ */
+export function defaultContentLanguage(locale: string): ContentLanguage {
+  return locale === 'es' ? 'es' : 'en'
+}
+
+/**
+ * `language` is whatever the page passes in -- `defaultContentLanguage` for a fresh
+ * wizard, or the fallback for a draft whose stored snapshot names no usable language.
+ * The server's own default when a request omits the field is
+ * `company.Settings.Language`, but this wizard always sends the field, so the seed
+ * here is the value that reaches the server; see `defaultContentLanguage` for why it
+ * is the reader's locale rather than that setting.
  */
 export function emptyWizardValues(language: ContentLanguage): SurveyWizardValues {
   return {
@@ -567,25 +615,13 @@ export function scheduledDays(values: SurveyWizardValues): number | null {
 }
 
 /**
- * The request body.
- *
- * Only the fields the wizard actually asked about are sent. `SurveySettingsInput`'s
- * fifteen members are all "leave this alone when omitted", so sending the whole
- * record with invented defaults would overwrite twelve settings this flow never
- * showed anyone.
- *
- * Call it only when `wizardStepErrors(...).review` is empty — it assumes a title and
- * both dates are present, which is exactly what that guarantees.
+ * The `questions` of `buildCreateInput`, on their own: one `CreateSurveyQuestionInput` per row,
+ * in order. Split out so the builder can send a row the author added beside a template's copied
+ * questions (`next/authoring/templateRows.ts`) exactly as `POST /surveys` would, without building
+ * — and so without requiring — the rest of the create body.
  */
-export function buildCreateInput(
-  values: SurveyWizardValues,
-  companyId: string,
-): CreateSurveyInput {
-  const title = localizedFor(values.language, values.titleEn, values.titleEs)
-  const description = localizedFor(values.language, values.descriptionEn, values.descriptionEs)
-  const target = Number(values.targetAudienceCount)
-
-  const questions: CreateSurveyQuestionInput[] = values.questions.map((question, index) => {
+export function buildQuestionInputs(values: SurveyWizardValues): CreateSurveyQuestionInput[] {
+  return values.questions.map((question, index) => {
     const built: CreateSurveyQuestionInput = {
       // Non-null by the guard above: `questionErrors` rejects a blank text.
       text: localizedFor(values.language, question.textEn, question.textEs) as LocalizedInput,
@@ -600,6 +636,7 @@ export function buildCreateInput(
     // server's own null is the honest value for it.
     const category = question.category.trim()
     if (category !== '') built.category = category
+    if (question.sourceQuestionBankItemId) built.sourceQuestionBankItemId = question.sourceQuestionBankItemId
     if (needsScaleLabels(question.type)) {
       // The bounds go with the words, and both are gated on the type for the same
       // reason: a card typed as a likert and then switched to `open_ended` keeps the
@@ -635,6 +672,28 @@ export function buildCreateInput(
     }
     return built
   })
+}
+
+/**
+ * The request body.
+ *
+ * Only the fields the wizard actually asked about are sent. `SurveySettingsInput`'s
+ * fifteen members are all "leave this alone when omitted", so sending the whole
+ * record with invented defaults would overwrite twelve settings this flow never
+ * showed anyone.
+ *
+ * Call it only when `wizardStepErrors(...).review` is empty — it assumes a title and
+ * both dates are present, which is exactly what that guarantees.
+ */
+export function buildCreateInput(
+  values: SurveyWizardValues,
+  companyId: string,
+): CreateSurveyInput {
+  const title = localizedFor(values.language, values.titleEn, values.titleEs)
+  const description = localizedFor(values.language, values.descriptionEn, values.descriptionEs)
+  const target = Number(values.targetAudienceCount)
+
+  const questions = buildQuestionInputs(values)
 
   const input: CreateSurveyInput = {
     title: title as LocalizedInput,
@@ -673,10 +732,12 @@ export function buildCreateInput(
  * — so the case where the fallback is least wanted is also the case where it fails — and
  * an author who has typed a title in the wizard should get the title they typed.
  *
- * `language` is *not* sent, deliberately. The server infers it from the template's own
- * questions, and that is the only value that cannot produce a survey declaring a
- * language it holds no text for. The wizard reflects that language rather than offering
- * a choice, which is why `values.language` is read here only through `localizedFor`.
+ * `language` is sent: `UseSurveyTemplateRequest.Language` is honoured ahead of the
+ * inference (`SurveyTemplateEndpoints.UseAsync`: `NormaliseLanguage(request.Language) ??
+ * SurveyTemplateLanguage.Infer(questions) ?? …`). A caller must offer only a language the
+ * template's questions are written in — the builder disables the others — or the survey
+ * would declare a language it holds no text for; the previous wizard sets `values.language`
+ * to the template's own language, so for it the value sent is the one the server infers.
  */
 export function buildInstantiateInput(
   values: SurveyWizardValues,
@@ -687,6 +748,7 @@ export function buildInstantiateInput(
 
   const input: InstantiateSurveyTemplateInput = {
     companyId,
+    language: values.language,
     title: localizedFor(values.language, values.titleEn, values.titleEs) as LocalizedInput,
     type: values.type,
     startDate: new Date(values.startDate).toISOString(),

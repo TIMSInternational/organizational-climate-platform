@@ -255,8 +255,18 @@ export async function saveSurveyQuestions(
   id: string,
   questions: AuthoringQuestion[],
 ): Promise<void> {
+  await replaceSurveyQuestions(baseUrl, id, toQuestionInputs(questions))
+}
+
+/**
+ * The same request with the inputs already built — for a caller holding
+ * `CreateSurveyQuestionInput` shapes beside `toQuestionInputs` ones: the builder, which
+ * rearranges a template's copied questions and appends the questions the author added
+ * (`next/authoring/templateRows.ts`). Only `questions` is sent, for the reason above.
+ */
+export async function replaceSurveyQuestions(baseUrl: string, id: string, questions: unknown[]): Promise<void> {
   await authFetch(`${baseUrl}/surveys/${id}`, {
     method: 'PUT',
-    body: JSON.stringify({ questions: toQuestionInputs(questions) }),
+    body: JSON.stringify({ questions }),
   })
 }
