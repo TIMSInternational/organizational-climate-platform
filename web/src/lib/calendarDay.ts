@@ -128,3 +128,17 @@ export function calendarDayLong(value: number | Date, locale: string, now: numbe
     ...(sameYear ? {} : { year: 'numeric' }),
   })
 }
+
+/**
+ * The calendar day a survey date stands for, as `YYYY-MM-DD`: its UTC day, the day
+ * `calendarDay` prints. For counting whole days against `todayCalendarDay()` — a count
+ * taken against the full instant counts its hours too, and `Math.round` then moves the
+ * day: a survey closing at 18:21 UTC on 26 Sep read "en 17 días" on 10 Sep, where the
+ * calendar says 16 (the fidelity refuter's measurement on the super administrator's list).
+ * An unparseable value comes back as given, so the count degrades to `NaN` rather than
+ * to a wrong number.
+ */
+export function calendarDayOf(iso: string): string {
+  const time = Date.parse(iso)
+  return Number.isNaN(time) ? iso : new Date(time).toISOString().slice(0, 10)
+}

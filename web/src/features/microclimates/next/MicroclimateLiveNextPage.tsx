@@ -35,7 +35,7 @@ import {
   questionKinds,
   respondUrl,
   stamp,
-  wordBars,
+  liveWordBars,
 } from './derive'
 import type { MicroclimateLiveNextModel } from './model'
 import { useCopyLink } from './useCopyLink'
@@ -63,7 +63,7 @@ const CARD = 'flex min-w-0 flex-col gap-3 rounded-xl border border-line-default 
  * ## What people wrote
  *
  * Word frequencies, never text: each bar is a word and how many times it was written
- * (`wordBars`, which applies both floors of `microclimatePrivacy.ts`). Under 5 responses
+ * (`liveWordBars`, which applies both floors of `microclimatePrivacy.ts`). Under 5 responses
  * the panel is the hatch and a sentence naming the floor — never the count of words
  * held back, never how far the session is from the floor, because either inverts in one
  * step into the sub-floor count the floor exists to hide. The response count itself is
@@ -315,7 +315,7 @@ function LiveStamp({ lastUpdatedAt, isStale }: { lastUpdatedAt: Date | null; isS
  */
 function WordsBlock({ live, responses }: { live: LiveResults | null; responses: number }) {
   const { t, locale } = useTranslation()
-  const words = wordBars(live?.wordCloud ?? [], responses)
+  const words = liveWordBars(live?.wordCloud ?? [], responses)
 
   return (
     <div data-slot="live-words" className="mt-2 flex flex-col gap-2">
