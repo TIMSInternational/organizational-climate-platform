@@ -9,6 +9,7 @@ import { LOCALE_STORAGE_KEY } from '../../../i18n/locale'
 import { clearToken, setToken } from '../../../auth/token'
 import { CompanyContextProvider } from '../../../company-context'
 import { tokenFor } from '../../../test/jwtFixture'
+import en from '../../../i18n/en.json'
 import tokensCss from '../../../styles/tokens.css?raw'
 import themeCss from '../../../styles/theme.css?raw'
 
@@ -470,7 +471,7 @@ describe('by role', () => {
     setToken(tokenFor({ role, companyId: 'c1' }))
     renderPage()
 
-    expect(await screen.findByText('Microclimates belong to the administration')).toBeTruthy()
+    expect(await screen.findByText(en.microclimates.next.noAccessTitle)).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Close the session' })).toBeNull()
     await waitFor(() => expect(vi.mocked(fetch)).not.toHaveBeenCalled())
   })

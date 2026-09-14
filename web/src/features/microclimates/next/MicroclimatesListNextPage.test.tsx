@@ -9,6 +9,7 @@ import { LOCALE_STORAGE_KEY } from '../../../i18n/locale'
 import { clearToken, setToken } from '../../../auth/token'
 import { COMPANY_CONTEXT_STORAGE_KEY, CompanyContextProvider } from '../../../company-context'
 import { tokenFor } from '../../../test/jwtFixture'
+import en from '../../../i18n/en.json'
 
 /**
  * The redesigned Microclimas (`/microclimates`), against the MicroclimatesList artboard:
@@ -337,7 +338,7 @@ describe('by role', () => {
     setToken(tokenFor({ role, companyId: 'their-co' }))
     renderPage()
 
-    expect(await screen.findByText('Microclimates belong to the administration')).toBeTruthy()
+    expect(await screen.findByText(en.microclimates.next.noAccessTitle)).toBeTruthy()
     expect(screen.queryByRole('link', { name: 'Launch a microclimate' })).toBeNull()
     await waitFor(() => expect(vi.mocked(fetch)).not.toHaveBeenCalled())
   })
