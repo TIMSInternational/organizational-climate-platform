@@ -25,6 +25,12 @@ import { readViewerClaims } from '../../../auth/viewerCapabilities'
 import SuperUsersView from '../next/super/SuperUsersView'
 
 /**
+ * UNROUTED since the per-role canvas (10 Sep): `/admin/companies/:companyId/users` mounts
+ * `next/UsersNextPage`, which draws `next/admin/AdminUsersView` for a company administrator and
+ * `next/super/SuperUsersView` for a super administrator. This file stays in the tree as the
+ * wiring reference — the reads, the `updateUser`/`updateUserRole` sequencing, the invite and
+ * import paths the redesign kept.
+ *
  * The roster, and the invite path (UI redesign).
  *
  * ## What changed and why

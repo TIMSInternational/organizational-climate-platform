@@ -78,21 +78,13 @@ export default function RoleBasedNav({ sections, collapsed = false, onNavigate }
   const pathname = location.pathname
   // Resolved once for the whole rail: which single row wins the current path.
   const selectedHref = activeHref(pathname, sections)
-  const [expanded, setExpanded] = useState<string[]>(() => {
-    const initiallyExpanded: string[] = []
-    for (const section of sections) {
-      for (const item of section.items) {
-        // Opened for a child that is a page of its own — not for the group's own href,
-        // which is also its first child's: on that page the canvas draws the group closed
-        // and filled (CompanySettings artboard, 10 Sep), and the closed row carries the
-        // selection below.
-        if (item.sub?.some((sub) => sub.href === selectedHref && sub.href !== item.href)) {
-          initiallyExpanded.push(item.labelKey)
-        }
-      }
-    }
-    return initiallyExpanded
-  })
+  // Every group starts closed — on its own page and on each child's alike. The 10 Sep
+  // per-role canvas draws the company administrator's "Administración de Empresa" as ONE
+  // filled row, its children absent, on all three of its pages (CompanySettings, UsersList,
+  // DemographicFields). The rail used to open the group on a child's page and fill the child
+  // under it. Closed, the group row carries the selection (`isFilled` below); the reader
+  // still opens it with a click, and the child then takes the fill.
+  const [expanded, setExpanded] = useState<string[]>([])
   const [flyout, setFlyout] = useState<FlyoutAnchor | null>(null)
 
   // Nothing may outlive the state that produced it: expanding the rail removes
