@@ -1,3 +1,11 @@
+/**
+ * NOT ROUTED. `/microclimates/analytics` renders the redesigned board (`../next/analytics/MicroclimateAnalyticsNextPage`),
+ * which replaced this page — ruled 10 Sep: a redesigned screen replaces its real route.
+ * Nothing in `router.tsx` reaches this file.
+ *
+ * It stays in the tree on purpose, as the wiring reference: `useMicroclimateAnalyticsModel` makes this page's list read,
+ * and this file's own test still pins what it did. Delete it when nothing reads it.
+ */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { calendarDay } from '../../../lib/calendarDay'
 import { Link } from 'react-router'
