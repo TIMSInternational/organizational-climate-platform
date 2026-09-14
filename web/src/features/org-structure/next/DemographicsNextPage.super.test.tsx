@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
-import DemographicFieldsPage from './DemographicFieldsPage'
+import DemographicsNextPage from './DemographicsNextPage'
 import { TranslationProvider, LOCALE_STORAGE_KEY } from '../../../i18n'
 import { CompanyContextProvider } from '../../../company-context'
 import { setToken, clearToken } from '../../../auth/token'
@@ -11,12 +11,12 @@ import es from '../../../i18n/es.json'
 
 /**
  * The route's dispatcher, rendered — not its source text.
- * `/admin/companies/:companyId/demographic-fields` mounts `DemographicFieldsPage`; for a
+ * `/admin/companies/:companyId/demographic-fields` mounts `DemographicsNextPage`; for a
  * super administrator it must return the per-role canvas's `SuperDemographicFieldsView`,
  * whose "Cómo se aplica el umbral" card only that view draws. A branch made unreachable
  * renders the company administrator's page instead, and this fails.
  */
-describe('DemographicFieldsPage for a super administrator', () => {
+describe('DemographicsNextPage for a super administrator', () => {
   beforeEach(() => {
     localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
     vi.stubGlobal('fetch', vi.fn(superMeridianoFetch))
@@ -36,7 +36,7 @@ describe('DemographicFieldsPage for a super administrator', () => {
         <MemoryRouter initialEntries={[`/admin/companies/${MERIDIANO_ID}/demographic-fields`]}>
           <CompanyContextProvider>
             <Routes>
-              <Route path="/admin/companies/:companyId/demographic-fields" element={<DemographicFieldsPage />} />
+              <Route path="/admin/companies/:companyId/demographic-fields" element={<DemographicsNextPage />} />
             </Routes>
           </CompanyContextProvider>
         </MemoryRouter>

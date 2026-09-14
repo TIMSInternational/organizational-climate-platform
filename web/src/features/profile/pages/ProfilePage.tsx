@@ -59,6 +59,8 @@ import {
  * panel keeps its own submit, one column apart, which is what the code already did
  * correctly.
  */
+// UNROUTED since the per-role canvas (10 Sep): `/profile` mounts `profile/next/ProfileNextPage`. This file stays in the
+// tree as the wiring reference — the reads and writes the redesign kept.
 export default function ProfilePage() {
   const { t } = useTranslation()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
