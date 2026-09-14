@@ -156,6 +156,8 @@ public class DashboardExportTests
     [Fact]
     public void An_open_surveys_team_count_under_the_floor_prints_the_word_never_the_count()
     {
+        // The endpoint no longer sends a sub-floor count (null under 5); a payload built any
+        // other way still must not print one, which is what the raw 3 and 0 below stand for.
         var dashboard = DepartmentDashboard(SuppressedClimate()) with
         {
             ActiveSurveys =
@@ -349,6 +351,34 @@ public class DashboardExportTests
                 new DashboardDepartmentSummary(SmallDepartmentId, "Finanzas", MemberCount: 4, CompletedResponseCount: 3),
             ]);
 
+    /// <summary>
+    /// What <c>GET /dashboard/department-admin</c> sends for a team count under the floor since
+    /// fix round 2: null. The file prints the word and the notice for it -- never a blank cell,
+    /// and never "0", which would read "nobody in this team has answered".
+    /// </summary>
+    [Fact]
+    public void An_open_survey_the_endpoint_already_withheld_prints_the_word_and_the_notice()
+    {
+        var dashboard = DepartmentDashboard(SuppressedClimate()) with
+        {
+            ActiveSurveys =
+            [
+                OpenSurvey("Clima Q4", responseCount: null),
+                OpenSurvey("Clima 2026", responseCount: 14),
+            ],
+        };
+        var rows = CsvRows(DashboardExport.BuildCsv(
+            DashboardExport.ForDepartmentAdmin(dashboard, ContentLanguages.English, GeneratedAt)));
+
+        // The counted row prints, so this does not pass by printing nothing.
+        Assert.Equal("14", Cell(rows, "Ongoing surveys", "Clima 2026 - Responses"));
+        Assert.Equal("Withheld", Cell(rows, "Ongoing surveys", "Clima Q4 - Responses"));
+        Assert.Contains(
+            rows,
+            r => r.Section == "Ongoing surveys"
+                && r.Value.Contains("fewer than 5 responses from this team", StringComparison.Ordinal));
+    }
+
     private static DepartmentAdminDashboard DepartmentDashboard(DashboardTeamClimate? climate)
         => new(
             DepartmentId,
@@ -372,7 +402,7 @@ public class DashboardExportTests
             ],
             Climate: climate);
 
-    private static DashboardDepartmentSurveySummary OpenSurvey(string title, int responseCount)
+    private static DashboardDepartmentSurveySummary OpenSurvey(string title, int? responseCount)
         => new(
             Guid.NewGuid(),
             title,

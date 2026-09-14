@@ -63,6 +63,12 @@ public sealed record DashboardSurveyRow(
 /// Completed responses <em>from this department alone</em> — computed, not the denormalised
 /// <c>Survey.ResponseCount</c>, which is bumped once per completed response company-wide.
 /// </param>
+/// <param name="CompanyResponseCount">
+/// The denormalised <c>Survey.ResponseCount</c> -- the whole company's completed responses,
+/// the figure the company dashboard prints -- carried under its own name so the page can say
+/// "toda la empresa" without passing it off as the department's.
+/// </param>
+/// <param name="CompanyTargetAudienceCount">The tenant's invited headcount, <c>Survey.TargetAudienceCount</c>.</param>
 public sealed record DashboardDepartmentSurveyRow(
     Guid Id,
     string? TitleEn,
@@ -71,7 +77,9 @@ public sealed record DashboardDepartmentSurveyRow(
     string Status,
     DateTimeOffset StartDate,
     DateTimeOffset EndDate,
-    int ResponseCount);
+    int ResponseCount,
+    int CompanyResponseCount,
+    int? CompanyTargetAudienceCount);
 
 /// <summary>
 /// The company's most recently closed survey, before its title is resolved for a locale.
@@ -191,6 +199,20 @@ public static class DashboardQueries
         => responses
             .GroupBy(_ => 1)
             .Select(g => new DashboardResponseCounts(g.Count(), g.Count(r => r.IsComplete)));
+
+    /// <summary>
+    /// One department's completed responses, one count per survey it answered. The department
+    /// dashboard sums only the counts at or over the floor, so its running total never moves
+    /// by a sub-floor step (<c>DepartmentAdminDashboard.CompletedResponseCount</c>).
+    /// </summary>
+    public static IQueryable<int> DepartmentCompletedCountsBySurvey(
+        IQueryable<Response> responses,
+        Guid companyId,
+        Guid departmentId)
+        => responses
+            .Where(r => r.DepartmentId == departmentId && r.CompanyId == companyId && r.IsComplete)
+            .GroupBy(r => r.SurveyId)
+            .Select(g => g.Count());
 
     public static IQueryable<DashboardUserCounts> UserCounts(IQueryable<User> users)
         => users
@@ -368,7 +390,9 @@ public static class DashboardQueries
                     r.SurveyId == s.Id
                     && r.DepartmentId == departmentId
                     && r.CompanyId == companyId
-                    && r.IsComplete)));
+                    && r.IsComplete),
+                s.ResponseCount,
+                s.TargetAudienceCount));
 
     /// <summary>
     /// The company's most recent closed survey -- the one "what came of the last one" is

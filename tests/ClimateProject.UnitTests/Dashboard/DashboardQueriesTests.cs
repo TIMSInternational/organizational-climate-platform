@@ -232,13 +232,28 @@ public class DashboardQueriesTests
     }
 
     /// <summary>
-    /// The department dashboard's own survey projection. Two things have to be true of the
-    /// SQL and both are the fix for a real defect: the participation figure is counted from
-    /// the response rows with a department predicate, and the survey's own denormalised
-    /// company-wide columns are nowhere in it.
+    /// The department dashboard's own survey projection: the participation figure is counted
+    /// from the response rows with a department predicate, never read off the survey row.
+    ///
+    /// **This case used to assert the opposite about the survey's own columns, and the change
+    /// is deliberate.** It read "neither is even selected" and banned `response_count` and
+    /// `target_audience_count` from the whole query, because the department's page had once
+    /// printed those tenant-wide numbers as if they were the department's.
+    ///
+    /// The page now needs them — it says "toda la empresa: N de M" beside the team's own
+    /// figure — so they are selected and carried under `CompanyResponseCount` and
+    /// `CompanyTargetAudienceCount`, names that cannot be mistaken for the department's. A
+    /// substring ban over the whole query cannot express that distinction: both readings are
+    /// the same column text, and what separates them is which field they land in.
+    ///
+    /// So the guarantee moved to where it can actually be stated. `DepartmentDashboardFloorTests`
+    /// asserts it behaviourally — `At_the_floor_the_team_count_is_the_departments_and_the_company_total_the_companys`
+    /// — and the record's field names carry it at compile time. What is left here is the half
+    /// a SQL-text test is good for: that the department's own count is computed in SQL, from
+    /// the response rows, under a department predicate.
     /// </summary>
     [Fact]
-    public void The_department_survey_projection_counts_responses_per_department_and_asks_for_no_target()
+    public void The_department_survey_projection_counts_responses_per_department_in_sql()
     {
         using var db = CreateContext();
 
@@ -249,11 +264,12 @@ public class DashboardQueriesTests
         Assert.Contains("responses", sql, StringComparison.Ordinal);
         Assert.Contains("department_id = @departmentId", sql, StringComparison.Ordinal);
         Assert.Contains("is_complete", sql, StringComparison.Ordinal);
-        // `Survey.ResponseCount` and `Survey.TargetAudienceCount` are tenant-wide numbers
-        // living on the survey row; neither belongs on a department's page, so neither is
-        // even selected.
-        Assert.DoesNotContain("target_audience_count", sql, StringComparison.Ordinal);
-        Assert.DoesNotContain("response_count", sql, StringComparison.Ordinal);
+        // The department's own participation is a COUNT over the response rows, not the
+        // survey row's denormalised figure: the predicate above and this aggregate are the
+        // same expression, and a projection that dropped it would read the tenant's number.
+        Assert.Contains("count(", sql, StringComparison.OrdinalIgnoreCase);
+        // The company-wide columns ARE now selected, as the company's own figures.
+        Assert.Contains("target_audience_count", sql, StringComparison.Ordinal);
     }
 
     [Fact]

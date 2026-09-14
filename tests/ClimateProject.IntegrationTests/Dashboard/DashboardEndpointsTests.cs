@@ -650,7 +650,10 @@ public class DashboardEndpointsTests : IAsyncLifetime
         Assert.Equal(_engineeringId, body.DepartmentId);
         Assert.Equal("Engineering", body.DepartmentName);
         Assert.Equal(_companyAId, body.CompanyId);
-        Assert.Equal(2, body.CompletedResponseCount);
+        // Engineering's two completed responses are to one survey it answered under the
+        // floor, so the running total leaves them out; DepartmentDashboardFloorTests pins the
+        // floor, and that the total is the department's own once the floor is met.
+        Assert.Equal(0, body.CompletedResponseCount);
         Assert.Equal(2, body.OpenActionPlanCount);
         Assert.Equal(1, body.OverdueActionPlanCount);
 
@@ -699,6 +702,18 @@ public class DashboardEndpointsTests : IAsyncLifetime
     [Fact]
     public async Task The_department_survey_list_counts_that_departments_responses_and_shows_no_tenant_target()
     {
+        // Three more completed Engineering responses to the company-wide survey, so its count
+        // clears the floor and can be told apart from the tenant's 140 at all: under the floor
+        // it travels as null (DepartmentDashboardFloorTests).
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            for (var i = 0; i < 3; i++)
+            {
+                await SeedResponseAsync(db, _companyWideSurveyId, _companyAId, _engineeringId, isComplete: true);
+            }
+        }
+
         var engineering = await ClientAsync(Roles.Leader, _companyADomain, _companyAId, _engineeringId);
         var sales = await ClientAsync(Roles.Supervisor, _companyADomain, _companyAId, _salesId);
 
@@ -711,16 +726,22 @@ public class DashboardEndpointsTests : IAsyncLifetime
         var forSales = Assert.Single(salesBody.ActiveSurveys, s => s.Id == _companyWideSurveyId);
 
         // Same survey, same tenant, two departments -- and therefore two different numbers.
-        // Engineering has two completed responses to it (plus one incomplete, which is not
-        // participation); Sales has none.
-        Assert.Equal(2, forEngineering.ResponseCount);
-        Assert.Equal(0, forSales.ResponseCount);
+        // Engineering has five completed responses to it (plus one incomplete, which is not
+        // participation); Sales has none, which is under the floor and so travels as null,
+        // never as a 0 that would read "nobody answered".
+        Assert.Equal<int?>(5, forEngineering.ResponseCount);
+        Assert.Null(forSales.ResponseCount);
 
         // And it agrees with the KPI printed directly above it on the same page, which is
         // the disagreement that made the old behaviour a defect rather than a rounding
         // difference.
-        Assert.Equal(engineeringBody.CompletedResponseCount, forEngineering.ResponseCount);
-        Assert.Equal(salesBody.CompletedResponseCount, forSales.ResponseCount);
+        Assert.Equal<int?>(engineeringBody.CompletedResponseCount, forEngineering.ResponseCount);
+        Assert.Equal(0, salesBody.CompletedResponseCount);
+
+        // The tenant-wide figures do travel -- the leader's panel prints "toda la empresa" --
+        // but only under names that say they are the company's.
+        Assert.Equal<int?>(CompanyWideResponseCount, forEngineering.CompanyResponseCount);
+        Assert.Equal<int?>(CompanyWideTargetAudience, forEngineering.CompanyTargetAudienceCount);
 
         // There is no per-department invited headcount in this schema, so the payload
         // offers none rather than passing off the tenant's. Read as raw JSON on purpose:

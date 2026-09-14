@@ -95,6 +95,13 @@ public static class DashboardEndpoints
     /// </summary>
     private const string DepartmentDimension = "department";
 
+    /// <summary>
+    /// The floor every response count on the department dashboard is held to: the segment
+    /// floor every results surface applies (<c>SurveyResultsPrivacy.MinimumSegmentRespondents</c>,
+    /// 5), which is also the <c>MinimumGroupSize</c> the team's climate block reports.
+    /// </summary>
+    internal const int DepartmentCountFloor = SurveyResultsPrivacy.MinimumSegmentRespondents;
+
     public static void MapDashboardEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/dashboard").RequireAuthorization();
@@ -526,10 +533,15 @@ public static class DashboardEndpoints
             .UserCounts(db.Users.Where(u => u.DepartmentId == scopedDepartmentId && u.CompanyId == department.CompanyId))
             .FirstOrDefaultAsync(cancellationToken) ?? DashboardUserCounts.Empty;
 
-        var responses = await DashboardQueries
-            .ResponseCounts(db.Responses.Where(r =>
-                r.DepartmentId == scopedDepartmentId && r.CompanyId == department.CompanyId))
-            .FirstOrDefaultAsync(cancellationToken) ?? DashboardResponseCounts.Empty;
+        // Every response count on this page is held to the floor here, at read time: the
+        // 10 Sep artboards hatch the team's count under 5, and a count the screen hatches
+        // must not travel for the browser to hide. The running total sums only the surveys
+        // this department answered at or over the floor -- a total that included one under
+        // it would move by exactly that survey's hidden count between two reads.
+        var countsBySurvey = await DashboardQueries
+            .DepartmentCompletedCountsBySurvey(db.Responses, department.CompanyId, scopedDepartmentId)
+            .ToListAsync(cancellationToken);
+        var completedAtTheFloor = countsBySurvey.Where(count => count >= DepartmentCountFloor).Sum();
 
         var actionPlans = await DashboardQueries
             .ActionPlanCounts(
@@ -562,7 +574,7 @@ public static class DashboardEndpoints
             members.Total,
             members.Active,
             activeSurveyCount,
-            responses.Completed,
+            completedAtTheFloor,
             actionPlans.Open,
             actionPlans.Overdue,
             surveyRows.Select(s => ToDepartmentSummary(s, lang)).ToList(),
@@ -848,7 +860,16 @@ public static class DashboardEndpoints
             row.Status,
             row.StartDate,
             row.EndDate,
-            row.ResponseCount);
+            AtTheFloor(row.ResponseCount),
+            AtTheFloor(row.CompanyResponseCount),
+            row.CompanyTargetAudienceCount);
+
+    /// <summary>
+    /// A count as the department page may carry it: itself at or over
+    /// <see cref="DepartmentCountFloor"/>, null under it -- zero included, which printed would
+    /// read "nobody has answered".
+    /// </summary>
+    private static int? AtTheFloor(int count) => count < DepartmentCountFloor ? null : count;
 
     /// <summary>
     /// One department's climate scores from the most recent survey it could have answered.
@@ -865,6 +886,13 @@ public static class DashboardEndpoints
     /// answered anything invites the leader to read collection progress as a change in
     /// climate. It is also why the participation figures above this are a separate
     /// question from the scores.
+    ///
+    /// **Closed, never archived** -- the rule <c>DashboardQueries.LatestClosedSurvey</c> and the
+    /// administrator's Panel de Control (<c>web/src/features/dashboard/next/compose.ts</c>, "an
+    /// archived survey is never one") already apply. Archiving files a survey away, and it can
+    /// happen before the survey's end date: on the demo tenant an archived copy with one
+    /// response and an end date a month ahead out-ranked the closed Q3 by end date, so the
+    /// leader read "withheld" about a survey nobody ran while the administrator read Q3.
     ///
     /// **Cost:** exactly one aggregation, of one survey. The trends route is capped at
     /// twelve because it is this N times; a dashboard is a page load and reads one.
@@ -883,7 +911,7 @@ public static class DashboardEndpoints
         var survey = await db.Surveys
             .AsNoTracking()
             .Where(s => s.CompanyId == companyId
-                        && (s.Status == SurveyStatuses.Closed || s.Status == SurveyStatuses.Archived))
+                        && s.Status == SurveyStatuses.Closed)
             .OrderByDescending(s => s.EndDate)
             .ThenByDescending(s => s.Id)
             .FirstOrDefaultAsync(cancellationToken);
@@ -946,6 +974,37 @@ public static class DashboardEndpoints
             scores
                 .OrderBy(pair => pair.Key, StringComparer.Ordinal)
                 .Select(pair => new DashboardDimensionScore(pair.Key, pair.Value))
+                .ToList(),
+            OrganizationClimate(aggregate, segment.RespondentCount));
+    }
+
+    /// <summary>
+    /// The whole company's reading of the survey the team's reading is from -- the leader's
+    /// "org." side -- rolled up exactly as the climate-over-time matrix rolls its
+    /// whole-company row (<c>SurveyClimateTrends.BuildWholeCompany</c>: the survey's own
+    /// per-dimension means over its completed responses), so a leader and an administrator
+    /// read one number for the company.
+    /// </summary>
+    /// <remarks>
+    /// Only ever beside a DISCLOSED team reading -- the caller returns before this for a
+    /// withheld one -- and withheld itself when everyone who answered outside the team is
+    /// fewer than the floor: the company's mean and the team's, with both counts, give the
+    /// rest's mean by subtraction. A team that IS the whole company leaves no rest to disclose.
+    /// </remarks>
+    private static DashboardOrganizationClimate? OrganizationClimate(SurveyAggregate aggregate, int teamRespondents)
+    {
+        var company = aggregate.Summary.CompletedCount;
+        var rest = company - teamRespondents;
+        if (rest > 0 && rest < SurveyResultsPrivacy.MinimumSegmentRespondents)
+        {
+            return null;
+        }
+
+        return new DashboardOrganizationClimate(
+            company,
+            aggregate.Dimensions
+                .OrderBy(d => d.Dimension, StringComparer.Ordinal)
+                .Select(d => new DashboardDimensionScore(d.Dimension, d.AverageScore))
                 .ToList());
     }
 

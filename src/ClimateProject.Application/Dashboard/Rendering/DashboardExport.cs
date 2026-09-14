@@ -238,11 +238,12 @@ public static class DashboardExport
         };
 
         // The team's count to a survey still open is held to the floor the leader's panel
-        // holds it to (`compose.flooredCount`, "menos de 5 respuestas"): the payload carries it
-        // unfloored, so this is the second place the export applies a floor the payload does
-        // not -- see TeamCountFloor.
+        // holds it to (`compose.flooredCount`, "menos de 5 respuestas"). The endpoint already
+        // sends it floored (null under 5, `DashboardEndpoints.DepartmentCountFloor`); the file
+        // keeps its own floor as a second lock, so a payload built any other way still cannot
+        // print it -- see TeamCountFloor. Null is withheld, never zero.
         var floor = TeamCountFloor(dashboard.Climate);
-        var withheldSurveys = dashboard.ActiveSurveys.Count(s => s.ResponseCount < floor);
+        var withheldSurveys = dashboard.ActiveSurveys.Count(s => s.ResponseCount is not int count || count < floor);
 
         sections.Add(dashboard.ActiveSurveys.Count == 0
             ? new DashboardExportSection(copy.OngoingSurveys, [], Notice: copy.NoOngoingSurveys)
@@ -257,7 +258,7 @@ public static class DashboardExport
                     s.Status,
                     shared.Day(s.StartDate),
                     shared.Day(s.EndDate),
-                    s.ResponseCount < floor ? shared.Withheld : shared.Count(s.ResponseCount),
+                    s.ResponseCount is int count && count >= floor ? shared.Count(count) : shared.Withheld,
                 ])]));
 
         sections.Add(ClimateSection(dashboard.Climate, copy));
@@ -277,8 +278,8 @@ public static class DashboardExport
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <see cref="DashboardDepartmentSurveySummary.ResponseCount"/> arrives UNFLOORED, and the
-    /// leader's Panel de Control hatches it under this floor -- "menos de 5 respuestas", with
+    /// <see cref="DashboardDepartmentSurveySummary.ResponseCount"/> arrives floored from the
+    /// endpoint (null under 5), and the leader's Panel de Control hatches it under this floor -- "menos de 5 respuestas", with
     /// the sentence "El conteo del equipo se muestra al llegar a 5 respuestas" (the canvas's
     /// LeaderDashboard, 10 Sep; <c>web/src/features/dashboard/next/team/compose.ts</c>'s
     /// <c>countFloor</c> and <c>flooredCount</c>). The file behind that screen's "Exportar" is

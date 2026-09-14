@@ -39,7 +39,24 @@ public sealed record DashboardSurveySummary(
 /// </summary>
 /// <param name="ResponseCount">
 /// Completed responses from this department alone, counted in SQL against the response
-/// rows rather than read off the survey.
+/// rows rather than read off the survey -- and <b>null under the floor</b>
+/// (<c>DashboardEndpoints.DepartmentCountFloor</c>, 5). The leader's and the supervisor's
+/// panels hatch this count below 5 ("menos de 5 respuestas": the canvas's LeaderDashboard
+/// and SupervisorDashboard, 10 Sep), so it is withheld here, at read time, rather than sent
+/// for the browser to hide. Null is never zero: a zero would read "nobody in this team has
+/// answered".
+/// </param>
+/// <param name="CompanyResponseCount">
+/// The WHOLE COMPANY's completed responses to the same survey -- <c>Survey.ResponseCount</c>,
+/// the column the company dashboard prints -- carried under a name that says its scope, so
+/// it cannot be read as this department's. Null under the same floor: beside a hatched team
+/// count, a company total under 5 bounds the hidden number ("the whole company: 3" means
+/// the team has at most 3).
+/// </param>
+/// <param name="CompanyTargetAudienceCount">
+/// The tenant's invited headcount as the author entered it (<c>Survey.TargetAudienceCount</c>),
+/// named for its scope for the same reason: the schema has no per-department invited
+/// headcount, so this is the company's and says so.
 /// </param>
 public sealed record DashboardDepartmentSurveySummary(
     Guid Id,
@@ -47,7 +64,9 @@ public sealed record DashboardDepartmentSurveySummary(
     string Status,
     DateTimeOffset StartDate,
     DateTimeOffset EndDate,
-    int ResponseCount);
+    int? ResponseCount,
+    int? CompanyResponseCount = null,
+    int? CompanyTargetAudienceCount = null);
 
 /// <summary>One tenant on the platform overview. SuperAdmin-only by construction.</summary>
 public sealed record DashboardCompanySummary(
@@ -155,11 +174,14 @@ public sealed record DashboardDimensionScore(string Dimension, double? AverageSc
 /// close enough to three named people's answers that "they run the team" does not make it
 /// safe. Ruled on 2026-08-27.
 ///
-/// **The response count on the dashboard around it is deliberately NOT floored, and that
-/// is not an inconsistency.** A leader looking at their own team already knows its size;
-/// publishing one department's sub-threshold count to a company admin reading all of them
-/// is a different disclosure, and <c>DepartmentList</c> withholds it there. Count
-/// unfloored, scores floored. Do not "fix" one to match the other.
+/// **The counts around it.** Ruled 2026-08-27: count unfloored, scores floored -- a leader
+/// looking at their own team already knows its size. The HEADCOUNT
+/// (<see cref="DepartmentAdminDashboard.MemberCount"/>) still is. The RESPONSE counts are
+/// not any more: the 10 Sep LeaderDashboard and SupervisorDashboard artboards hatch the
+/// open survey's team count under 5 ("El conteo del equipo se muestra al llegar a 5
+/// respuestas"), and a count a screen hatches must not travel in the payload that feeds it
+/// (<see cref="DashboardDepartmentSurveySummary.ResponseCount"/>,
+/// <see cref="DepartmentAdminDashboard.CompletedResponseCount"/>).
 /// </summary>
 /// <param name="SurveyId">The survey these scores are from. Null when there is no closed survey to read.</param>
 /// <param name="RespondentCount">
@@ -168,6 +190,13 @@ public sealed record DashboardDimensionScore(string Dimension, double? AverageSc
 /// <c>ProtectedCell</c> states.
 /// </param>
 /// <param name="MinimumGroupSize">The floor actually applied, so a client renders the promise the server kept rather than its own constant.</param>
+/// <param name="Organization">
+/// The whole company's reading of the same survey -- the "org." side of the leader's "Tu
+/// equipo frente a la organización". Null whenever the team's own reading is withheld (half
+/// a comparison would give the other half back), and when the REST of the company --
+/// everyone who answered outside this team -- is under the floor: the company's reading and
+/// the team's, side by side with both counts, give the rest's reading by subtraction.
+/// </param>
 public sealed record DashboardTeamClimate(
     Guid? SurveyId,
     string? SurveyTitle,
@@ -175,8 +204,26 @@ public sealed record DashboardTeamClimate(
     int RespondentCount,
     bool IsSuppressed,
     int MinimumGroupSize,
+    IReadOnlyList<DashboardDimensionScore> Dimensions,
+    DashboardOrganizationClimate? Organization = null);
+
+/// <summary>
+/// The whole company's reading of one closed survey: how many completed it, and its mean per
+/// dimension -- rolled up exactly as the climate-over-time matrix rolls its whole-company row
+/// (<c>SurveyClimateTrends.BuildWholeCompany</c>: the survey's own <c>SurveyAggregate.Dimensions</c>),
+/// so a leader and an administrator read one number for the company.
+/// </summary>
+public sealed record DashboardOrganizationClimate(
+    int RespondentCount,
     IReadOnlyList<DashboardDimensionScore> Dimensions);
 
+/// <param name="CompletedResponseCount">
+/// This department's completed responses, counted only over the surveys it answered at or
+/// over the floor (<c>DashboardEndpoints.DepartmentCountFloor</c>). A running total that
+/// included a survey under the floor would give that survey's hatched count back to anyone
+/// who reads it twice: between two reads it moves by exactly the hidden number. Counted
+/// survey by survey, it only ever moves by a count the page prints anyway.
+/// </param>
 /// <param name="Climate">
 /// The department's own climate scores. Null when the company has no closed survey at all —
 /// which is a different statement from a withheld reading, and the screen says so
