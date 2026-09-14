@@ -5,7 +5,7 @@ import AuthErrorNextPage from '../auth/next/AuthErrorNextPage'
 import AccountInactiveNextPage from '../auth/next/AccountInactiveNextPage'
 import AuthTransitionNextPage from '../auth/next/AuthTransitionNextPage'
 import AuthSuccessNextPage from '../auth/next/AuthSuccessNextPage'
-import AcceptInvitationPage from '../features/org-structure/pages/AcceptInvitationPage'
+import AcceptInvitationNextPage from '../features/org-structure/next/invitation/AcceptInvitationNextPage'
 import RequireAuth from './RequireAuth'
 import AdminLayout from './AdminLayout'
 import RouteErrorBoundary from './RouteErrorBoundary'
@@ -26,7 +26,7 @@ import MicroclimateDetailNextPage from '../features/microclimates/next/detail/Mi
 import MicroclimateLiveNextPage from '../features/microclimates/next/MicroclimateLiveNextPage'
 import MicroclimateResultsNextPage from '../features/microclimates/next/results/MicroclimateResultsNextPage'
 import MicroclimateRespondPage from '../features/microclimates/pages/MicroclimateRespondPage'
-import MicroclimateInvitationPage from '../features/microclimates/pages/MicroclimateInvitationPage'
+import MicroclimateInvitationNextPage from '../features/microclimates/next/invitation/MicroclimateInvitationNextPage'
 import SurveyRespondPage from '../features/surveys/pages/SurveyRespondPage'
 import PublicSurveyRespondPage from '../features/surveys/pages/PublicSurveyRespondPage'
 import PublicSurveyLinkPage from '../features/surveys/pages/PublicSurveyLinkPage'
@@ -225,7 +225,9 @@ export const router = createBrowserRouter([
       { path: '/auth/inactive', element: <AccountInactiveNextPage /> },
       { path: '/auth/loading', element: <AuthTransitionNextPage /> },
       { path: '/auth/success', element: <AuthSuccessNextPage /> },
-      { path: '/accept-invitation/:token', element: <AcceptInvitationPage /> },
+      // The redesigned invitation acceptance (AcceptInvitation, 10 Sep) replaced
+      // `AcceptInvitationPage` here; the old page stays unrouted as the wiring reference.
+      { path: '/accept-invitation/:token', element: <AcceptInvitationNextPage /> },
       { path: '/microclimates/:id/respond', element: <MicroclimateRespondPage /> },
       // Public by design (#120), same placement and same reason as the microclimate
       // respond route above it: an anonymous survey is answered by people who have no
@@ -269,7 +271,10 @@ export const router = createBrowserRouter([
       // line. Renaming this route breaks every link already sitting in a recipient's
       // inbox and no .NET test will notice, so it moves only in lockstep with that
       // constant.
-      { path: '/microclimate-invitations/:token', element: <MicroclimateInvitationPage /> },
+      // The redesigned invitation (MicroclimateInvitation and MicroclimateInvitationStates,
+      // 10 Sep) replaced `MicroclimateInvitationPage` here; the old page stays unrouted as
+      // the wiring reference.
+      { path: '/microclimate-invitations/:token', element: <MicroclimateInvitationNextPage /> },
       // #139, and out here for a reason the two routes above only half share.
       //
       // They are public because their visitor has no account. This one is public because
