@@ -166,6 +166,15 @@ const PAIRS: readonly Pair[] = [
   // see REJECTED_INK_ON_SOFT below for the measurement that decided it.
   { what: 'the anonymous chip word', ink: '--admin-font-secondary', fill: '--admin-accent-bg-green', base: '--admin-bg-panel' },
   { what: 'the not-anonymous chip word', ink: '--admin-font-secondary', fill: '--admin-accent-bg-blue', base: '--admin-bg-panel' },
+  // The canvas's respond page (10 Sep). The anonymity block's green label is the chip's
+  // measured green ink — the canvas's own `#0f7f4e` is rejected below — on the respond
+  // page's ground and on Home's card; the chosen scale point is the ink and the card
+  // swapped (`SegmentedScale`), legible in both themes only if the two tokens are far
+  // apart in both.
+  { what: 'the anonymity block label on the page ground', ink: '--admin-chip-ink-good', fill: '--admin-accent-bg-green', base: '--admin-bg-outer' },
+  { what: 'the anonymity block label on a card', ink: '--admin-chip-ink-good', fill: '--admin-accent-bg-green', base: '--admin-bg-card' },
+  { what: 'the chosen scale point', ink: '--admin-bg-card', fill: '--admin-font-primary', base: '--admin-bg-card' },
+  { what: 'an unchosen scale point', ink: '--admin-font-primary', fill: '--admin-bg-card', base: '--admin-bg-outer' },
 ]
 
 /**
@@ -184,6 +193,9 @@ const PAIRS: readonly Pair[] = [
 const REJECTED_INK_ON_SOFT: readonly Pair[] = [
   { what: 'accent green on the soft green fill', ink: '--admin-accent-green', fill: '--admin-accent-bg-green', base: '--admin-bg-panel' },
   { what: 'accent blue on the soft blue fill', ink: '--admin-accent-blue', fill: '--admin-accent-bg-blue', base: '--admin-bg-panel' },
+  // The canvas's anonymity label ink (RespondSurveyPhone, `#0f7f4e`), measured at 4.31:1
+  // on the soft green fill over the respond page's ground when this lane first used it.
+  { what: 'the canvas’s green ink on the soft green fill over the page ground', ink: '--admin-accent-green-ink', fill: '--admin-accent-bg-green', base: '--admin-bg-outer' },
 ]
 
 describe('the respond page reads in both themes', () => {

@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import { RespondShell, RespondCaption, RespondReading, BrandLockup } from './RespondShell'
 import { SidebarBrand } from './SidebarBrand'
+import { CHIP_SELECT_STYLE } from './chipSelectStyle'
 import { TranslationProvider } from '../../i18n'
 import { LOCALE_STORAGE_KEY } from '../../i18n/locale'
 
@@ -83,12 +84,22 @@ describe('RespondShell', () => {
    * centred column to drift away from. The cap is the layout; without it the
    * questions run the full width of a 2560px monitor.
    */
-  it('caps and centres the content column', () => {
+  /**
+   * The canvas draws this surface as a phone (RespondSurveyPhone and its siblings, 10 Sep):
+   * one column of cards, and on a wide screen the same column centred with the lockup over
+   * it. `max-w-field` (32rem), not `max-w-content`: a question card stretched to 1280px put
+   * the five scale boxes 250px apart. The header is capped the same, so the lockup sits over
+   * the questions rather than at the window's edge.
+   */
+  it('caps and centres the content column at the phone column’s width, header included', () => {
     const { container } = renderShell()
 
     const main = container.querySelector('main')
-    expect(main?.className).toContain('max-w-content')
+    expect(main?.className.split(/\s+/)).toContain('max-w-field')
     expect(main?.className).toContain('mx-auto')
+    const header = container.querySelector('header')
+    expect(header?.className.split(/\s+/)).toContain('max-w-field')
+    expect(header?.className).toContain('mx-auto')
   })
 
   /**
@@ -97,6 +108,18 @@ describe('RespondShell', () => {
    * screen of this product they ever see, and it carried nothing that connects it
    * to the email that sent them here.
    */
+  /**
+   * The canvas's "Español" and "Claro" are 22px chips that hug their word. A native
+   * `<select>` is as wide as its widest option, which drew "Claro" in a chip with a blank
+   * tail the width of "Sistema"; `field-sizing: content` sizes it to what it shows.
+   * happy-dom keeps no unknown CSS property, so this reads the shared style both pickers
+   * spread — the screenshot at 390 is where the width itself was looked at.
+   */
+  it('sizes each picker chip to its word', () => {
+    expect(CHIP_SELECT_STYLE.fieldSizing).toBe('content')
+    expect(CHIP_SELECT_STYLE.appearance).toBe('none')
+  })
+
   it('opens on the brand lockup rather than on the product name in plain text', () => {
     const { container } = renderShell()
 
@@ -130,49 +153,21 @@ describe('RespondShell', () => {
   })
 
   /**
-   * Default off. Anonymity is a per-survey setting the shell cannot know, and the
-   * microclimate route and `/survey/:id` both mounted this frame before the prop
-   * existed — a chip that appeared by default would be the shell making the one
-   * promise it is least entitled to guess at, on their pages.
+   * The canvas's respond strip (RespondSurveyPhone and its two siblings, 10 Sep) is the
+   * lockup and the two pickers, and nothing else. The anonymity promise is the green block
+   * the page opens on — the invitation landing card's, then the form's — so a chip up here
+   * was the same promise said twice, in two wordings, one of them a single word.
    */
-  it('makes no anonymity claim unless it is told to', () => {
-    window.localStorage.setItem(LOCALE_STORAGE_KEY, 'en')
-    renderShell()
-
-    expect(screen.queryByText('Anonymous')).toBeNull()
-  })
-
-  it('states anonymity beside the lockup when the survey is anonymous', () => {
-    window.localStorage.setItem(LOCALE_STORAGE_KEY, 'en')
-    const { container } = render(
-      <TranslationProvider>
-        <RespondShell skipLabel="Skip to the survey" anonymous>
-          <p>body</p>
-        </RespondShell>
-      </TranslationProvider>,
-    )
-
-    const chip = screen.getByText('Anonymous')
-    // The word, not only the tint: `Chip` requires the label for WCAG 1.4.1, and
-    // an icon-only anonymity signal is exactly what that rule exists to prevent.
-    expect(chip.getAttribute('data-slot')).toBe('chip')
-    // In the header beside the lockup, which is the point of moving it out of the
-    // form: it is read before the first question, not after it.
-    expect(container.querySelector('header')?.contains(chip)).toBe(true)
-  })
-
-  it('translates the anonymity chip rather than hardcoding the English word', () => {
+  it('draws the lockup and the two pickers in its header, and no anonymity chip', () => {
     window.localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
-    render(
-      <TranslationProvider>
-        <RespondShell skipLabel="Saltar" anonymous>
-          <p>body</p>
-        </RespondShell>
-      </TranslationProvider>,
-    )
+    const { container } = renderShell()
 
-    expect(screen.getByText('Anónima')).toBeTruthy()
-    expect(screen.queryByText('Anonymous')).toBeNull()
+    const header = container.querySelector('header')
+    expect(header).toBeTruthy()
+    expect(header!.querySelector('[data-slot="chip"]')).toBeNull()
+    expect(header!.textContent).not.toMatch(/Anónima|Anonymous/)
+    // The strip lost a chip, not its controls: both pickers are still in it.
+    expect(header!.querySelectorAll('select')).toHaveLength(2)
   })
 })
 

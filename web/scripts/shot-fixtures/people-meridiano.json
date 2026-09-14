@@ -1,0 +1,230 @@
+{
+  "_comment": "Grupo Meridiano S.A. as the local API answered carlos.mata@meridiano.test (employee, Ingenieria) on 11 Sep 2026: GET /profile, /notifications/mine, /dashboard/employee/last-outcome, /surveys/4c9c8c8c-.../respond and /microclimates/5e4cf7fd-... verbatim. Three departures, each named: the respond view has inProgress null (Carlos has already answered Q4, which renders the already-answered state); /dashboard/employee lists the two surveys open to him on the canvas date (10 Sep), built from the Q4 respond view and the admin GET /surveys row of its copy, where his live payload today lists none; the POST bodies are SurveySubmissionResult and the empty 201, shaped from the client types. Anonymity as the tenant has it: Q4 is NOT anonymous.",
+  "GET /notifications/mine": {
+    "notifications": []
+  },
+  "GET /profile": {
+    "id": "091b20f1-e4f0-4fa5-aa2e-5111faf2e3b4",
+    "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+    "companyName": "Grupo Meridiano S.A.",
+    "email": "carlos.mata@meridiano.test",
+    "name": "Carlos Mata",
+    "role": "employee",
+    "departmentId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+    "departmentName": "Ingeniería",
+    "managerId": null,
+    "isActive": true,
+    "hasPassword": true,
+    "lastLoginAt": "2026-09-11T10:23:28.378408+00:00",
+    "createdAt": "2026-09-10T02:42:03.722253+00:00",
+    "demographics": {}
+  },
+  "GET /dashboard/employee": {
+    "name": "Carlos Mata",
+    "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+    "departmentId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+    "departmentName": "Ingeniería",
+    "pendingSurveyCount": 2,
+    "completedSurveyCount": 0,
+    "unreadNotificationCount": 0,
+    "nextDeadline": "2026-10-10T02:03:39.148+00:00",
+    "pendingSurveys": [
+      {
+        "id": "4c9c8c8c-03e1-4033-8224-8c80b242c558",
+        "title": "Encuesta de Clima Q4 (abierta)",
+        "type": "periodic",
+        "startDate": "2026-09-03T02:03:39.148+00:00",
+        "endDate": "2026-10-10T02:03:39.148+00:00",
+        "questionCount": 6,
+        "anonymous": false
+      },
+      {
+        "id": "801a81a4-3551-4f08-96f4-d465e05b1605",
+        "title": "Encuesta de Clima Q4 (abierta) (Copia)",
+        "type": "periodic",
+        "startDate": "2026-09-03T02:03:39.148+00:00",
+        "endDate": "2026-10-10T02:03:39.148+00:00",
+        "questionCount": 6,
+        "anonymous": false
+      }
+    ]
+  },
+  "GET /dashboard/employee/last-outcome": {
+    "surveyId": "38b2002f-66da-468d-b136-ec112ba3204b",
+    "surveyTitle": "Encuesta de Clima Q3",
+    "closedOn": "2026-08-06T02:05:22.922+00:00",
+    "responseCount": 24,
+    "departmentCount": 5,
+    "protectedDepartmentCount": 1,
+    "minimumGroupSize": 5,
+    "plansOpenedSince": [
+      {
+        "departmentName": "Personas",
+        "createdAt": "2026-09-10T02:05:50.263923+00:00"
+      },
+      {
+        "departmentName": "Operaciones",
+        "createdAt": "2026-09-10T02:05:50.280646+00:00"
+      },
+      {
+        "departmentName": "Ingeniería",
+        "createdAt": "2026-09-10T02:05:50.287727+00:00"
+      },
+      {
+        "departmentName": null,
+        "createdAt": "2026-09-10T02:05:50.294635+00:00"
+      }
+    ],
+    "openPlanCount": 4
+  },
+  "GET /surveys/*/respond": {
+    "id": "4c9c8c8c-03e1-4033-8224-8c80b242c558",
+    "title": "Encuesta de Clima Q4 (abierta)",
+    "description": "Abierta a respuestas. Sembrada para que las pantallas de respuesta y distribución tengan una encuesta viva.",
+    "type": "periodic",
+    "language": "both",
+    "resolvedLocale": "es",
+    "fallbackFields": [],
+    "startDate": "2026-09-03T02:03:39.148+00:00",
+    "endDate": "2026-10-10T02:03:39.148+00:00",
+    "anonymous": false,
+    "allowPartialResponses": true,
+    "autoSave": true,
+    "randomizeQuestions": false,
+    "showProgress": true,
+    "timeLimitMinutes": null,
+    "questions": [
+      {
+        "id": "bdca477a-e031-4a51-87b3-c762151dbb46",
+        "text": "Puedo plantear preocupaciones sin miedo a represalias.",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Muy en desacuerdo",
+        "scaleLabelMax": "Muy de acuerdo",
+        "required": true,
+        "commentRequired": true,
+        "commentPrompt": null,
+        "order": 0,
+        "category": "psychological_safety"
+      },
+      {
+        "id": "4c133f33-8be3-4b0c-83a0-02af8c25e0d6",
+        "text": "Mi carga de trabajo es sostenible a largo plazo.",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Muy en desacuerdo",
+        "scaleLabelMax": "Muy de acuerdo",
+        "required": true,
+        "commentRequired": true,
+        "commentPrompt": null,
+        "order": 1,
+        "category": "workload"
+      },
+      {
+        "id": "633bafd9-f254-4490-8c12-7e7690e0b4b3",
+        "text": "Confío en las decisiones que toma la dirección.",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Muy en desacuerdo",
+        "scaleLabelMax": "Muy de acuerdo",
+        "required": true,
+        "commentRequired": true,
+        "commentPrompt": null,
+        "order": 2,
+        "category": "trust"
+      },
+      {
+        "id": "8dfa854f-ae7a-4c6f-b4aa-87970ffabdd1",
+        "text": "Aquí se reconoce el buen trabajo.",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Muy en desacuerdo",
+        "scaleLabelMax": "Muy de acuerdo",
+        "required": true,
+        "commentRequired": true,
+        "commentPrompt": null,
+        "order": 3,
+        "category": "recognition"
+      },
+      {
+        "id": "2f0169a2-28a7-4fee-9101-7fb217bda38e",
+        "text": "Veo un camino para crecer en esta organización.",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Muy en desacuerdo",
+        "scaleLabelMax": "Muy de acuerdo",
+        "required": true,
+        "commentRequired": true,
+        "commentPrompt": null,
+        "order": 4,
+        "category": "growth"
+      },
+      {
+        "id": "c5664edb-3234-42c3-ba89-494ecf145661",
+        "text": "Siento que pertenezco a mi equipo.",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Muy en desacuerdo",
+        "scaleLabelMax": "Muy de acuerdo",
+        "required": true,
+        "commentRequired": true,
+        "commentPrompt": null,
+        "order": 5,
+        "category": "belonging"
+      }
+    ],
+    "inProgress": null
+  },
+  "POST /surveys/*/responses": {
+    "responseId": "974edc4e-e094-4953-aec8-bad82d3e9109",
+    "sessionId": "293dc7d3-a900-4f4f-9ad1-bce3ab44e8a8",
+    "isComplete": true,
+    "isAnonymous": false,
+    "alreadySubmitted": false,
+    "language": "es",
+    "answeredQuestionCount": 6,
+    "questionCount": 6,
+    "suppressedDemographics": []
+  },
+  "GET /microclimates/*": {
+    "id": "5e4cf7fd-d792-4cf5-9750-11f7748bd37e",
+    "title": "Pulso semanal — ¿cómo fue la semana?",
+    "status": "active",
+    "questions": [
+      {
+        "id": "7ab07c7b-9cb1-42ca-a8ca-0d6fa59ac52e",
+        "text": "¿Cómo se sintió esta semana?",
+        "type": "likert",
+        "options": null,
+        "required": true,
+        "order": 0,
+        "emojiOptions": null
+      },
+      {
+        "id": "fc09b434-c0a5-4027-9672-2c38a2c4db62",
+        "text": "En una palabra, ¿qué ayudaría más?",
+        "type": "open_ended",
+        "options": null,
+        "required": false,
+        "order": 1,
+        "emojiOptions": null
+      }
+    ],
+    "language": "en",
+    "resolvedLocale": "es",
+    "fallbackFields": []
+  },
+  "POST /microclimates/*/responses": {}
+}

@@ -144,6 +144,87 @@ public class DashboardExportTests
     }
 
     /// <summary>
+    /// The team's count to a survey still OPEN -- the figure the leader's Panel de Control
+    /// hatches under the floor ("menos de 5 respuestas").
+    /// </summary>
+    /// <remarks>
+    /// <c>DashboardDepartmentSurveySummary.ResponseCount</c> arrives unfloored and the screen
+    /// floors it itself (<c>team/compose.ts</c>). The file behind that screen's "Exportar" is the
+    /// same payload, so before this rule it printed 3 where the page beside the button drew the
+    /// hatch -- found by the leaders lane's refuter on 11 Sep 2026.
+    /// </remarks>
+    [Fact]
+    public void An_open_surveys_team_count_under_the_floor_prints_the_word_never_the_count()
+    {
+        var dashboard = DepartmentDashboard(SuppressedClimate()) with
+        {
+            ActiveSurveys =
+            [
+                OpenSurvey("Clima Q4", responseCount: 3),
+                OpenSurvey("Pulso de septiembre", responseCount: 0),
+                OpenSurvey("Clima 2026", responseCount: 14),
+            ],
+        };
+        var document = DashboardExport.ForDepartmentAdmin(dashboard, ContentLanguages.English, GeneratedAt);
+        var rows = CsvRows(DashboardExport.BuildCsv(document));
+
+        // At or over the floor the count prints, so this does not pass by printing nothing.
+        Assert.Equal("14", Cell(rows, "Ongoing surveys", "Clima 2026 - Responses"));
+
+        // Under it, the word -- and zero is under it: "0" would read as "nobody in this team
+        // has answered", a claim about named people the hatch exists to prevent.
+        Assert.Equal("Withheld", Cell(rows, "Ongoing surveys", "Clima Q4 - Responses"));
+        Assert.Equal("Withheld", Cell(rows, "Ongoing surveys", "Pulso de septiembre - Responses"));
+
+        // The file says why, rather than leaving "Withheld" to read as a bug.
+        Assert.Contains(
+            rows,
+            r => r.Section == "Ongoing surveys"
+                && r.Value.Contains("fewer than 5 responses from this team", StringComparison.Ordinal));
+
+        // The PDF draws neither count either.
+        var drawn = PdfText.DrawnStrings(DashboardExport.BuildPdf(document));
+        Assert.Contains("14", drawn, StringComparer.Ordinal);
+        Assert.DoesNotContain("3", drawn, StringComparer.Ordinal);
+        Assert.DoesNotContain("0", drawn, StringComparer.Ordinal);
+
+        // And in Spanish, the locale this client reads it in.
+        var spanish = CsvRows(DashboardExport.BuildCsv(
+            DashboardExport.ForDepartmentAdmin(dashboard, ContentLanguages.Spanish, GeneratedAt)));
+        Assert.Equal("Reservado", Cell(spanish, "Encuestas en curso", "Clima Q4 - Respuestas"));
+        Assert.Contains(
+            spanish,
+            r => r.Value.Contains("menos de 5 respuestas de este equipo", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// The floor an open survey's team count is held to is the screen's: the server's own
+    /// <c>minimumGroupSize</c> when the payload carries one, and never lower than 5 -- including
+    /// when no closed survey has sent a floor at all.
+    /// </summary>
+    [Fact]
+    public void An_open_surveys_team_count_is_held_to_the_servers_floor_and_never_below_five()
+    {
+        var noClosedSurvey = DepartmentDashboard(null) with
+        {
+            ActiveSurveys = [OpenSurvey("Clima Q4", responseCount: 4)],
+        };
+        var unclimated = CsvRows(DashboardExport.BuildCsv(
+            DashboardExport.ForDepartmentAdmin(noClosedSurvey, ContentLanguages.English, GeneratedAt)));
+        Assert.Equal("Withheld", Cell(unclimated, "Ongoing surveys", "Clima Q4 - Responses"));
+
+        var raised = DepartmentDashboard(SuppressedClimate() with { MinimumGroupSize = 8 }) with
+        {
+            ActiveSurveys = [OpenSurvey("Clima Q4", responseCount: 7), OpenSurvey("Clima 2026", responseCount: 8)],
+        };
+        var rows = CsvRows(DashboardExport.BuildCsv(
+            DashboardExport.ForDepartmentAdmin(raised, ContentLanguages.English, GeneratedAt)));
+        Assert.Equal("Withheld", Cell(rows, "Ongoing surveys", "Clima Q4 - Responses"));
+        Assert.Equal("8", Cell(rows, "Ongoing surveys", "Clima 2026 - Responses"));
+        Assert.Contains(rows, r => r.Value.Contains("fewer than 8 responses from this team", StringComparison.Ordinal));
+    }
+
+    /// <summary>
     /// A dimension whose average is null inside an <em>unsuppressed</em> reading: a different
     /// state from the whole team being withheld, and it must still not print as zero.
     /// </summary>
@@ -290,6 +371,15 @@ public class DashboardExportTests
                     ResponseCount: 14),
             ],
             Climate: climate);
+
+    private static DashboardDepartmentSurveySummary OpenSurvey(string title, int responseCount)
+        => new(
+            Guid.NewGuid(),
+            title,
+            "active",
+            new DateTimeOffset(2026, 9, 3, 0, 0, 0, TimeSpan.Zero),
+            new DateTimeOffset(2026, 10, 10, 0, 0, 0, TimeSpan.Zero),
+            ResponseCount: responseCount);
 
     /// <summary>
     /// The shape the dashboard endpoint actually produces for a team under the floor: empty

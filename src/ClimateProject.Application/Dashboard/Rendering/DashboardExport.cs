@@ -42,9 +42,13 @@ public sealed record DashboardExportDocument(
 /// This is the property the slice exists for, and it is the same one
 /// <c>SurveyExportEndpoints</c> states: the endpoints that call this hand it the payload the
 /// *screen* was already given, built by the same loader behind <c>GET /dashboard/company-admin</c>
-/// and <c>/department-admin</c>. There is no query in this file, no floor, and no branch on a
-/// respondent count. An export cannot reveal what the screen withholds if it never asks the
-/// database anything the screen did not ask.
+/// and <c>/department-admin</c>. There is no query in this file. An export cannot reveal what
+/// the screen withholds if it never asks the database anything the screen did not ask -- but
+/// where a payload carries a count UNFLOORED because its screen floors it itself, the export
+/// has to apply the same floor or it republishes what the screen hatches. There are two such
+/// counts, each floored here against the constant the screen uses: the company dashboard's
+/// department table (<c>DepartmentSection</c>) and the department dashboard's open surveys
+/// (<c>TeamCountFloor</c>).
 ///
 /// ## What it does decide is how a withheld figure PRINTS
 ///
@@ -140,8 +144,8 @@ public static class DashboardExport
     }
 
     /// <summary>
-    /// The department table -- and the one place the export has to apply a floor the payload
-    /// does not.
+    /// The department table -- one of the two places the export has to apply a floor the
+    /// payload does not (the other is <see cref="TeamCountFloor"/>).
     /// </summary>
     /// <remarks>
     /// <b>`CompanyAdminDashboard.Departments` carries UNFLOORED completed-response counts.</b>
@@ -233,11 +237,19 @@ public static class DashboardExport
             ]),
         };
 
+        // The team's count to a survey still open is held to the floor the leader's panel
+        // holds it to (`compose.flooredCount`, "menos de 5 respuestas"): the payload carries it
+        // unfloored, so this is the second place the export applies a floor the payload does
+        // not -- see TeamCountFloor.
+        var floor = TeamCountFloor(dashboard.Climate);
+        var withheldSurveys = dashboard.ActiveSurveys.Count(s => s.ResponseCount < floor);
+
         sections.Add(dashboard.ActiveSurveys.Count == 0
             ? new DashboardExportSection(copy.OngoingSurveys, [], Notice: copy.NoOngoingSurveys)
             : new DashboardExportSection(
                 copy.OngoingSurveys,
                 [],
+                Notice: withheldSurveys > 0 ? copy.TeamCountWithheld(floor) : null,
                 TableHeaders: [copy.Survey, shared.Status, copy.StartDate, copy.EndDate, shared.Responses],
                 TableRows: [.. dashboard.ActiveSurveys.Select(s => (IReadOnlyList<string>)
                 [
@@ -245,7 +257,7 @@ public static class DashboardExport
                     s.Status,
                     shared.Day(s.StartDate),
                     shared.Day(s.EndDate),
-                    shared.Count(s.ResponseCount),
+                    s.ResponseCount < floor ? shared.Withheld : shared.Count(s.ResponseCount),
                 ])]));
 
         sections.Add(ClimateSection(dashboard.Climate, copy));
@@ -257,6 +269,30 @@ public static class DashboardExport
             ResolveLocale(locale),
             sections);
     }
+
+    /// <summary>
+    /// The floor a department's count to an OPEN survey is printed under: the server's own
+    /// <see cref="DashboardTeamClimate.MinimumGroupSize"/> when the payload carries one, and
+    /// never lower than <see cref="SurveyResultsPrivacy.MinimumSegmentRespondents"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="DashboardDepartmentSurveySummary.ResponseCount"/> arrives UNFLOORED, and the
+    /// leader's Panel de Control hatches it under this floor -- "menos de 5 respuestas", with
+    /// the sentence "El conteo del equipo se muestra al llegar a 5 respuestas" (the canvas's
+    /// LeaderDashboard, 10 Sep; <c>web/src/features/dashboard/next/team/compose.ts</c>'s
+    /// <c>countFloor</c> and <c>flooredCount</c>). The file behind that screen's "Exportar" is
+    /// the same payload, so printing the raw count here would put in a file that leaves the
+    /// building the one number the screen beside the button withholds.
+    /// </para>
+    /// <para>
+    /// The rule is the screen's, term for term: <c>Math.Max(5, minimumGroupSize)</c>, and a
+    /// count under it -- zero included -- prints <see cref="ReportRenderCopy.Withheld"/>, never
+    /// the number and never <c>0</c>, which would read as "nobody in this team has answered".
+    /// </para>
+    /// </remarks>
+    private static int TeamCountFloor(DashboardTeamClimate? climate)
+        => Math.Max(SurveyResultsPrivacy.MinimumSegmentRespondents, climate?.MinimumGroupSize ?? 0);
 
     /// <summary>
     /// The team-climate section -- the one place in this file where a suppression decision
