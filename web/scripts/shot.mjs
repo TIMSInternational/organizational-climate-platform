@@ -98,6 +98,12 @@ const { values, positionals } = parseArgs({
     // only a user's press reaches (a recovered draft, an open menu) -- never to fill a form.
     click: { type: 'string', multiple: true },
     viewport: { type: 'boolean', default: false },
+    // Write no token at all, for the surfaces whose whole subject is not having one:
+    // `/s/:token`, `/survey-invitations/:token`, `/shared/reports/:token`, `/login`.
+    // Until this existed those pages could only ever be photographed as a signed-in
+    // visitor, so the branch a real respondent reaches -- `getToken() === null` -- had
+    // no picture at all. Anything behind `RequireAuth` redirects to /login with it.
+    'signed-out': { type: 'boolean', default: false },
     help: { type: 'boolean', default: false },
   },
 })
@@ -133,6 +139,8 @@ Options:
                      screenshotting at once cannot photograph each other
   --settle <ms>      extra wait after network idle (default 400)
   --viewport         clip to the viewport instead of capturing the full page
+  --signed-out       write no token, for the token-addressed public pages and
+                     /login. Anything behind RequireAuth redirects to /login
   --help             show this
 `.trim()
 
@@ -270,7 +278,10 @@ async function main() {
     await context.addInitScript(
       ([keys, token, themeValue, locale, companyId]) => {
         try {
-          localStorage.setItem(keys.token, token)
+          // `null` is `--signed-out`: no token is written, and `getToken()` answers
+          // null exactly as it does for the respondent this product mails a link to.
+          if (token === null) localStorage.removeItem(keys.token)
+          else localStorage.setItem(keys.token, token)
           localStorage.setItem(keys.theme, themeValue)
           localStorage.setItem(keys.locale, locale)
           localStorage.setItem(keys.company, companyId)
@@ -281,12 +292,14 @@ async function main() {
       },
       [
         STORAGE_KEYS,
-        buildDevToken({
-          role: values.role,
-          companyId: values.company,
-          name: values.name,
-          nodoId: values.nodo,
-        }),
+        values['signed-out']
+          ? null
+          : buildDevToken({
+              role: values.role,
+              companyId: values.company,
+              name: values.name,
+              nodoId: values.nodo,
+            }),
         theme,
         values.lang,
         values.company,

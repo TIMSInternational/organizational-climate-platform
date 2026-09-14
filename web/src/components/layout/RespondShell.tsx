@@ -239,7 +239,19 @@ export function RespondCaption({
       <span className="text-2xs font-semibold uppercase tracking-eyebrow text-fg-secondary">
         {eyebrow}
       </span>
-      <h1 className="text-2xl font-semibold tracking-tight text-fg-primary">{title}</h1>
+      {/* `min-w-0 break-words`: the title is author-supplied and this caption is drawn
+          at 390px on the two token-addressed pages, where a long unhyphenated word — a
+          survey named `RetroalimentacionInstitucionalConsolidadaDelCuartoTrimestre`,
+          which is the shape a pasted identifier takes — runs off the right edge.
+          **Both classes are needed and `break-words` alone was measured not to work:**
+          this `<header>` is a grid, a grid item's automatic minimum size is its
+          min-content width, so the column track grew to the length of the word and
+          there was no overflow left for `overflow-wrap` to act on. `min-w-0` lets the
+          track shrink to the page; `break-words` then breaks the word inside it.
+          Neither changes anything for a title that already fits. */}
+      <h1 className="min-w-0 break-words text-2xl font-semibold tracking-tight text-fg-primary">
+        {title}
+      </h1>
       {description ? <p className="max-w-prose text-base text-fg-secondary">{description}</p> : null}
     </header>
   )

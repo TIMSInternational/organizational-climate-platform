@@ -5013,7 +5013,16 @@
       "underAMinute": "menos de un minuto en total",
       "submittedAt": "Enviadas a las {time}.",
       "submittedAtAnonymous": "Enviadas a las {time}. Se guardaron sin nada que lo identifique.",
-      "receiptOf": "de {total}"
+      "receiptOf": "de {total}",
+      "entryStart": "Empezar",
+      "entryAfter": "Después, una pregunta por pantalla.",
+      "entryArrivedByLink": "Llegó con un enlace compartido",
+      "entryNoAccount": "no necesita cuenta",
+      "entryPace": "{count} preguntas, una a la vez. Unos {minutes} minutos.",
+      "entryPaceOne": "Una pregunta. Menos de un minuto.",
+      "entryPaceBrief": "{count} preguntas, una a la vez. Menos de un minuto.",
+      "entrySignInTitle": "Esta encuesta registra quién responde",
+      "entrySignInBody": "Para responder, inicie sesión con su cuenta."
     }
   },
   "surveyResults": {
