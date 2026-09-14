@@ -154,6 +154,41 @@ public static class BenchmarkQuality
     }
 
     /// <summary>
+    /// The score a payload may carry for a benchmark, given what the row stores.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>benchmarks.quality_score</c> is <c>NOT NULL DEFAULT 0</c>, so a benchmark nobody has
+    /// validated holds the same stored number as one <see cref="Assess"/> scored 0 and failed
+    /// -- and the benchmarks page printed "Puntaje de calidad 0,00" over both, a failing grade
+    /// on a reference whose own detail panel said "not assessed yet". The two are not the same
+    /// fact: a computed 0 is a verdict (a benchmark that measures nothing, line for line the
+    /// short circuit above), and an unassessed benchmark has no score at all.
+    /// </para>
+    /// <para>
+    /// The row already knows which it is. <see cref="BenchmarkValidationStatuses.Pending"/> is
+    /// written by exactly one path -- <c>BenchmarkEndpoints.CreateAsync</c> -- and the only
+    /// other writers of <c>validation_status</c>, <c>validate</c> and <c>import</c>, store what
+    /// <see cref="Assess"/> returned, which is never <c>pending</c>. So <c>pending</c> means
+    /// "the rule has not run" and nothing else, and a row cannot return to it. That makes the
+    /// null derivable at read time without a schema change: this is where every payload that
+    /// carries a score derives it, so the list, the detail and the validate response cannot
+    /// disagree about which zeros are real.
+    /// </para>
+    /// <para>
+    /// Whether the column itself should become nullable is a separate decision -- see
+    /// <c>docs/decisions/benchmark-analytics-endpoints.md</c>, "An unscored benchmark has no
+    /// score".
+    /// </para>
+    /// </remarks>
+    /// <returns>
+    /// Null when <paramref name="validationStatus"/> is <see cref="BenchmarkValidationStatuses.Pending"/>;
+    /// otherwise <paramref name="storedScore"/> unchanged, zero included.
+    /// </returns>
+    public static double? ReportedScore(string validationStatus, double storedScore)
+        => validationStatus == BenchmarkValidationStatuses.Pending ? null : storedScore;
+
+    /// <summary>
     /// One component, scored as <paramref name="satisfied"/> out of <paramref name="total"/>.
     /// </summary>
     /// <remarks>

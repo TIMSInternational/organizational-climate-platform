@@ -163,7 +163,11 @@ export interface BenchmarkCategorySummary {
   globalCount: number
   activeCount: number
   types: string[]
-  averageQualityScore: number
+  /**
+   * The mean over the benchmarks the rule has scored — `null` when it has scored none of
+   * them. A row nobody has validated is not a 0 in this mean.
+   */
+  averageQualityScore: number | null
 }
 
 /** One component of the quality rule — `BenchmarkQualityComponent`. */
@@ -182,7 +186,8 @@ export interface BenchmarkValidation {
   status: string
   qualityScore: number
   previousStatus: string
-  previousQualityScore: number
+  /** `null` on the first run of the rule: there was no previous score to report. */
+  previousQualityScore: number | null
   /** Every component with its weight and counts, so the score can be recomputed by hand. */
   components: BenchmarkQualityComponent[]
 }

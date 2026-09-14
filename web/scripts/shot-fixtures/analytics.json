@@ -124,6 +124,16 @@
       "companyId": "11111111-1111-1111-1111-111111111111",
       "isActive": true,
       "qualityScore": 0.9
+    },
+    {
+      "id": "b-new",
+      "name": "Helios Q3 2026",
+      "type": "internal",
+      "category": "engagement",
+      "companyId": "11111111-1111-1111-1111-111111111111",
+      "isActive": true,
+      "qualityScore": null,
+      "priorPeriodStatus": "unlinked"
     }
   ],
   "GET /admin/ai-insights": [
@@ -529,6 +539,35 @@
         "sampleSize": null
       }
     ]
+  },
+  "GET /admin/benchmarks/b-new": {
+    "id": "b-new",
+    "name": "Helios Q3 2026",
+    "description": "This quarter, created and not yet validated.",
+    "type": "internal",
+    "category": "engagement",
+    "source": "survey",
+    "industry": null,
+    "companySize": null,
+    "region": null,
+    "companyId": "11111111-1111-1111-1111-111111111111",
+    "isActive": true,
+    "validationStatus": "pending",
+    "qualityScore": null,
+    "priorPeriodBenchmarkId": null,
+    "metrics": [
+      {
+        "id": "m-new-0",
+        "metricName": "Psychological safety",
+        "value": 73,
+        "unit": "pts",
+        "percentile": null,
+        "sampleSize": null
+      }
+    ],
+    "priorPeriodStatus": "unlinked",
+    "priorPeriod": null,
+    "fallbackFields": []
   },
   "GET /admin/ai-insights/ai-1": {
     "id": "ai-1",

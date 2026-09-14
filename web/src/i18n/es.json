@@ -3180,6 +3180,7 @@
     "companySize": "Tamaño de la empresa",
     "region": "Región",
     "qualityScore": "Puntaje de calidad",
+    "qualityScoreNotAssessed": "Aún sin puntaje",
     "validationStatus": "Validación",
     "validationStatusPending": "Sin evaluar",
     "validationStatusVerified": "Verificado",

@@ -55,4 +55,28 @@ describe('averageQualityByCategory', () => {
   it('is empty for no benchmarks, so the chart shows its own empty state', () => {
     expect(averageQualityByCategory([])).toEqual([])
   })
+
+  it('leaves a benchmark nobody has scored out of the mean rather than counting it as 0', () => {
+    // `null` is "the rule has never run", not a reading. Before the score was nullable
+    // every unvalidated row arrived as 0 and this mean read 33.3, not 50.
+    const rows = averageQualityByCategory([
+      benchmark({ id: 'a', category: 'engagement', qualityScore: 40 }),
+      benchmark({ id: 'b', category: 'engagement', qualityScore: null }),
+      benchmark({ id: 'c', category: 'engagement', qualityScore: 60 }),
+    ])
+
+    expect(rows).toEqual([{ label: 'engagement', values: { [QUALITY_SERIES_KEY]: 50 } }])
+  })
+
+  it('charts a category in which nothing has been scored as a gap, not as a zero', () => {
+    const rows = averageQualityByCategory([
+      benchmark({ id: 'a', category: 'engagement', qualityScore: null }),
+      benchmark({ id: 'b', category: 'wellbeing', qualityScore: 90 }),
+    ])
+
+    expect(rows).toEqual([
+      { label: 'engagement', values: { [QUALITY_SERIES_KEY]: null } },
+      { label: 'wellbeing', values: { [QUALITY_SERIES_KEY]: 90 } },
+    ])
+  })
 })
