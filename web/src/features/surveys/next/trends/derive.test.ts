@@ -73,6 +73,23 @@ describe('trends derive', () => {
     expect(waveMean(mixed, 0)).toBeCloseTo(3.5)
   })
 
+  it('averages the UNROUNDED means, so it is 3,65 and never the artboard’s 3,67', () => {
+    // Ruled 2026-09-14 (`docs/decisions/app-wide-mean.md`). The case above cannot tell the
+    // two rules apart: its values are already at one decimal, so both give the same answer.
+    // These are Grupo Meridiano's real Q3 company row from
+    // `scripts/shot-fixtures/redesign-meridiano.json`, which do separate them:
+    //   unrounded  21,92 / 6 = 3,6533 -> 3,65   <- the rule
+    //   as printed 22,0  / 6 = 3,6667 -> 3,67   <- what the artboard draws, rejected
+    const q3: TrendDimension[] = [4, 3.79, 3.75, 3.38, 3.67, 3.33].map((value, index) => ({
+      key: `d${index}`,
+      name: `D${index}`,
+      values: [value],
+    }))
+    expect(waveMean(q3, 0)).toBeCloseTo(3.6533, 4)
+    expect(Number(waveMean(q3, 0)?.toFixed(2))).toBe(3.65)
+    expect(Number(waveMean(q3, 0)?.toFixed(2))).not.toBe(3.67)
+  })
+
   it('spans a domain around every reading and the target, and labels the half-points from the lowest reading up', () => {
     // The canvas's linechart: domain 2,5–4,5, labels 3,0 · 3,5 · 4,0 · 4,5 over readings down to 2,8.
     expect(trendAxis([2.8, null, 3.4, 4.0], 3.7)).toEqual({ low: 2.5, high: 4.5, ticks: [3.0, 3.5, 4.0, 4.5] })
