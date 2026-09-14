@@ -4,7 +4,6 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import LeaderDashboardView from './LeaderDashboardView'
 import { composeLeaderDashboard, type TrackingRead } from './compose'
-import { ORGANIZATION_SAMPLE } from './sampleModel'
 import type { DepartmentAdminDashboard, DashboardTeamClimate } from '../../api/dashboard'
 import type { PlanAccion, TableroResponse } from '../../../tracking/api/trackingApi'
 import { TranslationProvider } from '../../../../i18n'
@@ -19,13 +18,26 @@ vi.mock('../../../../lib/downloadBlobFile', () => ({ downloadBlobFile: vi.fn() }
 
 /**
  * The leader's Panel de Control, drawn from a model composed the way the hook composes it,
- * so every case reads the page a real payload produces. The payloads are shaped from the
- * ones Grupo Meridiano's leader got on 11 Sep 2026 (`scripts/shot-fixtures/leaders-meridiano.json`).
+ * so every case reads the page a real payload produces. The payloads are Grupo Meridiano's
+ * leader's of 11 Sep 2026 as this branch's server shapes them
+ * (`scripts/shot-fixtures/leaders-meridiano.json`): Ingeniería's Q3 beside the whole
+ * company's, the open survey's 3 withheld.
  */
 
 const copy = en.dashboard.next.leader
 const DEPARTMENT = '5bfdb04e-8847-4baa-89c8-d4411654a129'
 const KEYS = ['belonging', 'growth', 'psychological_safety', 'recognition', 'trust', 'workload']
+
+/** Ingeniería's Q3 (6 respondents). Reconocimiento prints 3,5, under the 3,7 target. */
+const Q3 = [4.33, 4.17, 4, 3.5, 4, 3.67]
+/** The whole company's Q3 (24 respondents) — the organisation's side of the same survey. */
+const ORG_Q3 = [4, 3.79, 3.75, 3.38, 3.67, 3.33]
+/** Ingeniería's Q2 — Reconocimiento 3,2 and Carga de trabajo 3,5, both under the target. */
+const Q2 = [3.83, 3.83, 3.83, 3.17, 3.67, 3.5]
+
+function organization(scores: readonly number[], respondentCount = 24) {
+  return { respondentCount, dimensions: KEYS.map((dimension, index) => ({ dimension, averageScore: scores[index] ?? null })) }
+}
 
 function climate(scores: readonly number[], overrides: Partial<DashboardTeamClimate> = {}): DashboardTeamClimate {
   return {
@@ -36,14 +48,10 @@ function climate(scores: readonly number[], overrides: Partial<DashboardTeamClim
     isSuppressed: false,
     minimumGroupSize: 5,
     dimensions: KEYS.map((dimension, index) => ({ dimension, averageScore: scores[index] ?? null })),
+    organization: organization(ORG_Q3),
     ...overrides,
   }
 }
-
-/** Ingeniería's Q3 — the artboard's numbers. Every one is on or above target. */
-const Q3 = [4.33, 4.17, 4, 3.5, 4, 3.67]
-/** Ingeniería's Q2 — Reconocimiento prints 3,2, below the target. */
-const Q2 = [3.83, 3.83, 3.83, 3.17, 3.67, 3.5]
 
 function department(overrides: Partial<DepartmentAdminDashboard> = {}): DepartmentAdminDashboard {
   return {
@@ -53,7 +61,7 @@ function department(overrides: Partial<DepartmentAdminDashboard> = {}): Departme
     memberCount: 14,
     activeMemberCount: 14,
     activeSurveyCount: 1,
-    completedResponseCount: 22,
+    completedResponseCount: 18,
     openActionPlanCount: 1,
     overdueActionPlanCount: 0,
     activeSurveys: [
@@ -63,7 +71,9 @@ function department(overrides: Partial<DepartmentAdminDashboard> = {}): Departme
         status: 'active',
         startDate: '2026-09-03T02:03:39.148+00:00',
         endDate: '2026-10-10T02:03:39.148+00:00',
-        responseCount: 3,
+        responseCount: null,
+        companyResponseCount: null,
+        companyTargetAudienceCount: 24,
       },
     ],
     climate: climate(Q3),
@@ -84,7 +94,7 @@ function plan(overrides: Partial<PlanAccion> = {}): PlanAccion {
     fechaCreacion: '2026-09-10',
     fechaCompromiso: '2026-09-15',
     porcentajeAvance: 0,
-    estadoSemaforo: 'Verde',
+    estadoSemaforo: 'Amarillo',
     cicloEncuestaExternalId: null,
     fechaUltimaActualizacion: '2026-09-10',
     cumplido: false,
@@ -94,7 +104,7 @@ function plan(overrides: Partial<PlanAccion> = {}): PlanAccion {
 }
 
 function board(planes: PlanAccion[] = [plan()]): TrackingRead<TableroResponse> {
-  return { status: 'ok', value: { nodoExternalId: DEPARTMENT, conteos: { rojo: 0, amarillo: 0, verde: planes.length }, planes } }
+  return { status: 'ok', value: { nodoExternalId: DEPARTMENT, conteos: { rojo: 0, amarillo: planes.length, verde: 0 }, planes } }
 }
 
 interface Options {
@@ -104,7 +114,6 @@ interface Options {
   /** The `nodoId` claim: the department's id for a node leader, `unassigned-c1` for none. */
   nodoId?: string
   role?: string
-  organization?: { respondents: number; scores: Record<string, number> }
 }
 
 function renderLeader({
@@ -113,12 +122,10 @@ function renderLeader({
   trackingOn = true,
   nodoId = DEPARTMENT,
   role = 'leader',
-  organization = ORGANIZATION_SAMPLE,
 }: Options = {}) {
   setToken(tokenFor({ sub: 'luis', name: 'Luis Mora', role, companyId: 'c1', nodoId }))
   const model = composeLeaderDashboard({
     department: dashboard,
-    organization,
     tablero,
     trackingOn,
     viewer: { personaExternalId: 'luis', name: 'Luis Mora' },
@@ -149,6 +156,12 @@ function dimensionCard(key: string): HTMLElement {
   return found
 }
 
+function legend(): HTMLElement {
+  const found = document.querySelector<HTMLElement>('[data-slot="team-legend"]')
+  if (!found) throw new Error('no legend')
+  return found
+}
+
 describe('LeaderDashboardView', () => {
   afterEach(() => {
     cleanup()
@@ -172,44 +185,58 @@ describe('LeaderDashboardView', () => {
   })
 
   /**
-   * The artboard's Seguridad psicológica: the team's 4,00 against the organisation's 3,75.
-   * The raw difference, 0,25, rounds to +0,3 beside two printed readings — 4,0 and 3,8 —
-   * that a reader subtracts to 0,2. The page prints the difference of what it prints.
+   * Seguridad psicológica: the team's 4,00 against the whole company's 3,75. The raw
+   * difference, 0,25, rounds to +0,3 beside two printed readings — 4,0 and 3,8 — that a reader
+   * subtracts to 0,2. The page prints the difference of what it prints.
    */
-  it("prints each move against the organisation as the difference of the printed readings", () => {
+  it('prints each move against the organisation as the difference of the printed readings', () => {
     renderLeader()
 
     const safety = dimensionCard('psychological_safety')
     expect(within(safety).getByText('4.0', { selector: '[data-slot="team-reading"]' })).toBeTruthy()
     expect(within(safety).getByText('+0.2', { selector: '[data-slot="team-move"]' })).toBeTruthy()
-    // Pertenencia 4,33 against 4,00: +0,3, as the artboard prints it.
+    // Pertenencia 4,33 against 4,00: +0,3. Reconocimiento 3,50 against 3,38: 3,5 − 3,4 = +0,1.
     expect(within(dimensionCard('belonging')).getByText('+0.3', { selector: '[data-slot="team-move"]' })).toBeTruthy()
+    expect(within(dimensionCard('recognition')).getByText('+0.1', { selector: '[data-slot="team-move"]' })).toBeTruthy()
   })
 
   it('gives no move a colour or a sign: level is level', () => {
-    // Desarrollo in Q2: the team's 3,83 and the organisation's 3,79 both print 3,8.
-    renderLeader({ dashboard: department({ climate: climate(Q2) }) })
+    // Pertenencia 4,33 against a company 4,34: both print 4,3. Desarrollo 4,17 against 4,40:
+    // 4,2 − 4,4 = −0,2, in red.
+    renderLeader({ dashboard: department({ climate: climate(Q3, { organization: organization([4.34, 4.4, 3.75, 3.38, 3.67, 3.33]) }) }) })
 
-    const level = within(dimensionCard('growth')).getByText('0.0', { selector: '[data-slot="team-move"]' })
+    const level = within(dimensionCard('belonging')).getByText('0.0', { selector: '[data-slot="team-move"]' })
     expect(level.dataset.direction).toBe('level')
     expect(level.className).not.toMatch(/accent-(green|red)/)
-    const down = within(dimensionCard('belonging')).getByText('-0.2', { selector: '[data-slot="team-move"]' })
+    const down = within(dimensionCard('growth')).getByText('-0.2', { selector: '[data-slot="team-move"]' })
     expect(down.className).toMatch(/accent-red/)
   })
 
-  it('judges every cell by the one target rule, and offers a plan only where the reading is below it', () => {
-    renderLeader({ dashboard: department({ climate: climate(Q2) }) })
+  /**
+   * The LeaderDashboard artboard: Reconocimiento 3,5 on a red card, "bajo la meta 3,7" and a
+   * red Crear plan; Carga de trabajo 3,7 "en la meta"; the rest "sobre la meta".
+   */
+  it('stands each cell on its side of the target and offers a plan on every cell under it', () => {
+    renderLeader()
 
     const recognition = dimensionCard('recognition')
     expect(recognition.dataset.standing).toBe('below')
+    expect(recognition.className).toMatch(/accent-red-soft/)
     expect(within(recognition).getByText(copy.standingBelow.replace('{target}', '3.7'))).toBeTruthy()
     const create = within(recognition).getByRole('link', { name: copy.createPlanFor.replace('{dimension}', 'Recognition') })
-    expect(create.getAttribute('href')).toBe('/tracking/planes')
-    // 3,5 is inside the canvas's grey band — on target, as on the administrator's map.
+    // Onto the tracking module's create form, open on arrival.
+    expect(create.getAttribute('href')).toBe('/tracking/planes?nuevo=1')
+    // 3,67 prints 3,7: on the target, not under it.
     expect(dimensionCard('workload').dataset.standing).toBe('on')
     expect(within(dimensionCard('workload')).getByText(copy.standingOn.replace('{target}', '3.7'))).toBeTruthy()
-    // Exactly one offer on the page: the one cell under the target.
+    expect(dimensionCard('belonging').dataset.standing).toBe('above')
     expect(screen.getAllByRole('link', { name: /^Create a plan for/ })).toHaveLength(1)
+    cleanup()
+
+    // Q2: Reconocimiento 3,2 and Carga de trabajo 3,5 — two cells under it, two offers.
+    renderLeader({ dashboard: department({ climate: climate(Q2) }) })
+    expect(dimensionCard('workload').dataset.standing).toBe('below')
+    expect(screen.getAllByRole('link', { name: /^Create a plan for/ })).toHaveLength(2)
   })
 
   /**
@@ -218,7 +245,7 @@ describe('LeaderDashboardView', () => {
    * would be refused on every node, so the page never offers the button to them.
    */
   it('offers no Crear plan to a leader who leads no nodo, and still says the cell is below target', () => {
-    renderLeader({ dashboard: department({ climate: climate(Q2) }), nodoId: 'unassigned-c1', tablero: { status: 'off' } })
+    renderLeader({ nodoId: 'unassigned-c1', tablero: { status: 'off' } })
 
     const recognition = dimensionCard('recognition')
     expect(within(recognition).getByText(copy.standingBelow.replace('{target}', '3.7'))).toBeTruthy()
@@ -227,7 +254,7 @@ describe('LeaderDashboardView', () => {
   })
 
   it('offers no Crear plan where this deployment has no tracking service', () => {
-    renderLeader({ dashboard: department({ climate: climate(Q2) }), trackingOn: false, tablero: { status: 'off' } })
+    renderLeader({ trackingOn: false, tablero: { status: 'off' } })
 
     expect(screen.queryByRole('link', { name: /^Create a plan for/ })).toBeNull()
   })
@@ -235,7 +262,8 @@ describe('LeaderDashboardView', () => {
   /**
    * The 27 Aug ruling: the floor applies to the scores. A withheld team reading keeps its
    * dimension names and loses every number — its scores, its respondent count (the server
-   * zeroes it; a 0 would read "nobody answered"), the organisation's side and the move.
+   * zeroes it; a 0 would read "nobody answered"), the organisation's side and the move. The
+   * payload here still carries an organisation side, and the page drops it anyway.
    */
   it('hatches a withheld reading and prints no number for it anywhere', () => {
     renderLeader({
@@ -256,12 +284,13 @@ describe('LeaderDashboardView', () => {
     expect(document.querySelectorAll('[data-slot="team-reading"]')).toHaveLength(0)
     expect(document.querySelectorAll('[data-slot="team-move"]')).toHaveLength(0)
     expect(within(compare).getAllByRole('img')).toHaveLength(KEYS.length)
+    // No organisation count beside it: the legend keys the team alone.
+    expect(legend().textContent).not.toContain('24')
+    expect(legend().textContent).not.toContain(copy.legendOrg.replace('{count}', '24'))
     // The respondents tile is hatched, not "0".
     expect(screen.getByRole('img', { name: copy.responsesWithheldLabel.replace('{floor}', '5') })).toBeTruthy()
     const tiles = [...document.querySelectorAll<HTMLElement>('[data-slot="nodo-tile"]')]
     expect(tiles[1]?.textContent).not.toMatch(/\b0\b/)
-    // No organisation side to mark as sample, and no plan rule without a reading.
-    expect(screen.queryByText(en.dashboard.next.sampleChip)).toBeNull()
   })
 
   it('says a survey under its own floor published nothing, with no names to hatch', () => {
@@ -272,6 +301,7 @@ describe('LeaderDashboardView', () => {
           isSuppressed: true,
           respondentCount: 0,
           dimensions: [],
+          organization: null,
         }),
       }),
     })
@@ -284,12 +314,45 @@ describe('LeaderDashboardView', () => {
     expect(document.querySelectorAll('[data-slot="team-dimension"]')).toHaveLength(0)
   })
 
+  it("draws the organisation's side from the payload, with its count in the legend, and marks nothing as sample", () => {
+    renderLeader()
+
+    for (const [index, key] of KEYS.entries()) {
+      // The org. row of each card, read from `climate.organization` — the company's Q3.
+      const orgRow = within(dimensionCard(key)).getByText(copy.orgWord).parentElement!
+      expect(orgRow.textContent, key).toContain(String(Math.round((ORG_Q3[index] ?? 0) * 10) / 10))
+    }
+    expect(legend().textContent).toContain(copy.legendOrg.replace('{count}', '24'))
+    expect(legend().textContent).toContain(copy.planRule)
+    // Every region is live: no "Datos de muestra" anywhere on the page.
+    expect(screen.queryAllByText(en.dashboard.next.sampleChip)).toHaveLength(0)
+  })
+
   /**
-   * The open wave's team count is unfloored on the wire (`DashboardDepartmentSurveySummary`)
-   * and both artboards hatch it under 5. Three people have answered: "3" must not appear
-   * in the card at all — not in the row, not in a tooltip.
+   * The server sends no organisation side when fewer than the floor answered outside the
+   * team: the company's reading and the team's, side by side with both counts, would give
+   * theirs away. The cards draw the team alone and the legend says so, with no number.
    */
-  it("hatches the open survey's team count under the floor and never prints it", () => {
+  it("draws the team alone where the server withheld the organisation's side, and says so without a number", () => {
+    renderLeader({ dashboard: department({ climate: climate(Q3, { organization: null }) }) })
+
+    expect(document.querySelectorAll('[data-slot="team-reading"]')).toHaveLength(KEYS.length)
+    expect(document.querySelectorAll('[data-slot="team-move"]')).toHaveLength(0)
+    for (const key of KEYS) {
+      expect(within(dimensionCard(key)).queryByText(copy.orgWord), key).toBeNull()
+    }
+    expect(legend().textContent).toContain(copy.legendOrgWithheld.replace('{floor}', '5'))
+    expect(legend().textContent).not.toMatch(/\b24\b/)
+    // The plan rule still stands: the team's own cells are still judged.
+    expect(dimensionCard('recognition').dataset.standing).toBe('below')
+  })
+
+  /**
+   * The open wave's team count arrives `null` under the floor, and both artboards hatch it.
+   * Three people had answered: "3" must not appear in the card at all — not in the row, not
+   * in a tooltip, and not in the whole company's line under it, whose 3 is withheld as well.
+   */
+  it("hatches the open survey's team count under the floor, and the whole company's count with it", () => {
     renderLeader()
 
     const participation = card(copy.participationHeading.replace('{wave}', 'Q4'))
@@ -297,59 +360,47 @@ describe('LeaderDashboardView', () => {
       name: copy.participationUnderFloorLabel.replace('{floor}', '5'),
     })
     expect(hatch.textContent).toBe(copy.participationUnderFloor.replace('{floor}', '5'))
+    expect(
+      within(participation).getByText(copy.companyUnderFloor.replace('{floor}', '5').replace('{target}', '24')),
+    ).toBeTruthy()
     expect(participation.textContent).not.toMatch(/(^|\D)3(\D|$)/)
     expect(hatch.getAttribute('title')).not.toMatch(/(^|\D)3(\D|$)/)
   })
 
-  it('prints the count once the team has reached the floor', () => {
+  it('holds a raw count under the floor as well, from a payload built before the server floored it', () => {
     const dashboard = department()
-    dashboard.activeSurveys[0] = { ...dashboard.activeSurveys[0]!, responseCount: 7 }
+    dashboard.activeSurveys[0] = { ...dashboard.activeSurveys[0]!, responseCount: 3, companyResponseCount: 3 }
+    renderLeader({ dashboard })
+
+    const participation = card(copy.participationHeading.replace('{wave}', 'Q4'))
+    expect(within(participation).getAllByRole('img')).toHaveLength(1)
+    expect(participation.textContent).not.toMatch(/(^|\D)3(\D|$)/)
+  })
+
+  it("prints the team's count and the whole company's once each reaches the floor", () => {
+    const dashboard = department()
+    dashboard.activeSurveys[0] = { ...dashboard.activeSurveys[0]!, responseCount: 7, companyResponseCount: 9 }
     renderLeader({ dashboard })
 
     const participation = card(copy.participationHeading.replace('{wave}', 'Q4'))
     expect(within(participation).getByText('7 of 14 answered')).toBeTruthy()
+    expect(within(participation).getByText(copy.companyCount.replace('{count}', '9').replace('{target}', '24'))).toBeTruthy()
     expect(within(participation).queryByRole('img')).toBeNull()
   })
 
-  it("marks the organisation's side on every card that draws it — the one region no endpoint gives a leader — and nothing else", () => {
-    renderLeader()
-
-    // One chip per card, inside the card whose org. bar and move come from the sample.
-    for (const key of KEYS) {
-      expect(within(dimensionCard(key)).getAllByText(en.dashboard.next.sampleChip), key).toHaveLength(1)
+  it('draws no company line from a payload that carries no company figures', () => {
+    const dashboard = department()
+    dashboard.activeSurveys[0] = {
+      id: 'q4',
+      title: 'Encuesta de Clima Q4 (abierta)',
+      status: 'active',
+      startDate: '2026-09-03T02:03:39.148+00:00',
+      endDate: '2026-10-10T02:03:39.148+00:00',
+      responseCount: null,
     }
-    // And none anywhere else: the tiles, the plan and the participation are live.
-    expect(screen.getAllByText(en.dashboard.next.sampleChip)).toHaveLength(KEYS.length)
-    // The legend names the organisation and prints no count of the sample's: 24 is another
-    // reading's respondents, and a chip beside it pushed the plan rule onto a second line.
-    const legend = document.querySelector('[data-slot="team-legend"]')
-    expect(legend?.textContent).toContain(copy.legendOrgNoCount)
-    expect(legend?.textContent).not.toContain('24')
-    expect(legend?.textContent).toContain(copy.planRule)
-  })
+    renderLeader({ dashboard })
 
-  it('marks no card whose organisation side is not drawn: a withheld reading, or a dimension the sample lacks', () => {
-    renderLeader({
-      dashboard: department({
-        climate: climate(Q3, {
-          isSuppressed: true,
-          respondentCount: 0,
-          dimensions: KEYS.map((dimension) => ({ dimension, averageScore: null })),
-        }),
-      }),
-    })
-    expect(screen.queryAllByText(en.dashboard.next.sampleChip)).toHaveLength(0)
-    cleanup()
-
-    renderLeader({
-      organization: {
-        respondents: ORGANIZATION_SAMPLE.respondents,
-        scores: Object.fromEntries(Object.entries(ORGANIZATION_SAMPLE.scores).filter(([key]) => key !== 'workload')),
-      },
-    })
-    expect(within(dimensionCard('workload')).queryByText(en.dashboard.next.sampleChip)).toBeNull()
-    expect(within(dimensionCard('workload')).queryByText(copy.vsOrg)).toBeNull()
-    expect(screen.getAllByText(en.dashboard.next.sampleChip)).toHaveLength(KEYS.length - 1)
+    expect(document.querySelector('[data-slot="team-company-line"]')).toBeNull()
   })
 
   it("lists the team's open plans from its own board, each opening the plan's page", () => {
@@ -402,12 +453,14 @@ describe('LeaderDashboardView', () => {
     }
   })
 
-  it('links nowhere a leader would be refused', () => {
+  it('links nowhere a leader would be refused, and offers no reminder', () => {
     renderLeader({ dashboard: department({ climate: climate(Q2) }) })
 
     const hrefs = screen.getAllByRole('link').map((link) => link.getAttribute('href'))
     for (const href of hrefs) {
-      expect(href, String(href)).toMatch(/^\/tracking\/(planes|tablero)(\/|$)/)
+      expect(href, String(href)).toMatch(/^\/tracking\/(planes|tablero)(\/|\?|$)/)
     }
+    // `POST /surveys/{id}/invitations/reminders` is `CanAdminister`: no "Recordar al equipo".
+    expect(screen.queryByRole('button', { name: /remind/i })).toBeNull()
   })
 })

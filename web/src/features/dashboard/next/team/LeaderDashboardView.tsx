@@ -40,17 +40,22 @@ const PLANS_LISTED = 3
  *   its respondents when the server withheld them; the cells are hatched and say
  *   "protegido", and the comparison beside them is dropped with them — half a comparison
  *   would give the other half back.
- * - **A sub-floor count.** The open survey's team count is `null` under the floor in the
- *   model, so the row can only draw "menos de 5 respuestas" — and the file behind
- *   "Exportar" holds the same count to the same floor (`DashboardExport.TeamCountFloor`), so
- *   the download cannot print what the row hatches.
- * - **Another organisation's numbers as this one's.** The org. bar and the move against it
- *   come from `sampleModel.ts`; every card that draws them carries the "Datos de muestra"
- *   chip, and the legend names the organisation without the sample's respondent count.
+ * - **A sub-floor count.** The open survey's team count is `null` under the floor — on the
+ *   wire (`DashboardEndpoints.DepartmentCountFloor`) and again in the model — so the row can
+ *   only draw "menos de 5 respuestas", and the file behind "Exportar" holds it to the same
+ *   floor (`DashboardExport.TeamCountFloor`). The whole company's count under the list is held
+ *   to it too: beside a hatched team count, "toda la empresa: 3" would say the team has at
+ *   most 3.
+ * - **The organisation's side where the server withholds it.** The org. bar and the move
+ *   come from the same read's `climate.organization`, the whole company's reading of the same
+ *   survey. When fewer than the floor answered outside the team the server sends none — the
+ *   two readings side by side would give theirs away — and the legend says the organisation
+ *   is not compared, with no number.
  * - **A control the server would refuse.** "Exportar" is the department's file
  *   (`canExport` for a team role, `DashboardEndpoints.cs:124`). "Crear plan" is offered only
  *   where a tracking plan can be created for this team — a node leader on their own nodo,
- *   `Roles.PlanCreator` in the tracking service (`leadsANodo`) — and "Abrir el plan" only on
+ *   `Roles.PlanCreator` in the tracking service (`leadsANodo`) — and lands on the tracking
+ *   module's create form (`/tracking/planes?nuevo=1`); "Abrir el plan" only on
  *   a plan this reader may open (`canRecordProgress`, `PlanAccessHandler`). `POST
  *   /action-plans` and `/action-plans/{id}` are `Roles.Admin` and never linked from here.
  */
@@ -233,7 +238,6 @@ function CompareCard({
               department={model.departmentName}
               target={model.target}
               mayCreatePlan={mayCreatePlan}
-              sample={model.organizationIsSample}
               t={t}
               locale={locale}
             />
@@ -256,18 +260,20 @@ function CompareCard({
               count: count(model.memberCount, locale),
             })}
           </span>
-          {!wave.withheld && (
-            <span className="inline-flex items-center gap-1.5">
-              <span aria-hidden="true" className="h-2 w-3.5 rounded bg-chart-div-mid" />
-              {/* The key and not a figure while the organisation's side is the sample: its
-                  respondent count is another reading's, and the numbers drawn from it are
-                  marked on the cards that draw them (`DimensionCard`). A chip here as well
-                  pushed the plan rule onto a second line the artboard does not have. */}
-              {model.organizationIsSample || model.organizationRespondents === null
-                ? t('dashboard.next.leader.legendOrgNoCount')
-                : t('dashboard.next.leader.legendOrg', { count: count(model.organizationRespondents, locale) })}
-            </span>
-          )}
+          {!wave.withheld &&
+            (model.organizationRespondents !== null ? (
+              <span className="inline-flex items-center gap-1.5">
+                <span aria-hidden="true" className="h-2 w-3.5 rounded bg-chart-div-mid" />
+                {t('dashboard.next.leader.legendOrg', { count: count(model.organizationRespondents, locale) })}
+              </span>
+            ) : (
+              // The server withheld the organisation's side: fewer than the floor answered
+              // outside the team. Said in words, with no number and no swatch for bars that
+              // are not drawn.
+              <span data-slot="team-legend-org-withheld">
+                {t('dashboard.next.leader.legendOrgWithheld', { floor: wave.floor })}
+              </span>
+            ))}
           {mayCreatePlan && !wave.withheld && <span>{t('dashboard.next.leader.planRule')}</span>}
         </div>
       )}
@@ -281,7 +287,6 @@ function DimensionCard({
   department,
   target,
   mayCreatePlan,
-  sample,
   t,
   locale,
 }: {
@@ -290,8 +295,6 @@ function DimensionCard({
   department: string
   target: number
   mayCreatePlan: boolean
-  /** The organisation's side is `sampleModel.ts`: the move and the org. bar are marked. */
-  sample: boolean
   t: TranslateFn
   locale: string
 }) {
@@ -361,14 +364,6 @@ function DimensionCard({
               />
             )}
           </div>
-          {/* The org. bar and the move above it come from `sampleModel.ts`, so the card that
-              draws them says so: on any tenant but the one the sample was read from, they are
-              another organisation's numbers, and a reader must not take them for theirs. */}
-          {sample && dimension.organization !== null && (
-            <span className="inline-flex">
-              <Chip data-slot="sample-chip" tone="warning" label={t('dashboard.next.sampleChip')} />
-            </span>
-          )}
           <div className="mt-auto pt-0.5">
             {below ? (
               <div className="flex flex-col gap-2">
@@ -378,7 +373,7 @@ function DimensionCard({
                 {mayCreatePlan && (
                   <Button asChild variant="primary" size="canvas" className="w-full">
                     <Link
-                      to="/tracking/planes"
+                      to="/tracking/planes?nuevo=1"
                       aria-label={t('dashboard.next.leader.createPlanFor', { dimension: name })}
                     >
                       <Plus aria-hidden="true" />
@@ -618,8 +613,39 @@ function ParticipationCard({ model, t, locale }: { model: LeaderDashboardModel; 
               </li>
             ))}
           </ul>
+          {first.company !== null && (
+            <p data-slot="team-company-line" className="m-0 pt-1 text-sm text-fg-label">
+              {companyLine(first.company, model.floor, t, locale)}
+            </p>
+          )}
         </>
       )}
     </TeamCard>
   )
+}
+
+/**
+ * "Toda la empresa: 3 de 24 respuestas." — the artboard's line under the list, for the survey
+ * the card is headed by. The count is held to the floor like the team's, in words: under it,
+ * "menos de 5". No "Recordar al equipo" beside it: `POST /surveys/{id}/invitations/reminders`
+ * is `CanAdminister` (`SurveyDistributionEndpoints.cs:131`, `:1121`), and a button that 403s
+ * is worse than none.
+ */
+function companyLine(
+  company: { responses: number | null; target: number | null },
+  floor: number,
+  t: TranslateFn,
+  locale: string,
+): string {
+  if (company.responses === null) {
+    return company.target === null
+      ? t('dashboard.next.leader.companyUnderFloorNoTarget', { floor })
+      : t('dashboard.next.leader.companyUnderFloor', { floor, target: count(company.target, locale) })
+  }
+  return company.target === null
+    ? t('dashboard.next.leader.companyCountNoTarget', { count: count(company.responses, locale) })
+    : t('dashboard.next.leader.companyCount', {
+        count: count(company.responses, locale),
+        target: count(company.target, locale),
+      })
 }

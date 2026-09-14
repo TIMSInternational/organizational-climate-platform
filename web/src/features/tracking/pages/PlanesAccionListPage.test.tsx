@@ -54,10 +54,10 @@ function routeFetch(plans: PlanAccion[] = [plan()], options: { pickers?: boolean
   })
 }
 
-function renderPage() {
+function renderPage(initialEntries?: string[]) {
   return render(
     <TranslationProvider initialLocale="es">
-      <MemoryRouter>
+      <MemoryRouter initialEntries={initialEntries}>
         <CompanyContextProvider>
           <PlanesAccionListPage />
         </CompanyContextProvider>
@@ -157,6 +157,30 @@ describe('PlanesAccionListPage', () => {
     await screen.findByText('Reforzar la comunicación interna')
 
     expect(screen.queryByRole('button', { name: 'Nuevo plan' })).toBeNull()
+  })
+
+  /**
+   * The leader's Panel de Control links a below-target cell's "Crear plan" to
+   * `/tracking/planes?nuevo=1`: the form is open on arrival for a plan creator, and for
+   * nobody else, because there is no form to open for a role `canCreatePlan` refuses.
+   */
+  it('opens the create form on arrival with ?nuevo=1, for a plan creator only', async () => {
+    routeFetch([plan()], { pickers: false })
+    setToken(tokenFor({ sub: 'lider-1', role: 'leader', nodoId: 'nodo-a', companyId: 'company-1' }))
+    renderPage(['/tracking/planes?nuevo=1'])
+    expect(await screen.findByRole('button', { name: 'Crear plan de acción' })).toBeTruthy()
+    cleanup()
+
+    setToken(tokenFor({ sub: 'persona-2', role: 'employee', nodoId: '', companyId: 'company-1' }))
+    renderPage(['/tracking/planes?nuevo=1'])
+    await screen.findByText('Reforzar la comunicación interna')
+    expect(screen.queryByRole('button', { name: 'Crear plan de acción' })).toBeNull()
+  })
+
+  it('keeps the create form closed without the parameter', async () => {
+    renderPage(['/tracking/planes'])
+    await screen.findByText('Reforzar la comunicación interna')
+    expect(screen.queryByRole('button', { name: 'Crear plan de acción' })).toBeNull()
   })
 
   it('keeps the listing when the picker directory is refused', async () => {

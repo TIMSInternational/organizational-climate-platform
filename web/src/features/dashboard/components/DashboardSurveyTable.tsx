@@ -2,6 +2,7 @@ import { Link } from 'react-router'
 import { Plus } from 'lucide-react'
 import { useTranslation } from '../../../i18n'
 import { Button, EmptyState, Table } from '../../../components/ui'
+import { ProtectedCell } from '../../../components/charts'
 import { statusLabel } from '../../surveys/surveyVocabulary'
 import { calendarDay } from '../../../lib/calendarDay'
 
@@ -20,8 +21,10 @@ export interface DashboardSurveyTableRow {
   /**
    * Completed responses, **already scoped by the server to whatever this page is about** —
    * the whole tenant on the company dashboard, this department alone on the department one.
+   * `null` where the server withheld it under the floor of 5 (the department dashboard's
+   * `activeSurveys[].responseCount`): drawn as a protected cell, never as "0".
    */
-  responseCount: number
+  responseCount: number | null
   /**
    * The tenant's invited headcount. Absent on a department's payload: it is a single
    * author-entered number for the whole company with no per-department breakdown, so there
@@ -138,7 +141,15 @@ export default function DashboardSurveyTable({
                 rests on, and the one this table was missing while the KPI tiles directly
                 above it honoured it. Two faces for the same kind of number on one screen is
                 exactly what stops it reading as an instrument. */}
-            <td className="font-mono tabular-nums">{survey.responseCount}</td>
+            <td className="font-mono tabular-nums">
+              {survey.responseCount === null ? (
+                <ProtectedCell responses={0} description={survey.title ?? t('surveys.untitled')} showWord={false}>
+                  {null}
+                </ProtectedCell>
+              ) : (
+                survey.responseCount
+              )}
+            </td>
             {/* An em dash, not "0": a survey with no invitation total has no target, and
                 printing zero would read as "nobody was invited". */}
             {showTarget && (

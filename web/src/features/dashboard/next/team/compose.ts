@@ -7,7 +7,7 @@ import { dayDiff, hasRecordedProgress, isOverdue, type Viewer } from '../../../t
 import { ANONYMITY_FLOOR, isSuppressed } from '../../../../components/charts/suppression'
 import { waveCode } from '../compose'
 import { daysUntil } from '../employee/compose'
-import { printedMove, targetStanding, type TargetStanding } from '../derive'
+import { printedMove, printedReading, type TargetStanding } from '../derive'
 import type {
   LeaderDashboardModel,
   LeaderPlans,
@@ -42,8 +42,12 @@ export function countFloor(climate: DashboardTeamClimate | null): number {
   return Math.max(ANONYMITY_FLOOR, climate?.minimumGroupSize ?? 0)
 }
 
-/** A count as a page may print it: itself at or over the floor, `null` under it. */
-export function flooredCount(count: number, floor: number): number | null {
+/**
+ * A count as a page may print it: itself at or over the floor, `null` under it — and `null`
+ * for a count the server already withheld (`null` on the wire since fix round 2).
+ */
+export function flooredCount(count: number | null | undefined, floor: number): number | null {
+  if (count === null || count === undefined) return null
   return isSuppressed(count, floor) ? null : count
 }
 
@@ -54,12 +58,13 @@ export function flooredCount(count: number, floor: number): number | null {
  * the respondent count (the server zeroes it; a 0 would read "nobody answered"), and the
  * organisation's mean too, because the comparison is the page's subject and half of it
  * cannot be drawn. A survey that fell under its own floor has no names to keep.
+ *
+ * The organisation's side is the payload's own `climate.organization`, keyed by dimension so
+ * a dimension the company block lacks draws no bar rather than a borrowed one. The server
+ * sends none when fewer than the floor answered outside the team; the cards then draw the
+ * team alone.
  */
-export function teamClosedWave(
-  climate: DashboardTeamClimate | null,
-  organization: { readonly scores: Readonly<Record<string, number>> },
-  asOf?: string,
-): TeamClosedWave | null {
+export function teamClosedWave(climate: DashboardTeamClimate | null, asOf?: string): TeamClosedWave | null {
   if (climate === null || climate.surveyId === null) return null
   // `surveyEndDate` is the survey's END date, and an archived survey can be archived before
   // it: the live stack's "(Copia)" was archived on 9 Sep with an end date of 10 Oct. "Cerró
@@ -74,10 +79,16 @@ export function teamClosedWave(
   // Belt and braces: a disclosed reading whose own count is under the floor is withheld
   // here as well. The server never sends one, and a page that trusted it would print it.
   const withheld = climate.isSuppressed || isSuppressed(climate.respondentCount, floor)
+  // Half a comparison would give the other half back: beside a withheld reading, no
+  // organisation side even if a payload carried one.
+  const organization = withheld ? null : (climate.organization ?? null)
+  const organizationScores = new Map(
+    (organization?.dimensions ?? []).map((score) => [score.dimension, score.averageScore] as const),
+  )
   const dimensions: TeamDimension[] = climate.dimensions.map((dimension) => ({
     key: dimension.dimension,
     team: withheld ? null : dimension.averageScore,
-    organization: withheld ? null : (organization.scores[dimension.dimension] ?? null),
+    organization: organizationScores.get(dimension.dimension) ?? null,
   }))
   return {
     surveyId: climate.surveyId,
@@ -85,6 +96,7 @@ export function teamClosedWave(
     code: waveCode(climate.surveyTitle, '—'),
     closedOn,
     respondents: withheld ? null : climate.respondentCount,
+    organizationRespondents: organization === null ? null : organization.respondentCount,
     withheld,
     surveyWithheld: withheld && climate.dimensions.length === 0,
     floor,
@@ -104,13 +116,23 @@ export function dimensionMove(dimension: TeamDimension): number | null {
 }
 
 /**
- * Where the team's reading stands against the target, by the ONE rule every screen judges
- * with (`derive.targetStanding`, the canvas's bands judged at the printed decimal) — so the
- * Ingeniería × Reconocimiento cell cannot be "en la meta" on the administrator's map and
- * "bajo la meta" here. `null` for a withheld reading, which stands nowhere.
+ * Where the team's reading stands against the target on the leader's card: the side of the
+ * target the PRINTED reading falls on, strictly — under 3,7 is "bajo la meta", 3,7 itself is
+ * "en la meta", over it "sobre la meta". The LeaderDashboard artboard (10 Sep) draws exactly
+ * that: Reconocimiento 3,5 on a red card with "bajo la meta 3,7" and Crear plan, Carga de
+ * trabajo 3,7 "en la meta", every 3,8 and up "sobre la meta" — and its legend says why: "un
+ * plan nace de la celda que está bajo la meta".
+ *
+ * The administrator's map TINTS cells in bands (`derive.targetStep`, grey from 3,5 to 3,7): a
+ * colour scale over every team at once. This is the plan rule for one team's cell, so the two
+ * screens may colour the same 3,5 differently; both print the same number. Judged at the
+ * printed decimal, so the word never contradicts the number beside it (3,67 prints 3,7 and is
+ * on target). `null` for a withheld reading, which stands nowhere.
  */
 export function dimensionStanding(dimension: TeamDimension, target: number): TargetStanding | null {
-  return dimension.team === null ? null : targetStanding(dimension.team, target)
+  if (dimension.team === null) return null
+  const tenths = Math.round(printedReading(dimension.team) * 10) - Math.round(printedReading(target) * 10)
+  return tenths < 0 ? 'below' : tenths > 0 ? 'above' : 'on'
 }
 
 /** The surveys open to the team, soonest close first, each count held to the floor. */
@@ -128,6 +150,13 @@ export function teamOpenSurveys(
       closesOn: survey.endDate,
       daysLeft: daysUntil(survey.endDate, asOf),
       responses: flooredCount(survey.responseCount, floor),
+      company:
+        survey.companyResponseCount === undefined
+          ? null
+          : {
+              responses: flooredCount(survey.companyResponseCount, floor),
+              target: survey.companyTargetAudienceCount ?? null,
+            },
     }))
 }
 
@@ -174,7 +203,6 @@ function byDue(a: TeamPlan, b: TeamPlan): number {
 
 export interface LeaderInput {
   department: DepartmentAdminDashboard
-  organization: { readonly respondents: number; readonly scores: Readonly<Record<string, number>> }
   /** The leader's own nodo board, or why it was not read; `null` while it is being read. */
   tablero: TrackingRead<TableroResponse> | null
   trackingOn: boolean
@@ -185,10 +213,10 @@ export interface LeaderInput {
 }
 
 export function composeLeaderDashboard(input: LeaderInput): LeaderDashboardModel {
-  const { department, organization, tablero, asOf } = input
+  const { department, tablero, asOf } = input
   const today = todayIso(new Date(asOf))
   const floor = countFloor(department.climate)
-  const closedWave = teamClosedWave(department.climate, organization, asOf)
+  const closedWave = teamClosedWave(department.climate, asOf)
 
   let plans: LeaderPlans
   if (tablero === null) {
@@ -215,10 +243,8 @@ export function composeLeaderDashboard(input: LeaderInput): LeaderDashboardModel
     openSurveys: teamOpenSurveys(department, floor, asOf),
     openSurveyCount: department.activeSurveyCount,
     floor,
-    // The organisation's count belongs to the same region as its scores: the sample, and
-    // only beside a reading that exists and is drawn.
-    organizationRespondents: closedWave && !closedWave.withheld ? organization.respondents : null,
-    organizationIsSample: true,
+    // The organisation's count belongs with its scores: only beside a reading that is drawn.
+    organizationRespondents: closedWave?.organizationRespondents ?? null,
     plans,
     trackingOn: input.trackingOn,
     target: input.target,

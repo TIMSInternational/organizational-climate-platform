@@ -8,7 +8,6 @@ import { getMisTareas, getTablero } from '../../../tracking/api/trackingApi'
 import { isTrackingEnabled } from '../../../tracking/api/config'
 import { readViewer } from '../../../tracking/next/viewer'
 import { CLIMATE_TARGET } from '../compose'
-import { ORGANIZATION_SAMPLE } from './sampleModel'
 import { composeLeaderDashboard, composeSupervisorDashboard, type TrackingRead } from './compose'
 import type { LeaderDashboardModel, SupervisorDashboardModel } from './model'
 
@@ -83,7 +82,7 @@ function useTrackingRead<T>(enabled: boolean, read: () => Promise<T>, nonce: num
  * | Region                                   | Endpoint                                    |
  * |------------------------------------------|---------------------------------------------|
  * | the three tiles, the team's reading, the open wave's participation | `GET /dashboard/department-admin` |
- * | the organisation's side of the comparison | none for this role — `sampleModel.ts`        |
+ * | the organisation's side of the comparison | the same read's `climate.organization`     |
  * | "El plan que atiende al equipo"          | `GET /api/tablero-seguimiento` (own nodo)  |
  *
  * The board is read only when this deployment has a tracking service AND the reader leads a
@@ -110,7 +109,6 @@ export function useLeaderDashboardModel(): TeamDashboardState<LeaderDashboardMod
     if (data?.kind !== 'department') return null
     return composeLeaderDashboard({
       department: data.dashboard,
-      organization: ORGANIZATION_SAMPLE,
       tablero,
       trackingOn,
       viewer,

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router'
 import { useCompanyScope } from '../../../company-context'
 import { PageTopBar } from '../../../components/layout'
 import {
@@ -96,7 +97,11 @@ export default function PlanesAccionListPage() {
   const [personas, setPersonas] = useState<PersonaPickerItem[]>([])
   const [directoryUnavailable, setDirectoryUnavailable] = useState(false)
 
-  const [showCreate, setShowCreate] = useState(false)
+  // `?nuevo=1` opens the form on arrival: the leader's Panel de Control links its "Crear
+  // plan" here, and whoever arrives through it came to create one. Ignored for anyone
+  // `canCreatePlan` refuses: there is no form to open for them.
+  const [searchParams] = useSearchParams()
+  const [showCreate, setShowCreate] = useState(() => searchParams.get('nuevo') === '1' && canCreatePlan(claims))
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [created, setCreated] = useState<PlanAccion | null>(null)

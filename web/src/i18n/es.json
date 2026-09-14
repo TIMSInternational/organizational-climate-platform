@@ -987,7 +987,6 @@
         "createPlanFor": "Crear un plan para {dimension}",
         "legendTeam": "equipo: {department}, {count} integrantes",
         "legendOrg": "org.: toda la organización, {count} respuestas",
-        "legendOrgNoCount": "org.: toda la organización",
         "planRule": "Un plan nace de la celda que está bajo la meta; enlaza a la dimensión y al equipo, nunca a respuestas.",
         "surveyWithheld": "{survey} quedó por debajo del mínimo de {floor} respuestas: no se publica ninguna lectura, ni del equipo ni de la organización.",
         "teamWithheld": "En {survey} respondieron menos de {floor} personas del equipo, así que su lectura queda protegida: las dimensiones se nombran y ningún puntaje se muestra.",
@@ -1022,7 +1021,12 @@
         "participationCount": "{count} de {members} respondieron",
         "participationNone": "No hay ninguna encuesta abierta para el equipo en este momento.",
         "surveyActive": "Activa",
-        "responsesUnitNoDate": "completadas"
+        "responsesUnitNoDate": "completadas",
+        "companyCount": "Toda la empresa: {count} de {target} respuestas.",
+        "companyCountNoTarget": "Toda la empresa: {count} respuestas.",
+        "companyUnderFloor": "Toda la empresa: menos de {floor} de {target} respuestas.",
+        "companyUnderFloorNoTarget": "Toda la empresa: menos de {floor} respuestas.",
+        "legendOrgWithheld": "org.: sin comparación, fuera del equipo respondieron menos de {floor}"
       },
       "supervisor": {
         "proposal": "Propuesta",

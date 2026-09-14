@@ -987,7 +987,6 @@
         "createPlanFor": "Create a plan for {dimension}",
         "legendTeam": "team: {department}, {count} members",
         "legendOrg": "org.: the whole organisation, {count} responses",
-        "legendOrgNoCount": "org.: the whole organisation",
         "planRule": "A plan is born from the cell that is below target; it links to the dimension and the team, never to responses.",
         "surveyWithheld": "{survey} stayed under the minimum of {floor} responses, so no reading is published — neither the team's nor the organisation's.",
         "teamWithheld": "Fewer than {floor} people in the team answered {survey}, so its reading is protected: the dimensions are named, no score is shown.",
@@ -1022,7 +1021,12 @@
         "participationCount": "{count} of {members} answered",
         "participationNone": "No survey is open for the team right now.",
         "surveyActive": "Active",
-        "responsesUnitNoDate": "completed"
+        "responsesUnitNoDate": "completed",
+        "companyCount": "Whole company: {count} of {target} responses.",
+        "companyCountNoTarget": "Whole company: {count} responses.",
+        "companyUnderFloor": "Whole company: fewer than {floor} of {target} responses.",
+        "companyUnderFloorNoTarget": "Whole company: fewer than {floor} responses.",
+        "legendOrgWithheld": "org.: not compared — fewer than {floor} answered outside the team"
       },
       "supervisor": {
         "proposal": "Proposal",
