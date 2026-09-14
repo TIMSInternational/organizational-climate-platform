@@ -11,6 +11,11 @@ import { cn } from '../../lib/cn'
  * change from the legacy implementation but not from its intended behaviour.
  *
  * `value` is 0–100. Pass `null` for indeterminate.
+ *
+ * At 0 (and indeterminate) the indicator is hidden, not merely translated out: a
+ * `translateX(-100%)` indicator inside a rounded, clipped track left an antialiased
+ * sliver of fill at the track's left end (sampled (207,208,239) on the microclimate
+ * live bar at 2x, 11 Sep), where every artboard draws an empty track flat.
  */
 export type ProgressProps = ComponentProps<typeof ProgressPrimitive.Root> & {
   /**
@@ -27,6 +32,7 @@ export type ProgressProps = ComponentProps<typeof ProgressPrimitive.Root> & {
 }
 
 export function Progress({ className, indicatorClassName, value, ...props }: ProgressProps) {
+  const empty = (value ?? 0) <= 0
   return (
     <ProgressPrimitive.Root
       data-slot="progress"
@@ -42,6 +48,7 @@ export function Progress({ className, indicatorClassName, value, ...props }: Pro
         className={cn(
           'size-full flex-1 bg-accent-blue transition-transform ease-out',
           indicatorClassName,
+          empty && 'invisible',
         )}
         style={{ transform: `translateX(-${100 - (value ?? 0)}%)` }}
       />

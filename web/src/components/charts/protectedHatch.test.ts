@@ -69,6 +69,13 @@ function hatchToken(): string {
   return match[1]
 }
 
+/** The token the hatch's gaps are painted in, read out of the shared constant. */
+function groundToken(): string {
+  const match = /_0_4px,var\((--[a-z0-9-]+)\)_4px_8px\)/.exec(PROTECTED_HATCH)
+  if (!match) throw new Error('PROTECTED_HATCH no longer paints its gaps in a token')
+  return match[1]
+}
+
 const SRC = join(process.cwd(), 'src')
 
 /**
@@ -104,11 +111,14 @@ describe('the fixtures themselves', () => {
 
 describe('the protected hatch', () => {
   const token = hatchToken()
+  const ground = groundToken()
 
   it('is painted in a token the component actually names', () => {
     // Its own token since the canvas (10 Sep): the artboards' stripe is fainter than
     // `--admin-border-hover`, which every hovered border still uses.
     expect(token).toBe('--admin-hatch-stripe')
+    // And its gaps in one, rather than `transparent` over whatever it lands on.
+    expect(ground).toBe('--admin-hatch-ground')
     // The surface it is painted on. `bg-surface-icon-box` maps to
     // `--admin-bg-icon-box` through theme.css.
     expect(protectedCellSource).toContain('bg-surface-icon-box')
@@ -136,21 +146,45 @@ describe('the protected hatch', () => {
   })
 
   it.each([
-    ['light', lightToken(token), lightToken('--admin-bg-icon-box')],
-    ['dark', darkToken(token), darkToken('--admin-bg-icon-box')],
-  ])('is not the same colour as the surface it sits on, in %s', (_theme, stripe, surface) => {
+    ['light', lightToken(token), lightToken(ground)],
+    ['dark', darkToken(token), darkToken(ground)],
+  ])('is not the same colour as the ground between its stripes, in %s', (_theme, stripe, surface) => {
     // The regression that shipped: identical hexes in dark, 1.02:1 in light.
     expect(stripe).not.toBe(surface)
     expect(contrast(stripe, surface)).toBeGreaterThan(1.2)
   })
 
+  it('paints its gaps in the canvas’s own ground in light, and in the surface it sits on in dark', () => {
+    // Every artboard of 10 Sep, 26 of 26, draws the hatch as
+    // `repeating-linear-gradient(135deg, #e6e3f1 0 4px, #f8f7fb 4px 8px)`: the gaps are
+    // the outer ground, not the recessed #f3f1fa the cell sits on, which a transparent
+    // gap showed and which read a shade darker and bluer on the live session's words.
+    expect(lightToken(ground)).toBe(lightToken('--admin-bg-outer'))
+    // The artboards draw no dark theme; there the gaps stay what they always showed.
+    expect(darkToken(ground)).toBe(darkToken('--admin-bg-icon-box'))
+  })
+
+  it('is the canvas’s stripe in light, only as much darker as the floor needs', () => {
+    // The canvas's own pair is under the floor above — which is why the stripe is not
+    // the canvas's hex.
+    expect(contrast('#e6e3f1', '#f8f7fb')).toBeLessThan(1.2)
+    // Within 3 of it on every channel, and fainter than 1.21:1 on the ground: neither
+    // under the floor nor darkened by eye into a texture the artboards do not draw.
+    const stripe = channels(lightToken(token))
+    const canvas = channels('#e6e3f1')
+    expect(Math.max(...stripe.map((channel, i) => Math.abs(channel - canvas[i])))).toBeLessThanOrEqual(3)
+    expect(contrast(lightToken(token), lightToken(ground))).toBeLessThan(1.21)
+  })
+
   it.each([
-    ['light', lightToken('--admin-font-tertiary'), lightToken('--admin-bg-icon-box')],
-    ['dark', darkToken('--admin-font-tertiary'), darkToken('--admin-bg-icon-box')],
-  ])('shows the padlock at 3:1 or better against the surface, in %s', (_theme, ink, surface) => {
+    ['light', lightToken('--admin-font-tertiary'), lightToken(ground), lightToken(token)],
+    ['dark', darkToken('--admin-font-tertiary'), darkToken(ground), darkToken(token)],
+  ])('shows the padlock at 3:1 or better against both colours of the hatch, in %s', (_theme, ink, gap, stripe) => {
     // 3:1 is WCAG 1.4.11 for a non-text graphic that carries meaning, which the
-    // padlock does — it is what says "withheld" rather than "empty".
-    expect(contrast(ink, surface)).toBeGreaterThanOrEqual(3)
+    // padlock does — it is what says "withheld" rather than "empty". It sits across
+    // the stripes and the gaps, so it clears both.
+    expect(contrast(ink, gap)).toBeGreaterThanOrEqual(3)
+    expect(contrast(ink, stripe)).toBeGreaterThanOrEqual(3)
   })
 
   it('uses that ink, rather than the near-invisible --admin-font-light', () => {

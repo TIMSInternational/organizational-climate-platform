@@ -58,7 +58,9 @@ export interface ChipProps extends Omit<ComponentProps<'span'>, 'children'> {
   /**
    * An optional glyph before the word. Rendered `aria-hidden`, because the word
    * beside it already says the same thing and a screen reader should not hear it
-   * twice.
+   * twice. Drawn 13px (3.25 x the 4px `--spacing` token): every chip glyph on the
+   * approved canvas of 10 Sep is `width: 13px; height: 13px`, 23 of 23 across 12
+   * artboards.
    */
   icon?: ReactNode
 }
@@ -67,7 +69,7 @@ export function Chip({ label, tone, icon, className, ...props }: ChipProps) {
   return (
     <span data-slot="chip" className={cn(chipVariants({ tone }), className)} {...props}>
       {icon && (
-        <span aria-hidden="true" className="inline-flex shrink-0 items-center [&>svg]:size-3">
+        <span aria-hidden="true" className="inline-flex shrink-0 items-center [&>svg]:size-3.25">
           {icon}
         </span>
       )}
