@@ -1,8 +1,9 @@
 import { useCallback, useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router'
+import { useLocation, useNavigate } from 'react-router'
 import { AuthRequestError, login } from '../api'
 import { setToken } from '../token'
 import { resolveInitialRoute } from '../../app/resolveInitialRoute'
+import { safeReturnPath } from '../returnPath'
 import { useTranslation } from '../../i18n'
 import { loginOutcome, type LoginOutcome } from './derive'
 
@@ -41,6 +42,11 @@ export interface SignInModel {
 export function useSignInModel(): SignInModel {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  // Where to go after signing in, when something sent this visitor here with a destination
+  // — today the microclimate invitation's «Iniciar sesión y volver aquí». Validated rather
+  // than trusted: see `returnPath.ts`. This lives HERE, on the routed component's model,
+  // and not on `auth/LoginPage.tsx`, which the auth lane left in the tree unrouted.
+  const returnPath = safeReturnPath(useLocation().state)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<SignInError | null>(null)
@@ -58,8 +64,9 @@ export function useSignInModel(): SignInModel {
           const { token } = await login(baseUrl, email, password)
           setToken(token)
           // `/dashboard` for every role since #132 — the page dispatches on the claim, so
-          // nothing has to be decoded here to pick a destination.
-          navigate(resolveInitialRoute())
+          // nothing has to be decoded here to pick a destination. A validated `from`
+          // destination wins over it, so the invitation's promise to come back is kept.
+          navigate(returnPath ?? resolveInitialRoute())
         } catch (err) {
           const status = err instanceof AuthRequestError ? err.status : 0
           const message = err instanceof Error && err.message ? err.message : t('errors.generic')

@@ -445,3 +445,76 @@ describe('AuthTransitionNextPage', () => {
     expect(screen.getByTestId('state-message').textContent).toBe('No company found for this email domain.')
   })
 })
+
+/**
+ * Where a successful sign-in LANDS, when something sent this visitor here with a destination.
+ *
+ * ## Why this block exists here and not on `auth/LoginPage.test.tsx`
+ *
+ * The invitations lane wrote this guarantee against `auth/LoginPage.tsx`, which was the
+ * routed component when that lane was cut. This lane re-pointed `/login` at
+ * `LoginNextPage`, and the two lanes touched **different files** — so the merge produced no
+ * conflict, every gate stayed green, and the promise silently stopped being kept.
+ *
+ * A test left on the unrouted page is worse than no test at all: it reports a guarantee as
+ * held on a component nothing mounts. So it moved here, onto the model the router actually
+ * runs (`useSignInModel`). `returnPath.test.ts` still unit-tests the guard itself; this is
+ * the seam where the promise is kept or broken.
+ *
+ * The label that makes it a promise is `microclimates.next.invitation.signInAction` —
+ * «Iniciar sesión y volver aquí» — on the MicroclimateInvitationStates artboard.
+ */
+describe('LoginNextPage — the return destination', () => {
+  function renderLoginWithState(state: unknown) {
+    return render(
+      <TranslationProvider initialLocale="en">
+        <MemoryRouter initialEntries={[{ pathname: '/login', state }]}>
+          <LocationProbe />
+          <Routes>
+            <Route path="/login" element={<LoginNextPage />} />
+            <Route path="/dashboard" element={<p>dashboard</p>} />
+            <Route path="/microclimate-invitations/:token" element={<p>the invitation</p>} />
+          </Routes>
+        </MemoryRouter>
+      </TranslationProvider>,
+    )
+  }
+
+  async function signIn() {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ token: tokenFor({ role: 'employee', companyId: 'c1' }) }), { status: 200 }),
+    )
+    await userEvent.type(screen.getByLabelText(/Email address/), 'ana@meridiano.test')
+    await userEvent.type(screen.getByLabelText(/^Password/), 'Contrasena1')
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+  }
+
+  it('returns to the page that sent them, rather than to the dashboard', async () => {
+    renderLoginWithState({ from: '/microclimate-invitations/tok-42' })
+    await signIn()
+
+    await waitFor(() => expect(path()).toBe('/microclimate-invitations/tok-42'))
+    expect(screen.getByText('the invitation')).toBeTruthy()
+    expect(screen.queryByText('dashboard')).toBeNull()
+  })
+
+  it('lands on the dashboard when nothing named a destination', async () => {
+    renderLoginWithState(undefined)
+    await signIn()
+
+    await waitFor(() => expect(path()).toBe('/dashboard'))
+  })
+
+  /**
+   * `location.state` is not in the URL, but `history.pushState` can put any JSON there, so
+   * it is validated as untrusted input rather than trusted for its provenance. A
+   * protocol-relative `//evil.test` is another ORIGIN, and a sign-in that honoured it would
+   * hand a freshly authenticated visitor to whoever wrote the state.
+   */
+  it('refuses a destination on another origin and falls back to the dashboard', async () => {
+    renderLoginWithState({ from: '//evil.test/steal' })
+    await signIn()
+
+    await waitFor(() => expect(path()).toBe('/dashboard'))
+  })
+})
