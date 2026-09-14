@@ -4955,7 +4955,16 @@
       "underAMinute": "under a minute in all",
       "submittedAt": "Sent at {time}.",
       "submittedAtAnonymous": "Sent at {time}. They were saved without anything that identifies you.",
-      "receiptOf": "of {total}"
+      "receiptOf": "of {total}",
+      "entryStart": "Start",
+      "entryAfter": "After this, one question per screen.",
+      "entryArrivedByLink": "You arrived on a shared link",
+      "entryNoAccount": "no account needed",
+      "entryPace": "{count} questions, one at a time. About {minutes} minutes.",
+      "entryPaceOne": "One question. Less than a minute.",
+      "entryPaceBrief": "{count} questions, one at a time. Less than a minute.",
+      "entrySignInTitle": "This survey records who answers",
+      "entrySignInBody": "To answer it, sign in with your account."
     }
   },
   "surveyResults": {
