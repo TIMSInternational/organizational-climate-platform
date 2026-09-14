@@ -41,13 +41,30 @@ export default function CompanyContextProvider({ children }: CompanyContextProvi
     setSelectedCompanyId(next)
   }, [])
 
+  // How many mounted pages draw their own company strip, or are about no company at all,
+  // and so asked the header switcher to stand down (`useHeaderSwitcherStandDown`). A count
+  // rather than a flag: a page leaving must not re-open the switcher under a page that is
+  // still asking. Each release runs once, whatever React does with the effect.
+  const [standDowns, setStandDowns] = useState(0)
+  const standDownHeaderSwitcher = useCallback(() => {
+    setStandDowns((count) => count + 1)
+    let released = false
+    return () => {
+      if (released) return
+      released = true
+      setStandDowns((count) => Math.max(0, count - 1))
+    }
+  }, [])
+
   const value = useMemo(
     () => ({
       scope: resolveCompanyScope({ role, companyId }, selectedCompanyId),
       selectedCompanyId,
       selectCompany,
+      headerSwitcherStandsDown: standDowns > 0,
+      standDownHeaderSwitcher,
     }),
-    [role, companyId, selectedCompanyId, selectCompany],
+    [role, companyId, selectedCompanyId, selectCompany, standDowns, standDownHeaderSwitcher],
   )
 
   return <CompanyContext.Provider value={value}>{children}</CompanyContext.Provider>
