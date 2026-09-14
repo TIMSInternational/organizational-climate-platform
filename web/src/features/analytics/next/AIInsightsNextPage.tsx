@@ -1,7 +1,7 @@
 import { ShieldCheck, Sparkles } from 'lucide-react'
 import { PageTopBar } from '../../../components/layout'
 import { Alert, AlertDescription, Button, Chip, ErrorState, LoadingRegion, SkeletonText, EmptyState, Table } from '../../../components/ui'
-import { useViewerCapabilities } from '../../../auth/viewerCapabilities'
+import { readViewerClaims, useViewerCapabilities } from '../../../auth/viewerCapabilities'
 import { useCompanyScope } from '../../../company-context'
 import { useCompanyName } from '../../../company-context/useCompanyName'
 import { useTranslation } from '../../../i18n'
@@ -9,6 +9,7 @@ import { insightPriorityLabel, insightTypeLabel } from '../insightVocabulary'
 import { EmptyRow, Note, PanelHeading, TABLE_CARD_CLASS, TH_CLASS } from '../../shared-next/parts'
 import { useAIInsightsModel } from './useAnalyticsModels'
 import { priorityTone } from './model'
+import SuperAIInsightsView from './super/SuperAIInsightsView'
 
 /**
  * Información de IA, redesigned (canvas board "AIInsights").
@@ -27,6 +28,12 @@ import { priorityTone } from './model'
  */
 
 export default function AIInsightsNextPage() {
+  // The per-role canvas (10 Sep): the super administrator's variant — the choose-a-company state and the cross-tenant reading — is its own
+  // view, `super/SuperAIInsightsView`, read off the claim as the tenant pages dispatch. Everyone else keeps this page.
+  return readViewerClaims().role === 'super_admin' ? <SuperAIInsightsView /> : <AIInsightsForCompany />
+}
+
+function AIInsightsForCompany() {
   const { t } = useTranslation()
   const scope = useCompanyScope()
   const caps = useViewerCapabilities()
