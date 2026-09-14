@@ -1,0 +1,891 @@
+import { useState } from 'react'
+import { Link } from 'react-router'
+import { ArrowRight, Check, EyeOff, FileIcon, GripVertical, Lock, MoreHorizontal, Plus, ShieldCheck, Trash2 } from 'lucide-react'
+import { PageTopBar } from '../../../../components/layout'
+import {
+  Alert,
+  AlertDescription,
+  Button,
+  CheckboxField,
+  Chip,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  ErrorState,
+  Select,
+  SelectContent,
+  SelectField,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Switch,
+  TextField,
+  TextareaField,
+} from '../../../../components/ui'
+import { ANONYMITY_FLOOR } from '../../../../components/charts'
+import { QuestionLibraryBrowser } from '../../../../components/questions'
+import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
+import { useCompanyScope } from '../../../../company-context'
+import { useTranslation, type TranslateFn } from '../../../../i18n'
+import { cn } from '../../../../lib/cn'
+import type { SurveyRespondQuestion } from '../../api/surveyResponses'
+import { SurveyDraftIndicator, SurveyDraftRecoveryBanner } from '../../components/SurveyDraftNotices'
+import { dimensionLabel } from '../../dimensionLabel'
+import { hasDraftableContent } from '../../draftContent'
+import {
+  SUGGESTED_DIMENSION_KEYS,
+  SURVEY_QUESTION_TYPES,
+  SURVEY_TYPES,
+  languageLabel,
+  needsOptions,
+  needsScaleLabels,
+  questionTypeLabel,
+  typeLabel,
+} from '../../surveyVocabulary'
+import {
+  CONTENT_LANGUAGES,
+  SURVEY_WIZARD_STEPS,
+  chosenDimensions,
+  derivedOptionValue,
+  emptyOption,
+  emptyQuestion,
+  positionsWithoutDimension,
+  questionFromLibrary,
+  scheduledDays,
+  startsFromTemplate,
+  wizardStepErrors,
+  type ContentLanguage,
+  type SurveyQuestionValues,
+  type SurveyWizardStepId,
+  type SurveyWizardValues,
+} from '../../wizardValues'
+import { Eyebrow, PanelHeading } from '../../../shared-next/parts'
+import { PreviewQuestion, PreviewSection } from './QuestionPreview'
+import { QuestionBankPicker } from './QuestionBankPicker'
+import { Card } from './parts'
+import { dimensionSections } from './launch'
+import { templateCovers } from './templateRows'
+import { useSurveyBuilderModel } from './useSurveyBuilderModel'
+
+const NO_TEMPLATE = '__none__'
+
+/**
+ * Nueva encuesta, redesigned (canvas board "SurveyBuilder") — `/surveys/new`.
+ *
+ * The wizard as a two-pane editor. The five steps are a progress rail, not pages; the left pane
+ * holds the current step, the right pane is the respondent's own view of what is being built —
+ * the survey's header as it is typed and the selected question as the respond page will draw it.
+ * The questions step is the artboard's: rows with a drag handle, the dimension and scale chips, a
+ * live required switch and a "•••" menu — a template's questions included, which are rows like
+ * any other (`templateRows.ts`) — and "Agregar pregunta" from the bank, the library or blank.
+ *
+ * State, draft and submit are the previous wizard's (`useSurveyBuilderModel`); only an author the
+ * server would accept reaches the builder (`canAuthorSurveys` — `POST /surveys` is `CanAdminister`).
+ */
+export default function SurveyBuilderNextPage() {
+  const caps = useViewerCapabilities()
+  const scope = useCompanyScope()
+  const { t } = useTranslation()
+  if (!caps.canAuthorSurveys || scope.companyId === undefined) {
+    return (
+      <ErrorState
+        title={t('surveys.next.builder.cannotAuthorTitle')}
+        description={scope.isSuperAdmin ? t('surveys.next.builder.pickCompany') : t('surveys.next.builder.cannotAuthorBody')}
+      />
+    )
+  }
+  return <SurveyBuilder companyId={scope.companyId} />
+}
+
+function SurveyBuilder({ companyId }: { companyId: string }) {
+  const { t, locale } = useTranslation()
+  const m = useSurveyBuilderModel(companyId)
+  const { values, patch, setQuestions, stepIndex, setStepIndex, template, draft } = m
+  const copy = (key: string, vars?: Record<string, string | number>) => t(`surveys.next.builder.${key}`, vars)
+  const [attempted, setAttempted] = useState<ReadonlySet<SurveyWizardStepId>>(new Set())
+  const [selected, setSelected] = useState(0)
+  const [editing, setEditing] = useState<string | null>(null)
+  const [dragFrom, setDragFrom] = useState<number | null>(null)
+  const [libraryOpen, setLibraryOpen] = useState(false)
+  const [bankOpen, setBankOpen] = useState(false)
+
+  const fromTemplate = startsFromTemplate(values)
+  const baseErrors = wizardStepErrors(values, t, template === null ? null : template.questions.length)
+  // A template's questions are rows once they arrive (`templateRows.ts`), so they are validated
+  // as rows; until then the wizard's own "the template is loading" stands.
+  const questionErrors =
+    fromTemplate && template === null && values.questions.length === 0
+      ? baseErrors.questions
+      : wizardStepErrors({ ...values, templateId: '' }, t).questions
+  const errors = {
+    ...baseErrors,
+    questions: questionErrors,
+    review: [...baseErrors.basics, ...baseErrors.schedule, ...baseErrors.audience, ...questionErrors],
+  }
+  const step = SURVEY_WIZARD_STEPS[stepIndex]
+  const last = stepIndex === SURVEY_WIZARD_STEPS.length - 1
+  const both = values.language === 'both'
+  // The reader's column when the survey is bilingual; the survey's own language otherwise.
+  const shown: 'en' | 'es' = values.language === 'both' ? (locale === 'es' ? 'es' : 'en') : values.language
+  const title = (shown === 'es' ? values.titleEs : values.titleEn).trim()
+  const description = (shown === 'es' ? values.descriptionEs : values.descriptionEn).trim()
+  const previewQuestions: SurveyRespondQuestion[] = values.questions.map((q, index) => respondShape(q, index, shown))
+  const sections = dimensionSections(previewQuestions)
+  const focus = Math.min(selected, Math.max(previewQuestions.length - 1, 0))
+  const focusSection = sections.find((section) => section.questions.some((entry) => entry.position === focus + 1))
+  const reachable = (index: number) =>
+    index <= stepIndex || SURVEY_WIZARD_STEPS.slice(0, index).every((id) => errors[id].length === 0)
+
+  function goNext() {
+    if (errors[step].length > 0) {
+      setAttempted((current) => new Set(current).add(step))
+      return
+    }
+    if (last) void m.submit()
+    else setStepIndex(stepIndex + 1)
+  }
+
+  function move(from: number, to: number) {
+    if (from === to || to < 0 || to >= values.questions.length) return
+    setQuestions((questions) => {
+      const next = [...questions]
+      const [moved] = next.splice(from, 1)
+      next.splice(to, 0, moved)
+      return next
+    })
+    setSelected(to)
+  }
+
+  const patchQuestion = (key: string, next: Partial<SurveyQuestionValues>) =>
+    setQuestions((questions) => questions.map((q) => (q.key === key ? { ...q, ...next } : q)))
+
+  return (
+    <div>
+      <PageTopBar
+        title={copy('title')}
+        // The artboard's chip: small, serif, lavender — not the sans secondary badge.
+        badge={{
+          text: copy('draftBadge'),
+          variant: 'secondary',
+          // `font-store-serif` is the headings' Goudy; `font-serif` is Tailwind's Georgia stack.
+          className: 'h-5.5 rounded border border-line-default bg-surface-icon-box px-2 font-store-serif text-xs font-normal text-fg-primary',
+        }}
+        tightBreadcrumb
+        description={`${copy(`stepLine.${step}`)} ${copy('stepOf', { current: stepIndex + 1, total: SURVEY_WIZARD_STEPS.length })}`}
+        breadcrumbs={[{ label: t('navigation.surveys'), href: '/surveys' }, { label: copy('title') }]}
+        actions={
+          <Button
+            type="button"
+            variant="outline"
+            disabled={!hasDraftableContent(values) || draft.state.status === 'saving' || draft.state.status === 'conflict'}
+            onClick={draft.saveNow}
+          >
+            {/* The artboard's glyph is a plain folded-corner page (`M4 2h5l3 3v9H4z`), lucide's
+                File — not FileText, whose text lines the board does not draw. */}
+            <FileIcon aria-hidden="true" data-slot="save-draft-icon" className="size-icon" />
+            {copy('saveDraft')}
+          </Button>
+        }
+      />
+
+      {m.submitError && (
+        <Alert variant="destructive" role="alert" className="mb-4">
+          <AlertDescription>{m.submitError}</AlertDescription>
+        </Alert>
+      )}
+      {m.unsaved && (
+        <Alert variant="destructive" role="alert" className="mb-4">
+          <AlertDescription>
+            {copy('questionsNotSaved', { message: m.unsaved.message })}{' '}
+            <Link to={`/surveys/${m.unsaved.id}/questions`}>{copy('openQuestionEditor')}</Link>
+          </AlertDescription>
+        </Alert>
+      )}
+      {draft.recovery !== null && (
+        <SurveyDraftRecoveryBanner
+          recovery={draft.recovery}
+          locale={locale}
+          onRestore={draft.restore}
+          onDiscard={draft.discardRecovered}
+          onDismiss={draft.dismissRecovery}
+        />
+      )}
+
+      {/* `-mt-1`: the header's 24px bottom margin (`mb-section`) collapses with this one, and the
+          artboard puts the rail 20px under the hairline (measured: 198 → 218). */}
+      <Card className="-mt-1 flex flex-wrap items-center gap-x-6 gap-y-3 px-5 py-3.5" data-testid="builder-rail">
+        <ol aria-label={t('surveys.wizardStepList')} className="m-0 flex min-w-0 flex-1 list-none flex-wrap items-center gap-x-3.5 gap-y-2 p-0">
+          {SURVEY_WIZARD_STEPS.map((id, index) => {
+            const state = index < stepIndex ? (errors[id].length === 0 ? 'done' : 'open') : index === stepIndex ? 'current' : 'pending'
+            return (
+              // `mb-0`: index.css gives every <li> a 4px bottom margin, which made the rail 4px taller.
+              <li key={id} className={cn('mb-0 flex min-w-0 items-center gap-3.5', index < SURVEY_WIZARD_STEPS.length - 1 && 'xl:flex-1')}>
+                <button
+                  type="button"
+                  aria-current={state === 'current' ? 'step' : undefined}
+                  disabled={!reachable(index)}
+                  onClick={() => setStepIndex(index)}
+                  className="flex min-w-0 items-center gap-2.5 border-0 bg-transparent p-0 text-left shadow-none disabled:cursor-default"
+                >
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      'flex size-5.5 shrink-0 items-center justify-center rounded-full font-mono text-xs [&>svg]:size-3',
+                      state === 'done' && 'border border-accent-green-ring bg-chip-good-fill text-chip-good-ink',
+                      state === 'open' && 'border border-accent-amber-ring bg-chip-warning-fill text-chip-warning-ink',
+                      state === 'current' && 'bg-accent-red font-semibold text-fg-on-accent',
+                      state === 'pending' && 'border border-line-default bg-surface-icon-box text-fg-label',
+                    )}
+                  >
+                    {state === 'done' ? <Check /> : index + 1}
+                  </span>
+                  <span className="flex min-w-0 flex-col whitespace-nowrap leading-tight">
+                    {/* The artboard's 1.25 line height (15px + 13.75px), not the type scale's 1.5 / 1.35. */}
+                    <span className={cn('text-sm leading-[1.25]', state === 'current' ? 'font-semibold text-fg-primary' : state === 'pending' ? 'font-medium text-fg-label' : 'font-medium text-fg-secondary')}>
+                      {t(`surveys.step${id.charAt(0).toUpperCase()}${id.slice(1)}`)}
+                    </span>
+                    <span
+                      className={cn(
+                        'text-xs leading-[1.25]',
+                        state === 'done' && 'text-chip-good-ink',
+                        state === 'open' && 'text-accent-amber-ink',
+                        state === 'current' && 'text-chip-critical-ink',
+                        state === 'pending' && 'text-fg-label',
+                      )}
+                    >
+                      {copy(`railState.${state}`)}
+                    </span>
+                  </span>
+                </button>
+                {index < SURVEY_WIZARD_STEPS.length - 1 && (
+                  <span aria-hidden="true" className={cn('hidden h-px min-w-6 flex-1 xl:block', index < stepIndex ? 'bg-accent-green' : 'bg-line-default')} />
+                )}
+              </li>
+            )
+          })}
+        </ol>
+        {/* Below sm the block takes its own line and the select the rest of it: a fixed 150px
+            select beside the nowrap label ran past the card's right edge at 390px. From sm it is
+            the artboard's: a hairline, the label and a 150px select. */}
+        <div className="flex w-full min-w-0 items-center gap-2.5 sm:w-auto sm:flex-none sm:border-l sm:border-line-light sm:pl-5" data-testid="builder-language">
+          <span id="builder-language" className="whitespace-nowrap text-sm font-semibold text-fg-secondary">
+            {t('surveys.contentLanguage')}
+          </span>
+          {/* Live in both modes: `/use` honours a language (`buildInstantiateInput`). From a
+              template, only the languages its questions are written in are offered. */}
+          <Select value={values.language} onValueChange={(next) => patch({ language: next as ContentLanguage })}>
+            <SelectTrigger aria-labelledby="builder-language" className="min-w-0 flex-1 sm:w-37.5 sm:flex-none">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {CONTENT_LANGUAGES.map((code) => (
+                <SelectItem key={code} value={code} disabled={fromTemplate && template !== null && !templateCovers(template.language, code)}>
+                  {languageLabel(t, code)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </Card>
+
+      {/* `items-stretch`: the artboard's two panes end together, the preview as tall as the list. */}
+      <div className="mt-5 grid items-stretch gap-4 xl:grid-cols-2" data-testid="builder-panes">
+        <Card className="flex min-w-0 flex-col gap-3 px-5 pb-4.5 pt-4" data-testid="builder-step">
+          {step === 'questions' ? (
+            <>
+              <PanelHeading
+                title={copy('questionsTitle')}
+                count={values.questions.length}
+                aside={fromTemplate && template ? copy('fromTemplate', { name: template.name }) : undefined}
+              />
+              {/* `-mt-3` cancels the heading's own 12px margin, so the hint sits the card's 12px
+                  gap under it, as the artboard's does (it sat 16px under, measured). */}
+              <p className="-mt-3 mb-0 flex items-start gap-2 text-sm text-fg-secondary">
+                <GripVertical aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+                {copy('dragHint')}
+              </p>
+              {m.templateError && (
+                <Alert variant="destructive" role="alert">
+                  <AlertDescription>{m.templateError}</AlertDescription>
+                </Alert>
+              )}
+              {/* The rows and the add row share one 8px rhythm, as in the artboard's list column. */}
+              <div className="flex flex-col gap-2" data-testid="builder-list">
+              <ol className="m-0 flex list-none flex-col gap-2 p-0" data-testid="builder-questions">
+                {previewQuestions.map((question, index) => {
+                  const own = values.questions[index]
+                  // A template's question: reordered, dropped or made optional here, and its
+                  // words edited after creation, in Editar preguntas (`templateRows.ts`).
+                  const copied = own.templateOrder !== undefined
+                  const isSelected = index === focus
+                  return (
+                    <li
+                      key={own.key}
+                      draggable
+                      onDragStart={() => setDragFrom(index)}
+                      onDragOver={(event) => event.preventDefault()}
+                      onDrop={() => {
+                        if (dragFrom !== null) move(dragFrom, index)
+                        setDragFrom(null)
+                      }}
+                      data-selected={isSelected || undefined}
+                      // `mb-0`: index.css's 4px <li> margin put 12px between rows, not the artboard's 8.
+                      className={cn('mb-0 rounded-lg border', isSelected ? 'border-accent-blue bg-surface-icon-box' : 'border-line-default bg-surface-card')}
+                    >
+                      {/* From sm, the artboard's single row: grip, number, text, then the switch and
+                          the menu. Below sm the controls take a second line under the text, so a
+                          390px row keeps its words (builder-390.png squeezed them to 3-4 letters
+                          and slid the dimension chip under the switch). `pb-2.75` with the 22px
+                          chip is the artboard's 70.5px row (10px + a 24px content-box chip + 10px). */}
+                      <div
+                        data-slot="question-row"
+                        className="grid grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-x-2.5 gap-y-2 pb-2.75 pl-2 pr-3 pt-2.5 sm:flex"
+                      >
+                        <GripVertical aria-hidden="true" data-slot="drag-grip" className="size-4 shrink-0 cursor-grab text-fg-label" />
+                        <span className="w-5.5 shrink-0 text-center font-mono text-sm text-fg-secondary tabular-nums">{index + 1}</span>
+                        <button
+                          type="button"
+                          aria-pressed={isSelected}
+                          onClick={() => setSelected(index)}
+                          // `h-auto` and `whitespace-normal`: `index.css` gives every bare button
+                          // the 32px control height and nowrap, which clipped the two-line text of
+                          // the selected row and hid the text of every other row (measured in the
+                          // first shot of this screen).
+                          className="flex h-auto min-h-0 min-w-0 flex-1 flex-col items-start gap-1.5 whitespace-normal border-0 bg-transparent p-0 text-left shadow-none"
+                        >
+                          {/* An unselected row truncates from sm, as the artboard's do; below sm the
+                              text wraps, because a phone's text column holds too few letters. */}
+                          <span className={cn('block w-full text-base text-fg-primary', isSelected ? 'font-semibold' : 'font-medium sm:truncate')}>
+                            {question.text?.trim() ? question.text : copy('noText')}
+                          </span>
+                          <span className="flex flex-wrap items-center gap-1.5">
+                            {question.category ? (
+                              <Chip label={dimensionLabel(question.category, t)} />
+                            ) : (
+                              <Chip tone="warning" label={copy('noDimension')} />
+                            )}
+                            <Chip label={typeChip(t, question)} />
+                          </span>
+                        </button>
+                        <div data-slot="question-controls" className="col-start-3 flex flex-none items-center justify-between gap-2.5 sm:justify-start">
+                        {/* `font-normal`: index.css sets every <label> in the medium weight, and the
+                            artboard's "Obligatoria" is regular — the extra weight cost the text
+                            column 1.7px. */}
+                        <label className="mb-0 inline-flex shrink-0 items-center gap-2 text-sm font-normal text-fg-secondary">
+                          {/* The artboard's switch is #12945b (SurveyBuilder.dc.html), the accent
+                              green — the chip ink is a darker, text-weight green — on its 16×28
+                              track (`size="sm"`), 4px narrower than the default's. */}
+                          <Switch
+                            size="sm"
+                            className="data-[state=checked]:bg-accent-green"
+                            checked={question.required}
+                            onCheckedChange={(value) => patchQuestion(own.key, { required: value === true })}
+                          />
+                          {copy('required')}
+                        </label>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button type="button" variant="outline" size="icon" className="size-7" aria-label={copy('questionMenu', { position: index + 1 })}>
+                              <MoreHorizontal aria-hidden="true" className="size-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {!copied && (
+                              <DropdownMenuItem onSelect={() => { setSelected(index); setEditing(editing === own.key ? null : own.key) }}>
+                                {editing === own.key ? copy('closeEditor') : copy('edit')}
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem disabled={index === 0} onSelect={() => move(index, index - 1)}>{copy('moveUp')}</DropdownMenuItem>
+                            <DropdownMenuItem disabled={index === previewQuestions.length - 1} onSelect={() => move(index, index + 1)}>{copy('moveDown')}</DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => { setQuestions((questions) => questions.filter((q) => q.key !== own.key)); setEditing(null) }}>
+                              {copy('remove')}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                        </div>
+                      </div>
+                      {!copied && editing === own.key && (
+                        <QuestionEditor
+                          t={t}
+                          question={own}
+                          language={values.language}
+                          history={m.history}
+                          others={values.questions.filter((q) => q.key !== own.key)}
+                          onChange={(next) => patchQuestion(own.key, next)}
+                          onAddOption={() => patchQuestion(own.key, { options: [...own.options, emptyOption(m.takeKeys(1)[0])] })}
+                        />
+                      )}
+                    </li>
+                  )
+                })}
+              </ol>
+              {/* The add row, as the artboard draws it: the bank, the library or blank — from a
+                  template too, whose copy the added rows join (`arrangedQuestions`). */}
+              <div className="flex min-h-10 flex-wrap items-center justify-center gap-x-1.5 rounded-lg border border-dashed border-line-default px-2 py-1" data-testid="add-question">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button type="button" variant="ghost" className="h-8 px-2">
+                      <Plus aria-hidden="true" className="size-4" />
+                      {copy('addQuestion')}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    <DropdownMenuItem onSelect={() => setBankOpen(true)}>{copy('addFromBank')}</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setLibraryOpen(true)}>{copy('addFromLibrary')}</DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={() => {
+                        const [key] = m.takeKeys(1)
+                        setQuestions((questions) => [...questions, emptyQuestion(key)])
+                        setSelected(values.questions.length)
+                        setEditing(key)
+                      }}
+                    >
+                      {copy('addBlank')}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <span className="text-sm text-fg-label">{copy('addTail')}</span>
+              </div>
+              </div>
+              <QuestionsFooter t={t} values={values} questions={previewQuestions} />
+              <QuestionLibraryBrowser
+                open={libraryOpen}
+                onOpenChange={setLibraryOpen}
+                companyId={companyId}
+                allowedTypes={SURVEY_QUESTION_TYPES}
+                typeLabel={(type) => questionTypeLabel(t, type)}
+                onAdd={(picked) => {
+                  const keys = m.takeKeys(picked.length)
+                  setQuestions((questions) => [...questions, ...picked.map((item, index) => questionFromLibrary(item, keys[index]))])
+                }}
+              />
+              <QuestionBankPicker
+                open={bankOpen}
+                onOpenChange={setBankOpen}
+                companyId={companyId}
+                takeKey={() => m.takeKeys(1)[0]}
+                onAdd={(question) => setQuestions((questions) => [...questions, question])}
+              />
+            </>
+          ) : (
+            <StepForm step={step} m={m} both={both} copy={copy} />
+          )}
+          {attempted.has(step) && errors[step].length > 0 && (
+            <ul role="alert" className="m-0 flex list-none flex-col gap-1 p-0 text-sm text-accent-amber-ink">
+              {errors[step].map((message) => (
+                <li key={message}>{message}</li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        <Card className="flex min-w-0 flex-col gap-3 bg-surface-outer px-5 pb-4.5 pt-4" data-testid="builder-preview">
+          <PanelHeading
+            title={copy('previewTitle')}
+            aside={
+              <span className="inline-flex items-center gap-2">
+                <Chip label={languageLabel(t, shown)} />
+                <Chip label={copy('desktop')} />
+              </span>
+            }
+          />
+          <p className="-mt-3 mb-0 text-sm text-fg-secondary">{copy('previewLine')}</p>
+          <div className="flex flex-col gap-3.5 rounded-lg border border-line-default bg-surface-card px-4.5 pb-4.5 pt-4 shadow-xs">
+            <div className="flex flex-col gap-1 border-b border-line-light pb-3">
+              <Eyebrow className="leading-normal">{copy('surveyEyebrow')}</Eyebrow>
+              {/* The artboard's `.serif` at 18px: the headings' Goudy (`font-store-serif`, not
+                  Tailwind's Georgia `font-serif`) at their 1.2 line height. */}
+              <p className="m-0 font-store-serif text-[1.125rem] leading-tight text-fg-primary">{title || copy('untitled')}</p>
+              {description && <p className="m-0 text-sm text-fg-secondary">{description}</p>}
+            </div>
+            {focusSection ? (
+              <PreviewSection category={focusSection.category} index={focusSection.index} count={focusSection.count}>
+                <PreviewQuestion question={previewQuestions[focus]} position={focus + 1} total={previewQuestions.length} />
+              </PreviewSection>
+            ) : (
+              <p className="m-0 text-sm text-fg-secondary">{fromTemplate && template === null ? t('common.loading') : copy('previewEmpty')}</p>
+            )}
+            <div aria-hidden="true" className="flex flex-wrap items-center justify-between gap-3 border-t border-line-light pt-2.5">
+              <span data-slot="preview-answered" className="inline-flex items-center gap-2 text-xs leading-normal text-fg-label">
+                <span className="h-1.25 w-12 rounded-sm bg-surface-icon-box" />
+                {copy('answeredOf', { count: previewQuestions.length })}
+              </span>
+              {/* Wraps: the two nowrap chips are ~330px together, wider than a 390px preview. Each is the
+                  artboard's `.btn` (weight 500) at `height: 28px` in a content box, so 30px with its
+                  borders: at 28px regular the preview card came out 2px short of the artboard's. */}
+              <span className="flex flex-wrap gap-2" data-slot="preview-actions">
+                <span className="inline-flex h-7.5 items-center whitespace-nowrap rounded border border-line-default px-3 text-sm font-medium text-fg-primary">{copy('saveLater')}</span>
+                <span className="inline-flex h-7.5 items-center whitespace-nowrap rounded border border-accent-red-ring bg-chip-critical-fill px-3 text-sm font-medium text-chip-critical-ink">
+                  {copy('submitAnswers')}
+                </span>
+              </span>
+            </div>
+          </div>
+          <p className="m-0 flex items-start gap-2 text-sm text-fg-secondary">
+            <EyeOff aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+            {copy('previewNote')}
+          </p>
+        </Card>
+      </div>
+
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-line-light pt-4">
+        <span className="inline-flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-sm text-fg-secondary">
+          <span className="inline-flex items-center gap-2">
+            <Lock aria-hidden="true" className="size-3.5 shrink-0" />
+            {copy('nothingSent')}
+          </span>
+          {/* The artboard's bar prints no save time; the indicator speaks only when the draft
+              needs the reader — a conflict with another tab, or a save that failed. */}
+          {(draft.state.status === 'conflict' || draft.state.status === 'error') && (
+            <SurveyDraftIndicator state={draft.state} locale={locale} onSaveAnyway={draft.saveAnyway} />
+          )}
+        </span>
+        <span className="flex gap-2">
+          <Button type="button" variant="outline" disabled={stepIndex === 0} onClick={() => setStepIndex(stepIndex - 1)}>
+            {copy('back')}
+          </Button>
+          <Button type="button" variant="primary" disabled={m.submitting || m.unsaved !== null} onClick={goNext}>
+            {last ? <Check aria-hidden="true" className="size-icon" /> : <ArrowRight aria-hidden="true" className="size-icon" />}
+            {last ? copy('create') : copy('next')}
+          </Button>
+        </span>
+      </div>
+    </div>
+  )
+}
+
+/** A wizard question as the respond page will receive it — the columns the reader will see. */
+function respondShape(q: SurveyQuestionValues, index: number, lang: 'en' | 'es'): SurveyRespondQuestion {
+  const pick = (en: string, es: string) => (lang === 'es' ? es || '' : en || '')
+  return {
+    id: q.key,
+    text: pick(q.textEn, q.textEs),
+    type: q.type,
+    options: needsOptions(q.type)
+      ? q.options
+          .filter((option) => derivedOptionValue(option) !== null)
+          .map((option, order) => ({ order, value: derivedOptionValue(option) ?? '', label: pick(option.labelEn, option.labelEs) || null }))
+      : null,
+    scaleMin: q.scaleMin,
+    scaleMax: q.scaleMax,
+    scaleLabelMin: pick(q.scaleLabelMinEn, q.scaleLabelMinEs) || null,
+    scaleLabelMax: pick(q.scaleLabelMaxEn, q.scaleLabelMaxEs) || null,
+    required: q.required,
+    commentRequired: false,
+    commentPrompt: null,
+    order: index,
+    category: q.category.trim() || null,
+  }
+}
+
+/** "Likert 1–5" for a scale, the type's own name for anything else. */
+function typeChip(t: TranslateFn, q: SurveyRespondQuestion): string {
+  if ((q.type === 'likert' || q.type === 'rating') && (q.options?.length ?? 0) === 0) {
+    return t(`surveys.next.builder.scaleChip.${q.type}`, { min: q.scaleMin ?? 1, max: q.scaleMax ?? 5 })
+  }
+  return questionTypeLabel(t, q.type)
+}
+
+function QuestionsFooter({
+  t,
+  values,
+  questions,
+}: {
+  t: TranslateFn
+  values: SurveyWizardValues
+  questions: SurveyRespondQuestion[]
+}) {
+  const copy = (key: string, vars?: Record<string, string | number>) => t(`surveys.next.builder.${key}`, vars)
+  const dimensions = chosenDimensions(values).length
+  const missing = positionsWithoutDimension(values).length
+  const required = questions.filter((q) => q.required).length
+  const open = questions.filter((q) => q.type === 'open_ended').length
+  if (questions.length === 0) return null
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-light pt-2.5 text-sm text-fg-secondary" data-testid="questions-footer">
+      <span className="min-w-0 flex-1 basis-56">
+        {copy('coverage', { dimensions, required })} · {open === 0 ? copy('noOpen') : copy('someOpen', { count: open })}
+      </span>
+      {missing === 0 ? (
+        // 216px: the artboard's two lines, "Cada dimensión tiene al menos / una pregunta" (at 220px
+        // "una" still fit on the first line in the shot).
+        <span className="inline-flex max-w-54 items-start gap-1.5 text-chip-good-ink [&>svg]:mt-0.5">
+          <Check aria-hidden="true" className="size-3.5" />
+          {copy('everyDimension')}
+        </span>
+      ) : (
+        <span className="text-accent-amber-ink">{copy('withoutDimension', { count: missing })}</span>
+      )}
+    </div>
+  )
+}
+
+function QuestionEditor({
+  t,
+  question,
+  language,
+  history,
+  others,
+  onChange,
+  onAddOption,
+}: {
+  t: TranslateFn
+  question: SurveyQuestionValues
+  language: ContentLanguage
+  history: readonly string[]
+  others: readonly SurveyQuestionValues[]
+  onChange: (next: Partial<SurveyQuestionValues>) => void
+  onAddOption: () => void
+}) {
+  const copy = (key: string) => t(`surveys.next.builder.${key}`)
+  const columns: ('en' | 'es')[] = language === 'both' ? ['es', 'en'] : [language]
+  const current = question.category.trim()
+  const chips = [...new Set([...SUGGESTED_DIMENSION_KEYS, ...history, ...others.map((q) => q.category.trim()), current].filter((c) => c !== ''))]
+  return (
+    <div className="flex flex-col gap-3 border-t border-line-light p-4 text-sm" data-testid="question-editor">
+      {columns.map((col) => (
+        <TextField
+          key={col}
+          required
+          label={col === 'es' ? t('surveys.questionTextEs') : t('surveys.questionTextEn')}
+          value={col === 'es' ? question.textEs : question.textEn}
+          onChange={(next) => onChange(col === 'es' ? { textEs: next } : { textEn: next })}
+        />
+      ))}
+      <SelectField
+        label={t('surveys.questionType')}
+        value={question.type}
+        onChange={(next) => onChange({ type: next })}
+        options={SURVEY_QUESTION_TYPES.map((code) => ({ value: code, label: questionTypeLabel(t, code) }))}
+      />
+      <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+        <legend className="mb-1.5 text-sm font-medium">{copy('dimension')}</legend>
+        <div className="flex flex-wrap gap-1.5">
+          {chips.map((key) => (
+            <button
+              key={key}
+              type="button"
+              aria-pressed={key === current}
+              onClick={() => onChange({ category: key })}
+              className={cn(
+                'inline-flex h-5.5 items-center rounded-md border px-2 text-xs font-medium shadow-none',
+                key === current ? 'border-accent-blue-ring bg-chip-accent-fill text-fg-primary' : 'border-line-light bg-surface-icon-box text-fg-secondary',
+              )}
+            >
+              {dimensionLabel(key, t)}
+            </button>
+          ))}
+        </div>
+      </fieldset>
+      {needsScaleLabels(question.type) && (
+        <div className="grid gap-2 md:grid-cols-2">
+          {columns.map((col) => (
+            <div key={col} className="contents">
+              <TextField
+                label={col === 'es' ? t('surveyCreate.scaleMinEs') : t('surveyCreate.scaleMinEn')}
+                value={col === 'es' ? question.scaleLabelMinEs : question.scaleLabelMinEn}
+                onChange={(next) => onChange(col === 'es' ? { scaleLabelMinEs: next } : { scaleLabelMinEn: next })}
+              />
+              <TextField
+                label={col === 'es' ? t('surveyCreate.scaleMaxEs') : t('surveyCreate.scaleMaxEn')}
+                value={col === 'es' ? question.scaleLabelMaxEs : question.scaleLabelMaxEn}
+                onChange={(next) => onChange(col === 'es' ? { scaleLabelMaxEs: next } : { scaleLabelMaxEn: next })}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+      {needsOptions(question.type) && (
+        <div className="flex flex-col gap-2">
+          {question.options.map((option) => (
+            <div key={option.key} className="flex flex-wrap items-end gap-2">
+              {columns.map((col) => (
+                <div key={col} className="min-w-0 flex-1">
+                  <TextField
+                    label={col === 'es' ? t('surveys.optionLabelEs') : t('surveys.optionLabelEn')}
+                    value={col === 'es' ? option.labelEs : option.labelEn}
+                    onChange={(next) =>
+                      onChange({
+                        options: question.options.map((o) => (o.key === option.key ? { ...o, ...(col === 'es' ? { labelEs: next } : { labelEn: next }) } : o)),
+                      })
+                    }
+                  />
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                aria-label={t('surveys.removeOption')}
+                onClick={() => onChange({ options: question.options.filter((o) => o.key !== option.key) })}
+              >
+                <Trash2 aria-hidden="true" className="size-icon" />
+              </Button>
+            </div>
+          ))}
+          <div>
+            <Button type="button" variant="outline" size="sm" onClick={onAddOption}>
+              <Plus aria-hidden="true" className="size-4" />
+              {t('surveys.addOption')}
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function StepForm({
+  step,
+  m,
+  both,
+  copy,
+}: {
+  step: SurveyWizardStepId
+  m: ReturnType<typeof useSurveyBuilderModel>
+  both: boolean
+  copy: (key: string, vars?: Record<string, string | number>) => string
+}) {
+  const { t, locale } = useTranslation()
+  const { values, patch, departments, templates, template } = m
+  const fromTemplate = startsFromTemplate(values)
+  const days = scheduledDays(values)
+  const columns: ('en' | 'es')[] = both ? ['es', 'en'] : [values.language === 'es' ? 'es' : 'en']
+  const headcount = (departments ?? []).reduce((sum, d) => sum + d.employeeCount, 0)
+
+  if (step === 'basics') {
+    return (
+      <>
+        <PanelHeading title={t('surveys.stepBasics')} />
+        <div className="grid gap-3 md:grid-cols-2">
+          <SelectField
+            label={t('surveys.startFromTemplate')}
+            value={values.templateId === '' ? NO_TEMPLATE : values.templateId}
+            onChange={(next) => m.chooseTemplate(next === NO_TEMPLATE ? '' : next)}
+            options={[{ value: NO_TEMPLATE, label: t('surveys.startBlank') }, ...templates.map((option) => ({ value: option.id, label: option.name }))]}
+          />
+          <SelectField
+            required
+            label={t('surveys.typeLabel')}
+            value={values.type}
+            onChange={(next) => patch({ type: next })}
+            options={SURVEY_TYPES.map((code) => ({ value: code, label: typeLabel(t, code) }))}
+          />
+        </div>
+        {columns.map((col) => (
+          <TextField
+            key={`title-${col}`}
+            required
+            label={both ? (col === 'es' ? t('surveys.titleEs') : t('surveys.titleEn')) : t('surveys.titleLabel')}
+            value={col === 'es' ? values.titleEs : values.titleEn}
+            onChange={(next) => patch(col === 'es' ? { titleEs: next } : { titleEn: next })}
+          />
+        ))}
+        {columns.map((col) => (
+          <TextareaField
+            key={`description-${col}`}
+            label={both ? (col === 'es' ? t('surveys.descriptionEs') : t('surveys.descriptionEn')) : t('surveys.descriptionLabel')}
+            value={col === 'es' ? values.descriptionEs : values.descriptionEn}
+            onChange={(next) => patch(col === 'es' ? { descriptionEs: next } : { descriptionEn: next })}
+          />
+        ))}
+      </>
+    )
+  }
+  if (step === 'schedule') {
+    return (
+      <>
+        <PanelHeading title={t('surveys.stepSchedule')} />
+        <div className="grid gap-3 md:grid-cols-2">
+          <TextField required type="datetime-local" label={t('surveys.startDate')} value={values.startDate} onChange={(next) => patch({ startDate: next })} />
+          <TextField required type="datetime-local" label={t('surveys.endDate')} value={values.endDate} onChange={(next) => patch({ endDate: next })} />
+        </div>
+        {days !== null && (
+          <p className="m-0 text-sm text-fg-secondary">
+            <span className="font-mono text-fg-primary tabular-nums">{days}</span> {copy('daysOpen')}
+          </p>
+        )}
+      </>
+    )
+  }
+  if (step === 'audience') {
+    return (
+      <>
+        <PanelHeading title={t('surveys.stepAudience')} />
+        <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+          <legend className="mb-1.5 text-sm font-medium">{t('surveys.departmentsLabel')}</legend>
+          {departments === null || departments.length === 0 ? (
+            <p className="m-0 text-sm text-fg-secondary">{t('surveys.departmentsAll')}</p>
+          ) : (
+            <div className="flex flex-wrap gap-x-6 gap-y-2">
+              {departments.map((department) => (
+                <CheckboxField
+                  key={department.id}
+                  label={t('surveyCreate.departmentPeople', { name: department.name, count: department.employeeCount })}
+                  checked={values.departmentIds.includes(department.id)}
+                  onChange={(checked) =>
+                    patch({
+                      departmentIds: checked
+                        ? [...values.departmentIds, department.id]
+                        : values.departmentIds.filter((id) => id !== department.id),
+                    })
+                  }
+                />
+              ))}
+            </div>
+          )}
+          {departments !== null && departments.length > 0 && values.departmentIds.length === 0 && (
+            <p className="m-0 text-sm text-fg-secondary">{copy('reachesEveryone', { count: headcount })}</p>
+          )}
+        </fieldset>
+        <p className="m-0 flex items-start gap-2 rounded-md bg-surface-icon-box px-3.5 py-3 text-sm text-fg-secondary">
+          <ShieldCheck aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+          {copy('floorNote', { floor: ANONYMITY_FLOOR })}
+        </p>
+        <TextField
+          type="number"
+          label={t('surveys.targetAudienceLabel')}
+          description={t('surveys.targetAudienceHelp')}
+          value={values.targetAudienceCount}
+          onChange={(next) => patch({ targetAudienceCount: next })}
+        />
+        <CheckboxField label={t('surveys.anonymous')} checked={values.anonymous} onChange={(checked) => patch({ anonymous: checked })} />
+        <CheckboxField label={t('surveys.allowPartialResponses')} checked={values.allowPartialResponses} onChange={(checked) => patch({ allowPartialResponses: checked })} />
+        <CheckboxField label={t('surveys.showProgress')} checked={values.showProgress} onChange={(checked) => patch({ showProgress: checked })} />
+      </>
+    )
+  }
+  // review
+  const named = (departments ?? []).filter((d) => values.departmentIds.includes(d.id)).map((d) => d.name)
+  const rows: [string, string][] = [
+    [t('surveys.startFromTemplate'), fromTemplate ? (template?.name ?? '—') : t('surveys.startBlank')],
+    [t('surveys.titleLabel'), [values.titleEs, values.titleEn].filter((s) => s.trim() !== '').join(' / ') || '—'],
+    [t('surveys.typeLabel'), typeLabel(t, values.type)],
+    [t('surveys.contentLanguage'), languageLabel(t, values.language)],
+    [t('surveys.startDate'), reviewDate(values.startDate, locale)],
+    [t('surveys.endDate'), reviewDate(values.endDate, locale)],
+    [t('surveys.departmentsLabel'), values.departmentIds.length === 0 ? t('surveys.departmentsAll') : named.join(', ') || t('surveys.readingDepartmentsUnlisted')],
+    [copy('questionsTitle'), String(values.questions.length)],
+  ]
+  return (
+    <>
+      <PanelHeading title={t('surveys.stepReview')} />
+      <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
+        {rows.map(([label, value]) => (
+          <div key={label} className="contents">
+            <dt className="text-fg-secondary">{label}</dt>
+            <dd className="m-0 break-words">{value}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="m-0 rounded-md bg-surface-icon-box px-3.5 py-3 text-sm text-fg-secondary">{t('surveys.reviewCreatesDraft')}</p>
+    </>
+  )
+}
+
+function reviewDate(value: string, locale: string): string {
+  const when = new Date(value)
+  if (Number.isNaN(when.getTime())) return '—'
+  return when.toLocaleString(locale === 'es' ? 'es-CR' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' })
+}

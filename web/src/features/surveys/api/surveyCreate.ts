@@ -63,6 +63,12 @@ export interface CreateSurveyQuestionInput {
    * (`psychological_safety`), never a display name.
    */
   category?: string
+  /**
+   * The question-bank item this question was picked from (#110) — provenance the server
+   * stores beside the text it copies, and the only thing bank usage counts. Sent only for
+   * a question that came from the bank.
+   */
+  sourceQuestionBankItemId?: string
 }
 
 /**

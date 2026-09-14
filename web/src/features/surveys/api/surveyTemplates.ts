@@ -142,6 +142,8 @@ export interface SurveyTemplateListFilters {
  */
 export interface InstantiateSurveyTemplateInput {
   companyId?: string
+  /** `UseSurveyTemplateRequest.Language` — honoured ahead of the server's inference from the questions. */
+  language?: string
   title?: LocalizedInput
   description?: LocalizedInput
   type?: string
