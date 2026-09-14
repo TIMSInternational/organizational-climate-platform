@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { render, screen, cleanup, within } from '@testing-library/react'
+import { render, screen, cleanup, within, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import SurveyRespondForm from './SurveyRespondForm'
@@ -20,18 +20,19 @@ import type { SurveyRespondQuestion, SurveyRespondView } from '../api/surveyResp
 const copy = { en: createTranslator(CATALOGUES.en), es: createTranslator(CATALOGUES.es) } as const
 
 /**
- * The respond form as the approved employee design draws it.
+ * The respond form as the canvas draws it (RespondSurveyPhone and
+ * RespondConfirmationPhone, 10 Sep).
  *
  * `pages/SurveyRespondPage.test.tsx` covers what this form *does* — the payload, the
  * required-question rule, the four unavailable states, resume and language. This
- * file covers the four things the redesign changed about how it is *shaped*, each of
- * which a green suite could otherwise be made to hold while the page looked nothing
- * like the design:
+ * file covers what the redesign changed about how it is *shaped*, each of which a
+ * green suite could otherwise be made to hold while the page looked nothing like the
+ * canvas:
  *
- * 1. the questions are asked under dimension headings, from `respondDimensions`;
+ * 1. each question is labelled with its dimension, from `respondDimensions`;
  * 2. a bare numeric scale is a segmented control rather than a row of radios;
- * 3. the right-hand rail is gone — the promise is the first block and the count and
- *    the actions ride a bar stuck to the bottom;
+ * 3. the promise is the first block, the position heads the question, and the two
+ *    actions sit under the card — one question at a time;
  * 4. the confirmation says what happens next, from data already in hand.
  *
  * Rendered against the component directly rather than through a route: every claim
@@ -152,33 +153,41 @@ function lastSubmission(): Record<string, unknown> {
   >
 }
 
-/** The dimension heading elements, in the order they are printed. */
-function headingNodes(): HTMLElement[] {
-  return [...document.querySelectorAll<HTMLElement>('form h2')]
+/** The dimension label on the question card that is on screen, or `null`. */
+function dimensionNode(): HTMLElement | null {
+  return document.querySelector<HTMLElement>('[data-slot="question-dimension"]')
 }
 
 /**
- * The dimension headings **as the respondent reads them**, in printed order.
+ * A dimension label **as the respondent reads it**.
  *
- * Not `textContent`. The design sets this eyebrow in `uppercase`, so `textContent`
- * is the value *before* the transform, and asserting on it is how a pair of headings
- * that collide on screen — `team_support` and `Team Support` both print TEAM SUPPORT —
- * can be asserted "distinct" and stay green. Every claim in this file about what a
- * heading says is a claim about what is on the screen, so the transform is applied
- * here, once, rather than at each call site.
- *
- * It has to be applied by hand: the suite runs on happy-dom, which has no stylesheet
- * loaded and no layout engine, so `getComputedStyle(node).textTransform` is the empty
- * string here even though the class is present (verified). The class is therefore the
- * only signal available, and `prints its headings in uppercase, as the design sets
- * them` below asserts it is there — without that, dropping `uppercase` from the
- * component would silently turn this helper back into `textContent`.
+ * Not `textContent`. The canvas sets the label in `uppercase`, so `textContent` is the
+ * value *before* the transform, and asserting on it is how two labels that collide on
+ * screen — `team_support` and `Team Support` both print TEAM SUPPORT — can be asserted
+ * "distinct" and stay green. happy-dom loads no stylesheet, so the transform is applied
+ * here from the class, and `prints its dimension label in uppercase` below asserts the
+ * class is there — without it this helper would silently turn back into `textContent`.
  */
-function headings(): string[] {
-  return headingNodes().map((node) => {
-    const text = node.textContent ?? ''
-    return node.classList.contains('uppercase') ? text.toUpperCase() : text
-  })
+function readDimension(node: HTMLElement | null): string | null {
+  if (node === null) return null
+  const text = node.textContent ?? ''
+  return node.classList.contains('uppercase') ? text.toUpperCase() : text
+}
+
+/**
+ * Every question's dimension label, met the way a respondent meets them: one page at a
+ * time, turned with "Siguiente" until the last page offers the submit instead. `null` for
+ * a card that prints none. The fixtures' questions are optional, so nothing stops a turn.
+ */
+async function dimensionsAcrossPages(read: (node: HTMLElement | null) => string | null = readDimension) {
+  const seen: (string | null)[] = []
+  for (let guard = 0; guard < 50; guard += 1) {
+    seen.push(read(dimensionNode()))
+    const next = screen.queryByRole('button', { name: 'Siguiente' })
+    if (next === null) return seen
+    await userEvent.click(next)
+  }
+  throw new Error('more than 50 pages: the walk is not turning')
 }
 
 beforeEach(() => {
@@ -200,7 +209,7 @@ afterEach(() => {
  * proved here is that this page asks it, prints what it returns, and prints nothing
  * when it says there is no structure to show.
  */
-describe('SurveyRespondForm dimension sections', () => {
+describe('SurveyRespondForm dimension labels', () => {
   const sectioned = view({
     questions: [
       question({ id: 'a', text: 'Pregunta A', category: 'psychological_safety' }),
@@ -209,96 +218,94 @@ describe('SurveyRespondForm dimension sections', () => {
     ],
   })
 
-  it('prints a heading per dimension, in the order the author put them in', async () => {
+  /**
+   * The canvas's "2/6 · CARGA DE TRABAJO": one question per page, and the dimension it is
+   * asked under beside its position. The grouping is still `respondDimensions`', so the
+   * respondent is asked under the names the analysis reports under.
+   */
+  it('labels each question with its dimension, in the order the author put them in', async () => {
     respondWith(sectioned)
     renderForm()
 
     await screen.findByText('Pregunta A')
-    expect(headings()).toEqual([
+    expect(await dimensionsAcrossPages()).toEqual([
+      copy.es('surveyRespond.dimensions.psychological_safety').toUpperCase(),
       copy.es('surveyRespond.dimensions.psychological_safety').toUpperCase(),
       copy.es('surveyRespond.dimensions.workload').toUpperCase(),
     ])
   })
 
-  /**
-   * The premise `headings()` rests on, asserted rather than assumed.
-   *
-   * happy-dom resolves no stylesheet, so the helper reads the transform off the
-   * class instead of off `getComputedStyle`. If the class went away — a refactor
-   * that moved `uppercase` to the row, say — the helper would quietly stop
-   * uppercasing and every distinctness claim below would start comparing the
-   * pre-transform strings again, which is exactly the hole this file was fixed for.
-   */
-  it('prints its headings in uppercase, as the design sets them', async () => {
+  /** The premise `readDimension` rests on, asserted rather than assumed. */
+  it('prints its dimension label in uppercase, as the canvas sets it', async () => {
     respondWith(sectioned)
     renderForm()
 
     await screen.findByText('Pregunta A')
-    const nodes = headingNodes()
-    expect(nodes).toHaveLength(2)
-    for (const node of nodes) {
-      expect(
-        node.classList.contains('uppercase'),
-        'headings() reads the text transform off this class; without it the ' +
-          'assertions below compare the pre-transform text.',
-      ).toBe(true)
-    }
+    const node = dimensionNode()
+    expect(node).toBeTruthy()
+    expect(
+      node!.classList.contains('uppercase'),
+      'readDimension() reads the text transform off this class; without it the ' +
+        'assertions below compare the pre-transform text.',
+    ).toBe(true)
   })
 
   /**
-   * The design's `1–2 OF 12` reading. A section of one prints `3 of 12` instead — a
-   * range whose ends are equal reads as an error rather than as a single question.
+   * Where the respondent is, said twice and never disagreeing: the reading at the head
+   * of the page ("2 de 6") and the chip on the card ("2/6"), both moving with the page.
    */
-  it('reads the range each heading covers, and collapses a range of one', async () => {
+  it('reads where the respondent is, at the head and on the card, page by page', async () => {
+    respondWith(view({ ...sectioned, showProgress: true }))
+    renderForm()
+
+    await screen.findByText('Pregunta A')
+    const position = () => document.querySelector('[data-slot="respond-position"]')?.textContent
+    const chip = () => document.querySelector('[data-slot="question-index"]')?.textContent
+    expect([position(), chip()]).toEqual(['1 de 3', '1/3'])
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+    expect([position(), chip()]).toEqual(['2 de 3', '2/3'])
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+    expect([position(), chip()]).toEqual(['3 de 3', '3/3'])
+  })
+
+  /**
+   * The numbering is the position in the whole form, not in the dimension. Restarting it
+   * under each one would tell a respondent three questions in that they are on 1 of 3.
+   */
+  it('numbers the questions across the dimensions rather than within them', async () => {
     respondWith(sectioned)
     renderForm()
 
-    expect(await screen.findByText('1–2 de 3')).toBeTruthy()
-    expect(screen.getByText('3 de 3')).toBeTruthy()
+    await screen.findByText('Pregunta A')
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+    expect(await screen.findByText('Pregunta C')).toBeTruthy()
+    expect(document.querySelector('legend')?.textContent).toContain('Pregunta 3 de 3')
   })
 
   /**
-   * The numbering is the position in the whole form, not in the section. Restarting
-   * it under each heading would tell a respondent three questions in that they are
-   * on question 1 of 3.
+   * `respondDimensions` switches grouping off for a randomised survey, because naming a
+   * shuffled list by dimension gathers each dimension back together in the reader's head
+   * and undoes the randomisation the author asked for. The page honours that rather than
+   * re-deriving its own answer — and every question is still asked.
    */
-  it('numbers the questions across the headings rather than within them', async () => {
-    respondWith(sectioned)
-    renderForm()
-
-    await screen.findByText('Pregunta C')
-    const legends = [...document.querySelectorAll('legend')].map((node) => node.textContent ?? '')
-    expect(legends[2]).toContain('Pregunta 3 de 3')
-  })
-
-  /**
-   * `respondDimensions` switches sectioning off for a randomised survey, because
-   * grouping a shuffled list gathers each dimension's questions back together and
-   * undoes the randomisation the author asked for. The page must honour that rather
-   * than re-derive its own answer.
-   */
-  it('prints no headings at all when the survey randomises its questions', async () => {
+  it('prints no dimension at all when the survey randomises its questions', async () => {
     respondWith(view({ ...sectioned, randomizeQuestions: true }))
     renderForm()
 
-    await screen.findByText('Pregunta A')
-    expect(headings()).toEqual([])
-    // And every question is still asked — an unsectioned run is the whole form.
-    expect(document.querySelectorAll('legend')).toHaveLength(3)
+    await screen.findByRole('radio', { name: 'Muy de acuerdo' })
+    expect(await dimensionsAcrossPages()).toEqual([null, null, null])
   })
 
   /**
-   * `Question.Category` is free text the server neither controls nor translates, so
-   * the catalogue is a translation table for the ten values the product ships, not a
-   * vocabulary. A value outside it is the author's own word for what is being asked,
-   * and is printed as such; a question with no category at all is named from the
-   * catalogue, because there is no word to print.
+   * `Question.Category` is free text the server neither controls nor translates, so the
+   * catalogue is a translation table for the values the product ships, not a vocabulary.
+   * A value outside it is the author's own word and is printed as such; a question with
+   * no category at all is named from the catalogue.
    *
    * `hybrid_working` and `mentoring` are deliberately NOT in `surveyRespond.dimensions`
-   * and must not be added: this is the case that proves an uncatalogued category still
-   * names its own section. This example used to be `recognition`, which stopped being
-   * uncatalogued the moment the seeded survey's vocabulary (safety / trust /
-   * recognition / growth / belonging) was added. Pick values no product would ship.
+   * and must not be added: they are what makes these uncatalogued. Pick values no product
+   * would ship.
    */
   it('names an uncatalogued category in the survey’s own words, and an absent one from the catalogue', async () => {
     respondWith(
@@ -312,42 +319,21 @@ describe('SurveyRespondForm dimension sections', () => {
     renderForm()
 
     await screen.findByText('Pregunta A')
-    // The separator is opened out and nothing else is: the design uppercases this
-    // heading in CSS, so inventing case here would be invisible and could only
-    // mangle a word the author capitalised on purpose.
-    expect(headings()).toEqual([
+    // The separator is opened out and nothing else is: the canvas uppercases this label
+    // in CSS, so inventing case here would be invisible and could only mangle a word the
+    // author capitalised on purpose.
+    expect(await dimensionsAcrossPages()).toEqual([
       'HYBRID WORKING',
       copy.es('surveyRespond.dimensionNone').toUpperCase(),
     ])
   })
 
   /**
-   * The defect this replaced: `respondDimensions` groups by the raw key, so two
-   * uncatalogued categories are two real sections — and both used to be headed
-   * "Más preguntas". The respondent could not tell whether the form had changed
-   * subject or the page had broken.
-   *
-   * ## What this asserts, and what it deliberately does not
-   *
-   * It asserts that each uncatalogued section is headed **from its own category** —
-   * not that no two headings on a page can ever match. The earlier version of this
-   * test was named "never gives two different dimensions the same heading" and that
-   * claim is false; the test below pins where it fails. The claim that *is* true is
-   * the one the defect was about: the generic is no longer the answer for a category
-   * that has words, so N uncatalogued sections no longer collapse into N copies of
-   * one heading.
-   *
-   * The check is against each category's own text rather than against a literal, so
-   * it cannot be satisfied by a fixture that happens to differ — the assert-on-the-
-   * fixture mistake this whole task exists to fix.
-   *
-   * `hybrid_working` and `mentoring` are deliberately NOT in `surveyRespond.dimensions`
-   * and must not be added: they are what makes these sections uncatalogued. This
-   * example used to be `recognition`, which stopped being uncatalogued the moment the
-   * seeded survey's vocabulary (safety / trust / recognition / growth / belonging) was
-   * added. Pick values no product would ship.
+   * Each uncatalogued dimension is named from its own category — not from the generic,
+   * which is what made N uncatalogued sections read as N copies of one label before.
+   * Checked against each category's own text, derived from the input rather than restated.
    */
-  it('heads each uncatalogued section from its own category, not from the generic', async () => {
+  it('names each uncatalogued dimension from its own category, not from the generic', async () => {
     const categories = ['hybrid_working', 'mentoring']
     respondWith(
       view({
@@ -359,36 +345,17 @@ describe('SurveyRespondForm dimension sections', () => {
     )
     renderForm()
 
-    await screen.findByText('Pregunta B')
-    const printed = headings()
-    expect(printed).toHaveLength(2)
-
-    // Each heading is that section's own category, uppercased with `_` opened out —
-    // derived from the input, not restated.
+    await screen.findByText('Pregunta A')
+    const printed = await dimensionsAcrossPages()
     expect(printed).toEqual(categories.map((category) => category.replace(/_/g, ' ').toUpperCase()))
-    // And neither fell back to the generic, which is what made them identical before.
-    // Read from the catalogue, so rewording the generic cannot quietly retire this.
     expect(printed).not.toContain(copy.es('surveyRespond.dimensionUnknown').toUpperCase())
   })
 
   /**
    * The first bound on the claim above, pinned so it is a fact rather than a paragraph.
-   *
-   * Two sections CAN still read the same. `respondDimensions` groups by
-   * `dimensionKeyOf`'s trim, which is case-SENSITIVE, while the design sets the eyebrow
-   * in `uppercase`, which is not. So two categories differing in nothing but case are
-   * two sections that print one heading twice.
-   *
-   * The fixture differs in case and in **nothing else**, deliberately. An earlier draft
-   * of this test used `team_support` / `Team Support`, which also collide — but they
-   * differ by a separator too, so the test stayed green when `dimensionKeyOf` was
-   * mutated to fold case, and it therefore did not pin what its own comment claimed.
-   * Verified: with the pair below, folding case in `dimensionKeyOf` merges the two into
-   * one section and this test fails.
-   *
-   * If someone does close it that way — which would also change how the analyst's
-   * climate map columns group, since `dimensionKeyOf` is shared — this test fails and
-   * is the right place to record the new behaviour.
+   * `respondDimensions` groups by `dimensionKeyOf`'s trim, which is case-SENSITIVE, while
+   * the label is set in `uppercase`, which is not. So two categories differing only in
+   * case are two dimensions — two different label texts — that READ the same on screen.
    */
   it('still reads the same for two categories differing only in case — the known bound', async () => {
     respondWith(
@@ -401,37 +368,35 @@ describe('SurveyRespondForm dimension sections', () => {
     )
     renderForm()
 
-    await screen.findByText('Pregunta B')
-    // Two sections, because the grouping is case-sensitive...
-    expect(headings()).toHaveLength(2)
+    await screen.findByText('Pregunta A')
+    // Two keys, because the grouping is case-sensitive...
+    const raw = (node: HTMLElement | null) => node?.textContent ?? null
+    expect(await dimensionsAcrossPages(raw)).toEqual(['team support', 'Team Support'])
+    cleanup()
+
     // ...reading the same, because the rendering is not.
-    expect(headings()).toEqual(['TEAM SUPPORT', 'TEAM SUPPORT'])
+    respondWith(
+      view({
+        questions: [
+          question({ id: 'a', text: 'Pregunta A', category: 'team support' }),
+          question({ id: 'b', text: 'Pregunta B', category: 'Team Support' }),
+        ],
+      }),
+    )
+    renderForm()
+    await screen.findByText('Pregunta A')
+    expect(await dimensionsAcrossPages()).toEqual(['TEAM SUPPORT', 'TEAM SUPPORT'])
   })
 
   /**
-   * The second bound, and the reason the first one is not simply a bug to be fixed by
-   * normalising the key harder.
-   *
-   * A catalogue *value* can equal another category's authored form. `enps` is headed
-   * "Recommending this place to work"; a survey author who types that sentence as a
-   * category gets a section headed with the same words. No normalisation of the KEYS
-   * can see this coming — the two keys are `enps` and `Recommending this place to
-   * work`, which are not similar by any measure — so guaranteeing distinct headings
-   * would mean grouping on the rendered LABEL, which is locale-dependent, and
-   * switching language would then re-section the form mid-answer.
-   *
-   * That is why `dimensionLabel` claims only what it can hold: an uncatalogued
-   * category is headed with its own text rather than with boilerplate. It does not
-   * claim, as 97efd72 did, that two dimensions never share a heading.
+   * The second bound. A catalogue *value* can equal another category's authored form:
+   * `enps` is labelled "Recommending this place to work", and an author who types that
+   * sentence as a category gets the same words. No normalisation of the KEYS can see it,
+   * and grouping on the rendered label would re-section the form when the language
+   * changes mid-answer — which is why `dimensionLabel` claims only what it can hold.
    */
-  it('reads the same for a catalogued dimension and a category spelled like its heading', async () => {
-    // The catalogue is read from the UI locale, so this one is asserted in English —
-    // `enps`'s heading is a whole sentence there, which is what makes the collision
-    // easy to demonstrate.
+  it('reads the same for a catalogued dimension and a category spelled like its label', async () => {
     window.localStorage.setItem(LOCALE_STORAGE_KEY, 'en')
-    // The colliding category is TAKEN FROM the catalogue rather than spelled out, so
-    // the collision is a property of the design and not of a string typed twice:
-    // reword `enps` and this fixture rewords with it and still collides.
     const enpsHeading = copy.en('surveyRespond.dimensions.enps')
     respondWith(
       view({
@@ -444,25 +409,27 @@ describe('SurveyRespondForm dimension sections', () => {
     )
     renderForm()
 
-    await screen.findByText('Question B')
-    const printed = headings()
+    await screen.findByText('Question A')
+    const walk = async () => {
+      const seen: (string | null)[] = []
+      for (let guard = 0; guard < 10; guard += 1) {
+        seen.push(readDimension(dimensionNode()))
+        const next = screen.queryByRole('button', { name: 'Next' })
+        if (next === null) return seen
+        await userEvent.click(next)
+      }
+      return seen
+    }
+    const printed = await walk()
     expect(printed).toHaveLength(2)
-    // Derived from the catalogue rather than restated, so it cannot drift from it:
-    // whatever `enps` is headed with, the authored category matching it collides.
     expect(new Set(printed).size, `expected a collision, got ${printed.join(' / ')}`).toBe(1)
     expect(printed[0]).toBe(enpsHeading.toUpperCase())
   })
 
   /**
-   * `_` is a separator standing in for a space in a machine-shaped slug and is opened
-   * out. A hyphen is a character of running text in both shipped locales and is not.
-   *
-   * The version of this transform that shipped in 97efd72 replaced `[_-]+`
-   * unconditionally, which turned `work-life balance` into `work life balance`,
-   * `COVID-19` into `COVID 19` and `comunicación jefe-equipo` into `comunicación jefe
-   * equipo`. Losing a real hyphen changes a word the author chose, which is worse than
-   * leaving a slug-shaped one in place — a heading is not the place to correct an
-   * author's spelling.
+   * `_` is a separator standing in for a space in a machine-shaped slug and is opened out.
+   * A hyphen is a character of running text in both shipped locales and is not: losing a
+   * real hyphen changes a word the author chose.
    */
   it('opens out the underscore and leaves the author’s hyphens alone', async () => {
     respondWith(
@@ -477,8 +444,8 @@ describe('SurveyRespondForm dimension sections', () => {
     )
     renderForm()
 
-    await screen.findByText('Pregunta D')
-    expect(headings()).toEqual([
+    await screen.findByText('Pregunta A')
+    expect(await dimensionsAcrossPages()).toEqual([
       'WORK-LIFE BALANCE',
       'COVID-19',
       'COMUNICACIÓN JEFE-EQUIPO',
@@ -487,45 +454,21 @@ describe('SurveyRespondForm dimension sections', () => {
   })
 
   /**
-   * `Category` is `varchar(100)` and the heading now prints it in full, where before
-   * only the ten short catalogue strings could reach this slot. The row is a flex
-   * line — eyebrow, a `flex-1` rule, then the range reading — and `flex-1` is
-   * `flex: 1 1 0%`, so the rule is the first thing a hundred-character eyebrow
-   * squeezes to nothing before it pushes the reading off the row entirely.
+   * `Category` is `varchar(100)` and the label prints it in full. On a 390px card the
+   * meta row is the `2/6` chip and then the label, so a hundred characters must be
+   * clipped to the card rather than widen it.
    *
-   * ## Read this before trusting it
-   *
-   * These are assertions about CLASS NAMES, and a class name is not a layout. The
-   * suite runs on happy-dom, which has no layout engine: `getBoundingClientRect` is
-   * all zeroes here, so a width assertion would pass whatever the row did. Asserting
-   * the class is the same compromise `AdminLayout.test.tsx` makes for `min-w-0` on
-   * `#main`, and it carries the same limit — this test can only fail when a class is
-   * *deleted*, never when the classes present turn out to be insufficient.
-   *
-   * That limit is not hypothetical. An earlier draft of this fix asserted exactly the
-   * four classes below minus one, was green, and still overflowed: measured with
-   * `npm run shot` at `--width 390` against a fixture carrying a 100-character
-   * category, the page rendered **983 CSS px wide inside a 390 px viewport** — a 2.5x
-   * horizontal overrun, with the eyebrow ellipsised at 900-odd px rather than at the
-   * card edge. `truncate` and `min-w-0` on the `h2` do not bound anything on their
-   * own, because the row itself is a grid item of `<form className="grid">` and a grid
-   * item's automatic minimum size is its min-content width: the track grew to fit the
-   * nowrap eyebrow and took the page with it. `min-w-0` on the ROW is what lets the
-   * track shrink, and it is asserted below for that reason.
-   *
-   * After the fix the same command renders 390x1320, equal in width to the
-   * short-category baseline. Re-verify with a screenshot, not with this test, whenever
-   * this row's classes change — `scripts/shot-fixtures/employee-respond-long-category.json`
-   * exists for exactly this and carries a 100-character category and a hyphenated one:
+   * These are assertions about CLASS NAMES, and a class name is not a layout — happy-dom
+   * has none. They can only fail when a class is deleted. Re-verify with a screenshot
+   * whenever this row changes:
    *
    *   npm run shot -- /surveys/44444444-4444-4444-4444-444444440006/respond out.png \
    *     --fixtures scripts/shot-fixtures/employee-respond-long-category.json \
    *     --role employee --width 390
    *
-   * A PNG wider than the requested viewport IS the bug; the harness widens the capture
-   * for horizontal overflow instead of reporting it (it only checks vertical).
+   * A PNG wider than the requested viewport IS the bug.
    */
-  it('bounds a long category so the rule and the range keep the row', async () => {
+  it('bounds a long category so the label cannot widen the card', async () => {
     const long = 'satisfacción con la comunicación entre turnos de noche y coordinación de relevos'
     respondWith(
       view({
@@ -537,36 +480,22 @@ describe('SurveyRespondForm dimension sections', () => {
     )
     renderForm()
 
-    await screen.findByText('Pregunta B')
-    const heading = headingNodes()[0]
-
-    // The row is a grid item of `<form className="grid">`, whose automatic minimum
-    // size is its min-content width. Without this the track grows to fit the nowrap
-    // eyebrow and drags the whole page wider than the viewport — measured, not
-    // supposed; see above.
-    expect(
-      heading.parentElement!.className,
-      'the heading row must be allowed to shrink below its min-content width, or the ' +
-        'form’s grid track grows to fit a long category and the page scrolls sideways',
-    ).toContain('min-w-0')
-
-    // Shrinkable and clipped to one line, rather than wrapping the row to three.
-    expect(heading.className).toContain('min-w-0')
-    expect(heading.className).toContain('truncate')
-    // Truncated on screen, so the whole category stays reachable — it is the
-    // author's text, not ours to discard.
-    expect(heading.getAttribute('title')).toBe(long)
-
-    const [rule, range] = [...heading.parentElement!.querySelectorAll('span')]
-    // The rule keeps a floor, so it still reads as a rule.
-    expect(rule.className).toContain('min-w-8')
-    // The range is a reading: an ellipsised `1–2 DE…` is a different number.
-    expect(range.className).toContain('shrink-0')
+    await screen.findByText('Pregunta A')
+    const label = dimensionNode()!
+    // Shrinkable and clipped to one line, rather than a nowrap run the card must fit.
+    expect(label.className.split(/\s+/)).toContain('min-w-0')
+    expect(label.className.split(/\s+/)).toContain('truncate')
+    // Truncated on screen, so the whole category stays reachable — the author's text.
+    expect(label.getAttribute('title')).toBe(long)
+    // The row wraps, so the label can take a line of its own under the chip.
+    expect(label.parentElement!.className.split(/\s+/)).toContain('flex-wrap')
+    // And the card itself may shrink below its min-content width.
+    expect(label.closest('fieldset')!.className.split(/\s+/)).toContain('min-w-0')
   })
 
   /**
-   * The generic still has a job. A category of punctuation has nothing to open out,
-   * and a heading reading `___` says less than "more questions" does.
+   * The generic still has a job. A category of punctuation has nothing to open out, and a
+   * label reading `___` says less than "more questions" does.
    */
   it('falls back to the generic only when the category carries no letter or digit', async () => {
     respondWith(
@@ -579,11 +508,132 @@ describe('SurveyRespondForm dimension sections', () => {
     )
     renderForm()
 
-    await screen.findByText('Pregunta B')
-    expect(headings()).toEqual([
+    await screen.findByText('Pregunta A')
+    expect(await dimensionsAcrossPages()).toEqual([
       copy.es('surveyRespond.dimensionUnknown').toUpperCase(),
       'MENTORING',
     ])
+  })
+})
+
+/**
+ * 1b. One question at a time (the triage's "one question at a time on small screens").
+ *
+ * Only the presentation is paged: the answer map, the autosave and the one POST that
+ * completes the response are the ones the long form had — `SurveyRespondPage.test.tsx`
+ * pins the payload. What is pinned here is the paging itself.
+ */
+describe('SurveyRespondForm one question at a time', () => {
+  const three = () =>
+    view({
+      questions: [
+        question({ id: 'q1', text: 'Pregunta uno' }),
+        question({ id: 'q2', text: 'Pregunta dos', order: 1 }),
+        question({ id: 'q3', text: 'Pregunta tres', order: 2 }),
+      ],
+    })
+
+  it('shows one question, and draws Anterior disabled on the first so the way on never moves', async () => {
+    respondWith(three())
+    renderForm()
+
+    await screen.findByText('Pregunta uno')
+    expect(document.querySelectorAll('fieldset[id^="question-"]')).toHaveLength(1)
+    expect(screen.queryByText('Pregunta dos')).toBeNull()
+    expect((screen.getByRole('button', { name: 'Anterior' }) as HTMLButtonElement).disabled).toBe(true)
+    // Not the submit yet: a respondent on question 1 has not asked to finish.
+    expect(screen.queryByRole('button', { name: 'Enviar mis respuestas' })).toBeNull()
+  })
+
+  it('stops Siguiente on a required question with no answer, on that question', async () => {
+    respondWith(
+      view({
+        questions: [question({ id: 'q1', text: 'Pregunta uno', required: true }), question({ id: 'q2', text: 'Pregunta dos', order: 1 })],
+      }),
+    )
+    renderForm()
+
+    await screen.findByText('Pregunta uno')
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+
+    // Still on it, told why, and put on it — not sent to question 2 to meet the error at
+    // the end.
+    expect(screen.getByText('Pregunta uno')).toBeTruthy()
+    expect(screen.queryByText('Pregunta dos')).toBeNull()
+    expect(screen.getByText(copy.es('surveyRespond.answerRequired'))).toBeTruthy()
+    expect(document.activeElement?.id).toBe('question-q1')
+  })
+
+  it('turns back with Anterior and keeps the answer given', async () => {
+    respondWith(three())
+    renderForm()
+
+    await userEvent.click(await screen.findByRole('radio', { name: 'Muy de acuerdo' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+    expect(await screen.findByText('Pregunta dos')).toBeTruthy()
+    await userEvent.click(screen.getByRole('button', { name: 'Anterior' }))
+
+    expect(await screen.findByText('Pregunta uno')).toBeTruthy()
+    expect((screen.getByRole('radio', { name: 'Muy de acuerdo' }) as HTMLInputElement).checked).toBe(true)
+  })
+
+  it('moves focus onto the question it turns to', async () => {
+    respondWith(three())
+    renderForm()
+
+    await screen.findByText('Pregunta uno')
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+    await screen.findByText('Pregunta dos')
+    // A page turn removes the fieldset focus was in; left alone, focus falls to <body>
+    // and a keyboard respondent starts every page from the top of the document.
+    expect(document.activeElement?.id).toBe('question-q2')
+  })
+
+  it('sends one complete response carrying every page’s answer, and only from the last page', async () => {
+    respondWith(
+      view({
+        questions: [question({ id: 'q1', text: 'Pregunta uno' }), question({ id: 'q2', text: 'Pregunta dos', order: 1 })],
+      }),
+    )
+    renderForm()
+
+    await userEvent.click(await screen.findByRole('radio', { name: 'Muy de acuerdo' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+    await userEvent.click(await screen.findByRole('radio', { name: 'En desacuerdo' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Enviar mis respuestas' }))
+
+    await screen.findByText('Qué pasa ahora')
+    const posts = vi.mocked(fetch).mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === 'POST')
+    expect(posts).toHaveLength(1)
+    const body = lastSubmission()
+    expect(body.isComplete).toBe(true)
+    expect(body.answers).toEqual([
+      { questionId: 'q1', value: 'strongly_agree' },
+      { questionId: 'q2', value: 'disagree' },
+    ])
+  })
+
+  /**
+   * Anything that submits the `<form>` from an early page — Enter on a control, a browser's
+   * implicit submission — reaches `handleSubmit`. Before the last page that has to mean
+   * "next": a respondent on question 1 has not asked to send. Fired as a raw `submit` so
+   * the guard is tested whatever the control that triggered it.
+   */
+  it('reads a submit from an early page as Siguiente, never as send', async () => {
+    respondWith(
+      view({
+        questions: [question({ id: 'q1', text: 'Pregunta uno' }), question({ id: 'q2', text: 'Pregunta dos', order: 1 })],
+      }),
+    )
+    renderForm()
+
+    await screen.findByText('Pregunta uno')
+    fireEvent.submit(document.querySelector('form')!)
+
+    expect(await screen.findByText('Pregunta dos')).toBeTruthy()
+    expect(
+      vi.mocked(fetch).mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === 'POST'),
+    ).toHaveLength(0)
   })
 })
 
@@ -606,6 +656,26 @@ describe('SurveyRespondForm numeric scales', () => {
     // The anchors sit under the ends of the row they annotate.
     expect(screen.getByText('Nunca')).toBeTruthy()
     expect(screen.getByText('Siempre')).toBeTruthy()
+  })
+
+  /**
+   * The canvas sets the question at 17px with line-height 1.4 and its scale points at 17px
+   * (RespondSurveyPhone.dc.html). The type scale had no 17px step, so both were drawn at
+   * 16px; `text-question` is that step (`tokens.css`, pinned in `tokens.test.ts`).
+   */
+  it('sets the question and its scale points at the canvas’s 17px step', async () => {
+    respondWith(view({ questions: [scaleQuestion()] }))
+    const { container } = renderForm()
+
+    const group = await screen.findByRole('radiogroup')
+    const text = container.querySelector('[data-slot="question-text"]') as HTMLElement
+    expect(text.className.split(/\s+/)).toContain('text-question')
+    expect(text.className.split(/\s+/)).not.toContain('text-xl')
+    // The step carries the canvas's 1.4; a `leading-*` beside it would override it.
+    expect(text.className).not.toMatch(/\bleading-/)
+    for (const point of within(group).getAllByRole('radio')) {
+      expect(point.className.split(/\s+/)).toContain('text-question')
+    }
   })
 
   it('submits the scale point as the stored code', async () => {
@@ -642,9 +712,15 @@ describe('SurveyRespondForm numeric scales', () => {
     respondWith(view({ questions: [question(), scaleQuestion({ id: 'q2', options: null })] }))
     const { container } = renderForm()
 
+    // One question per page: the authored options first, as native radios...
     await screen.findByRole('radio', { name: 'Muy de acuerdo' })
     expect(container.querySelectorAll('input[type="radio"]')).toHaveLength(2)
-    expect(screen.getAllByRole('radiogroup')).toHaveLength(1)
+    expect(container.querySelector('[data-slot="segmented-scale"]')).toBeNull()
+
+    // ...and the bare scale on the next page, as the segmented control and nothing else.
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+    expect(await screen.findByRole('radiogroup')).toBeTruthy()
+    expect(container.querySelectorAll('input[type="radio"]')).toHaveLength(0)
   })
 })
 
@@ -675,14 +751,12 @@ describe('SurveyRespondForm layout', () => {
   })
 
   /**
-   * The count and the two actions ride the bottom of the viewport.
-   *
-   * happy-dom does no layout, so whether the bar *visually* sticks is not knowable
-   * here — `components/layout/respondSticky.test.tsx` is where this page's computed
-   * positioning is measured. What is knowable is that the three things the design
-   * puts in the bar are in the bar, and that the bar asks to be stuck to the bottom.
+   * The canvas's order under the promise: the survey's name with where the respondent is
+   * and a 6px bar, the one question card, then the pair — Anterior and the way on — with
+   * "Guardar y terminar después" under it. Nothing pinned to the viewport: every page is
+   * one question, so the pair is always right under the card it acts on.
    */
-  it('gathers the progress reading and both actions into a bar pinned to the bottom', async () => {
+  it('heads the question with the position and the bar, and puts the pair and the save under the card', async () => {
     respondWith(
       view({
         showProgress: true,
@@ -692,36 +766,68 @@ describe('SurveyRespondForm layout', () => {
     )
     const { container } = renderForm()
 
-    await screen.findByRole('button', { name: 'Enviar mis respuestas' })
-    const bar = container.querySelector('[data-slot="respond-submit-bar"]') as HTMLElement | null
-    expect(bar, 'the form ends in a submit bar').toBeTruthy()
-    expect(bar!.className).toContain('sticky')
-    expect(bar!.className).toContain('bottom-0')
+    await screen.findByRole('button', { name: 'Siguiente' })
+    const head = container.querySelector('[data-slot="respond-progress"]') as HTMLElement
+    expect(within(head).getByRole('heading', { level: 1, name: 'Clima laboral 2026' })).toBeTruthy()
+    expect(within(head).getByText('1 de 3')).toBeTruthy()
+    expect(within(head).getByRole('progressbar').getAttribute('aria-valuenow')).toBe('33')
 
-    expect(within(bar!).getByRole('progressbar')).toBeTruthy()
-    // Read off the bar's own text rather than matched as one string: `MonoReadings`
-    // sets the numerals in mono and leaves the prose in the sans face, so the
-    // sentence is spread across several elements and an exact-text query cannot
-    // match it. The numerals are asserted to BE readings just below.
-    expect(bar!.textContent).toContain('0 de 3 respondidas')
+    const card = container.querySelector('fieldset[id^="question-"]') as HTMLElement
+    const nav = container.querySelector('[data-slot="respond-nav"]') as HTMLElement
+    const save = container.querySelector('[data-slot="respond-save"]') as HTMLElement
+    expect(within(nav).getByRole('button', { name: 'Anterior' })).toBeTruthy()
+    expect(within(nav).getByRole('button', { name: 'Siguiente' })).toBeTruthy()
+    expect(within(save).getByRole('button', { name: 'Guardar y terminar después' })).toBeTruthy()
+    // In that order down the page. Read off `querySelectorAll`, which returns document
+    // order — happy-dom's `compareDocumentPosition` answered 0 for the header against the
+    // card inside the form, which is a question about happy-dom, not about this page.
+    const order = [
+      ...container.querySelectorAll('[data-slot="respond-progress"], fieldset[id^="question-"], [data-slot="respond-nav"], [data-slot="respond-save"]'),
+    ]
+    expect(order).toEqual([head, card, nav, save])
+    // And nothing asks to be stuck to the viewport any more.
     expect(
-      Array.from(bar!.querySelectorAll('.font-mono.tabular-nums')).map((n) => n.textContent),
-    ).toEqual(['0', '3'])
-    expect(within(bar!).getByRole('button', { name: 'Guardar y terminar después' })).toBeTruthy()
-    expect(within(bar!).getByRole('button', { name: 'Enviar mis respuestas' })).toBeTruthy()
+      [...container.querySelectorAll('[class]')].filter((node) => /(^|\s)(\w+:)?sticky(\s|$)/.test(node.getAttribute('class') ?? '')),
+    ).toEqual([])
   })
 
-  it('counts an answer into the bar as it is given', async () => {
+  /**
+   * The canvas reads the POSITION ("2 de 6", the bar at a third), not an answered count:
+   * one question per page makes where you are the thing worth watching.
+   */
+  it('moves the position and the bar as the respondent turns the page, not as they answer', async () => {
     respondWith(view({ showProgress: true, questions: [question(), question({ id: 'q2' })] }))
     renderForm()
 
-    const radios = await screen.findAllByRole('radio', { name: 'Muy de acuerdo' })
-    await userEvent.click(radios[0])
-    const bar = document.querySelector('[data-slot="respond-submit-bar"]') as HTMLElement
-    expect(bar.textContent).toContain('1 de 2 respondidas')
-    expect(
-      Array.from(bar.querySelectorAll('.font-mono.tabular-nums')).map((n) => n.textContent),
-    ).toEqual(['1', '2'])
+    const position = () => document.querySelector('[data-slot="respond-position"]')?.textContent
+    const valueNow = () => screen.getByRole('progressbar').getAttribute('aria-valuenow')
+    await screen.findByRole('progressbar')
+    expect([position(), valueNow()]).toEqual(['1 de 2', '50'])
+
+    await userEvent.click(screen.getAllByRole('radio', { name: 'Muy de acuerdo' })[0])
+    expect([position(), valueNow()]).toEqual(['1 de 2', '50'])
+
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+    expect([position(), valueNow()]).toEqual(['2 de 2', '100'])
+
+    await userEvent.click(screen.getByRole('button', { name: 'Anterior' }))
+    expect([position(), valueNow()]).toEqual(['1 de 2', '50'])
+  })
+
+  /**
+   * The canvas inks the promise's label green (`#0f7f4e`), and that ink measures 4.31:1 on
+   * the soft green over the respond page's ground — under AA for 10px text
+   * (`respondContrast.test.ts` records it as rejected). The label keeps the green on the
+   * chip's measured green ink instead.
+   */
+  it('inks the promise’s label with the measured green, not the canvas’s own', async () => {
+    respondWith(view({ anonymous: true }))
+    const { container } = renderForm()
+
+    await screen.findByRole('radio', { name: 'Muy de acuerdo' })
+    const label = container.querySelector('[data-slot="anonymity-label"]') as HTMLElement
+    expect(label.className.split(/\s+/)).toContain('text-chip-good-ink')
+    expect(label.className.split(/\s+/)).not.toContain('text-accent-green-ink')
   })
 
   /**
@@ -729,15 +835,17 @@ describe('SurveyRespondForm layout', () => {
    * failure mode of "remove the right column" done carelessly, and it is the one
    * fact a respondent deciding whether to finish later actually needs.
    */
-  it('keeps the closing date and the time limit as readings', async () => {
+  it('keeps the closing date and the time limit at the foot of the page', async () => {
     respondWith(view({ timeLimitMinutes: 10 }))
-    renderForm()
+    const { container } = renderForm()
 
-    const panel = await screen.findByRole('region', { name: 'Sobre esta encuesta' })
-    expect(within(panel).getByText('Cierra')).toBeTruthy()
-    expect(within(panel).getByText('12 sept 2026')).toBeTruthy()
-    expect(within(panel).getByText('Tiempo restante')).toBeTruthy()
-    expect(within(panel).getByText('10:00')).toBeTruthy()
+    await screen.findByRole('radio', { name: 'Muy de acuerdo' })
+    const foot = container.querySelector('[data-slot="respond-footer"]') as HTMLElement
+    expect(within(foot).getByText('Cierra el 12 de septiembre')).toBeTruthy()
+    const left = foot.querySelector('[data-slot="respond-time-left"]') as HTMLElement
+    expect(left.textContent).toBe('Queda 10:00')
+    expect(left.className).toContain('font-mono')
+    expect(left.className).toContain('tabular-nums')
   })
 
   /**
@@ -760,11 +868,12 @@ describe('SurveyRespondForm layout', () => {
     try {
       // 23:59:59Z — the last second of 5 August in UTC, already the 6th in Tokyo.
       respondWith(view({ endDate: '2026-08-05T23:59:59+00:00' }))
-      renderForm()
+      const { container } = renderForm()
+      await screen.findByRole('radio', { name: 'Muy de acuerdo' })
 
-      const panel = await screen.findByRole('region', { name: 'Sobre esta encuesta' })
-      expect(within(panel).getByText('5 ago 2026')).toBeTruthy()
-      expect(within(panel).queryByText('6 ago 2026')).toBeNull()
+      const foot = container.querySelector('[data-slot="respond-footer"]') as HTMLElement
+      expect(within(foot).getByText('Cierra el 5 de agosto')).toBeTruthy()
+      expect(within(foot).queryByText('Cierra el 6 de agosto')).toBeNull()
     } finally {
       process.env.TZ = original
     }
@@ -805,10 +914,33 @@ describe('SurveyRespondForm confirmation', () => {
   })
 
   it('reads back what was recorded, and when', async () => {
-    await submitOnce()
-    expect(screen.getByText(/^3 respuestas, enviadas a las \d{1,2}:\d{2}\./)).toBeTruthy()
-    // The receipt reading the page has always given is still there.
-    expect(screen.getByText('Respuestas registradas')).toBeTruthy()
+    await submitOnce({ answeredQuestionCount: 3, questionCount: 3 })
+
+    const receipt = document.querySelector('[data-slot="respond-receipt"]') as HTMLElement
+    expect(within(receipt).getByText('Respuestas registradas')).toBeTruthy()
+    // The server's own count as a reading, beside what it is out of.
+    const reading = receipt.querySelector('.font-mono.tabular-nums')
+    expect(reading?.textContent).toBe('3 de 3')
+    expect(
+      within(receipt).getByText(/^Enviadas a las \d{1,2}:\d{2}\. Se guardaron sin nada que lo identifique\.$/),
+    ).toBeTruthy()
+  })
+
+  /**
+   * "Se guardaron sin nada que lo identifique" describes how THIS response was stored, so
+   * it is said only when the server says the response is anonymous. On a survey that
+   * records who answered, the time is the whole of what is true.
+   */
+  it('says only when it was sent, on a survey that records who answered', async () => {
+    respondWith(view({ anonymous: false, questions: [question()] }), { answeredQuestionCount: 1 })
+    renderForm()
+    await userEvent.click(await screen.findByRole('radio', { name: 'Muy de acuerdo' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Enviar mis respuestas' }))
+    await screen.findByText('Qué pasa ahora')
+
+    const receipt = document.querySelector('[data-slot="respond-receipt"]') as HTMLElement
+    expect(within(receipt).getByText(/^Enviadas a las \d{1,2}:\d{2}\.$/)).toBeTruthy()
+    expect(receipt.textContent).not.toMatch(/sin nada que lo identifique/)
   })
 
   /**

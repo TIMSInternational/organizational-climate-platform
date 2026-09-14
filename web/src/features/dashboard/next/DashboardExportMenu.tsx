@@ -12,6 +12,7 @@ import { downloadBlobFile } from '../../../lib/downloadBlobFile'
 import {
   dashboardExportFileName,
   getCompanyDashboardExport,
+  getDepartmentDashboardExport,
   type DashboardExportFormat,
 } from '../api/dashboardExport'
 
@@ -27,8 +28,21 @@ import {
  *
  * `companyId` is a SuperAdmin's chosen tenant and `undefined` for a CompanyAdmin, whose
  * scope the server takes from the claim — the same rule `useAdminDashboardModel` follows.
+ *
+ * `scope="department"` is the leader's Panel de Control (the canvas's LeaderDashboard):
+ * the same button and menu, fetching `GET /dashboard/department-admin/export`
+ * (`DashboardEndpoints.cs:124`) through `getDepartmentDashboardExport` with no department
+ * id — the server reads the caller's own row, exactly as the screen's own read does.
  */
-export default function DashboardExportMenu({ subject, companyId }: { subject: string; companyId?: string }) {
+export default function DashboardExportMenu({
+  subject,
+  companyId,
+  scope = 'company',
+}: {
+  subject: string
+  companyId?: string
+  scope?: 'company' | 'department'
+}) {
   const { t, locale } = useTranslation()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const [exporting, setExporting] = useState(false)
@@ -37,7 +51,11 @@ export default function DashboardExportMenu({ subject, companyId }: { subject: s
   function download(format: DashboardExportFormat) {
     setExporting(true)
     setFailed(false)
-    getCompanyDashboardExport(baseUrl, format, { companyId, lang: locale })
+    const request =
+      scope === 'department'
+        ? getDepartmentDashboardExport(baseUrl, format, { lang: locale })
+        : getCompanyDashboardExport(baseUrl, format, { companyId, lang: locale })
+    request
       .then((file) => downloadBlobFile(dashboardExportFileName(subject, format), file))
       .catch(() => setFailed(true))
       .finally(() => setExporting(false))
