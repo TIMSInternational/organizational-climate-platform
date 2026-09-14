@@ -141,3 +141,10 @@ Nothing in `scripts/` is imported by `src/`, and `tsconfig.app.json` includes on
 `src`, so `npm run typecheck` and `npm run build` never see it. The only test that
 touches the harness is `scripts/shot-harness.test.mjs`, which covers the pure helpers
 (fixture matching, the dev token, request classification) and launches no browser.
+
+## Photographing the real stack instead
+
+`shot` answers every API call from a fixture, so it can photograph a state the API would
+never produce. To look at the screens the demo actually shows, with the real API behind
+them, use `scripts/rehearse.mjs` — one PNG per runbook step, read-only — described in
+`rehearsal.md`.

@@ -24,5 +24,10 @@ dist-ssr
 *.sw?
 .vercel
 
-# Output of scripts/e2e.mjs — the live API journal and per-route summary.
-.e2e/
+# Output of the three drivers that run against the real local stack: scripts/e2e.mjs (the
+# live API journal and per-route summary), scripts/flows.mjs (a screenshot per failed flow)
+# and scripts/rehearse.mjs (a screenshot per runbook step plus results.json). The trailing
+# `*` covers a run given its own --out, e.g. `.e2e-demo/` or `.rehearsal-dark/`.
+.e2e*/
+.flows*/
+.rehearsal*/
