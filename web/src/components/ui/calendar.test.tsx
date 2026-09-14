@@ -126,6 +126,20 @@ describe('Calendar', () => {
     expect(onSelect).not.toHaveBeenCalled()
   })
 
+  /**
+   * happy-dom has no layout, so this pins the class that cancels index.css's bare `th` and
+   * `button` padding. Without it, Chromium drew the month arrows' chevrons 2px wide and broke
+   * each Spanish weekday head in two ("L" over "U") — measured in the shot harness, 10 Sep.
+   */
+  it('zeroes the padding index.css gives every bare th and button, on the weekday heads and the month arrows', () => {
+    const { container } = renderCalendar(<Calendar mode="single" defaultMonth={AUGUST_2026} />, 'es')
+    const heads = [...container.querySelectorAll('thead th')]
+    const arrows = [...container.querySelectorAll('nav button')]
+    expect(heads).toHaveLength(7)
+    expect(arrows).toHaveLength(2)
+    for (const element of [...heads, ...arrows]) expect(element.classList.contains('p-0')).toBe(true)
+  })
+
   it('lets an override win over the provider locale', () => {
     renderCalendar(
       <Calendar mode="single" defaultMonth={AUGUST_2026} localeOverride="es" />,

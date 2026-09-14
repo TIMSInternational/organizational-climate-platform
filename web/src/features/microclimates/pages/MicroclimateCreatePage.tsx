@@ -1,3 +1,11 @@
+/**
+ * NOT ROUTED. `/microclimates/new` renders the redesigned board (`../next/create/MicroclimateCreateNextPage`),
+ * which replaced this page — ruled 10 Sep: a redesigned screen replaces its real route.
+ * Nothing in `router.tsx` reaches this file.
+ *
+ * It stays in the tree on purpose, as the wiring reference: `useMicroclimateCreateModel` sends this page's payload through the same `buildCreateInput`,
+ * and this file's own test still pins what it did. Delete it when nothing reads it.
+ */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useTranslation } from '../../../i18n'

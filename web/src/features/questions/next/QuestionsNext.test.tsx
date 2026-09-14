@@ -139,11 +139,21 @@ describe('QuestionLibraryNextPage', () => {
     expect(screen.getByText(lib.subcategoryOf.replace('{parent}', 'Leadership').replace('{count}', '2'))).toBeTruthy()
   })
 
-  it('lets a super administrator edit a global row', async () => {
+  // The page's one role branch (roles/super-admin-2): a super administrator gets the global
+  // catalogue view, `super/SuperQuestionLibraryView`, where a global row is theirs to edit — and
+  // never this page's company list.
+  it('sends a super administrator to the global catalogue view, where a global row is editable', async () => {
     arrange()
-    renderAs(<QuestionLibraryNextPage />, 'super_admin')
-    const rows = await screen.findAllByTestId('library-row')
-    expect(within(rows[0]).getByRole('button').textContent).toBe(lib.edit)
+    // That view also reads the companies that own rows.
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(JSON.stringify({ companies: [] }), { status: 200 }))))
+    try {
+      renderAs(<QuestionLibraryNextPage />, 'super_admin')
+      const edits = await screen.findAllByRole('button', { name: en.questionLibraryAdmin.next.editRow.replace('{text}', 'ES') })
+      expect(edits.length).toBeGreaterThan(0)
+      expect(screen.queryAllByTestId('library-row')).toHaveLength(0)
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 
   it('creates a question in both languages, owned by the caller company', async () => {
