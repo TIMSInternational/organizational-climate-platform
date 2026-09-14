@@ -245,7 +245,7 @@ public static class PlanesAccionEndpoints
         }
 
         var authResult = await authorizationService.AuthorizeAsync(
-            user, plan, new PlanAccessRequirement(AccessLevel.Write));
+            user, plan, new PlanAccessRequirement(AccessLevel.Approve));
         if (!authResult.Succeeded)
         {
             return Results.Forbid();
