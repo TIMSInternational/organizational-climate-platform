@@ -1,10 +1,10 @@
 import { createBrowserRouter, Navigate, type RouteObject } from 'react-router'
-import LoginPage from '../auth/LoginPage'
-import RegisterPage from '../auth/RegisterPage'
-import AuthErrorPage from '../auth/AuthErrorPage'
-import AccountInactivePage from '../auth/AccountInactivePage'
-import AuthLoadingPage from '../auth/AuthLoadingPage'
-import AuthSuccessPage from '../auth/AuthSuccessPage'
+import LoginNextPage from '../auth/next/LoginNextPage'
+import RegisterNextPage from '../auth/next/RegisterNextPage'
+import AuthErrorNextPage from '../auth/next/AuthErrorNextPage'
+import AccountInactiveNextPage from '../auth/next/AccountInactiveNextPage'
+import AuthTransitionNextPage from '../auth/next/AuthTransitionNextPage'
+import AuthSuccessNextPage from '../auth/next/AuthSuccessNextPage'
 import AcceptInvitationPage from '../features/org-structure/pages/AcceptInvitationPage'
 import RequireAuth from './RequireAuth'
 import AdminLayout from './AdminLayout'
@@ -203,7 +203,7 @@ export const router = createBrowserRouter([
     errorElement: <RouteErrorBoundary />,
     children: [
       { path: '/', element: <HomeRedirect /> },
-      { path: '/login', element: <LoginPage /> },
+      { path: '/login', element: <LoginNextPage /> },
       // #81's auth states. All five sit OUTSIDE RequireAuth, beside /login, and
       // must: each of them is a state the app is in precisely because there is no
       // usable session, so putting them behind the gate would redirect them to
@@ -216,11 +216,15 @@ export const router = createBrowserRouter([
       // /auth/loading is the Google OAuth `redirect_uri`. Its visitor is arriving
       // from accounts.google.com with an ID token and no session yet -- it is the
       // page that CREATES the session -- so it is public by definition.
-      { path: '/register', element: <RegisterPage /> },
-      { path: '/auth/error', element: <AuthErrorPage /> },
-      { path: '/auth/inactive', element: <AccountInactivePage /> },
-      { path: '/auth/loading', element: <AuthLoadingPage /> },
-      { path: '/auth/success', element: <AuthSuccessPage /> },
+      //
+      // The six elements are the 10 Sep canvas's (`auth/next/`). The pages they replaced
+      // stay in the tree, unrouted and still tested, as the wiring reference — the same
+      // way `NotificationsInboxPage` did when the Notifications artboard landed.
+      { path: '/register', element: <RegisterNextPage /> },
+      { path: '/auth/error', element: <AuthErrorNextPage /> },
+      { path: '/auth/inactive', element: <AccountInactiveNextPage /> },
+      { path: '/auth/loading', element: <AuthTransitionNextPage /> },
+      { path: '/auth/success', element: <AuthSuccessNextPage /> },
       { path: '/accept-invitation/:token', element: <AcceptInvitationPage /> },
       { path: '/microclimates/:id/respond', element: <MicroclimateRespondPage /> },
       // Public by design (#120), same placement and same reason as the microclimate
