@@ -1,0 +1,94 @@
+{
+  "GET /microclimate-invitations/live": {
+    "invitationId": "8f2a4c11-0d3e-4a62-9b71-2c5e8a10dd44",
+    "microclimateId": "3b6d9e02-77a1-4c8f-9a20-51bb6f0c1d33",
+    "microclimateTitle": "Pulso semanal — ¿cómo fue la semana?",
+    "microclimateDescription": "Dos preguntas, menos de un minuto: una escala del 1 al 5 y, si quiere, una palabra.",
+    "language": "es",
+    "resolvedLocale": "es",
+    "fallbackFields": [],
+    "status": "sent",
+    "microclimateStatus": "active",
+    "startTime": "2026-09-09T15:00:00Z",
+    "endTime": "2026-09-11T23:00:00Z",
+    "expiresAt": "2026-09-12T23:00:00Z",
+    "anonymity": {
+      "anonymous": true,
+      "highestRecordableState": "opened",
+      "suppressedStates": ["started", "completed"],
+      "guarantee": "Tracking stops at opened."
+    }
+  },
+  "GET /microclimate-invitations/identified": {
+    "invitationId": "8f2a4c11-0d3e-4a62-9b71-2c5e8a10dd45",
+    "microclimateId": "3b6d9e02-77a1-4c8f-9a20-51bb6f0c1d33",
+    "microclimateTitle": "Pulso semanal — ¿cómo fue la semana?",
+    "microclimateDescription": "Dos preguntas, menos de un minuto: una escala del 1 al 5 y, si quiere, una palabra.",
+    "language": "es",
+    "resolvedLocale": "es",
+    "fallbackFields": [],
+    "status": "sent",
+    "microclimateStatus": "active",
+    "startTime": "2026-09-09T15:00:00Z",
+    "endTime": "2026-09-11T23:00:00Z",
+    "expiresAt": "2026-09-12T23:00:00Z",
+    "anonymity": {
+      "anonymous": false,
+      "highestRecordableState": "completed",
+      "suppressedStates": [],
+      "guarantee": "Every state is recorded."
+    }
+  },
+  "GET /microclimate-invitations/closed": {
+    "invitationId": "8f2a4c11-0d3e-4a62-9b71-2c5e8a10dd46",
+    "microclimateId": "3b6d9e02-77a1-4c8f-9a20-51bb6f0c1d33",
+    "microclimateTitle": "Pulso semanal — ¿cómo fue la semana?",
+    "microclimateDescription": "Dos preguntas, menos de un minuto.",
+    "language": "es",
+    "resolvedLocale": "es",
+    "fallbackFields": [],
+    "status": "opened",
+    "microclimateStatus": "closed",
+    "startTime": "2026-09-09T15:00:00Z",
+    "endTime": "2026-09-11T23:00:00Z",
+    "expiresAt": "2026-09-12T23:00:00Z",
+    "anonymity": {
+      "anonymous": true,
+      "highestRecordableState": "opened",
+      "suppressedStates": ["started", "completed"],
+      "guarantee": "Tracking stops at opened."
+    }
+  },
+  "GET /microclimate-invitations/expired 410": {
+    "message": "Invitation has expired",
+    "reason": "expired"
+  },
+  "GET /microclimate-invitations/revoked 410": {
+    "message": "Invitation has been revoked",
+    "reason": "revoked"
+  },
+  "GET /microclimate-invitations/unknown 404": {
+    "message": "Invitation not found",
+    "reason": "not_found"
+  },
+  "GET /microclimate-invitations/answered 409": {
+    "message": "This invitation has already been completed",
+    "reason": "already_completed"
+  },
+  "GET /microclimate-invitations/throttled 429": {
+    "message": "Too many attempts on this link. Try again in a minute."
+  },
+  "POST /microclimate-invitations/*/opened": {
+    "invitationId": "8f2a4c11-0d3e-4a62-9b71-2c5e8a10dd44",
+    "status": "opened",
+    "recorded": true,
+    "suppressedForAnonymity": false,
+    "reason": null,
+    "anonymity": {
+      "anonymous": true,
+      "highestRecordableState": "opened",
+      "suppressedStates": ["started", "completed"],
+      "guarantee": "Tracking stops at opened."
+    }
+  }
+}

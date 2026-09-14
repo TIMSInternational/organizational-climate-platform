@@ -1,6 +1,7 @@
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
-import { MemoryRouter } from 'react-router'
+import userEvent from '@testing-library/user-event'
+import { MemoryRouter, Route, Routes } from 'react-router'
 import LoginPage from './LoginPage'
 import { TranslationProvider } from '../i18n'
 import { LOCALE_STORAGE_KEY } from '../i18n/locale'
@@ -111,5 +112,85 @@ describe('LoginPage', () => {
     expect(screen.getByLabelText(/Email/)).toBeTruthy()
     expect(screen.getByLabelText(/Password/)).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Sign In' })).toBeTruthy()
+  })
+})
+
+/**
+ * Where a successful sign-in LANDS, when something sent this visitor here with a
+ * destination.
+ *
+ * Added by the invitations lane. The MicroclimateInvitationStates artboard (10 Sep) draws
+ * one card whose whole action is "Iniciar sesión y volver aquí", and that label is a
+ * promise the product could not keep: this page navigated to `resolveInitialRoute()`
+ * unconditionally, so the respondent landed on `/dashboard` and had to go back to their
+ * email for the link. The guard itself is unit-tested in `returnPath.test.ts`; this is the
+ * seam where the promise is kept or broken, and it is the one place a test of the guard
+ * alone would not have noticed.
+ */
+describe('LoginPage — the return destination', () => {
+  function renderWithState(state: unknown) {
+    return render(
+      <TranslationProvider>
+        <MemoryRouter initialEntries={[{ pathname: '/login', state }]}>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/dashboard" element={<p>dashboard page</p>} />
+            <Route path="/microclimate-invitations/:token" element={<p>the invitation</p>} />
+          </Routes>
+        </MemoryRouter>
+      </TranslationProvider>,
+    )
+  }
+
+  async function signIn() {
+    await userEvent.type(screen.getByLabelText(/Email/), 'ana@meridiano.test')
+    await userEvent.type(screen.getByLabelText(/Password/), 'Correct-Horse-9')
+    await userEvent.click(screen.getByRole('button', { name: 'Sign In' }))
+  }
+
+  beforeEach(() => {
+    window.localStorage.setItem(LOCALE_STORAGE_KEY, 'en')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ token: 'a.b.c' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    )
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it('returns to the page that sent them, rather than to the dashboard', async () => {
+    renderWithState({ from: '/microclimate-invitations/tok-42' })
+    await signIn()
+
+    expect(await screen.findByText('the invitation')).toBeTruthy()
+    expect(screen.queryByText('dashboard page')).toBeNull()
+  })
+
+  it('lands on the dashboard when nothing named a destination', async () => {
+    renderWithState(undefined)
+    await signIn()
+
+    expect(await screen.findByText('dashboard page')).toBeTruthy()
+  })
+
+  /**
+   * `location.state` is not in the URL, but `history.pushState` can put any JSON there, so
+   * it is validated as untrusted input rather than trusted for its provenance. A
+   * protocol-relative `//evil.test` is another ORIGIN, and a sign-in that honoured it would
+   * hand a freshly authenticated visitor to whoever wrote the state.
+   */
+  it('refuses a destination on another origin and falls back to the dashboard', async () => {
+    renderWithState({ from: '//evil.test/steal' })
+    await signIn()
+
+    expect(await screen.findByText('dashboard page')).toBeTruthy()
   })
 })

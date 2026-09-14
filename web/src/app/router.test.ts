@@ -34,7 +34,8 @@ import PublicSurveyRespondPage from '../features/surveys/pages/PublicSurveyRespo
 import PublicSurveyLinkPage from '../features/surveys/pages/PublicSurveyLinkPage'
 import SurveyInvitationPage from '../features/surveys/pages/SurveyInvitationPage'
 import MicroclimateRespondPage from '../features/microclimates/pages/MicroclimateRespondPage'
-import MicroclimateInvitationPage from '../features/microclimates/pages/MicroclimateInvitationPage'
+import MicroclimateInvitationNextPage from '../features/microclimates/next/invitation/MicroclimateInvitationNextPage'
+import AcceptInvitationNextPage from '../features/org-structure/next/invitation/AcceptInvitationNextPage'
 import ProfileNextPage from '../features/profile/next/ProfileNextPage'
 import NotificationPreferencesNextPage from '../features/notifications/next/NotificationPreferencesNextPage'
 import PrivacyNextPage from '../features/profile/next/PrivacyNextPage'
@@ -450,8 +451,8 @@ describe('router', () => {
       ],
       [
         '/microclimate-invitations/:token',
-        MicroclimateInvitationPage,
-        'features/microclimates/pages/MicroclimateInvitationPage.tsx',
+        MicroclimateInvitationNextPage,
+        'features/microclimates/next/invitation/MicroclimateInvitationNextPage.tsx',
         'MicroclimatePulseForm',
       ],
     ]
@@ -459,7 +460,7 @@ describe('router', () => {
       expect(componentAt(path), path).toBe(page)
       expect(byPath.has(`${path}/next`), path).toBe(false)
       const source = readFileSync(join(src, file), 'utf8')
-      expect(source, file).toMatch(new RegExp(`^import ${form}\\b[^;]*?from '\\.\\./components/${form}'$`, 'm'))
+      expect(source, file).toMatch(new RegExp(`^import ${form}\\b[^;]*?from '(?:\\.\\./)+components/${form}'$`, 'm'))
       expect(source, file).toMatch(new RegExp(`<${form}\\b`))
     }
 
@@ -892,6 +893,87 @@ describe('router', () => {
         'A static import puts the gallery and its sample data in the production ' +
           'bundle even though the route is gated. Import it dynamically inside the ' +
           'import.meta.env.DEV branch in router.tsx.',
+      ).toEqual([])
+    })
+  })
+
+  /**
+   * The invitations lane (the canvas's AcceptInvitation, MicroclimateInvitation and
+   * MicroclimateInvitationStates, 10 Sep).
+   *
+   * Both routes are public and both are the END of an emailed link, which is what makes
+   * these two assertions worth their lines rather than duplicates of the path check above:
+   * the path being registered says nothing about WHICH component it mounts, and a lane that
+   * built a redesign and left the route pointing at the old page would pass every existing
+   * case in this file. The old pages stay in the tree as the wiring reference, so the
+   * second half pins that nothing but their own tests still reaches them — unrouted has to
+   * mean unreferenced, or the production bundle carries both.
+   */
+  describe('the invitations lane', () => {
+    function elements(): Map<string, unknown> {
+      const byPath = new Map<string, unknown>()
+      function walk(routes: typeof router.routes): void {
+        for (const route of routes) {
+          if (route.path) byPath.set(route.path, route.element)
+          if (route.children) walk(route.children as typeof router.routes)
+        }
+      }
+      walk(router.routes)
+      return byPath
+    }
+
+    it('mounts both invitation routes on the redesigned pages', () => {
+      const byPath = elements()
+      const componentAt = (path: string) => (byPath.get(path) as { type?: unknown } | undefined)?.type
+
+      expect(componentAt('/accept-invitation/:token')).toBe(AcceptInvitationNextPage)
+      expect(componentAt('/microclimate-invitations/:token')).toBe(MicroclimateInvitationNextPage)
+
+      // Replaced in place, at the real route. A redesign parked on a route of its own is a
+      // screen nobody reaches from an email.
+      expect(byPath.has('/accept-invitation/:token/next')).toBe(false)
+      expect(byPath.has('/microclimate-invitations/:token/next')).toBe(false)
+    })
+
+    it('leaves both routes outside RequireAuth, where the invitee can reach them', () => {
+      // Their visitors have no session by definition — an invitee has no account yet, and a
+      // microclimate is answered anonymously by default. `RequireAuth` redirects with no
+      // destination at all, so a gate here would not defer the page, it would destroy it.
+      const gated = new Set<string>()
+      function walk(routes: typeof router.routes, underGuard: boolean): void {
+        for (const route of routes) {
+          const guarded =
+            underGuard ||
+            (route.element as { type?: { name?: string } } | undefined)?.type?.name === 'RequireAuth'
+          if (route.path && guarded) gated.add(route.path)
+          if (route.children) walk(route.children as typeof router.routes, guarded)
+        }
+      }
+      walk(router.routes, false)
+
+      expect(gated).not.toContain('/accept-invitation/:token')
+      expect(gated).not.toContain('/microclimate-invitations/:token')
+    })
+
+    it('leaves the pages it replaced unrouted and unreferenced', () => {
+      const source = readFileSync(join(process.cwd(), 'src', 'app', 'router.tsx'), 'utf8')
+      expect(source).not.toMatch(/pages\/AcceptInvitationPage'/)
+      expect(source).not.toMatch(/pages\/MicroclimateInvitationPage'/)
+
+      const src = join(process.cwd(), 'src')
+      const offenders = globSync('**/*.{ts,tsx}', { cwd: src })
+        .filter((file) => !/\.test\.tsx?$/.test(file))
+        .filter((file) =>
+          /^\s*import\s[^\n]*(AcceptInvitationPage|MicroclimateInvitationPage)\b/m.test(
+            readFileSync(join(src, file), 'utf8'),
+          ),
+        )
+
+      expect(
+        offenders,
+        'The redesigned invitation pages replaced these two. A remaining static import ' +
+          'puts both copies in the production bundle and invites a future edit to the ' +
+          'one nothing renders.',
       ).toEqual([])
     })
   })
