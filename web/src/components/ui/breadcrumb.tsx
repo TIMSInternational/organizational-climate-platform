@@ -60,7 +60,14 @@ export function BreadcrumbLink({
   )
 }
 
-/** The current page. Not a link, and marked `aria-current`. */
+/**
+ * The current page. Not a link, and marked `aria-current`.
+ *
+ * Regular weight in the primary ink: every artboard of 10 Sep that draws a breadcrumb
+ * (CompanySettings, Distribution, Main, MicroclimateLive, ReportShare, ReportsList) sets
+ * the current crumb as `color: #110a29` with no weight of its own. The colour is what
+ * separates it from the links before it; `font-medium` drew it heavier than the canvas.
+ */
 export function BreadcrumbPage({ className, ...props }: ComponentProps<'span'>) {
   return (
     <span
@@ -68,7 +75,7 @@ export function BreadcrumbPage({ className, ...props }: ComponentProps<'span'>) 
       role="link"
       aria-disabled="true"
       aria-current="page"
-      className={cn('font-medium text-fg-primary', className)}
+      className={cn('font-normal text-fg-primary', className)}
       {...props}
     />
   )

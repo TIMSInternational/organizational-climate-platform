@@ -45,12 +45,15 @@ export function isSuppressed(responses: number, threshold = ANONYMITY_FLOOR): bo
  * beside it rendered a blank box — a legend disagreeing with the thing it is a
  * legend for, which is worse than either being wrong alone.
  *
- * `--admin-hatch-stripe` is a visible texture against that surface in both themes,
- * and as faint as that allows: every artboard of 10 Sep draws the hatch as 4px
- * stripes at 135deg, lighter than the 5px `--admin-border-hover` ones it shipped
- * with. `protectedHatch.test.ts` reads the token out of this constant, measures it
- * against the surface, and sweeps `src/` so a third hand-rolled copy fails instead of
- * quietly diverging again.
+ * The gradient paints both halves: stripes in `--admin-hatch-stripe`, gaps in
+ * `--admin-hatch-ground`, so a hatch is the one every artboard of 10 Sep draws,
+ * `repeating-linear-gradient(135deg, #e6e3f1 0 4px, #f8f7fb 4px 8px)`, whatever it
+ * lands on. The gaps were `transparent`, which showed the recessed surface under them,
+ * #f3f1fa: a shade darker and bluer than the canvas's #f8f7fb. The stripe is as close
+ * to the canvas's as the floor of 1.2:1 allows (its own pair is 1.18:1, `tokens.css`).
+ * `protectedHatch.test.ts` reads both tokens out of this constant, measures the pair in
+ * both themes, and sweeps `src/` so a third hand-rolled copy fails instead of quietly
+ * diverging again.
  */
 export const PROTECTED_HATCH =
-  '[background-image:repeating-linear-gradient(135deg,var(--admin-hatch-stripe)_0_4px,transparent_4px_8px)]'
+  '[background-image:repeating-linear-gradient(135deg,var(--admin-hatch-stripe)_0_4px,var(--admin-hatch-ground)_4px_8px)]'

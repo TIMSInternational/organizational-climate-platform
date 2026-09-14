@@ -100,6 +100,17 @@ describe('Chip', () => {
     }
   })
 
+  it('draws its glyph 13px, as every chip glyph on the canvas', () => {
+    // The approved canvas (10 Sep) sizes each chip glyph `width: 13px; height: 13px`, 23 of
+    // 23 across 12 artboards. happy-dom does no layout, so what can be pinned is the class
+    // the browser sizes it from: 3.25 x the 4px --spacing token.
+    const { container } = render(<Chip label="Protected" icon={<svg data-testid="glyph" />} />)
+    const slot = container.querySelector('[aria-hidden="true"]')
+    expect(slot).not.toBeNull()
+    expect(slot!.className.split(/\s+/)).toContain('[&>svg]:size-3.25')
+    expect(slot!.className.split(/\s+/)).not.toContain('[&>svg]:size-3')
+  })
+
   it('passes through the rest of its span props', () => {
     render(<Chip label="Live" title="Closes in 3 days" id="survey-status" />)
     const chip = screen.getByText('Live')

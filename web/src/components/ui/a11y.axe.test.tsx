@@ -32,6 +32,13 @@ import {
   BreadcrumbSeparator,
   Button,
   Calendar,
+  CanvasArrowRightIcon,
+  CanvasClockIcon,
+  CanvasCopyIcon,
+  CanvasFileIcon,
+  CanvasLinkIcon,
+  CanvasLockIcon,
+  CanvasPlusIcon,
   Card,
   CardContent,
   CardDescription,
@@ -200,6 +207,38 @@ const SPECIMENS: Specimen[] = [
           <span aria-hidden="true">×</span>
         </Button>
         <Button disabled>Guardar</Button>
+      </>
+    ),
+  },
+  {
+    name: 'Canvas glyphs, in buttons and a chip',
+    render: () => (
+      <>
+        <Button>
+          <CanvasPlusIcon />
+          Lanzar un microclima
+        </Button>
+        <Button variant="outline">
+          <CanvasLinkIcon />
+          Compartir
+        </Button>
+        <Button variant="outline">
+          <CanvasArrowRightIcon />
+          Ver en vivo
+        </Button>
+        <Button variant="outline">
+          <CanvasFileIcon />
+          Resultados
+        </Button>
+        <Button variant="outline">
+          <CanvasClockIcon />
+          Cerrar la sesión
+        </Button>
+        <Button variant="outline">
+          <CanvasCopyIcon />
+          Copiar
+        </Button>
+        <Chip tone="neutral" icon={<CanvasLockIcon />} label="Protegido hasta 5 respuestas" />
       </>
     ),
   },

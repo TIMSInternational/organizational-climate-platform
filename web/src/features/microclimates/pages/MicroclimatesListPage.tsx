@@ -1,3 +1,16 @@
+/**
+ * NOT ROUTED. `/microclimates` renders the redesigned Microclimas
+ * (`../next/MicroclimatesListNextPage`, the MicroclimatesList artboard of 10 Sep), which
+ * replaced this page — the same swap `/surveys` made. Nothing in `router.tsx` reaches
+ * this file.
+ *
+ * It stays in the tree on purpose, as the wiring reference: `useMicroclimatesListModel`
+ * makes this page's request (`GET /microclimates?companyId=` through `listMicroclimates`,
+ * the company from `useCompanyScope()`), and what this file still pins is what the
+ * redesign chose not to keep — the KPI strip, the status filter and the
+ * `MicroclimateList` table. Its behaviour is pinned by `MicroclimatesListPage.test.tsx`,
+ * which renders it directly. Delete it when that table has no other reader.
+ */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Plus } from 'lucide-react'
 import { Link } from 'react-router'
