@@ -12,6 +12,11 @@ import {
 } from '../../../components/ui'
 
 /**
+ * UNROUTED — kept as the wiring reference. `/surveys/templates` now mounts
+ * `next/templates/SurveyTemplatesNextPage` (the Templates artboard); nothing in
+ * `app/router.tsx` imports this file. Its test still pins the behaviour it was wired with.
+ */
+/**
  * The template catalogue.
  *
  * ## Scoping is the server's, and it is not the same rule as the survey listing's

@@ -16,7 +16,7 @@ import UsersNextPage from '../features/org-structure/next/UsersNextPage'
 import SystemSettingsNextPage from '../features/org-structure/next/system/SystemSettingsNextPage'
 import SystemHealthNextPage from '../features/org-structure/next/system/SystemHealthNextPage'
 import DemographicsNextPage from '../features/org-structure/next/DemographicsNextPage'
-import DepartmentsPage from '../features/org-structure/pages/DepartmentsPage'
+import DepartmentsNextPage from '../features/org-structure/next/departments/DepartmentsNextPage'
 import ActionPlansListNextPage from '../features/action-plans/next/ActionPlansListNextPage'
 import ActionPlanDetailNextPage from '../features/action-plans/next/ActionPlanDetailNextPage'
 import MicroclimatesListNextPage from '../features/microclimates/next/MicroclimatesListNextPage'
@@ -34,7 +34,7 @@ import SurveyInvitationPage from '../features/surveys/pages/SurveyInvitationPage
 import NotificationPreferencesNextPage from '../features/notifications/next/NotificationPreferencesNextPage'
 import ProfileNextPage from '../features/profile/next/ProfileNextPage'
 import PrivacyNextPage from '../features/profile/next/PrivacyNextPage'
-import NotificationsInboxPage from '../features/notifications/pages/NotificationsInboxPage'
+import NotificationsNextPage from '../features/notifications/next/NotificationsNextPage'
 import SurveyDistributionNextPage from '../features/surveys/next/authoring/SurveyDistributionNextPage'
 import BenchmarksNextPage from '../features/analytics/next/benchmarks/BenchmarksNextPage'
 import AIInsightsNextPage from '../features/analytics/next/AIInsightsNextPage'
@@ -47,7 +47,7 @@ import SurveyBuilderNextPage from '../features/surveys/next/authoring/SurveyBuil
 import SurveyDetailNextPage from '../features/surveys/next/authoring/SurveyDetailNextPage'
 import SurveyQuestionsEditorPage from '../features/surveys/next/authoring/SurveyQuestionsEditorPage'
 import MySurveysPage from '../features/surveys/pages/MySurveysPage'
-import SurveyTemplatesPage from '../features/surveys/pages/SurveyTemplatesPage'
+import SurveyTemplatesNextPage from '../features/surveys/next/templates/SurveyTemplatesNextPage'
 import TemplateDetailNextPage from '../features/surveys/next/authoring/TemplateDetailNextPage'
 import AnalyticsNextPage from '../features/analytics/next/AnalyticsNextPage'
 import QuestionBankNextPage from '../features/questions/next/QuestionBankNextPage'
@@ -362,7 +362,7 @@ export const router = createBrowserRouter([
               // Flat, with no company id in the path (#142), like /surveys and
               // /action-plans: the page takes its company from `company-context`,
               // so one route and one nav entry serve both admin roles.
-              { path: '/departments', element: <DepartmentsPage /> },
+              { path: '/departments', element: <DepartmentsNextPage /> },
               // The redesigned Planes de Acción replaced `ActionPlansListPage` here (ruled
               // 10 Sep): a redesigned screen takes its real route, never a `/next` sibling.
               // The old page stays in the tree, unrouted, as the wiring reference.
@@ -413,7 +413,7 @@ export const router = createBrowserRouter([
               { path: '/surveys/my', element: <MySurveysPage /> },
               // Same static-beats-dynamic ranking as `/surveys/my`, so `templates`
               // is never parsed as a survey id.
-              { path: '/surveys/templates', element: <SurveyTemplatesPage /> },
+              { path: '/surveys/templates', element: <SurveyTemplatesNextPage /> },
               { path: '/surveys/templates/:id', element: <TemplateDetailNextPage /> },
               // Same static-beats-dynamic ranking again, so `climate-trends` is never
               // parsed as a survey id. Unlike `/surveys/:id/results` this one IS in the
@@ -463,7 +463,7 @@ export const router = createBrowserRouter([
               { path: '/settings/privacy', element: <PrivacyNextPage /> },
               // Self-service, so no role gate beyond RequireAuth: /notifications/mine
               // is scoped per user and every authenticated role can load it.
-              { path: '/notifications', element: <NotificationsInboxPage /> },
+              { path: '/notifications', element: <NotificationsNextPage /> },
               // Reached from a survey, not from the sidebar: distribution is an action on
               // one survey rather than a destination, so it gets a route and no nav entry.
               // Same ruling: the redesigned launch checklist; `pages/SurveyDistributionPage.tsx` stays

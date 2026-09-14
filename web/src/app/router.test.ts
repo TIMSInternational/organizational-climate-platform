@@ -38,6 +38,9 @@ import MicroclimateInvitationPage from '../features/microclimates/pages/Microcli
 import ProfileNextPage from '../features/profile/next/ProfileNextPage'
 import NotificationPreferencesNextPage from '../features/notifications/next/NotificationPreferencesNextPage'
 import PrivacyNextPage from '../features/profile/next/PrivacyNextPage'
+import DepartmentsNextPage from '../features/org-structure/next/departments/DepartmentsNextPage'
+import NotificationsNextPage from '../features/notifications/next/NotificationsNextPage'
+import SurveyTemplatesNextPage from '../features/surveys/next/templates/SurveyTemplatesNextPage'
 import SystemSettingsNextPage from '../features/org-structure/next/system/SystemSettingsNextPage'
 import SystemHealthNextPage from '../features/org-structure/next/system/SystemHealthNextPage'
 
@@ -477,6 +480,37 @@ describe('router', () => {
       .filter((file) => !/EmployeeDashboardView(\.test)?\.tsx$/.test(file))
       .filter((file) => /from '[^']*\/EmployeeDashboardView'/.test(readFileSync(join(src, file), 'utf8')))
     expect(importers).toEqual([])
+  })
+
+  /**
+   * The org lane replaced three pages on the routes the sidebar links (Departamentos,
+   * Notificaciones, Plantillas de Encuesta) and gave `/admin/companies/:id` the CompanySettings
+   * artboard for everyone but a super administrator. Same ruling as above: the element, not the
+   * path, no `/next` sibling, and the old pages imported for no route at all.
+   */
+  it('mounts the org lane’s artboards on /departments, /notifications and /surveys/templates, and routes the old pages nowhere', () => {
+    const byPath = new Map<string, unknown>()
+    function walk(routes: typeof router.routes): void {
+      for (const route of routes) {
+        if (route.path) byPath.set(route.path, route.element)
+        if (route.children) walk(route.children as typeof router.routes)
+      }
+    }
+    walk(router.routes)
+    const componentAt = (path: string) => (byPath.get(path) as { type?: unknown } | undefined)?.type
+    expect(componentAt('/departments')).toBe(DepartmentsNextPage)
+    expect(componentAt('/notifications')).toBe(NotificationsNextPage)
+    expect(componentAt('/surveys/templates')).toBe(SurveyTemplatesNextPage)
+    for (const path of ['/departments', '/notifications', '/surveys/templates', '/admin/companies/:id']) {
+      expect(byPath.has(`${path}/next`), path).toBe(false)
+    }
+    const source = readFileSync(join(process.cwd(), 'src', 'app', 'router.tsx'), 'utf8')
+    expect(source).not.toMatch(/pages\/DepartmentsPage'/)
+    expect(source).not.toMatch(/pages\/NotificationsInboxPage'/)
+    expect(source).not.toMatch(/pages\/SurveyTemplatesPage'/)
+    expect(source).not.toMatch(/CompanyDetailLegacyAdminPage/)
+    const dispatcher = readFileSync(join(process.cwd(), 'src', 'features', 'org-structure', 'pages', 'CompanyDetailPage.tsx'), 'utf8')
+    expect(dispatcher).toMatch(/<CompanySettingsNextView\b/)
   })
 
   /**
