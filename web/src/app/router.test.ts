@@ -43,6 +43,12 @@ import NotificationsNextPage from '../features/notifications/next/NotificationsN
 import SurveyTemplatesNextPage from '../features/surveys/next/templates/SurveyTemplatesNextPage'
 import SystemSettingsNextPage from '../features/org-structure/next/system/SystemSettingsNextPage'
 import SystemHealthNextPage from '../features/org-structure/next/system/SystemHealthNextPage'
+import LoginNextPage from '../auth/next/LoginNextPage'
+import RegisterNextPage from '../auth/next/RegisterNextPage'
+import AuthErrorNextPage from '../auth/next/AuthErrorNextPage'
+import AccountInactiveNextPage from '../auth/next/AccountInactiveNextPage'
+import AuthTransitionNextPage from '../auth/next/AuthTransitionNextPage'
+import AuthSuccessNextPage from '../auth/next/AuthSuccessNextPage'
 
 /**
  * A construction guard for the router.
@@ -894,5 +900,63 @@ describe('router', () => {
           'import.meta.env.DEV branch in router.tsx.',
       ).toEqual([])
     })
+  })
+})
+
+/**
+ * The auth lane of the 10 Sep canvas (Login, Register, AuthError, AuthTransition,
+ * AccountInactive, plus the account-ready state AuthTransition draws beside itself).
+ *
+ * The ruling this pins: an artboard is coded at the route it already has, replacing the
+ * element that route renders. The previous pages are still in the tree and still tested —
+ * which is exactly why the route table is the only thing that can say which of the two a
+ * user reaches, and why a check on the element rather than on the path is the one that
+ * means something here.
+ */
+describe('the redesigned auth routes', () => {
+  function elementsByPath(): Map<string, unknown> {
+    const byPath = new Map<string, unknown>()
+    function walk(routes: typeof router.routes): void {
+      for (const route of routes) {
+        if (route.path) byPath.set(route.path, route.element)
+        if (route.children) walk(route.children as typeof router.routes)
+      }
+    }
+    walk(router.routes)
+    return byPath
+  }
+
+  const AUTH_PATHS = ['/login', '/register', '/auth/error', '/auth/inactive', '/auth/loading', '/auth/success']
+
+  it('mounts the canvas pages on the real routes, with no /next sibling', () => {
+    const byPath = elementsByPath()
+    const componentAt = (path: string) => (byPath.get(path) as { type?: unknown } | undefined)?.type
+
+    expect(componentAt('/login')).toBe(LoginNextPage)
+    expect(componentAt('/register')).toBe(RegisterNextPage)
+    expect(componentAt('/auth/error')).toBe(AuthErrorNextPage)
+    expect(componentAt('/auth/inactive')).toBe(AccountInactiveNextPage)
+    expect(componentAt('/auth/loading')).toBe(AuthTransitionNextPage)
+    expect(componentAt('/auth/success')).toBe(AuthSuccessNextPage)
+
+    for (const path of AUTH_PATHS) {
+      expect(byPath.has(`${path}/next`), path).toBe(false)
+    }
+  })
+
+  /**
+   * Every one of these is a state the app is in BECAUSE there is no usable session, so
+   * behind `RequireAuth` each would redirect to `/login` and lose the reason it exists.
+   * `/auth/inactive` is the subtle one: its visitor does hold a token, and it is public
+   * because `RequireAuth` is what sends them there — a guard that redirects into itself is
+   * a loop. Asserted structurally, at the top level, because a page can be moved under the
+   * gate with every unit test still green.
+   */
+  it('keeps all six outside RequireAuth structurally', () => {
+    const topLevel = (router.routes[0].children ?? []).flatMap((route) => (route.path ? [route.path] : []))
+
+    for (const path of AUTH_PATHS) {
+      expect(topLevel, path).toContain(path)
+    }
   })
 })
