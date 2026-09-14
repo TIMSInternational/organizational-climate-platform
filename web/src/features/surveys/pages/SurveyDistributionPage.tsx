@@ -268,6 +268,9 @@ export default function SurveyDistributionPage() {
           baseUrl,
           surveyId,
           status === '' ? {} : { status: status as SurveyInvitationStatus },
+          // The one refetch on this page that forgot the locale: choosing a chip
+          // swapped the guarantee sentence to English on a Spanish screen.
+          locale,
         ),
       )
     })

@@ -3,7 +3,7 @@ import { render, screen, cleanup, waitFor, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import BenchmarksPage from './BenchmarksPage'
-import { TranslationProvider } from '../../../i18n'
+import { TranslationProvider, LanguageSwitcher, LOCALE_STORAGE_KEY } from '../../../i18n'
 import { setToken, clearToken } from '../../../auth/token'
 import type { Benchmark, BenchmarkListItem } from '../api/benchmarks'
 import { tokenFor } from '../../../test/jwtFixture'
@@ -40,9 +40,11 @@ function detail(id: string, name: string, companyId: string | null, overrides: P
   }
 }
 
-function renderPage() {
+/** `switcher` mounts the real language control beside the page, in the same provider. */
+function renderPage({ switcher = false } = {}) {
   return render(
     <TranslationProvider>
+      {switcher && <LanguageSwitcher compact />}
       <MemoryRouter>
         <BenchmarksPage />
       </MemoryRouter>
@@ -75,6 +77,7 @@ afterEach(() => {
   // No `globals: true` in vite.config.ts, so RTL's auto-cleanup never registers.
   cleanup()
   clearToken()
+  localStorage.removeItem(LOCALE_STORAGE_KEY)
   vi.unstubAllGlobals()
 })
 
@@ -464,7 +467,7 @@ describe('BenchmarksPage comparison and trend', () => {
   it('distinguishes a benchmark with no prior period from one nobody has linked yet', async () => {
     setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
     routeFetch([
-      [/\/prior-period\/candidates$/, () => []],
+      [/\/prior-period\/candidates(\?|$)/, () => []],
       [/\/admin\/benchmarks\/first(\?|$)/, () => detail('first', 'Our first measurement', OWN, { priorPeriodStatus: 'none' })],
       [/\/admin\/benchmarks\/backlog(\?|$)/, () => detail('backlog', 'Our 2026 baseline', OWN)],
       [
@@ -495,7 +498,7 @@ describe('BenchmarksPage comparison and trend', () => {
   it('says a prior period exists but is unreadable rather than calling it unlinked', async () => {
     setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
     routeFetch([
-      [/\/prior-period\/candidates$/, () => []],
+      [/\/prior-period\/candidates(\?|$)/, () => []],
       [
         /\/admin\/benchmarks\/o(\?|$)/,
         () => detail('o', 'Our 2026 baseline', OWN, { priorPeriodStatus: 'linked', priorPeriodBenchmarkId: 'hidden', priorPeriod: null }),
@@ -525,7 +528,7 @@ describe('BenchmarksPage comparison and trend', () => {
   it('shows the year-over-year figures the API computed', async () => {
     setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
     routeFetch([
-      [/\/prior-period\/candidates$/, () => []],
+      [/\/prior-period\/candidates(\?|$)/, () => []],
       [
         /\/admin\/benchmarks\/o(\?|$)/,
         () =>
@@ -586,7 +589,7 @@ describe('BenchmarksPage comparison and trend', () => {
   it('refuses to difference the trend across a change of unit', async () => {
     setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
     routeFetch([
-      [/\/prior-period\/candidates$/, () => []],
+      [/\/prior-period\/candidates(\?|$)/, () => []],
       [
         /\/admin\/benchmarks\/q2(\?|$)/,
         () =>
@@ -633,7 +636,7 @@ describe('BenchmarksPage comparison and trend', () => {
           new Response(JSON.stringify(detail('o', 'Our 2026 baseline', OWN, { priorPeriodStatus: 'linked', priorPeriodBenchmarkId: 'p' })), { status: 200 }),
         )
       }
-      if (/\/prior-period\/candidates$/.test(url)) {
+      if (/\/prior-period\/candidates(\?|$)/.test(url)) {
         return Promise.resolve(
           new Response(
             JSON.stringify([
@@ -802,5 +805,52 @@ describe('BenchmarksPage single-selection readings', () => {
     expect(mono).toContain('+4')
     // The metric name is a word and must not be dragged into the mono face.
     expect(mono).not.toContain('engagement')
+  })
+})
+
+describe('BenchmarksPage locale on the wire', () => {
+  const candidateUrls = () =>
+    vi.mocked(fetch).mock.calls.map(([input]) => String(input)).filter((url) => /\/prior-period\/candidates/.test(url))
+  const langOf = (url: string) => new URL(url, 'http://test.local').searchParams.get('lang')
+
+  function serveOwnBenchmark() {
+    setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
+    routeFetch([
+      [/\/prior-period\/candidates(\?|$)/, () => []],
+      [/\/admin\/benchmarks\/o(\?|$)/, () => detail('o', 'Our 2026 baseline', OWN)],
+      [/\/admin\/benchmarks(\?|$)/, () => [listRow('o', 'Our 2026 baseline', OWN)]],
+    ])
+  }
+
+  it('asks for the prior-period shortlist in the reader\'s language, as it asks for the catalogue', async () => {
+    // The list and the details carried `lang` since the 9 September rehearsal; the
+    // shortlist a company admin links a prior period from did not, so its names came back
+    // in the server's fallback language. A *stored* choice, not the provider's default: a
+    // hardcoded 'en' would pass a test rendered in English.
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
+    serveOwnBenchmark()
+
+    renderPage()
+    await userEvent.click(await screen.findByRole('checkbox', { name: /Our 2026 baseline/ }))
+
+    await waitFor(() => expect(candidateUrls()).toHaveLength(1))
+    expect(langOf(candidateUrls()[0])).toBe('es')
+  })
+
+  it('asks for the shortlist again when the reader switches locale', async () => {
+    // `loadCandidates` keys on `locale`, and the panel refetches when it changes identity:
+    // the names in the shortlist are in the language they were asked in.
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'en')
+    serveOwnBenchmark()
+
+    renderPage({ switcher: true })
+    await userEvent.click(await screen.findByRole('checkbox', { name: /Our 2026 baseline/ }))
+
+    await waitFor(() => expect(candidateUrls()).toHaveLength(1))
+    expect(langOf(candidateUrls()[0])).toBe('en')
+
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Switch Language' }), 'es')
+
+    await waitFor(() => expect(candidateUrls().some((url) => langOf(url) === 'es')).toBe(true))
   })
 })

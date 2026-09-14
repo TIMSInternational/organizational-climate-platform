@@ -103,7 +103,9 @@ export default function MicroclimateDetailPage() {
     try {
       // The response IS the updated detail, so using it directly keeps the badge and
       // the buttons from disagreeing for a frame.
-      setMicroclimate(await updateMicroclimate(baseUrl, id, { status }))
+      // Asked for in the reader's language like the GET was: without `lang` a
+      // status change flipped a bilingual title to the server's fallback.
+      setMicroclimate(await updateMicroclimate(baseUrl, id, { status }, locale))
     } catch (err) {
       setActionError(err instanceof Error ? err.message : t('errors.generic'))
     } finally {

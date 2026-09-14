@@ -24,7 +24,7 @@ import { Button, ErrorState, LoadingRegion } from '../../../components/ui'
  * than asking for a browser reload.
  */
 export default function SystemSettingsPage() {
-  const { t } = useTranslation()
+  const { t, locale } = useTranslation()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const [settings, setSettings] = useState<SystemSettingsData | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -33,7 +33,8 @@ export default function SystemSettingsPage() {
     setError(null)
     setSettings(null)
     try {
-      const result = await getSystemSettings(baseUrl)
+      // `lang` rides along so the maintenance notice comes back in the reader's language.
+      const result = await getSystemSettings(baseUrl, locale)
       setSettings(result)
     } catch (err) {
       setError(err instanceof Error ? err.message : t('errors.generic'))
@@ -43,9 +44,11 @@ export default function SystemSettingsPage() {
   useEffect(() => {
     reload()
     // `reload` closes over `t`, which is not a stable reference; depending on it
-    // would refetch on every render. `baseUrl` is the only real input.
+    // would refetch on every render. `baseUrl` and the reader's locale are the only
+    // real inputs: the maintenance notice comes back resolved for `locale`, so a
+    // language switch has to ask again.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [baseUrl])
+  }, [baseUrl, locale])
 
   async function handleSubmit(values: {
     loginEnabled: boolean

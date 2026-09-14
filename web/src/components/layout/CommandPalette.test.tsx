@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { CommandPalette, OPEN_COMMAND_PALETTE_EVENT } from './CommandPalette'
 import { buildNavSections } from '../../navigation/navSections'
-import { TranslationProvider } from '../../i18n'
+import { TranslationProvider, LanguageSwitcher, LOCALE_STORAGE_KEY } from '../../i18n'
 import { setToken, clearToken } from '../../auth/token'
 import type { SearchResultItem } from '../../features/search/api/search'
 import { tokenFor } from '../../test/jwtFixture'
@@ -36,9 +36,11 @@ function serve(items: SearchResultItem[], seen: string[] = []) {
   return seen
 }
 
-function renderPalette() {
+/** `switcher` mounts the real language control beside the palette, in the same provider. */
+function renderPalette({ switcher = false } = {}) {
   return render(
     <TranslationProvider>
+      {switcher && <LanguageSwitcher compact />}
       <MemoryRouter initialEntries={['/dashboard']}>
         <CommandPalette sections={buildNavSections('super_admin', COMPANY)} />
       </MemoryRouter>
@@ -61,6 +63,7 @@ describe('CommandPalette search (#135)', () => {
   afterEach(() => {
     cleanup()
     clearToken()
+    localStorage.removeItem(LOCALE_STORAGE_KEY)
     vi.unstubAllGlobals()
     vi.useRealTimers()
   })
@@ -117,5 +120,55 @@ describe('CommandPalette search (#135)', () => {
     await userEvent.type(screen.getByRole('combobox'), 'benchmarks')
 
     await waitFor(() => expect(screen.getByText('Benchmarks')).toBeTruthy())
+  })
+
+  /**
+   * `SearchEndpoints.ToItem` resolves each hit's title and subtitle for `lang`. The palette
+   * never sent it, so a Spanish reader searching a Spanish product was offered the English
+   * half of every bilingual survey, plan and report. A *stored* choice, not the provider's
+   * default: a hardcoded 'en' would pass a test rendered in English.
+   */
+  it('asks for the hits in the reader\'s language', async () => {
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
+    const seen = serve([hit()])
+    renderPalette()
+    await openPalette()
+
+    await userEvent.type(screen.getByRole('combobox'), 'climate')
+
+    await waitFor(() => expect(seen.some((url) => url.includes('/search'))).toBe(true))
+    const url = new URL(seen.find((entry) => entry.includes('/search'))!, 'http://test.local')
+    expect(url.searchParams.get('q')).toBe('climate')
+    expect(url.searchParams.get('lang')).toBe('es')
+  })
+
+  /**
+   * The debounced effect keys on `locale`: the hits on screen are titled for the language
+   * they were asked in, so a switch mid-search has to ask again with the same query.
+   */
+  it('asks again in the new language when the reader switches locale mid-search', async () => {
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'en')
+    const seen = serve([hit()])
+    const searches = () => seen.filter((url) => url.includes('/search'))
+    const langOf = (url: string) => new URL(url, 'http://test.local').searchParams.get('lang')
+    renderPalette({ switcher: true })
+    await openPalette()
+
+    // Two comboboxes are mounted now -- the palette's input and the language <select> --
+    // so each is addressed by its accessible name.
+    await userEvent.type(screen.getByRole('combobox', { name: 'Command palette' }), 'climate')
+
+    await waitFor(() => expect(searches()).toHaveLength(1))
+    expect(langOf(searches()[0])).toBe('en')
+
+    // The palette is a Radix `Dialog` (modal): while it is open the rest of the document is
+    // `aria-hidden`, and role queries skip hidden elements unless told not to. The control
+    // still works; it is only the accessibility tree that has set it aside.
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Switch Language', hidden: true }), 'es')
+
+    await waitFor(() => expect(searches()).toHaveLength(2))
+    const second = new URL(searches()[1], 'http://test.local')
+    expect(second.searchParams.get('q')).toBe('climate')
+    expect(second.searchParams.get('lang')).toBe('es')
   })
 })

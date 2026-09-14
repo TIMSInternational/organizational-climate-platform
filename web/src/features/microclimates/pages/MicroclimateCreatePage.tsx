@@ -153,7 +153,8 @@ export default function MicroclimateCreatePage() {
   const loadTemplates = useCallback(async () => {
     if (!companyId) return
     try {
-      setTemplates(await listMicroclimateTemplates(baseUrl, companyId))
+      // `lang` rides along so the picker names each template in the reader's language.
+      setTemplates(await listMicroclimateTemplates(baseUrl, companyId, locale))
     } catch {
       // Deliberately silent, and the only silent catch on this page. Templates are a
       // reference field: if the list cannot be fetched the picker is simply absent,
@@ -161,7 +162,7 @@ export default function MicroclimateCreatePage() {
       // lookup failed would be the wrong trade.
       setTemplates([])
     }
-  }, [baseUrl, companyId])
+  }, [baseUrl, companyId, locale])
 
   useEffect(() => {
     void loadTemplates()
