@@ -362,4 +362,22 @@ describe('SurveysListNextPage', () => {
       vi.useRealTimers()
     }
   })
+
+  // roles/super-admin-2's fidelity round: the close is counted as a calendar day too. A close at
+  // 18:21 UTC on 26 Sep is 16.76 days past the 10th's midnight — "17" when the hours count —
+  // and 16 days on the calendar (`calendarDayOf`).
+  it('counts to the close\'s calendar day, not its hour: 16, not 17, for a close late on the 26th', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-09-10T15:00:00Z'))
+    try {
+      vi.mocked(listSurveys).mockResolvedValue([
+        row({ id: 'open', title: 'Q4', status: 'active', responseCount: 1, targetAudienceCount: 24, endDate: '2026-09-26T18:21:20.555+00:00' }),
+      ])
+      renderAs({ role: 'company_admin', companyId: 'c1' })
+      await waitFor(() => expect(rowOf('open')).toBeTruthy())
+      expect(rowOf('open').querySelector('[data-slot="close-note"]')?.textContent).toBe(copy.inDays.replace('{count}', '16'))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

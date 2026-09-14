@@ -78,17 +78,13 @@ export default function RoleBasedNav({ sections, collapsed = false, onNavigate }
   const pathname = location.pathname
   // Resolved once for the whole rail: which single row wins the current path.
   const selectedHref = activeHref(pathname, sections)
-  const [expanded, setExpanded] = useState<string[]>(() => {
-    const initiallyExpanded: string[] = []
-    for (const section of sections) {
-      for (const item of section.items) {
-        if (item.sub?.some((sub) => sub.href === selectedHref)) {
-          initiallyExpanded.push(item.labelKey)
-        }
-      }
-    }
-    return initiallyExpanded
-  })
+  // Every group starts closed — on its own page and on each child's alike. The 10 Sep
+  // per-role canvas draws the company administrator's "Administración de Empresa" as ONE
+  // filled row, its children absent, on all three of its pages (CompanySettings, UsersList,
+  // DemographicFields). The rail used to open the group on a child's page and fill the child
+  // under it. Closed, the group row carries the selection (`isFilled` below); the reader
+  // still opens it with a click, and the child then takes the fill.
+  const [expanded, setExpanded] = useState<string[]>([])
   const [flyout, setFlyout] = useState<FlyoutAnchor | null>(null)
 
   // Nothing may outlive the state that produced it: expanding the rail removes
@@ -154,12 +150,15 @@ export default function RoleBasedNav({ sections, collapsed = false, onNavigate }
     // owns the path. Without this the rail showed *no* selected row at all while
     // collapsed on System settings, Users or Demographic fields. It cannot double
     // up: the children this borrows from are not rows while collapsed.
-    const isFilled = !hasSub && (isActive || childSelected)
+    // A group the reader has not opened stands in for its sub-tree the same way: its
+    // children are not rows either, so it wears the selection for its own page and for a
+    // child's (CompanySettings artboard: "Administración de Empresa" filled, closed).
+    const isExpanded = expanded.includes(item.labelKey)
+    const isFilled = (!hasSub || !isExpanded) && (isActive || childSelected)
     const navState: NavRowState = isFilled ? 'selected' : isActive && hasSub ? 'parent-selected' : undefined
     // How far down the run of children the elbow should read as "active". ForMaps
     // lights every rung above the selected one, so the bracket leads the eye to it.
     const selectedSubIndex = item.sub ? item.sub.findIndex((sub) => sub.href === selectedHref) : -1
-    const isExpanded = expanded.includes(item.labelKey)
     const isFlyoutOpen = hasFlyout && flyout?.key === item.labelKey
     const label = t(item.labelKey)
 
@@ -185,7 +184,7 @@ export default function RoleBasedNav({ sections, collapsed = false, onNavigate }
       borderRadius: 'var(--admin-radius-md)',
       fontFamily: 'inherit',
       fontSize: 'var(--admin-text-base)',
-      fontWeight: isActive && hasSub ? 'var(--admin-weight-bold)' : 'var(--admin-weight-medium)',
+      fontWeight: isActive && hasSub && isExpanded ? 'var(--admin-weight-bold)' : 'var(--admin-weight-medium)',
       textAlign: 'left' as const,
       textDecoration: 'none',
     }

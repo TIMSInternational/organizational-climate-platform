@@ -6,11 +6,16 @@ import SurveysListNextPage from '../features/surveys/next/list/SurveysListNextPa
 import CompaniesListNextPage from '../features/org-structure/next/super/CompaniesListNextPage'
 import DashboardPage from '../features/dashboard/pages/DashboardPage'
 import CompanyDetailPage from '../features/org-structure/pages/CompanyDetailPage'
-import UsersListPage from '../features/org-structure/pages/UsersListPage'
-import DemographicFieldsPage from '../features/org-structure/pages/DemographicFieldsPage'
+import UsersNextPage from '../features/org-structure/next/UsersNextPage'
+import DemographicsNextPage from '../features/org-structure/next/DemographicsNextPage'
 import ClimateTrendsNextPage from '../features/surveys/next/trends/ClimateTrendsNextPage'
 import SurveyResultsNextPage from '../features/surveys/next/SurveyResultsNextPage'
 import ActionPlansListNextPage from '../features/action-plans/next/ActionPlansListNextPage'
+import ActionPlanDetailNextPage from '../features/action-plans/next/ActionPlanDetailNextPage'
+import MicroclimateCreateNextPage from '../features/microclimates/next/create/MicroclimateCreateNextPage'
+import MicroclimateDetailNextPage from '../features/microclimates/next/detail/MicroclimateDetailNextPage'
+import MicroclimateAnalyticsNextPage from '../features/microclimates/next/analytics/MicroclimateAnalyticsNextPage'
+import MicroclimateResultsNextPage from '../features/microclimates/next/results/MicroclimateResultsNextPage'
 import ReportsListNextPage from '../features/reports/next/ReportsListNextPage'
 import BenchmarksNextPage from '../features/analytics/next/benchmarks/BenchmarksNextPage'
 import SurveyQuestionsEditorPage from '../features/surveys/next/authoring/SurveyQuestionsEditorPage'
@@ -25,6 +30,11 @@ import PublicSurveyLinkPage from '../features/surveys/pages/PublicSurveyLinkPage
 import SurveyInvitationPage from '../features/surveys/pages/SurveyInvitationPage'
 import MicroclimateRespondPage from '../features/microclimates/pages/MicroclimateRespondPage'
 import MicroclimateInvitationPage from '../features/microclimates/pages/MicroclimateInvitationPage'
+import ProfileNextPage from '../features/profile/next/ProfileNextPage'
+import NotificationPreferencesNextPage from '../features/notifications/next/NotificationPreferencesNextPage'
+import PrivacyNextPage from '../features/profile/next/PrivacyNextPage'
+import SystemSettingsNextPage from '../features/org-structure/next/system/SystemSettingsNextPage'
+import SystemHealthNextPage from '../features/org-structure/next/system/SystemHealthNextPage'
 
 /**
  * A construction guard for the router.
@@ -286,6 +296,32 @@ describe('router', () => {
    * them; the `/next` siblings the first cut mounted are gone with the ruling. Asserted
    * on the element, not the path: a path alone would pass with the old page behind it.
    */
+  /**
+   * The admin-gaps boards of 10 Sep replaced five pages on their real routes: the action
+   * plan the list links to, and the microclimate flow's create, share, analytics and read
+   * steps. Asserted on the element, as above — a path alone would pass with the old page
+   * behind it — and no `/next` sibling may exist for any of them.
+   */
+  it('mounts Detalle de plan and the microclimate flow on the real routes, and no /next sibling', () => {
+    const byPath = new Map<string, unknown>()
+    function walk(routes: typeof router.routes): void {
+      for (const route of routes) {
+        if (route.path) byPath.set(route.path, route.element)
+        if (route.children) walk(route.children as typeof router.routes)
+      }
+    }
+    walk(router.routes)
+    const componentAt = (path: string) => (byPath.get(path) as { type?: unknown } | undefined)?.type
+    expect(componentAt('/action-plans/:id')).toBe(ActionPlanDetailNextPage)
+    expect(componentAt('/microclimates/new')).toBe(MicroclimateCreateNextPage)
+    expect(componentAt('/microclimates/:id')).toBe(MicroclimateDetailNextPage)
+    expect(componentAt('/microclimates/analytics')).toBe(MicroclimateAnalyticsNextPage)
+    expect(componentAt('/microclimates/:id/results')).toBe(MicroclimateResultsNextPage)
+    for (const path of ['/action-plans/:id', '/microclimates/new', '/microclimates/:id', '/microclimates/analytics', '/microclimates/:id/results']) {
+      expect(byPath.has(`${path}/next`)).toBe(false)
+    }
+  })
+
   it('mounts the redesigned list, Clima en el tiempo and the results on the real routes, and no /next sibling', () => {
     const byPath = new Map<string, unknown>()
     function walk(routes: typeof router.routes): void {
@@ -318,6 +354,12 @@ describe('router', () => {
     expect(componentAt('/admin/question-library')).toBe(QuestionLibraryNextPage)
     expect(componentAt('/analytics/ai-insights')).toBe(AIInsightsNextPage)
     expect(componentAt('/admin/companies/:companyId/analytics')).toBe(AnalyticsNextPage)
+    // The admin-gaps lane swapped the three account pages the user menu links. Pinned on the
+    // element: with only the path asserted, swapping Tu perfil and Privacidad, or putting the
+    // inbox behind /settings/notifications, left this file green.
+    expect(componentAt('/profile')).toBe(ProfileNextPage)
+    expect(componentAt('/settings/notifications')).toBe(NotificationPreferencesNextPage)
+    expect(componentAt('/settings/privacy')).toBe(PrivacyNextPage)
     expect(byPath.has('/surveys/next')).toBe(false)
     expect(byPath.has('/surveys/climate-trends/next')).toBe(false)
     expect(byPath.has('/surveys/:id/results/next')).toBe(false)
@@ -341,6 +383,9 @@ describe('router', () => {
     expect(source).not.toMatch(/pages\/QuestionLibraryPage'/)
     expect(source).not.toMatch(/pages\/AIInsightsPage'/)
     expect(source).not.toMatch(/pages\/AnalyticsDashboardPage'/)
+    expect(source).not.toMatch(/pages\/ProfilePage'/)
+    expect(source).not.toMatch(/pages\/NotificationPreferencesPage'/)
+    expect(source).not.toMatch(/pages\/PrivacySettingsPage'/)
   })
 
   /**
@@ -475,11 +520,11 @@ describe('router', () => {
     const dispatchers: ReadonlyArray<[string, unknown, string, string]> = [
       ['/dashboard', DashboardPage, 'features/dashboard/pages/DashboardPage.tsx', 'PlatformDashboardView'],
       ['/admin/companies/:id', CompanyDetailPage, 'features/org-structure/pages/CompanyDetailPage.tsx', 'SuperCompanyDetailView'],
-      ['/admin/companies/:companyId/users', UsersListPage, 'features/org-structure/pages/UsersListPage.tsx', 'SuperUsersView'],
+      ['/admin/companies/:companyId/users', UsersNextPage, 'features/org-structure/next/UsersNextPage.tsx', 'SuperUsersView'],
       [
         '/admin/companies/:companyId/demographic-fields',
-        DemographicFieldsPage,
-        'features/org-structure/pages/DemographicFieldsPage.tsx',
+        DemographicsNextPage,
+        'features/org-structure/next/DemographicsNextPage.tsx',
         'SuperDemographicFieldsView',
       ],
       // #472 replaced this route's page with the redesigned AnalyticsNextPage, which carries the
@@ -497,6 +542,49 @@ describe('router', () => {
       const source = readFileSync(join(process.cwd(), 'src', file), 'utf8')
       expect(source, file).toMatch(/role === 'super_admin'|\bisSuperAdmin\b/)
       expect(source, file).toMatch(new RegExp(`<${view}\\b`))
+    }
+  })
+
+  /**
+   * The super administrator's per-role canvas (10 Sep) replaced five more pages on their real
+   * routes: Información de IA, the question bank and library, Configuración del Sistema and
+   * Estado del sistema. `/surveys` stays `SurveysListNextPage`, which dispatches the super
+   * administrator to `SuperSurveysListView` by role. Pinned on the element, as above, and the
+   * old pages stay in the tree unreferenced by the router.
+   */
+  it('mounts the super administrator\'s five redesigned pages on their real routes, and routes no old one', () => {
+    const byPath = new Map<string, unknown>()
+    function walk(routes: typeof router.routes): void {
+      for (const route of routes) {
+        if (route.path) byPath.set(route.path, route.element)
+        if (route.children) walk(route.children as typeof router.routes)
+      }
+    }
+    walk(router.routes)
+    const componentAt = (path: string) => (byPath.get(path) as { type?: unknown } | undefined)?.type
+    expect(componentAt('/analytics/ai-insights')).toBe(AIInsightsNextPage)
+    expect(componentAt('/admin/question-bank')).toBe(QuestionBankNextPage)
+    expect(componentAt('/admin/question-library')).toBe(QuestionLibraryNextPage)
+    expect(componentAt('/admin/system-settings')).toBe(SystemSettingsNextPage)
+    expect(componentAt('/admin/system')).toBe(SystemHealthNextPage)
+
+    const source = readFileSync(join(process.cwd(), 'src', 'app', 'router.tsx'), 'utf8')
+    for (const old of ['AIInsightsPage', 'QuestionBankPage', 'QuestionLibraryPage', 'SystemSettingsPage', 'SystemHealthPage']) {
+      expect(source).not.toMatch(new RegExp(`pages/${old}'`))
+    }
+    const list = readFileSync(join(process.cwd(), 'src', 'features', 'surveys', 'next', 'list', 'SurveysListNextPage.tsx'), 'utf8')
+    expect(list).toMatch(/from '\.\.\/super\/SuperSurveysListView'/)
+    // #472 mounted the company administrator's pages at three of these routes; each carries ONE role
+    // branch to the super administrator's view (`next/super/`), which its own test renders through the page.
+    const dispatched: Array<[string[], string]> = [
+      [['analytics', 'next', 'AIInsightsNextPage.tsx'], 'SuperAIInsightsView'],
+      [['questions', 'next', 'QuestionBankNextPage.tsx'], 'SuperQuestionBankView'],
+      [['questions', 'next', 'QuestionLibraryNextPage.tsx'], 'SuperQuestionLibraryView'],
+    ]
+    for (const [file, view] of dispatched) {
+      const page = readFileSync(join(process.cwd(), 'src', 'features', ...file), 'utf8')
+      expect(page).toMatch(new RegExp(`from '\\./super/${view}'`))
+      expect(page).toMatch(new RegExp(`role === 'super_admin' \\? <${view} />`))
     }
   })
 
@@ -583,8 +671,8 @@ describe('router', () => {
      * reference and must be reached by NO route — each carries a "NOT ROUTED" header
      * saying so. Everything else in `pages/`, and every page in `next/`, must be routed.
      */
-    const WIRING_REFERENCES = ['ConsolidadoPage', 'TableroSeguimientoPage', 'PlanDeAccionDetailPage']
-    const REDESIGNED = ['ConsolidadoNextPage', 'TableroNextPage', 'PlanDetailNextPage']
+    const WIRING_REFERENCES = ['ConsolidadoPage', 'TableroSeguimientoPage', 'PlanDeAccionDetailPage', 'PlanesAccionListPage']
+    const REDESIGNED = ['ConsolidadoNextPage', 'TableroNextPage', 'PlanDetailNextPage', 'PlanesListNextPage']
 
     it('routes the redesigned tracking screens and leaves the wiring references unrouted', () => {
       const source = readFileSync(join(process.cwd(), 'src', 'app', 'router.tsx'), 'utf8')
@@ -598,14 +686,37 @@ describe('router', () => {
       }
     })
 
+    /**
+     * The swap pinned on the component each path resolves to, not on the source text. The
+     * test above asks only that each page's `await import` appears somewhere in router.tsx,
+     * and "registers every tracking screen" only that each path exists — so swapping the
+     * lazy imports of `/tracking/planes` and `/tracking/tablero` left this file green (the
+     * admin-gaps refuter, 11 Sep). Each route's `lazy()` is resolved here and its Component
+     * compared with the module built for that path.
+     */
+    it('resolves each tracking path to the page built for it', async () => {
+      const routes = shellChildren()
+      async function componentAt(path: string): Promise<unknown> {
+        const lazy = routes.find((route) => route.path === path)?.lazy
+        if (typeof lazy !== 'function') throw new Error(`${path} is not a lazy route in the admin shell`)
+        const resolved = (await (lazy as () => Promise<unknown>)()) as { Component?: unknown }
+        return resolved.Component
+      }
+      expect(await componentAt('/tracking')).toBe((await import('../features/tracking/next/ConsolidadoNextPage')).default)
+      expect(await componentAt('/tracking/tablero')).toBe((await import('../features/tracking/next/TableroNextPage')).default)
+      expect(await componentAt('/tracking/planes')).toBe((await import('../features/tracking/next/PlanesListNextPage')).default)
+      expect(await componentAt('/tracking/planes/:id')).toBe((await import('../features/tracking/next/PlanDetailNextPage')).default)
+      expect(await componentAt('/tracking/mis-tareas')).toBe((await import('../features/tracking/pages/MisTareasPage')).default)
+    })
+
     it('leaves no tracking page unrouted', () => {
       const pagesDir = join(process.cwd(), 'src', 'features', 'tracking', 'pages')
-      const pages = globSync('*.tsx', { cwd: pagesDir })
+      const found = globSync('*.tsx', { cwd: pagesDir })
         .filter((file) => !/\.test\.tsx$/.test(file))
         .map((file) => file.replace(/\.tsx$/, ''))
-        .filter((page) => !WIRING_REFERENCES.includes(page))
 
-      expect(pages.length, 'no tracking pages found — the glob is wrong').toBeGreaterThan(1)
+      expect(found.length, 'no tracking pages found — the glob is wrong').toBeGreaterThan(1)
+      const pages = found.filter((page) => !WIRING_REFERENCES.includes(page))
 
       const source = readFileSync(join(process.cwd(), 'src', 'app', 'router.tsx'), 'utf8')
       const unrouted = pages.filter(
@@ -645,13 +756,15 @@ describe('router', () => {
       const src = join(process.cwd(), 'src')
       const source = readFileSync(join(src, 'app', 'router.tsx'), 'utf8')
       const pageNames =
-        'ConsolidadoPage|TableroSeguimientoPage|PlanesAccionListPage|PlanDeAccionDetailPage|MisTareasPage|ConsolidadoNextPage|TableroNextPage|PlanDetailNextPage'
-      expect(source).not.toMatch(new RegExp(`^import .*(${pageNames}).*$`, 'm'))
+        'ConsolidadoPage|TableroSeguimientoPage|PlanesAccionListPage|PlanDeAccionDetailPage|MisTareasPage|ConsolidadoNextPage|TableroNextPage|PlanDetailNextPage|PlanesListNextPage'
+      // Whole names only (a regex \b): the Detalle de plan's `ActionPlanDetailNextPage` contains
+      // `PlanDetailNextPage` and is a static import of an action-plans page, not a tracking one.
+      expect(source).not.toMatch(new RegExp(`^import .*\\b(${pageNames})\\b.*$`, 'm'))
 
       const offenders = globSync('**/*.{ts,tsx}', { cwd: src })
         .filter((file) => !file.includes('features/tracking/') && !/\.test\.tsx?$/.test(file))
         .filter((file) =>
-          new RegExp(`^\\s*import\\s[^\\n]*(${pageNames})`, 'm').test(
+          new RegExp(`^\\s*import\\s[^\\n]*\\b(${pageNames})\\b`, 'm').test(
             readFileSync(join(src, file), 'utf8'),
           ),
         )

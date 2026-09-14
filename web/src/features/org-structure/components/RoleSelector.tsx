@@ -17,14 +17,16 @@ interface RoleSelectorProps {
   value: string
   onChange: (role: string) => void
   disabled?: boolean
+  /** The roles offered; every role unless the caller narrows it (`INVITABLE_ROLES`). */
+  roles?: readonly string[]
 }
 
-export default function RoleSelector({ value, onChange, disabled }: RoleSelectorProps) {
+export default function RoleSelector({ value, onChange, disabled, roles = ROLES }: RoleSelectorProps) {
   const { t } = useTranslation()
 
   return (
     <select value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled}>
-      {ROLES.map((role) => {
+      {roles.map((role) => {
         const key = roleLabelKey(role)
         return (
           <option key={role} value={role}>
