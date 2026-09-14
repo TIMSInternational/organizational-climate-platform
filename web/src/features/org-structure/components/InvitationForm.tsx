@@ -1,3 +1,4 @@
+import { INVITABLE_ROLES } from '../labels'
 import { useState, type FormEvent } from 'react'
 import RoleSelector from './RoleSelector'
 import { useTranslation } from '../../../i18n'
@@ -57,7 +58,7 @@ export default function InvitationForm({ allowCompanyAdminSetup, onSubmit }: Inv
       {values.invitationType === 'employee_direct' && (
         <label>
           {t('users.role')}
-          <RoleSelector value={values.role} onChange={(role) => setValues({ ...values, role })} />
+          <RoleSelector value={values.role} roles={INVITABLE_ROLES} onChange={(role) => setValues({ ...values, role })} />
         </label>
       )}
       <Button type="submit" variant="primary" disabled={submitting}>
