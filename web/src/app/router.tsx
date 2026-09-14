@@ -13,18 +13,18 @@ import DashboardPage from '../features/dashboard/pages/DashboardPage'
 import CompaniesListNextPage from '../features/org-structure/next/super/CompaniesListNextPage'
 import CompanyDetailPage from '../features/org-structure/pages/CompanyDetailPage'
 import UsersListPage from '../features/org-structure/pages/UsersListPage'
-import SystemSettingsPage from '../features/org-structure/pages/SystemSettingsPage'
-import SystemHealthPage from '../features/org-structure/pages/SystemHealthPage'
+import SystemSettingsNextPage from '../features/org-structure/next/system/SystemSettingsNextPage'
+import SystemHealthNextPage from '../features/org-structure/next/system/SystemHealthNextPage'
 import DemographicFieldsPage from '../features/org-structure/pages/DemographicFieldsPage'
 import DepartmentsPage from '../features/org-structure/pages/DepartmentsPage'
 import ActionPlansListNextPage from '../features/action-plans/next/ActionPlansListNextPage'
-import ActionPlanDetailPage from '../features/action-plans/pages/ActionPlanDetailPage'
+import ActionPlanDetailNextPage from '../features/action-plans/next/ActionPlanDetailNextPage'
 import MicroclimatesListPage from '../features/microclimates/pages/MicroclimatesListPage'
-import MicroclimateCreatePage from '../features/microclimates/pages/MicroclimateCreatePage'
-import MicroclimateAnalyticsPage from '../features/microclimates/pages/MicroclimateAnalyticsPage'
-import MicroclimateDetailPage from '../features/microclimates/pages/MicroclimateDetailPage'
+import MicroclimateCreateNextPage from '../features/microclimates/next/create/MicroclimateCreateNextPage'
+import MicroclimateAnalyticsNextPage from '../features/microclimates/next/analytics/MicroclimateAnalyticsNextPage'
+import MicroclimateDetailNextPage from '../features/microclimates/next/detail/MicroclimateDetailNextPage'
 import MicroclimateLivePage from '../features/microclimates/pages/MicroclimateLivePage'
-import MicroclimateResultsPage from '../features/microclimates/pages/MicroclimateResultsPage'
+import MicroclimateResultsNextPage from '../features/microclimates/next/results/MicroclimateResultsNextPage'
 import MicroclimateRespondPage from '../features/microclimates/pages/MicroclimateRespondPage'
 import MicroclimateInvitationPage from '../features/microclimates/pages/MicroclimateInvitationPage'
 import SurveyRespondPage from '../features/surveys/pages/SurveyRespondPage'
@@ -322,8 +322,11 @@ export const router = createBrowserRouter([
               // same swap as `/surveys`); the old page stays unrouted as the wiring reference.
               { path: '/admin/companies/:companyId/reports', element: <ReportsListNextPage /> },
               { path: '/admin/companies/:companyId/analytics', element: <AnalyticsNextPage /> },
-              { path: '/admin/system-settings', element: <SystemSettingsPage /> },
-              { path: '/admin/system', element: <SystemHealthPage /> },
+              // The redesigned Configuración del Sistema and Estado del sistema (the per-role
+              // canvas, 10 Sep) replaced SystemSettingsPage and SystemHealthPage here; the old
+              // pages stay in the tree unrouted, as the wiring reference. Super-only on the server.
+              { path: '/admin/system-settings', element: <SystemSettingsNextPage /> },
+              { path: '/admin/system', element: <SystemHealthNextPage /> },
               // #114, the question BANK — not the question library, which is the
               // authoring repository and now has its own route just below (#423).
               // The two reach different tables on purpose; `questionBank.ts` and
@@ -334,6 +337,8 @@ export const router = createBrowserRouter([
               // role, so a leader or employee who typed the URL gets the page's own
               // error state rather than another tenant's corpus. `navSections.ts` is
               // what keeps it out of their sidebar.
+              // The page dispatches by role: the super administrator's platform-wide bank (the
+              // per-role canvas, 10 Sep) is its own view, `questions/next/super/SuperQuestionBankView`.
               { path: '/admin/question-bank', element: <QuestionBankNextPage /> },
               // #423, the question LIBRARY's authoring screen. Its endpoints have
               // accepted POST and PUT since #112; until this route existed the only
@@ -345,6 +350,8 @@ export const router = createBrowserRouter([
               // every `/admin/question-*` endpoint checks `Roles.Admin` and then
               // scopes by role, so a leader who typed the URL meets the page's own
               // error state, never another tenant's corpus.
+              // The page dispatches by role: the super administrator's global catalogue (the
+              // per-role canvas, 10 Sep) is its own view, `questions/next/super/SuperQuestionLibraryView`.
               { path: '/admin/question-library', element: <QuestionLibraryNextPage /> },
               // Flat, with no company id in the path (#142), like /surveys and
               // /action-plans: the page takes its company from `company-context`,
@@ -354,20 +361,25 @@ export const router = createBrowserRouter([
               // 10 Sep): a redesigned screen takes its real route, never a `/next` sibling.
               // The old page stays in the tree, unrouted, as the wiring reference.
               { path: '/action-plans', element: <ActionPlansListNextPage /> },
-              { path: '/action-plans/:id', element: <ActionPlanDetailPage /> },
+              // The redesigned Detalle de plan replaced `ActionPlanDetailPage` here (the
+              // admin-gaps boards of 10 Sep); the old page stays in the tree, unrouted.
+              { path: '/action-plans/:id', element: <ActionPlanDetailNextPage /> },
               { path: '/microclimates', element: <MicroclimatesListPage /> },
               // Before `/microclimates/:id` for readability only, same as
               // `/surveys/my`: react-router ranks a static segment above a dynamic
               // one whatever the declaration order, so `new` can never be parsed as
               // a microclimate id.
-              { path: '/microclimates/new', element: <MicroclimateCreatePage /> },
-              { path: '/microclimates/analytics', element: <MicroclimateAnalyticsPage /> },
-              { path: '/microclimates/:id', element: <MicroclimateDetailPage /> },
+              // Crear, Analítica, Detalle and Resultados are the redesigned boards of 10 Sep,
+              // mounted on the real routes in place of the old pages, which stay in the tree
+              // unrouted as the wiring reference. No `/next` sibling exists or may.
+              { path: '/microclimates/new', element: <MicroclimateCreateNextPage /> },
+              { path: '/microclimates/analytics', element: <MicroclimateAnalyticsNextPage /> },
+              { path: '/microclimates/:id', element: <MicroclimateDetailNextPage /> },
               // No nav entry, deliberately: both are per-session destinations reached
               // from the session, not places in the sidebar. Same rule as
               // `/surveys/:id/results`.
               { path: '/microclimates/:id/live', element: <MicroclimateLivePage /> },
-              { path: '/microclimates/:id/results', element: <MicroclimateResultsPage /> },
+              { path: '/microclimates/:id/results', element: <MicroclimateResultsNextPage /> },
               // The redesigned Todas las Encuestas replaced `SurveysListPage` on this route
               // (ruled 10 Sep). The old page stays in the tree, unrouted, as the wiring
               // reference — its module comment says what it still pins.
@@ -438,6 +450,8 @@ export const router = createBrowserRouter([
               // The redesigned Puntos de Referencia replaced `BenchmarksPage` here (ruled
               // 10 Sep); the old page stays unrouted as the wiring reference.
               { path: '/analytics/benchmarks', element: <BenchmarksNextPage /> },
+              // The page dispatches by role: the super administrator's choose-a-company state and
+              // cross-tenant reading (the per-role canvas, 10 Sep) are its own view, `analytics/next/super/SuperAIInsightsView`.
               { path: '/analytics/ai-insights', element: <AIInsightsNextPage /> },
               // The tracking module (#125, #126). Inside `AdminLayout` like every
               // other work surface — these are administration screens, not a

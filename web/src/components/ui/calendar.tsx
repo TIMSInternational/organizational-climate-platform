@@ -55,21 +55,26 @@ export function Calendar({ className, classNames, localeOverride, ...props }: Ca
         month_caption: 'flex h-control-lg items-center justify-center',
         caption_label: 'text-base font-medium text-fg-primary',
         nav: 'flex items-center justify-between absolute inset-x-0',
+        // `p-0` on the arrows and the weekday heads, as on `day`: index.css gives every bare
+        // `<button>` 12px of side padding and every `<th>` 8px/12px. Measured in Chromium on
+        // 10 Sep: the 28px arrow kept `padding: 0 12px` and squeezed its chevron to 2px wide
+        // (no visible way to change month), and the 32px weekday head kept 8px of content,
+        // so `overflow-wrap: break-word` broke "LU" into "L" over "U".
         button_previous: cn(
-          'flex size-control-md items-center justify-center rounded-md',
+          'flex size-control-md items-center justify-center rounded-md p-0',
           'border-transparent bg-transparent text-fg-tertiary',
           'hover:bg-state-hover hover:text-fg-primary',
           'disabled:opacity-50',
         ),
         button_next: cn(
-          'flex size-control-md items-center justify-center rounded-md',
+          'flex size-control-md items-center justify-center rounded-md p-0',
           'border-transparent bg-transparent text-fg-tertiary',
           'hover:bg-state-hover hover:text-fg-primary',
           'disabled:opacity-50',
         ),
         month_grid: 'w-full border-collapse',
         weekdays: 'flex',
-        weekday: 'w-control-lg text-2xs font-medium uppercase tracking-label text-fg-label',
+        weekday: 'w-control-lg p-0 text-2xs font-medium uppercase tracking-label text-fg-label',
         week: 'flex w-full',
         day: 'p-0',
         day_button: cn(

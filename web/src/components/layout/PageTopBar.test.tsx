@@ -190,6 +190,30 @@ describe('PageTopBar', () => {
       expect(column.className.split(/\s+/)).toEqual(expect.arrayContaining(['flex', 'flex-col', 'gap-1.5']))
     })
 
+    it('draws the admin-gaps boards\' 14px crumb gap when compact, and the 38px one otherwise', () => {
+      const props = { title: 'Pulso', eyebrow: 'Workspace', breadcrumbs: [{ label: 'Microclimas', href: '/microclimates' }, { label: 'Pulso' }] }
+      const compact = topBar(renderTopBar({ ...props, compact: true }).container).className.split(/\s+/)
+      expect(compact).toContain('gap-3.5')
+      expect(compact).not.toContain('gap-9.5')
+      cleanup()
+      expect(topBar(renderTopBar(props).container).className.split(/\s+/)).toContain('gap-9.5')
+    })
+
+    it('puts the meta line inside the text column, under the description', () => {
+      const { container } = renderTopBar({ title: 'Pulso', description: 'Hágalo llegar', meta: <span data-testid="meta">En vivo</span> })
+      const column = container.querySelector('[data-slot="page-top-bar"] h1')!.closest('.flex-col')!
+      const meta = container.querySelector('[data-testid="meta"]')!
+      expect(column.contains(meta)).toBe(true)
+      expect(column.lastElementChild?.getAttribute('data-slot')).toBe('page-meta')
+      expect(column.lastElementChild?.contains(meta)).toBe(true)
+      // The first canvas's boards set the row 6px lower than the column's gap; these do not.
+      expect(column.lastElementChild?.className.split(/\s+/)).toContain('mt-1.5')
+      cleanup()
+      const compact = renderTopBar({ title: 'Pulso', description: 'Hágalo llegar', compact: true, meta: <span>En vivo</span> })
+      const slot = compact.container.querySelector('[data-slot="page-meta"]')!
+      expect(slot.className.split(/\s+/)).not.toContain('mt-1.5')
+    })
+
     it('draws the rule itself rather than delegating to a Separator element', () => {
       // A separator is a sibling with margins of its own, so the 16px/24px split
       // above cannot be expressed with one. Its absence is the assertion.

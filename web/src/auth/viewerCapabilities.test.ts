@@ -161,6 +161,49 @@ describe('capabilitiesFor', () => {
       })
     }
   })
+
+  /**
+   * `PUT /microclimates/{id}`, `POST /microclimates/{id}/invitations`, `PUT /action-plans/{id}`
+   * and `POST /action-plans/{id}/progress` all refuse unless `Roles.Admin` AND
+   * `CanAccessCompany(user, resource.CompanyId)` — the resource's own company, never the
+   * selection.
+   */
+  describe('canManageMicroclimate(m) and canManageActionPlan(p) mirror Roles.Admin + CanAccessCompany on the resource', () => {
+    const own = { companyId: 'c1' }
+    const other = { companyId: 'c2' }
+
+    it('super_admin manages any tenant’s resource with nothing selected', () => {
+      const claims = claimsFor('super_admin', { companyId: undefined })
+      const capabilities = capabilitiesFor(claims, scopeFor(claims, null))
+      expect(capabilities.canManageMicroclimate(other)).toBe(true)
+      expect(capabilities.canManageActionPlan(other)).toBe(true)
+    })
+
+    it("company_admin manages only their claim's tenant, whatever is selected", () => {
+      const claims = claimsFor('company_admin')
+      const capabilities = capabilitiesFor(claims, scopeFor(claims, 'c2'))
+      expect(capabilities.canManageMicroclimate(own)).toBe(true)
+      expect(capabilities.canManageMicroclimate(other)).toBe(false)
+      expect(capabilities.canManageActionPlan(own)).toBe(true)
+      expect(capabilities.canManageActionPlan(other)).toBe(false)
+    })
+
+    it('company_admin with no tenant claim manages nothing', () => {
+      const claims = claimsFor('company_admin', { companyId: undefined })
+      const capabilities = capabilitiesFor(claims, scopeFor(claims))
+      expect(capabilities.canManageMicroclimate(own)).toBe(false)
+      expect(capabilities.canManageActionPlan(own)).toBe(false)
+    })
+
+    for (const role of ['leader', 'supervisor', 'employee', undefined]) {
+      it(`${role ?? 'no role'} manages nothing, even of their own tenant`, () => {
+        const claims = claimsFor(role, { nodoExternalId: 'n1' })
+        const capabilities = capabilitiesFor(claims, scopeFor(claims))
+        expect(capabilities.canManageMicroclimate(own)).toBe(false)
+        expect(capabilities.canManageActionPlan(own)).toBe(false)
+      })
+    }
+  })
 })
 
 describe('readViewerClaims and useViewerCapabilities', () => {
