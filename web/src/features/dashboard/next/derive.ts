@@ -3,8 +3,26 @@ import { isSuppressed } from '../../../components/charts'
 
 /**
  * Every derived reading on the redesigned Panel de Control, as pure functions of
- * the model. The page never carries a computed number as a literal: the mockup's
- * "3,67", "+0,32", "100 %", "bajo la meta" are all outputs of these.
+ * the model. The page never carries a computed number as a literal: "3,65", "+0,29",
+ * "100 %", "bajo la meta" are all outputs of these.
+ *
+ * ## The app-wide mean is the mean of the UNROUNDED dimension means
+ *
+ * Ruled 2026-09-14 — `docs/decisions/app-wide-mean.md`. For Grupo Meridiano's Q3 the six
+ * dimension means are 4 · 3,79 · 3,75 · 3,38 · 3,67 · 3,33, so:
+ *
+ *   - mean of the unrounded means = 21,92 / 6 = 3,6533 -> the screen prints **3,65**
+ *   - mean of the six one-decimal READINGS = 22,0 / 6 = 3,6667 -> would print **3,67**
+ *
+ * The first is the rule, on every screen that shows the figure. This comment previously
+ * named the second — "the mockup's 3,67, +0,32" — as though these functions produced it.
+ * They never did, and the artboards are the side that is wrong: they print 3,67 / +0,32.
+ * `deriveTarget.test.ts`'s `companyMean` case and `derive.test.ts`'s guard below both pin
+ * 3,65 with inputs that tell the two rules apart.
+ *
+ * The *move* is a different rule and deliberately so: `printedMove` differences the two
+ * readings AS PRINTED, so the delta a reader can compute by subtracting the two numbers on
+ * screen is the delta shown. At two decimals that gives 3,65 - 3,36 = **+0,29**.
  */
 
 const DAY_MS = 24 * 60 * 60 * 1000
