@@ -1,0 +1,8 @@
+{
+  "GET /survey-links/* 404": {
+    "message": "Survey link not found"
+  },
+  "GET /notifications/mine": {
+    "notifications": []
+  }
+}

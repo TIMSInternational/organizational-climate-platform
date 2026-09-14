@@ -187,6 +187,24 @@ describe('RespondCaption', () => {
 
     expect(container.querySelector('p')).toBeNull()
   })
+
+  /**
+   * A class-presence assertion rather than a measurement, because happy-dom has no
+   * layout engine and cannot be asked how wide a word is. What it pins is a pair that
+   * was measured in Chromium at 390px and is easy to half-remove: the title is
+   * author-supplied, and a survey named with one long unhyphenated token ran off the
+   * right edge of `/s/:token`. `break-words` on its own did NOT fix it — this
+   * `<header>` is a grid and a grid item's automatic minimum size is its min-content
+   * width, so the track simply grew to the length of the word. Both PNGs are in the
+   * lane report.
+   */
+  it('keeps a long unbroken title inside the column', () => {
+    render(<RespondCaption eyebrow="Survey" title="RetroalimentacionInstitucional2026" />)
+
+    const heading = screen.getByRole('heading', { level: 1 })
+    expect(heading.className).toContain('break-words')
+    expect(heading.className).toContain('min-w-0')
+  })
 })
 
 describe('RespondReading', () => {

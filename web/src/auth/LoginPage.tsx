@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router'
+import { useLocation, useNavigate } from 'react-router'
 import { ShieldCheck } from 'lucide-react'
 import { AuthRequestError, login } from './api'
 import { AuthShell } from './AuthShell'
@@ -7,6 +7,7 @@ import { AuthPending } from './AuthPending'
 import { pageWorthyReason } from './authReason'
 import { beginGoogleSignIn, googleClientId } from './googleOAuth'
 import { setToken } from './token'
+import { safeReturnPath } from './returnPath'
 import { resolveInitialRoute } from '../app/resolveInitialRoute'
 import { useTranslation } from '../i18n'
 import { Alert, AlertDescription, Button, TextField } from '../components/ui'
@@ -68,6 +69,10 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const navigate = useNavigate()
+  // Where to go after signing in, when something sent this visitor here with a
+  // destination — today the microclimate invitation's "Iniciar sesión y volver aquí".
+  // Validated rather than trusted: see `returnPath.ts`.
+  const returnPath = safeReturnPath(useLocation().state)
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
@@ -82,7 +87,7 @@ export default function LoginPage() {
       // 403 every non-SuperAdmin login before they could see anything. Since #132
       // the destination is `/dashboard` for every role — the page itself dispatches
       // on the claim, so nothing needs decoding here.
-      navigate(resolveInitialRoute())
+      navigate(returnPath ?? resolveInitialRoute())
     } catch (err) {
       const status = err instanceof AuthRequestError ? err.status : 0
       const message = err instanceof Error && err.message ? err.message : t('errors.generic')

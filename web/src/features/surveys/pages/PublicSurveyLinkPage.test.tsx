@@ -28,7 +28,7 @@ function link(overrides: Partial<SurveyPublicLinkDetail> = {}): SurveyPublicLink
   }
 }
 
-function respondView(): SurveyRespondView {
+function respondView(overrides: Partial<SurveyRespondView> = {}): SurveyRespondView {
   return {
     id: 'survey-77',
     title: 'Clima laboral 2026',
@@ -38,7 +38,7 @@ function respondView(): SurveyRespondView {
     resolvedLocale: 'es',
     fallbackFields: [],
     startDate: '2026-01-01T00:00:00Z',
-    endDate: '2026-12-31T00:00:00Z',
+    endDate: '2026-10-10T00:00:00Z',
     anonymous: true,
     allowPartialResponses: false,
     autoSave: true,
@@ -63,6 +63,7 @@ function respondView(): SurveyRespondView {
       },
     ],
     inProgress: null,
+    ...overrides,
   }
 }
 
@@ -71,10 +72,7 @@ function respondView(): SurveyRespondView {
  * without the other — which is the whole shape of this page: two requests, and the
  * second only happens because the first succeeded.
  */
-function serve(options: {
-  resolve?: () => Response
-  respond?: () => Response
-}): void {
+function serve(options: { resolve?: () => Response; respond?: () => Response }): void {
   vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
     const url = String(input)
     if (url.includes('/survey-links/')) {
@@ -98,6 +96,11 @@ function renderPage() {
       </MemoryRouter>
     </TranslationProvider>,
   )
+}
+
+/** The entry card, then the button that hands over to the questions. */
+async function begin(): Promise<void> {
+  await userEvent.click(await screen.findByRole('button', { name: /Empezar/ }))
 }
 
 beforeEach(() => {
@@ -132,15 +135,71 @@ describe('PublicSurveyLinkPage', () => {
   })
 
   /**
-   * One request, not one per language switch. The resolve is what increments
-   * `survey_distributions.total_accesses`, and it is the only access figure an
-   * administrator gets.
+   * The entry, as PublicRespondEntry draws it: what this is, when it closes, how many
+   * questions, what is and is not stored, and the one action.
    */
-  it('resolves the token once, because resolving it counts as a visit', async () => {
+  it('draws the entry card before the first question', async () => {
     serve({})
     renderPage()
 
-    await screen.findByRole('heading', { name: 'Clima laboral 2026' })
+    expect(await screen.findByRole('heading', { name: 'Clima laboral 2026' })).toBeTruthy()
+    // "6 preguntas..." is derived from the payload; this fixture carries one.
+    expect(screen.getByText('Una pregunta. Menos de un minuto.')).toBeTruthy()
+    expect(screen.getByText('Cierra')).toBeTruthy()
+    expect(screen.getByText('10 oct')).toBeTruthy()
+    expect(screen.getByText('Preguntas')).toBeTruthy()
+    expect(screen.getByText('Esta encuesta es anónima')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Empezar/ })).toBeTruthy()
+    // Not the questions, yet.
+    expect(screen.queryByRole('radio', { name: 'Bien' })).toBeNull()
+  })
+
+  /**
+   * The trap this page is one line away from at all times.
+   *
+   * `SurveyPublicLinkDetail.allowAnonymous` is
+   * `SurveyDistribution.AccessRules.AllowAnonymous` — who may OPEN the link — while the
+   * promise is about `Survey.Settings.Anonymous`, which is whether the response is
+   * written with a user id on it. They are different columns and they disagree here: the
+   * link allows anonymous visitors, the survey records who answers. Reading the promise
+   * off the link payload would tell this respondent their answers cannot be traced to
+   * them, on a survey that traces them.
+   */
+  it('makes the anonymity promise from the survey, never from the link rule', async () => {
+    serve({
+      resolve: () =>
+        new Response(JSON.stringify(link({ allowAnonymous: true })), { status: 200 }),
+      respond: () =>
+        new Response(JSON.stringify(respondView({ anonymous: false })), { status: 200 }),
+    })
+    renderPage()
+
+    expect(await screen.findByText('Esta encuesta no es anónima')).toBeTruthy()
+    expect(screen.queryByText('Esta encuesta es anónima')).toBeNull()
+  })
+
+  /**
+   * One request, not one per language switch. The resolve is what increments
+   * `survey_distributions.total_accesses`, and it is the only access figure an
+   * administrator gets.
+   *
+   * The entry card is where this now bites hardest: it renders the survey's own title,
+   * which has to come back translated, and the obvious way to get that is to put
+   * `locale` on the effect that resolves the token. That is one word, it typechecks, and
+   * it reports one respondent switching language as two visitors. The title comes from
+   * the respond read instead, which is free.
+   */
+  it('resolves the token once even when the visitor switches language on the entry', async () => {
+    serve({})
+    renderPage()
+
+    await screen.findByRole('button', { name: /Empezar/ })
+
+    await userEvent.selectOptions(
+      screen.getByRole('combobox', { name: 'Cambiar Idioma' }),
+      'en',
+    )
+    await screen.findByRole('combobox', { name: 'Switch Language' })
 
     const resolves = vi
       .mocked(fetch)
@@ -148,6 +207,12 @@ describe('PublicSurveyLinkPage', () => {
     expect(resolves).toHaveLength(1)
     // And with no `?lang=`: the localized title it returns is never rendered here.
     expect(String(resolves[0][0])).not.toContain('lang=')
+
+    // The survey itself IS re-read, because its title and questions have to come back
+    // in the language that was just chosen.
+    expect(
+      vi.mocked(fetch).mock.calls.filter((call) => String(call[0]).includes('/respond')).length,
+    ).toBeGreaterThan(1)
   })
 
   /**
@@ -155,15 +220,15 @@ describe('PublicSurveyLinkPage', () => {
    * that would suffer it worse — this visitor may hold nothing but the link, with no
    * account and no saved draft to fall back on.
    *
-   * Adding `locale` to the resolve effect's deps is a one-word edit that typechecks,
-   * lints and passes every other test in this tree, and it is the edit somebody makes
-   * the first time a translated title is wanted here. The comment above those deps was
-   * the only thing standing against it, and a comment is not a test. The test above
-   * does not catch it because it never switches language.
+   * Adding `locale` to either load's deps without the guard is a one-word edit that
+   * typechecks, lints and passes every other test in this tree. The comment above those
+   * deps was the only thing standing against it, and a comment is not a test.
    */
   it('keeps the answers already given when the visitor switches language mid-survey', async () => {
     serve({})
     renderPage()
+
+    await begin()
 
     await userEvent.click(await screen.findByRole('radio', { name: 'Bien' }))
     expect((screen.getByRole('radio', { name: 'Bien' }) as HTMLInputElement).checked).toBe(true)
@@ -193,6 +258,21 @@ describe('PublicSurveyLinkPage', () => {
     expect(screen.queryByText(/anulada|caducado/)).toBeNull()
   })
 
+  /**
+   * Fail closed. A token that did not resolve has earned this client nothing to render,
+   * and the fixture would happily have served a survey's name to anybody who asked.
+   */
+  it('puts none of the survey on screen when the link is dead', async () => {
+    serve({ resolve: () => new Response(JSON.stringify({ message: 'nope' }), { status: 404 }) })
+    renderPage()
+
+    await screen.findByText('Este enlace no abre ninguna encuesta')
+    expect(screen.queryByText('Clima laboral 2026')).toBeNull()
+    expect(screen.queryByText('Esta encuesta es anónima')).toBeNull()
+    expect(screen.queryByText('Cierra')).toBeNull()
+    expect(screen.queryByRole('button', { name: /Empezar/ })).toBeNull()
+  })
+
   it('does not ask the respond endpoint for a survey the link never resolved', async () => {
     serve({ resolve: () => new Response(JSON.stringify({ message: 'nope' }), { status: 404 }) })
     renderPage()
@@ -217,6 +297,79 @@ describe('PublicSurveyLinkPage', () => {
   })
 
   /**
+   * The state PublicRespondEntryStates draws last, and the one this route could not
+   * reach before: a live share link to a survey that records who answers, opened by
+   * somebody with no session. The respond endpoint refuses it, and the resolve has
+   * already ruled out "the survey is closed", so the respondent can be told the one
+   * thing they can act on.
+   */
+  it('asks a visitor with no session to sign in, when the survey records who answers', async () => {
+    serve({
+      respond: () =>
+        new Response(JSON.stringify({ message: 'This survey is not currently available' }), {
+          status: 401,
+        }),
+    })
+    renderPage()
+
+    expect(await screen.findByText('Esta encuesta registra quién responde')).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Iniciar sesión' })).toBeTruthy()
+    // And nothing about the survey itself: the payload never arrived.
+    expect(screen.queryByText('Clima laboral 2026')).toBeNull()
+    expect(screen.queryByRole('button', { name: /Empezar/ })).toBeNull()
+  })
+
+  /**
+   * A survey that closed between the resolve and the respond read is closed, not
+   * broken. Reporting it as a dead link sends the respondent hunting for a new one.
+   */
+  it('reports a survey that stopped accepting answers as closed', async () => {
+    serve({
+      respond: () =>
+        new Response(
+          JSON.stringify({ message: 'This survey is not currently accepting responses' }),
+          { status: 400 },
+        ),
+    })
+    renderPage()
+
+    expect(await screen.findByText('Esta encuesta está cerrada')).toBeTruthy()
+    expect(screen.queryByText('Este enlace no abre ninguna encuesta')).toBeNull()
+  })
+
+  /**
+   * Somebody who already answered is not offered "Empezar". The form would tell them
+   * one screen later; the page they land on should be the page they needed.
+   */
+  it('tells a respondent who already answered, instead of offering to start', async () => {
+    serve({
+      respond: () =>
+        new Response(
+          JSON.stringify(
+            respondView({
+              inProgress: {
+                responseId: 'r1',
+                sessionId: 's1',
+                isComplete: true,
+                language: 'es',
+                startTime: '2026-09-02T00:00:00Z',
+                completionTime: '2026-09-02T00:10:00Z',
+                answers: [],
+              },
+            }),
+          ),
+          { status: 200 },
+        ),
+    })
+    renderPage()
+
+    expect(await screen.findByText('Ya respondió esta encuesta')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Empezar/ })).toBeNull()
+    // A confirmation waits its turn; it does not interrupt.
+    expect(screen.getByRole('status')).toBeTruthy()
+  })
+
+  /**
    * The share link and the anonymous respond route are one surface. A third respond
    * implementation would be a third place for the anonymity promise to be forgotten.
    */
@@ -224,8 +377,9 @@ describe('PublicSurveyLinkPage', () => {
     serve({})
     renderPage()
 
-    await screen.findByRole('heading', { name: 'Clima laboral 2026' })
-    expect(screen.getByText('Esta encuesta es anónima')).toBeTruthy()
+    await begin()
+
+    expect(await screen.findByText('Esta encuesta es anónima')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Enviar mis respuestas' })).toBeTruthy()
   })
 

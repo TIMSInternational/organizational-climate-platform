@@ -1,6 +1,4 @@
-import { Info, ShieldCheck } from 'lucide-react'
-import { useTranslation } from '../../../i18n'
-import { Alert, AlertDescription, AlertTitle } from '../../../components/ui'
+import { EntryOutcomeCard } from '../next/entry/EntryOutcomeCard'
 import type { LinkFailureCopy } from '../linkFailure'
 
 export interface LinkOutcomeProps {
@@ -34,27 +32,21 @@ export interface LinkOutcomeProps {
  *
  * `already_completed` arrives as a 409 and is not a problem: the respondent's answers
  * are in and there is nothing left for them to do. It renders in the success treatment
- * with the shield, exactly as `SurveyRespondForm`'s own already-completed state does, so
+ * with the tick, exactly as `SurveyRespondForm`'s own already-completed state does, so
  * one situation does not have two faces depending on which route reached it.
+ *
+ * ## Why it is now a wrapper and not a component
+ *
+ * PublicRespondEntryStates (10 Sep) draws all seven of these outcomes — the two share
+ * links' and the invitation's — as one card. `EntryOutcomeCard` is that card, and the
+ * `/s/:token` entry needs it with one extra thing this signature cannot express: a
+ * sign-in control, for the one outcome whose answer genuinely is signing in. Rather
+ * than widen `LinkFailureCopy` — which is the module about *what to say*, shared by
+ * both token routes — the card takes the richer shape and this stays the invitation
+ * route's door to it. Deleting this file and calling the card directly from
+ * `SurveyInvitationPage` is a fine follow-up; it is an edit to that page, with that
+ * page's tests, rather than a side effect of redrawing the share link's entry.
  */
 export function LinkOutcome({ copy, serverMessage }: LinkOutcomeProps) {
-  const { t } = useTranslation('surveyRespond')
-  const { t: tRoot } = useTranslation()
-
-  const success = copy.tone === 'success'
-  const description = copy.bodyKey === null ? serverMessage || tRoot('errors.generic') : t(copy.bodyKey)
-
-  return (
-    <Alert
-      variant={success ? 'success' : 'warning'}
-      // `alert` interrupts, `status` waits its turn. A dead link is the reason the page
-      // exists and the respondent needs it now; a completed survey is a confirmation,
-      // and the same rule the respond form already applies to those two cases.
-      role={success ? 'status' : 'alert'}
-    >
-      {success ? <ShieldCheck aria-hidden="true" /> : <Info aria-hidden="true" />}
-      <AlertTitle>{t(copy.titleKey)}</AlertTitle>
-      <AlertDescription>{description}</AlertDescription>
-    </Alert>
-  )
+  return <EntryOutcomeCard outcome={{ ...copy, signIn: false }} serverMessage={serverMessage} />
 }

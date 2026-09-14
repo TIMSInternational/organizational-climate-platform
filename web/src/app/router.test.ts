@@ -34,7 +34,8 @@ import PublicSurveyRespondPage from '../features/surveys/pages/PublicSurveyRespo
 import PublicSurveyLinkPage from '../features/surveys/pages/PublicSurveyLinkPage'
 import SurveyInvitationPage from '../features/surveys/pages/SurveyInvitationPage'
 import MicroclimateRespondPage from '../features/microclimates/pages/MicroclimateRespondPage'
-import MicroclimateInvitationPage from '../features/microclimates/pages/MicroclimateInvitationPage'
+import MicroclimateInvitationNextPage from '../features/microclimates/next/invitation/MicroclimateInvitationNextPage'
+import AcceptInvitationNextPage from '../features/org-structure/next/invitation/AcceptInvitationNextPage'
 import ProfileNextPage from '../features/profile/next/ProfileNextPage'
 import NotificationPreferencesNextPage from '../features/notifications/next/NotificationPreferencesNextPage'
 import PrivacyNextPage from '../features/profile/next/PrivacyNextPage'
@@ -43,6 +44,12 @@ import NotificationsNextPage from '../features/notifications/next/NotificationsN
 import SurveyTemplatesNextPage from '../features/surveys/next/templates/SurveyTemplatesNextPage'
 import SystemSettingsNextPage from '../features/org-structure/next/system/SystemSettingsNextPage'
 import SystemHealthNextPage from '../features/org-structure/next/system/SystemHealthNextPage'
+import LoginNextPage from '../auth/next/LoginNextPage'
+import RegisterNextPage from '../auth/next/RegisterNextPage'
+import AuthErrorNextPage from '../auth/next/AuthErrorNextPage'
+import AccountInactiveNextPage from '../auth/next/AccountInactiveNextPage'
+import AuthTransitionNextPage from '../auth/next/AuthTransitionNextPage'
+import AuthSuccessNextPage from '../auth/next/AuthSuccessNextPage'
 
 /**
  * A construction guard for the router.
@@ -450,8 +457,8 @@ describe('router', () => {
       ],
       [
         '/microclimate-invitations/:token',
-        MicroclimateInvitationPage,
-        'features/microclimates/pages/MicroclimateInvitationPage.tsx',
+        MicroclimateInvitationNextPage,
+        'features/microclimates/next/invitation/MicroclimateInvitationNextPage.tsx',
         'MicroclimatePulseForm',
       ],
     ]
@@ -459,7 +466,7 @@ describe('router', () => {
       expect(componentAt(path), path).toBe(page)
       expect(byPath.has(`${path}/next`), path).toBe(false)
       const source = readFileSync(join(src, file), 'utf8')
-      expect(source, file).toMatch(new RegExp(`^import ${form}\\b[^;]*?from '\\.\\./components/${form}'$`, 'm'))
+      expect(source, file).toMatch(new RegExp(`^import ${form}\\b[^;]*?from '(?:\\.\\./)+components/${form}'$`, 'm'))
       expect(source, file).toMatch(new RegExp(`<${form}\\b`))
     }
 
@@ -894,5 +901,144 @@ describe('router', () => {
           'import.meta.env.DEV branch in router.tsx.',
       ).toEqual([])
     })
+  })
+
+  /**
+   * The invitations lane (the canvas's AcceptInvitation, MicroclimateInvitation and
+   * MicroclimateInvitationStates, 10 Sep).
+   *
+   * Both routes are public and both are the END of an emailed link, which is what makes
+   * these two assertions worth their lines rather than duplicates of the path check above:
+   * the path being registered says nothing about WHICH component it mounts, and a lane that
+   * built a redesign and left the route pointing at the old page would pass every existing
+   * case in this file. The old pages stay in the tree as the wiring reference, so the
+   * second half pins that nothing but their own tests still reaches them — unrouted has to
+   * mean unreferenced, or the production bundle carries both.
+   */
+  describe('the invitations lane', () => {
+    function elements(): Map<string, unknown> {
+      const byPath = new Map<string, unknown>()
+      function walk(routes: typeof router.routes): void {
+        for (const route of routes) {
+          if (route.path) byPath.set(route.path, route.element)
+          if (route.children) walk(route.children as typeof router.routes)
+        }
+      }
+      walk(router.routes)
+      return byPath
+    }
+
+    it('mounts both invitation routes on the redesigned pages', () => {
+      const byPath = elements()
+      const componentAt = (path: string) => (byPath.get(path) as { type?: unknown } | undefined)?.type
+
+      expect(componentAt('/accept-invitation/:token')).toBe(AcceptInvitationNextPage)
+      expect(componentAt('/microclimate-invitations/:token')).toBe(MicroclimateInvitationNextPage)
+
+      // Replaced in place, at the real route. A redesign parked on a route of its own is a
+      // screen nobody reaches from an email.
+      expect(byPath.has('/accept-invitation/:token/next')).toBe(false)
+      expect(byPath.has('/microclimate-invitations/:token/next')).toBe(false)
+    })
+
+    it('leaves both routes outside RequireAuth, where the invitee can reach them', () => {
+      // Their visitors have no session by definition — an invitee has no account yet, and a
+      // microclimate is answered anonymously by default. `RequireAuth` redirects with no
+      // destination at all, so a gate here would not defer the page, it would destroy it.
+      const gated = new Set<string>()
+      function walk(routes: typeof router.routes, underGuard: boolean): void {
+        for (const route of routes) {
+          const guarded =
+            underGuard ||
+            (route.element as { type?: { name?: string } } | undefined)?.type?.name === 'RequireAuth'
+          if (route.path && guarded) gated.add(route.path)
+          if (route.children) walk(route.children as typeof router.routes, guarded)
+        }
+      }
+      walk(router.routes, false)
+
+      expect(gated).not.toContain('/accept-invitation/:token')
+      expect(gated).not.toContain('/microclimate-invitations/:token')
+    })
+
+    it('leaves the pages it replaced unrouted and unreferenced', () => {
+      const source = readFileSync(join(process.cwd(), 'src', 'app', 'router.tsx'), 'utf8')
+      expect(source).not.toMatch(/pages\/AcceptInvitationPage'/)
+      expect(source).not.toMatch(/pages\/MicroclimateInvitationPage'/)
+
+      const src = join(process.cwd(), 'src')
+      const offenders = globSync('**/*.{ts,tsx}', { cwd: src })
+        .filter((file) => !/\.test\.tsx?$/.test(file))
+        .filter((file) =>
+          /^\s*import\s[^\n]*(AcceptInvitationPage|MicroclimateInvitationPage)\b/m.test(
+            readFileSync(join(src, file), 'utf8'),
+          ),
+        )
+
+      expect(
+        offenders,
+        'The redesigned invitation pages replaced these two. A remaining static import ' +
+          'puts both copies in the production bundle and invites a future edit to the ' +
+          'one nothing renders.',
+      ).toEqual([])
+    })
+  })
+})
+
+/**
+ * The auth lane of the 10 Sep canvas (Login, Register, AuthError, AuthTransition,
+ * AccountInactive, plus the account-ready state AuthTransition draws beside itself).
+ *
+ * The ruling this pins: an artboard is coded at the route it already has, replacing the
+ * element that route renders. The previous pages are still in the tree and still tested —
+ * which is exactly why the route table is the only thing that can say which of the two a
+ * user reaches, and why a check on the element rather than on the path is the one that
+ * means something here.
+ */
+describe('the redesigned auth routes', () => {
+  function elementsByPath(): Map<string, unknown> {
+    const byPath = new Map<string, unknown>()
+    function walk(routes: typeof router.routes): void {
+      for (const route of routes) {
+        if (route.path) byPath.set(route.path, route.element)
+        if (route.children) walk(route.children as typeof router.routes)
+      }
+    }
+    walk(router.routes)
+    return byPath
+  }
+
+  const AUTH_PATHS = ['/login', '/register', '/auth/error', '/auth/inactive', '/auth/loading', '/auth/success']
+
+  it('mounts the canvas pages on the real routes, with no /next sibling', () => {
+    const byPath = elementsByPath()
+    const componentAt = (path: string) => (byPath.get(path) as { type?: unknown } | undefined)?.type
+
+    expect(componentAt('/login')).toBe(LoginNextPage)
+    expect(componentAt('/register')).toBe(RegisterNextPage)
+    expect(componentAt('/auth/error')).toBe(AuthErrorNextPage)
+    expect(componentAt('/auth/inactive')).toBe(AccountInactiveNextPage)
+    expect(componentAt('/auth/loading')).toBe(AuthTransitionNextPage)
+    expect(componentAt('/auth/success')).toBe(AuthSuccessNextPage)
+
+    for (const path of AUTH_PATHS) {
+      expect(byPath.has(`${path}/next`), path).toBe(false)
+    }
+  })
+
+  /**
+   * Every one of these is a state the app is in BECAUSE there is no usable session, so
+   * behind `RequireAuth` each would redirect to `/login` and lose the reason it exists.
+   * `/auth/inactive` is the subtle one: its visitor does hold a token, and it is public
+   * because `RequireAuth` is what sends them there — a guard that redirects into itself is
+   * a loop. Asserted structurally, at the top level, because a page can be moved under the
+   * gate with every unit test still green.
+   */
+  it('keeps all six outside RequireAuth structurally', () => {
+    const topLevel = (router.routes[0].children ?? []).flatMap((route) => (route.path ? [route.path] : []))
+
+    for (const path of AUTH_PATHS) {
+      expect(topLevel, path).toContain(path)
+    }
   })
 })

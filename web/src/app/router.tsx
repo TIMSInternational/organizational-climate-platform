@@ -1,11 +1,11 @@
 import { createBrowserRouter, Navigate, type RouteObject } from 'react-router'
-import LoginPage from '../auth/LoginPage'
-import RegisterPage from '../auth/RegisterPage'
-import AuthErrorPage from '../auth/AuthErrorPage'
-import AccountInactivePage from '../auth/AccountInactivePage'
-import AuthLoadingPage from '../auth/AuthLoadingPage'
-import AuthSuccessPage from '../auth/AuthSuccessPage'
-import AcceptInvitationPage from '../features/org-structure/pages/AcceptInvitationPage'
+import LoginNextPage from '../auth/next/LoginNextPage'
+import RegisterNextPage from '../auth/next/RegisterNextPage'
+import AuthErrorNextPage from '../auth/next/AuthErrorNextPage'
+import AccountInactiveNextPage from '../auth/next/AccountInactiveNextPage'
+import AuthTransitionNextPage from '../auth/next/AuthTransitionNextPage'
+import AuthSuccessNextPage from '../auth/next/AuthSuccessNextPage'
+import AcceptInvitationNextPage from '../features/org-structure/next/invitation/AcceptInvitationNextPage'
 import RequireAuth from './RequireAuth'
 import AdminLayout from './AdminLayout'
 import RouteErrorBoundary from './RouteErrorBoundary'
@@ -26,7 +26,7 @@ import MicroclimateDetailNextPage from '../features/microclimates/next/detail/Mi
 import MicroclimateLiveNextPage from '../features/microclimates/next/MicroclimateLiveNextPage'
 import MicroclimateResultsNextPage from '../features/microclimates/next/results/MicroclimateResultsNextPage'
 import MicroclimateRespondPage from '../features/microclimates/pages/MicroclimateRespondPage'
-import MicroclimateInvitationPage from '../features/microclimates/pages/MicroclimateInvitationPage'
+import MicroclimateInvitationNextPage from '../features/microclimates/next/invitation/MicroclimateInvitationNextPage'
 import SurveyRespondPage from '../features/surveys/pages/SurveyRespondPage'
 import PublicSurveyRespondPage from '../features/surveys/pages/PublicSurveyRespondPage'
 import PublicSurveyLinkPage from '../features/surveys/pages/PublicSurveyLinkPage'
@@ -39,7 +39,7 @@ import SurveyDistributionNextPage from '../features/surveys/next/authoring/Surve
 import BenchmarksNextPage from '../features/analytics/next/benchmarks/BenchmarksNextPage'
 import AIInsightsNextPage from '../features/analytics/next/AIInsightsNextPage'
 import ReportsListNextPage from '../features/reports/next/ReportsListNextPage'
-import SharedReportPage from '../features/reports/pages/SharedReportPage'
+import SharedReportNextPage from '../features/reports/next/shared/SharedReportNextPage'
 import SurveyResultsNextPage from '../features/surveys/next/SurveyResultsNextPage'
 import ClimateTrendsNextPage from '../features/surveys/next/trends/ClimateTrendsNextPage'
 import SurveysListNextPage from '../features/surveys/next/list/SurveysListNextPage'
@@ -203,7 +203,7 @@ export const router = createBrowserRouter([
     errorElement: <RouteErrorBoundary />,
     children: [
       { path: '/', element: <HomeRedirect /> },
-      { path: '/login', element: <LoginPage /> },
+      { path: '/login', element: <LoginNextPage /> },
       // #81's auth states. All five sit OUTSIDE RequireAuth, beside /login, and
       // must: each of them is a state the app is in precisely because there is no
       // usable session, so putting them behind the gate would redirect them to
@@ -216,12 +216,18 @@ export const router = createBrowserRouter([
       // /auth/loading is the Google OAuth `redirect_uri`. Its visitor is arriving
       // from accounts.google.com with an ID token and no session yet -- it is the
       // page that CREATES the session -- so it is public by definition.
-      { path: '/register', element: <RegisterPage /> },
-      { path: '/auth/error', element: <AuthErrorPage /> },
-      { path: '/auth/inactive', element: <AccountInactivePage /> },
-      { path: '/auth/loading', element: <AuthLoadingPage /> },
-      { path: '/auth/success', element: <AuthSuccessPage /> },
-      { path: '/accept-invitation/:token', element: <AcceptInvitationPage /> },
+      //
+      // The six elements are the 10 Sep canvas's (`auth/next/`). The pages they replaced
+      // stay in the tree, unrouted and still tested, as the wiring reference — the same
+      // way `NotificationsInboxPage` did when the Notifications artboard landed.
+      { path: '/register', element: <RegisterNextPage /> },
+      { path: '/auth/error', element: <AuthErrorNextPage /> },
+      { path: '/auth/inactive', element: <AccountInactiveNextPage /> },
+      { path: '/auth/loading', element: <AuthTransitionNextPage /> },
+      { path: '/auth/success', element: <AuthSuccessNextPage /> },
+      // The redesigned invitation acceptance (AcceptInvitation, 10 Sep) replaced
+      // `AcceptInvitationPage` here; the old page stays unrouted as the wiring reference.
+      { path: '/accept-invitation/:token', element: <AcceptInvitationNextPage /> },
       { path: '/microclimates/:id/respond', element: <MicroclimateRespondPage /> },
       // Public by design (#120), same placement and same reason as the microclimate
       // respond route above it: an anonymous survey is answered by people who have no
@@ -265,7 +271,10 @@ export const router = createBrowserRouter([
       // line. Renaming this route breaks every link already sitting in a recipient's
       // inbox and no .NET test will notice, so it moves only in lockstep with that
       // constant.
-      { path: '/microclimate-invitations/:token', element: <MicroclimateInvitationPage /> },
+      // The redesigned invitation (MicroclimateInvitation and MicroclimateInvitationStates,
+      // 10 Sep) replaced `MicroclimateInvitationPage` here; the old page stays unrouted as
+      // the wiring reference.
+      { path: '/microclimate-invitations/:token', element: <MicroclimateInvitationNextPage /> },
       // #139, and out here for a reason the two routes above only half share.
       //
       // They are public because their visitor has no account. This one is public because
@@ -282,8 +291,10 @@ export const router = createBrowserRouter([
       // resolves one, so a live token now renders the report here. A dead one — expired,
       // revoked, or never real — resolves to the page's single "not available" state, and
       // the three are indistinguishable by construction on both sides of the wire. See
-      // SharedReportPage.tsx and `ReportShareEndpoints.cs`.
-      { path: '/shared/reports/:token', element: <SharedReportPage /> },
+      // SharedReportNextPage.tsx and `ReportShareEndpoints.cs`. The SharedReport and
+      // SharedReportUnavailable artboards (10 Sep) replaced `SharedReportPage` here; the
+      // old page stays in the tree, unrouted, as the wiring reference.
+      { path: '/shared/reports/:token', element: <SharedReportNextPage /> },
       ...devOnlyRoutes,
       {
         element: <RequireAuth />,

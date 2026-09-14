@@ -1,0 +1,21 @@
+{
+  "GET /survey-links/*": {
+    "surveyId": "s1",
+    "surveyTitle": "Encuesta de Clima Q4",
+    "surveyDescription": "Lo que nos diga aquí decide dónde apoyamos mejor a su equipo el próximo trimestre.",
+    "language": "both",
+    "resolvedLocale": "es",
+    "fallbackFields": [],
+    "surveyStartDate": "2026-09-01T00:00:00Z",
+    "surveyEndDate": "2026-10-10T00:00:00Z",
+    "requireLogin": false,
+    "allowAnonymous": true,
+    "singleResponse": true
+  },
+  "GET /surveys/*/respond 400": {
+    "message": "This survey is not currently accepting responses"
+  },
+  "GET /notifications/mine": {
+    "notifications": []
+  }
+}
