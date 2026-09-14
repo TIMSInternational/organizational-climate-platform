@@ -31,6 +31,13 @@ function renderScale(overrides: Partial<Parameters<typeof SegmentedScale>[0]> = 
 }
 
 describe('SegmentedScale', () => {
+  it('sets its points at the canvas’s 17px step (`text-question`)', () => {
+    renderScale()
+    for (const radio of screen.getAllByRole('radio')) {
+      expect(radio.className.split(/\s+/)).toContain('text-question')
+    }
+  })
+
   it('is one radiogroup with a segment per scale point', () => {
     renderScale()
     expect(screen.getByRole('radiogroup')).toBeTruthy()
@@ -240,26 +247,41 @@ describe('SegmentedScale', () => {
     expect(container.textContent).toBe('')
   })
 
-  it('fills the chosen segment with the accent FILL, never the plain accent', () => {
-    // tokens.css: the on-accent ink is 3.74:1 light / 2.49:1 dark on
-    // `--admin-accent-blue` and 5.47:1 on `--admin-accent-blue-fill`. Asserted on
-    // the class list split, because `bg-accent-blue` is a substring of
-    // `bg-accent-blue-fill` and a `toContain` on the raw string would pass either
-    // way.
+  /**
+   * The canvas's chosen point (RespondSurveyPhone, 10 Sep): filled with the INK, the
+   * number in the card colour — `#110a29` behind white in light. Not the accent fill: that
+   * is the red of "Siguiente" beside it, and a scale point in the primary action's red read
+   * as a second call to action. `respondContrast.test.ts` measures the swapped pair in
+   * both themes. Asserted on the split class list so a substring cannot satisfy it.
+   */
+  it('fills the chosen segment with the ink, never with the primary action’s red', () => {
     renderScale({ value: '4' })
     const classes = screen.getByRole('radio', { name: '4' }).className.split(/\s+/)
-    expect(classes).toContain('bg-accent-blue-fill')
-    expect(classes).not.toContain('bg-accent-blue')
-    expect(classes).toContain('text-fg-on-accent')
+    expect(classes).toContain('bg-fg-primary')
+    expect(classes).toContain('text-surface-card')
+    expect(classes).not.toContain('bg-accent-blue-fill')
   })
 
-  it('leaves the unchosen segments on the input surface', () => {
+  it('leaves the unchosen segments on the card surface in the ink', () => {
     // Guard the test above: if the checked branch never ran, every segment would
     // carry the same classes and the assertion would pass on the wrong element.
     renderScale({ value: '4' })
     const classes = screen.getByRole('radio', { name: '2' }).className.split(/\s+/)
-    expect(classes).toContain('bg-surface-input')
-    expect(classes).not.toContain('bg-accent-blue-fill')
+    expect(classes).toContain('bg-surface-card')
+    expect(classes).toContain('text-fg-primary')
+    expect(classes).not.toContain('bg-fg-primary')
+  })
+
+  /**
+   * The canvas's tick under every box: one 1px hairline per point, so the row reads as a
+   * scale rather than five buttons. Decoration, so hidden from assistive technology.
+   */
+  it('draws one tick under each point, hidden from assistive technology', () => {
+    renderScale()
+    const ticks = document.querySelector('[data-slot="scale-ticks"]')
+    expect(ticks).toBeTruthy()
+    expect(ticks!.getAttribute('aria-hidden')).toBe('true')
+    expect(ticks!.children).toHaveLength(screen.getAllByRole('radio').length)
   })
 
   it('never sets outline-none, so the global focus ring survives', () => {
@@ -272,13 +294,13 @@ describe('SegmentedScale', () => {
     expect(screen.getByRole('radiogroup').className).not.toMatch(/outline-none/)
   })
 
-  it('gives every segment a 44px target', () => {
+  it('gives every segment the canvas’s 52px target, past the 44px minimum', () => {
     // The reason the design replaced the radio row: a native radio is ~13px, far
     // under the WCAG 2.2 target minimum, on the screen most people answer on a
-    // phone. h-11 is 11 x the 4px --spacing token.
+    // phone. h-13 is 13 x the 4px --spacing token — the canvas's 52px box.
     renderScale()
     for (const radio of screen.getAllByRole('radio')) {
-      expect(radio.className.split(/\s+/)).toContain('h-11')
+      expect(radio.className.split(/\s+/)).toContain('h-13')
     }
   })
 

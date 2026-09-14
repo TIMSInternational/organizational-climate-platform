@@ -1,5 +1,6 @@
 import { useTranslation } from './useTranslation'
 import { LOCALES, isLocale } from './locale'
+import { CHIP_SELECT_LABEL_STYLE, CHIP_SELECT_STYLE } from '../components/layout/chipSelectStyle'
 
 /**
  * Locale picker for the app shell.
@@ -19,22 +20,36 @@ export interface LanguageSwitcherProps {
    * -- it was duplicating that label, not supplying it.
    */
   compact?: boolean
+  /**
+   * `chip` draws the control as the canvas's 22px chip — the respond strip's "Español"
+   * beside "Claro" (RespondSurveyPhone, 10 Sep). Still a native `<select>`, so it keeps
+   * the keyboard and screen-reader behaviour this component exists for; only the box
+   * changes, and the caption is dropped as `compact` drops it. The label's own bottom
+   * margin (index.css gives every `<label>` 12px) is zeroed too: beside the theme
+   * picker in a centred row it pushed this chip 6px above its neighbour.
+   */
+  variant?: 'default' | 'chip'
 }
 
-export default function LanguageSwitcher({ compact = false }: LanguageSwitcherProps = {}) {
+export default function LanguageSwitcher({ compact = false, variant = 'default' }: LanguageSwitcherProps = {}) {
   const { t, locale, setLocale } = useTranslation('language')
+  const chip = variant === 'chip'
 
   return (
     <label
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 'var(--admin-size-inline-gap)',
-        fontSize: 'var(--admin-text-sm)',
-        color: 'var(--admin-font-secondary)',
-      }}
+      style={
+        chip
+          ? CHIP_SELECT_LABEL_STYLE
+          : {
+              display: 'flex',
+              alignItems: 'center',
+              gap: 'var(--admin-size-inline-gap)',
+              fontSize: 'var(--admin-text-sm)',
+              color: 'var(--admin-font-secondary)',
+            }
+      }
     >
-      {compact ? null : <span>{t('selectLanguage')}</span>}
+      {compact || chip ? null : <span>{t('selectLanguage')}</span>}
       <select
         value={locale}
         aria-label={t('switchLanguage')}
@@ -44,15 +59,19 @@ export default function LanguageSwitcher({ compact = false }: LanguageSwitcherPr
           // keeps `setLocale` honestly typed rather than cast at the call site.
           if (isLocale(next)) setLocale(next)
         }}
-        style={{
-          minHeight: 'var(--admin-size-control-md)',
-          padding: `var(--admin-space-4) var(--admin-space-8)`,
-          borderRadius: 'var(--admin-radius-md)',
-          border: '1px solid var(--admin-border-default)',
-          background: 'var(--admin-bg-panel)',
-          color: 'var(--admin-font-primary)',
-          fontSize: 'var(--admin-text-sm)',
-        }}
+        style={
+          chip
+            ? CHIP_SELECT_STYLE
+            : {
+                minHeight: 'var(--admin-size-control-md)',
+                padding: `var(--admin-space-4) var(--admin-space-8)`,
+                borderRadius: 'var(--admin-radius-md)',
+                border: '1px solid var(--admin-border-default)',
+                background: 'var(--admin-bg-panel)',
+                color: 'var(--admin-font-primary)',
+                fontSize: 'var(--admin-text-sm)',
+              }
+        }
       >
         {LOCALES.map((option) => (
           <option key={option} value={option}>

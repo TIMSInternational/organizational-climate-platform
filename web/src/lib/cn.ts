@@ -51,7 +51,7 @@ const twMerge = extendTailwindMerge({
       // The named steps that are not t-shirt sizes. tailwind-merge already reads `2xs`/`3xs`
       // as font sizes; an unregistered `text-reading` or `text-kpi-hero` is read as a COLOUR
       // and silently drops the colour class beside it (`cn.test.ts`).
-      text: ['2xs', 'reading', 'kpi-lg', 'kpi-hero'],
+      text: ['2xs', 'reading', 'kpi-lg', 'kpi-hero', 'question'],
       tracking: ['label', 'eyebrow', 'kpi'],
     },
   },

@@ -6,6 +6,7 @@ import { Avatar, AvatarFallback } from '../ui/avatar'
 import { getToken } from '../../auth/token'
 import { decodeJwtPayload } from '../../auth/jwt'
 import { readAdminThemeMode, setAdminThemeMode, type AdminThemeMode } from '../../theme/adminTheme'
+import { CHIP_SELECT_LABEL_STYLE, CHIP_SELECT_STYLE } from './chipSelectStyle'
 
 const THEME_MODES: readonly AdminThemeMode[] = ['light', 'dark', 'system']
 
@@ -29,24 +30,36 @@ const THEME_LABEL_KEY: Record<AdminThemeMode, string> = {
  * keyboard and screen-reader behaviour with no work, and it is already styled by
  * the element layer in index.css.
  */
-export function ThemeSwitcher({ compact = false }: { compact?: boolean } = {}) {
+export function ThemeSwitcher({
+  compact = false,
+  variant = 'default',
+}: {
+  compact?: boolean
+  /** `chip` draws it as the canvas's 22px chip — see `chipSelectStyle.ts`. */
+  variant?: 'default' | 'chip'
+} = {}) {
   const { t } = useTranslation()
   // Read once on mount rather than every render: `localStorage` is the source of
   // truth, but reading it in a render body makes the component impure.
   const [mode, setMode] = useState<AdminThemeMode>(() => readAdminThemeMode())
+  const chip = variant === 'chip'
 
   return (
     <label
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 'var(--admin-size-inline-gap)',
-        marginBottom: 0,
-        fontSize: 'var(--admin-text-sm)',
-        color: 'var(--admin-font-secondary)',
-      }}
+      style={
+        chip
+          ? CHIP_SELECT_LABEL_STYLE
+          : {
+              display: 'flex',
+              alignItems: 'center',
+              gap: 'var(--admin-size-inline-gap)',
+              marginBottom: 0,
+              fontSize: 'var(--admin-text-sm)',
+              color: 'var(--admin-font-secondary)',
+            }
+      }
     >
-      {compact ? null : <span>{t('shell.theme')}</span>}
+      {compact || chip ? null : <span>{t('shell.theme')}</span>}
       <select
         value={mode}
         aria-label={t('shell.theme')}
@@ -58,15 +71,19 @@ export function ThemeSwitcher({ compact = false }: { compact?: boolean } = {}) {
           setMode(next as AdminThemeMode)
           setAdminThemeMode(next as AdminThemeMode)
         }}
-        style={{
-          minHeight: 'var(--admin-size-control-md)',
-          padding: `var(--admin-space-4) var(--admin-space-8)`,
-          borderRadius: 'var(--admin-radius-md)',
-          border: '1px solid var(--admin-border-default)',
-          background: 'var(--admin-bg-panel)',
-          color: 'var(--admin-font-primary)',
-          fontSize: 'var(--admin-text-sm)',
-        }}
+        style={
+          chip
+            ? CHIP_SELECT_STYLE
+            : {
+                minHeight: 'var(--admin-size-control-md)',
+                padding: `var(--admin-space-4) var(--admin-space-8)`,
+                borderRadius: 'var(--admin-radius-md)',
+                border: '1px solid var(--admin-border-default)',
+                background: 'var(--admin-bg-panel)',
+                color: 'var(--admin-font-primary)',
+                fontSize: 'var(--admin-text-sm)',
+              }
+        }
       >
         {THEME_MODES.map((option) => (
           <option key={option} value={option}>
