@@ -19,6 +19,8 @@ The API is AWS App Runner in account `747814092517`, addressed by its generated 
 `https://bhgrdkd4gt.us-east-1.awsapprunner.com`, and it has no custom domain. DNS for
 `timsint.com` is at Namecheap, not Route 53.**
 
+[AMENDED 2026-09-14. **DNS for the `climate` subtree is now Route 53, not Namecheap.** App Runner's second certificate validation record needs a 77-character Namecheap "Host" (65 even at the deepest possible zone) and the field caps at 60, so `climate.timsint.com` was delegated to public hosted zone `Z058256939JG0YA4Y6FRY`. `timsint.com` itself stays at Namecheap. Measured: `dig +short NS climate.timsint.com @1.1.1.1` -> four `awsdns` nameservers; `dig +short NS timsint.com @1.1.1.1` -> `dns1/dns2.registrar-servers.com`. Procedure and the character counts: `docs/runbooks/api-custom-domain.md`.]
+
 ## What is settled, and how each part was measured
 
 | Claim | Measurement, 2026-09-03 |
@@ -56,6 +58,12 @@ below visible before someone changes one half of it.
 > This is the only open question in this file, and it is **human-only**: it needs a name
 > somebody picks, plus a Namecheap console session to create the CNAME and the ACM
 > validation records App Runner asks for. It cannot be measured into existence.
+>
+> [RESOLVED 2026-09-14. The name is **`api.climate.timsint.com`**, decided by Federico, and it
+> is `active`. The records could **not** be created at Namecheap — the 60-character "Host" cap
+> cannot hold App Runner's second validation record at any subdomain depth — so the `climate`
+> subtree was delegated to Route 53 zone `Z058256939JG0YA4Y6FRY` and the records live there.
+> `docs/runbooks/api-custom-domain.md`.]
 >
 > Until it is decided, `#160` stays open at "half": the web has a domain, the API does not,
 > and everything external addresses the API by a generated hostname that changes if the
