@@ -39,7 +39,7 @@ import SurveyDistributionNextPage from '../features/surveys/next/authoring/Surve
 import BenchmarksNextPage from '../features/analytics/next/benchmarks/BenchmarksNextPage'
 import AIInsightsNextPage from '../features/analytics/next/AIInsightsNextPage'
 import ReportsListNextPage from '../features/reports/next/ReportsListNextPage'
-import SharedReportPage from '../features/reports/pages/SharedReportPage'
+import SharedReportNextPage from '../features/reports/next/shared/SharedReportNextPage'
 import SurveyResultsNextPage from '../features/surveys/next/SurveyResultsNextPage'
 import ClimateTrendsNextPage from '../features/surveys/next/trends/ClimateTrendsNextPage'
 import SurveysListNextPage from '../features/surveys/next/list/SurveysListNextPage'
@@ -282,8 +282,10 @@ export const router = createBrowserRouter([
       // resolves one, so a live token now renders the report here. A dead one — expired,
       // revoked, or never real — resolves to the page's single "not available" state, and
       // the three are indistinguishable by construction on both sides of the wire. See
-      // SharedReportPage.tsx and `ReportShareEndpoints.cs`.
-      { path: '/shared/reports/:token', element: <SharedReportPage /> },
+      // SharedReportNextPage.tsx and `ReportShareEndpoints.cs`. The SharedReport and
+      // SharedReportUnavailable artboards (10 Sep) replaced `SharedReportPage` here; the
+      // old page stays in the tree, unrouted, as the wiring reference.
+      { path: '/shared/reports/:token', element: <SharedReportNextPage /> },
       ...devOnlyRoutes,
       {
         element: <RequireAuth />,

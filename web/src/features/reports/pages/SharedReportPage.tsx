@@ -11,7 +11,17 @@ import SharedReportSections from '../components/SharedReportSections'
 import { getSharedReport, type SharedReport } from '../api/sharedReports'
 
 /**
- * `/shared/reports/:token` — a report as somebody who was sent a link reads it (#139).
+ * A report as somebody who was sent a link reads it (#139).
+ *
+ * ## No longer routed
+ *
+ * `/shared/reports/:token` renders `reports/next/shared/SharedReportNextPage` — the
+ * SharedReport and SharedReportUnavailable artboards of 10 Sep. This page stays in the
+ * tree, unrouted, as the wiring reference, which is what every other redesigned route in
+ * this repository does with the page it replaced. Everything below still describes what
+ * the route owes its reader, and the new page inherits each decision by name rather than
+ * re-deciding it: one outcome for every failure, the token resolved once per visit,
+ * `noindex` while mounted, and no link into the application at all.
  *
  * This is the highest-exposure page in the product. It is unauthenticated by design and
  * it serves a company's climate data to whoever holds the URL, so most of what follows
