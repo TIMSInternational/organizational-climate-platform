@@ -103,4 +103,45 @@ public class PlanAccessHandlerTests
         Assert.False(await Authorize(user, plan, AccessLevel.Read));
         Assert.False(await Authorize(user, plan, AccessLevel.Write));
     }
+
+    /// <summary>
+    /// Fulfilment is an administrator's act. Ruled 2026-09-14 from the client's "only one
+    /// person marks it fulfilled", expressed as a role rather than a name.
+    ///
+    /// The case that carries the rule is the THIRD one: a node leader has Write on their own
+    /// plan and must still be refused Approve. Without it, `Approve` would be indistinguishable
+    /// from `Write` for every caller who matters -- admins pass both, strangers fail both, and
+    /// the leader is the only principal whose two answers differ.
+    /// </summary>
+    [Theory]
+    [InlineData("super_admin")]
+    [InlineData("company_admin")]
+    public async Task An_admin_may_declare_a_plan_fulfilled(string role)
+    {
+        var allowed = await Authorize(CreateUser("PER-0001", role, "ND-014"), CreatePlan(), AccessLevel.Approve);
+
+        Assert.True(allowed);
+    }
+
+    [Fact]
+    public async Task The_nodes_own_leader_may_write_the_plan_but_not_declare_it_fulfilled()
+    {
+        var leader = CreateUser("PER-0231", "leader", "ND-014");
+        var plan = CreatePlan();
+
+        Assert.True(await Authorize(leader, plan, AccessLevel.Write));
+        Assert.False(await Authorize(leader, plan, AccessLevel.Approve));
+    }
+
+    [Fact]
+    public async Task The_responsable_de_ejecucion_may_not_declare_their_own_plan_fulfilled()
+    {
+        // Read-only already, but stated outright: the person who reports the progress is the
+        // person least able to audit it, which is the whole reason this level exists.
+        var responsable = CreateUser("PER-9999", "employee", "ND-014");
+        var plan = CreatePlan(responsableId: "PER-9999");
+
+        Assert.True(await Authorize(responsable, plan, AccessLevel.Read));
+        Assert.False(await Authorize(responsable, plan, AccessLevel.Approve));
+    }
 }

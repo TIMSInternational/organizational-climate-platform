@@ -268,11 +268,16 @@ public class PlanesAccionEndpointsTests : IClassFixture<PostgresFixture>, IAsync
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    /// <summary>
+    /// Fulfilment is an administrator's act as of 2026-09-14, so this case signs in as one.
+    /// It used to sign in as the node's leader, and that is now the refusal case below.
+    /// `docs/decisions/tracking-fulfilment-authority.md`.
+    /// </summary>
     [Fact]
     public async Task MarcarCumplido_happy_path()
     {
         var planId = await SeedPlanAsync();
-        var client = CreateAuthenticatedClient("PER-0231", "leader", "ND-014");
+        var client = CreateAuthenticatedClient("PER-0001", "company_admin", "ND-014");
 
         var response = await client.PostAsJsonAsync($"/api/planes-accion/{planId}/cumplir", new
         {
@@ -282,6 +287,38 @@ public class PlanesAccionEndpointsTests : IClassFixture<PostgresFixture>, IAsync
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.True(body.GetProperty("cumplido").GetBoolean());
+    }
+
+    /// <summary>
+    /// The rule, at the seam a client actually reaches. The leader is the principal whose
+    /// answer changed: they may still write the plan, and may no longer declare it met.
+    /// Asserting both in one case is what stops a later "fix" from widening `Approve` back to
+    /// `Write` and leaving every other case green.
+    /// </summary>
+    [Fact]
+    public async Task MarcarCumplido_refuses_the_nodes_own_leader_who_may_still_write_the_plan()
+    {
+        var planId = await SeedPlanAsync();
+        var leader = CreateAuthenticatedClient("PER-0231", "leader", "ND-014");
+
+        var cumplir = await leader.PostAsJsonAsync($"/api/planes-accion/{planId}/cumplir", new
+        {
+            fecha = new DateOnly(2026, 6, 1),
+        });
+
+        Assert.Equal(HttpStatusCode.Forbidden, cumplir.StatusCode);
+
+        // The same caller, the same plan, a Write act: still allowed. Without this half the
+        // case would also pass if the leader had simply lost all access to the plan.
+        // 0.4 is 40 %: `PorcentajeAvance` is a fraction of one, not a 0-100 figure.
+        var avance = await leader.PostAsJsonAsync($"/api/planes-accion/{planId}/avance", new
+        {
+            porcentajeAvance = 0.4m,
+            comentario = "Primer taller impartido",
+            fecha = new DateOnly(2026, 6, 1),
+        });
+
+        Assert.Equal(HttpStatusCode.OK, avance.StatusCode);
     }
 
     [Fact]
