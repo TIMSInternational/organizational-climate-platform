@@ -6,16 +6,18 @@
  * Every number either page prints is derived in `compose.ts` from the payloads the old
  * `DepartmentAdminDashboardView` already read — `GET /dashboard/department-admin` — plus
  * the tracking service's own reads and, for the supervisor's tasks, `GET /surveys/my`.
- * The one region no endpoint answers for these roles is the organisation's side of the
- * comparison, which comes from `sampleModel.ts` and wears the "Datos de muestra" chip.
+ * Every region is live: the organisation's side of the comparison is the same department
+ * read's `climate.organization` — the whole company's reading of the same survey — so
+ * neither page wears a "Datos de muestra" chip.
  *
  * ## The floor lives here, not in the view
  *
  * A count under the anonymity floor is `null` in these models, never the number: the view
  * cannot print what it was never handed. `DepartmentAdminDashboard.activeSurveys[].responseCount`
- * arrives unfloored (the payload's own docblock), and both artboards hatch it under 5 — so
- * the composer applies the floor once and every reader of the model inherits it. The team's
- * SIZE stays unfloored, as the 27 Aug ruling says: a leader already knows their team.
+ * arrives floored from the server (`null` under 5, `DashboardEndpoints.DepartmentCountFloor`)
+ * and both artboards hatch it; the composer floors it again, so a payload built any other way
+ * still cannot reach the view, and every reader of the model inherits it. The team's SIZE
+ * stays unfloored, as the 27 Aug ruling says: a leader already knows their team.
  *
  * Naming: the human-readable fields are `name`, not `title`/`label`, because the models
  * carry payload content, and `noHardcodedStrings.test.ts` reads a `title:` or `label:`
@@ -29,8 +31,10 @@ export interface TeamDimension {
   /** The team's pooled mean on 1–5, or `null` when the reading is withheld. */
   team: number | null
   /**
-   * The organisation's mean for the same dimension, from `sampleModel.ts` — no endpoint
-   * gives it to a leader. `null` when the sample has no value for this key.
+   * The whole company's mean for the same dimension on the same survey — the payload's
+   * `climate.organization`. `null` when the server withheld that side (fewer than the floor
+   * answered outside the team), when the team's own reading is withheld, or when the block
+   * carries no value for this key.
    */
   organization: number | null
 }
@@ -50,6 +54,11 @@ export interface TeamClosedWave {
    * withheld reading"), and a 0 printed here would read as "nobody answered".
    */
   respondents: number | null
+  /**
+   * How many answered the same survey across the whole company (`climate.organization`), or
+   * `null` when the organisation's side is not drawn.
+   */
+  organizationRespondents: number | null
   /** The team's reading is withheld: under the floor, or absent from the survey. */
   withheld: boolean
   /**
@@ -78,6 +87,12 @@ export interface TeamOpenSurvey {
    * model can print a sub-floor count (both artboards hatch it: "menos de 5 respuestas").
    */
   responses: number | null
+  /**
+   * The whole company's figures for the same survey — "Toda la empresa: 3 de 24 respuestas" —
+   * its count `null` under the same floor (beside a hatched team count, a company total under
+   * 5 bounds it). `null` when the payload carries no company figures at all.
+   */
+  company: { responses: number | null; target: number | null } | null
 }
 
 /** A tracking plan as a card line on either page. */
@@ -145,10 +160,11 @@ export interface LeaderDashboardModel {
   openSurveyCount: number
   /** The floor every count on the page is held to (`compose.countFloor`). */
   floor: number
-  /** The organisation's respondents to the same survey, from the sample. */
+  /**
+   * The whole company's respondents to the same survey, or `null` when the organisation's
+   * side is not drawn (a withheld team reading, or a side the server withheld).
+   */
   organizationRespondents: number | null
-  /** True while the organisation's side is the sample — which, today, is always. */
-  organizationIsSample: boolean
   plans: LeaderPlans
   /** A tracking service is configured for this deployment. */
   trackingOn: boolean

@@ -1,5 +1,5 @@
 {
-  "_comment": "Leaders lane, supervisor (sofia.vargas@meridiano.test, Supervisora, Ingeniería) on the Grupo Meridiano demo tenant. EVERY BODY IS VERBATIM: GET /notifications/mine, /profile, /dashboard/department-admin, /surveys/my were captured read-only from the local stack on 11 Sep 2026 (14:24Z) and re-measured identical at 15:44Z with ?lang=es (only /profile's lastLoginAt moved, because the capture's own POST /auth/login writes it); GET /api/mis-tareas answers [] as she got it live at 15:44Z (she is neither the responsable nor an involucrada of any plan), and GET /api/planes-accion is her live list. So 'Los planes que ejecutas' is the empty state she sees today. The tablero is the node leader's screen and is not read for this role. supervisor-meridiano-involucrada.json is the constructed state with a plan on her list. Shoot with --role supervisor --name 'Sofía Vargas' --company 16c97c29-07f8-4522-86fc-e6cc56298829 --nodo 5bfdb04e-8847-4baa-89c8-d4411654a129 --lang es.",
+  "_comment": "Leaders lane, supervisor (sofia.vargas@meridiano.test, Supervisora, Ingeniería) on the Grupo Meridiano demo tenant. EVERY BODY IS VERBATIM: GET /notifications/mine, /profile, /dashboard/department-admin, /surveys/my were captured read-only from the local stack on 11 Sep 2026 (14:24Z) and re-measured identical at 15:44Z with ?lang=es (only /profile's lastLoginAt moved, because the capture's own POST /auth/login writes it); GET /api/mis-tareas answers [] as she got it live at 15:44Z (she is neither the responsable nor an involucrada of any plan), and GET /api/planes-accion is her live list. So 'Los planes que ejecutas' is the empty state she sees today. The tablero is the node leader's screen and is not read for this role. supervisor-meridiano-involucrada.json is the constructed state with a plan on her list. Shoot with --role supervisor --name 'Sofía Vargas' --company 16c97c29-07f8-4522-86fc-e6cc56298829 --nodo 5bfdb04e-8847-4baa-89c8-d4411654a129 --lang es. GET /dashboard/department-admin is her captured body put through this branch's server rules: activeSurveys[0].responseCount 3 -> None, companyResponseCount/companyTargetAudienceCount from GET /dashboard/company-admin (16:47Z), completedResponseCount -> 18, and climate the closed-only rule's Q3 reading with its organisation side (leaders-meridiano.json names each source). Her panel draws none of the climate block.",
   "GET /notifications/mine": {
     "notifications": []
   },
@@ -26,7 +26,7 @@
     "memberCount": 14,
     "activeMemberCount": 14,
     "activeSurveyCount": 1,
-    "completedResponseCount": 22,
+    "completedResponseCount": 18,
     "openActionPlanCount": 1,
     "overdueActionPlanCount": 0,
     "activeSurveys": [
@@ -36,17 +36,73 @@
         "status": "active",
         "startDate": "2026-09-03T02:03:39.148+00:00",
         "endDate": "2026-10-10T02:03:39.148+00:00",
-        "responseCount": 3
+        "responseCount": null,
+        "companyResponseCount": null,
+        "companyTargetAudienceCount": 24
       }
     ],
     "climate": {
-      "surveyId": "801a81a4-3551-4f08-96f4-d465e05b1605",
-      "surveyTitle": "Encuesta de Clima Q4 (abierta) (Copia)",
-      "surveyEndDate": "2026-10-10T02:03:39.148+00:00",
-      "respondentCount": 0,
-      "isSuppressed": true,
+      "surveyId": "38b2002f-66da-468d-b136-ec112ba3204b",
+      "surveyTitle": "Encuesta de Clima Q3",
+      "surveyEndDate": "2026-08-06T02:05:22.922+00:00",
+      "respondentCount": 6,
+      "isSuppressed": false,
       "minimumGroupSize": 5,
-      "dimensions": []
+      "dimensions": [
+        {
+          "dimension": "belonging",
+          "averageScore": 4.33
+        },
+        {
+          "dimension": "growth",
+          "averageScore": 4.17
+        },
+        {
+          "dimension": "psychological_safety",
+          "averageScore": 4
+        },
+        {
+          "dimension": "recognition",
+          "averageScore": 3.5
+        },
+        {
+          "dimension": "trust",
+          "averageScore": 4
+        },
+        {
+          "dimension": "workload",
+          "averageScore": 3.67
+        }
+      ],
+      "organization": {
+        "respondentCount": 24,
+        "dimensions": [
+          {
+            "dimension": "belonging",
+            "averageScore": 4
+          },
+          {
+            "dimension": "growth",
+            "averageScore": 3.79
+          },
+          {
+            "dimension": "psychological_safety",
+            "averageScore": 3.75
+          },
+          {
+            "dimension": "recognition",
+            "averageScore": 3.38
+          },
+          {
+            "dimension": "trust",
+            "averageScore": 3.67
+          },
+          {
+            "dimension": "workload",
+            "averageScore": 3.33
+          }
+        ]
+      }
     }
   },
   "GET /surveys/my": {

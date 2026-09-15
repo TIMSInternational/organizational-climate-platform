@@ -1,5 +1,5 @@
 {
-  "_comment": "Leaders lane, leader (luis.mora@meridiano.test, Líder, nodo Ingeniería 5bfdb04e-8847-4baa-89c8-d4411654a129) on the Grupo Meridiano demo tenant. GET /notifications/mine, /profile, /dashboard/department-admin, /api/tablero-seguimiento and /api/planes-accion were captured read-only from the local stack on 11 Sep 2026 and are verbatim except where this note says otherwise. The directory pickers, /action-plans and /api/consolidado are refused to this role and answer 403 here. Shoot with --role leader --name 'Luis Mora' --company 16c97c29-07f8-4522-86fc-e6cc56298829 --nodo 5bfdb04e-8847-4baa-89c8-d4411654a129 --lang es. ONE FIELD IS NOT VERBATIM: `climate`. Live, the department read's latest closed survey is 'Encuesta de Clima Q4 (abierta) (Copia)', an archived copy with one response that a flow run left behind, so the whole survey is under its floor (leaders-meridiano-live.json). Here `climate` is the Encuesta de Clima Q3 reading the artboard draws, in the endpoint's own non-suppressed shape (DashboardEndpoints.TeamClimateAsync: dimensions ordinal by key, respondentCount the segment's), with Ingeniería's Q3 values and respondent count exactly as GET /surveys/climate-trends?groupBy=department answered the company administrator on 10 Sep (redesign-meridiano.json on origin/rescue/built-screens-fidelity-wip). Both reads roll up through SurveyAggregation.SegmentDimensionScores, which is why the two agree.",
+  "_comment": "Leaders lane, leader (luis.mora@meridiano.test, Lider, nodo Ingenieria 5bfdb04e-8847-4baa-89c8-d4411654a129) on the Grupo Meridiano demo tenant. Captured read-only from the local stack on 11 Sep 2026 at 16:47Z with a token an earlier run already held (no POST /auth/login; /profile lastLoginAt is still 14:24:55Z): GET /profile, /notifications/mine, /api/tablero-seguimiento (PA-2026-00002 now Amarillo), /api/planes-accion are VERBATIM. The directory pickers, /action-plans and /api/consolidado are refused to this role. GET /dashboard/department-admin is the live body put through this branch's server rules (DashboardEndpoints.LoadDepartmentAdminAsync), field by field: activeSurveys[0].responseCount 3 -> null (under the floor of 5); companyResponseCount null (the whole company's 3, from GET /dashboard/company-admin as the administrator, is under the floor too) and companyTargetAudienceCount 24 (the same read); completedResponseCount 22 -> 18 (Ingenieria answered Q1, Q2 and Q3 with [6, 6, 6] each, per GET /surveys/climate-trends?groupBy=department; the rest of the live total is the open Q4 and the archived copy, both under the floor); climate is the closed-only rule's reading (the latest CLOSED survey, Encuesta de Clima Q3; the live server, on main, still ranks the archived \"(Copia)\" first -- leaders-meridiano-live.json): Ingenieria's Q3 means and 6 respondents, and organization = the whole company's Q3 row (24 respondents; 24 - 6 = 18 answered outside the team, over the floor), both exactly as GET /surveys/climate-trends answered the company administrator at 16:47Z -- the two reads roll up through the same SurveyAggregation. Shoot with --role leader --name 'Luis Mora' --company 16c97c29-07f8-4522-86fc-e6cc56298829 --nodo 5bfdb04e-8847-4baa-89c8-d4411654a129 --lang es.",
   "GET /notifications/mine": {
     "notifications": []
   },
@@ -23,8 +23,8 @@
     "nodoExternalId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
     "conteos": {
       "rojo": 0,
-      "amarillo": 0,
-      "verde": 1
+      "amarillo": 1,
+      "verde": 0
     },
     "planes": [
       {
@@ -39,7 +39,7 @@
         "fechaCreacion": "2026-09-10",
         "fechaCompromiso": "2026-09-15",
         "porcentajeAvance": 0.0,
-        "estadoSemaforo": "Verde",
+        "estadoSemaforo": "Amarillo",
         "cicloEncuestaExternalId": null,
         "fechaUltimaActualizacion": "2026-09-10",
         "cumplido": false,
@@ -62,7 +62,7 @@
       "fechaCreacion": "2026-09-10",
       "fechaCompromiso": "2026-09-15",
       "porcentajeAvance": 0.0,
-      "estadoSemaforo": "Verde",
+      "estadoSemaforo": "Amarillo",
       "cicloEncuestaExternalId": null,
       "fechaUltimaActualizacion": "2026-09-10",
       "cumplido": false,
@@ -82,7 +82,7 @@
     "memberCount": 14,
     "activeMemberCount": 14,
     "activeSurveyCount": 1,
-    "completedResponseCount": 22,
+    "completedResponseCount": 18,
     "openActionPlanCount": 1,
     "overdueActionPlanCount": 0,
     "activeSurveys": [
@@ -92,7 +92,9 @@
         "status": "active",
         "startDate": "2026-09-03T02:03:39.148+00:00",
         "endDate": "2026-10-10T02:03:39.148+00:00",
-        "responseCount": 3
+        "responseCount": null,
+        "companyResponseCount": null,
+        "companyTargetAudienceCount": 24
       }
     ],
     "climate": {
@@ -127,7 +129,36 @@
           "dimension": "workload",
           "averageScore": 3.67
         }
-      ]
+      ],
+      "organization": {
+        "respondentCount": 24,
+        "dimensions": [
+          {
+            "dimension": "belonging",
+            "averageScore": 4
+          },
+          {
+            "dimension": "growth",
+            "averageScore": 3.79
+          },
+          {
+            "dimension": "psychological_safety",
+            "averageScore": 3.75
+          },
+          {
+            "dimension": "recognition",
+            "averageScore": 3.38
+          },
+          {
+            "dimension": "trust",
+            "averageScore": 3.67
+          },
+          {
+            "dimension": "workload",
+            "averageScore": 3.33
+          }
+        ]
+      }
     }
   }
 }
