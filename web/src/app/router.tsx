@@ -163,9 +163,13 @@ const trackingRoutes: RouteObject[] = [
   {
     // The involucrado's view. `MisTareasAsync` scopes to the caller's own `sub`
     // claim, so this path takes no parameter and cannot be pointed at anyone else.
+    //
+    // The redesigned Mis tareas (the MisTareas and MisTareasAsignadas artboards, 10 Sep)
+    // replaced `pages/MisTareasPage` here; the old page stays in the tree unrouted, as the
+    // wiring reference, like the other four.
     path: '/tracking/mis-tareas',
     lazy: async () => ({
-      Component: (await import('../features/tracking/pages/MisTareasPage')).default,
+      Component: (await import('../features/tracking/next/MisTareasNextPage')).default,
     }),
   },
 ]

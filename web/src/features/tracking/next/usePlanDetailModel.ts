@@ -13,15 +13,26 @@ import {
 } from '../api/trackingApi'
 import { getNodoNames, listPersonaOptions, type PersonaPickerItem } from '../api/trackingPickers'
 import { todayIso } from '../planDates'
-import { isNotFound, resolvePersona } from './derive'
+import { isForbidden, isNotFound, resolvePersona } from './derive'
 import type { PlanDetailModel } from './model'
 import { readViewer } from './viewer'
 
 export interface PlanDetailState {
-  /** `not-found` is the plan's own 404 — "this plan is gone", never "an error occurred". */
-  status: 'loading' | 'ready' | 'not-found' | 'error'
+  /**
+   * `not-found` is the plan's own 404 — "this plan is gone", never "an error occurred" —
+   * and `forbidden` its 403: a plan of another nodo that does not name this caller. Both
+   * are states of the plan, not faults of the service, and `model` is `null` in each, so
+   * neither can print a word the reader was refused.
+   */
+  status: 'loading' | 'ready' | 'not-found' | 'forbidden' | 'error'
   model: PlanDetailModel | null
   error: string | null
+  /**
+   * The viewer's own department, from `GET /profile` — the one nodo a non-admin can name,
+   * and the only name the 403 and 404 screens have to work with, since neither holds a plan.
+   * `null` until it answers, and for an administrator, who is not asked.
+   */
+  ownNodoName: string | null
   /** The directory for the involucrados picker — empty unless the seam allows the picker. */
   directory: readonly PersonaPickerItem[]
   reload: () => void
@@ -79,6 +90,13 @@ export function usePlanDetailModel(id: string | undefined): PlanDetailState {
       setPlan(null)
       if (isNotFound(err)) {
         setStatus('not-found')
+        return
+      }
+      // Before this, a 403 fell through to `error` and the screen said "No se pudo
+      // contactar el servicio de seguimiento" — a fault, about a service that had just
+      // answered, with a Reintentar button that could only ever be refused again.
+      if (isForbidden(err)) {
+        setStatus('forbidden')
         return
       }
       setError(err instanceof Error ? err.message : t('errors.generic'))
@@ -162,6 +180,7 @@ export function usePlanDetailModel(id: string | undefined): PlanDetailState {
     status,
     model,
     error,
+    ownNodoName: ownDepartment?.name ?? null,
     directory: withDirectory ? directory : [],
     reload: () => {
       void reload()
