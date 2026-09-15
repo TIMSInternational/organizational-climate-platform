@@ -1,7 +1,12 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using ClimateProject.Api.Infrastructure;
+using ClimateProject.Application.Localization;
+using ClimateProject.Application.Notifications;
+using ClimateProject.Application.Scheduling;
 using ClimateProject.Application.Surveys;
 using ClimateProject.Application.Tracking;
+using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -411,12 +416,155 @@ public static class TrackingInternalEndpoints
     private static string CicloEstado(string status)
         => status is SurveyStatuses.Closed or SurveyStatuses.Archived ? EstadoCerrado : EstadoAbierto;
 
-    private static IResult SendNotificationAsync()
+    /// <summary>
+    /// Raises one notification per recipient for an action-plan trigger from the tracking
+    /// module, and lets the ordinary dispatcher deliver them.
+    ///
+    /// <para><b>This was a no-op stub returning 200 until 2026-09-15</b>, on the stated premise
+    /// that "notifications domain (#55) doesn't exist yet". It does: <c>Notification</c>,
+    /// <c>NotificationDispatchWorker</c> (co-hosted in this process since #275),
+    /// <c>INotificationSender</c> and an SMTP transport are all live, and
+    /// <c>NotificationTypes</c> has carried <see cref="NotificationTypes.ActionPlanAlert"/> and
+    /// <see cref="NotificationTypes.DeadlineReminder"/> the whole time. The premise went stale
+    /// and the stub did not.</para>
+    ///
+    /// <para><b>The cost of that was worse than silence.</b> <c>DailySemaforoWorker</c> marks its
+    /// row <c>EstadoEnvio = Enviado</c> when this call succeeds, and then refuses to raise the
+    /// same trigger again because it has "already sent" it. A 200 from a no-op therefore did not
+    /// merely fail to notify anyone — it recorded that it had, and suppressed the retry.</para>
+    ///
+    /// <para><b>Recipients are tracking's persona ids</b>, which are
+    /// <c>User.PersonaExternalId ?? User.Id</c> (<see cref="TrackingIdentifiers.ExternalPersonaId"/>),
+    /// so both forms are resolved. An id that matches no user is REPORTED rather than dropped:
+    /// the response carries the counts, because a caller that asked for five notices and got
+    /// three needs to know, and this endpoint's whole history is a success response that meant
+    /// nothing.</para>
+    ///
+    /// <para><b>Idempotent per (plan, recipient, trigger)</b> via
+    /// <see cref="DeterministicNotificationId.ForTrackingPlanNotification"/> — the same identity
+    /// the tracking worker's own `alreadySent` guard uses. A replayed call updates nothing and
+    /// creates nothing; it reports the row as a duplicate.</para>
+    /// </summary>
+    private static async Task<IResult> SendNotificationAsync(
+        [FromBody] SendNotificationBody body,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
     {
-        // Stub: notifications domain (#55) doesn't exist yet. No-op success response;
-        // #55 replaces this body with a real send once notification infrastructure exists.
-        return Results.Json(new Envelope<object?>(true, null), SnakeCaseOptions);
+        if (body is null || string.IsNullOrWhiteSpace(body.PlanId) || string.IsNullOrWhiteSpace(body.Contenido))
+        {
+            return Results.Json(new { message = "plan_id and contenido are required." }, statusCode: 400);
+        }
+
+        if (!Guid.TryParse(body.PlanId, out var planId))
+        {
+            return Results.Json(new { message = "plan_id must be a valid GUID." }, statusCode: 400);
+        }
+
+        var requested = (body.DestinatariosIds ?? []).Where(id => !string.IsNullOrWhiteSpace(id)).Distinct().ToList();
+        if (requested.Count == 0)
+        {
+            return Results.Json(new { message = "destinatarios_ids must name at least one recipient." }, statusCode: 400);
+        }
+
+        // Both spellings of a persona id, in one pass: the explicit column and the user's own
+        // GUID, because `ExternalPersonaId` falls back to the latter.
+        var guids = requested.Select(id => Guid.TryParse(id, out var g) ? g : Guid.Empty).Where(g => g != Guid.Empty).ToList();
+        var recipients = await db.Users
+            .Where(u => u.CompanyId != null
+                        && ((u.PersonaExternalId != null && requested.Contains(u.PersonaExternalId)) || guids.Contains(u.Id)))
+            .ToListAsync(cancellationToken);
+
+        var resolved = recipients
+            .GroupBy(TrackingIdentifiers.ExternalPersonaId)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+
+        var unresolved = requested.Where(id => !resolved.ContainsKey(id)).ToList();
+        var trigger = string.IsNullOrWhiteSpace(body.TipoDisparador) ? "desconocido" : body.TipoDisparador.Trim();
+        var type = NotificationTypeForTrigger(trigger);
+        var now = DateTimeOffset.UtcNow;
+
+        var ids = resolved.Values
+            .Select(u => DeterministicNotificationId.ForTrackingPlanNotification(planId, u.Id, trigger))
+            .ToList();
+        var existing = await db.Notifications
+            .Where(n => ids.Contains(n.Id))
+            .Select(n => n.Id)
+            .ToListAsync(cancellationToken);
+        var already = existing.ToHashSet();
+
+        var created = 0;
+        foreach (var recipient in resolved.Values)
+        {
+            var id = DeterministicNotificationId.ForTrackingPlanNotification(planId, recipient.Id, trigger);
+            if (already.Contains(id)) continue;
+
+            db.Notifications.Add(new Notification
+            {
+                Id = id,
+                UserId = recipient.Id,
+                CompanyId = recipient.CompanyId!.Value,
+                Type = type,
+                Channel = NotificationChannels.Email,
+                Priority = NotificationPriorities.Default,
+                Status = NotificationStatuses.Default,
+                Title = TrackingNotificationTitle(recipient, type),
+                // The tracking module composes its own sentence and names the plan in it; it is
+                // the message, not a stem to decorate. Trimmed to the column, never truncated
+                // mid-substitution, because it arrives already complete.
+                Message = body.Contenido.Trim(),
+                ScheduledFor = now,
+                RetryCount = 0,
+                MaxRetries = 3,
+                CreatedAt = now,
+                UpdatedAt = now,
+            });
+            created += 1;
+        }
+
+        if (created > 0) await db.SaveChangesAsync(cancellationToken);
+
+        return Results.Json(
+            new Envelope<SendNotificationResult>(
+                true,
+                new SendNotificationResult(created, already.Count, unresolved)),
+            SnakeCaseOptions);
     }
+
+    /// <summary>
+    /// The notification type an action-plan trigger raises. The three date-driven triggers are
+    /// deadline reminders; everything else is an alert about the plan itself. An unrecognised
+    /// trigger is an alert rather than a rejection: the tracking module owns that vocabulary and
+    /// may add to it, and refusing an unknown word would drop a real notice on a deploy skew.
+    /// </summary>
+    private static string NotificationTypeForTrigger(string trigger)
+        => trigger is "recordatorio_30_dias" or "alerta_15_dias" or "vencimiento"
+            ? NotificationTypes.DeadlineReminder
+            : NotificationTypes.ActionPlanAlert;
+
+    private static string TrackingNotificationTitle(User recipient, string type)
+    {
+        var locale = ContentLanguages.NormaliseLocale(recipient.Preferences.Language) ?? ContentLanguages.FallbackLocale;
+        return (type, locale) switch
+        {
+            (NotificationTypes.DeadlineReminder, "es") => "Plan de acción: fecha de compromiso",
+            (NotificationTypes.DeadlineReminder, _) => "Action plan: commitment date",
+            (_, "es") => "Plan de acción",
+            _ => "Action plan",
+        };
+    }
+
+    /// <summary>The tracking module's wire shape — snake_case, as `ClimateProjectClient` sends it.</summary>
+    private sealed record SendNotificationBody(
+        [property: JsonPropertyName("destinatarios_ids")] IReadOnlyList<string>? DestinatariosIds,
+        [property: JsonPropertyName("tipo_disparador")] string? TipoDisparador,
+        [property: JsonPropertyName("contenido")] string? Contenido,
+        [property: JsonPropertyName("plan_id")] string? PlanId);
+
+    /// <param name="Unresolved">
+    /// The persona ids that matched no user. Named rather than counted so the caller can act:
+    /// a stale persona cache and a deactivated person look identical in a number.
+    /// </param>
+    private sealed record SendNotificationResult(int Created, int Duplicates, IReadOnlyList<string> Unresolved);
 
     // Shared `company_id` validation for the four data routes (/nodos, /personas,
     // /ciclos-encuesta, /hallazgos) -- see the class-level contract note for why

@@ -51,14 +51,27 @@ public class TrackingInternalStubEndpointsTests
         Assert.Empty(envelope.Data.Hallazgos);
     }
 
+    /// <summary>
+    /// This case used to assert 200 for an empty body, and that was correct while the route was
+    /// a no-op: there was nothing a body could be wrong about.
+    ///
+    /// The route became real on 2026-09-15, which inverts the argument rather than abandoning
+    /// it — the same way #385 inverted it for /ciclos-encuesta and /hallazgos. A 200 is now a
+    /// promise that notifications were raised, and `DailySemaforoWorker` acts on that promise by
+    /// marking its row `EstadoEnvio = Enviado` and never raising the trigger again. So a request
+    /// that names no plan and no message must fail loudly, not succeed quietly.
+    ///
+    /// The live behaviour is covered by `TrackingSendNotificationTests`, which asserts rows
+    /// rather than status codes, because a status-code test would have passed against the stub.
+    /// </summary>
     [Fact]
-    public async Task SendNotification_endpoint_returns_success_envelope()
+    public async Task SendNotification_endpoint_refuses_an_empty_body_now_that_it_really_notifies()
     {
         var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", AuthWebApplicationFactory.TestInternalApiKey);
 
         var response = await client.PostAsync("/api/internal/send-notification", new StringContent("{}", System.Text.Encoding.UTF8, "application/json"));
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     // These two USED to assert an empty 200 for a non-GUID company_id, and did so on
@@ -73,8 +86,9 @@ public class TrackingInternalStubEndpointsTests
     // rather than deleted so the reversal stays visible; the new verdict is a 400, and
     // TrackingCiclosHallazgosEndpointsTests asserts it names the parameter.
     //
-    // /send-notification is still a stub and still permissive; the class-level contract note
-    // on TrackingInternalEndpoints carries the surviving half of the argument.
+    // /send-notification is no longer a stub either (2026-09-15): the notifications domain its
+    // comment was waiting on had existed for some time, and the case above now asserts the 400
+    // that replaced its permissive 200.
     [Fact]
     public async Task Ciclos_endpoint_rejects_a_non_guid_company_id_now_that_it_returns_real_data()
     {
