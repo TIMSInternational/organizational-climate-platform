@@ -52,6 +52,12 @@ public static class DeterministicNotificationId
     /// <summary>Namespace for scheduled report delivery notifications (#91). See <see cref="DigestNamespace"/>.</summary>
     public static readonly Guid ScheduledReportNamespace = new("4e8a2c17-6b93-5d40-8f5a-b1c09e37d264");
 
+    /// <summary>
+    /// Namespace for action-plan notifications raised by the tracking module (#55 / #125). See
+    /// <see cref="DigestNamespace"/>.
+    /// </summary>
+    public static readonly Guid TrackingPlanNamespace = new("c7f24b90-8d51-5e36-b0a9-6f38e1d05427");
+
     /// <summary>The id of the digest for <paramref name="userId"/> covering <paramref name="periodKey"/>.</summary>
     public static Guid ForDigest(Guid userId, string periodKey)
         => Create(DigestNamespace, string.Create(null, $"{userId:D}:{periodKey}"));
@@ -75,6 +81,19 @@ public static class DeterministicNotificationId
     /// </summary>
     public static Guid ForMicroclimateReminder(Guid invitationId, int reminderNumber)
         => Create(MicroclimateReminderNamespace, string.Create(null, $"{invitationId:D}:{reminderNumber}"));
+
+    /// <summary>
+    /// The id of the notification one recipient gets for one trigger on one action plan.
+    ///
+    /// Keyed on (plan, recipient, trigger) because that is exactly the identity the tracking
+    /// module's own guard uses: <c>DailySemaforoWorker</c> refuses to raise a trigger it has
+    /// already recorded as sent for a plan, so "the vencimiento notice for this plan" is one
+    /// thing however many times the daily sweep runs. Keyed per RECIPIENT as well, because one
+    /// trigger fans out to the leader, the responsable and every involucrado, and each of those
+    /// is a separate row that must be able to fail and retry on its own.
+    /// </summary>
+    public static Guid ForTrackingPlanNotification(Guid planId, Guid recipientUserId, string trigger)
+        => Create(TrackingPlanNamespace, string.Create(null, $"{planId:D}:{recipientUserId:D}:{trigger}"));
 
     /// <summary>
     /// The id of the delivery notification for one occurrence of a recurring report (#91).
