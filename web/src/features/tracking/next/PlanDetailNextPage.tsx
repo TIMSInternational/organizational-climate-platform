@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router'
-import { ArrowRight, Check, Clock, Ellipsis, Plus, ShieldCheck, TrendingUp } from 'lucide-react'
+import { ArrowRight, Check, Clock, Compass, Ellipsis, Eye, ListChecks, Plus, ShieldCheck, TrendingUp } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
 import {
@@ -18,7 +18,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  EmptyState,
   LoadingRegion,
   NetworkError,
   SkeletonText,
@@ -31,6 +30,7 @@ import RegistrarAvanceForm from '../components/RegistrarAvanceForm'
 import SemaforoChip from '../components/SemaforoChip'
 import { todayIso } from '../planDates'
 import { toPercent } from '../semaforo'
+import { canDeclareCumplido, isNamedOnPlan, readTrackingClaims } from '../trackingAccess'
 import { asSentence, dayDiff, fullDay, hasRecordedProgress, isOverdue } from './derive'
 import type { PersonaRef, PlanDetailModel } from './model'
 import { InfoBox, PersonaAvatar, ProgressTrack, RowGlyph } from './parts'
@@ -48,12 +48,29 @@ import { usePlanDetailModel, type PlanDetailState } from './usePlanDetailModel'
  *
  * ## Who may write
  *
- * `canRecordProgress(plan)` from the seam — `PlanAccessHandler`, claim for claim: an
- * administrator, or the leader of this plan's nodo. Only that viewer gets "Registrar
- * avance", "Marcar cumplido" and "Agregar personas al plan"; the responsable and the
- * involucrados read, and the rail says who records progress. Adding people also needs
- * the directory, which only an administrator may list (`canUseDirectoryPickers`), so a
- * leader is told who does it rather than offered an empty picker.
+ * `canRecordProgress(plan)` from the seam — `PlanAccessHandler` at `AccessLevel.Write`,
+ * claim for claim: an administrator, or the leader of this plan's nodo. That viewer gets
+ * "Registrar avance" and "Agregar personas al plan"; the responsable and the involucrados
+ * read, and the rail says who records progress. Adding people also needs the directory,
+ * which only an administrator may list (`canUseDirectoryPickers`), so a leader is told who
+ * does it rather than offered an empty picker.
+ *
+ * **"Marcar cumplido" is not on that list.** Since 2026-09-14 `POST …/cumplir` requires
+ * `AccessLevel.Approve`, which `PlanAccessHandler` grants to `Roles.Admin` and to nobody
+ * else — expressly not to the node's own leader, because "the person best placed to report
+ * progress is the person least able to audit it"
+ * (`docs/decisions/tracking-fulfilment-authority.md`). It is gated on
+ * `trackingAccess.canDeclareCumplido`, which is a different question from `writable` and is
+ * asked separately here for exactly that reason.
+ *
+ * ## The reader's own relation to the plan
+ *
+ * Three readers with read access see three different screens, and the difference is not
+ * decoration: the node's leader (write, no fulfilment), someone the plan NAMES and gives
+ * nothing else (`isNamedOnPlan` — `PlanAccessHandler`'s `isInvolved`), and an administrator.
+ * The eyebrow, the read-only notice, the Ficha's "Tu papel" row, the Bitácora's empty line
+ * and the rail's closing sentence each pick from that, as the four leader boards of 10 Sep
+ * draw them.
  *
  * ## What this screen will not link
  *
@@ -73,26 +90,29 @@ export default function PlanDetailNextPage() {
   const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const state = usePlanDetailModel(id)
+  const nodo = state.ownNodoName
 
   if (state.status === 'not-found') {
     return (
-      <div>
-        <PageTopBar
-          title={t('tracking.detail.title')}
-          breadcrumbs={[{ label: t('tracking.planes.title'), href: '/tracking/planes' }, { label: t('tracking.detail.title') }]}
-          tightBreadcrumb
-        />
-        <EmptyState
-          fill
-          title={t('tracking.next.notFoundTitle')}
-          description={t('tracking.next.notFoundBody')}
-          action={
-            <Button asChild variant="outline">
-              <Link to="/tracking/planes">{t('tracking.next.goToPlans')}</Link>
-            </Button>
-          }
-        />
-      </div>
+      <PlanGate
+        crumb={t('tracking.next.notFoundCrumb')}
+        title={t('tracking.next.notFoundTitle')}
+        description={t('tracking.next.notFoundBody')}
+        help={nodo ? t('tracking.next.notFoundHelp', { nodo }) : t('tracking.next.notFoundHelpBare')}
+        t={t}
+      />
+    )
+  }
+
+  if (state.status === 'forbidden') {
+    return (
+      <PlanGate
+        crumb={t('tracking.next.forbiddenCrumb')}
+        title={t('tracking.next.forbiddenTitle')}
+        description={nodo ? t('tracking.next.forbiddenBody', { nodo }) : t('tracking.next.forbiddenBodyBare')}
+        help={t('tracking.next.forbiddenHelp')}
+        t={t}
+      />
     )
   }
 
@@ -124,6 +144,73 @@ export default function PlanDetailNextPage() {
   return <PlanDetail model={state.model} state={state} />
 }
 
+/**
+ * The two states where there is no plan to draw: its 403 and its 404
+ * (TrackingPlanDetailLeaderForbidden and …NotFound, 10 Sep). One component, because the
+ * boards are one layout with different words — a crumb, a title, a line, and a "Qué puedes
+ * hacer" card with the two ways out.
+ *
+ * **It takes strings, not a plan.** That is the fail-closed property stated as a signature:
+ * neither caller holds a `PlanAccion` (the model is `null` in both states), and this cannot
+ * print a title, a date, a nodo or an owner even if a later edit wanted it to. The only
+ * payload word either caller passes is the reader's OWN department name, which they were
+ * never refused.
+ */
+function PlanGate({
+  crumb,
+  title,
+  description,
+  help,
+  t,
+}: {
+  crumb: string
+  title: string
+  description: string
+  help: string
+  t: TranslateFn
+}) {
+  return (
+    <div>
+      <PageTopBar
+        breadcrumbs={[{ label: t('tracking.planes.title'), href: '/tracking/planes' }, { label: crumb }]}
+        tightBreadcrumb
+        eyebrow={t('tracking.next.planEyebrowBare')}
+        title={title}
+        description={description}
+      />
+      <section
+        aria-labelledby="plan-gate"
+        data-slot="plan-gate"
+        className="flex items-start gap-4 rounded-lg border border-line-default bg-surface-card px-5 pb-4.5 pt-4 shadow-sm"
+      >
+        <span
+          aria-hidden="true"
+          className="inline-flex size-10 shrink-0 items-center justify-center rounded-md bg-surface-icon-box text-fg-secondary"
+        >
+          <Compass className="size-4.5" />
+        </span>
+        <div className="flex min-w-0 flex-col gap-2.5">
+          <h2 id="plan-gate" className="m-0">
+            {t('tracking.next.whatYouCanDo')}
+          </h2>
+          <p className="m-0 max-w-[76ch] text-base text-fg-secondary">{help}</p>
+          <div className="flex flex-wrap gap-2.5">
+            <Button asChild variant="primary">
+              <Link to="/tracking/planes">{t('tracking.next.backToPlans')}</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link to="/tracking/mis-tareas">
+                <ListChecks aria-hidden="true" />
+                {t('tracking.misTareas.title')}
+              </Link>
+            </Button>
+          </div>
+        </div>
+      </section>
+    </div>
+  )
+}
+
 function dueSentence(t: TranslateFn, locale: string, fecha: string, days: number, cumplido: boolean): string {
   if (cumplido) return t('tracking.detail.cumplido')
   const date = calendarDayLong(Date.parse(fecha), locale)
@@ -136,7 +223,17 @@ function PlanDetail({ model, state }: { model: PlanDetailModel; state: PlanDetai
   const { t, locale } = useTranslation()
   const capabilities = useViewerCapabilities()
   const { plan } = model
+  const claims = useMemo(() => readTrackingClaims(), [])
   const writable = capabilities.canRecordProgress(plan)
+  // `AccessLevel.Approve`, which the node's own leader does NOT reach — the ruling of
+  // 2026-09-14. Separate from `writable` on purpose: the leader keeps every write control
+  // and loses exactly this one.
+  const mayDeclareCumplido = canDeclareCumplido(claims)
+  /** The node's own leader: write access that is not an administrator's. */
+  const leadsThisNodo = writable && !mayDeclareCumplido
+  /** The plan names this viewer — `PlanAccessHandler`'s `isInvolved`, which is Read only. */
+  const named = isNamedOnPlan(plan, claims)
+  const readOnlyAsNamed = !writable && named
   const mayAddPeople = writable && capabilities.canUseDirectoryPickers
   const percent = toPercent(plan.porcentajeAvance)
   const overdue = isOverdue(plan, model.asOf)
@@ -157,7 +254,31 @@ function PlanDetail({ model, state }: { model: PlanDetailModel; state: PlanDetai
       <PageTopBar
         breadcrumbs={[{ label: t('tracking.planes.title'), href: '/tracking/planes' }, { label: plan.planCode }]}
         tightBreadcrumb
-        eyebrow={model.nodoName ? t('tracking.next.detailEyebrow', { nodo: model.nodoName }) : t('tracking.detail.title')}
+        // The leader boards of 10 Sep close the eyebrow with the reader's relation to the
+        // plan — "Ingeniería · Plan de acción · tu nodo", "Finanzas · Plan de acción ·
+        // participas" — which is the one line that tells a leader, before they read a word
+        // of the plan, why this screen has controls or has none.
+        //
+        // The RELATION survives when the name does not, and the two have different sources.
+        // A non-admin resolves exactly one nodo — their own, from `GET /profile` — because
+        // the nodo directory is admin-only (`TrackingPickerEndpoints.cs:19-21`). So a leader
+        // reading a plan of ANOTHER nodo that names them gets no name for it, which is
+        // precisely the read-only board's case; printing the id there would be worse than
+        // printing nothing, and dropping "participas" with the name would lose the half the
+        // reader actually needs.
+        eyebrow={
+          leadsThisNodo
+            ? model.nodoName
+              ? t('tracking.next.detailEyebrowOwn', { nodo: model.nodoName })
+              : t('tracking.next.detailEyebrowOwnBare')
+            : readOnlyAsNamed
+              ? model.nodoName
+                ? t('tracking.next.detailEyebrowInvolved', { nodo: model.nodoName })
+                : t('tracking.next.detailEyebrowInvolvedBare')
+              : model.nodoName
+                ? t('tracking.next.detailEyebrow', { nodo: model.nodoName })
+                : t('tracking.detail.title')
+        }
         title={plan.descripcionQue}
         // The Main artboard: the code, the semáforo and the date 10px apart, just under the
         // title — not the 6px status line the authoring boards draw.
@@ -183,16 +304,34 @@ function PlanDetail({ model, state }: { model: PlanDetailModel; state: PlanDetai
         actions={
           <>
             {writable && !plan.cumplido && (
-              <>
-                <Button type="button" variant="primary" onClick={() => setAvanceOpen(true)}>
-                  <Plus aria-hidden="true" />
-                  {t('tracking.actions.registrarAvance')}
-                </Button>
-                <Button type="button" variant="outline" onClick={() => setCumplidoOpen(true)}>
-                  <Check aria-hidden="true" />
-                  {t('tracking.next.marcarCumplido')}
-                </Button>
-              </>
+              <Button type="button" variant="primary" onClick={() => setAvanceOpen(true)}>
+                <Plus aria-hidden="true" />
+                {t('tracking.actions.registrarAvance')}
+              </Button>
+            )}
+            {/* `AccessLevel.Approve`, not `Write`. Until the ruling of 2026-09-14 this sat
+                inside the block above, so the node's own leader was offered a control the
+                service now answers 403 — the exact shape this file's module comment calls
+                worse than no control at all. */}
+            {mayDeclareCumplido && !plan.cumplido && (
+              <Button type="button" variant="outline" onClick={() => setCumplidoOpen(true)}>
+                <Check aria-hidden="true" />
+                {t('tracking.next.marcarCumplido')}
+              </Button>
+            )}
+            {/* TrackingPlanDetailLeaderReadOnly draws this where the buttons would be: the
+                reader is told what they are instead of being shown a gap. */}
+            {readOnlyAsNamed && (
+              <p
+                data-slot="read-only-notice"
+                className="m-0 flex max-w-[52ch] items-start gap-2.5 rounded-md border border-line-default bg-surface-outer px-3.5 py-2.5 text-sm text-fg-secondary"
+              >
+                <Eye aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+                <span>
+                  <b className="font-semibold text-fg-primary">{t('tracking.next.readOnlyBadge')}</b>{' '}
+                  {t('tracking.next.readOnlyInvolucrado')}
+                </span>
+              </p>
             )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -221,16 +360,62 @@ function PlanDetail({ model, state }: { model: PlanDetailModel; state: PlanDetai
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="flex min-w-0 flex-col gap-4">
-          <AvanceCard model={model} percent={percent} overdue={overdue} progressed={progressed} days={days} t={t} locale={locale} />
+          <AvanceCard
+            model={model}
+            percent={percent}
+            overdue={overdue}
+            progressed={progressed}
+            days={days}
+            mayDeclareCumplido={mayDeclareCumplido}
+            writable={writable}
+            t={t}
+            locale={locale}
+          />
           <QueComoCard model={model} t={t} />
-          <BitacoraCard model={model} percent={percent} progressed={progressed} writable={writable} t={t} locale={locale} />
+          <BitacoraCard
+            model={model}
+            percent={percent}
+            progressed={progressed}
+            writable={writable}
+            leadsThisNodo={leadsThisNodo}
+            readOnlyAsNamed={readOnlyAsNamed}
+            t={t}
+            locale={locale}
+          />
         </div>
         <div className="flex min-w-0 flex-col gap-4">
-          <FichaCard model={model} overdue={overdue} tableroHref={tableroHref} t={t} locale={locale} />
-          <InvolucradosCard model={model} state={state} writable={writable} mayAddPeople={mayAddPeople} t={t} />
-          <p className="m-0 flex gap-2.5 rounded-md bg-surface-icon-box px-3.5 py-3 text-xs text-fg-secondary">
+          <FichaCard
+            model={model}
+            overdue={overdue}
+            tableroHref={tableroHref}
+            leadsThisNodo={leadsThisNodo}
+            papel={readOnlyAsNamed ? (plan.responsableEjecucionExternalId === claims?.personaExternalId ? 'responsable' : 'involucrado') : null}
+            t={t}
+            locale={locale}
+          />
+          <InvolucradosCard
+            model={model}
+            state={state}
+            writable={writable}
+            mayAddPeople={mayAddPeople}
+            viewerId={claims?.personaExternalId ?? ''}
+            t={t}
+          />
+          <p className="m-0 flex gap-2.5 rounded-md bg-surface-icon-box px-3.5 py-3 text-xs text-fg-secondary" data-slot="who-writes">
             <ShieldCheck aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
-            <span>{t('tracking.next.whoWrites')}</span>
+            {/* Three true sentences, and the reader gets the one that is about them. The
+                unconditional third one names "la jefatura del nodo" as the writer, which
+                for a node leader reading their own plan is a description of themselves in
+                the third person — the defect `MisTareasNextPage` records for its own banner. */}
+            <span>
+              {leadsThisNodo
+                ? model.nodoName
+                  ? t('tracking.next.whoWritesLeader', { nodo: model.nodoName })
+                  : t('tracking.next.whoWritesLeaderBare')
+                : readOnlyAsNamed
+                  ? t('tracking.next.whoWritesInvolved')
+                  : t('tracking.next.whoWrites')}
+            </span>
           </p>
         </div>
       </div>
@@ -261,7 +446,7 @@ function PlanDetail({ model, state }: { model: PlanDetailModel; state: PlanDetai
       </Dialog>
 
       <ConfirmationDialog
-        open={cumplidoOpen}
+        open={cumplidoOpen && mayDeclareCumplido}
         onOpenChange={setCumplidoOpen}
         title={t('tracking.next.marcarCumplido')}
         description={t('tracking.detail.confirmCumplido')}
@@ -296,6 +481,8 @@ function AvanceCard({
   overdue,
   progressed,
   days,
+  mayDeclareCumplido,
+  writable,
   t,
   locale,
 }: {
@@ -304,6 +491,9 @@ function AvanceCard({
   overdue: boolean
   progressed: boolean
   days: number
+  /** `AccessLevel.Approve` — whether "Marcar cumplido" is a milestone this reader can reach. */
+  mayDeclareCumplido: boolean
+  writable: boolean
   t: TranslateFn
   locale: string
 }) {
@@ -316,10 +506,20 @@ function AvanceCard({
         : t('tracking.next.overdueNoProgress')
       : t('tracking.next.onTimeDetail')
   const createdDays = dayDiff(plan.fechaCreacion, model.asOf)
+  // An overdue plan's next milestone used to be "Marcar cumplido" for everybody. Since the
+  // ruling of 2026-09-14 that is an administrator's act, so for every other reader the box
+  // named a control that is not theirs and, for a leader, one that would 403. The leader
+  // and read-only boards of 10 Sep both draw the avance as the milestone instead — "Primer
+  // avance · o nueva fecha de compromiso" — which is what the node can actually do next.
   const hito = plan.cumplido
     ? { value: t('tracking.next.hitoNone'), sub: t('tracking.detail.cumplido') }
     : overdue
-      ? { value: t('tracking.next.hitoCumplir'), sub: t('tracking.next.hitoCumplirSub') }
+      ? mayDeclareCumplido
+        ? { value: t('tracking.next.hitoCumplir'), sub: t('tracking.next.hitoCumplirSub') }
+        : {
+            value: progressed ? t('tracking.next.hitoSiguiente') : t('tracking.next.hitoPrimero'),
+            sub: writable ? t('tracking.next.hitoOrNewDate') : t('tracking.next.hitoOrNewDateNodo'),
+          }
       : progressed
         ? { value: t('tracking.next.hitoSiguiente'), sub: t('tracking.next.hitoBefore', { date: calendarDay(Date.parse(plan.fechaCompromiso), locale) }) }
         : { value: t('tracking.next.hitoPrimero'), sub: t('tracking.next.hitoBefore', { date: calendarDay(Date.parse(plan.fechaCompromiso), locale) }) }
@@ -405,6 +605,8 @@ function BitacoraCard({
   percent,
   progressed,
   writable,
+  leadsThisNodo,
+  readOnlyAsNamed,
   t,
   locale,
 }: {
@@ -412,6 +614,8 @@ function BitacoraCard({
   percent: number
   progressed: boolean
   writable: boolean
+  leadsThisNodo: boolean
+  readOnlyAsNamed: boolean
   t: TranslateFn
   locale: string
 }) {
@@ -464,9 +668,18 @@ function BitacoraCard({
             t('tracking.next.earlierNotListed')
           ) : writable && !plan.cumplido ? (
             <>
-              {t('tracking.next.noAvancesLead')} <b className="font-semibold text-fg-primary">{t('tracking.actions.registrarAvance')}</b>
-              {t('tracking.next.noAvancesTail')}
+              {leadsThisNodo
+                ? model.nodoName
+                  ? t('tracking.next.noAvancesLeadLeader', { nodo: model.nodoName })
+                  : t('tracking.next.noAvancesLeadLeaderBare')
+                : t('tracking.next.noAvancesLead')}{' '}
+              <b className="font-semibold text-fg-primary">{t('tracking.actions.registrarAvance')}</b>
+              {leadsThisNodo ? t('tracking.next.noAvancesTailLeader') : t('tracking.next.noAvancesTail')}
             </>
+          ) : readOnlyAsNamed && !plan.cumplido ? (
+            // TrackingPlanDetailLeaderReadOnly: the reader is told the avance is coming and
+            // from whom, rather than only that there is none.
+            t('tracking.next.noAvancesFromNodo')
           ) : (
             t('tracking.next.noAvancesYet')
           )}
@@ -480,12 +693,17 @@ function FichaCard({
   model,
   overdue,
   tableroHref,
+  leadsThisNodo,
+  papel,
   t,
   locale,
 }: {
   model: PlanDetailModel
   overdue: boolean
   tableroHref: string
+  leadsThisNodo: boolean
+  /** The reader's own part in the plan, when the plan names them and gives them no write. */
+  papel: 'responsable' | 'involucrado' | null
   t: TranslateFn
   locale: string
 }) {
@@ -498,11 +716,14 @@ function FichaCard({
       </h2>
       <dl className="m-0 grid grid-cols-[112px_minmax(0,1fr)] items-center gap-x-3 gap-y-2.5 text-base">
         <dt className={term}>{t('tracking.fields.nodo')}</dt>
-        <dd className="m-0">
+        <dd className="m-0 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           <Link to={tableroHref} className="inline-flex items-center gap-1.5 font-medium text-fg-primary no-underline hover:underline">
             {model.nodoName ?? t('tracking.next.nodoUnnamed')}
             <ArrowRight aria-hidden="true" className="size-3.5" />
           </Link>
+          {/* TrackingPlanDetailLeader marks the row rather than repeating the nodo's name in
+              a sentence: the leader's one board is "tu nodo", and the chip is what says so. */}
+          {leadsThisNodo && <Chip label={t('tracking.next.chipTuNodo')} />}
         </dd>
         <dt className={term}>{t('tracking.next.fichaResponsable')}</dt>
         <dd className="m-0 flex min-w-0 items-center gap-2">
@@ -521,6 +742,16 @@ function FichaCard({
         <dd className={cn('m-0 font-mono tabular-nums', overdue && 'text-accent-red')}>{fullDay(plan.fechaCompromiso, locale)}</dd>
         <dt className={term}>{t('tracking.next.fichaActualizado')}</dt>
         <dd className="m-0 font-mono tabular-nums">{fullDay(plan.fechaUltimaActualizacion, locale)}</dd>
+        {/* The last row of TrackingPlanDetailLeaderReadOnly's ficha, and only there: a reader
+            with write access does not need the plan to tell them their part in it. */}
+        {papel && (
+          <>
+            <dt className={term}>{t('tracking.next.fichaTuPapel')}</dt>
+            <dd className="m-0 text-fg-primary" data-slot="tu-papel">
+              {papel === 'responsable' ? t('tracking.next.papelResponsable') : t('tracking.next.papelInvolucrado')}
+            </dd>
+          </>
+        )}
       </dl>
     </Card>
   )
@@ -531,12 +762,15 @@ function InvolucradosCard({
   state,
   writable,
   mayAddPeople,
+  viewerId,
   t,
 }: {
   model: PlanDetailModel
   state: PlanDetailState
   writable: boolean
   mayAddPeople: boolean
+  /** The `sub` claim, for the "· tú" mark. `''` when there is no readable token. */
+  viewerId: string
   t: TranslateFn
 }) {
   const [open, setOpen] = useState(false)
@@ -577,7 +811,15 @@ function InvolucradosCard({
             <li key={persona.id} className="flex min-w-0 items-center gap-2.5">
               <PersonaAvatar name={persona.name} />
               <div className="flex min-w-0 flex-col">
-                <span className={cn('truncate text-base', persona.name ? 'text-fg-primary' : 'text-fg-label')}>{personaName(t, persona)}</span>
+                <span className={cn('truncate text-base', persona.name ? 'text-fg-primary' : 'text-fg-label')}>
+                  {personaName(t, persona)}
+                  {/* Both leader boards mark the row rather than making the reader compare
+                      it with the Ficha: "Alejandro Retana · responsable", "Luis Mora · tú". */}
+                  {persona.id === model.plan.responsableEjecucionExternalId && (
+                    <span className="text-fg-label"> · {t('tracking.next.responsableRow')}</span>
+                  )}
+                  {persona.id !== '' && persona.id === viewerId && <span className="text-fg-label"> {t('tracking.next.planesYou')}</span>}
+                </span>
                 {persona.email && <span className="truncate text-sm text-fg-label">{persona.email}</span>}
               </div>
             </li>
@@ -628,6 +870,9 @@ function InvolucradosCard({
         </>
       )}
       {writable && !mayAddPeople && <p className="m-0 text-sm text-fg-label">{t('tracking.next.addByAdmin')}</p>}
+      {/* The read-only boards carry the shorter half of the same fact. Without it the card
+          simply ended at the list, and a reader who cannot add anyone was never told why. */}
+      {!writable && <p className="m-0 text-sm text-fg-label">{t('tracking.next.involucradosOnlyAdmin')}</p>}
     </Card>
   )
 }

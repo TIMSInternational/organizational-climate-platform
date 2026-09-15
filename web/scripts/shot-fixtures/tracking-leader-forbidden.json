@@ -1,0 +1,91 @@
+{
+  "_comment": "Leader lane, 403 (TrackingPlanDetailLeaderForbidden). The refusal carries the WHOLE plan as its body -- Results.Forbid() sends none, but a proxy or a later handler could, and a fixture that published nothing would hide exactly the leak that would matter.",
+  "GET /notifications/mine": {
+    "notifications": []
+  },
+  "GET /profile": {
+    "id": "64fa2a68-3cef-4644-a7b0-ee3a7315c671",
+    "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+    "companyName": "Grupo Meridiano S.A.",
+    "email": "luis.mora@meridiano.test",
+    "name": "Luis Mora",
+    "role": "leader",
+    "departmentId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+    "departmentName": "Ingeniería",
+    "managerId": null,
+    "isActive": true,
+    "hasPassword": true,
+    "lastLoginAt": "2026-09-11T00:31:48.171895+00:00",
+    "createdAt": "2026-09-10T01:58:55.206569+00:00",
+    "demographics": {}
+  },
+  "GET /api/planes-accion": [
+    {
+      "id": "01a08b9e-6367-75aa-942c-1ec0efd04176",
+      "planCode": "PA-2026-00001",
+      "nodoExternalId": "bff21fd0-422b-4f3b-8c89-d6bfbf5f19e9",
+      "liderExternalId": "",
+      "hallazgoExternalId": null,
+      "descripcionQue": "Reponer la reunión de handover entre turnos",
+      "metodologiaComo": "Sesión de 20 minutos al cierre de cada turno, con acta breve.",
+      "responsableEjecucionExternalId": "77fbfc92-76bb-452e-8be3-8ae588464994",
+      "fechaCreacion": "2026-09-10",
+      "fechaCompromiso": "2026-08-20",
+      "porcentajeAvance": 0.0,
+      "estadoSemaforo": "Rojo",
+      "cicloEncuestaExternalId": null,
+      "fechaUltimaActualizacion": "2026-09-10",
+      "cumplido": false,
+      "involucradosExternalIds": [
+        "77fbfc92-76bb-452e-8be3-8ae588464994",
+        "00000000-0000-0000-0000-000000000001"
+      ]
+    },
+    {
+      "id": "01a08b9e-63d1-7f20-8a5d-62a31ac71d53",
+      "planCode": "PA-2026-00002",
+      "nodoExternalId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+      "liderExternalId": "",
+      "hallazgoExternalId": null,
+      "descripcionQue": "Publicar el rol de fines de semana con dos semanas de antelación",
+      "metodologiaComo": "Calendario compartido, actualizado los lunes por la jefatura del nodo.",
+      "responsableEjecucionExternalId": "1553edb1-e100-4bb1-a397-90882b3a3e9e",
+      "fechaCreacion": "2026-09-10",
+      "fechaCompromiso": "2026-09-30",
+      "porcentajeAvance": 0.0,
+      "estadoSemaforo": "Verde",
+      "cicloEncuestaExternalId": null,
+      "fechaUltimaActualizacion": "2026-09-10",
+      "cumplido": false,
+      "involucradosExternalIds": [
+        "1553edb1-e100-4bb1-a397-90882b3a3e9e"
+      ]
+    }
+  ],
+  "GET /api/mis-tareas": [],
+  "GET /tracking/picker/nodos 403": {},
+  "GET /tracking/picker/personas 403": {},
+  "GET /action-plans 403": {},
+  "GET /api/consolidado 403": {},
+  "GET /api/planes-accion/* 403": {
+    "id": "01a08b9e-6367-75aa-942c-1ec0efd04176",
+    "planCode": "PA-2026-00001",
+    "nodoExternalId": "bff21fd0-422b-4f3b-8c89-d6bfbf5f19e9",
+    "liderExternalId": "",
+    "hallazgoExternalId": null,
+    "descripcionQue": "Reponer la reunión de handover entre turnos",
+    "metodologiaComo": "Sesión de 20 minutos al cierre de cada turno, con acta breve.",
+    "responsableEjecucionExternalId": "77fbfc92-76bb-452e-8be3-8ae588464994",
+    "fechaCreacion": "2026-09-10",
+    "fechaCompromiso": "2026-08-20",
+    "porcentajeAvance": 0.0,
+    "estadoSemaforo": "Rojo",
+    "cicloEncuestaExternalId": null,
+    "fechaUltimaActualizacion": "2026-09-10",
+    "cumplido": false,
+    "involucradosExternalIds": [
+      "77fbfc92-76bb-452e-8be3-8ae588464994",
+      "00000000-0000-0000-0000-000000000001"
+    ]
+  }
+}

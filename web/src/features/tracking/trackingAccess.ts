@@ -17,9 +17,13 @@ import { decodeJwtPayload } from '../../auth/jwt'
  *
  * That last line is the one worth stating out loud, because it is easy to get
  * backwards: the person executing the plan cannot record their own progress. Only
- * the node's leader (or an admin) can call `avance`, `cumplir` or `involucrados`.
- * An involucrado gets a task list they can read, which is exactly what
- * `MisTareasPage` is.
+ * the node's leader (or an admin) can call `avance` or `involucrados`. An
+ * involucrado gets a task list they can read, which is exactly what
+ * `next/MisTareasNextPage` is.
+ *
+ * `cumplir` is **not** in that list any more. Since 2026-09-14 it requires
+ * `AccessLevel.Approve`, which only `Roles.Admin` reaches — see
+ * {@link canDeclareCumplido}, and `docs/decisions/tracking-fulfilment-authority.md`.
  *
  * The UI mirrors it so that a button which would come back 403 is never drawn —
  * not as a security boundary. The service re-checks every one of these on every
@@ -135,8 +139,9 @@ export function isTrackingAdmin(claims: TrackingClaims | null): boolean {
 }
 
 /**
- * Whether this caller may mutate this plan — `RegistrarAvance`, `MarcarCumplido`,
- * `AgregarInvolucrado`.
+ * Whether this caller may mutate this plan — `RegistrarAvance`, `AgregarInvolucrado`.
+ * `AccessLevel.Write`, exactly; `MarcarCumplido` moved to `Approve` on 2026-09-14 and is
+ * {@link canDeclareCumplido}.
  *
  * The empty-node guard is not cosmetic. `nodoId` is minted as `string.Empty` for a
  * user who leads nothing, and `PlanResponse.NodoExternalId` is `required` and
@@ -153,6 +158,51 @@ export function canManagePlan(
   if (claims.role !== 'leader') return false
   if (claims.nodoExternalId === '' || plan.nodoExternalId === '') return false
   return claims.nodoExternalId === plan.nodoExternalId
+}
+
+/**
+ * Whether this caller may declare a plan **fulfilled** — `POST …/cumplir`.
+ *
+ * This is NOT {@link canManagePlan}, and the difference is the whole content of the
+ * ruling of 2026-09-14 (`docs/decisions/tracking-fulfilment-authority.md`). The endpoint
+ * used to require `AccessLevel.Write`, which the node's own leader holds; it now requires
+ * the strictly narrower `AccessLevel.Approve`, and `PlanAccessHandler` succeeds that level
+ * for `Roles.Admin` and for nobody else:
+ *
+ * ```csharp
+ * // Admins have already succeeded above, so anything reaching here is not one -- and
+ * // Approve is theirs alone.
+ * if (requirement.Level == AccessLevel.Approve) return Task.CompletedTask;
+ * ```
+ *
+ * (`services/tracking-api/src/ClimateTracking.Application/Auth/PlanAccessHandler.cs`.)
+ *
+ * So a leader still records avance, still edits the plan — and must not be offered
+ * "Marcar cumplido", which would 403 on click. It takes no plan argument on purpose: the
+ * server's answer for this level does not look at the plan at all, and a signature that
+ * accepted one would invite a reader to believe some plan makes it true.
+ */
+export function canDeclareCumplido(claims: TrackingClaims | null): boolean {
+  return isTrackingAdmin(claims)
+}
+
+/**
+ * Whether this caller is named on the plan as its responsable de ejecución or as an
+ * involucrado — the `isInvolved` half of `PlanAccessHandler`, which grants
+ * `AccessLevel.Read` and nothing more.
+ *
+ * Read-only on its own: an admin and the node's leader reach a plan without being named on
+ * it, so this answers "does the plan name me", never "may I see it".
+ */
+export function isNamedOnPlan(
+  plan: { responsableEjecucionExternalId: string; involucradosExternalIds: readonly string[] },
+  claims: TrackingClaims | null,
+): boolean {
+  if (claims === null || claims.personaExternalId === '') return false
+  return (
+    plan.responsableEjecucionExternalId === claims.personaExternalId ||
+    plan.involucradosExternalIds.includes(claims.personaExternalId)
+  )
 }
 
 /**

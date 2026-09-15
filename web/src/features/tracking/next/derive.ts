@@ -163,6 +163,21 @@ export function isNotFound(error: unknown): boolean {
 }
 
 /**
+ * The plan detail's 403 — `PlanAccessHandler` refusing a plan of another nodo to a caller
+ * the plan does not name. Read the same way `isNotFound` reads a 404: `authFetch` throws
+ * `Request failed: 403` when the refusal carries no body, which `Results.Forbid()` does not.
+ *
+ * It is its own state and not an error, because the two say different things to the reader:
+ * "the tracking service did not answer" is a fault to retry, and "this plan is somebody
+ * else's" is a rule that retrying will not change. **Neither state may print anything off
+ * the plan** — on a 403 the client holds nothing anyway, and the screen is built so that
+ * stays true (`TrackingPlanDetailLeaderForbidden`, 10 Sep).
+ */
+export function isForbidden(error: unknown): boolean {
+  return error instanceof Error && /\b403\b/.test(error.message)
+}
+
+/**
  * A clause as the "Qué se hará y cómo" card prints it: the plan's own text, closed with a
  * full stop when it has no closing punctuation. The Main artboard prints "Reponer la reunión
  * de handover entre turnos." in that card; the page title keeps the text exactly as written.
