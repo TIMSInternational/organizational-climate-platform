@@ -1,0 +1,24 @@
+microclimates: Pulso semanal — ¿cómo fue la semana?|active
+template control: BUTTON role=combobox id=_r_3_
+labels on /surveys/new: Categoría de plantilla | Partir de una plantilla | Idioma del contenido | Tipo
+* | Título
+* | Descripción
+labels on plan form: Título del Plan
+* | Descripción
+* | Fecha de Vencimiento | Prioridad | Estado
+Todos los Estados
+No Iniciado
+En Progreso
+Completado
+Vencido
+Cancelado | Prioridad
+Todas las prioridades
+Baja
+Media
+Alta
+Crítica | Buscar
+buttons on plan form: Administración de Empresa | A
+Ana Rojas
+Administrador de Empresa | Cerrar sesión | Cmd+K | Cancelar | Agregar KPI | Agregar Objetivo | Crear Plan de Acción | Cancelar
+employee open survey: 4c9c8c8c-03e1-4033-8224-8c80b242c558
+respond controls: Guardar y terminar después | Enviar mis respuestas | radios: 30
