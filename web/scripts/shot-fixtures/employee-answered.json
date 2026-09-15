@@ -1,0 +1,50 @@
+{
+  "GET /notifications/mine": {
+    "notifications": []
+  },
+
+  "GET /dashboard/employee": {
+    "name": "Carlos Mata",
+    "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+    "departmentId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+    "departmentName": "Ingeniería",
+    "pendingSurveyCount": 0,
+    "completedSurveyCount": 2,
+    "unreadNotificationCount": 0,
+    "nextDeadline": null,
+    "pendingSurveys": []
+  },
+
+  "GET /dashboard/employee/last-outcome": {
+    "surveyId": "38b2002f-66da-468d-b136-ec112ba3204b",
+    "surveyTitle": "Encuesta de Clima Q3",
+    "closedOn": "2026-08-06T02:05:22.922+00:00",
+    "responseCount": 24,
+    "departmentCount": 5,
+    "protectedDepartmentCount": 1,
+    "minimumGroupSize": 5,
+    "plansOpenedSince": [
+      {
+        "departmentName": "Personas",
+        "createdAt": "2026-09-10T02:05:50.263923+00:00"
+      },
+      {
+        "departmentName": "Operaciones",
+        "createdAt": "2026-09-10T02:05:50.280646+00:00"
+      },
+      {
+        "departmentName": "Ingeniería",
+        "createdAt": "2026-09-10T02:05:50.287727+00:00"
+      },
+      {
+        "departmentName": null,
+        "createdAt": "2026-09-10T02:05:50.294635+00:00"
+      }
+    ],
+    "openPlanCount": 4
+  },
+
+  "GET /surveys/my": {
+    "surveys": []
+  }
+}

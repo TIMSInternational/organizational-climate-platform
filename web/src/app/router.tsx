@@ -46,7 +46,7 @@ import SurveysListNextPage from '../features/surveys/next/list/SurveysListNextPa
 import SurveyBuilderNextPage from '../features/surveys/next/authoring/SurveyBuilderNextPage'
 import SurveyDetailNextPage from '../features/surveys/next/authoring/SurveyDetailNextPage'
 import SurveyQuestionsEditorPage from '../features/surveys/next/authoring/SurveyQuestionsEditorPage'
-import MySurveysPage from '../features/surveys/pages/MySurveysPage'
+import MySurveysNextPage from '../features/surveys/next/mySurveys/MySurveysNextPage'
 import SurveyTemplatesNextPage from '../features/surveys/next/templates/SurveyTemplatesNextPage'
 import TemplateDetailNextPage from '../features/surveys/next/authoring/TemplateDetailNextPage'
 import AnalyticsNextPage from '../features/analytics/next/AnalyticsNextPage'
@@ -456,8 +456,8 @@ export const router = createBrowserRouter([
               //
               // Not gated beyond RequireAuth: `/surveys/my` scopes itself to the
               // caller's own user row and reads no role claim, so employee,
-              // supervisor and leader can all load it. See MySurveysPage.tsx.
-              { path: '/surveys/my', element: <MySurveysPage /> },
+              // supervisor and leader can all load it. See MySurveysNextPage.tsx.
+              { path: '/surveys/my', element: <MySurveysNextPage /> },
               // Same static-beats-dynamic ranking as `/surveys/my`, so `templates`
               // is never parsed as a survey id.
               { path: '/surveys/templates', element: <SurveyTemplatesNextPage /> },

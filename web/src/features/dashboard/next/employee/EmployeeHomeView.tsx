@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router'
-import { ArrowRight, Check, Inbox, Target } from 'lucide-react'
+import { ArrowRight, Check, Clock, EyeOff, FileText, Inbox, Target } from 'lucide-react'
 import { PageTopBar } from '../../../../components/layout'
-import { Button, Chip, EmptyState } from '../../../../components/ui'
+import { Button, Chip } from '../../../../components/ui'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { calendarDay } from '../../../../lib/calendarDay'
 import { cn } from '../../../../lib/cn'
@@ -15,7 +15,8 @@ import type { EmployeeHomeModel, HomeOutcome, HomeSurvey } from './model'
 
 /**
  * The employee's Home — `/dashboard` for the `employee` role, and for any role
- * `DashboardPage` does not recognise. The canvas's EmployeeDashboard artboard (10 Sep).
+ * `DashboardPage` does not recognise. The canvas's EmployeeDashboard artboard (10 Sep), and
+ * its EmployeeDashboardAnswered state when the reader owes nothing (`NothingDueCard`).
  *
  * ## The page's one job
  *
@@ -149,14 +150,19 @@ function HomeBody({ model }: { model: EmployeeHomeModel }) {
           hairline, which is the canvas's space between the greeting and this heading. */}
       <section aria-labelledby="home-to-answer" className="flex flex-col gap-3">
         <div className="flex flex-wrap items-baseline justify-between gap-3">
+          {/* The canvas draws two states of this one section: "Para responder" over the
+              task, and "Ya respondió" over the answered card. The third heading is the
+              honest floor between them — see `nothingDueHeading` below. */}
           <h2 id="home-to-answer" className="m-0">
-            {t('employee.next.toAnswerHeading')}
+            {model.lead
+              ? t('employee.next.toAnswerHeading')
+              : model.hasAnsweredIdentified
+                ? t('employee.next.answeredHeading')
+                : t('employee.next.nothingDueHeading')}
           </h2>
-          {model.pendingCount > 0 ? (
-            <span data-slot="home-to-answer-meta" className="text-sm text-fg-secondary">
-              {toAnswerMeta(model.pendingCount, t)}
-            </span>
-          ) : null}
+          <span data-slot="home-to-answer-meta" className="text-sm text-fg-secondary">
+            {model.pendingCount > 0 ? toAnswerMeta(model.pendingCount, t) : t('employee.next.nothingDueMeta')}
+          </span>
         </div>
 
         {model.lead ? (
@@ -177,23 +183,19 @@ function HomeBody({ model }: { model: EmployeeHomeModel }) {
             ) : null}
           </>
         ) : (
-          <EmptyState
-            title={t('dashboard.noPendingSurveys')}
-            // Department-aware where there is a department to name: "no survey is open to
-            // Ingeniería" is a fact about this reader.
-            description={
-              model.departmentName
-                ? t('employee.emptyBodyInDepartment', { department: model.departmentName })
-                : t('dashboard.noPendingSurveysDescription')
-            }
-          />
+          <NothingDueCard model={model} />
         )}
       </section>
 
       {/* Absent, not empty, when nothing has closed: the endpoint's `null`. */}
       {model.outcome ? <OutcomeCard outcome={model.outcome} /> : null}
 
-      <p className="mb-0 mt-5 max-w-measure text-sm text-fg-secondary">{t('employee.next.resultsNote')}</p>
+      {/* Only under a task. With nothing owed, `NothingDueCard`'s right-hand column says
+          the same three things at more length, and printing both put two sentences about
+          publication and two about the email one screen apart. */}
+      {model.lead ? (
+        <p className="mb-0 mt-5 max-w-measure text-sm text-fg-secondary">{t('employee.next.resultsNote')}</p>
+      ) : null}
     </div>
   )
 }
@@ -269,6 +271,149 @@ function LeadCard({ survey, allowsSaveForLater }: { survey: HomeSurvey; allowsSa
 
       {survey.anonymous ? <AnonymityNotice anonymous /> : null}
     </div>
+  )
+}
+
+/**
+ * **The answered state** — the EmployeeDashboardAnswered artboard (10 Sep), drawn when the
+ * reader owes nothing.
+ *
+ * ## What the artboard asks for that no endpoint can serve
+ *
+ * The artboard's card names the survey the reader answered, the day they answered it, and
+ * the day it closes, and marks the response date "dato nuevo" — because it is. A survey
+ * that records who answered leaves `SurveyQueries.AssignedTo`'s result set the moment it is
+ * answered (`!responses.Any(r => … && r.IsComplete)`), so it is in neither
+ * `GET /dashboard/employee`'s `pendingSurveys` nor `GET /surveys/my`; the only thing either
+ * payload carries about it is `completedSurveyCount`, a tally with no survey and no date
+ * attached. The artboard's own note says so: "Hoy Inicio solo recibe cuántas encuestas
+ * respondió la persona, no cuáles ni cuándo".
+ *
+ * So the card names no survey, prints no response date, and carries none of the three
+ * readings. Drawing that row against a survey this page cannot identify would be a receipt
+ * for an answer it cannot see.
+ *
+ * ## What it does say, and on what evidence
+ *
+ * - **"Ya respondió", and the tick, only on `hasAnsweredIdentified`.** A completed response
+ *   the server recorded against this user row. At zero the heading falls back to "Nada
+ *   pendiente" and the chip is not drawn, because zero is also what an anonymous survey
+ *   leaves behind — silence, never "you did not answer".
+ * - **The three steps are guidance, not readings.** Each is true of every reader: the next
+ *   survey arrives under "Para responder"; results are published to the department as
+ *   averages with the floor applied; an anonymous survey leaves no receipt, which is why
+ *   this page can never be sure about one. Only the second takes data — the department's
+ *   name and the floor — and each falls back to a sentence that states neither rather than
+ *   assuming one.
+ */
+function NothingDueCard({ model }: { model: EmployeeHomeModel }) {
+  const { t } = useTranslation()
+
+  return (
+    <div
+      data-slot="home-nothing-due"
+      // The lead card's geometry with the canvas's green hairline
+      // (`--admin-accent-border-green` IS `rgba(18,148,91,.2)`), and its two columns at the
+      // same breakpoint, so the answered state and the task state are one card in two moods.
+      className={cn(
+        'grid gap-6 rounded-xl border border-accent-green-ring bg-surface-card px-4 pb-5 pt-4.5 shadow-sm sm:px-5',
+        // The artboard's own split (`minmax(0,1fr) 440px`), a little narrower: at 440 the
+        // steps' lines are short enough that the column runs well past the left one, and the
+        // card is as tall as whichever side is taller.
+        'lg:grid-cols-[minmax(0,1fr)_400px]',
+      )}
+    >
+      <div className="flex min-w-0 flex-col gap-3">
+        {model.hasAnsweredIdentified ? (
+          <div className="flex flex-wrap items-center gap-2.5">
+            <Chip tone="good" label={t('employee.next.answeredChip')} icon={<Check aria-hidden="true" />} />
+          </div>
+        ) : null}
+        <h3 className="m-0 font-store-serif text-2xl font-normal">{t('employee.next.nothingDueTitle')}</h3>
+        <p className="mb-0 max-w-measure text-base text-fg-secondary">
+          {/* Department-aware where there is a department to name: "no survey is open to
+              Ingeniería" is a fact about this reader. The sentence the old empty state
+              carried, kept word for word. */}
+          {model.departmentName
+            ? t('employee.emptyBodyInDepartment', { department: model.departmentName })
+            : t('dashboard.noPendingSurveysDescription')}
+        </p>
+        <div className="mt-1 flex flex-wrap items-center gap-3">
+          {/* The artboard's "Ver el recibo en Mis Encuestas", without the receipt: the
+              destination is real and holds the same list, so it keeps the way out. */}
+          <Button asChild variant="outline" size="canvas">
+            <Link to="/surveys/my">
+              <Inbox aria-hidden="true" />
+              {t('navigation.mySurveys')}
+            </Link>
+          </Button>
+          <span className="text-sm text-fg-secondary">{t('employee.next.nothingDueAnswersNote')}</span>
+        </div>
+      </div>
+
+      <WhatHappensNow model={model} />
+    </div>
+  )
+}
+
+/** The artboard's right-hand column: three things that are true of every reader who owes nothing. */
+function WhatHappensNow({ model }: { model: EmployeeHomeModel }) {
+  const { t } = useTranslation()
+  // The server's own floor, from the last outcome it sent — never the constant 5 assumed
+  // here. With no outcome the sentence states the rule without a number instead.
+  const floor = model.outcome?.floor ?? null
+
+  return (
+    // The rule is the column divider at the width the card actually has two columns, and
+    // nothing above it: on a phone the steps sit under the text, not beside a stray line.
+    <div className="flex min-w-0 flex-col lg:border-l lg:border-line-light lg:pl-6">
+      <span className="pb-0.5 text-2xs font-bold uppercase tracking-eyebrow text-fg-label">
+        {t('employee.next.whatHappensNow')}
+      </span>
+      <ul className="m-0 flex list-none flex-col p-0">
+        <NextStep
+          icon={<Clock className="size-icon" />}
+          title={t('employee.next.nextSurveyTitle')}
+          body={t('employee.next.nextSurveyBody')}
+        />
+        <NextStep
+          icon={<FileText className="size-icon" />}
+          title={
+            model.departmentName
+              ? t('employee.next.resultsGoToTitle', { department: model.departmentName })
+              : t('employee.next.resultsGoToTitleAnyDepartment')
+          }
+          body={
+            floor === null
+              ? t('employee.next.resultsGoToBodyNoFloor')
+              : t('employee.next.resultsGoToBody', { floor })
+          }
+        />
+        <NextStep
+          icon={<EyeOff className="size-icon" />}
+          title={t('employee.next.anonymousNoReceiptTitle')}
+          body={t('employee.next.anonymousNoReceiptBody')}
+        />
+      </ul>
+    </div>
+  )
+}
+
+/** One step of that column — the canvas's glyph box, the claim and the line under it. */
+function NextStep({ icon, title, body }: { icon: ReactNode; title: string; body: string }) {
+  return (
+    <li className="flex items-start gap-3 border-b border-line-light py-3.5 last:border-b-0 last:pb-0">
+      <span
+        aria-hidden="true"
+        className="grid size-7 shrink-0 place-items-center rounded-lg bg-surface-icon-box text-fg-secondary"
+      >
+        {icon}
+      </span>
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <span className="text-base font-semibold text-fg-primary">{title}</span>
+        <span className="text-sm text-fg-secondary">{body}</span>
+      </div>
+    </li>
   )
 }
 
