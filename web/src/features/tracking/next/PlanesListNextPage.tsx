@@ -1,10 +1,10 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
-import { Check, ChevronRight, CircleAlert, Clock, LayoutPanelTop, Plus, Shield } from 'lucide-react'
+import { Check, ChevronRight, CircleAlert, Clock, LayoutPanelTop, Plus, Shield, Users } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
 import { KpiTile } from '../../../components/charts'
-import { Alert, AlertDescription, Button, EmptyState, LoadingRegion, NetworkError, SkeletonText, Table } from '../../../components/ui'
+import { Alert, AlertDescription, Button, Chip, EmptyState, LoadingRegion, NetworkError, SkeletonText, Table, chipVariants } from '../../../components/ui'
 import { useCompanyName } from '../../../company-context/useCompanyName'
 import { useViewerCapabilities } from '../../../auth/viewerCapabilities'
 import { calendarDay } from '../../../lib/calendarDay'
@@ -62,6 +62,37 @@ const LEGEND: Record<SemaforoEstado, string> = {
 }
 
 /**
+ * The leader board's "Alcance de la lista": the two relations a node leader has to the plans
+ * `GET /api/planes-accion` returns them, and the union.
+ *
+ * Not a filter by nodo. `mine` is "the service lets me record avance here" (`canManage`) and
+ * `involved` is "this plan names me" (`named`) — two different answers from
+ * `PlanAccessHandler`, and a leader can hold both on the same plan, which is why `all` is not
+ * the sum of the two.
+ */
+type Scope = 'all' | 'mine' | 'involved'
+
+function inScope(row: ListRow, scope: Scope): boolean {
+  if (scope === 'mine') return row.canManage
+  if (scope === 'involved') return row.named && !row.canManage
+  return true
+}
+
+function scopeCounts(rows: readonly ListRow[]): Record<Scope, number> {
+  return {
+    all: rows.length,
+    mine: rows.filter((row) => inScope(row, 'mine')).length,
+    involved: rows.filter((row) => inScope(row, 'involved')).length,
+  }
+}
+
+const SCOPE_LABEL: Record<Scope, string> = {
+  all: 'tracking.next.planesScopeAll',
+  mine: 'tracking.next.planesScopeMine',
+  involved: 'tracking.next.planesScopeInvolved',
+}
+
+/**
  * `/tracking/planes` — the redesigned *Planes de acción* (TrackingPlanesList artboard,
  * 10 Sep). It replaced `pages/PlanesAccionListPage.tsx` on this route; that page stays in the
  * tree, unrouted, as the wiring reference.
@@ -78,6 +109,21 @@ const LEGEND: Record<SemaforoEstado, string> = {
  * "Registrar avance" on the plans the viewer may record progress on (`canManagePlan`) and
  * "Abrir" on the rest. Names come from the directory only an administrator may read; anyone
  * else sees their own name and "responsable fuera del directorio" for the others.
+ *
+ * ## The node leader's board (TrackingPlanesListLeader, 10 Sep)
+ *
+ * A `leader` with a real `nodoId` (`capabilities.leadsANodo`) gets a different page from the
+ * same data, because their list is not one thing: `PlanesAccionEndpoints` hands them their
+ * OWN nodo's plans, where they record avance, **and** plans of other nodos that merely name
+ * them, where they may not. An administrator filters by nodo because they have every nodo;
+ * this reader has two relations to what they can see, and the board says so — in the
+ * description, in a scope selector, in a "Tu papel" column in place of "Nodo", and in a
+ * legend that spells out what each relation lets them do.
+ *
+ * "Marcar cumplido" is on neither relation. Since 2026-09-14 that is `AccessLevel.Approve`
+ * and an administrator's act (`docs/decisions/tracking-fulfilment-authority.md`), so the
+ * board's own sentence — which in the artboard read "registras avance y lo marcas cumplido"
+ * — says the opposite here, deliberately.
  */
 export default function PlanesListNextPage() {
   const { t, locale } = useTranslation()
@@ -86,12 +132,16 @@ export default function PlanesListNextPage() {
   const claims = useMemo(() => readTrackingClaims(), [])
   const state = usePlanesListModel()
   const [nodo, setNodo] = useState(ALL)
+  const [scope, setScope] = useState<Scope>('all')
   const [estado, setEstado] = useState(ALL)
   const [creating, setCreating] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [created, setCreated] = useState<PlanAccion | null>(null)
   const mayCreate = canCreatePlan(claims)
+  /** The node leader's board: `role === 'leader'` with a `nodoId` that names a real nodo. */
+  const leaderView = capabilities.leadsANodo
+  const ownNodo = state.ownNodoName
 
   const names = useMemo(() => new Map((state.nodos ?? []).map((item) => [item.id, item.name])), [state.nodos])
   const rows = useMemo(
@@ -99,7 +149,12 @@ export default function PlanesListNextPage() {
     [state.plans, state.asOf, names, state.personas, state.viewer, claims],
   )
   const all = groupRows(rows)
-  const filtered = rows.filter((row) => (nodo === ALL || row.nodoExternalId === nodo) && (estado === ALL || row.estado === estado))
+  const filtered = rows.filter(
+    (row) =>
+      (nodo === ALL || row.nodoExternalId === nodo) &&
+      (!leaderView || inScope(row, scope)) &&
+      (estado === ALL || row.estado === estado),
+  )
   const shown = groupRows(filtered)
   const nodoOrder = (state.nodos ?? []).map((item) => item.id)
   const nodoOptions = state.nodos
@@ -125,17 +180,52 @@ export default function PlanesListNextPage() {
     <div className="flex flex-col gap-section">
       <div className="-mb-6">
         <PageTopBar
-          eyebrow={companyName ? t('tracking.next.consolidadoEyebrow', { company: companyName }) : t('tracking.next.consolidadoEyebrowBare')}
+          eyebrow={
+            leaderView && ownNodo
+              ? t('tracking.next.planesEyebrowNodo', { nodo: ownNodo })
+              : companyName
+                ? t('tracking.next.consolidadoEyebrow', { company: companyName })
+                : t('tracking.next.consolidadoEyebrowBare')
+          }
           title={t('tracking.next.planesTitle')}
-          description={t('tracking.next.planesDescription')}
+          description={
+            leaderView
+              ? ownNodo
+                ? t('tracking.next.planesDescriptionLeader', { nodo: ownNodo })
+                : t('tracking.next.planesDescriptionLeaderBare')
+              : t('tracking.next.planesDescription')
+          }
+          // The board's dashed line under the description. It is not decoration: a leader
+          // who presses "Nuevo plan" gets a form whose nodo field offers exactly one option
+          // (`trackingAccess.creatableNodos`), and being told why beforehand is the whole
+          // difference between a constraint and a bug.
+          meta={
+            leaderView && mayCreate ? (
+              <span className="flex items-start gap-2 text-xs text-fg-label" data-slot="create-note">
+                <CircleAlert aria-hidden="true" className="mt-px size-3.5 shrink-0" />
+                <span>{ownNodo ? t('tracking.next.planesCreateNote', { nodo: ownNodo }) : t('tracking.next.planesCreateNoteBare')}</span>
+              </span>
+            ) : undefined
+          }
           actions={
-            capabilities.canViewConsolidado || mayCreate ? (
+            capabilities.canViewConsolidado || capabilities.leadsANodo || mayCreate ? (
               <>
                 {capabilities.canViewConsolidado && (
                   <Button asChild variant="outline">
                     <Link to="/tracking">
                       <LayoutPanelTop aria-hidden="true" />
                       {t('tracking.next.planesConsolidado')}
+                    </Link>
+                  </Button>
+                )}
+                {/* A leader has no consolidado — `ConsolidadoAsync` forbids them — and their
+                    equivalent is their own nodo's board. `/tracking/tablero` takes no id:
+                    `TableroAsync` answers a caller who names none with their own nodo. */}
+                {leaderView && (
+                  <Button asChild variant="outline">
+                    <Link to="/tracking/tablero">
+                      <LayoutPanelTop aria-hidden="true" />
+                      {ownNodo ? t('tracking.next.planesTablero', { nodo: ownNodo }) : t('tracking.next.planesTableroBare')}
                     </Link>
                   </Button>
                 )}
@@ -150,7 +240,7 @@ export default function PlanesListNextPage() {
                     }}
                   >
                     <Plus aria-hidden="true" />
-                    {t('tracking.actions.newPlan')}
+                    {leaderView && ownNodo ? t('tracking.next.planesNewPlanIn', { nodo: ownNodo }) : t('tracking.actions.newPlan')}
                   </Button>
                 )}
               </>
@@ -203,7 +293,7 @@ export default function PlanesListNextPage() {
             <EmptyState title={mayCreate ? t('tracking.next.planesEmptyAll') : t('tracking.next.planesEmptyMine')} />
           ) : (
             <div className="flex flex-col gap-section">
-              <Tiles rows={rows} grouped={all} nodoOrder={nodoOrder} t={t} locale={locale} />
+              <Tiles rows={rows} grouped={all} nodoOrder={nodoOrder} leaderView={leaderView} ownNodo={ownNodo} t={t} locale={locale} />
 
               <div className="flex flex-col gap-4">
                 <Filters
@@ -212,7 +302,10 @@ export default function PlanesListNextPage() {
                   nodoOptions={nodoOptions}
                   onNodo={setNodo}
                   onEstado={setEstado}
-                  summary={<CoverageLine rows={rows} directory={state.nodos} t={t} locale={locale} />}
+                  scope={leaderView ? scope : null}
+                  scopeCounts={scopeCounts(rows)}
+                  onScope={setScope}
+                  summary={leaderView ? <span>{t('tracking.next.planesScopeNote')}</span> : <CoverageLine rows={rows} directory={state.nodos} t={t} locale={locale} />}
                   t={t}
                 />
                 {filtered.length === 0 ? (
@@ -220,18 +313,19 @@ export default function PlanesListNextPage() {
                 ) : (
                   <>
                     {SEMAFORO_ORDER.filter((key) => estado === ALL || estado === key).map((key) => (
-                      <StateSection key={key} estado={key} rows={shown.byEstado[key]} t={t} locale={locale} />
+                      <StateSection key={key} estado={key} rows={shown.byEstado[key]} leaderView={leaderView} ownNodo={ownNodo} t={t} locale={locale} />
                     ))}
-                    {shown.unknown.length > 0 && <UnknownSection rows={shown.unknown} t={t} locale={locale} />}
+                    {shown.unknown.length > 0 && <UnknownSection rows={shown.unknown} leaderView={leaderView} ownNodo={ownNodo} t={t} locale={locale} />}
                   </>
                 )}
-                {estado === ALL && <Cumplidos rows={shown.cumplidos} t={t} locale={locale} />}
+                {estado === ALL && <Cumplidos rows={shown.cumplidos} leaderView={leaderView} ownNodo={ownNodo} t={t} locale={locale} />}
               </div>
 
               <Legend asOf={state.asOf} t={t} locale={locale} />
+              {leaderView && <RoleLegend ownNodo={ownNodo} t={t} />}
               <div className="flex items-start gap-2.5 rounded-lg bg-surface-icon-box px-3.5 py-3 text-sm leading-normal text-fg-secondary">
                 <Shield aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
-                <span>{t('tracking.next.planesWhoWrites')}</span>
+                <span>{leaderView ? t('tracking.next.planesWhoWritesLeader') : t('tracking.next.planesWhoWrites')}</span>
               </div>
             </div>
           )}
@@ -245,18 +339,23 @@ function Tiles({
   rows,
   grouped,
   nodoOrder,
+  leaderView,
+  ownNodo,
   t,
   locale,
 }: {
   rows: readonly ListRow[]
   grouped: ReturnType<typeof groupRows>
   nodoOrder: readonly string[]
+  leaderView: boolean
+  ownNodo: string | null
   t: TranslateFn
   locale: string
 }) {
   const nodos = new Set(rows.map((row) => row.nodoExternalId)).size
   const withProgress = rows.filter((row) => row.hasProgress).length
   const cumplidos = grouped.cumplidos.length
+  const counts = scopeCounts(rows)
   const sub = [
     withProgress === 0 ? t('tracking.next.planesNoneWithProgress') : t('tracking.next.planesWithProgress', { count: withProgress }),
     cumplidos === 0
@@ -265,14 +364,29 @@ function Tiles({
         ? t('tracking.next.planesCumplidoOne')
         : t('tracking.next.planesCumplidoMany', { count: cumplidos }),
   ].join(' · ')
+  // "in 2 nodos" is a coverage reading, and coverage is a statement about the tenant that
+  // only a reader who can see the tenant may make. A leader sees their own nodo plus
+  // whatever named them, so the board splits the total that way instead.
+  const leaderSub = t('tracking.next.joined', {
+    first: ownNodo ? t('tracking.next.planesFromYourNodo', { nodo: ownNodo }) : t('tracking.next.planesFromYourNodoBare'),
+    second: counts.involved === 0 ? t('tracking.next.planesNoneOtherNodos') : t('tracking.next.planesOtherNodos', { count: counts.involved }),
+  })
   return (
     <KpiRow>
       <KpiTile
-        label={t('tracking.totalPlanes')}
+        label={leaderView ? t('tracking.next.planesTileYours') : t('tracking.totalPlanes')}
         value={rows.length}
         locale={locale}
-        unit={nodos === 1 ? t('tracking.next.inOneNodo') : t('tracking.next.inNodos', { count: nodos })}
-        sub={<span className="text-fg-label">{sub}</span>}
+        unit={
+          leaderView
+            ? rows.length === 1
+              ? t('tracking.next.unitPlan')
+              : t('tracking.next.unitPlans')
+            : nodos === 1
+              ? t('tracking.next.inOneNodo')
+              : t('tracking.next.inNodos', { count: nodos })
+        }
+        sub={<span className="text-fg-label">{leaderView ? leaderSub : sub}</span>}
       />
       {SEMAFORO_ORDER.map((estado) => {
         const presentation = semaforoPresentation(estado)
@@ -334,6 +448,9 @@ function Filters({
   nodoOptions,
   onNodo,
   onEstado,
+  scope,
+  scopeCounts: counts,
+  onScope,
   summary,
   t,
 }: {
@@ -342,12 +459,41 @@ function Filters({
   nodoOptions: readonly { id: string; name: string }[]
   onNodo: (value: string) => void
   onEstado: (value: string) => void
+  /** `null` for everyone but the node leader, whose board replaces the nodo picker with it. */
+  scope: Scope | null
+  scopeCounts: Record<Scope, number>
+  onScope: (value: Scope) => void
   summary: ReactNode
   t: TranslateFn
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2.5">
-      {nodoOptions.length > 1 && (
+      {scope !== null ? (
+        // Toggle buttons in a named group, not `role="tab"`: these filter a list that is
+        // already on screen, and a tab whose panel is the page would be claiming a
+        // relationship the markup does not have. `chipVariants` styles them whole, so
+        // `index.css`'s bare-button card never shows (`SurveysListNextPage` does the same).
+        <div role="group" aria-label={t('tracking.next.planesScopeLabel')} className="flex flex-wrap items-center gap-1.5">
+          {(['all', 'mine', 'involved'] as const).map((value) => {
+            const selected = scope === value
+            return (
+              <button
+                key={value}
+                type="button"
+                data-slot="scope-pill"
+                data-scope={value}
+                aria-pressed={selected}
+                onClick={() => onScope(value)}
+                className={cn(chipVariants({ tone: selected ? 'critical' : 'neutral' }), 'cursor-pointer hover:border-line-hover')}
+              >
+                {t(SCOPE_LABEL[value])}
+                <span className="font-mono tabular-nums">{counts[value]}</span>
+              </button>
+            )
+          })}
+        </div>
+      ) : null}
+      {scope === null && nodoOptions.length > 1 && (
         <label className="m-0">
           <span className="sr-only">{t('tracking.next.planesNodoFilter')}</span>
           <CanvasSelect className="w-50" value={nodo} onChange={(event) => onNodo(event.target.value)}>
@@ -391,7 +537,21 @@ function SectionHead({ id, icon, tone, heading, count, note }: { id: string; ico
   )
 }
 
-function StateSection({ estado, rows, t, locale }: { estado: SemaforoEstado; rows: readonly ListRow[]; t: TranslateFn; locale: string }) {
+function StateSection({
+  estado,
+  rows,
+  leaderView,
+  ownNodo,
+  t,
+  locale,
+}: {
+  estado: SemaforoEstado
+  rows: readonly ListRow[]
+  leaderView: boolean
+  ownNodo: string | null
+  t: TranslateFn
+  locale: string
+}) {
   const presentation = semaforoPresentation(estado)
   const id = `planes-${presentation.countKey}`
   return (
@@ -403,22 +563,48 @@ function StateSection({ estado, rows, t, locale }: { estado: SemaforoEstado; row
           {t(SECTION_EMPTY[estado])}
         </p>
       ) : (
-        <PlansTable rows={rows} label={t(presentation.labelKey)} t={t} locale={locale} />
+        <PlansTable rows={rows} label={t(presentation.labelKey)} leaderView={leaderView} ownNodo={ownNodo} t={t} locale={locale} />
       )}
     </section>
   )
 }
 
-function UnknownSection({ rows, t, locale }: { rows: readonly ListRow[]; t: TranslateFn; locale: string }) {
+function UnknownSection({
+  rows,
+  leaderView,
+  ownNodo,
+  t,
+  locale,
+}: {
+  rows: readonly ListRow[]
+  leaderView: boolean
+  ownNodo: string | null
+  t: TranslateFn
+  locale: string
+}) {
   return (
     <section aria-labelledby="planes-sin-estado" className="flex flex-col gap-2.5">
       <SectionHead id="planes-sin-estado" icon={<CircleAlert aria-hidden="true" className="size-4" />} tone="" heading={t('tracking.next.planesSinEstado')} count={rows.length} note={t('tracking.next.planesSinEstadoNote')} />
-      <PlansTable rows={rows} label={t('tracking.next.planesSinEstado')} t={t} locale={locale} />
+      <PlansTable rows={rows} label={t('tracking.next.planesSinEstado')} leaderView={leaderView} ownNodo={ownNodo} t={t} locale={locale} />
     </section>
   )
 }
 
-function PlansTable({ rows, label, t, locale }: { rows: readonly ListRow[]; label: string; t: TranslateFn; locale: string }) {
+function PlansTable({
+  rows,
+  label,
+  leaderView,
+  ownNodo,
+  t,
+  locale,
+}: {
+  rows: readonly ListRow[]
+  label: string
+  leaderView: boolean
+  ownNodo: string | null
+  t: TranslateFn
+  locale: string
+}) {
   return (
     <div className="overflow-hidden rounded-xl border border-line-default bg-surface-card shadow-sm">
       <div className="overflow-x-auto">
@@ -431,7 +617,7 @@ function PlansTable({ rows, label, t, locale }: { rows: readonly ListRow[]; labe
             <colgroup>
               <col className="w-35.5" />
               <col />
-              <col className="w-28" />
+              <col className={leaderView ? 'w-38' : 'w-28'} />
               <col className="w-45.5" />
               <col className="w-27" />
               <col className="w-37" />
@@ -441,7 +627,11 @@ function PlansTable({ rows, label, t, locale }: { rows: readonly ListRow[]; labe
               <tr className="border-b border-line-default">
                 <th className={TH}>{t('tracking.next.planesColCodigo')}</th>
                 <th className={TH}>{t('tracking.next.planesColQue')}</th>
-                <th className={TH}>{t('tracking.next.planesColNodo')}</th>
+                {/* The leader board replaces "Nodo" with "Tu papel". A leader's list holds
+                    at most their own nodo plus whichever ones named them, so the nodo's name
+                    is the less useful half of that cell — and the half they cannot resolve
+                    anyway for a plan that is not theirs (`TrackingPickerEndpoints.cs:19-21`). */}
+                <th className={TH}>{leaderView ? t('tracking.next.planesColPapel') : t('tracking.next.planesColNodo')}</th>
                 <th className={TH}>{t('tracking.next.planesColResponsable')}</th>
                 <th className={TH}>{t('tracking.next.planesColAvance')}</th>
                 <th className={TH}>{t('tracking.next.planesColCompromiso')}</th>
@@ -452,7 +642,7 @@ function PlansTable({ rows, label, t, locale }: { rows: readonly ListRow[]; labe
             </thead>
             <tbody>
               {rows.map((row) => (
-                <PlanRow key={row.id} row={row} t={t} locale={locale} />
+                <PlanRow key={row.id} row={row} leaderView={leaderView} ownNodo={ownNodo} t={t} locale={locale} />
               ))}
             </tbody>
           </Table>
@@ -470,7 +660,19 @@ function compromisoSub(row: ListRow, t: TranslateFn): string {
   return t('tracking.next.planesInDays', { days })
 }
 
-function PlanRow({ row, t, locale }: { row: ListRow; t: TranslateFn; locale: string }) {
+function PlanRow({
+  row,
+  leaderView,
+  ownNodo,
+  t,
+  locale,
+}: {
+  row: ListRow
+  leaderView: boolean
+  ownNodo: string | null
+  t: TranslateFn
+  locale: string
+}) {
   const responsable = row.responsable
   return (
     <tr data-plan-code={row.code} className="border-b border-line-light last:border-b-0">
@@ -485,7 +687,25 @@ function PlanRow({ row, t, locale }: { row: ListRow; t: TranslateFn; locale: str
           {row.como && <span className="line-clamp-2 text-xs text-fg-label">{row.como}</span>}
         </span>
       </td>
-      <td className={cn(TD, 'text-sm text-fg-secondary')}>{row.nodoName ?? t('tracking.next.nodoUnnamed')}</td>
+      {leaderView ? (
+        <td className={TD} data-slot="papel">
+          <span className="flex min-w-0 flex-col gap-1">
+            <Chip
+              label={row.canManage ? t('tracking.next.planesPapelTuNodo') : t('tracking.next.planesPapelParticipas')}
+              icon={row.canManage ? <LayoutPanelTop /> : <Users />}
+            />
+            <span className="text-2xs text-fg-label">
+              {row.canManage
+                ? row.nodoName ?? ownNodo
+                  ? t('tracking.next.planesPapelRegistras', { nodo: row.nodoName ?? ownNodo ?? '' })
+                  : t('tracking.next.planesPapelRegistrasBare')
+                : t('tracking.next.planesPapelOtroNodo')}
+            </span>
+          </span>
+        </td>
+      ) : (
+        <td className={cn(TD, 'text-sm text-fg-secondary')}>{row.nodoName ?? t('tracking.next.nodoUnnamed')}</td>
+      )}
       <td className={TD}>
         {responsable.id === '' ? (
           <span className="text-xs text-fg-label">{t('tracking.next.responsableUnassigned')}</span>
@@ -527,7 +747,19 @@ function PlanRow({ row, t, locale }: { row: ListRow; t: TranslateFn; locale: str
   )
 }
 
-function Cumplidos({ rows, t, locale }: { rows: readonly ListRow[]; t: TranslateFn; locale: string }) {
+function Cumplidos({
+  rows,
+  leaderView,
+  ownNodo,
+  t,
+  locale,
+}: {
+  rows: readonly ListRow[]
+  leaderView: boolean
+  ownNodo: string | null
+  t: TranslateFn
+  locale: string
+}) {
   const [open, setOpen] = useState(false)
   return (
     <section aria-labelledby="planes-cumplidos" className="flex flex-col gap-2.5">
@@ -537,19 +769,60 @@ function Cumplidos({ rows, t, locale }: { rows: readonly ListRow[]; t: Translate
         aria-expanded={open}
         disabled={rows.length === 0}
         onClick={() => setOpen((value) => !value)}
-        className="h-auto justify-start gap-2.5 rounded-xl border border-line-default bg-surface-card px-4 py-3 font-normal shadow-sm disabled:opacity-100"
+        // `flex-wrap` and a text column that may shrink: the leader's line names the nodo
+        // ("ningún plan de Ingeniería se ha marcado como cumplido todavía") and at 390 the
+        // row ran past the card's right edge and was clipped. Only the PNG showed it.
+        className="h-auto flex-wrap justify-start gap-x-2.5 gap-y-1 whitespace-normal rounded-xl border border-line-default bg-surface-card px-4 py-3 text-left font-normal shadow-sm disabled:opacity-100"
       >
         <ChevronRight aria-hidden="true" className={cn('size-4 text-fg-label transition-transform', open && 'rotate-90')} />
         <span id="planes-cumplidos" className="text-sm font-semibold text-fg-primary">
           {t('tracking.next.planesCumplidos')}
         </span>
         <span className="font-mono text-xs tabular-nums text-fg-label">{rows.length}</span>
-        <span className="text-xs text-fg-label">
-          {rows.length === 0 ? t('tracking.next.planesCumplidosNone') : t('tracking.next.planesCumplidosSome')}
+        <span className="min-w-0 text-xs text-fg-label">
+          {rows.length === 0
+            ? leaderView && ownNodo
+              ? t('tracking.next.planesCumplidosNoneNodo', { nodo: ownNodo })
+              : t('tracking.next.planesCumplidosNone')
+            : t('tracking.next.planesCumplidosSome')}
         </span>
       </Button>
-      {open && rows.length > 0 && <PlansTable rows={rows} label={t('tracking.next.planesCumplidos')} t={t} locale={locale} />}
+      {open && rows.length > 0 && (
+        <PlansTable rows={rows} label={t('tracking.next.planesCumplidos')} leaderView={leaderView} ownNodo={ownNodo} t={t} locale={locale} />
+      )}
     </section>
+  )
+}
+
+/**
+ * The leader board's closing block: what each of the two marks in the "Tu papel" column
+ * actually lets the reader do.
+ *
+ * The artboard's first line reads "el plan es de Ingeniería: registras avance **y lo marcas
+ * cumplido**". That half is no longer true — `POST …/cumplir` became `AccessLevel.Approve` on
+ * 2026-09-14 and `PlanAccessHandler` excludes the node's own leader from it by name — so the
+ * line says who does instead. Reported as a difference from the board rather than built.
+ */
+function RoleLegend({ ownNodo, t }: { ownNodo: string | null; t: TranslateFn }) {
+  return (
+    <ul className="m-0 grid list-none grid-cols-1 gap-2 p-0 text-xs text-fg-secondary md:grid-cols-2" data-slot="role-legend">
+      {/* `items-start` + a `min-w-0 flex-1` text column, not `flex-wrap`: wrapping put the
+          chip on its own line for whichever item happened to be longer, so the two halves of
+          one legend lined up differently. Only the PNG showed it. */}
+      <li className="m-0 flex items-start gap-2">
+        <Chip label={t('tracking.next.planesPapelTuNodo')} icon={<LayoutPanelTop />} />
+        <span className="min-w-0 flex-1 pt-0.5">
+          {ownNodo ? t('tracking.next.planesRoleLegendMine', { nodo: ownNodo }) : t('tracking.next.planesRoleLegendMineBare')}
+        </span>
+      </li>
+      {/* `items-start` + a `min-w-0 flex-1` text column, not `flex-wrap`: wrapping put the
+          chip on its own line for whichever item happened to be longer, so the two halves of
+          one legend lined up differently. Only the PNG showed it. */}
+      <li className="m-0 flex items-start gap-2">
+        <Chip label={t('tracking.next.planesPapelParticipas')} icon={<Users />} />
+        <span className="min-w-0 flex-1 pt-0.5">{t('tracking.next.planesRoleLegendInvolved')}</span>
+      </li>
+    </ul>
   )
 }
 
