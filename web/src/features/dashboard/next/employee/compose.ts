@@ -106,6 +106,9 @@ export function composeEmployeeHome(input: {
     others,
     // The count is the truth and the list is a page of it (`SurveyRowLimit` = 5).
     beyondList: dashboard.pendingSurveyCount > surveys.length,
+    // `> 0`, never the number: see `model.ts`. A payload missing the field entirely — an
+    // older server, a cached body — is `NaN > 0`, which is `false`, i.e. silence.
+    hasAnsweredIdentified: dashboard.completedSurveyCount > 0,
     leadAllowsSaveForLater: lead === null ? null : input.leadAllowsSaveForLater,
     outcome: composeOutcome(input.lastOutcome),
   }

@@ -409,6 +409,103 @@ describe('EmployeeHomeView', () => {
     expect(screen.getByText(es('employee.homeDescriptionNothingDue'))).toBeTruthy()
   })
 
+  /**
+   * The EmployeeDashboardAnswered artboard. Its card names the survey the reader answered
+   * and the day they answered it, and marks that date "dato nuevo" because it is: a survey
+   * that records who answered leaves `SurveyQueries.AssignedTo`'s result set on submission,
+   * so neither payload carries it. What the card CAN say is drawn; the receipt is not.
+   */
+  it('draws the answered card when nothing is owed, and names no survey and no date on it', async () => {
+    serves({ dashboard: home({ pendingSurveyCount: 0, pendingSurveys: [], nextDeadline: null }) })
+    renderHome()
+
+    const card = await waitFor(() => {
+      const node = document.querySelector<HTMLElement>('[data-slot="home-nothing-due"]')
+      if (!node) throw new Error('no answered card yet')
+      return node
+    })
+    expect(within(card).getByText(es('employee.next.nothingDueTitle'))).toBeTruthy()
+    // The survey the reader answered is not in either payload, so it is not on the card.
+    expect(card.textContent).not.toContain('Encuesta de Clima Q4')
+    // No readings row: "Su respuesta · 9 sept" is the tile the artboard marks "dato nuevo".
+    expect(card.querySelector('dl')).toBeNull()
+    // The way out the artboard draws, at a real route.
+    expect(within(card).getByRole('link', { name: es('navigation.mySurveys') }).getAttribute('href')).toBe(
+      '/surveys/my',
+    )
+    expect(within(card).getByText(es('employee.next.nothingDueAnswersNote'))).toBeTruthy()
+    expect(document.querySelector('[data-slot="home-to-answer-meta"]')?.textContent).toBe(
+      es('employee.next.nothingDueMeta'),
+    )
+  })
+
+  it('says “Ya respondió” and ticks it only on a response the server recorded as this reader’s', async () => {
+    serves({ dashboard: home({ pendingSurveyCount: 0, pendingSurveys: [], nextDeadline: null }) })
+    renderHome()
+
+    expect(
+      await screen.findByRole('heading', { level: 2, name: es('employee.next.answeredHeading') }),
+    ).toBeTruthy()
+    expect(screen.getByText(es('employee.next.answeredChip'))).toBeTruthy()
+    // The tally itself is still never printed — against an anonymous survey it reads 0 for
+    // someone who did answer.
+    expect(document.body.textContent).not.toContain('37')
+  })
+
+  it('never says a reader with no such record failed to answer — the heading goes neutral instead', async () => {
+    // `completedSurveyCount` is 0 for someone who answered an anonymous survey, because
+    // `SurveyResponseEndpoints.cs` writes no user id for one. Zero is silence.
+    serves({
+      dashboard: home({ pendingSurveyCount: 0, pendingSurveys: [], nextDeadline: null, completedSurveyCount: 0 }),
+    })
+    renderHome()
+
+    expect(
+      await screen.findByRole('heading', { level: 2, name: es('employee.next.nothingDueHeading') }),
+    ).toBeTruthy()
+    expect(screen.queryByRole('heading', { level: 2, name: es('employee.next.answeredHeading') })).toBeNull()
+    expect(screen.queryByText(es('employee.next.answeredChip'))).toBeNull()
+  })
+
+  it('takes the floor in “what happens now” from the server’s own last outcome', async () => {
+    serves({
+      dashboard: home({ pendingSurveyCount: 0, pendingSurveys: [], nextDeadline: null }),
+      lastOutcome: outcome({ minimumGroupSize: 8 }),
+    })
+    renderHome()
+
+    expect(await screen.findByText(es('employee.next.resultsGoToBody', { floor: 8 }))).toBeTruthy()
+    expect(screen.queryByText(es('employee.next.resultsGoToBody', { floor: 5 }))).toBeNull()
+    expect(
+      screen.getByText(es('employee.next.resultsGoToTitle', { department: 'Ingeniería' })),
+    ).toBeTruthy()
+  })
+
+  it('states the rule without a number when no outcome has told it the floor', async () => {
+    serves({
+      dashboard: home({ pendingSurveyCount: 0, pendingSurveys: [], nextDeadline: null }),
+      lastOutcome: null,
+    })
+    renderHome()
+
+    expect(await screen.findByText(es('employee.next.resultsGoToBodyNoFloor'))).toBeTruthy()
+    expect(screen.queryByText(es('employee.next.resultsGoToBody', { floor: 5 }))).toBeNull()
+  })
+
+  it('keeps the standing note off the answered page, where the column beside it says the same', async () => {
+    serves({ dashboard: home({ pendingSurveyCount: 0, pendingSurveys: [], nextDeadline: null }) })
+    renderHome()
+
+    await screen.findByText(es('employee.next.nothingDueTitle'))
+    expect(screen.queryByText(es('employee.next.resultsNote'))).toBeNull()
+    // …and keeps it where there IS a task, which is the state it was written for.
+    cleanup()
+    serves()
+    renderHome()
+    expect(await screen.findByText(es('employee.next.resultsNote'))).toBeTruthy()
+    expect(document.querySelector('[data-slot="home-nothing-due"]')).toBeNull()
+  })
+
   it('tells what came of the last survey, naming no protected department and counting none of its answers', async () => {
     serves()
     renderHome()

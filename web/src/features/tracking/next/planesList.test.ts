@@ -19,6 +19,7 @@ function row(code: string, over: Partial<ListRow> = {}): ListRow {
     hasProgress: false,
     responsableIsViewer: false,
     canManage: false,
+    named: false,
     ...over,
   }
 }

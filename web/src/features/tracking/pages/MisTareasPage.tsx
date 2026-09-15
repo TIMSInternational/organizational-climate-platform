@@ -1,3 +1,19 @@
+/**
+ * NOT ROUTED. `/tracking/mis-tareas` renders the redesigned Mis tareas
+ * (`../next/MisTareasNextPage`), which replaced this page — the MisTareas and
+ * MisTareasAsignadas artboards of 10 Sep, under the standing ruling that a redesigned screen
+ * takes its real route. Nothing in `router.tsx` reaches this file; `router.test.ts` pins that.
+ *
+ * It stays in the tree as the wiring reference: `useMisTareasModel` makes this page's one
+ * request (`GET /api/mis-tareas`, no company parameter) and keeps its two findings — that the
+ * endpoint reads no role claim, so every role is a first-class caller, and that the read-only
+ * banner must ask `canManagePlan` rather than assert who writes.
+ *
+ * **Its tests moved with its route**, into `next/MisTareasNextPage.test.tsx`. A test naming a
+ * component nothing mounts keeps reporting a guarantee as held on code no user reaches — the
+ * defect a lane shipped by re-pointing `/login` and leaving the old file's test behind — so
+ * this file has none, deliberately. Delete it when nothing reads it as a reference.
+ */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { PageTopBar } from '../../../components/layout'
 import {

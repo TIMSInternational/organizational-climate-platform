@@ -491,7 +491,10 @@ describe('DashboardPage', () => {
 
     renderDashboard()
 
-    expect(await screen.findByText('Nothing is waiting for you')).toBeTruthy()
+    // The EmployeeDashboardAnswered card's own sentence. It replaced the bare empty state
+    // ("Nothing is waiting for you") when that artboard was built; `EmployeeHomeView.tsx`
+    // says what the card can and cannot claim.
+    expect(await screen.findByText('You have nothing to answer right now')).toBeTruthy()
     const waysIn = screen
       .queryAllByRole('link')
       .map((link) => link.getAttribute('href') ?? '')
