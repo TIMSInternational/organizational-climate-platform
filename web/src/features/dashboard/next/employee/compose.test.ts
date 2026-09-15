@@ -154,6 +154,29 @@ describe('composeEmployeeHome', () => {
     }
   })
 
+  /**
+   * The one shape `completedSurveyCount` may be read in. A positive count is a response the
+   * server recorded against this user row, so "you have answered" is true; a zero is also
+   * what an anonymous survey leaves behind, so it is silence and never a denial.
+   */
+  it('reads the completed tally as a one-way fact, never as a denial', () => {
+    const cases: [number, boolean][] = [
+      [37, true],
+      [1, true],
+      [0, false],
+      [Number.NaN, false],
+    ]
+    for (const [count, expected] of cases) {
+      const model = composeEmployeeHome({
+        dashboard: dashboard({ completedSurveyCount: count, pendingSurveyCount: 0, pendingSurveys: [] }),
+        lastOutcome: null,
+        leadAllowsSaveForLater: null,
+        asOf: CANVAS_EVENING,
+      })
+      expect(model.hasAnsweredIdentified, `completedSurveyCount: ${String(count)}`).toBe(expected)
+    }
+  })
+
   it('carries no save-for-later claim when there is no survey to make it about', () => {
     const model = composeEmployeeHome({
       dashboard: dashboard({ pendingSurveyCount: 0, pendingSurveys: [] }),

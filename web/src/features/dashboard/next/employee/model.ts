@@ -75,6 +75,19 @@ export interface EmployeeHomeModel {
   /** The count says more is outstanding than the page lists. */
   beyondList: boolean
   /**
+   * Whether this person has completed at least one survey that recorded who answered.
+   *
+   * **A one-way fact, and the only shape `completedSurveyCount` may be read in.** The count
+   * itself is never drawn — an anonymous response stores no user id
+   * (`SurveyResponseEndpoints.cs` writes `IsAnonymous ? null : ActingUserId`), so against an
+   * anonymous survey it reads 0 for someone who did answer, and printing it would call that
+   * person a non-respondent. `> 0` carries no such risk: a positive count is a response the
+   * server recorded against this user row, so "you have answered" is true whenever it is
+   * set. `false` is silence — "we have no record", never "you did not answer" — and the
+   * page draws a neutral heading for it rather than an accusation.
+   */
+  hasAnsweredIdentified: boolean
+  /**
    * Whether the lead survey lets the respondent save and finish later — its own
    * `Settings.AllowPartialResponses`, read from `GET /surveys/{id}/respond`. `null` when
    * that read has not answered (or failed): the page then says nothing about saving,
