@@ -723,9 +723,21 @@ Download.
   account, and `infra/aws/climate-project-observability.yml` has never been deployed (verified
   2026-09-02). So "we would have been paged" is not an expectation any step here may rely on.
   That is #158.
-- **Custom domain on the API.** No custom domain is attached to the App Runner service (verified
+- **Custom domain on the API.** ~~No custom domain is attached to the App Runner service (verified
   2026-09-02); `web/vercel.json`'s CSP `connect-src` hardcodes the App Runner hostname. That is
-  #160, and it means a domain change is a web redeploy, not just DNS.
+  #160, and it means a domain change is a web redeploy, not just DNS.~~
+  [AMENDED 2026-09-16. **Both halves are now wrong, and the conclusion survives for a different
+  reason.** (1) `api.climate.timsint.com` has been attached and `active` since 2026-09-14 —
+  `dig +short api.climate.timsint.com @1.1.1.1` -> `bhgrdkd4gt.us-east-1.awsapprunner.com.`,
+  `/version` -> `69193e40`, `/health` -> `200`. (2) The CSP does **not** hardcode only the App
+  Runner hostname: `web/vercel.json` `connect-src` reads `'self' https://api.climate.timsint.com
+  https://bhgrdkd4gt.us-east-1.awsapprunner.com`, and the header served by
+  `https://climate.timsint.com` carries both (measured 2026-09-16). So moving the web onto the
+  custom domain needs **no CSP edit**. It still needs a redeploy, because `VITE_API_BASE_URL` is
+  compiled into the bundle at build time, not read at runtime — and it is still unset, so the
+  live bundle calls the App Runner host 84 times and the custom domain 0 times. For UAT this
+  means: the tester will see requests to the App Runner hostname, and that is expected, not a
+  defect.]
 
 ### 8.6 Two microclimate surfaces exist on the API and cannot be reached from any screen
 

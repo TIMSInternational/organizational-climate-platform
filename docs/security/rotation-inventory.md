@@ -278,10 +278,23 @@ never values, per this file's rule. Evidence per console:
   `climate-project-api/prod/database-connection-string` (`…-jgthiv`);
   `INTERNAL_API_KEY_SECRET_ARN` → `climate-project-api/prod/InternalApiKey` (`…-rILWWK`) —
   all account `747814092517`, us-east-1, set 2026-08-04 — plus the two CORS origins
-  (production frontend: `https://web-one-green-86.vercel.app` — corrected 2026-08-18;
-  the previously-recorded `organizational-climate-platform.vercel.app` is the LEGACY
-  deployment, which is consistent with this document's own finding that the legacy
-  Vercel project is not visible from this account).
+  (production frontend: `https://climate.timsint.com`).
+  [CORRECTED 2026-09-16, twice. This read: *"production frontend:
+  `https://web-one-green-86.vercel.app` — corrected 2026-08-18; the previously-recorded
+  `organizational-climate-platform.vercel.app` is the LEGACY deployment, which is consistent
+  with this document's own finding that the legacy Vercel project is not visible from this
+  account"*. **(1)** The CORS origin is neither of those names: `gh variable list --env
+  production` → `CORS_ALLOWED_ORIGIN = https://climate.timsint.com`, set 2026-08-19, and a
+  preflight from either `vercel.app` name returns `204` with **no**
+  `access-control-allow-origin` header (measured 2026-09-16 against
+  `https://api.climate.timsint.com/version`). **(2)** `organizational-climate-platform.vercel.app`
+  is **not** the legacy deployment. The legacy Next.js app never ran on Vercel at all — it ran on
+  Coolify (`deploy.sh` line 3, `docs/security/2026-08-15-exfiltration-audit.md:44-48`; no
+  `.vercel/project.json` in the legacy repo). That host is an unrelated stale deployment serving
+  the Vite default `<title>web</title>`. The inference drawn from it here — that its being the
+  legacy app is "consistent with" the legacy Vercel project being invisible — was reasoning from
+  a false premise to a true conclusion: the project is invisible because it never existed.
+  See `docs/decisions/legacy-dependency-inventory.md`, correction 1.]
 - Exactly one environment secret exists: `MIGRATION_DATABASE_CONNECTION_STRING`
   (set 2026-08-04 19:32 UTC). No stray secret beyond the inventory's list.
 

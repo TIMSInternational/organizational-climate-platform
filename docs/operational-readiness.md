@@ -653,7 +653,11 @@ halves are false and someone following it during an incident would waste the inc
   **not planned**.
 - **No rollback in this system touches DNS.** `climate.timsint.com` resolves to Vercel
   anycast; rolling the web back re-points a Vercel *alias*, instantly, with no resolver
-  cache involved. The API has no custom domain at all. **`cutover.md` Phase B's TTL
+  cache involved. ~~The API has no custom domain at all.~~ [AMENDED 2026-09-16: it has one —
+  `api.climate.timsint.com`, live 2026-09-14, `/version` → `69193e40`, `/health` → `200`. The
+  bolded conclusion below is unaffected: the domain is a CNAME onto the same App Runner service,
+  so no rollback in this system touches DNS, and the deployed web bundle does not call the
+  custom domain at all while `VITE_API_BASE_URL` stays unset.] **`cutover.md` Phase B's TTL
   lowering is therefore not a rollback prerequisite and must not be allowed to gate a
   date.**
 

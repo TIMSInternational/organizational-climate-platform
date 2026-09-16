@@ -63,10 +63,21 @@ for i in $(seq 1 20); do curl -s -o /dev/null -w '%{http_code}\n' --max-time 10 
   https://bhgrdkd4gt.us-east-1.awsapprunner.com/ready; done
 ```
 
-**PROBE-LOGIN** — open `https://web-one-green-86.vercel.app` (the production frontend;
-the old `organizational-climate-platform.vercel.app` is a legacy deployment — see
-`README.md` "Deployments", corrected 2026-08-18), log in with a
+**PROBE-LOGIN** — open `https://climate.timsint.com` (the production frontend), log in with a
 known account, open a page that renders data (not just the shell).
+[CORRECTED 2026-09-16. This step named `https://web-one-green-86.vercel.app`. Measured today,
+all three hostnames answer `200`, which is exactly why the distinction matters:
+`climate.timsint.com` (`76.76.21.21`) is the canonical URL and the **only** exact origin in
+`CORS_ALLOWED_ORIGIN`; `web-one-green-86.vercel.app` (`216.198.79.3`) is a generated alias of
+the same Vercel project, serving the same `<title>Organizational Climate Platform</title>`, but
+it gets no `access-control-allow-origin` header from the API — so a login probe there can fail
+on CORS and be misread as a broken secret. The preflight, run 2026-09-16 against the custom
+domain: `curl -X OPTIONS -H 'Origin: <o>' -H 'Access-Control-Request-Method: GET'
+https://api.climate.timsint.com/version` → `204` + `access-control-allow-origin:
+https://climate.timsint.com` for the canonical origin, and `204` with **no such header** for
+both `vercel.app` names; and `organizational-climate-platform.vercel.app`
+(`64.29.17.67`) is an unrelated stale deployment serving the Vite default `<title>web</title>`,
+which this repo replaced on 2026-08-07 in `d905c02`. Probe the canonical URL.]
 
 **REDEPLOY** — how a changed secret reaches the running API. App Runner resolves
 `RuntimeEnvironmentSecrets` when instances launch, so `put-secret-value` alone changes

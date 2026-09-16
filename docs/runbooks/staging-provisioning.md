@@ -15,7 +15,13 @@ Grounded in console state read on **2026-08-15**: GitHub environments are `Previ
 the DEV AWS account `795965600143` has **no GitHub OIDC provider**
 (`aws iam list-open-id-connect-providers` → `[]`); the Supabase project is
 `lzhfnjfsdwdywwnlqgqq` with **zero branches**; the Vercel team runs the web app as
-project `climate` (production URL `https://web-one-green-86.vercel.app`).
+project `climate` (production URL `https://climate.timsint.com`).
+[CORRECTED 2026-09-16. This named `https://web-one-green-86.vercel.app`, a Vercel-generated
+alias of the same project. It is not dead — measured today it answers `200` from
+`216.198.79.3` and serves `<title>Organizational Climate Platform</title>` — but it is not the
+canonical URL, it is not the origin the API's CORS allowlist names, and a reader who probes it
+is not probing what customers use. Same correction as `README.md` ("Deployments", 2026-09-03)
+and `docs/security/rotation-runbook.md` PROBE-LOGIN.]
 
 Nothing in this runbook touches production. The staging deploy role's trust policy and
 permissions are scoped so that even a misdispatched staging workflow cannot reach the

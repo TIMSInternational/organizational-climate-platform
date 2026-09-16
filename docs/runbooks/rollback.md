@@ -33,8 +33,16 @@ twice over:
    Vercel's anycast address (`A 76.76.21.21`, TTL 1799 — measured with
    `dig +noall +answer climate.timsint.com @1.1.1.1`), so rolling the front end back
    means re-pointing a Vercel *alias*, which is instant and never touches DNS. The API
-   still runs on its generated App Runner hostname with no custom domain, so rolling it
-   back is a stack update. **No resolver cache is on the critical path of any rollback
+   still runs on its generated App Runner hostname ~~with no custom domain~~, so rolling it
+   back is a stack update.
+   [AMENDED 2026-09-16. `api.climate.timsint.com` has existed since 2026-09-14 — measured
+   `dig +short api.climate.timsint.com @1.1.1.1` → `bhgrdkd4gt.us-east-1.awsapprunner.com.`,
+   `/version` → `69193e40`, `/health` → `200`. **The paragraph's conclusion is unchanged and
+   is now true for a second reason.** The custom domain is a CNAME onto the same App Runner
+   service, so rolling the API back is still a stack update and still touches no DNS record;
+   and the deployed web bundle does not resolve the custom domain at all — it names the
+   generated hostname 84 times and `api.climate.timsint.com` zero times
+   (`/assets/index-q-ElFsLd.js`, counted 2026-09-16), because `VITE_API_BASE_URL` is unset.] **No resolver cache is on the critical path of any rollback
    in this document.** The TTL phase in `cutover.md` is not wrong, it is simply not what
    makes rollback fast here.
 
