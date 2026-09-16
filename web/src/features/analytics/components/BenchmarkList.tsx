@@ -1,9 +1,8 @@
 import type { BenchmarkListItem } from '../api/benchmarks'
 import { isGlobalBenchmark } from '../benchmarkScope'
-import { QUALITY_SCORE_FORMAT } from '../benchmarkReadings'
+import QualityScoreReading from './QualityScoreReading'
 import { useTranslation } from '../../../i18n'
 import { Badge, Checkbox, EmptyState, Table } from '../../../components/ui'
-import { formatMetric } from '../../../components/charts'
 
 export interface BenchmarkListProps {
   benchmarks: readonly BenchmarkListItem[]
@@ -39,7 +38,7 @@ export interface BenchmarkListProps {
  * below it another.
  */
 export default function BenchmarkList({ benchmarks, selectedIds, onToggle }: BenchmarkListProps) {
-  const { t, locale } = useTranslation()
+  const { t } = useTranslation()
   const selectable = onToggle !== undefined
 
   if (benchmarks.length === 0) {
@@ -90,12 +89,12 @@ export default function BenchmarkList({ benchmarks, selectedIds, onToggle }: Ben
               {/* Mono with tabular figures, like every other reading in the
                   product: a column of scores that do not line up digit for digit
                   cannot be scanned, which is the whole reason it is a column.
-                  Tabular figures only line the column up if every score has the
-                  same number of them, which is what `QUALITY_SCORE_FORMAT` is
-                  for — and going through `formatMetric` is also what gives a
-                  Spanish reader `0,92` rather than a raw JS `0.92`. */}
+                  `QualityScoreReading` fixes the digit count and the locale, and
+                  it is also where a score nobody has computed becomes a labelled
+                  dash rather than the "0,00" this cell used to print over every
+                  reference an administrator had created and not yet validated. */}
               <td className="text-right font-mono tabular-nums">
-                {formatMetric(benchmark.qualityScore, QUALITY_SCORE_FORMAT, locale)}
+                <QualityScoreReading value={benchmark.qualityScore} />
               </td>
             </tr>
           )
