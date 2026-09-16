@@ -226,6 +226,9 @@ public static class SubjectDataMap
         NotPersonal("BenchmarkMetric", "benchmark_metrics", "Aggregate values on a benchmark. No person referenced."),
         NotPersonal("Company", "companies",
             "The employer, a legal person. Its email domain is a routing rule, not an individual's address."),
+        NotPersonal("CompanyServiceLicense", "company_service_licenses",
+            "A company's entitlement to run a climate service, in respondent seats. Seat counts and status "
+            + "against a company, no individual referenced."),
         NotPersonal("DemographicField", "demographic_fields",
             "A tenant's demographic field definitions — the questions, not anybody's answers."),
         NotPersonal("DemographicFieldOption", "demographic_field_options",
