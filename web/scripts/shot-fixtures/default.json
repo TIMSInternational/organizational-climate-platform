@@ -44,6 +44,13 @@
     "createdAt": "2025-03-14T09:12:00Z",
     "userCount": 208
   },
+  "GET /admin/companies/*/licenses": {
+    "services": [
+      { "serviceType": "general_climate", "seatsTotal": 500, "seatsUsed": 312, "status": "active", "licensed": true, "notes": "PO-2026-014", "updatedAt": "2026-09-10T00:00:00Z" },
+      { "serviceType": "organizational_culture", "seatsTotal": 0, "seatsUsed": 0, "status": "active", "licensed": false, "notes": null, "updatedAt": null },
+      { "serviceType": "microclimate", "seatsTotal": 120, "seatsUsed": 120, "status": "suspended", "licensed": true, "notes": null, "updatedAt": "2026-09-12T00:00:00Z" }
+    ]
+  },
   "PUT /admin/companies/*/settings": {
     "companyId": "11111111-1111-1111-1111-111111111111",
     "settings": {

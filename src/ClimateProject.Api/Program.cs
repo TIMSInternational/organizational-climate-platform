@@ -619,6 +619,7 @@ app.MapGet("/version", () => Results.Ok(new VersionResponse(
 
 app.MapAuthEndpoints();
 app.MapCompanyEndpoints();
+app.MapCompanyLicenseEndpoints();
 app.MapDepartmentEndpoints();
 app.MapUserEndpoints();
 app.MapProfileEndpoints();

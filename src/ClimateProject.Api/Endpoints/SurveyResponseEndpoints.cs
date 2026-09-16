@@ -444,6 +444,21 @@ public static class SurveyResponseEndpoints
         IReadOnlyList<string> suppressed = [];
         if (request.IsComplete)
         {
+            // A completed response spends one licence seat for this company + service, atomically,
+            // inside this transaction. A blocked outcome (exhausted or suspended licence) refuses the
+            // completion before any of it is persisted -- the return below leaves the transaction to
+            // roll back on dispose, releasing the seat the guarded UPDATE may have taken. A company
+            // with no licence row for the service (grandfathered) or a custom survey (unmetered)
+            // proceeds untouched, so this is inert until a super admin grants a licence. An
+            // already-complete response never reaches here -- it returns above -- so a seat is spent
+            // once, at the transition to complete, never on a retry or a partial save.
+            var licence = await CompanyLicenses.TryConsumeSeatAsync(
+                db, survey.CompanyId, survey.Type, now, cancellationToken);
+            if (!licence.Allows())
+            {
+                return NoLicenseSeats();
+            }
+
             var capture = await CaptureDemographicsAsync(survey, respondent, db, cancellationToken);
             suppressed = capture.SuppressedFields;
 
@@ -831,6 +846,13 @@ public static class SurveyResponseEndpoints
 
     private static IResult NotAccepting()
         => Results.Json(new { message = "This survey is not currently accepting responses" }, statusCode: 400);
+
+    // 402: the company's licence for this survey's service has no seat for this completion (exhausted
+    // or suspended). Distinct from NotAccepting's 400 so the admin surface and the client can tell
+    // "out of licences" from "survey closed", and worded neutrally so a respondent is never shown the
+    // client's commercial state.
+    private static IResult NoLicenseSeats()
+        => Results.Json(new { message = "This survey is not currently accepting new responses" }, statusCode: 402);
 
     private static IResult Unavailable()
         => Results.Json(new { message = "This survey is not currently available" }, statusCode: 401);
