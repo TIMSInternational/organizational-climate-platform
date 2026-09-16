@@ -631,18 +631,29 @@ public static class SurveyDistributionEndpoints
             return Results.Ok(new SurveyReminderResult(0, 0, skippedTooSoon, null));
         }
 
+        // Active invitees only -- the membership rule the scheduled sweep applies
+        // (InvitationReminderJob.LoadRecipientsAsync) and the invite route enforces with a
+        // 400. An invitation minted while the person was active and still outstanding after
+        // they were deactivated used to be reminded by THIS route: its counters advanced and
+        // the reminder was reported as queued, while the sweep skipped the same row -- one
+        // invitation, two answers, depending on who asked. Narrowed before `due` is counted,
+        // so `Eligible` does not report a reminder as owed to someone it cannot be sent to.
+        // The invitation row itself is left alone: it expires with the survey, and reviving
+        // it is the resend route's decision, not a reminder's.
         var recipientIds = due.Select(i => i.UserId).Distinct().ToList();
         var recipients = await db.Users
-            .Where(u => recipientIds.Contains(u.Id))
+            .Where(u => recipientIds.Contains(u.Id) && u.IsActive)
             .ToDictionaryAsync(u => u.Id, cancellationToken);
+        due = due.Where(i => recipients.ContainsKey(i.UserId)).ToList();
 
         var queued = 0;
         foreach (var invitation in due)
         {
             if (!recipients.TryGetValue(invitation.UserId, out var recipient))
             {
-                // Unreachable while the user_id FK holds. Skipped rather than assumed,
-                // because the alternative is composing mail for an address we cannot read.
+                // Unreachable: `due` was just narrowed to the keys of `recipients`. Kept as
+                // the belt, because the alternative is composing mail for an address we
+                // cannot read.
                 continue;
             }
 

@@ -46,6 +46,7 @@ function renderSelector(
     onModeChange?: () => void
     onDepartmentsChange?: () => void
     onUsersChange?: () => void
+    departments?: Department[]
   } = {},
 ) {
   return render(
@@ -57,7 +58,7 @@ function renderSelector(
         onDepartmentsChange={overrides.onDepartmentsChange ?? (() => {})}
         selectedUserIds={overrides.selectedUserIds ?? []}
         onUsersChange={overrides.onUsersChange ?? (() => {})}
-        departments={DEPARTMENTS}
+        departments={overrides.departments ?? DEPARTMENTS}
         users={USERS}
         surveyDepartmentIds={overrides.surveyDepartmentIds ?? []}
       />
@@ -109,6 +110,20 @@ describe('AudienceSelector', () => {
     expect(screen.getAllByRole('checkbox')).toHaveLength(3)
     expect(screen.queryByText('z@acme.com')).toBeNull()
     await userEvent.click(screen.getAllByRole('checkbox')[0])
+  })
+
+  it('does not offer a department the administrator retired', () => {
+    // A deactivated department stays in the catalogue (the departments page lists it
+    // behind "show inactive") but is not a place a new invitation batch can be aimed at --
+    // the rule the survey builder's audience step and the tracking picker apply. Its people
+    // are still reachable by name, or company-wide.
+    renderSelector({
+      mode: 'departments',
+      departments: [...DEPARTMENTS, { ...department('telex', 'Telex'), isActive: false }],
+    })
+
+    expect(screen.getAllByRole('checkbox')).toHaveLength(DEPARTMENTS.length)
+    expect(screen.queryByText('Telex')).toBeNull()
   })
 
   it('reports a department toggle to its owner', async () => {
