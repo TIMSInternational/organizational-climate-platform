@@ -33,6 +33,7 @@ import {
 } from './companyDetail'
 import { STATUS_COUNT_KEYS, countText, dayWithYear, languageText, sizeText, tierText } from './labels'
 import { CanvasSelect, Field, IconBox, LinkCard, Panel } from './parts'
+import CompanyServiceLicensesPanel from './CompanyServiceLicensesPanel'
 import { useSuperCompanyDetailModel, type SuperCompanyDetailModel } from './useSuperCompanyDetailModel'
 
 const FREQUENCIES = ['daily', 'weekly', 'monthly', 'quarterly']
@@ -175,6 +176,8 @@ function DetailForm({ model, onSaved }: { model: SuperCompanyDetailModel; onSave
       )}
 
       <OnlyFromHere model={model} />
+
+      <CompanyServiceLicensesPanel companyId={company.id} />
 
       <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-12">
         <div className="flex min-w-0 flex-col gap-4 xl:col-span-7">
