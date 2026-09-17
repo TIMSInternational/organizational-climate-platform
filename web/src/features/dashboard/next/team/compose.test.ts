@@ -10,13 +10,18 @@ import {
   teamOpenSurveys,
   type TrackingRead,
 } from './compose'
-import { ORGANIZATION_SAMPLE } from './sampleModel'
 import type { DashboardTeamClimate, DepartmentAdminDashboard } from '../../api/dashboard'
 import type { MySurveyListItem } from '../../../surveys/api/surveys'
 import type { PlanAccion, TableroResponse } from '../../../tracking/api/trackingApi'
 
 const DEPARTMENT = 'd-ing'
 const KEYS = ['belonging', 'growth', 'psychological_safety', 'recognition', 'trust', 'workload']
+/**
+ * Grupo Meridiano's Encuesta de Clima Q3 across the whole company (24 respondents), as the
+ * administrator's climate-over-time read it on 11 Sep — the organisation's side the server
+ * now sends beside Ingeniería's reading of the same survey.
+ */
+const ORG_Q3 = [4, 3.79, 3.75, 3.38, 3.67, 3.33]
 const AS_OF = '2026-09-11T15:00:00.000Z'
 const VIEWER = { personaExternalId: 'me', name: 'Sofía Vargas' }
 
@@ -29,6 +34,10 @@ function climate(scores: readonly (number | null)[], overrides: Partial<Dashboar
     isSuppressed: false,
     minimumGroupSize: 5,
     dimensions: KEYS.map((dimension, index) => ({ dimension, averageScore: scores[index] ?? null })),
+    organization: {
+      respondentCount: 24,
+      dimensions: KEYS.map((dimension, index) => ({ dimension, averageScore: ORG_Q3[index] ?? null })),
+    },
     ...overrides,
   }
 }
@@ -41,7 +50,7 @@ function department(overrides: Partial<DepartmentAdminDashboard> = {}): Departme
     memberCount: 14,
     activeMemberCount: 14,
     activeSurveyCount: 1,
-    completedResponseCount: 22,
+    completedResponseCount: 18,
     openActionPlanCount: 1,
     overdueActionPlanCount: 0,
     activeSurveys: [
@@ -51,7 +60,11 @@ function department(overrides: Partial<DepartmentAdminDashboard> = {}): Departme
         status: 'active',
         startDate: '2026-09-03T02:03:39.148+00:00',
         endDate: '2026-10-10T02:03:39.148+00:00',
-        responseCount: 3,
+        // As the server sends Ingeniería's 3 since fix round 2: withheld, with the whole
+        // company's 3 withheld beside it and the tenant's invited 24.
+        responseCount: null,
+        companyResponseCount: null,
+        companyTargetAudienceCount: 24,
       },
     ],
     climate: climate([4.33, 4.17, 4, 3.5, 4, 3.67]),
@@ -84,7 +97,6 @@ function plan(overrides: Partial<PlanAccion> = {}): PlanAccion {
 function leader(overrides: { department?: DepartmentAdminDashboard; tablero?: TrackingRead<TableroResponse> | null } = {}) {
   return composeLeaderDashboard({
     department: overrides.department ?? department(),
-    organization: ORGANIZATION_SAMPLE,
     tablero: overrides.tablero === undefined ? { status: 'off' } : overrides.tablero,
     trackingOn: true,
     viewer: VIEWER,
@@ -143,6 +155,23 @@ describe('the floor', () => {
     expect(teamOpenSurveys(over, 5, AS_OF)[0]?.responses).toBe(5)
   })
 
+  it('holds a raw count and the whole company count to the floor too, and keeps an absent company count absent', () => {
+    // A payload built before the server floored it: the model still never hands the view a 3.
+    const raw = department()
+    raw.activeSurveys[0] = { ...raw.activeSurveys[0]!, responseCount: 3, companyResponseCount: 3, companyTargetAudienceCount: 24 }
+    const [open] = teamOpenSurveys(raw, 5, AS_OF)
+    expect(open?.responses).toBeNull()
+    expect(open?.company).toEqual({ responses: null, target: 24 })
+    raw.activeSurveys[0] = { ...raw.activeSurveys[0]!, companyResponseCount: 7, companyTargetAudienceCount: null }
+    expect(teamOpenSurveys(raw, 5, AS_OF)[0]?.company).toEqual({ responses: 7, target: null })
+    const older = department({
+      activeSurveys: [
+        { id: 'q4', title: 'Q4', status: 'active', startDate: '', endDate: '2026-10-10T02:03:39Z', responseCount: null },
+      ],
+    })
+    expect(teamOpenSurveys(older, 5, AS_OF)[0]?.company).toBeNull()
+  })
+
   it('orders the open surveys soonest close first and counts the days to the UTC close day', () => {
     const two = department({
       activeSurveys: [
@@ -158,11 +187,11 @@ describe('the floor', () => {
 
 describe('the team against the organisation', () => {
   it('is null when the company has never closed a survey', () => {
-    expect(teamClosedWave(null, ORGANIZATION_SAMPLE)).toBeNull()
+    expect(teamClosedWave(null)).toBeNull()
   })
 
   it("reads the team's disclosed means beside the organisation's, keyed by dimension", () => {
-    const wave = teamClosedWave(climate([4.33, 4.17, 4, 3.5, 4, 3.67]), ORGANIZATION_SAMPLE)!
+    const wave = teamClosedWave(climate([4.33, 4.17, 4, 3.5, 4, 3.67]))!
     expect(wave.code).toBe('Q3')
     expect(wave.respondents).toBe(6)
     expect(wave.withheld).toBe(false)
@@ -173,24 +202,35 @@ describe('the team against the organisation', () => {
     })
   })
 
-  it('draws no organisation bar for a dimension the sample has no value for, rather than borrowing one', () => {
-    const wave = teamClosedWave(
-      { ...climate([]), dimensions: [{ dimension: 'autonomy', averageScore: 4.1 }] },
-      ORGANIZATION_SAMPLE,
-    )!
+  it('draws no organisation bar for a dimension the organisation block does not carry, rather than borrowing one', () => {
+    const wave = teamClosedWave({ ...climate([]), dimensions: [{ dimension: 'autonomy', averageScore: 4.1 }] })!
     expect(wave.dimensions[0]).toEqual({ key: 'autonomy', team: 4.1, organization: null })
   })
 
+  it("takes the organisation's side and its count from the payload, and draws none where the server withheld it", () => {
+    const wave = teamClosedWave(climate([4.33, 4.17, 4, 3.5, 4, 3.67]))!
+    expect(wave.organizationRespondents).toBe(24)
+    expect(wave.dimensions.map((d) => d.organization)).toEqual(ORG_Q3)
+    // Fewer than the floor answered outside the team: the server sends no organisation side,
+    // and the team's own reading stands alone.
+    const alone = teamClosedWave(climate([4.33, 4.17, 4, 3.5, 4, 3.67], { organization: null }))!
+    expect(alone.withheld).toBe(false)
+    expect(alone.organizationRespondents).toBeNull()
+    expect(alone.dimensions.every((d) => d.team !== null && d.organization === null)).toBe(true)
+  })
+
   it('withholds every number of a withheld reading — scores, the organisation beside them, the count', () => {
-    const wave = teamClosedWave(climate([null, null, null, null, null, null], { isSuppressed: true, respondentCount: 0 }), ORGANIZATION_SAMPLE)!
+    const wave = teamClosedWave(climate([null, null, null, null, null, null], { isSuppressed: true, respondentCount: 0 }))!
     expect(wave.withheld).toBe(true)
     expect(wave.surveyWithheld).toBe(false)
     expect(wave.respondents).toBeNull()
+    expect(wave.organizationRespondents).toBeNull()
+    // The payload carried an organisation side; beside a withheld reading it is dropped.
     expect(wave.dimensions.every((d) => d.team === null && d.organization === null)).toBe(true)
   })
 
   it('withholds a reading the server marked disclosed when its own count is under the floor', () => {
-    const wave = teamClosedWave(climate([4, 4, 4, 4, 4, 4], { respondentCount: 3 }), ORGANIZATION_SAMPLE)!
+    const wave = teamClosedWave(climate([4, 4, 4, 4, 4, 4], { respondentCount: 3 }))!
     expect(wave.withheld).toBe(true)
     expect(wave.respondents).toBeNull()
     expect(wave.dimensions.every((d) => d.team === null)).toBe(true)
@@ -202,12 +242,12 @@ describe('the team against the organisation', () => {
    */
   it('prints no close date that is still ahead of the reader', () => {
     const archivedEarly = climate([], { surveyEndDate: '2026-10-10T02:03:39Z', isSuppressed: true, respondentCount: 0, dimensions: [] })
-    expect(teamClosedWave(archivedEarly, ORGANIZATION_SAMPLE, AS_OF)?.closedOn).toBeNull()
-    expect(teamClosedWave(climate([4]), ORGANIZATION_SAMPLE, AS_OF)?.closedOn).toBe('2026-08-06T02:05:22.922+00:00')
+    expect(teamClosedWave(archivedEarly, AS_OF)?.closedOn).toBeNull()
+    expect(teamClosedWave(climate([4]), AS_OF)?.closedOn).toBe('2026-08-06T02:05:22.922+00:00')
   })
 
   it('knows a survey under its own floor has no names to hatch', () => {
-    const wave = teamClosedWave(climate([], { isSuppressed: true, respondentCount: 0, dimensions: [] }), ORGANIZATION_SAMPLE)!
+    const wave = teamClosedWave(climate([], { isSuppressed: true, respondentCount: 0, dimensions: [] }))!
     expect(wave.surveyWithheld).toBe(true)
     expect(wave.dimensions).toEqual([])
   })
@@ -224,10 +264,32 @@ describe('the team against the organisation', () => {
     expect(dimensionMove({ key: 'x', team: 4, organization: null })).toBeNull()
   })
 
-  it('stands each reading by the one target rule every screen uses', () => {
+  /**
+   * The SHARED rule, `derive.targetStanding`, judged at the printed decimal — the same rule the
+   * administrator's climate map and Clima en el tiempo apply, whose own docblock calls it "the
+   * ONE rule behind every tint ... and every bajo / en / sobre la meta word".
+   *
+   * **3,5 against a 3,7 target is "en la meta", and the case below is the one that says so.**
+   * `TARGET_BANDS_TENTHS` puts anything within 3 tenths under the target in the grey band.
+   *
+   * The LeaderDashboard artboard disagrees: it draws Reconocimiento 3,5 on a red card with
+   * "bajo la meta 3,7" and a red Crear plan. `2d0bc7cf` closed that gap by giving
+   * `dimensionStanding` its own strict rule, so the same 3,5 was grey on one screen and red on
+   * another for one survey. Reverted 2026-09-15 — which band is right is a product ruling, and
+   * until it is made this file holds the line that one number gets one colour.
+   */
+  it('stands each reading by the shared target rule, so 3,5 against 3,7 is on target', () => {
+    // Outside the band: 3,2 and below is genuinely under the target.
     expect(dimensionStanding({ key: 'a', team: 3.17, organization: null }, 3.7)).toBe('below')
+    expect(dimensionStanding({ key: 'a', team: 3.38, organization: null }, 3.7)).toBe('below')
+    // THE CASE. Inside the grey band, so "en la meta" — flip this and you have re-opened the
+    // inconsistency, not fixed a bug.
     expect(dimensionStanding({ key: 'a', team: 3.5, organization: null }, 3.7)).toBe('on')
+    expect(dimensionStanding({ key: 'a', team: 3.64, organization: null }, 3.7)).toBe('on')
+    // 3,67 prints 3,7: on the target, never under it.
     expect(dimensionStanding({ key: 'a', team: 3.67, organization: null }, 3.7)).toBe('on')
+    expect(dimensionStanding({ key: 'a', team: 3.74, organization: null }, 3.7)).toBe('on')
+    // 3,75 prints 3,8 — three tenths over, the far edge of the band.
     expect(dimensionStanding({ key: 'a', team: 4.33, organization: null }, 3.7)).toBe('above')
     expect(dimensionStanding({ key: 'a', team: null, organization: 4 }, 3.7)).toBeNull()
   })
@@ -239,7 +301,6 @@ describe("the leader's model", () => {
     expect(model.memberCount).toBe(14)
     expect(model.openSurveyCount).toBe(1)
     expect(model.organizationRespondents).toBe(24)
-    expect(model.organizationIsSample).toBe(true)
     const withheld = leader({
       department: department({ climate: climate([null, null, null, null, null, null], { isSuppressed: true, respondentCount: 0 }) }),
     })
