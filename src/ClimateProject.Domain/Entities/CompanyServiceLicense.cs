@@ -54,8 +54,19 @@ public static class ClimateServiceTypes
     public static readonly IReadOnlyList<string> Metered =
         [GeneralClimate, OrganizationalCulture, Microclimate];
 
-    /// <summary>Whether a <c>Survey.Type</c> is subject to licence metering.</summary>
-    public static bool IsMetered(string surveyType) => Metered.Contains(surveyType);
+    /// <summary>Whether a service name is subject to licence metering.</summary>
+    /// <remarks>
+    /// The argument is a <c>Survey.ServiceType</c>, NOT a <c>Survey.Type</c>. It was the latter
+    /// until #496, which measured that the two vocabularies do not intersect at all -- so this
+    /// returned false for every survey the product can create and no seat was ever spent.
+    /// </remarks>
+    public static bool IsMetered(string serviceType) => Metered.Contains(serviceType);
+
+    /// <summary>
+    /// Whether a caller-supplied service is acceptable on a survey: a metered service, or nothing.
+    /// </summary>
+    public static bool IsAssignable(string? serviceType)
+        => string.IsNullOrWhiteSpace(serviceType) || Metered.Contains(serviceType);
 }
 
 /// <summary>Licence lifecycle states.</summary>

@@ -453,7 +453,7 @@ public static class SurveyResponseEndpoints
             // already-complete response never reaches here -- it returns above -- so a seat is spent
             // once, at the transition to complete, never on a retry or a partial save.
             var licence = await CompanyLicenses.TryConsumeSeatAsync(
-                db, survey.CompanyId, survey.Type, now, cancellationToken);
+                db, survey.CompanyId, survey.ServiceType, now, cancellationToken);
             if (!licence.Allows())
             {
                 return NoLicenseSeats();

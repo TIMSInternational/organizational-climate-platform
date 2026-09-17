@@ -112,6 +112,11 @@ export interface SurveyDetail {
   companyId: string
   createdBy: string
   type: string
+  /**
+   * The licensed service this survey meters against, or `null` for none. Orthogonal to
+   * `type` — see `LICENSED_SERVICES` in `surveyVocabulary.ts` (#496).
+   */
+  serviceType: string | null
   status: string
   /** The content's own language: 'en' | 'es' | 'both'. */
   language: string

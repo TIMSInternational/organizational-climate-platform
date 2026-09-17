@@ -45,6 +45,7 @@ const detail: SurveyDetail = {
   id: 's1',
   title: 'Encuesta de clima',
   description: null,
+  serviceType: null,
   companyId: 'c1',
   createdBy: 'u1',
   type: 'periodic',

@@ -18,6 +18,9 @@ public class SurveyConfiguration : IEntityTypeConfiguration<Survey>
         builder.Property(s => s.DescriptionEs).HasColumnName("description_es").HasMaxLength(1000);
         builder.Property(s => s.Language).HasColumnName("language").HasMaxLength(10).IsRequired().HasDefaultValue("en");
         builder.Property(s => s.Type).HasColumnName("type").HasMaxLength(30).IsRequired();
+        // Nullable on purpose: null is "no licensed service", which is what every row written
+        // before this column carries and what keeps metering inert until an author opts in (#496).
+        builder.Property(s => s.ServiceType).HasColumnName("service_type").HasMaxLength(40);
         builder.Property(s => s.StartDate).HasColumnName("start_date").IsRequired();
         builder.Property(s => s.EndDate).HasColumnName("end_date").IsRequired();
         builder.Property(s => s.Status).HasColumnName("status").HasMaxLength(20).IsRequired().HasDefaultValue("draft");

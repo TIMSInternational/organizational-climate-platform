@@ -98,6 +98,12 @@ export interface CreateSurveyInput {
   targetAudienceCount?: number
   /** 'en' | 'es' | 'both'. Omitted inherits the company's own language. */
   language?: string
+  /**
+   * Which licensed service this survey is an instrument of (`LICENSED_SERVICES`), or omitted
+   * for none. Omitted is the default and leaves the survey unmetered — a seat is only spent
+   * once somebody says which service it belongs to (#496).
+   */
+  serviceType?: string | null
 }
 
 /**

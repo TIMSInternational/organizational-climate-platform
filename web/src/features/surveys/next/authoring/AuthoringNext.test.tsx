@@ -80,7 +80,7 @@ function survey(over: Partial<SurveyDetail> = {}): SurveyDetail {
   })
   return {
     id: 's1', title: 'Encuesta de Clima Q4 (abierta)', description: 'Abierta a respuestas.', companyId: 'c1', createdBy: 'u1',
-    type: 'periodic', status: 'active', language: 'both', resolvedLocale: 'es', fallbackFields: [],
+    type: 'periodic', serviceType: null, status: 'active', language: 'both', resolvedLocale: 'es', fallbackFields: [],
     startDate: '2026-09-03T12:00:00Z', endDate: '2026-10-10T12:00:00Z', responseCount: 3, targetAudienceCount: 24, version: 1,
     departmentIds: ['d1', 'd2'],
     questions: [question(0, 'psychological_safety', 'Puedo plantear preocupaciones.'), question(1, 'workload', 'Mi carga es sostenible.')],

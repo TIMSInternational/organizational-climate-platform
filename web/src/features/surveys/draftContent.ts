@@ -260,6 +260,7 @@ export function draftValuesFrom(
     titleEs: str(content, 'titleEs'),
     descriptionEn: str(content, 'descriptionEn'),
     descriptionEs: str(content, 'descriptionEs'),
+    serviceType: str(content, 'serviceType'),
     type: str(content, 'type', defaults.type),
     startDate: str(content, 'startDate'),
     endDate: str(content, 'endDate'),

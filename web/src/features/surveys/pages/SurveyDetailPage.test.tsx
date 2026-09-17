@@ -22,6 +22,7 @@ function detail(overrides: Partial<SurveyDetail> = {}): SurveyDetail {
     id: 's1',
     title: 'Q3 climate survey',
     description: null,
+    serviceType: null,
     companyId: 'c1',
     createdBy: 'u1',
     type: 'periodic',

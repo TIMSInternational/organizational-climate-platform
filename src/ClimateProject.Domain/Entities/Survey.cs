@@ -22,6 +22,28 @@ public class Survey
     public string Language { get; set; } = "en";
 
     public required string Type { get; set; }
+
+    /// <summary>
+    /// Which licensed climate service this survey is an instrument of, or <c>null</c> for none.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Deliberately NOT <see cref="Type"/>. The two are orthogonal taxonomies and #496 records the
+    /// measurement: <see cref="Type"/> is cadence and purpose -- <c>periodic</c>, <c>pulse</c>,
+    /// <c>exit</c> -- while a licensed service is a product line the customer bought. An
+    /// "Encuesta Periodica" can be the general-climate instrument or the culture one, and nothing
+    /// about its cadence says which. Metering on <see cref="Type"/> compared a licence's
+    /// <c>general_climate</c> against a survey's <c>periodic</c> and therefore never matched: the
+    /// intersection of the two vocabularies was empty, so no seat was ever spent.
+    /// </para>
+    /// <para>
+    /// <c>null</c> means "not an instrument of any licensed service", and is the grandfathering
+    /// path: every survey that existed before this column, and every survey created without
+    /// choosing a service, is unmetered. A seat is only ever spent for a survey whose author said
+    /// which service it belongs to.
+    /// </para>
+    /// </remarks>
+    public string? ServiceType { get; set; }
     public DateTimeOffset StartDate { get; set; }
     public DateTimeOffset EndDate { get; set; }
     public string Status { get; set; } = "draft";

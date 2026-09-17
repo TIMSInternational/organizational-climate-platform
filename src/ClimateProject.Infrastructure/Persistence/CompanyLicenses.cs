@@ -52,14 +52,16 @@ public static class CompanyLicenses
     public static async Task<SeatConsumeOutcome> TryConsumeSeatAsync(
         ClimateProjectDbContext db,
         Guid companyId,
-        string serviceType,
+        string? serviceType,
         DateTimeOffset nowUtc,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(db);
-        ArgumentException.ThrowIfNullOrWhiteSpace(serviceType);
 
-        if (!ClimateServiceTypes.IsMetered(serviceType))
+        // null/blank is "this survey is not an instrument of any licensed service" -- the
+        // grandfathering path (#496), and the state of every row written before Survey.ServiceType
+        // existed. It is NOT an argument error: the caller passes whatever the survey carries.
+        if (string.IsNullOrWhiteSpace(serviceType) || !ClimateServiceTypes.IsMetered(serviceType))
         {
             return SeatConsumeOutcome.NotMetered;
         }
