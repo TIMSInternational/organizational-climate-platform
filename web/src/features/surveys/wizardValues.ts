@@ -179,6 +179,11 @@ export interface SurveyWizardValues {
   descriptionEn: string
   descriptionEs: string
   type: string
+  /**
+   * The licensed service this survey is an instrument of, or `''` for none (#496).
+   * Separate axis from `type`: cadence vs product line.
+   */
+  serviceType: string
   /** `<input type="datetime-local">` text, e.g. `2026-08-07T10:30`. Local wall clock. */
   startDate: string
   endDate: string
@@ -344,6 +349,9 @@ export function emptyWizardValues(language: ContentLanguage): SurveyWizardValues
     descriptionEn: '',
     descriptionEs: '',
     type: 'periodic',
+    // Unset by default, deliberately. Defaulting to a service would start metering a
+    // customer's seats because of a form default nobody chose (#496).
+    serviceType: '',
     startDate: '',
     endDate: '',
     departmentIds: [],
@@ -699,6 +707,12 @@ export function buildCreateInput(
     title: title as LocalizedInput,
     companyId,
     type: values.type,
+    // Omitted entirely when unset rather than sent as '' — the API reads absence as "no
+    // service". Truthiness, not `=== ''`: a values object that simply has no serviceType
+    // (undefined) must omit the key too, or the payload carries `serviceType: undefined`
+    // and stops matching what the page actually sends. AuthoringNext's key-set assertion
+    // caught exactly that.
+    ...(values.serviceType ? { serviceType: values.serviceType } : {}),
     startDate: new Date(values.startDate).toISOString(),
     endDate: new Date(values.endDate).toISOString(),
     language: values.language,

@@ -108,7 +108,13 @@ public sealed record SurveyDetail(
     IReadOnlyList<string> AllowedStatusTransitions,
     bool IsContentEditable,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    // Which LICENSED SERVICE this survey is an instrument of (#496): one of
+    // ClimateServiceTypes.Metered, or null for "none", which is the default and leaves the
+    // survey unmetered. Deliberately separate from Type -- Type is cadence (periodic, pulse,
+    // exit), a licensed service is a product line, and an Encuesta Periodica can be either
+    // instrument.
+    string? ServiceType = null);
 
 /// <summary>
 /// A survey the caller is expected to answer, as served to a non-admin. Deliberately
@@ -201,7 +207,13 @@ public sealed record CreateSurveyRequest(
     int? TargetAudienceCount = null,
     // 'es' | 'en' | 'both'. Defaults to the company's own language, so 'both' is an
     // opt-in rather than something every survey inherits.
-    string? Language = null);
+    string? Language = null,
+    // Which LICENSED SERVICE this survey is an instrument of (#496): one of
+    // ClimateServiceTypes.Metered, or null for "none", which is the default and leaves the
+    // survey unmetered. Deliberately separate from Type -- Type is cadence (periodic, pulse,
+    // exit), a licensed service is a product line, and an Encuesta Periodica can be either
+    // instrument.
+    string? ServiceType = null);
 
 /// <summary>
 /// Note the absence of Status. Lifecycle changes go through
@@ -220,7 +232,14 @@ public sealed record UpdateSurveyRequest(
     List<CreateSurveyQuestionInput>? Questions = null,
     SurveySettingsInput? Settings = null,
     int? TargetAudienceCount = null,
-    string? Language = null);
+    string? Language = null,
+    // Which LICENSED SERVICE this survey is an instrument of (#496): one of
+    // ClimateServiceTypes.Metered, or null for "none", which is the default and leaves the
+    // survey unmetered. Deliberately separate from Type -- Type is cadence (periodic, pulse,
+    // exit), a licensed service is a product line, and an Encuesta Periodica can be either
+    // instrument.
+    // On update, null means "leave unchanged"; to clear it, send an empty string.
+    string? ServiceType = null);
 
 public sealed record UpdateSurveyStatusRequest(string Status);
 

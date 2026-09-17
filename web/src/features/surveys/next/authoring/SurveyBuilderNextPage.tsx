@@ -37,6 +37,8 @@ import {
   SUGGESTED_DIMENSION_KEYS,
   SURVEY_QUESTION_TYPES,
   SURVEY_TYPES,
+  LICENSED_SERVICES,
+  licensedServiceLabel,
   languageLabel,
   needsOptions,
   needsScaleLabels,
@@ -69,6 +71,9 @@ import { templateCovers } from './templateRows'
 import { useSurveyBuilderModel } from './useSurveyBuilderModel'
 
 const NO_TEMPLATE = '__none__'
+// Radix Select has no empty-string value, so "no licensed service" needs a sentinel,
+// exactly as "no template" above does.
+const NO_SERVICE = '__no_service__'
 
 /**
  * Nueva encuesta, redesigned (canvas board "SurveyBuilder") — `/surveys/new`.
@@ -771,6 +776,17 @@ function StepForm({
             value={values.type}
             onChange={(next) => patch({ type: next })}
             options={SURVEY_TYPES.map((code) => ({ value: code, label: typeLabel(t, code) }))}
+          />
+          {/* A separate axis from the type above, and optional. Leaving it on "none" is
+              what keeps a survey unmetered — see LICENSED_SERVICES (#496). */}
+          <SelectField
+            label={t('surveys.serviceLabel')}
+            value={values.serviceType === '' ? NO_SERVICE : values.serviceType}
+            onChange={(next) => patch({ serviceType: next === NO_SERVICE ? '' : next })}
+            options={[
+              { value: NO_SERVICE, label: t('surveys.serviceNone') },
+              ...LICENSED_SERVICES.map((code) => ({ value: code, label: licensedServiceLabel(t, code) })),
+            ]}
           />
         </div>
         {columns.map((col) => (

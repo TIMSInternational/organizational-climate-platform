@@ -336,6 +336,16 @@ public static class SurveyEndpoints
             return Results.Json(new { message = "Type is required" }, statusCode: 400);
         }
 
+        // Optional, and unset is the norm: a survey only meters a licence seat once somebody says
+        // which service it is an instrument of (#496). Anything outside the metered vocabulary is
+        // refused rather than stored, because Survey.Type's own lack of validation is exactly how
+        // the licence layer came to compare two vocabularies that never intersect.
+        var serviceType = string.IsNullOrWhiteSpace(request.ServiceType) ? null : request.ServiceType.Trim();
+        if (!ClimateServiceTypes.IsAssignable(serviceType))
+        {
+            return InvalidServiceType(request.ServiceType);
+        }
+
         if (request.StartDate >= request.EndDate)
         {
             return Results.Json(new { message = "StartDate must be before EndDate" }, statusCode: 400);
@@ -413,6 +423,7 @@ public static class SurveyEndpoints
             DescriptionEs = descriptionEs,
             Language = language,
             Type = type,
+            ServiceType = serviceType,
             StartDate = request.StartDate,
             EndDate = request.EndDate,
             Status = SurveyStatuses.Draft,
@@ -618,6 +629,26 @@ public static class SurveyEndpoints
             }
 
             survey.Type = type;
+        }
+
+        // null = leave unchanged; "" = clear it back to unmetered; otherwise it must be a metered
+        // service. Clearing has to be expressible, or a survey mis-assigned to a service could
+        // never be taken back off it.
+        if (request.ServiceType is not null)
+        {
+            var serviceType = request.ServiceType.Trim();
+            if (serviceType.Length == 0)
+            {
+                survey.ServiceType = null;
+            }
+            else if (!ClimateServiceTypes.IsMetered(serviceType))
+            {
+                return InvalidServiceType(request.ServiceType);
+            }
+            else
+            {
+                survey.ServiceType = serviceType;
+            }
         }
 
         var startDate = request.StartDate ?? survey.StartDate;
@@ -1481,10 +1512,16 @@ public static class SurveyEndpoints
             SurveyStatuses.AllowedTransitionsFrom(survey.Status),
             SurveyStatuses.AllowsContentEdit(survey.Status),
             survey.CreatedAt,
-            survey.UpdatedAt);
+            survey.UpdatedAt,
+            survey.ServiceType);
     }
 
     private static IResult NotFound() => Results.Json(new { message = "Survey not found" }, statusCode: 404);
+
+    private static IResult InvalidServiceType(string? serviceType)
+        => Results.Json(
+            new { message = $"Invalid service type: {serviceType}. Expected one of: {string.Join(", ", ClimateServiceTypes.Metered)}, or omit it." },
+            statusCode: 400);
 
     private static IResult InvalidStatus(string? status)
         => Results.Json(

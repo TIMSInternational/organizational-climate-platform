@@ -57,6 +57,22 @@ export const SURVEY_TYPES = [
 export type SurveyType = (typeof SURVEY_TYPES)[number]
 
 /**
+ * The licensed climate services a survey can be an instrument of (#496).
+ *
+ * **Not the same axis as `SURVEY_TYPES`, and the reason this list exists separately.** A
+ * survey type is cadence and purpose — periodic, pulse, exit. A licensed service is the
+ * product line the customer bought, and an "Encuesta Periódica" can be the general-climate
+ * instrument or the culture one. Licensing was metered on `SURVEY_TYPES` until #496, which
+ * measured that the two vocabularies never intersect, so no seat was ever spent.
+ *
+ * Mirrors `ClimateServiceTypes.Metered` in `CompanyServiceLicense.cs`. `custom` is absent on
+ * purpose: it is a survey type, never a service.
+ */
+export const LICENSED_SERVICES = ['general_climate', 'organizational_culture', 'microclimate'] as const
+
+export type LicensedService = (typeof LICENSED_SERVICES)[number]
+
+/**
  * `QuestionTypes.ForSurvey`, in the order the wizard offers them. Same rule as
  * `SURVEY_TYPES`: the ordered list is exported, the lookup below stays the authority
  * on membership.
@@ -117,6 +133,12 @@ export const SUGGESTED_DIMENSION_KEYS = [
   'priorities',
   'open',
 ] as const
+
+const LICENSED_SERVICE_KEYS: Record<string, string> = {
+  general_climate: 'surveys.serviceGeneralClimate',
+  organizational_culture: 'surveys.serviceOrganizationalCulture',
+  microclimate: 'surveys.serviceMicroclimate',
+}
 
 const TYPE_KEYS: Record<string, string> = {
   periodic: 'surveys.periodic',
@@ -191,6 +213,11 @@ export function typeLabel(t: TranslateFn, type: string): string {
 
 export function questionTypeLabel(t: TranslateFn, type: string): string {
   return label(t, QUESTION_TYPE_KEYS, type)
+}
+
+/** A licensed service's display name; falls back to the code, like every other label here. */
+export function licensedServiceLabel(t: TranslateFn, service: string): string {
+  return label(t, LICENSED_SERVICE_KEYS, service)
 }
 
 export function languageLabel(t: TranslateFn, language: string): string {

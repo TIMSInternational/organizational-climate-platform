@@ -255,6 +255,9 @@ function emptyValues(language: ContentLanguage): SurveyWizardValues {
     descriptionEn: '',
     descriptionEs: '',
     type: 'periodic',
+    // Unset by default: defaulting to a service would start metering seats because of a
+    // form default nobody chose (#496).
+    serviceType: '',
     startDate: '',
     endDate: '',
     departmentIds: [],
