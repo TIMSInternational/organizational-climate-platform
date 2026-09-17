@@ -29,6 +29,132 @@ document is read alongside those changes:
   exactly two CloudFormation stacks and neither is it — but the scheduler count in (b) is
   two-at-baseline, three-in-tree.
 
+## Re-verified 2026-09-16 against `main` at `69193e40`
+
+The tables below are still the record; this section says what a re-measurement fourteen days
+later changed, and adds what the first pass did not reach. Criteria **1** and **3** are
+re-confirmed. Criterion **2** is still unreachable and criterion **4** still has one open
+consumer. Nothing here was copied from the tables — the legacy repository was cloned again
+(`TIMSInternational/climate-project` at `ab3266c`, last pushed 2026-08-01) and re-read.
+
+### (a) Hostnames — one new row, and three that all answer 200
+
+`api.climate.timsint.com` did not exist when this document was written. It has been `active`
+since 2026-09-14 (#160, #483, #484). Measured 2026-09-16 from a public network position:
+`dig +short api.climate.timsint.com @1.1.1.1` -> `bhgrdkd4gt.us-east-1.awsapprunner.com.` plus
+`18.215.132.119`, `34.232.168.96`, `54.159.217.78`; `GET /version` ->
+`{"service":"climate-project-api","runtime":"10.0.12","environment":"Production",`
+`"commit":"69193e4087463524b0ac526ffa612297ba784034","builtAt":"2026-09-16T21:26:11Z"}`;
+`/health` -> `200`. Production and `main` are the same commit, drift 0.
+
+**It is not yet in use.** The deployed bundle `/assets/index-q-ElFsLd.js` names
+`bhgrdkd4gt.us-east-1.awsapprunner.com` **84 times** and `api.climate.timsint.com` **zero**
+times, because `VITE_API_BASE_URL` is unset in Vercel Production. Both hostnames must stay
+reachable until that is set and the web is rebuilt.
+
+The three web hostnames this document argues about all answer `200`, which is why naming them
+loosely has repeatedly misled readers. Preflight run 2026-09-16 with `curl -X OPTIONS -H
+'Origin: <o>' -H 'Access-Control-Request-Method: GET' https://api.climate.timsint.com/version`:
+
+| Host | Answers | `<title>` | CORS |
+|---|---|---|---|
+| `climate.timsint.com` (`76.76.21.21`) | 200 | `Organizational Climate Platform` | `204` + `access-control-allow-origin: https://climate.timsint.com` |
+| `web-one-green-86.vercel.app` (`216.198.79.3`) | 200 | `Organizational Climate Platform` | `204`, **no** allow-origin header |
+| `organizational-climate-platform.vercel.app` (`64.29.17.67`) | 200 | `web` | `204`, **no** allow-origin header |
+
+The middle row is the correction that matters: it is **not** dead and **not** legacy — it is a
+Vercel-generated alias of the *same* `climate` project, serving the *same* app. It is simply
+not the canonical URL and not a CORS-allowed origin, so a login probe aimed at it can fail on
+CORS and be misread as a broken secret. That is why `rotation-runbook.md` PROBE-LOGIN and
+`staging-provisioning.md` were repointed at `climate.timsint.com` in this change.
+
+### (b) Crons — re-measured at the source, and the count is one
+
+`vercel.json` in the legacy repo schedules **exactly one** job:
+
+```json
+{ "crons": [ { "path": "/api/cron/send-reminders", "schedule": "*/15 * * * *" } ] }
+```
+
+Three cron routes exist on disk — `send-reminders`, `scheduled-reports`, `process-reminders` —
+but only the first has a scheduler. The other two are reachable by anyone holding `CRON_SECRET`
+and were called by nothing on a timer.
+
+**What the scheduled one actually did is not what its name suggests.** It queries
+`Notification` for `channel: 'email'`, `status: 'pending'`, `scheduled_for: { $lte: now }`,
+`limit(100)`, and sends each (`src/app/api/cron/send-reminders/route.ts:34-44`). That is a
+notification **dispatch sweep**, not an invitation reminder. Its successor is therefore
+`NotificationDispatchWorker`, not `InvitationReminderWorker` — and it runs every **1 minute**
+(`src/ClimateProject.Workers/WorkerSchedulingOptions.cs:57`) against the legacy 15, so the
+replacement is fifteen times more frequent, not merely equivalent.
+
+**No second scheduler existed.** `node-cron`, `bullmq` and `new CronJob` return zero hits over
+the legacy `src`; every `setInterval` found is client-side React polling (autosave indicators,
+live charts, a session-expiry warning). The new stack registers nine hosted services
+(`SchedulingServiceCollectionExtensions.cs:81-89`), so criterion 3 is met with room to spare.
+
+### (c) Third-party integrations — the first pass over-counted
+
+A keyword sweep of the legacy `src` for `webhook|stripe|twilio|sendgrid|zapier` returns four
+files and **all four are false positives**: `striped`/`bg-stripes` on a progress-bar component
+and in `globals.css`, and a *user-configurable* `webhook_url` delivery option in
+`src/app/api/dashboard/export/route.ts:37-39`. The last is an outbound target a user could have
+set, not a registered inbound webhook, and with the legacy data abandoned
+(`no-data-migration.md`) none is set. **There is no inbound third-party integration to migrate.**
+
+Two genuine outbound dependencies, both legacy-only:
+
+| Dependency | Evidence | Status |
+|---|---|---|
+| **Brevo** (email) | `src/lib/email.ts:1197-1201` selects `BrevoEmailService` when `BREVO_SMTP_PASS` is set; `src/lib/email-providers/brevo.ts:22-23` | **REPLACED by** AWS SES in the new stack. The Brevo account is closable at decommission — add it to #165/#164's checklist |
+| **`AI_SERVICE_URL` / `AI_SERVICE_API_KEY`** | declared at `src/lib/env.ts:11-12`, defaulting to `http://localhost:8000` | **Dead config.** Called nowhere in the legacy tree. Nothing to migrate and nothing to switch off |
+
+### What this change fixed, and what it did not
+
+Section (e) listed eight docs rows that still sent a reader to the wrong place. Re-checked
+today, two had been fixed by later corrections (`README.md` "Deployments", 2026-09-03) and the
+rest had not. This change amends every **live** assertion that the API has no custom domain —
+`web-hosting.md` (title, one-line decision, evidence row), `cutover.md` (the 2026-08-24
+amendment, its 2026-09-02 verification, and gate A11), `rollback.md:36`,
+`operational-readiness.md`, `README.md`, `legacy-dependencies.md`, `uat-script.md` — plus the
+stale production frontend in `staging-provisioning.md`, `rotation-runbook.md` and
+`rotation-inventory.md`.
+
+Two of those were found only because the sweep was run by grep rather than from this document's
+own list, and both had a second error behind the first:
+
+- **`uat-script.md`** also told the tester that `web/vercel.json`'s CSP `connect-src` hardcodes
+  the App Runner hostname, so a domain move would need a web redeploy. The CSP already names
+  **both** hosts — `'self' https://api.climate.timsint.com https://bhgrdkd4gt.us-east-1.awsapprunner.com`
+  in the file and in the header served by `climate.timsint.com` (measured 2026-09-16). A redeploy
+  is still required, but because `VITE_API_BASE_URL` is compiled into the bundle, not because of
+  the CSP. A right answer for a wrong reason is still a wrong runbook.
+- **`rotation-inventory.md`** named `web-one-green-86.vercel.app` as the CORS origin (it is
+  `climate.timsint.com`) *and* called `organizational-climate-platform.vercel.app` the legacy
+  deployment, then reasoned that this was "consistent with" the legacy Vercel project being
+  invisible from this account. It is invisible because it never existed — the legacy app ran on
+  Coolify. That is a false premise carrying a true conclusion, which is the hardest kind to spot.
+
+This is the failure mode this repository has already paid for once: a claim corrected in one
+runbook and left standing in the others. The lesson for the next sweep is to enumerate by
+`git grep` over the assertion, not by re-reading the list a previous pass wrote.
+
+`docs/audits/2026-09-03-functional-gaps.md:167` carries the same superseded claim and is
+**deliberately left alone**: audits in this repository are additive and are superseded by a
+later dated audit, never edited (`CLAUDE.md`, "Where the knowledge lives").
+
+**Criterion 2 is still unreachable, and for the reason correction 1 gives.** There are no
+legacy access logs to review because the legacy app never ran on Vercel — it ran on a Coolify
+host whose address appears in no repository — and because cutover (#162) has not happened, so
+there is no "post-cutover" window to review. #163 cannot be closed on this evidence. What it
+can now carry is criteria 1 and 3 met, re-verified at `69193e40`.
+
+**Criterion 4 has one open consumer:** `CLIMATE_PROJECT_BASE_URL` in the `production`
+environment is still `https://bhgrdkd4gt.us-east-1.awsapprunner.com` (`gh variable list --env
+production`, 2026-09-16). It is read by the tracking service, which has never deployed, so
+nothing is broken by it today — but it points at the generated hostname rather than the custom
+domain and should move with `VITE_API_BASE_URL`.
+
 ## Status vocabulary
 
 | Status | Meaning |
