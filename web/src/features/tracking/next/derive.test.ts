@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { ApiError } from '../../../api/authFetch'
 import type { PlanAccion } from '../api/trackingApi'
 import {
   asSentence,
@@ -153,10 +154,28 @@ describe('ordering and summaries', () => {
 })
 
 describe('isNotFound', () => {
-  it('reads the 404 authFetch reports for an empty body', () => {
-    expect(isNotFound(new Error('Request failed: 404'))).toBe(true)
-    expect(isNotFound(new Error('Request failed: 500'))).toBe(false)
+  /**
+   * Rewritten with the rule it tests. It used to assert
+   * `isNotFound(new Error('Request failed: 404'))`, which passed only because `authFetch`
+   * had no body to report and so happened to write the status into the sentence. That made
+   * a passing test out of a latent bug: the moment the server sends
+   * `{"message":"Plan not found"}` the same 404 stops being recognised, and a plan whose
+   * own message merely contains "404" starts being reported missing. The status is now read
+   * off `ApiError`, and the two cases below are the ones the old implementation got wrong.
+   */
+  it('reads the status, not the message', () => {
+    expect(isNotFound(new ApiError(404, 'Request failed: 404'))).toBe(true)
+    expect(isNotFound(new ApiError(500, 'Request failed: 500'))).toBe(false)
     expect(isNotFound('404')).toBe(false)
+  })
+
+  it('recognises a 404 that carries a server-authored message', () => {
+    expect(isNotFound(new ApiError(404, 'Plan not found'))).toBe(true)
+  })
+
+  it('does not call a plan missing because its message mentions 404', () => {
+    expect(isNotFound(new ApiError(500, 'Upstream returned 404 to us'))).toBe(false)
+    expect(isNotFound(new Error('Request failed: 404'))).toBe(false)
   })
 })
 

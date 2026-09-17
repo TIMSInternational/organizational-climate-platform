@@ -30,6 +30,40 @@ export interface AuthFetchOptions {
   allowStatus?: readonly number[]
 }
 
+/**
+ * A response the server ANSWERED and refused, carrying the status it refused with.
+ *
+ * Before this, every non-2xx became a bare `Error` whose only record of the status was
+ * the text `Request failed: 403` — so a page could not tell a refusal from an outage
+ * without matching on a string, and the tracking module told eight screens that "el
+ * módulo de seguimiento no respondió … vuelva a intentarlo en unos minutos" for a 403 the
+ * service answered instantly. `scripts/e2e.mjs` believed it too and reported those routes
+ * as broken.
+ *
+ * Mirrors `SurveyRespondError` (`features/surveys/api/surveyResponses.ts`), which carries
+ * the same field for the same reason on the respond path.
+ *
+ * **Additive on purpose.** It still extends `Error` and still carries the server's message
+ * unchanged, so the ~178 call sites that do `err instanceof Error ? err.message : …` keep
+ * working untouched; only a caller that wants to branch on the status has to know about it.
+ * A transport failure is NOT one of these — `fetch` rejecting means no response existed to
+ * have a status, and that branch still throws a plain `Error`.
+ */
+export class ApiError extends Error {
+  readonly status: number
+
+  constructor(status: number, message: string) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
+/** Whether `error` is a refusal the server answered with `status`. */
+export function isApiStatus(error: unknown, status: number): boolean {
+  return error instanceof ApiError && error.status === status
+}
+
 export async function authFetch(
   url: string,
   init: RequestInit = {},
@@ -87,7 +121,7 @@ export async function authFetch(
       return response
     }
     const body = await response.json().catch(() => null)
-    throw new Error((body && body.message) || `Request failed: ${response.status}`)
+    throw new ApiError(response.status, (body && body.message) || `Request failed: ${response.status}`)
   }
   return response
 }

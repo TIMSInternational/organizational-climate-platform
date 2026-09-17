@@ -5534,6 +5534,8 @@
     "tableroChooseNodoBody": "Un administrador no tiene tablero propio. Abra el consolidado y entre al nodo que quiere revisar.",
     "tableroBackToConsolidado": "Ir al consolidado",
     "serviceUnavailableTitle": "No se pudo contactar el servicio de seguimiento",
+    "noAccessTitle": "No tiene acceso al módulo de seguimiento",
+    "noAccessBody": "El seguimiento de planes de acción de esta instalación pertenece a otra organización, por lo que su cuenta no puede consultarlo. El servicio funciona con normalidad.",
     "serviceUnavailableBody": "El módulo de seguimiento no respondió. El resto de la plataforma sigue funcionando; vuelva a intentarlo en unos minutos.",
     "totalPlanes": "Planes de acción",
     "totalPlanesSub": "En total",
