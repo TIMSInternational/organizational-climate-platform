@@ -61,6 +61,43 @@ afterEach(() => {
 })
 
 describe('MisTareasPage', () => {
+
+  /**
+   * A REFUSAL IS NOT AN OUTAGE, and the difference is the whole of this pair.
+   *
+   * `/api/mis-tareas` answers 403 when the caller's tenant does not match the one this
+   * tracking deployment is pinned to. Before `ApiError` carried the status, that rendered
+   * "El módulo de seguimiento no respondió … vuelva a intentarlo en unos minutos" with a
+   * Retry button — three false statements and an action that can never succeed. It misled
+   * a person and it misled `scripts/e2e.mjs`, which reported this route among 8 "broken".
+   */
+  it('says the module is not yours when the service answers 403, and offers no retry', async () => {
+    vi.mocked(fetch).mockImplementation(() => Promise.resolve(new Response('', { status: 403 })))
+    renderPage()
+
+    // The `tracking` namespace is Spanish in BOTH catalogues and `trackingCopy.test.ts`
+    // enforces that, so these assert the Spanish exactly. The retry button below is
+    // `common.retry`, which IS translated, so that one stays locale-tolerant.
+    await screen.findByText('No tiene acceso al módulo de seguimiento')
+    expect(screen.queryByText('No se pudo contactar el servicio de seguimiento')).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: /Reintentar|Retry/ }),
+      'retrying cannot turn a refusal into a result',
+    ).toBeNull()
+  })
+
+  /**
+   * The control. Without it, "never show the outage panel" would pass this file as well as
+   * the correct rule — and would delete the retry a real outage genuinely deserves.
+   */
+  it('still reports a real outage as an outage, with its retry', async () => {
+    vi.mocked(fetch).mockImplementation(() => Promise.resolve(new Response('', { status: 500 })))
+    renderPage()
+
+    await screen.findByText('No se pudo contactar el servicio de seguimiento')
+    expect(screen.queryByText('No tiene acceso al módulo de seguimiento')).toBeNull()
+    expect(screen.getByRole('button', { name: /Reintentar|Retry/ })).toBeTruthy()
+  })
   it('loads and lists an employee own tasks', async () => {
     vi.mocked(fetch).mockImplementation(() =>
       Promise.resolve(new Response(JSON.stringify([tarea()]), { status: 200 })),

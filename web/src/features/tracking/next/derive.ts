@@ -2,6 +2,7 @@ import type { PlanAccion, SemaforoCounts } from '../api/trackingApi'
 import type { PersonaPickerItem } from '../api/trackingPickers'
 import { SEMAFORO_ORDER, semaforoCount, toPercent, type SemaforoEstado } from '../semaforo'
 import type { AvancesReading, PersonaRef, PlanLine } from './model'
+import { isApiStatus } from '../../../api/authFetch'
 
 /**
  * The derived readings of the three redesigned tracking screens, as pure functions.
@@ -157,9 +158,18 @@ export function nextCompromiso<T extends { fechaCompromiso: string; code: string
   return open.find((plan) => plan.daysToCompromiso >= 0) ?? open[0] ?? null
 }
 
-/** The plan detail's 404, as `authFetch` reports it: an empty body leaves only the status. */
+/**
+ * The plan detail's 404.
+ *
+ * Reads the status off the error rather than out of its text. This used to be
+ * `/\b404\b/.test(error.message)` — which depended on `authFetch` having no body to
+ * report, so the sentence happened to be `Request failed: 404`. A server that started
+ * sending `{"message":"Plan not found"}` would have silently turned every missing plan
+ * into a generic error, and a plan whose own message merely contained "404" would have
+ * been reported missing. `ApiError` carries the status, so neither can happen.
+ */
 export function isNotFound(error: unknown): boolean {
-  return error instanceof Error && /\b404\b/.test(error.message)
+  return isApiStatus(error, 404)
 }
 
 /**

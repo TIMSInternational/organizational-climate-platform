@@ -17,6 +17,7 @@ import PlanesAccionTable from '../components/PlanesAccionTable'
 import SemaforoSummary from '../components/SemaforoSummary'
 import { tallySemaforo } from '../semaforo'
 import { canManagePlan, readTrackingClaims } from '../trackingAccess'
+import { isApiStatus } from '../../../api/authFetch'
 
 /**
  * `/tracking/mis-tareas` — the task-only view.
@@ -71,14 +72,25 @@ export default function MisTareasPage() {
   const [tareas, setTareas] = useState<PlanAccion[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
+  /**
+   * Set when the service ANSWERED and refused. Separate from `loadError` because the two
+   * need opposite screens: an outage is worth retrying, a refusal never is (#e2e reported
+   * this page "broken" under an outage panel for a 403 the service returned instantly).
+   */
+  const [noAccess, setNoAccess] = useState(false)
 
   const reload = useCallback(async () => {
     setLoading(true)
     setLoadError(null)
+    setNoAccess(false)
     try {
       setTareas(await getMisTareas())
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : t('errors.generic'))
+      if (isApiStatus(err, 403)) {
+        setNoAccess(true)
+      } else {
+        setLoadError(err instanceof Error ? err.message : t('errors.generic'))
+      }
     } finally {
       setLoading(false)
     }
@@ -140,7 +152,13 @@ export default function MisTareasPage() {
             </AlertDescription>
           </Alert>
 
-          {loadError ? (
+          {noAccess ? (
+            /* A REFUSAL, not an outage. The service answered 403 — this deployment's
+               tracking belongs to another tenant — so the panel says that and offers no
+               Retry, because retrying cannot turn a refusal into a result. `NetworkError`
+               draws no button when `onRetry` is omitted. */
+            <NetworkError title={t('tracking.noAccessTitle')} description={t('tracking.noAccessBody')} />
+          ) : loadError ? (
             /* `tracking.serviceUnavailable*`, the same pair Consolidado and Tablero
                already use, rather than errors.generic + the raw exception. Two
                things were wrong with the old pair: `loadError` is

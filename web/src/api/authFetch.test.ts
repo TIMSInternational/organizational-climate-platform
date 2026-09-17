@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { authFetch } from './authFetch'
+import { authFetch, ApiError } from './authFetch'
 import { setToken, clearToken } from '../auth/token'
 import { LOCALE_STORAGE_KEY } from '../i18n/locale'
 
@@ -79,5 +79,34 @@ describe('authFetch, when the server answered', () => {
     vi.mocked(fetch).mockResolvedValue(new Response('{"ok":true}', { status: 200 }))
     const response = await authFetch('/x')
     expect(response.status).toBe(200)
+  })
+
+  /**
+   * The status has to survive as a FIELD, not as text in the sentence.
+   *
+   * Everything above asserts the message, and the message alone is what eight tracking
+   * screens had to work from — so a 403 the service answered instantly was rendered as
+   * "el módulo de seguimiento no respondió … vuelva a intentarlo en unos minutos", and
+   * `scripts/e2e.mjs` reported those routes broken. A caller can now ask.
+   */
+  it('carries the status on the thrown error, whatever the message says', async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response('{"message":"Nope"}', { status: 403 }))
+    const error = await authFetch('/x').catch((err: unknown) => err)
+
+    expect(error).toBeInstanceOf(ApiError)
+    expect((error as ApiError).status).toBe(403)
+    // Still an Error carrying the server's own words, so the ~178 call sites that read
+    // `err.message` are untouched by this.
+    expect(error).toBeInstanceOf(Error)
+    expect((error as Error).message).toBe('Nope')
+  })
+
+  it('does not dress a transport failure as an answered status', async () => {
+    vi.mocked(fetch).mockRejectedValue(new TypeError('Failed to fetch'))
+    const error = await authFetch('/x').catch((err: unknown) => err)
+
+    // No response existed, so there is no status to carry and nothing may invent one.
+    expect(error).not.toBeInstanceOf(ApiError)
+    expect(error).toBeInstanceOf(Error)
   })
 })

@@ -8,6 +8,7 @@ import { todayIso } from '../planDates'
 import { byCompromiso, planLine } from './derive'
 import type { ConsolidadoModel, NodoBlock } from './model'
 import { readViewer } from './viewer'
+import { isApiStatus } from '../../../api/authFetch'
 
 export interface ConsolidadoState {
   /** `restricted` for a viewer `GET /api/consolidado` would refuse — no request is made. */
@@ -72,6 +73,15 @@ export function useConsolidadoModel(): ConsolidadoState {
       const reason: unknown = consolidado.reason
       // A retry that fails must not leave the previous good table under the error.
       setModel(null)
+      // A 403 is not an outage. The service answered, and it answered that this caller may
+      // not read the consolidado — which is the same fact `allowed` already computes on the
+      // client, so it takes the same state and the same copy, with no Retry button offering
+      // to try again at something that cannot succeed.
+      if (isApiStatus(reason, 403)) {
+        setError(null)
+        setStatus('restricted')
+        return
+      }
       setError(reason instanceof Error ? reason.message : t('errors.generic'))
       setStatus('error')
       return
