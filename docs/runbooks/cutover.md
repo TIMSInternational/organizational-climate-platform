@@ -32,7 +32,7 @@ below if you are reading it after **2026-09-02**.
 > **Amended again 2026-08-24 (#159).** [`rollback.md`](./rollback.md) has been rewritten
 > from scratch and no longer agrees with this file in two places. (1) **Rollback is not a
 > DNS operation.** The web is on Vercel's anycast address, so rolling it back re-points a
-> Vercel alias, not a DNS record; the API has no custom domain at all. **Phase B's TTL
+> Vercel alias, not a DNS record; ~~the API has no custom domain at all~~. **Phase B's TTL
 > lowering below is therefore not a rollback prerequisite** and should not be allowed to
 > gate a date. (2) The **point of no return is not one moment** — there are three
 > independent one-way doors (a non-additive migration, a hard-deleting job tick, an email
@@ -42,7 +42,9 @@ below if you are reading it after **2026-09-02**.
 > `dig +short climate.timsint.com @8.8.8.8` → `76.76.21.21`, Vercel's anycast address, so the
 > web layer is an alias promotion and not a record edit. And
 > `aws apprunner describe-custom-domains --service-arn …/climate-project-api-prod` returns
-> `"CustomDomains": []` — the API still has no custom domain, so it has no DNS to revert.]
+> `"CustomDomains": []` — ~~the API still has no custom domain, so it has no DNS to revert~~.]
+>
+> **[AMENDED 2026-09-16 — the API custom domain exists now.]** `api.climate.timsint.com` has been `active` since 2026-09-14 and serves commit `69193e40` (`GET /version`, measured 2026-09-16; `/health` → `200`). The claim struck above was true when written and is not any more. **What has NOT changed is the conclusion**: the deployed web bundle still calls `bhgrdkd4gt.us-east-1.awsapprunner.com` 84 times and `api.climate.timsint.com` zero times (`/assets/index-q-ElFsLd.js`, counted 2026-09-16), because `VITE_API_BASE_URL` is unset in Vercel Production. Until that is set and the web rebuilt, the generated hostname is still the address in use, so a TTL phase is still not a rollback prerequisite.
 
 > **Amended a third time 2026-09-02 — the premise of this runbook has changed.** This
 > document was written for a *big-bang cutover*: freeze the legacy stack, migrate its data,
@@ -121,7 +123,7 @@ written against `1219dc6` and has been **re-measured today**; six of the ten row
 | A8 | Production email actually configured | #100 | **CLOSED.** [STALE — was: "**Not configured** … the service template passes no `Email__*` variables, so production email today is the stub"; now: `infra/aws/climate-project-api-prod-service.yml:265-294` passes `Email__Provider=smtp`, `Email__SmtpHost=email-smtp.us-east-1.amazonaws.com`, `Email__SmtpPort=587`, `Email__FromAddress=no-reply@timsint.com`, `Email__AppBaseUrl=https://climate.timsint.com`, `Email__SesConfigurationSet=tims-transactional`, with the SMTP username/password as `RuntimeEnvironmentSecrets` (lines 302-305). SES in the prod account is **out of the sandbox and sending**: `aws sesv2 get-account` → `ProductionAccessEnabled: true`, `SendingEnabled: true`, `SentLast24Hours: 27`; `aws sesv2 get-email-identity --email-identity timsint.com` → `VerifiedForSendingStatus: true`, DKIM `SUCCESS`. `gh issue view 100` → CLOSED.] |
 | A9 | `deploy-prod.yml` has at least one successful dispatch | — | **CLOSED.** [STALE — was: "**Zero dispatches, lifetime**"; now: **18 lifetime runs**, the most recent `2026-09-02T17:44:41Z`, conclusion `success`, on `b371a9d`, and that commit is what `/version` reports live.] |
 | A10 | UAT complete | #161 | **Open.** [VERIFIED 2026-09-02: `gh issue view 161` → OPEN. Its stated dependency #100 is now CLOSED, so UAT is no longer blocked — it is simply undone.] |
-| A11 | API custom domain | #160 | **Open — new row.** Added because a verified fact makes several steps below unexecutable without it: B4/B5/D8 all speak of "the custom domain", and there is none. [VERIFIED 2026-09-02: `describe-custom-domains` → `"CustomDomains": []`.] |
+| A11 | API custom domain | #160 | ~~**Open — new row.**~~ **MET 2026-09-14**, consistent with P4 above. B4/B5/D8 speak of "the custom domain" and there now is one: `api.climate.timsint.com`, `active`, both ACM validation records `SUCCESS`. [VERIFIED 2026-09-16 from a public position: `dig +short api.climate.timsint.com @1.1.1.1` → `bhgrdkd4gt.us-east-1.awsapprunner.com.` + 3 A records; `/version` → `69193e40`; `/health` → `200`.] **Not fully done:** the web bundle does not call it yet — `VITE_API_BASE_URL` is unset, so `/assets/index-q-ElFsLd.js` names the App Runner host 84 times and the custom domain 0 times. Was: **The API has no custom domain.** [VERIFIED 2026-09-02: `describe-custom-domains` → `"CustomDomains": []`.] |
 
 ### A1 — Worker hosting decision (#275): an explicit prerequisite gate
 

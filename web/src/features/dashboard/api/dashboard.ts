@@ -43,8 +43,20 @@ export interface DashboardDepartmentSurveySummary {
   status: string
   startDate: string
   endDate: string
-  /** Completed responses from this department alone. */
-  responseCount: number
+  /**
+   * Completed responses from this department alone — `null` under the floor of 5. The server
+   * withholds it at read time (`DashboardEndpoints.DepartmentCountFloor`) because both team
+   * panels hatch it; `null` is never 0.
+   */
+  responseCount: number | null
+  /**
+   * The WHOLE company's completed responses to the same survey — the figure the company
+   * dashboard prints — under a name that says its scope; `null` under the same floor. Absent
+   * from a payload older than the field.
+   */
+  companyResponseCount?: number | null
+  /** The tenant's invited headcount as the author entered it; `null` when there is none. */
+  companyTargetAudienceCount?: number | null
 }
 
 /** One tenant on the platform overview — SuperAdmin payloads only. */
@@ -124,11 +136,11 @@ export interface DashboardDimensionScore {
  * empty and `respondentCount` is **0**, because the withheld size must not travel with the
  * withheld reading. Render it as protected, never as "no data".
  *
- * Note the deliberate asymmetry with the counts beside it: `memberCount` and
- * `completedResponseCount` on the dashboard are NOT floored. A leader already knows their
- * own team's size; publishing one department's sub-threshold count to a company admin
- * reading all of them is a different disclosure, which `DepartmentList` withholds there.
- * Count unfloored, scores floored — do not "fix" one to match the other.
+ * The counts beside it: `memberCount`, the headcount, is NOT floored — the 27 Aug ruling, a
+ * leader already knows their own team's size. The RESPONSE counts are, since the 10 Sep
+ * artboards hatch them: `activeSurveys[].responseCount` is `null` under 5, and
+ * `completedResponseCount` counts only the surveys the team answered at or over 5, so it
+ * never moves by a hidden step.
  */
 export interface DashboardTeamClimate {
   surveyId: string | null
@@ -137,6 +149,18 @@ export interface DashboardTeamClimate {
   respondentCount: number
   isSuppressed: boolean
   minimumGroupSize: number
+  dimensions: DashboardDimensionScore[]
+  /**
+   * The whole company's reading of the same survey — the leader's "org." side. `null` beside
+   * a withheld team reading, and when fewer than the floor answered outside the team (the two
+   * readings side by side would give theirs away). Absent from a payload older than it.
+   */
+  organization?: DashboardOrganizationClimate | null
+}
+
+/** The whole company's reading of one closed survey — `DashboardOrganizationClimate`. */
+export interface DashboardOrganizationClimate {
+  respondentCount: number
   dimensions: DashboardDimensionScore[]
 }
 

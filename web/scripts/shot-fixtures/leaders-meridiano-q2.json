@@ -1,5 +1,5 @@
 {
-  "_comment": "Leaders lane, leader (luis.mora@meridiano.test, Líder, nodo Ingeniería 5bfdb04e-8847-4baa-89c8-d4411654a129) on the Grupo Meridiano demo tenant. GET /notifications/mine, /profile, /dashboard/department-admin, /api/tablero-seguimiento and /api/planes-accion were captured read-only from the local stack on 11 Sep 2026 and are verbatim except where this note says otherwise. The directory pickers, /action-plans and /api/consolidado are refused to this role and answer 403 here. Shoot with --role leader --name 'Luis Mora' --company 16c97c29-07f8-4522-86fc-e6cc56298829 --nodo 5bfdb04e-8847-4baa-89c8-d4411654a129 --lang es. ONE FIELD IS NOT VERBATIM: `climate` is the Encuesta de Clima Q2 reading (closed 13 May), Ingeniería's Q2 values from the same climate-trends payload — the page as it read before Q3 closed, when Reconocimiento printed 3,2 and sat below the target. A state shot for the below-target cell and its Crear plan.",
+  "_comment": "Leaders lane, leader, Q2 STATE: every body is leaders-meridiano.json's except climate, which is the Encuesta de Clima Q2 reading (closed 13 May) -- Ingenieria's Q2 means and the whole company's Q2 row from the same climate-trends payloads -- the page as it read before Q3 closed, when Reconocimiento printed 3,2 and Carga de trabajo 3,5, two cells under the target. A state shot, never the primary. Shoot as leaders-meridiano.json.",
   "GET /notifications/mine": {
     "notifications": []
   },
@@ -23,8 +23,8 @@
     "nodoExternalId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
     "conteos": {
       "rojo": 0,
-      "amarillo": 0,
-      "verde": 1
+      "amarillo": 1,
+      "verde": 0
     },
     "planes": [
       {
@@ -39,7 +39,7 @@
         "fechaCreacion": "2026-09-10",
         "fechaCompromiso": "2026-09-15",
         "porcentajeAvance": 0.0,
-        "estadoSemaforo": "Verde",
+        "estadoSemaforo": "Amarillo",
         "cicloEncuestaExternalId": null,
         "fechaUltimaActualizacion": "2026-09-10",
         "cumplido": false,
@@ -62,7 +62,7 @@
       "fechaCreacion": "2026-09-10",
       "fechaCompromiso": "2026-09-15",
       "porcentajeAvance": 0.0,
-      "estadoSemaforo": "Verde",
+      "estadoSemaforo": "Amarillo",
       "cicloEncuestaExternalId": null,
       "fechaUltimaActualizacion": "2026-09-10",
       "cumplido": false,
@@ -82,7 +82,7 @@
     "memberCount": 14,
     "activeMemberCount": 14,
     "activeSurveyCount": 1,
-    "completedResponseCount": 22,
+    "completedResponseCount": 18,
     "openActionPlanCount": 1,
     "overdueActionPlanCount": 0,
     "activeSurveys": [
@@ -92,7 +92,9 @@
         "status": "active",
         "startDate": "2026-09-03T02:03:39.148+00:00",
         "endDate": "2026-10-10T02:03:39.148+00:00",
-        "responseCount": 3
+        "responseCount": null,
+        "companyResponseCount": null,
+        "companyTargetAudienceCount": 24
       }
     ],
     "climate": {
@@ -127,7 +129,36 @@
           "dimension": "workload",
           "averageScore": 3.5
         }
-      ]
+      ],
+      "organization": {
+        "respondentCount": 24,
+        "dimensions": [
+          {
+            "dimension": "belonging",
+            "averageScore": 3.67
+          },
+          {
+            "dimension": "growth",
+            "averageScore": 3.54
+          },
+          {
+            "dimension": "psychological_safety",
+            "averageScore": 3.5
+          },
+          {
+            "dimension": "recognition",
+            "averageScore": 3.08
+          },
+          {
+            "dimension": "trust",
+            "averageScore": 3.33
+          },
+          {
+            "dimension": "workload",
+            "averageScore": 3.04
+          }
+        ]
+      }
     }
   }
 }

@@ -1,4 +1,8 @@
-# Decision: the web is on Vercel at `climate.timsint.com`; the API is on App Runner with no custom domain (#160)
+# Decision: the web is on Vercel at `climate.timsint.com`; the API is on App Runner at `api.climate.timsint.com`, still addressed by its generated hostname (#160)
+
+> **Title amended 2026-09-16.** It read *"the API is on App Runner with no custom domain"*, which has
+> been false since 2026-09-14. The body below is kept as recorded on 2026-09-03 and amended in place,
+> per this directory's rule that a record is superseded by date and never silently rewritten.
 
 Recorded 2026-09-03 against production `e0896f9`, after the fact. #160's first acceptance
 criterion asks for the hosting decision to live in `docs/decisions/`; until this file it did
@@ -16,8 +20,10 @@ public network position. Nothing here required a Vercel, Namecheap or Google con
 
 **The customer-facing web is a Vite SPA on Vercel, served at `https://climate.timsint.com`.
 The API is AWS App Runner in account `747814092517`, addressed by its generated hostname
-`https://bhgrdkd4gt.us-east-1.awsapprunner.com`, and it has no custom domain. DNS for
+`https://bhgrdkd4gt.us-east-1.awsapprunner.com`, and ~~it has no custom domain~~. DNS for
 `timsint.com` is at Namecheap, not Route 53.**
+
+[AMENDED 2026-09-16. **The API now has a custom domain: `api.climate.timsint.com`, live since 2026-09-14.** Measured today from a public network position: `dig +short api.climate.timsint.com @1.1.1.1` -> `bhgrdkd4gt.us-east-1.awsapprunner.com.` and three A records; `GET https://api.climate.timsint.com/version` -> `{"service":"climate-project-api","runtime":"10.0.12","environment":"Production","commit":"69193e4087463524b0ac526ffa612297ba784034","builtAt":"2026-09-16T21:26:11Z"}`; `/health` -> `200`. **But nothing external uses it yet.** The deployed web bundle (`/assets/index-q-ElFsLd.js`) names `bhgrdkd4gt.us-east-1.awsapprunner.com` **84 times** and `api.climate.timsint.com` **zero** times, because `VITE_API_BASE_URL` is still unset in Vercel Production. So the generated hostname remains the address in use, and both hostnames must stay reachable until that variable is set and the web is rebuilt (`docs/runbooks/api-custom-domain.md` step 8).]
 
 [AMENDED 2026-09-14. **DNS for the `climate` subtree is now Route 53, not Namecheap.** App Runner's second certificate validation record needs a 77-character Namecheap "Host" (65 even at the deepest possible zone) and the field caps at 60, so `climate.timsint.com` was delegated to public hosted zone `Z058256939JG0YA4Y6FRY`. `timsint.com` itself stays at Namecheap. Measured: `dig +short NS climate.timsint.com @1.1.1.1` -> four `awsdns` nameservers; `dig +short NS timsint.com @1.1.1.1` -> `dns1/dns2.registrar-servers.com`. Procedure and the character counts: `docs/runbooks/api-custom-domain.md`.]
 
@@ -30,8 +36,8 @@ The API is AWS App Runner in account `747814092517`, addressed by its generated 
 | It is reachable without an SSO interstitial | the `200` above is unauthenticated, from a machine with no Vercel session |
 | It is the **only** exact origin the API allows | `gh variable list --env production` → `CORS_ALLOWED_ORIGIN = https://climate.timsint.com` (set `2026-08-19T04:15:37Z`). Preflight: `OPTIONS /version` with `Origin: https://climate.timsint.com` → `204` + `access-control-allow-origin: https://climate.timsint.com`; the same preflight with `Origin: https://organizational-climate-platform.vercel.app` → `204` with **no** such header |
 | Previews are allowlisted separately | `CORS_ALLOWED_WILDCARD_ORIGIN = https://climate-*-federicos-projects-21f2ff63.vercel.app` |
-| The API is App Runner, and has **no** custom domain | `aws --profile claude apprunner describe-custom-domains --service-arn arn:aws:apprunner:us-east-1:747814092517:service/climate-project-api-prod/126c3f282524450896385975cb3bcba9` → `"CustomDomains": []`, `"DNSTarget": "bhgrdkd4gt.us-east-1.awsapprunner.com"` |
-| The API is live and current | `GET https://bhgrdkd4gt.us-east-1.awsapprunner.com/version` → `{"service":"climate-project-api","environment":"Production","commit":"e0896f99f132087c7b97a4a9129b4f2baf25db6a","builtAt":"2026-09-02T20:32:57Z"}`; `/health` → `200` |
+| ~~The API is App Runner, and has **no** custom domain~~ **Superseded 2026-09-14** — it is App Runner *and* has `api.climate.timsint.com`. Was: | `aws --profile claude apprunner describe-custom-domains --service-arn arn:aws:apprunner:us-east-1:747814092517:service/climate-project-api-prod/126c3f282524450896385975cb3bcba9` → `"CustomDomains": []`, `"DNSTarget": "bhgrdkd4gt.us-east-1.awsapprunner.com"`. **Today:** `dig +short api.climate.timsint.com @1.1.1.1` → `bhgrdkd4gt.us-east-1.awsapprunner.com.` + `18.215.132.119`, `34.232.168.96`, `54.159.217.78` |
+| The API is live and current | `GET https://bhgrdkd4gt.us-east-1.awsapprunner.com/version` → `{"service":"climate-project-api","environment":"Production","commit":"e0896f99f132087c7b97a4a9129b4f2baf25db6a","builtAt":"2026-09-02T20:32:57Z"}`; `/health` → `200`. [AMENDED 2026-09-16: the same call on `api.climate.timsint.com` returns commit `69193e40`, built `2026-09-16T21:26:11Z`, runtime `10.0.12` — production is on `main`, drift 0.] |
 | **DNS is at Namecheap, not Route 53** | `dig +noall +answer timsint.com NS` → `dns1.registrar-servers.com.`, `dns2.registrar-servers.com.` — Namecheap's nameservers. `aws --profile claude route53 list-hosted-zones --query "HostedZones[].Name"` → `[]`, and the same command on `--profile default` (dev account `795965600143`) also → `[]`. **Neither AWS account holds a hosted zone at all**, so no `aws route53 change-resource-record-sets` path exists for this domain in either account |
 | TTLs are still the 1800 s class | `dig +noall +answer climate.timsint.com @dns1.registrar-servers.com` → `1797 IN A 76.76.21.21`. Cutover's Phase B asks for ≤ 300 s and was never executed |
 | The domain is already load-bearing inside the API | `infra/aws/climate-project-api-prod-service.yml:280` sets `Email__AppBaseUrl: "https://climate.timsint.com"` — the host in every invitation link this product mails. The live service carries it (`aws --profile claude apprunner describe-service … RuntimeEnvironmentVariables` → `"Email__AppBaseUrl": "https://climate.timsint.com"`) |
