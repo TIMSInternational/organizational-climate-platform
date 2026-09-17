@@ -732,8 +732,8 @@ describe('router', () => {
      * reference and must be reached by NO route — each carries a "NOT ROUTED" header
      * saying so. Everything else in `pages/`, and every page in `next/`, must be routed.
      */
-    const WIRING_REFERENCES = ['ConsolidadoPage', 'TableroSeguimientoPage', 'PlanDeAccionDetailPage', 'PlanesAccionListPage']
-    const REDESIGNED = ['ConsolidadoNextPage', 'TableroNextPage', 'PlanDetailNextPage', 'PlanesListNextPage']
+    const WIRING_REFERENCES = ['ConsolidadoPage', 'TableroSeguimientoPage', 'PlanDeAccionDetailPage', 'PlanesAccionListPage', 'MisTareasPage']
+    const REDESIGNED = ['ConsolidadoNextPage', 'TableroNextPage', 'PlanDetailNextPage', 'PlanesListNextPage', 'MisTareasNextPage']
 
     it('routes the redesigned tracking screens and leaves the wiring references unrouted', () => {
       const source = readFileSync(join(process.cwd(), 'src', 'app', 'router.tsx'), 'utf8')
@@ -767,7 +767,7 @@ describe('router', () => {
       expect(await componentAt('/tracking/tablero')).toBe((await import('../features/tracking/next/TableroNextPage')).default)
       expect(await componentAt('/tracking/planes')).toBe((await import('../features/tracking/next/PlanesListNextPage')).default)
       expect(await componentAt('/tracking/planes/:id')).toBe((await import('../features/tracking/next/PlanDetailNextPage')).default)
-      expect(await componentAt('/tracking/mis-tareas')).toBe((await import('../features/tracking/pages/MisTareasPage')).default)
+      expect(await componentAt('/tracking/mis-tareas')).toBe((await import('../features/tracking/next/MisTareasNextPage')).default)
     })
 
     it('leaves no tracking page unrouted', () => {

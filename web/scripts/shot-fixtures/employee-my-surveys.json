@@ -1,0 +1,42 @@
+{
+  "GET /notifications/mine": {
+    "notifications": []
+  },
+  "GET /dashboard/employee": {
+    "name": "Carlos Mata",
+    "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+    "departmentId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+    "departmentName": "Ingeniería",
+    "pendingSurveyCount": 2,
+    "completedSurveyCount": 1,
+    "unreadNotificationCount": 0,
+    "nextDeadline": "2026-10-10T02:03:39.148+00:00",
+    "pendingSurveys": []
+  },
+  "GET /surveys/my": {
+    "surveys": [
+      {
+        "id": "801a81a4-3551-4f08-96f4-d465e05b1605",
+        "title": "Encuesta de Clima Q4 (abierta) (Copia)",
+        "description": "Copia de ensayo de la Q4.",
+        "type": "periodic",
+        "startDate": "2026-09-03T02:03:39.148+00:00",
+        "endDate": "2026-09-16T02:03:39.148+00:00",
+        "questionCount": 6,
+        "anonymous": false,
+        "timeLimitMinutes": null
+      },
+      {
+        "id": "4c9c8c8c-03e1-4033-8224-8c80b242c558",
+        "title": "Encuesta de Clima Q4 (abierta)",
+        "description": "Seis preguntas sobre cómo se ha sentido el trimestre.",
+        "type": "periodic",
+        "startDate": "2026-09-03T02:03:39.148+00:00",
+        "endDate": "2026-10-10T02:03:39.148+00:00",
+        "questionCount": 6,
+        "anonymous": true,
+        "timeLimitMinutes": null
+      }
+    ]
+  }
+}
