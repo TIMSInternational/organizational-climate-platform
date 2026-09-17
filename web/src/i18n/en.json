@@ -5084,6 +5084,7 @@
     "happensResultsBody": "You will be emailed when they are published, and Home will show what was done about them.",
     "noCopyNote": "You can close this tab. We cannot show you your answers again — keeping a copy you could open would mean keeping a link between you and them.",
     "backToHome": "Back to Home",
+    "noSeatsBody": "This survey cannot accept new answers at the moment, so nothing you just sent has been recorded. Your answers are still on this page — leave it open and contact whoever sent you the survey.",
     "next": {
       "position": "{position} of {total}",
       "previous": "Previous",

@@ -549,7 +549,24 @@ export default function SurveyRespondForm({
         announce(t('progressSaved'))
       }
     } catch (error: unknown) {
-      const message = error instanceof Error && error.message ? error.message : tRoot('errors.generic')
+      // **A 402 must never reach the screen as the server wrote it.** `SubmitAsync`
+      // answers 402 when the company has no licence seat left for this survey's service
+      // (`SurveyResponseEndpoints.cs`, `NoLicenseSeats`), and its body is a fixed English
+      // string. Every other branch here falls through to `error.message`, so before this
+      // line a Costa Rican respondent pressing "Enviar mis respuestas" was shown
+      // "This survey is not currently accepting new responses" on an otherwise Spanish
+      // page. The catalogue answers it instead, in the reader's language.
+      //
+      // The copy is deliberately about the survey and not about the company: a
+      // respondent is never told that their employer has run out of licences. It also
+      // has to say that **nothing was recorded** — the 402 returns before the commit, so
+      // the whole transaction rolls back and the seat is released — because somebody who
+      // has just pressed Submit will otherwise assume their answers landed.
+      const message = isNoSeats(error)
+        ? t('noSeatsBody')
+        : error instanceof Error && error.message
+          ? error.message
+          : tRoot('errors.generic')
       // A pressed save that failed is the same fact as an autosave that failed, and it
       // belongs in the one place the respondent looks to tell saved from unsaved —
       // not under "your answers could not be SUBMITTED", which is about a different
@@ -1142,6 +1159,19 @@ function localeNameKey(locale: string): string {
  * them into one "something went wrong" is what makes a respondent retry a survey that
  * closed a week ago.
  */
+/**
+ * A licensing refusal from `POST /surveys/{id}/responses`.
+ *
+ * 402 is unused elsewhere in this API — 400, 401, 403 and 404 were all taken by the time
+ * the licensing slice needed a status that the client could tell apart from "survey
+ * closed" (`SurveyResponseEndpoints.cs`, the comment above `NoLicenseSeats`). Matching on
+ * the status rather than on the message is the whole point: the message is the English
+ * string this function exists to keep off the screen.
+ */
+function isNoSeats(error: unknown): boolean {
+  return error instanceof SurveyRespondError && error.status === 402
+}
+
 function LoadFailure({
   error,
   publicEntry,
