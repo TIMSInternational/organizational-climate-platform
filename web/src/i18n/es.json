@@ -5089,6 +5089,7 @@
     "happensResultsBody": "Le avisaremos por correo cuando se publiquen, y en Inicio verá qué se hizo con ellos.",
     "noCopyNote": "Puede cerrar esta pestaña. No podemos volver a mostrarle sus respuestas: guardar una copia que usted pudiera abrir significaría mantener un vínculo entre usted y ellas.",
     "backToHome": "Volver al inicio",
+    "noSeatsBody": "Esta encuesta no puede aceptar nuevas respuestas en este momento, así que no se registró nada de lo que acaba de enviar. Sus respuestas siguen en esta página: déjela abierta y contacte a quien le envió la encuesta.",
     "next": {
       "position": "{position} de {total}",
       "previous": "Anterior",

@@ -1264,6 +1264,83 @@ describe('SurveyRespondPage save state', () => {
   })
 
   /**
+   * The licensing refusal, and the one status whose server text must not reach the screen.
+   *
+   * `SubmitAsync` answers **402** when the company has no licence seat left for this
+   * survey's service, with a fixed English body (`SurveyResponseEndpoints.cs`,
+   * `NoLicenseSeats`). Every other failure here deliberately carries the server's own
+   * sentence — see the save-failure test above, where "the survey has reached its response
+   * limit" names something the respondent can act on. 402 is different twice over: the
+   * sentence is English on a Spanish product, and what it is really about is the customer's
+   * commercial state, which a respondent must never be shown.
+   *
+   * These three tests are why the leak survived the suite that was already here: the
+   * existing failure tests feed the mock `'Se ha alcanzado el límite'`, a **Spanish**
+   * string, so "print `error.message`" looked correct in every one of them. The fixture
+   * agreed with the code about a language neither of them was testing.
+   */
+  const NO_SEATS_SERVER_MESSAGE = 'This survey is not currently accepting new responses'
+
+  function refusing(status: number, message: string) {
+    vi.mocked(fetch).mockImplementation((_input: RequestInfo | URL, init?: RequestInit) =>
+      Promise.resolve(
+        init?.method === 'POST'
+          ? new Response(JSON.stringify({ message }), { status })
+          : new Response(JSON.stringify(view()), { status: 200 }),
+      ),
+    )
+  }
+
+  it('answers a licence refusal in the reader\u2019s language, never with the server\u2019s English', async () => {
+    refusing(402, NO_SEATS_SERVER_MESSAGE)
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('radio', { name: 'Muy de acuerdo' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Enviar mis respuestas' }))
+
+    const alert = await screen.findByRole('alert', {}, { timeout: 4000 })
+    expect(alert.textContent).toContain('No se pudieron enviar sus respuestas')
+    expect(alert.textContent).toContain('no se registr\u00f3 nada de lo que acaba de enviar')
+    expect(
+      alert.textContent,
+      'the English body of the 402 reached a Spanish screen',
+    ).not.toContain(NO_SEATS_SERVER_MESSAGE)
+  })
+
+  it('says the same thing in English when English is the reader\u2019s language', async () => {
+    window.localStorage.setItem(LOCALE_STORAGE_KEY, 'en')
+    refusing(402, NO_SEATS_SERVER_MESSAGE)
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('radio', { name: 'Muy de acuerdo' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Submit my answers' }))
+
+    const alert = await screen.findByRole('alert', {}, { timeout: 4000 })
+    expect(alert.textContent).toContain('nothing you just sent has been recorded')
+    // Catalogued, not passed through: the two sentences differ, and only the
+    // catalogue's says what happened to the answers.
+    expect(alert.textContent).not.toContain(NO_SEATS_SERVER_MESSAGE)
+  })
+
+  /**
+   * The control, and what gives the two above their teeth.
+   *
+   * Without it, "never show `error.message`" would pass this file just as well as
+   * "show it only when the status is not 402" — and the first would silently throw away
+   * the actionable server reason the save-failure alert was built to carry.
+   */
+  it('still carries the server\u2019s own reason for a refusal that is not a licence one', async () => {
+    refusing(400, 'Se ha alcanzado el l\u00edmite')
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('radio', { name: 'Muy de acuerdo' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Enviar mis respuestas' }))
+
+    const alert = await screen.findByRole('alert', {}, { timeout: 4000 })
+    expect(alert.textContent).toContain('Se ha alcanzado el l\u00edmite')
+  })
+
+  /**
    * Sticky. Answering again re-arms the save, and until one actually lands the warning
    * must stay: a page that goes quiet the moment you type is a page that says your
    * work is safe because you touched it.
