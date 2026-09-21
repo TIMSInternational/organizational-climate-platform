@@ -195,6 +195,15 @@ const devOnlyRoutes: RouteObject[] = import.meta.env.DEV
           Component: (await import('../features/storefront/pages/StorefrontGalleryPage')).default,
         }),
       },
+      // The "signal" admin language — a PROPOSAL, photographed beside the approved
+      // artboards rather than replacing them. Dev-only for exactly that reason: it
+      // changes no shipping screen, and this array is the thing that keeps it that way.
+      {
+        path: '/dev/signal',
+        lazy: async () => ({
+          Component: (await import('../features/signal/pages/SignalGalleryPage')).default,
+        }),
+      },
     ]
   : []
 
