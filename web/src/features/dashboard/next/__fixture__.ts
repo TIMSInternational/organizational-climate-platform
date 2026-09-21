@@ -1,28 +1,26 @@
 import type { AdminDashboardModel } from './model'
 
 /**
- * SAMPLE DATA. This is not a measurement of anything.
+ * A COMPLETE `AdminDashboardModel`, for tests only. Nothing in production imports it.
  *
- * It stands in for the endpoints the redesigned Panel de Control will read once
- * `useAdminDashboardModel()` is wired, and it is the reason the page wears a
- * "sample data" chip while `isSample` is true:
+ * It was `sampleModel.ts`, and until 2026-09-21 it was also the runtime fallback:
+ * `compose.ts` filled seventeen fields from it whenever a region's fetch failed, so a
+ * real tenant whose surveys endpoint was down read Grupo Meridiano's climate, company
+ * name and department names under a chip it could skim past. `compose.ts` now emits
+ * absence instead and takes no sample at all, which is why this file moved to the
+ * `__fixture__` name the i18n guard's own fixtures use: it is a test input, and
+ * reinstating it as a fallback would be the defect, not a shortcut.
  *
- * | Section                    | Endpoint                                  |
- * |----------------------------|-------------------------------------------|
- * | company, participation     | `GET /dashboard/company-admin`            |
- * | dimension series per wave  | `GET /surveys/climate-trends`             |
- * | the map of the latest wave | `GET /surveys/{id}/results`               |
- * | overdue tracking plans     | tracking `GET /api/consolidado`           |
- * | open action plans          | `GET /action-plans`                       |
- * | the live microclimate      | `GET /microclimates`                      |
+ * The figures are the approved mockup's Grupo Meridiano numbers, which is what makes it
+ * the right fixture for the view: the screen it renders can be compared against the
+ * design pixel for pixel. Nothing here is typed as a derived value — the average, the
+ * deltas, the percentages and "below target" are all computed in `derive.ts` from these
+ * inputs, so a test that asserts one of them is testing the derivation.
  *
- * The figures are the approved mockup's Grupo Meridiano numbers, so the screen
- * can be compared against the design pixel for pixel. Nothing in here is typed as
- * a derived value: the average, the deltas, the percentages and "below target"
- * are all computed in `derive.ts` from these inputs.
+ * `isPartial` is false: every region of it is present, which is the whole point.
  */
-export const sampleModel: AdminDashboardModel = {
-  isSample: true,
+export const fullModel: AdminDashboardModel = {
+  isPartial: false,
   asOf: '2026-09-10',
   companyName: 'Grupo Meridiano S.A.',
   target: 3.7,
