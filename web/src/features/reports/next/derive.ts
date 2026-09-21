@@ -1,6 +1,7 @@
 import type { TranslateFn } from '../../../i18n'
 import type { ReportShareSummary } from '../api/reportShares'
-import type { ReportContents, ReportRow } from './model'
+import type { ReportDocument } from '../reportDocument'
+import type { ReportContents, ReportGroup, ReportRow } from './model'
 
 /**
  * The arithmetic and the vocabulary behind the redesigned Informes and its share dialog.
@@ -159,15 +160,74 @@ export function contentsReading(contents: ReportContents): ContentsReading {
     shown: contents.groups.length - protectedGroups.length,
     total: contents.groups.length,
     protectedGroups,
-    suppressed: contents.responses < contents.floor,
+    // The document's own decision OR this screen's re-floor, never one alone. #490's rule:
+    // re-flooring what the server already floored means a document assembled any other way
+    // still cannot put a number on this page.
+    suppressed: contents.isSuppressed || contents.responses < contents.floor,
   }
 }
 
-/** The survey every row's contents names, or `null` when they name different ones (or none). */
+/**
+ * What a report contains, out of its own stored document.
+ *
+ * ## Every field here is DROPPED from the document, never recomputed
+ *
+ * `ReportDepartmentParticipation` says it outright (`ReportDtos.cs:28-36`): when
+ * `isSuppressed` is true the aggregation has ALREADY zeroed `respondentCount`, so a
+ * withheld department's headcount does not exist in the document for this function to
+ * leak. It is carried across as a name and a boolean and nothing else — `ReportGroup` has
+ * no count field, so there is no shape in which a `0` could reach the screen and read as
+ * "nobody here answered". That is the specific failure the floor exists to prevent.
+ *
+ * Withheld departments ARE in `departments[]`, named, alongside the disclosed ones
+ * (`ReportSurveySections.cs:77` maps every segment), which is what makes "4 de 5 grupos"
+ * a true count of the document's groups rather than of its disclosed ones.
+ *
+ * ## Across sections
+ *
+ * `responses` sums the sections because the document is the sum of them; a total over
+ * several surveys discloses no individual survey's count. A group is protected when it is
+ * protected in ANY section — the safe direction: a department withheld in one survey and
+ * disclosed in another still has numbers this document does not print.
+ */
+export function contentsOf(document: ReportDocument | null): ReportContents | null {
+  const sections = document?.surveys ?? []
+  if (sections.length === 0) return null
+
+  const groups = new Map<string, ReportGroup>()
+  for (const section of sections) {
+    for (const department of section.departments) {
+      // A department the document did not name is not a group this screen can name.
+      const name = department.name?.trim()
+      if (!name) continue
+      const seen = groups.get(name)
+      groups.set(name, { name, isProtected: (seen?.isProtected ?? false) || department.isSuppressed })
+    }
+  }
+
+  return {
+    surveyName: sections.length === 1 ? (sections[0].title?.trim() || null) : null,
+    surveyCount: sections.length,
+    responses: sections.reduce((total, section) => total + section.participation.responseCount, 0),
+    groups: [...groups.values()],
+    // Every section withheld means the document has no disclosed numbers at all, whatever
+    // the totals add up to.
+    isSuppressed: sections.every((section) => section.isSuppressed),
+    // The strictest floor any section was generated under.
+    floor: Math.max(...sections.map((section) => section.minimumGroupSize)),
+  }
+}
+
+/**
+ * The survey every row's contents names, or `null` when they name different ones, name
+ * none, or any row has no contents at all. A multi-survey document names none, so a list
+ * holding one never claims a single survey.
+ */
 export function commonSurvey(rows: readonly ReportRow[]): string | null {
   if (rows.length === 0 || rows.some((row) => row.contents === null)) return null
-  const names = new Set(rows.map((row) => row.contents?.surveyName))
-  return names.size === 1 ? (rows[0].contents?.surveyName ?? null) : null
+  const names = new Set(rows.map((row) => row.contents?.surveyName ?? null))
+  if (names.size !== 1) return null
+  return rows[0].contents?.surveyName ?? null
 }
 
 // ── Share dialog ───────────────────────────────────────────────────────────────────────

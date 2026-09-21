@@ -42,6 +42,49 @@ const csv = reportRow()
 const pdf = reportRow({ id: 'r-pdf', title: 'Clima organizacional — T3 2026', format: 'pdf' })
 const generating = reportRow({ id: 'r-gen', title: 'Resumen en curso', status: 'generating', format: 'pdf' })
 
+/**
+ * One survey section of a report's stored `reportOutput`, shaped as the API stores it
+ * (`ReportSurveySection`, camelCase through `JsonSerializerOptions.Web`).
+ *
+ * `isSuppressed` is spelled out on every row because `parseReportDocument` defaults it to
+ * TRUE when absent (`bool(raw.isSuppressed, true)`) — fail-closed, so a fixture that
+ * forgets it withholds everything and proves nothing.
+ *
+ * Finanzas is the withheld department, and it carries `respondentCount: 0` exactly as the
+ * server sends it: the aggregation zeroes a withheld headcount rather than omitting the
+ * row (`ReportDtos.cs:28-36`). That zero is the one this screen must never print.
+ */
+function section(over: Record<string, unknown> = {}) {
+  return {
+    surveyId: 's-q3',
+    title: 'Encuesta de Clima Q3',
+    status: 'closed',
+    resolvedLocale: 'es',
+    participation: { responseCount: 24, completedCount: 23, partialCount: 1, completionRate: 96 },
+    questions: [],
+    dimensions: [],
+    departments: [
+      { departmentId: 'd-fin', name: 'Finanzas', respondentCount: 0, participationRate: null, isSuppressed: true },
+      { departmentId: 'd-ing', name: 'Ingeniería', respondentCount: 7, participationRate: 70, isSuppressed: false },
+      { departmentId: 'd-ops', name: 'Operaciones', respondentCount: 5, participationRate: 50, isSuppressed: false },
+      { departmentId: 'd-per', name: 'Personas', respondentCount: 5, participationRate: 50, isSuppressed: false },
+      { departmentId: 'd-ven', name: 'Ventas', respondentCount: 7, participationRate: 70, isSuppressed: false },
+    ],
+    suppressedDepartmentCount: 1,
+    unsegmentedRespondentCount: 0,
+    demographics: [],
+    isSuppressed: false,
+    suppressionReason: null,
+    minimumGroupSize: 5,
+    ...over,
+  }
+}
+
+/** The whole stored document, as `GET /admin/reports/{id}` hands it back. */
+function documentOf(sections: Record<string, unknown>[] = [section()]) {
+  return JSON.stringify({ generationNote: '', surveys: sections, aiInsights: [], benchmarks: [] })
+}
+
 function share(over: Partial<ReportShareSummary> = {}): ReportShareSummary {
   return {
     id: 'live',
@@ -65,13 +108,29 @@ function json(body: unknown, status = 200): Response {
 }
 
 function routeFetch(
-  options: { list?: ReportListItem[]; listStatus?: number; download?: () => Response; sharesFail?: string[] } = {},
+  options: {
+    list?: ReportListItem[]
+    listStatus?: number
+    download?: () => Response
+    sharesFail?: string[]
+    /** `reportOutput` per report id; the default document when a row is not named here. */
+    documents?: Record<string, string | null>
+    /** Report ids whose detail read fails, so that row can claim no contents. */
+    detailFail?: string[]
+  } = {},
 ) {
   vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input), 'http://test.local')
     const method = init?.method ?? 'GET'
     if (method === 'GET' && url.pathname.endsWith('/admin/reports')) {
       return Promise.resolve(options.listStatus ? json({ message: 'nope' }, options.listStatus) : json(options.list ?? [csv, pdf]))
+    }
+    const detail = url.pathname.match(/\/admin\/reports\/([^/]+)$/)
+    if (method === 'GET' && detail) {
+      const id = detail[1]
+      if (options.detailFail?.includes(id)) return Promise.resolve(json({ message: 'boom' }, 500))
+      const stored = options.documents && id in options.documents ? options.documents[id] : documentOf()
+      return Promise.resolve(json({ ...reportRow({ id }), reportOutput: stored }))
     }
     const shares = url.pathname.match(/\/admin\/reports\/([^/]+)\/shares$/)
     if (method === 'GET' && shares && options.sharesFail?.includes(shares[1])) {
@@ -186,19 +245,100 @@ describe('ReportsListNextPage — what it reads', () => {
     expect(document.body.textContent).not.toContain('climate_summary')
   })
 
-  it('wears the sample chip exactly where sample data sits — Contiene and the survey it names — and nowhere else', async () => {
-    routeFetch()
+  /**
+   * "Contiene" used to be the same invented object on every completed row, under a sample
+   * chip. It is now each report's OWN document, so there is no sample and no chip — and
+   * each row reads what its own `reportOutput` says.
+   */
+  it('reads each row\'s contents from ITS OWN document, and wears no sample chip anywhere', async () => {
+    routeFetch({
+      documents: {
+        'r-csv': documentOf(),
+        'r-pdf': documentOf([
+          section({ surveyId: 's-q2', title: 'Encuesta de Clima Q2', participation: { responseCount: 11 }, departments: [
+            { departmentId: 'd-ing', name: 'Ingeniería', respondentCount: 6, participationRate: 60, isSuppressed: false },
+            { departmentId: 'd-ops', name: 'Operaciones', respondentCount: 5, participationRate: 50, isSuppressed: false },
+          ], suppressedDepartmentCount: 0 }),
+        ]),
+      },
+    })
     renderAs(ADMIN)
     await screen.findByText('Datos de clima — T3 2026')
-    const chips = [...document.querySelectorAll('[data-slot="sample-chip"]')]
-    expect(chips).toHaveLength(2)
-    expect(chips.some((chip) => chip.closest('th') !== null)).toBe(true)
-    const tiles = [...document.querySelectorAll('[data-slot="reports-tiles"] [data-slot="kpi-tile"]')]
-    expect(tiles[0].querySelector('[data-slot="sample-chip"]')).not.toBeNull()
-    expect(tiles[1].querySelector('[data-slot="sample-chip"]')).toBeNull()
-    expect(tiles[2].querySelector('[data-slot="sample-chip"]')).toBeNull()
+
+    expect(document.querySelectorAll('[data-slot="sample-chip"]')).toHaveLength(0)
+    const csvContents = rowOf('r-csv').querySelector('[data-slot="report-contents"]')?.textContent ?? ''
+    const pdfContents = rowOf('r-pdf').querySelector('[data-slot="report-contents"]')?.textContent ?? ''
+    expect(csvContents).toContain('Encuesta de Clima Q3 · 24 respuestas')
+    expect(csvContents).toContain('4 de 5 grupos')
+    // The second report's own numbers, not the first's — the defect this replaces.
+    expect(pdfContents).toContain('Encuesta de Clima Q2 · 11 respuestas')
+    expect(pdfContents).toContain('2 de 2 grupos')
+    expect(pdfContents).not.toContain('24 respuestas')
   })
 
+  /**
+   * A report made in this app has a section per survey of the company
+   * (`ReportFilters.SurveyIds` defaults to null), so naming one survey would describe a
+   * quarter of a four-survey document as the whole of it.
+   */
+  it('counts the surveys instead of naming one when the document holds several', async () => {
+    routeFetch({
+      documents: {
+        'r-csv': documentOf([
+          section({ participation: { responseCount: 24 } }),
+          section({ surveyId: 's-q2', title: 'Encuesta de Clima Q2', participation: { responseCount: 18 } }),
+        ]),
+      },
+    })
+    renderAs(ADMIN)
+    await screen.findByText('Datos de clima — T3 2026')
+    const contents = rowOf('r-csv').querySelector('[data-slot="report-contents"]')?.textContent ?? ''
+    // 24 + 18, and no single survey named.
+    expect(contents).toContain('2 encuestas · 42 respuestas')
+    expect(contents).not.toContain('Encuesta de Clima Q3')
+  })
+
+  /**
+   * The document's OWN suppression decision, honoured even when the totals look healthy.
+   *
+   * This is not hypothetical: `parseReportDocument` defaults `isSuppressed` to TRUE when
+   * the field is absent (`bool(raw.isSuppressed, true)`), so a document that lost the flag
+   * in transit arrives suppressed while still carrying a 24. Re-flooring on the count
+   * alone would print it. Same rule the leader dashboard follows (#490): the server's
+   * decision OR our own, never one of them.
+   */
+  it('prints no numbers for a section the document marks suppressed, however healthy the count', async () => {
+    routeFetch({
+      documents: {
+        'r-csv': documentOf([section({ isSuppressed: true, suppressionReason: 'below_minimum_respondents' })]),
+      },
+    })
+    renderAs(ADMIN)
+    await screen.findByText('Datos de clima — T3 2026')
+    const contents = rowOf('r-csv').querySelector('[data-slot="report-contents"]')?.textContent ?? ''
+    expect(contents).toContain('bajo el umbral, sin números')
+    expect(contents).not.toContain('24')
+    expect(contents).not.toContain('grupos')
+    // The floor and the survey's own name ("…Q3") are the only digits such a cell may
+    // carry; no count of any kind survives beside them.
+    expect(contents.replace('umbral de 5 aplicado', '').replace('Encuesta de Clima Q3', '')).not.toMatch(/\d/)
+  })
+
+  it('claims no contents for a report whose document could not be read', async () => {
+    routeFetch({ detailFail: ['r-csv'] })
+    renderAs(ADMIN)
+    await screen.findByText('Datos de clima — T3 2026')
+    expect(rowOf('r-csv').querySelector('[data-slot="report-contents"]')).toBeNull()
+    // Not another report's summary, and not a zero.
+    expect(rowOf('r-csv').textContent).not.toContain('respuestas')
+  })
+
+  /**
+   * THE privacy branch, now fed by the server's own shape: Finanzas arrives withheld with
+   * `respondentCount: 0`, which is what the aggregation puts on a withheld row. It is
+   * named and never numbered — printing that 0 would read as "nobody in Finanzas
+   * answered", a claim this report does not make.
+   */
   it('names a protected group without a number, and states the floor where a file goes out', async () => {
     routeFetch()
     renderAs(ADMIN)
@@ -206,6 +346,7 @@ describe('ReportsListNextPage — what it reads', () => {
     const contents = rowOf('r-csv').querySelector('[data-slot="report-contents"]')!.textContent ?? ''
     expect(contents).toContain('4 de 5 grupos · Finanzas protegido')
     expect(contents).not.toMatch(/Finanzas\s*·?\s*\d/)
+    expect(contents).not.toContain('0')
     expect(document.querySelector('[data-slot="floor-note"]')?.textContent).toContain('menos de 5 respuestas')
   })
 
@@ -235,11 +376,11 @@ describe('ReportsListNextPage — what it reads', () => {
     }
     unmount()
 
-    // With no completed report, nothing is sample-fed, so no chip is worn anywhere.
+    // And nothing is even asked for: a report with no document is not read.
     routeFetch({ list: [generating] })
     renderAs(ADMIN)
     await screen.findByText('Resumen en curso')
-    expect(document.querySelector('[data-slot="sample-chip"]')).toBeNull()
+    expect(calls((url, method) => method === 'GET' && /\/admin\/reports\/r-gen$/.test(url.pathname))).toHaveLength(0)
   })
 
   it('says so with a retry when the list cannot be read', async () => {

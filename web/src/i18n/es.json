@@ -2762,6 +2762,8 @@
       "scheduleNext": "{pattern} · el próximo el {date}",
       "containsSurvey": "{survey} · {responses} respuestas",
       "containsSurveySuppressed": "{survey} · bajo el umbral, sin números",
+      "containsSurveys": "{count} encuestas · {responses} respuestas",
+      "containsSurveysSuppressed": "{count} encuestas · bajo el umbral, sin números",
       "containsGroups": "{shown} de {total} grupos",
       "containsProtectedOne": "{group} protegido",
       "containsProtectedMany": "{count} protegidos",

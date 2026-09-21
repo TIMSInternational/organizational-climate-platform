@@ -14,22 +14,44 @@ import ReportsListNextPage from './ReportsListNextPage'
  * `derive.contentsReading().suppressed` is pinned on its own in `derive.test.ts`; this pins
  * the branch of the PAGE that reads it, because a mutation printing
  * "{survey} · {responses} respuestas" for a suppressed survey survived every other test.
- * The column is sample-fed today, and phase 2 will feed a real `reportOutput` through this
- * very branch — so a survey UNDER the floor is fed through the page's own seam here, by
- * replacing `sampleModel` for this file only: 3 responses against a floor of 5, both of
- * its groups withheld.
+ *
+ * This file used to reach that branch by mocking `sampleModel`, and said in this docblock
+ * that "phase 2 will feed a real `reportOutput` through this very branch". Phase 2 is here:
+ * the survey under the floor is now served as a real stored document from the real
+ * endpoint, so what is pinned is the whole seam — `getReport` → `parseReportDocument` →
+ * `contentsOf` → the page — and not a hand-written model shape that could drift from the
+ * one the server actually sends.
+ *
+ * 3 responses against a floor of 5, both groups withheld, and `isSuppressed: true` as the
+ * aggregation marks a section it withheld. Note the withheld departments carry
+ * `respondentCount: 0`, which is exactly what the server puts on a withheld row.
  */
-vi.mock('./sampleModel', () => ({
-  sampleContents: {
-    surveyName: 'Pulso de Tesorería',
-    responses: 3,
-    groups: [
-      { name: 'Finanzas', isProtected: true },
-      { name: 'Tesorería', isProtected: true },
-    ],
-    floor: 5,
-  },
-}))
+const SUPPRESSED_DOCUMENT = JSON.stringify({
+  generationNote: '',
+  surveys: [
+    {
+      surveyId: 's-tes',
+      title: 'Pulso de Tesorería',
+      status: 'closed',
+      resolvedLocale: 'es',
+      participation: { responseCount: 3, completedCount: 3, partialCount: 0, completionRate: 100 },
+      questions: [],
+      dimensions: [],
+      departments: [
+        { departmentId: 'd-fin', name: 'Finanzas', respondentCount: 0, participationRate: null, isSuppressed: true },
+        { departmentId: 'd-tes', name: 'Tesorería', respondentCount: 0, participationRate: null, isSuppressed: true },
+      ],
+      suppressedDepartmentCount: 2,
+      unsegmentedRespondentCount: 0,
+      demographics: [],
+      isSuppressed: true,
+      suppressionReason: 'below_minimum_respondents',
+      minimumGroupSize: 5,
+    },
+  ],
+  aiInsights: [],
+  benchmarks: [],
+})
 
 const CID = 'c1'
 
@@ -55,6 +77,9 @@ beforeEach(() => {
       const url = new URL(String(input), 'http://test.local')
       if (url.pathname.endsWith('/admin/reports')) return Promise.resolve(new Response(JSON.stringify([report])))
       if (url.pathname.endsWith('/shares')) return Promise.resolve(new Response('[]'))
+      if (url.pathname.endsWith('/admin/reports/r-csv')) {
+        return Promise.resolve(new Response(JSON.stringify({ ...report, reportOutput: SUPPRESSED_DOCUMENT })))
+      }
       return Promise.resolve(new Response(null, { status: 404 }))
     }),
   )
@@ -87,6 +112,9 @@ describe('ReportsListNextPage — a survey under the floor', () => {
     expect(cell, 'the contents cell').not.toBeNull()
     const lines = [...cell!.children].map((line) => line.textContent ?? '')
     expect(lines[0]).toBe('Pulso de Tesorería · bajo el umbral, sin números')
+    // The 3 the document really carries never reaches the screen, and neither does the
+    // 0 that each withheld department carries.
+    expect(cell!.textContent).not.toContain('3 respuestas')
     // "x de y grupos" is not printed either: every group of a withheld survey is withheld with it.
     expect(cell!.textContent).not.toContain('grupos')
     // The floor is the one number the cell may carry; the 3 responses never appear.
