@@ -12,6 +12,7 @@ import { todayIso } from '../planDates'
 import { avancesReading, byCompromiso, hasRecordedProgress, planLine } from './derive'
 import type { TableroModel, TableroPlanCard } from './model'
 import { readViewer } from './viewer'
+import { isApiStatus } from '../../../api/authFetch'
 
 /**
  * Whose board, if anyone's:
@@ -103,6 +104,13 @@ export function useTableroModel(): TableroState {
     if (tablero.status === 'rejected') {
       const reason: unknown = tablero.reason
       setModel(null)
+      // Same rule as the consolidado: an answered refusal takes `restricted`, which this
+      // model already uses for the client-side role check, and offers no Retry.
+      if (isApiStatus(reason, 403)) {
+        setError(null)
+        setStatus('restricted')
+        return
+      }
       setError(reason instanceof Error ? reason.message : t('errors.generic'))
       setStatus('error')
       return
