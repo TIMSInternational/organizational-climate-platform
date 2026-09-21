@@ -20,7 +20,6 @@ import {
   type TrackingPart,
 } from './compose'
 import { lowestCell } from './derive'
-import { sampleModel } from './sampleModel'
 
 /**
  * The reads behind the Panel de Control — every one of them an existing client, no new
@@ -106,7 +105,7 @@ export async function loadAdminDashboard(deps: LoadDeps): Promise<ComposedModel>
 
   let actionPlans: Part<ActionPlansPart> =
     plans.status === 'live' ? { status: 'live', value: { plans: plans.value, covering: null } } : plans
-  const options = { asOf: deps.asOf, floor: deps.floor, dimensionName: deps.dimensionName, sample: sampleModel }
+  const options = { asOf: deps.asOf, floor: deps.floor, dimensionName: deps.dimensionName }
   const parts = { company, surveys, trends, map, tracking, microclimates, questionOrder, reminders }
 
   const first = composeModel({ ...parts, actionPlans }, options)

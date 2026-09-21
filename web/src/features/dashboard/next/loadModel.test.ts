@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { loadAdminDashboard, type LoadDeps } from './loadModel'
-import { sampleModel } from './sampleModel'
 
 /**
  * The loader against a `fetch` answered by URL, with payloads shaped like the ones the
@@ -111,8 +110,8 @@ describe('loadAdminDashboard', () => {
     const { model, regions } = await loadAdminDashboard(deps())
 
     expect(Object.values(regions).every((region) => region.status === 'live')).toBe(true)
-    expect(model.isSample).toBe(false)
-    expect(model.latestClosedWave.id).toBe('sv-q3')
+    expect(model.isPartial).toBe(false)
+    expect(model.latestClosedWave?.id).toBe('sv-q3')
     expect(model.openSurvey?.id).toBe('sv-q4')
     expect(model.attention).toEqual([
       { kind: 'lowest-cell', plan: { id: 'ap-ops', name: 'Reduce the workload in Operations', progress: 40 } },
@@ -147,11 +146,37 @@ describe('loadAdminDashboard', () => {
     const { model, regions } = await loadAdminDashboard(deps())
 
     expect(regions.microclimates).toEqual({ status: 'fallback', reason: 'failed', error: 'Service unavailable' })
-    expect(model.isSample).toBe(true)
-    expect(model.liveMicroclimate).toBe(sampleModel.liveMicroclimate)
+    expect(model.isPartial).toBe(true)
+    // The failed region's field is absent, not another tenant's live session.
+    expect(model.liveMicroclimate).toBeNull()
     expect(regions.company).toEqual({ status: 'live' })
     expect(regions.map).toEqual({ status: 'live' })
     expect(model.attention[0]).toMatchObject({ kind: 'lowest-cell', plan: { id: 'ap-ops' } })
+  })
+
+  /**
+   * The end-to-end shape of the rule, through the real loader: every endpoint 503s, and
+   * the model that comes back carries none of the mockup tenant's figures. This is the
+   * case `DashboardPage.test.tsx` renders, and before 2026-09-21 it produced a fully
+   * populated Grupo Meridiano dashboard from seven failed reads.
+   */
+  it('composes a model with no borrowed figures when every endpoint fails', async () => {
+    serve(routes().map((route) => ({ ...route, body: { message: 'Service unavailable' }, status: 503 })))
+
+    const { model, regions } = await loadAdminDashboard(deps())
+
+    expect(Object.values(regions).every((region) => region.status === 'fallback')).toBe(true)
+    expect(model.isPartial).toBe(true)
+    expect(model.companyName).toBeNull()
+    expect(model.latestClosedWave).toBeNull()
+    expect(model.participation).toEqual({ responses: null, completed: null })
+    expect(model.dimensions).toEqual([])
+    expect(model.waves).toEqual([])
+    expect(model.map.rows).toEqual([])
+    expect(model.plans).toBeNull()
+    expect(model.attention).toEqual([])
+    expect(model.liveMicroclimate).toBeNull()
+    expect(JSON.stringify(model)).not.toContain('Meridiano')
   })
 
   it('asks nothing of a tracking service that is not configured', async () => {
@@ -159,7 +184,7 @@ describe('loadAdminDashboard', () => {
     const { model, regions } = await loadAdminDashboard(deps({ trackingBaseUrl: null }))
 
     expect(regions.tracking).toEqual({ status: 'off' })
-    expect(model.isSample).toBe(false)
+    expect(model.isPartial).toBe(false)
     expect(model.plans).toEqual({ open: 4, overdue: 0, overdueNodo: null })
     expect(requested().some((url) => url.startsWith(TRACKING) || url.includes('/tracking/picker'))).toBe(false)
   })
