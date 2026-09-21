@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import { ArrowRight, ChevronDown } from 'lucide-react'
 import { cn } from '../../../../lib/cn'
 import { Chip, type ChipTone } from '../../../../components/ui'
+import { SectionRule } from '../../../../components/signal/SignalPrimitives'
 
 /**
  * The per-role canvas's building blocks for the super administrator's screens, drawn
@@ -47,10 +48,15 @@ export function Panel({
       )}
     >
       {(heading !== undefined || meta !== undefined) && (
-        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-          {heading}
-          {meta !== undefined && <span className="text-xs text-fg-tertiary">{meta}</span>}
-        </div>
+        // The hairline under a panel's header is the "signal" rhythm
+        // (`components/signal/SignalPrimitives.tsx`), applied here rather than at each call
+        // site so every panel on the platform and org-structure screens gets it at once.
+        <SectionRule
+          labelAs="plain"
+          metaAs="plain"
+          label={heading}
+          meta={meta !== undefined ? <span className="text-xs text-fg-tertiary">{meta}</span> : undefined}
+        />
       )}
       {children}
     </section>
@@ -70,15 +76,19 @@ export function SectionHead({
   note?: ReactNode
 }) {
   return (
-    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-      <div className="flex items-baseline gap-2.5">
-        <h2 id={id} className="m-0 text-2xl">
-          {heading}
-        </h2>
-        {count !== undefined && <span className="font-mono text-xs text-fg-tertiary tabular-nums">{count}</span>}
-      </div>
-      {note !== undefined && <span className="text-xs text-fg-tertiary sm:text-right">{note}</span>}
-    </div>
+    <SectionRule
+      labelAs="plain"
+      metaAs="plain"
+      label={
+        <div className="flex items-baseline gap-2.5">
+          <h2 id={id} className="m-0 text-2xl">
+            {heading}
+          </h2>
+          {count !== undefined && <span className="font-mono text-xs text-fg-tertiary tabular-nums">{count}</span>}
+        </div>
+      }
+      meta={note !== undefined ? <span className="text-xs text-fg-tertiary sm:text-right">{note}</span> : undefined}
+    />
   )
 }
 

@@ -1,11 +1,25 @@
-# Decision: a second visual direction for the admin screens — OPEN
+# Decision: a second visual direction for the admin screens — RULED 2026-09-21
 
-**Status: OPEN. Nothing is decided and nothing shipping has changed.** Federico asked on
-2026-09-21 for the UI to be built from a reference site (aaru.com). This file records what
-the reference actually contains, what was taken, what was refused, and the three facts that
-make "apply it to all the pages" a decision rather than a task.
+**Status: RULED. Federico chose to apply it to real screens.** He asked on 2026-09-21 for
+the UI to be built from a reference site (aaru.com); shown the three options below, he
+chose the second — **adopt the primitives on the real screens now.** This file records what
+the reference actually contains, what was taken, what was refused, and the risks that were
+put to him before he ruled. Owner: Federico.
 
-Owner: Federico. The build is at `/dev/signal`, dev-only, linked from nowhere.
+## What that ruling covers, as built
+
+- The company dashboard's five sections, and a new "Quién respondió" population block.
+- Ten-plus screens through `SectionHead` and `Panel` (`org-structure/next/super/parts.tsx`):
+  the platform dashboard, departments, company settings, admin users, demographic fields,
+  action plans, profile, privacy, survey templates.
+- `/dev/signal` stays as the gallery for the language itself.
+
+**Every `<h2 id>` survives.** `SectionRule`'s `labelAs="plain"` passes the caller's real
+heading through, because those ids are what `aria-labelledby` and several tests point at.
+The rule and the meta are what was added; the heading is still a heading.
+
+**Not covered, and still the approved canvas:** the respond flow, the survey builder, the
+results screens, and every artboard in #492. Those were not touched.
 
 ## What the reference is, having looked at it
 
@@ -78,14 +92,15 @@ is already correct, and to anything added later.
    an untested rollback (#159) and UAT not run (#161). None of those move because a screen
    looks different.
 
-## The options, as they actually stand
+## The options as they were put, and the one chosen
 
-- **Keep the approved canvas for 16 Nov; hold this for v2.** Lowest risk. `/dev/signal`
-  costs nothing to keep and is ready when the client wants a refresh.
-- **Adopt selected primitives now.** `PopulationGrid` and `SectionRule` are additive and
-  could land on one or two screens without disturbing the canvas. The population grid in
-  particular says something true that no current screen says.
-- **Full reskin before go-live.** Possible and not advisable at eight weeks with the
-  operational work outstanding.
+- Keep the approved canvas for 16 Nov; hold this for v2. Lowest risk.
+- **← CHOSEN. Adopt selected primitives now.** Additive: the rule and the population grid
+  land without redrawing a single artboard, and the population grid says something true
+  that no current screen says.
+- Full reskin before go-live. Possible and not advisable at eight weeks with the
+  operational work outstanding. **Not chosen, and this file is the record that it was not:**
+  if a later session finds a screen that does not match the canvas, the answer is that only
+  the headers and the dashboard's population block changed.
 
-Federico decides. This file is updated with the ruling and its date when he does.
+Ruled 2026-09-21. Reopen by editing this file with a new date, never by editing the above.

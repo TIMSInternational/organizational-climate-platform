@@ -3,12 +3,13 @@ import { Link } from 'react-router'
 import { AlertCircle, ArrowRight, Clock, FileText, Plus, Send, Waves } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
-import { ANONYMITY_FLOOR, ClimateMap, KpiTile } from '../../../components/charts'
+import { ANONYMITY_FLOOR, ClimateMap, KpiTile, isSuppressed } from '../../../components/charts'
 import { Button, Chip, LoadingRegion, SkeletonText } from '../../../components/ui'
 import { useViewerCapabilities, type ViewerCapabilities } from '../../../auth/viewerCapabilities'
 import { calendarDay, instantDay } from '../../../lib/calendarDay'
 import { cn } from '../../../lib/cn'
-import { KpiRow, SectionHeading } from '../components/dashboardGrammar'
+import { KpiRow } from '../components/dashboardGrammar'
+import { Eyebrow, PopulationGrid, SectionRule } from '../../../components/signal/SignalPrimitives'
 import type { AdminDashboardModel, AttentionItem, DimensionSeries, RegionKey, RegionStatuses, Wave } from './model'
 import {
   closedWaveCount,
@@ -139,10 +140,18 @@ export default function AdminDashboardNextView({
       {/* `-mt-1`: PageTopBar leaves the 24px the list and trends artboards carry under the
           rule, but Dashboard.dc.html opens its first section at `margin-top: 20px`. */}
       <div data-slot="dashboard-sections" className="-mt-1 flex flex-col gap-section">
-        <section aria-labelledby="next-where">
-          <SectionHeading>
-            <span id="next-where">{t('dashboard.next.whereHeading')}</span>
-          </SectionHeading>
+        <section aria-labelledby="next-where" className="flex flex-col gap-3.5">
+          {/* `labelAs="plain"`: the heading stays an `<h2 id>`, because `aria-labelledby`
+              and three tests point at it. The rule and the meta are what this adds. */}
+          <SectionRule
+            labelAs="plain"
+            label={
+              <h2 id="next-where" className="m-0 text-2xl">
+                {t('dashboard.next.whereHeading')}
+              </h2>
+            }
+            meta={model.latestClosedWave?.code}
+          />
           <RegionNotice regions={regions} region="company" t={t} />
           <KpiRow>
             <KpiTile
@@ -246,17 +255,23 @@ export default function AdminDashboardNextView({
             aria-labelledby="next-moved"
             className="flex min-w-0 flex-col gap-3 rounded-lg border border-line-default bg-surface-card px-5 pt-4 pb-4.5 shadow-xs xl:col-span-7"
           >
-            <div className="flex flex-wrap items-baseline justify-between gap-3">
-              <h2 id="next-moved" className="m-0 text-2xl">
-                {t('dashboard.next.movedHeading')}
-              </h2>
-              <span className="inline-flex items-center gap-2 text-sm text-fg-label">
-                <svg aria-hidden="true" width="18" height="2" viewBox="0 0 18 2" className="shrink-0">
-                  <line x1="0" x2="18" y1="1" y2="1" stroke={TARGET_RULE} strokeDasharray="3 2" />
-                </svg>
-                {movedLegend(closedWaveCount(model), reading(target, locale), t, locale)}
-              </span>
-            </div>
+            <SectionRule
+              labelAs="plain"
+              metaAs="plain"
+              label={
+                <h2 id="next-moved" className="m-0 text-2xl">
+                  {t('dashboard.next.movedHeading')}
+                </h2>
+              }
+              meta={
+                <span className="inline-flex items-center gap-2 text-sm text-fg-label">
+                  <svg aria-hidden="true" width="18" height="2" viewBox="0 0 18 2" className="shrink-0">
+                    <line x1="0" x2="18" y1="1" y2="1" stroke={TARGET_RULE} strokeDasharray="3 2" />
+                  </svg>
+                  {movedLegend(closedWaveCount(model), reading(target, locale), t, locale)}
+                </span>
+              }
+            />
             <RegionNotice regions={regions} region="trends" t={t} />
             <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
               {ordered.map((dimension) => (
@@ -277,23 +292,29 @@ export default function AdminDashboardNextView({
             aria-labelledby="next-by-group"
             className="flex min-w-0 flex-col gap-3 rounded-lg border border-line-default bg-surface-card px-5 pt-4 pb-4.5 shadow-xs xl:col-span-5"
           >
-            <div className="flex flex-wrap items-baseline justify-between gap-3">
-              <h2 id="next-by-group" className="m-0 text-2xl">
-                {t('dashboard.next.byGroupHeading', { wave: model.latestClosedWave?.code ?? '—' })}
-              </h2>
-              {/* `GET /surveys/{id}/results` is `CanAdminister` (`SurveyResultsEndpoints.cs:199`):
-                  an admin with a company, for any survey of the scoped tenant. */}
-              {/* No wave, no link: there is no results page for a survey nobody read. */}
-              {capabilities.seesWholeCompany && model.latestClosedWave && (
-                <Link
-                  to={`/surveys/${model.latestClosedWave.id}/results`}
-                  className="inline-flex items-center gap-1 text-sm text-fg-secondary hover:text-fg-primary"
-                >
-                  {t('dashboard.next.openResults')}
-                  <ArrowRight aria-hidden="true" className="size-3.5" />
-                </Link>
-              )}
-            </div>
+            {/* `GET /surveys/{id}/results` is `CanAdminister` (`SurveyResultsEndpoints.cs:199`):
+                an admin with a company, for any survey of the scoped tenant. And: no wave,
+                no link — there is no results page for a survey nobody read. */}
+            <SectionRule
+              labelAs="plain"
+              metaAs="plain"
+              label={
+                <h2 id="next-by-group" className="m-0 text-2xl">
+                  {t('dashboard.next.byGroupHeading', { wave: model.latestClosedWave?.code ?? '—' })}
+                </h2>
+              }
+              meta={
+                capabilities.seesWholeCompany && model.latestClosedWave ? (
+                  <Link
+                    to={`/surveys/${model.latestClosedWave.id}/results`}
+                    className="inline-flex items-center gap-1 text-sm text-fg-secondary hover:text-fg-primary"
+                  >
+                    {t('dashboard.next.openResults')}
+                    <ArrowRight aria-hidden="true" className="size-3.5" />
+                  </Link>
+                ) : undefined
+              }
+            />
             <RegionNotice regions={regions} region="map" t={t} />
             {/* No rows, no grid. An empty ClimateMap is a set of headers promising a
                 table that never arrives; the notice above has already said why. */}
@@ -323,14 +344,39 @@ export default function AdminDashboardNextView({
               />
             </div>
             )}
+            {/* How many people are behind each row of the map above — the one thing the
+                grid does not say. A group under the floor draws a fixed band and no
+                count: `PopulationGrid` records why `n` dots would BE the count. */}
+            {model.map.rows.length > 0 && (
+              <div className="flex flex-col gap-3 border-t border-line-light pt-3.5">
+                <Eyebrow>{t('dashboard.next.whoAnsweredHeading')}</Eyebrow>
+                <PopulationGrid
+                  bands={model.map.rows.map((row) => ({
+                    name: row.name,
+                    responses: row.responses,
+                    isProtected: isSuppressed(row.responses, ANONYMITY_FLOOR),
+                  }))}
+                  protectedLabel={t('dashboard.next.protectedWord')}
+                />
+                <p className="m-0 text-xs text-fg-tertiary">
+                  {t('dashboard.next.whoAnsweredNote', { floor: ANONYMITY_FLOOR })}
+                </p>
+              </div>
+            )}
           </section>
         </div>
 
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
           <section aria-labelledby="next-attention" className="flex min-w-0 flex-col gap-2.5 xl:col-span-7">
-            <h2 id="next-attention" className="m-0 text-2xl">
-              {t('dashboard.next.attentionHeading')}
-            </h2>
+            <SectionRule
+              labelAs="plain"
+              label={
+                <h2 id="next-attention" className="m-0 text-2xl">
+                  {t('dashboard.next.attentionHeading')}
+                </h2>
+              }
+              meta={model.attention.length > 0 ? model.attention.length : undefined}
+            />
             <RegionNotice regions={regions} region="actionPlans" t={t} />
             <RegionNotice regions={regions} region="tracking" t={t} />
             {/* An empty list still draws its card border and reads as a rule across the
@@ -356,9 +402,14 @@ export default function AdminDashboardNextView({
           </section>
 
           <section aria-labelledby="next-cycle" className="flex min-w-0 flex-col gap-2.5 xl:col-span-5">
-            <h2 id="next-cycle" className="m-0 text-2xl">
-              {t('dashboard.next.cycleHeading')}
-            </h2>
+            <SectionRule
+              labelAs="plain"
+              label={
+                <h2 id="next-cycle" className="m-0 text-2xl">
+                  {t('dashboard.next.cycleHeading')}
+                </h2>
+              }
+            />
             <RegionNotice regions={regions} region="surveys" t={t} />
             {/* Same rule as the map: no waves, no timeline — and no note about a cycle
                 nobody read. */}
@@ -818,10 +869,17 @@ export function AdminDashboardNextSkeleton() {
       <PageTopBar title={t('dashboard.next.title')} description={t('dashboard.next.description')} />
       <div className="flex flex-col gap-section">
         {SECTION_REGIONS.map((section) => (
-          <section key={section.id} aria-labelledby={section.id}>
-            <SectionHeading>
-              <span id={section.id}>{t(section.headingKey)}</span>
-            </SectionHeading>
+          <section key={section.id} aria-labelledby={section.id} className="flex flex-col gap-3.5">
+            {/* The same rule the loaded screen draws, so the skeleton does not reflow
+                into a different shape the moment the data lands. */}
+            <SectionRule
+              labelAs="plain"
+              label={
+                <h2 id={section.id} className="m-0 text-2xl">
+                  {t(section.headingKey)}
+                </h2>
+              }
+            />
             <LoadingRegion
               loading
               label={t('dashboard.next.loadingRegion', { region: t(REGION_NAME_KEYS[section.region]) })}

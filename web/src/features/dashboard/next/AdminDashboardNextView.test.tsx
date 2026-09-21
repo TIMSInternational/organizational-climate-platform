@@ -10,6 +10,7 @@ import type { AdminDashboardModel, RegionStatuses } from './model'
 import { TranslationProvider } from '../../../i18n'
 import { CompanyContextProvider } from '../../../company-context'
 import { setToken } from '../../../auth/token'
+import { ANONYMITY_FLOOR } from '../../../components/charts'
 import { tokenFor } from '../../../test/jwtFixture'
 import en from '../../../i18n/en.json'
 import { calendarDay } from '../../../lib/calendarDay'
@@ -203,6 +204,36 @@ describe('AdminDashboardNextView', () => {
     const card = document.querySelector('[data-slot="trend-card"][data-dimension="pertenencia"]')
     expect(card?.textContent).toContain('+0.3')
     expect(card?.textContent).not.toContain('-0.3')
+  })
+
+  /**
+   * The geometric half of the privacy floor, which is a rule no other test here covers.
+   *
+   * "Quién respondió" draws one dot per respondent. For a group UNDER the floor that would
+   * BE the count — a reader counts the dots and knows the headcount, which is exactly what
+   * the floor of 5 exists to prevent — and it would slip past every assertion that only
+   * checks no NUMBER is rendered, because the disclosure is in the geometry.
+   *
+   * So a withheld band draws a constant number of marks unrelated to its own count, and
+   * the row still appears under its name: absent and withheld are different statements.
+   */
+  it('draws a withheld group a fixed band, never one mark per respondent, and never a count', () => {
+    renderView()
+    const withheld = document.querySelector('[data-slot="population-withheld"]')
+    expect(withheld, 'the withheld band').not.toBeNull()
+
+    const finance = fullModel.map.rows.find((row) => row.responses < ANONYMITY_FLOOR)!
+    expect(finance.responses).toBeGreaterThan(0)
+    // The band's width is a constant of the component, NOT this group's headcount.
+    expect(withheld!.children.length).not.toBe(finance.responses)
+    const row = withheld!.closest('div')!
+    expect(row.textContent).toContain(copy.protectedWord)
+    expect(row.textContent).not.toMatch(/\d/)
+
+    // A disclosed group, by contrast, is drawn a mark per person and says its number.
+    const disclosed = fullModel.map.rows.find((r) => r.responses >= ANONYMITY_FLOOR)!
+    const dotRows = [...document.querySelectorAll('[data-slot="population-dots"]')]
+    expect(dotRows.some((node) => node.children.length === disclosed.responses)).toBe(true)
   })
 
   it('names, in its own section, each region that fell back to the sample — and only those', () => {

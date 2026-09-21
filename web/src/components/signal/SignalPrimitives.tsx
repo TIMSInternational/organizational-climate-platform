@@ -40,17 +40,38 @@ export function Eyebrow({ children, className }: { children: ReactNode; classNam
 }
 
 /**
- * An eyebrow on the left, a meta note on the right, a hairline under both.
+ * A label on the left, a meta note on the right, a hairline under both.
  *
  * The reference uses this before every band of content, and it is what gives a long page
  * its rhythm without a heading competing with the one below it.
+ *
+ * ## `labelAs`
+ *
+ * `'eyebrow'` sets the label itself in small caps — right on a surface whose sections are
+ * not headings. `'plain'` renders whatever it is given untouched, which is what a real
+ * screen needs: the dashboard's sections carry `<h2 id>` elements that `aria-labelledby`
+ * and several tests point at, and dissolving those into decorative spans would trade an
+ * accessibility guarantee for a typeface. The rule and the meta are the part worth having;
+ * the heading stays a heading.
  */
-export function SectionRule({ label, meta }: { label: ReactNode; meta?: ReactNode }) {
+export function SectionRule({
+  label,
+  meta,
+  labelAs = 'eyebrow',
+  metaAs = 'eyebrow',
+}: {
+  label: ReactNode
+  meta?: ReactNode
+  labelAs?: 'eyebrow' | 'plain'
+  /** `'plain'` when the right side is already styled — a legend, or a link with its arrow. */
+  metaAs?: 'eyebrow' | 'plain'
+}) {
   return (
     <div data-slot="signal-rule" className="flex flex-col gap-2.5">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <Eyebrow>{label}</Eyebrow>
-        {meta !== undefined && <Eyebrow className="text-fg-tertiary">{meta}</Eyebrow>}
+        {labelAs === 'plain' ? label : <Eyebrow>{label}</Eyebrow>}
+        {meta !== undefined &&
+          (metaAs === 'plain' ? meta : <Eyebrow className="text-fg-tertiary">{meta}</Eyebrow>)}
       </div>
       <hr className="m-0 h-px w-full border-0 bg-line-default" />
     </div>
