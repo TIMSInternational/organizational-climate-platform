@@ -3,7 +3,6 @@ import { LanguageSwitcher, useTranslation } from '../../i18n'
 import { BrandLockup, ThemeSwitcher } from '../../components/layout'
 import { SkipLink } from '../../components/ui'
 import { cn } from '../../lib/cn'
-import { useForcedDarkTheme } from '../../theme/useForcedDarkTheme'
 
 /**
  * The frame the five unauthenticated screens share, drawn from the 10 Sep canvas
@@ -43,22 +42,21 @@ import { useForcedDarkTheme } from '../../theme/useForcedDarkTheme'
  * ground is `bg-surface-outer` (`#f8f7fb` in light, `#0f0a1c` in dark) and the card
  * `bg-surface-card`; nothing here is a literal.
  *
- * ## `ground="dark"` — one screen, and only one
+ * ## There is no dark variant, and the reason is worth keeping
  *
- * `/login` opts into a dark ground (`LoginNextPage` records the reasoning). It is a PROP
- * rather than a change to this component's default because six other screens share this
- * frame — register, the three auth states, and the invitation frame — and none of them
- * asked to be redrawn. Passing nothing leaves every one of them exactly as it was.
+ * This frame carried a `ground="dark"` prop until 2026-09-22: it pinned the palette dark
+ * for the life of the screen, for `/login` alone. "La sede" retired it. The screen is still
+ * dark, but the darkness is now `AuthBackdrop` — a photograph under a navy wash, behind the
+ * whole page — and a palette pin on top of that turned the artboard's WHITE card dark, so
+ * the mechanism was fighting the design it had been written to serve. Nothing passed the
+ * prop afterwards, so the prop, `ForcedDarkGround` and `useForcedDarkTheme` went with it.
  *
- * The variant does three things that only make sense together: it pins the palette to dark
- * for as long as the screen is mounted, it drops the theme picker from the strip, and it
- * centres the column. The picker goes because on a screen that is dark whatever you choose,
- * a control offering the choice is a lie — it would appear to do nothing. The language
- * picker stays, because that one still works and is the more important of the two here:
- * the reader may not read English.
+ * Keep the shape in mind before reaching for a pin again: a screen that wants to LOOK dark
+ * wants a ground, not a palette. Pinning the palette also changes every control on top of
+ * it, which is only ever right when the whole composition is dark.
  *
- * This variant carried a drifting dot lattice on its ground until 2026-09-21, when
- * Federico ruled it out. The dark itself is his call too and stays.
+ * (`authNextPages.test.tsx` holds what replaced the three pin tests: the reader's stored
+ * theme survives a visit to `/login`, and the picker that changes it still works.)
  */
 /** Which slice of the product the stage explains on a given screen. */
 export type StageVariant = 'product' | 'access' | 'cycle' | 'administration'
@@ -113,21 +111,18 @@ const STAGE: Record<
 
 export function AuthCanvas({
   children,
-  ground = 'plain',
   stage = 'product',
   skipLabel,
 }: {
   children: ReactNode
-  ground?: 'plain' | 'dark'
   stage?: StageVariant
   /** Overrides the generic skip label where a screen has a more specific one of its own. */
   skipLabel?: string
 }) {
   const { t } = useTranslation()
-  const dark = ground === 'dark'
 
   return (
-    <AuthGround dark={dark}>
+    <AuthGround>
       {/* First focusable thing on the page. `InvitationFrame` and `RespondShell` have had
           one since they were written; this frame — seven routes, including the one screen
           every user must pass — did not, so a keyboard user Tabbed through the language
@@ -252,25 +247,11 @@ function AuthStage({ variant }: { variant: StageVariant }) {
 /**
  * The ground under the strip and the column.
  *
- * Split out so the dark pin is a hook call on a component that only exists in the dark
- * variant: hooks cannot be called conditionally, and `AuthCanvas` is rendered by seven
- * screens of which one wants it.
+ * It was a two-branch component while `ground="dark"` existed — one branch called the pin
+ * hook, because hooks cannot be called conditionally. With the pin gone there is one
+ * ground, and `AuthBackdrop` is what makes `/login` dark.
  */
-function AuthGround({ dark, children }: { dark: boolean; children: ReactNode }) {
-  return dark ? (
-    <ForcedDarkGround>{children}</ForcedDarkGround>
-  ) : (
-    <div className="relative flex min-h-dvh flex-col bg-surface-outer">
-      <AuthBackdrop />
-      {children}
-    </div>
-  )
-}
-
-function ForcedDarkGround({ children }: { children: ReactNode }) {
-  useForcedDarkTheme()
-  // Identical markup to the plain ground; the hook is the whole difference. `bg-surface-outer`
-  // resolves to the dark palette because the hook has pinned the attribute above it.
+function AuthGround({ children }: { children: ReactNode }) {
   return (
     <div className="relative flex min-h-dvh flex-col bg-surface-outer">
       <AuthBackdrop />

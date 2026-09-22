@@ -31,19 +31,29 @@ import { useSignInModel } from './useSignInModel'
  *   always fails is worse than no button. Same rule the previous page had; the artboard
  *   records it.
  *
- * ## 2026-09-21: dark
+ * ## 2026-09-21: dark — and 2026-09-22, how
  *
  * Federico's call. This screen alone is drawn dark whatever the reader's stored theme is.
  *
  * **Why dark only here.** It is the threshold. Everything past it — the admin surfaces and
  * the respond flow — is light by default and stays that way; making the one screen reached
  * without a session a different weight says "outside" and "inside" without a word of copy.
- * The pin never touches the reader's stored preference (`useForcedDarkTheme`), so the app
- * they land in is still the one they chose, and the theme picker is dropped from the strip
- * rather than left there doing nothing.
+ *
+ * **It is a ground, not a palette pin — and it was the other thing first.** Until "La sede"
+ * this screen called `useForcedDarkTheme`, which pinned `data-admin-theme` dark for as long
+ * as it was mounted. That was right when the artboard's card was dark. The artboard
+ * Federico chose puts a WHITE card on a navy-washed photograph, and a pinned palette turned
+ * that card dark — the mechanism working against the design it was written for. So the pin
+ * went (with `ground="dark"` and the hook itself), and the darkness is `AuthBackdrop`,
+ * behind the whole page and owing nothing to the theme.
+ *
+ * Two things follow that the pinned version did not allow. The reader's stored theme is
+ * untouched because nothing writes it — not merely because the pin was careful. And the
+ * theme picker stays in the strip: it used to be dropped here, because under a pin it would
+ * have appeared to do nothing, and now it genuinely changes the card.
  *
  * A drifting dot lattice rode on this ground for part of 21 Sep — one mark per person, no
- * mark picked out. Federico ruled it out the same day. The ground is flat dark now, and
+ * mark picked out. Federico ruled it out the same day. The ground is the photograph now, and
  * the anonymity line under the card carries that idea on its own, in words.
  *
  * There is no "create an account" link, and that is not an omission: `POST /auth/signup`
