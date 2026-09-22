@@ -508,6 +508,42 @@
       },
       "stageHeadline": "Escuchar a toda una organización sin exponer a nadie.",
       "stageBody": "Cada respuesta cuenta en el conjunto y ninguna queda ligada a quien la escribió. Los grupos con menos de cinco respuestas nunca muestran una cifra."
+    },
+    "stage": {
+      "product": {
+        "eyebrow": "CLIMA ORGANIZACIONAL",
+        "lead": "Un instrumento de medición de clima laboral para instituciones.",
+        "measuresLabel": "MIDE",
+        "measures": "Encuestas de clima por ciclo y microclimas de cinco minutos entre ciclos.",
+        "followsLabel": "SIGUE",
+        "follows": "Planes de acción con fecha, y el avance contra el periodo anterior."
+      },
+      "access": {
+        "eyebrow": "ACCESO",
+        "lead": "Cada persona entra con el rol que su organización le asigna.",
+        "rolesLabel": "ROLES",
+        "roles": "Empleado, líder, supervisor y administración de empresa.",
+        "scopeLabel": "ALCANCE",
+        "scope": "Cada rol ve el nivel que le corresponde: la organización, su equipo o lo suyo."
+      },
+      "cycle": {
+        "eyebrow": "EL CICLO",
+        "lead": "La medición es un ciclo, no un evento aislado.",
+        "surveyLabel": "ENCUESTA",
+        "survey": "Una medición completa por ciclo, con preguntas agrupadas en dimensiones.",
+        "pulseLabel": "MICROCLIMA",
+        "pulse": "Pulsos de cinco minutos entre ciclos, para no esperar al siguiente.",
+        "followUpLabel": "SEGUIMIENTO",
+        "followUp": "Lo que se decide después queda como plan, con fecha."
+      },
+      "administration": {
+        "eyebrow": "ADMINISTRACIÓN",
+        "lead": "Cada organización administra sus propios accesos.",
+        "whoLabel": "QUIÉN",
+        "who": "Una persona de su propia organización, no el proveedor de la plataforma.",
+        "changesLabel": "QUÉ CAMBIA",
+        "changes": "Un acceso desactivado deja de entrar; lo ya registrado no se borra."
+      }
     }
   },
   "charts": {

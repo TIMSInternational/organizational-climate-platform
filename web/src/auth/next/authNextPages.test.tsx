@@ -118,15 +118,35 @@ afterEach(() => {
 })
 
 describe('LoginNextPage', () => {
-  it('draws the artboard: the eyebrow, the serif heading, both fields, the assurance line', () => {
+  it('draws the artboard, and does NOT repeat the privacy promise under the card', () => {
     renderAuthRoutes('/login')
 
     expect(screen.getByRole('heading', { level: 1, name: 'Sign in' })).toBeTruthy()
     expect(screen.getByLabelText(/Email address/)).toBeTruthy()
     expect(screen.getByLabelText(/^Password/)).toBeTruthy()
-    // The line the board puts UNDER the card, which is the question an employee about to
-    // answer an anonymous survey is actually asking.
-    expect(screen.getByText(/signing in only checks that you were invited/i)).toBeTruthy()
+
+    // This line used to sit under the card. It is gone on purpose, and the purpose is
+    // measurable: `es.json` stated some version of the promise in 89 strings, four of
+    // them on the auth surface, two of those byte-identical. A guarantee restated in
+    // four wordings reads as imprecision about the one thing this product exists to do.
+    //
+    // It is stated ONCE now, in full, where it is load-bearing — `AnonymityNotice`, the
+    // first block of `SurveyRespondForm`, on the screen before anyone answers. Signing in
+    // is not that moment: a returning person has already been told.
+    expect(screen.queryByText(/signing in only checks that you were invited/i)).toBeNull()
+  })
+
+  it('explains the product on the stage instead, and a different slice per screen', () => {
+    renderAuthRoutes('/login')
+    expect(screen.getByText(/An instrument for measuring workplace climate/i)).toBeTruthy()
+    expect(screen.getByText(/Climate surveys by cycle/i)).toBeTruthy()
+
+    // The same panel on every screen would be furniture. `/register` answers the question
+    // its own visitor has — what role am I about to get — and says nothing about cycles.
+    cleanup()
+    renderAuthRoutes('/register')
+    expect(screen.getByText(/Each person signs in with the role/i)).toBeTruthy()
+    expect(screen.queryByText(/An instrument for measuring workplace climate/i)).toBeNull()
   })
 
   /**

@@ -43,7 +43,7 @@ export default function AccountInactiveNextPage() {
   const navigate = useNavigate()
 
   return (
-    <AuthCanvas>
+    <AuthCanvas stage="administration">
       <AuthCard>
         <AuthHeadline
           tile={<Lock aria-hidden="true" />}

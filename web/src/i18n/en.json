@@ -508,6 +508,42 @@
       },
       "stageHeadline": "Hear a whole organisation without exposing anyone.",
       "stageBody": "Every answer counts in the aggregate and none is tied back to the person who wrote it. A group of fewer than five never yields a figure."
+    },
+    "stage": {
+      "product": {
+        "eyebrow": "ORGANISATIONAL CLIMATE",
+        "lead": "An instrument for measuring workplace climate, built for institutions.",
+        "measuresLabel": "MEASURES",
+        "measures": "Climate surveys by cycle, and five-minute microclimates in between.",
+        "followsLabel": "TRACKS",
+        "follows": "Action plans with a date, and progress against the previous period."
+      },
+      "access": {
+        "eyebrow": "ACCESS",
+        "lead": "Each person signs in with the role their organisation assigns them.",
+        "rolesLabel": "ROLES",
+        "roles": "Employee, leader, supervisor and company administration.",
+        "scopeLabel": "SCOPE",
+        "scope": "Each role sees the level that belongs to it: the organisation, their team, or their own."
+      },
+      "cycle": {
+        "eyebrow": "THE CYCLE",
+        "lead": "Measurement is a cycle, not a one-off event.",
+        "surveyLabel": "SURVEY",
+        "survey": "One full measurement per cycle, with questions grouped into dimensions.",
+        "pulseLabel": "MICROCLIMATE",
+        "pulse": "Five-minute pulses between cycles, so nobody waits for the next one.",
+        "followUpLabel": "FOLLOW-UP",
+        "followUp": "What gets decided afterwards becomes a plan, with a date."
+      },
+      "administration": {
+        "eyebrow": "ADMINISTRATION",
+        "lead": "Each organisation administers its own access.",
+        "whoLabel": "WHO",
+        "who": "Someone in your own organisation, not the platform provider.",
+        "changesLabel": "WHAT CHANGES",
+        "changes": "A deactivated account stops signing in; what was already recorded is not deleted."
+      }
     }
   },
   "charts": {

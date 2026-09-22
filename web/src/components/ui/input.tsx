@@ -20,7 +20,7 @@ export function Input({ className, type, ...props }: InputProps) {
       type={type}
       data-slot="input"
       className={cn(
-        'w-full rounded-md border border-line-default bg-surface-input text-base text-fg-primary',
+        'w-full rounded-md border border-line-control bg-surface-input text-base text-fg-primary',
         'placeholder:text-fg-tertiary',
         'file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-fg-primary',
         'hover:not-disabled:border-line-hover',

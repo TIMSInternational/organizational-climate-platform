@@ -1,8 +1,8 @@
-import { CircleAlert, ShieldCheck } from 'lucide-react'
+import { CircleAlert } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import { Alert, AlertDescription, AlertTitle, Button, Input } from '../../components/ui'
 import { beginGoogleSignIn, googleClientId } from '../googleOAuth'
-import { AuthCanvas, AuthCard, AuthDivider, AuthField, AuthFootnote, AuthHeadline } from './AuthCanvas'
+import { AuthCanvas, AuthCard, AuthDivider, AuthField, AuthHeadline } from './AuthCanvas'
 import { AuthTransitionCard } from './AuthTransitionCard'
 import { useSignInModel } from './useSignInModel'
 
@@ -146,7 +146,6 @@ export default function LoginNextPage() {
         </form>
       </AuthCard>
 
-      <AuthFootnote icon={<ShieldCheck aria-hidden="true" />}>{t('auth.next.signInAssurance')}</AuthFootnote>
     </AuthCanvas>
   )
 }

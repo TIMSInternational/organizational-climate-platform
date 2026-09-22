@@ -59,14 +59,73 @@ import { useForcedDarkTheme } from '../../theme/useForcedDarkTheme'
  * This variant carried a drifting dot lattice on its ground until 2026-09-21, when
  * Federico ruled it out. The dark itself is his call too and stays.
  */
-export function AuthCanvas({ children, ground = 'plain' }: { children: ReactNode; ground?: 'plain' | 'dark' }) {
+/** Which slice of the product the stage explains on a given screen. */
+export type StageVariant = 'product' | 'access' | 'cycle' | 'administration'
+
+/**
+ * The stage's content, per variant, as literal key paths so a typo is a failing
+ * `keysExist` test rather than a blank panel.
+ *
+ * One SYSTEM — eyebrow, serif lead, a label/value rail — carrying a DIFFERENT slice of the
+ * software on each screen. It was one constant panel for about an hour on 2026-09-22 and
+ * Federico's note was "para cada página, información distinta": a panel that says the same
+ * thing on five screens is furniture, and nobody reads furniture twice.
+ */
+const STAGE: Record<
+  StageVariant,
+  { eyebrow: string; lead: string; rows: readonly (readonly [string, string])[] }
+> = {
+  product: {
+    eyebrow: 'auth.stage.product.eyebrow',
+    lead: 'auth.stage.product.lead',
+    rows: [
+      ['auth.stage.product.measuresLabel', 'auth.stage.product.measures'],
+      ['auth.stage.product.followsLabel', 'auth.stage.product.follows'],
+    ],
+  },
+  access: {
+    eyebrow: 'auth.stage.access.eyebrow',
+    lead: 'auth.stage.access.lead',
+    rows: [
+      ['auth.stage.access.rolesLabel', 'auth.stage.access.roles'],
+      ['auth.stage.access.scopeLabel', 'auth.stage.access.scope'],
+    ],
+  },
+  cycle: {
+    eyebrow: 'auth.stage.cycle.eyebrow',
+    lead: 'auth.stage.cycle.lead',
+    rows: [
+      ['auth.stage.cycle.surveyLabel', 'auth.stage.cycle.survey'],
+      ['auth.stage.cycle.pulseLabel', 'auth.stage.cycle.pulse'],
+      ['auth.stage.cycle.followUpLabel', 'auth.stage.cycle.followUp'],
+    ],
+  },
+  administration: {
+    eyebrow: 'auth.stage.administration.eyebrow',
+    lead: 'auth.stage.administration.lead',
+    rows: [
+      ['auth.stage.administration.whoLabel', 'auth.stage.administration.who'],
+      ['auth.stage.administration.changesLabel', 'auth.stage.administration.changes'],
+    ],
+  },
+}
+
+export function AuthCanvas({
+  children,
+  ground = 'plain',
+  stage = 'product',
+}: {
+  children: ReactNode
+  ground?: 'plain' | 'dark'
+  stage?: StageVariant
+}) {
   const { t } = useTranslation()
   const dark = ground === 'dark'
 
   return (
     <AuthGround dark={dark}>
       <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-[1.05fr_minmax(30rem,0.95fr)]">
-        <AuthStage />
+        <AuthStage variant={stage} />
 
         <div className="flex min-h-dvh flex-col">
           {/* Transparent and unruled, like the respond strip: the card below is the only
@@ -103,61 +162,87 @@ export function AuthCanvas({ children, ground = 'plain' }: { children: ReactNode
 }
 
 /**
- * The panel beside the form: the product's own frame, carrying its promise.
+ * The panel beside the form: what this software is, told one slice at a time.
  *
- * ## Why the shell colour and not a picture
+ * ## Why a photograph, and why it is still the shell colour underneath
  *
- * The ground is `bg-surface-shell` — the exact indigo the signed-in sidebar is painted in,
- * and one of the few tokens that is dark in BOTH themes. Signing in then reads as stepping
- * into the product rather than arriving at a marketing page bolted to its front, and it
- * costs no bytes, needs no asset pipeline, and cannot drift from the app's palette because
- * it IS the app's palette.
+ * The ground stays `bg-surface-shell` — the navy the signed-in sidebar is painted in — and
+ * the photograph sits on it under a navy wash, so the page degrades to the old flat panel
+ * if the image never loads. Federico chose this over the flat panel and over a plain
+ * centred card on 2026-09-22.
  *
- * The depth is two radial washes and a vignette, placed as a single light source high on
- * the left. It is deliberately not a texture: the drifting dot lattice that sat here on
- * 21 Sep was wallpaper — pattern without meaning — and Federico ruled it out the same day.
- * A light has somewhere it comes from; a lattice does not.
+ * What is gone: the two radial washes and the vignette. They read as a gradient smear
+ * rather than a light source, and the photograph does the job they were hired for. What was
+ * already gone: the drifting dot lattice, ruled out 2026-09-21.
+ *
+ * ## Why it is no longer `aria-hidden`
+ *
+ * It used to be, and correctly: it carried a slogan that restated the card beside it, so a
+ * screen reader read the brand and the promise twice before reaching the first field. This
+ * panel instead carries information that appears nowhere else on the page. Hiding unique
+ * content from assistive tech while showing it to sighted desktop users is not a trade
+ * worth making, so it is a named `<aside>` — a complementary landmark, which AT can skip in
+ * one keystroke, and which is what the old comment actually wanted.
+ *
+ * Exactly one brand lockup sits in the accessibility tree at every width: below `lg` this
+ * panel is `display: none` and the header carries it; at `lg` and up the header's is
+ * `visibility: hidden` and this one carries it.
  *
  * ## Hidden below `lg`, and that is the whole mobile story
  *
- * On a phone the form IS the page: a stacked hero above it would push the first field
- * under the fold, which on a sign-in screen is the one thing that must never happen. The
- * strip keeps the lockup at those widths, which is why it carries `lg:invisible` rather
- * than being deleted.
+ * On a phone the form IS the page: a stacked panel above it would push the first field
+ * under the fold, which on a sign-in screen is the one thing that must never happen.
  */
-function AuthStage() {
+function AuthStage({ variant }: { variant: StageVariant }) {
   const { t } = useTranslation()
+  const { eyebrow, lead, rows } = STAGE[variant]
+
   return (
     <aside
-      // Decorative and duplicative: the form column carries the lockup, the heading and
-      // every control. A screen reader that reads this panel reads the brand twice before
-      // reaching the first field.
-      aria-hidden="true"
-      className="relative hidden overflow-hidden bg-surface-shell lg:flex lg:flex-col lg:justify-between"
+      aria-label={t(eyebrow)}
+      className="on-shell relative hidden overflow-hidden bg-surface-shell lg:flex lg:flex-col lg:justify-between"
     >
+      {/* Decorative: every word on this panel is text beside it, so the photograph carries
+          no meaning a reader would lose. `alt=""` rather than a description, for that
+          reason. */}
+      <img src="/auth-sede.webp" alt="" className="absolute inset-0 size-full object-cover" />
       <div
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            'radial-gradient(70% 55% at 18% 12%, color-mix(in oklab, var(--color-accent-blue) 42%, transparent) 0%, transparent 70%),' +
-            'radial-gradient(55% 45% at 88% 96%, color-mix(in oklab, var(--color-accent-purple) 34%, transparent) 0%, transparent 72%),' +
-            'radial-gradient(120% 90% at 50% 50%, transparent 40%, rgb(0 0 0 / 0.38) 100%)',
+            'linear-gradient(100deg, color-mix(in srgb, var(--color-surface-shell) 94%, transparent) 0%,' +
+            ' color-mix(in srgb, var(--color-surface-shell) 86%, transparent) 38%,' +
+            ' color-mix(in srgb, var(--color-surface-shell) 66%, transparent) 100%)',
         }}
       />
+
       <div className="relative flex flex-col gap-3 px-12 pt-10">
         <BrandLockup size="compact" />
       </div>
-      <div className="relative flex flex-col gap-5 px-12 pb-14">
-        {/* The app's display face, taken from the element rule `index.css` puts on h1/h2
-            rather than left to the body sans — the card beside this panel sets its own
-            heading in the serif, and two faces for one voice is what made the first
-            version read as a different product's marketing page. Weight stays regular:
-            the face ships ONE weight and a synthesised 600 is the fake bold `fonts.css`
-            exists to avoid. */}
-        <p className="m-0 max-w-[16ch] font-store-serif text-store-display font-normal leading-[1.05] text-fg-on-accent">
-          {t('auth.next.stageHeadline')}
+
+      <div className="relative flex flex-col px-12 pb-14">
+        <span className="text-2xs font-bold uppercase tracking-eyebrow text-fg-tertiary">{t(eyebrow)}</span>
+        {/* The app's display face, from the element rule `index.css` puts on h1/h2. Weight
+            stays regular: the face ships ONE weight and a synthesised 600 is the fake bold
+            `fonts.css` exists to avoid. At `text-3xl` rather than the storefront's display
+            step, which clamps to 4.4rem and is what made the first version read as a
+            marketing page bolted to the front of a product. */}
+        <p className="m-0 mt-3 max-w-[24ch] font-store-serif text-3xl font-normal leading-tight text-fg-primary">
+          {t(lead)}
         </p>
-        <p className="m-0 max-w-[46ch] text-reading text-fg-on-accent/70">{t('auth.next.stageBody')}</p>
+        <dl className="m-0 mt-7 flex max-w-[34rem] flex-col border-t border-line-light">
+          {rows.map(([labelKey, valueKey]) => (
+            <div
+              key={labelKey}
+              className="flex items-baseline gap-5 border-b border-line-light py-3.5 last:border-b-0"
+            >
+              <dt className="w-28 shrink-0 text-2xs font-bold uppercase tracking-eyebrow text-fg-tertiary">
+                {t(labelKey)}
+              </dt>
+              <dd className="m-0 text-sm leading-normal text-fg-primary">{t(valueKey)}</dd>
+            </div>
+          ))}
+        </dl>
       </div>
     </aside>
   )
@@ -287,7 +372,7 @@ export function AuthDivider({ label }: { label: string }) {
 
 /**
  * A labelled control the way the auth cards draw one: a 12px semibold label in the primary
- * ink with the canvas's red asterisk, the control, and an 11px helper under it.
+ * ink with a quiet asterisk, the control, and an 11px helper under it.
  *
  * `parts.tsx`'s `Field` is the same idea for the *admin* boards, where the label is 11px
  * in the secondary ink. These five cards set it at 12px on the primary ink, which is the
@@ -315,7 +400,11 @@ export function AuthField({
       <label htmlFor={htmlFor} className="m-0 flex gap-1 text-sm font-semibold text-fg-primary">
         {fieldLabel}
         {required && (
-          <span aria-hidden="true" className="text-accent-red">
+          /* Not `text-accent-red` any more. Red means destructive since the navy revalue
+             (`docs/decisions/palette-navy-not-purple.md`), and a form whose every required
+             field wears the delete colour reads as a form full of errors. Still decorative
+             and still `aria-hidden`: `required` on the control is what AT announces. */
+          <span aria-hidden="true" className="text-fg-tertiary">
             *
           </span>
         )}
