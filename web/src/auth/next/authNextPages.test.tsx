@@ -25,39 +25,51 @@ import {
  * reader's own setting. Three separate guarantees, because each has failed in a different
  * codebase: the pin applies, it is NOT persisted, and it is undone on the way out.
  */
-describe('the login screen is dark, and only while it is on screen', () => {
+/**
+ * Login is dark because of the PHOTOGRAPH, not because of a theme pin.
+ *
+ * It used to be pinned: `useForcedDarkTheme` forced the dark palette for the life of the
+ * screen, and three tests here held that shape. The artboard Federico chose on 2026-09-22
+ * ("La sede") puts a white card on a navy-washed photograph, and a pinned dark palette makes
+ * that card dark — so the pin was working against the design it was written to serve.
+ *
+ * The darkness now comes from `AuthBackdrop`, which is behind the whole page and owes
+ * nothing to the theme. What these tests hold instead: the reader's own setting survives
+ * the visit, and the picker that changes it is still reachable.
+ */
+describe('the login screen leaves the reader\'s theme alone', () => {
   const stored = () => window.localStorage.getItem(ADMIN_THEME_STORAGE_KEY)
   const attr = () => document.documentElement.getAttribute(ADMIN_THEME_ATTRIBUTE)
 
-  it('pins dark, leaves the stored preference alone, and restores it on unmount', () => {
+  it('neither pins a theme nor writes one', () => {
     window.localStorage.setItem(ADMIN_THEME_STORAGE_KEY, 'light')
     applyAdminTheme('light')
-    expect(attr()).toBe('light')
 
     const { unmount } = renderAuthRoutes('/login')
-    expect(attr()).toBe('dark')
-    // The reader chose light and still has: nothing was written.
+    // The old behaviour was `dark` here. A pin would make the card dark on a screen whose
+    // whole composition is a white card on a dark photograph.
+    expect(attr()).toBe('light')
     expect(stored()).toBe('light')
 
     unmount()
-    // And every other screen goes back to what they asked for.
     expect(attr()).toBe('light')
     expect(stored()).toBe('light')
   })
 
-  it('drops the theme picker, which on a screen that is always dark would do nothing', () => {
+  it('keeps the theme picker, which now changes something', () => {
     renderAuthRoutes('/login')
-    expect(screen.queryByRole('combobox', { name: 'Theme' })).toBeNull()
-    // The LANGUAGE picker stays. It still works, and it matters more here than the theme
-    // one: a reader who cannot read the page cannot sign in.
-    expect(screen.getAllByRole('combobox').length).toBeGreaterThan(0)
+    // It was dropped while the screen was pinned, on the grounds that it would do nothing.
+    // It does something again.
+    expect(screen.getByRole('combobox', { name: 'Theme' })).toBeTruthy()
+    // The LANGUAGE picker was never dropped and matters more: a reader who cannot read the
+    // page cannot sign in.
+    expect(screen.getAllByRole('combobox').length).toBeGreaterThanOrEqual(2)
   })
 
   it('leaves the other screens on this frame alone', () => {
     window.localStorage.setItem(ADMIN_THEME_STORAGE_KEY, 'light')
     applyAdminTheme('light')
     renderAuthRoutes('/register')
-    // Register shares `AuthCanvas` and opted into nothing: still light, still has its picker.
     expect(attr()).toBe('light')
     expect(screen.getByRole('combobox', { name: 'Theme' })).toBeTruthy()
   })

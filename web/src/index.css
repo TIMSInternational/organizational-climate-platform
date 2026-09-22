@@ -489,6 +489,11 @@
     --admin-bg-hover: var(--admin-shell-bg-hover);
     --admin-bg-active: var(--admin-shell-bg-active);
     --admin-bg-overlay: var(--admin-shell-bg-raised);
+    /* The brand lockup's tile (`.brand-lockup`, line ~175) is painted with this. Left out
+       of `.on-shell` until 2026-09-22, so on the auth panel it was a near-white square on
+       a dark photograph. Translucent rather than a hex, for the same reason
+       `--admin-shell-border` is: it composites correctly on the rail AND on the image. */
+    --admin-bg-icon-box: var(--admin-shell-bg-active);
     --admin-bg-input: var(--admin-shell-bg-raised);
     --admin-border-light: var(--admin-shell-border);
     --admin-border-hover: var(--admin-shell-border);

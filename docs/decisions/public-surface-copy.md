@@ -89,10 +89,13 @@ capabilities. Everything that survived is grounded in a route that exists, a fie
 exists, or the product's own words (`microclimates.listDescription` is where "cinco minutos"
 comes from).
 
-**Still unverified: the operator line.** The artboards carry "Operado por TIMS International
-para su organización." **Nothing in this repository names TIMS International** — that string
-came from the checkout path, not the product. Confirm the exact legal or brand name, and
-whether the operator belongs on a client-facing screen at all, before this ships.
+**RULED 2026-09-22: there is no operator line.** The artboards carried "Operado por TIMS
+International para su organización." Nothing in this repository names TIMS International —
+the string came from the checkout path, not the product. Asked to confirm the name or drop
+the line, Federico dropped it: an operator credit on a client's login page is a business
+decision, not a design one, and the screens read without it. The footer keeps only the
+language and theme controls. **Do not reintroduce it from the artboards**, which still show
+it; the canvas is one publish behind this ruling.
 
 ### Bands
 
@@ -136,3 +139,30 @@ renders** — every auth route resolves to the `next/` component.
   red means destructive (`palette-navy-not-purple.md`).
 - **The invitation's email helper was two sentences and is now one.** It lost *"Una
   invitación personal ya trae su dirección"*, which restated what the `opcional` chip says.
+
+## Two more rulings, 2026-09-22
+
+### The answering flow keeps its own frame
+
+`/s/:token` was designed with the stage (`CÓMO SE LEE` — ESCALA, RESULTADO) and that artboard
+is on the canvas. **It is not being built.**
+
+`PublicSurveyLinkPage:60` wraps the briefing AND the questions in a single `RespondShell`,
+so giving the briefing a stage would change the frame under the reader the moment they press
+*Empezar* — on the one transition in the product where nothing should move. Extending it to
+the whole flow instead would reach eight files, including microclimate answering, and put a
+photograph behind every screen where someone answers honestly.
+
+Federico chose to leave the respond flow alone. When someone is about to answer, focus beats
+brand, and that screen carries the anonymity notice — which should be the loudest thing on
+it. The cost, accepted: `/s/:token` stays visually apart from the five auth screens.
+
+### `--admin-line-control` stays at #7c8fb6
+
+Reviewed live on the dense admin screens after the change shipped: 3.25:1 on the white fill,
+3.05:1 on the page ground, 3.07:1 on the dark grounds. Federico's verdict was that the fields
+read as defined without shouting.
+
+Worth recording because the room below is almost nil — the binding ground is
+`--admin-bg-outer` (#f5f8fc), not white, and #8095bd already fails it at 2.84:1. "A little
+lighter" is not available without splitting the token again by ground.

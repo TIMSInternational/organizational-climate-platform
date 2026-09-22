@@ -508,7 +508,9 @@
       },
       "stageHeadline": "Hear a whole organisation without exposing anyone.",
       "stageBody": "Every answer counts in the aggregate and none is tied back to the person who wrote it. A group of fewer than five never yields a figure.",
-      "skipToForm": "Skip to the form"
+      "skipToForm": "Skip to the form",
+      "noAccount": "Don't have an account?",
+      "createOne": "Create one"
     },
     "stage": {
       "product": {

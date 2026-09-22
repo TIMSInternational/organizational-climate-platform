@@ -1,4 +1,5 @@
 import { CircleAlert } from 'lucide-react'
+import { Link } from 'react-router'
 import { useTranslation } from '../../i18n'
 import { Alert, AlertDescription, AlertTitle, Button, Input } from '../../components/ui'
 import { beginGoogleSignIn, googleClientId } from '../googleOAuth'
@@ -61,10 +62,9 @@ export default function LoginNextPage() {
   }
 
   return (
-    <AuthCanvas ground="dark">
+    <AuthCanvas>
       <AuthCard>
         <AuthHeadline
-          eyebrow={t('auth.next.eyebrow')}
           title={t('auth.next.signIn')}
           description={t('auth.next.signInDetail')}
         />
@@ -88,7 +88,7 @@ export default function LoginNextPage() {
             </Alert>
           )}
 
-          <AuthField htmlFor="auth-email" fieldLabel={t('auth.next.emailLabel')} required>
+          <AuthField htmlFor="auth-email" fieldLabel={t('auth.next.emailLabel')}>
             <Input
               id="auth-email"
               type="email"
@@ -103,7 +103,6 @@ export default function LoginNextPage() {
           <AuthField
             htmlFor="auth-password"
             fieldLabel={t('auth.next.passwordLabel')}
-            required
             helper={t('auth.next.passwordHelp')}
           >
             <Input
@@ -112,15 +111,15 @@ export default function LoginNextPage() {
               autoComplete="current-password"
               required
               value={model.password}
-              placeholder={t('auth.next.passwordPlaceholder')}
               onChange={(event) => model.setPassword(event.target.value)}
             />
           </AuthField>
 
-          {/* `size="canvas"` is the artboard's 34px control; `variant="primary"` is its red
-              (`--admin-accent-blue-fill` is #dd0c15 — the identity fill, recoloured for
-              this canvas). `outline` is deliberately untouched: index.css gives every
-              button its focus ring in `@layer base`, and setting it here removes it. */}
+          {/* `size="canvas"` is the artboard's 34px control. `variant="primary"` is
+              `--admin-accent-blue-fill`, which was #dd0c15 when this comment was written and
+              is navy since `palette-navy-not-purple.md`: red means destructive now.
+              `outline` is deliberately untouched — index.css gives every button its focus
+              ring in `@layer base`, and setting it here removes it. */}
           <Button type="submit" variant="primary" size="canvas" className="w-full">
             {t('auth.next.signIn')}
           </Button>
@@ -143,6 +142,14 @@ export default function LoginNextPage() {
               </Button>
             </>
           )}
+          {/* Register has the mirror of this and login had nothing, so the only route to an
+              account was knowing the URL. */}
+          <p className="m-0 flex flex-wrap gap-1.5 text-sm text-fg-secondary">
+            <span>{t('auth.next.noAccount')}</span>
+            <Link to="/register" className="text-accent-blue underline">
+              {t('auth.next.createOne')}
+            </Link>
+          </p>
         </form>
       </AuthCard>
 

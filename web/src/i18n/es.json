@@ -508,7 +508,9 @@
       },
       "stageHeadline": "Escuchar a toda una organización sin exponer a nadie.",
       "stageBody": "Cada respuesta cuenta en el conjunto y ninguna queda ligada a quien la escribió. Los grupos con menos de cinco respuestas nunca muestran una cifra.",
-      "skipToForm": "Ir al formulario"
+      "skipToForm": "Ir al formulario",
+      "noAccount": "¿No tiene cuenta?",
+      "createOne": "Crear una"
     },
     "stage": {
       "product": {

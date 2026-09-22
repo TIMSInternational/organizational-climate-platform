@@ -133,7 +133,7 @@ export function AuthCanvas({
           every user must pass — did not, so a keyboard user Tabbed through the language
           and theme pickers to reach the first field. */}
       <SkipLink href="#main">{skipLabel ?? t('auth.next.skipToForm')}</SkipLink>
-      <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-[1.05fr_minmax(30rem,0.95fr)]">
+      <div className="relative grid min-h-dvh grid-cols-1 lg:grid-cols-[1.05fr_minmax(30rem,0.95fr)]">
         <AuthStage variant={stage} />
 
         <div className="flex min-h-dvh flex-col">
@@ -141,29 +141,32 @@ export function AuthCanvas({
               surface, and a filled bar here would read as a second one with a seam. The
               lockup rides here only until the stage appears and takes it — two lockups on
               one screen is the kind of thing nobody reports and everybody notices. */}
-          <header className="flex w-full flex-wrap items-center justify-between gap-inline px-4 py-3.5">
-            <span className="lg:invisible">
-              <BrandLockup size="compact" />
-            </span>
-            <span
-              className="flex flex-wrap items-center gap-1.5"
-              // Not part of the auth flow itself — grouped so assistive tech can skip past
-              // it to the form.
-              role="group"
-              aria-label={t('shell.settings')}
-            >
-              <LanguageSwitcher variant="chip" />
-              {!dark && <ThemeSwitcher variant="chip" />}
-            </span>
+          {/* The lockup rides here only until the panel appears and takes it — two lockups
+              on one screen is the kind of thing nobody reports and everybody notices. */}
+          <header className="flex w-full flex-wrap items-center gap-inline px-4 py-3.5 lg:invisible">
+            <BrandLockup size="compact" />
           </header>
 
           {/* Centred in its own column now rather than on the whole page. The card used to
               sit in the top third of 1440px with two thirds of the viewport empty under
               it, which reads as a page that failed to finish loading rather than as a
               composition. */}
-          <main id="main" className="flex w-full flex-1 items-center justify-center px-6 pb-10 pt-4 sm:px-10">
+          <main id="main" className="flex w-full flex-1 items-center justify-center px-6 pb-4 pt-4 sm:px-10">
             <div className="flex w-full max-w-110 flex-col gap-4">{children}</div>
           </main>
+
+          {/* The artboard puts these at the foot of the page, not floating over its top
+              corner. They are not part of the auth flow, so they come AFTER the form in
+              reading order as well as below it — which is also where a reader who needs
+              the language picker looks once the form has not helped. */}
+          <footer
+            className="flex w-full flex-wrap items-center justify-end gap-1.5 px-6 pb-6 pt-2 sm:px-10"
+            role="group"
+            aria-label={t('shell.settings')}
+          >
+            <LanguageSwitcher variant="chip" />
+            <ThemeSwitcher variant="chip" />
+          </footer>
         </div>
       </div>
     </AuthGround>
@@ -209,34 +212,23 @@ function AuthStage({ variant }: { variant: StageVariant }) {
   return (
     <aside
       aria-label={t(eyebrow)}
-      className="on-shell relative hidden overflow-hidden bg-surface-shell lg:flex lg:flex-col lg:justify-between"
+      className="on-shell relative hidden lg:flex lg:flex-col"
     >
-      {/* Decorative: every word on this panel is text beside it, so the photograph carries
-          no meaning a reader would lose. `alt=""` rather than a description, for that
-          reason. */}
-      <img src="/auth-sede.webp" alt="" className="absolute inset-0 size-full object-cover" />
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            'linear-gradient(100deg, color-mix(in srgb, var(--color-surface-shell) 94%, transparent) 0%,' +
-            ' color-mix(in srgb, var(--color-surface-shell) 86%, transparent) 38%,' +
-            ' color-mix(in srgb, var(--color-surface-shell) 66%, transparent) 100%)',
-        }}
-      />
-
-      <div className="relative flex flex-col gap-3 px-12 pt-10">
+      <div className="relative flex shrink-0 flex-col gap-3 px-12 pt-10">
         <BrandLockup size="compact" />
       </div>
 
-      <div className="relative flex flex-col px-12 pb-14">
+      {/* Centred in the space under the lockup, so it sits with the card rather than on the
+          floor of the screen — `justify-between` put it at the bottom, which read as two
+          things stranded at opposite corners. */}
+      <div className="relative flex flex-1 flex-col justify-center px-12 pb-14">
         <span className="text-2xs font-bold uppercase tracking-eyebrow text-fg-tertiary">{t(eyebrow)}</span>
         {/* The app's display face, from the element rule `index.css` puts on h1/h2. Weight
             stays regular: the face ships ONE weight and a synthesised 600 is the fake bold
             `fonts.css` exists to avoid. At `text-3xl` rather than the storefront's display
             step, which clamps to 4.4rem and is what made the first version read as a
             marketing page bolted to the front of a product. */}
-        <p className="m-0 mt-3 max-w-[24ch] font-store-serif text-3xl font-normal leading-tight text-fg-primary">
+        <p className="m-0 mt-3 max-w-[29rem] font-store-serif text-3xl font-normal leading-tight text-fg-primary">
           {t(lead)}
         </p>
         <dl className="m-0 mt-7 flex max-w-[34rem] flex-col border-t border-line-light">
@@ -268,7 +260,10 @@ function AuthGround({ dark, children }: { dark: boolean; children: ReactNode }) 
   return dark ? (
     <ForcedDarkGround>{children}</ForcedDarkGround>
   ) : (
-    <div className="flex min-h-dvh flex-col bg-surface-outer">{children}</div>
+    <div className="relative flex min-h-dvh flex-col bg-surface-outer">
+      <AuthBackdrop />
+      {children}
+    </div>
   )
 }
 
@@ -276,7 +271,43 @@ function ForcedDarkGround({ children }: { children: ReactNode }) {
   useForcedDarkTheme()
   // Identical markup to the plain ground; the hook is the whole difference. `bg-surface-outer`
   // resolves to the dark palette because the hook has pinned the attribute above it.
-  return <div className="flex min-h-dvh flex-col bg-surface-outer">{children}</div>
+  return (
+    <div className="relative flex min-h-dvh flex-col bg-surface-outer">
+      <AuthBackdrop />
+      {children}
+    </div>
+  )
+}
+
+/**
+ * The photograph, under the whole page rather than under the panel.
+ *
+ * It sat inside the `<aside>` until 2026-09-22, which put a hard vertical seam down the
+ * middle of the screen: photograph on the left, flat ground on the right, card floating on
+ * the flat half. The artboard has one image across the viewport with the card ON it, and
+ * that is the difference between a composition and two panes side by side.
+ *
+ * `lg` and up only, matching the panel: on a phone the form is the page, and a photograph
+ * behind it buys nothing and costs a download.
+ *
+ * Decorative — `alt=""` — because every word on the panel is text beside it. If the image
+ * never loads, the navy ground underneath is the design the auth screens had before it.
+ */
+function AuthBackdrop() {
+  return (
+    <div aria-hidden="true" className="pointer-events-none absolute inset-0 hidden overflow-hidden lg:block">
+      <img src="/auth-sede.webp" alt="" className="size-full object-cover" />
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            'linear-gradient(100deg, color-mix(in srgb, var(--color-surface-shell) 94%, transparent) 0%,' +
+            ' color-mix(in srgb, var(--color-surface-shell) 86%, transparent) 38%,' +
+            ' color-mix(in srgb, var(--color-surface-shell) 66%, transparent) 100%)',
+        }}
+      />
+    </div>
+  )
 }
 
 /** The canvas's `.card` at the auth boards' own padding. */
@@ -311,7 +342,8 @@ export function AuthHeadline({
   tile,
   tone = 'neutral',
 }: {
-  eyebrow: string
+  /** Omitted on `/login`, where it only repeated the wordmark two inches above it. */
+  eyebrow?: string
   title: string
   description?: ReactNode
   tile?: ReactNode
@@ -334,9 +366,11 @@ export function AuthHeadline({
           {tile}
         </span>
       )}
-      <span data-slot="auth-eyebrow" className="text-2xs font-bold uppercase tracking-eyebrow text-fg-label">
-        {eyebrow}
-      </span>
+      {eyebrow !== undefined && (
+        <span data-slot="auth-eyebrow" className="text-2xs font-bold uppercase tracking-eyebrow text-fg-label">
+          {eyebrow}
+        </span>
+      )}
       <h1 className="m-0 text-3xl">{title}</h1>
       {description !== undefined && <p className="m-0 text-base text-fg-secondary">{description}</p>}
     </div>
