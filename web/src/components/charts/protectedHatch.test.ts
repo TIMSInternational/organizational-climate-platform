@@ -156,7 +156,7 @@ describe('the protected hatch', () => {
 
   it('paints its gaps in the canvas’s own ground in light, and in the surface it sits on in dark', () => {
     // Every artboard of 10 Sep, 26 of 26, draws the hatch as
-    // `repeating-linear-gradient(135deg, #e6e3f1 0 4px, #f8f7fb 4px 8px)`: the gaps are
+    // `repeating-linear-gradient(135deg, #e0e5ef 0 4px, #f5f8fc 4px 8px)`: the gaps are
     // the outer ground, not the recessed #f3f1fa the cell sits on, which a transparent
     // gap showed and which read a shade darker and bluer on the live session's words.
     expect(lightToken(ground)).toBe(lightToken('--admin-bg-outer'))
@@ -167,11 +167,11 @@ describe('the protected hatch', () => {
   it('is the canvas’s stripe in light, only as much darker as the floor needs', () => {
     // The canvas's own pair is under the floor above — which is why the stripe is not
     // the canvas's hex.
-    expect(contrast('#e6e3f1', '#f8f7fb')).toBeLessThan(1.2)
+    expect(contrast('#e0e5ef', '#f5f8fc')).toBeLessThan(1.2)
     // Within 3 of it on every channel, and fainter than 1.21:1 on the ground: neither
     // under the floor nor darkened by eye into a texture the artboards do not draw.
     const stripe = channels(lightToken(token))
-    const canvas = channels('#e6e3f1')
+    const canvas = channels('#e0e5ef')
     expect(Math.max(...stripe.map((channel, i) => Math.abs(channel - canvas[i])))).toBeLessThanOrEqual(3)
     expect(contrast(lightToken(token), lightToken(ground))).toBeLessThan(1.21)
   })

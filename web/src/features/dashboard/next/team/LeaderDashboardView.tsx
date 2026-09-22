@@ -20,7 +20,7 @@ import type { LeaderDashboardModel, TeamClosedWave, TeamDimension, TeamOpenSurve
 import { HatchedCount, TeamCard, TeamPlanRow } from './parts'
 
 /** The target rule's hex, as every redesigned chart draws it (`AdminDashboardNextView`). */
-const TARGET_RULE = '#b9b6cc'
+const TARGET_RULE = '#b3b8ca'
 
 /** How many open plans the card lists before it points at the board for the rest. */
 const PLANS_LISTED = 3

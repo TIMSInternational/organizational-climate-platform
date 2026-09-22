@@ -460,7 +460,7 @@ describe('Distribución (Distribution artboard)', () => {
     expect(screen.getByTestId('distribution-readings').className.split(' ')).toContain('-mt-1')
   })
 
-  it("prints 'y n personas más' in the artboard's #6e648b: the label ink, which clears AA on the card in both palettes", () => {
+  it("prints 'y n personas más' in the artboard's #5e6a82: the label ink, which clears AA on the card in both palettes", () => {
     distribution(invitationList(6))
     const more = screen.getByTestId('invitations-more')
     expect(more.textContent).toContain('y 2 personas más')
@@ -468,7 +468,7 @@ describe('Distribución (Distribution artboard)', () => {
     expect(more.className.split(' ')).not.toContain('text-fg-secondary')
     const [inkLight, inkDark] = tokenPair('admin-font-section-label')
     const [cardLight, cardDark] = tokenPair('admin-bg-card')
-    expect(inkLight).toBe('#6e648b')
+    expect(inkLight).toBe('#5e6a82')
     expect(contrast(inkLight, cardLight)).toBeGreaterThanOrEqual(4.5)
     expect(contrast(inkDark, cardDark)).toBeGreaterThanOrEqual(4.5)
   })
@@ -763,7 +763,7 @@ describe('Nueva encuesta (SurveyBuilder artboard)', () => {
 
   it("draws the preview's two buttons at the artboard's 30px in the medium weight, and the answered count in the label ink", async () => {
     // SurveyBuilder.dc.html: `.btn` (font-weight 500) at `height: 28px` plus its 1px borders, 30px,
-    // and "0 de 6 respondidas" in #6e648b. At 28px regular the preview card measured 369.1 against
+    // and "0 de 6 respondidas" in #5e6a82. At 28px regular the preview card measured 369.1 against
     // the artboard's 371.1, and each button ~3px narrower than the artboard's.
     renderAs('company_admin', <SurveyBuilderNextPage />)
     await screen.findByRole('combobox', { name: 'Idioma del contenido' })

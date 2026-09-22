@@ -47,9 +47,9 @@ export interface DimensionTrendChartProps {
   height?: number
 }
 
-const LINE = '#6a6ece'
+const LINE = '#4d76c7'
 const BELOW_TARGET = '#dd0c15'
-const TARGET = '#b9b6cc'
+const TARGET = '#b3b8ca'
 /** Where the plot starts; the tick labels end 6px before it. */
 const AXIS_LEFT = 30
 const AXIS_RIGHT = 24

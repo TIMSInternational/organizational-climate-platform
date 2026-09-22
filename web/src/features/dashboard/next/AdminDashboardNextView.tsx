@@ -35,7 +35,7 @@ import CycleTimeline, { type CycleStep } from './CycleTimeline'
 import DashboardExportMenu from './DashboardExportMenu'
 
 /** The target rule's hex, as the sparklines draw it, for the legend's swatch. */
-const TARGET_RULE = '#b9b6cc'
+const TARGET_RULE = '#b3b8ca'
 
 /**
  * The body of the redesigned Panel de Control, drawn as the Dashboard artboard (10 Sep):

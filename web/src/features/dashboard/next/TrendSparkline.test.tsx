@@ -42,7 +42,7 @@ describe('TrendSparkline', () => {
     )
     const end = onTarget.container.querySelector('circle[data-slot="trend-end"]')
     expect(end?.getAttribute('data-below-target')).toBe('false')
-    expect(end?.getAttribute('fill')).toBe('#6a6ece')
+    expect(end?.getAttribute('fill')).toBe('#4d76c7')
   })
 
   it('judges the endpoint at the decimal the card prints: 3.67 reads "3.7", on a 3.7 target', () => {

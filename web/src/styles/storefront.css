@@ -18,10 +18,14 @@
  *
  * WHAT DISTINGUISHES THE SOURCE SYSTEM
  * ------------------------------------
- *   - A violet ink family (#1F114C), not the checkout page's navy. The two
- *     TIMS surfaces are NOT the same palette; this is the newer one, and it
- *     is measurably better: ink is 16.90:1 here against 12.88:1 there.
- *   - Exactly ONE elevation, violet-tinted: 0 10px 34px rgba(31,17,76,.07).
+ *   - Its OWN ink family, distinct from the checkout page's. The two TIMS
+ *     surfaces are NOT the same palette; this is the newer one, and it is
+ *     measurably better: ink is 16.90:1 here against 12.88:1 there.
+ *
+ *     The source system's ink was a violet, #1F114C. The de-purpling of
+ *     2026-09-22 carried it to navy #0c1c3a at the same relative luminance, so
+ *     that 16.90:1 is still the measurement and not a stale quotation.
+ *   - Exactly ONE elevation, tinted with the ink: 0 10px 34px rgb(12 28 58/7%).
  *     Not a scale. A second shadow would be a change of system.
  *   - A serif display face over a system-sans body — the whole typographic
  *     identity is that pairing.
@@ -32,7 +36,7 @@
  * Three source values fail WCAG AA at body sizes. Hue and saturation are held
  * fixed and only lightness moves, so the palette still reads as Conócete:
  *
- *   --faint  #8f91a6  2.91:1 on ground -> #6e708a  4.53:1
+ *   --faint  #8f91a6  2.91:1 on ground -> #6a7283  4.53:1
  *   --f-i    #C77E14  3.27:1 on white  -> #a66911  4.52:1   (as TEXT only)
  *   --f-s    #12945B  3.88:1 on white  -> #108753  4.55:1   (as TEXT only)
  *
@@ -70,23 +74,23 @@
     serif;
 
   /* -- Surfaces ---------------------------------------------------------- */
-  --storefront-bg-ground: #f8f7fb; /* --ground: the page ground   */
+  --storefront-bg-ground: #f5f8fc; /* --ground: the page ground   */
   --storefront-bg-surface: #ffffff; /* --surface: cards and panels */
-  --storefront-bg-veil: rgb(248 247 251 / 88%); /* sticky header wash */
+  --storefront-bg-veil: rgb(245 248 252 / 88%); /* sticky header wash */
 
   /* -- Foreground -------------------------------------------------------- */
-  --storefront-fg-primary: #1f114c; /* --ink   16.90:1 on surface */
-  --storefront-fg-heading: #3a3364; /* --ink-2 11.43:1 on surface */
+  --storefront-fg-primary: #0c1c3a; /* --ink   16.90:1 on surface */
+  --storefront-fg-heading: #2d3958; /* --ink-2 11.43:1 on surface */
   --storefront-fg-body: #5b5e74; /* --body   6.37:1 on surface */
-  --storefront-fg-faint: #6e708a; /* was #8f91a6 — 4.53:1 on ground */
+  --storefront-fg-faint: #6a7283; /* was #8f91a6 — 4.53:1 on ground */
 
   /* -- Lines: two roles, deliberately ------------------------------------ */
-  --storefront-line-rule: #e5e3f0; /* --line:      decorative rules */
-  --storefront-line-soft: #eeedf6; /* --line-soft: hairlines        */
+  --storefront-line-rule: #dfe5ee; /* --line:      decorative rules */
+  --storefront-line-soft: #ebeef5; /* --line-soft: hairlines        */
   /* Interactive control boundaries. WCAG 1.4.11 wants 3:1; this is 3.02:1 on
      surface. Needed because the system leans on borders, not shadow, to say
      where a control is. */
-  --storefront-line-control: #968ec3;
+  --storefront-line-control: #8095bd;
 
   /* -- Accent ------------------------------------------------------------ */
   --storefront-accent: #dd0c15; /* 5.08:1 on surface, both directions */
@@ -97,18 +101,18 @@
 
   /* -- Categorical ramp -------------------------------------------------- */
   /* FILL values — use with --storefront-fg-on-accent only where measured. */
-  --storefront-ramp-1: #4a4fc4; /* 6.55:1 with white */
+  --storefront-ramp-1: #355ba7; /* 6.55:1 with white */
   --storefront-ramp-2: #dd0c15; /* 5.08:1 with white */
   --storefront-ramp-3: #c77e14; /* 3.27:1 — large text / fills only */
   --storefront-ramp-4: #12945b; /* 3.88:1 — large text / fills only */
   /* TEXT values — the two that fail AA as text are darkened. */
-  --storefront-ramp-1-text: #4a4fc4; /* 6.55:1 */
+  --storefront-ramp-1-text: #355ba7; /* 6.55:1 */
   --storefront-ramp-2-text: #dd0c15; /* 5.08:1 */
   --storefront-ramp-3-text: #a66911; /* was #C77E14 — 4.52:1 */
   --storefront-ramp-4-text: #108753; /* was #12945B — 4.55:1 */
 
   /* -- Elevation: one, and only one -------------------------------------- */
-  --storefront-shadow-card: 0 10px 34px rgb(31 17 76 / 7%);
+  --storefront-shadow-card: 0 10px 34px rgb(12 28 58 / 7%);
 
   /* -- Geometry ---------------------------------------------------------- */
   --storefront-radius-card: 16px;
@@ -135,26 +139,28 @@
 
 /* ---------------------------------------------------------------------------
  * Dark — derived, since the source ships light only.
- * Ratios measured against --storefront-bg-surface (#1b1240).
+ * Ratios measured against --storefront-bg-surface, #0f1933 since the navy
+ * revalue and #1b1240 when these were taken; the revalue held relative
+ * luminance, so every ratio below is unchanged.
  * ------------------------------------------------------------------------ */
 [data-admin-theme='dark'] {
-  --storefront-bg-ground: #120b2b;
-  --storefront-bg-surface: #1b1240;
-  --storefront-bg-veil: rgb(18 11 43 / 88%);
+  --storefront-bg-ground: #061120;
+  --storefront-bg-surface: #0f1933;
+  --storefront-bg-veil: rgb(6 17 32 / 88%);
 
-  --storefront-fg-primary: #dad2f5; /* 12.03:1 */
-  --storefront-fg-heading: #dad2f5; /* 12.03:1 */
+  --storefront-fg-primary: #c7d8f1; /* 12.03:1 */
+  --storefront-fg-heading: #c7d8f1; /* 12.03:1 */
   --storefront-fg-body: #a1a4b5; /*  7.04:1 */
   --storefront-fg-faint: #8f91a6; /*  5.61:1 — the source value works here */
 
-  --storefront-line-rule: #2b2154;
-  --storefront-line-soft: #241b48;
-  --storefront-line-control: #7d7aa8; /* 4.33:1 */
+  --storefront-line-rule: #1c2943;
+  --storefront-line-soft: #15223c;
+  --storefront-line-control: #6e7fa2; /* 4.33:1 */
 
   --storefront-accent: #f4363e; /* 4.51:1 */
-  --storefront-fg-on-accent: #120b2b;
+  --storefront-fg-on-accent: #061120;
 
-  --storefront-ramp-1-text: #767ad2; /* 4.54:1 */
+  --storefront-ramp-1-text: #5c82c8; /* 4.54:1 */
   --storefront-ramp-2-text: #f4363e; /* 4.51:1 */
   --storefront-ramp-3-text: #c77e14; /* 5.32:1 — unchanged, passes on dark */
   --storefront-ramp-4-text: #12955c; /* 4.54:1 */
