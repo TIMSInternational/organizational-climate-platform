@@ -76,7 +76,7 @@ server — producing a perfectly plausible PNG of a different codebase. If you p
 
 | Option | Default | What it does |
 | --- | --- | --- |
-| `--theme light\|dark` | `light` | Sets `admin-theme` in localStorage. The run fails if `<html>` does not end up carrying the matching `data-admin-theme`. |
+| `--theme light\|dark` | `light` | Sets `admin-theme` in localStorage. The run fails if `<html>` does not end up carrying the matching `data-admin-theme`. **`/login` is the one exception — see below.** |
 | `--width <px>` | `1440` | Viewport width. |
 | `--height <px>` | `900` | Viewport height. |
 | `--scale <n>` | `2` | Device pixel ratio. `--scale 1` for a smaller file. |
@@ -89,6 +89,17 @@ server — producing a perfectly plausible PNG of a different codebase. If you p
 | `--port <n>` | `auto` | Port for the dev server `shot` starts. `auto` claims a free one from the OS; a port you name is proved free before vite is spawned, and the run fails rather than screenshotting whatever already held it. |
 | `--settle <ms>` | `400` | Extra wait after network idle and web fonts. |
 | `--viewport` | off | Clip to the viewport instead of capturing the full page. |
+
+### `/login` pins its own theme, so shoot it dark
+
+`npm run shot -- /login … --theme light` **fails**, with
+`expected data-admin-theme="light" on <html>, found "dark"`. That is the guard working, not
+a bug: the login screen is drawn dark for every reader whatever they have stored
+(`useForcedDarkTheme`, and `LoginNextPage` records why), so the theme the harness asks for
+is the one thing that route will not honour. Shoot it with `--theme dark`.
+
+Nothing else on the auth frame does this — `/register` and the three auth states share
+`AuthCanvas` and take the requested theme normally.
 
 ## How it gets past the login screen
 

@@ -30,6 +30,21 @@ import { useSignInModel } from './useSignInModel'
  *   always fails is worse than no button. Same rule the previous page had; the artboard
  *   records it.
  *
+ * ## 2026-09-21: dark
+ *
+ * Federico's call. This screen alone is drawn dark whatever the reader's stored theme is.
+ *
+ * **Why dark only here.** It is the threshold. Everything past it — the admin surfaces and
+ * the respond flow — is light by default and stays that way; making the one screen reached
+ * without a session a different weight says "outside" and "inside" without a word of copy.
+ * The pin never touches the reader's stored preference (`useForcedDarkTheme`), so the app
+ * they land in is still the one they chose, and the theme picker is dropped from the strip
+ * rather than left there doing nothing.
+ *
+ * A drifting dot lattice rode on this ground for part of 21 Sep — one mark per person, no
+ * mark picked out. Federico ruled it out the same day. The ground is flat dark now, and
+ * the anonymity line under the card carries that idea on its own, in words.
+ *
  * There is no "create an account" link, and that is not an omission: `POST /auth/signup`
  * derives the company from the email domain and refuses an address whose domain no company
  * has registered, which is most of the people who reach this page. `/register` is still
@@ -46,7 +61,7 @@ export default function LoginNextPage() {
   }
 
   return (
-    <AuthCanvas>
+    <AuthCanvas ground="dark">
       <AuthCard>
         <AuthHeadline
           eyebrow={t('auth.next.eyebrow')}

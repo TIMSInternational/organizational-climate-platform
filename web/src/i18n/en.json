@@ -505,7 +505,9 @@
         "notFoundBody": "The link may have arrived broken across two lines. Copy the whole address from the email.",
         "accountExistsTitle": "An account with this email already exists",
         "accountExistsBody": "Sign in with that address. If you do not remember the password, ask an administrator to reset it."
-      }
+      },
+      "stageHeadline": "Hear a whole organisation without exposing anyone.",
+      "stageBody": "Every answer counts in the aggregate and none is tied back to the person who wrote it. A group of fewer than five never yields a figure."
     }
   },
   "charts": {

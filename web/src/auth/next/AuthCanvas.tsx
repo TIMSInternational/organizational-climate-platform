@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { LanguageSwitcher, useTranslation } from '../../i18n'
 import { BrandLockup, ThemeSwitcher } from '../../components/layout'
 import { cn } from '../../lib/cn'
+import { useForcedDarkTheme } from '../../theme/useForcedDarkTheme'
 
 /**
  * The frame the five unauthenticated screens share, drawn from the 10 Sep canvas
@@ -40,36 +41,148 @@ import { cn } from '../../lib/cn'
  * Every colour is a token utility, so the palette flips with `:root[data-theme]`. The
  * ground is `bg-surface-outer` (`#f8f7fb` in light, `#0f0a1c` in dark) and the card
  * `bg-surface-card`; nothing here is a literal.
+ *
+ * ## `ground="dark"` — one screen, and only one
+ *
+ * `/login` opts into a dark ground (`LoginNextPage` records the reasoning). It is a PROP
+ * rather than a change to this component's default because six other screens share this
+ * frame — register, the three auth states, and the invitation frame — and none of them
+ * asked to be redrawn. Passing nothing leaves every one of them exactly as it was.
+ *
+ * The variant does three things that only make sense together: it pins the palette to dark
+ * for as long as the screen is mounted, it drops the theme picker from the strip, and it
+ * centres the column. The picker goes because on a screen that is dark whatever you choose,
+ * a control offering the choice is a lie — it would appear to do nothing. The language
+ * picker stays, because that one still works and is the more important of the two here:
+ * the reader may not read English.
+ *
+ * This variant carried a drifting dot lattice on its ground until 2026-09-21, when
+ * Federico ruled it out. The dark itself is his call too and stays.
  */
-export function AuthCanvas({ children }: { children: ReactNode }) {
+export function AuthCanvas({ children, ground = 'plain' }: { children: ReactNode; ground?: 'plain' | 'dark' }) {
   const { t } = useTranslation()
+  const dark = ground === 'dark'
 
   return (
-    <div className="flex min-h-dvh flex-col bg-surface-outer">
-      {/* Transparent and unruled, like the respond strip: the card below is the only
-          surface, and a filled bar here would read as a second one with a seam. */}
-      <header className="flex w-full flex-wrap items-center justify-between gap-inline px-4 py-3.5">
-        <BrandLockup size="compact" />
-        <span
-          className="flex flex-wrap items-center gap-1.5"
-          // Not part of the auth flow itself — grouped so assistive tech can skip past it
-          // to the form.
-          role="group"
-          aria-label={t('shell.settings')}
-        >
-          <LanguageSwitcher variant="chip" />
-          <ThemeSwitcher variant="chip" />
-        </span>
-      </header>
+    <AuthGround dark={dark}>
+      <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-[1.05fr_minmax(30rem,0.95fr)]">
+        <AuthStage />
 
-      {/* 56px above the card (the artboard's 8px of outer pad plus its grid's 48px), 32px
-          of floor, 40px of gutter (16 + 24). `justify-center` centres the column on the
-          ground; `items-start` keeps a short card from stretching to the viewport. */}
-      <main id="main" className="flex w-full flex-1 items-start justify-center px-10 pb-8 pt-14">
-        <div className="flex w-full max-w-110 flex-col gap-4">{children}</div>
-      </main>
-    </div>
+        <div className="flex min-h-dvh flex-col">
+          {/* Transparent and unruled, like the respond strip: the card below is the only
+              surface, and a filled bar here would read as a second one with a seam. The
+              lockup rides here only until the stage appears and takes it — two lockups on
+              one screen is the kind of thing nobody reports and everybody notices. */}
+          <header className="flex w-full flex-wrap items-center justify-between gap-inline px-4 py-3.5">
+            <span className="lg:invisible">
+              <BrandLockup size="compact" />
+            </span>
+            <span
+              className="flex flex-wrap items-center gap-1.5"
+              // Not part of the auth flow itself — grouped so assistive tech can skip past
+              // it to the form.
+              role="group"
+              aria-label={t('shell.settings')}
+            >
+              <LanguageSwitcher variant="chip" />
+              {!dark && <ThemeSwitcher variant="chip" />}
+            </span>
+          </header>
+
+          {/* Centred in its own column now rather than on the whole page. The card used to
+              sit in the top third of 1440px with two thirds of the viewport empty under
+              it, which reads as a page that failed to finish loading rather than as a
+              composition. */}
+          <main id="main" className="flex w-full flex-1 items-center justify-center px-6 pb-10 pt-4 sm:px-10">
+            <div className="flex w-full max-w-110 flex-col gap-4">{children}</div>
+          </main>
+        </div>
+      </div>
+    </AuthGround>
   )
+}
+
+/**
+ * The panel beside the form: the product's own frame, carrying its promise.
+ *
+ * ## Why the shell colour and not a picture
+ *
+ * The ground is `bg-surface-shell` — the exact indigo the signed-in sidebar is painted in,
+ * and one of the few tokens that is dark in BOTH themes. Signing in then reads as stepping
+ * into the product rather than arriving at a marketing page bolted to its front, and it
+ * costs no bytes, needs no asset pipeline, and cannot drift from the app's palette because
+ * it IS the app's palette.
+ *
+ * The depth is two radial washes and a vignette, placed as a single light source high on
+ * the left. It is deliberately not a texture: the drifting dot lattice that sat here on
+ * 21 Sep was wallpaper — pattern without meaning — and Federico ruled it out the same day.
+ * A light has somewhere it comes from; a lattice does not.
+ *
+ * ## Hidden below `lg`, and that is the whole mobile story
+ *
+ * On a phone the form IS the page: a stacked hero above it would push the first field
+ * under the fold, which on a sign-in screen is the one thing that must never happen. The
+ * strip keeps the lockup at those widths, which is why it carries `lg:invisible` rather
+ * than being deleted.
+ */
+function AuthStage() {
+  const { t } = useTranslation()
+  return (
+    <aside
+      // Decorative and duplicative: the form column carries the lockup, the heading and
+      // every control. A screen reader that reads this panel reads the brand twice before
+      // reaching the first field.
+      aria-hidden="true"
+      className="relative hidden overflow-hidden bg-surface-shell lg:flex lg:flex-col lg:justify-between"
+    >
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(70% 55% at 18% 12%, color-mix(in oklab, var(--color-accent-blue) 42%, transparent) 0%, transparent 70%),' +
+            'radial-gradient(55% 45% at 88% 96%, color-mix(in oklab, var(--color-accent-purple) 34%, transparent) 0%, transparent 72%),' +
+            'radial-gradient(120% 90% at 50% 50%, transparent 40%, rgb(0 0 0 / 0.38) 100%)',
+        }}
+      />
+      <div className="relative flex flex-col gap-3 px-12 pt-10">
+        <BrandLockup size="compact" />
+      </div>
+      <div className="relative flex flex-col gap-5 px-12 pb-14">
+        {/* The app's display face, taken from the element rule `index.css` puts on h1/h2
+            rather than left to the body sans — the card beside this panel sets its own
+            heading in the serif, and two faces for one voice is what made the first
+            version read as a different product's marketing page. Weight stays regular:
+            the face ships ONE weight and a synthesised 600 is the fake bold `fonts.css`
+            exists to avoid. */}
+        <p className="m-0 max-w-[16ch] font-store-serif text-store-display font-normal leading-[1.05] text-fg-on-accent">
+          {t('auth.next.stageHeadline')}
+        </p>
+        <p className="m-0 max-w-[46ch] text-reading text-fg-on-accent/70">{t('auth.next.stageBody')}</p>
+      </div>
+    </aside>
+  )
+}
+
+/**
+ * The ground under the strip and the column.
+ *
+ * Split out so the dark pin is a hook call on a component that only exists in the dark
+ * variant: hooks cannot be called conditionally, and `AuthCanvas` is rendered by seven
+ * screens of which one wants it.
+ */
+function AuthGround({ dark, children }: { dark: boolean; children: ReactNode }) {
+  return dark ? (
+    <ForcedDarkGround>{children}</ForcedDarkGround>
+  ) : (
+    <div className="flex min-h-dvh flex-col bg-surface-outer">{children}</div>
+  )
+}
+
+function ForcedDarkGround({ children }: { children: ReactNode }) {
+  useForcedDarkTheme()
+  // Identical markup to the plain ground; the hook is the whole difference. `bg-surface-outer`
+  // resolves to the dark palette because the hook has pinned the attribute above it.
+  return <div className="flex min-h-dvh flex-col bg-surface-outer">{children}</div>
 }
 
 /** The canvas's `.card` at the auth boards' own padding. */

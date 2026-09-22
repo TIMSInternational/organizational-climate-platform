@@ -14,6 +14,54 @@ import type { Locale } from '../../i18n'
 import { getToken, setToken, clearToken } from '../token'
 import { beginGoogleSignIn, peekGoogleHandshake } from '../googleOAuth'
 import { tokenFor } from '../../test/jwtFixture'
+import {
+  ADMIN_THEME_ATTRIBUTE,
+  ADMIN_THEME_STORAGE_KEY,
+  applyAdminTheme,
+} from '../../theme/adminTheme'
+
+/**
+ * The login screen is drawn dark for everyone, and that must not become a change to the
+ * reader's own setting. Three separate guarantees, because each has failed in a different
+ * codebase: the pin applies, it is NOT persisted, and it is undone on the way out.
+ */
+describe('the login screen is dark, and only while it is on screen', () => {
+  const stored = () => window.localStorage.getItem(ADMIN_THEME_STORAGE_KEY)
+  const attr = () => document.documentElement.getAttribute(ADMIN_THEME_ATTRIBUTE)
+
+  it('pins dark, leaves the stored preference alone, and restores it on unmount', () => {
+    window.localStorage.setItem(ADMIN_THEME_STORAGE_KEY, 'light')
+    applyAdminTheme('light')
+    expect(attr()).toBe('light')
+
+    const { unmount } = renderAuthRoutes('/login')
+    expect(attr()).toBe('dark')
+    // The reader chose light and still has: nothing was written.
+    expect(stored()).toBe('light')
+
+    unmount()
+    // And every other screen goes back to what they asked for.
+    expect(attr()).toBe('light')
+    expect(stored()).toBe('light')
+  })
+
+  it('drops the theme picker, which on a screen that is always dark would do nothing', () => {
+    renderAuthRoutes('/login')
+    expect(screen.queryByRole('combobox', { name: 'Theme' })).toBeNull()
+    // The LANGUAGE picker stays. It still works, and it matters more here than the theme
+    // one: a reader who cannot read the page cannot sign in.
+    expect(screen.getAllByRole('combobox').length).toBeGreaterThan(0)
+  })
+
+  it('leaves the other screens on this frame alone', () => {
+    window.localStorage.setItem(ADMIN_THEME_STORAGE_KEY, 'light')
+    applyAdminTheme('light')
+    renderAuthRoutes('/register')
+    // Register shares `AuthCanvas` and opted into nothing: still light, still has its picker.
+    expect(attr()).toBe('light')
+    expect(screen.getByRole('combobox', { name: 'Theme' })).toBeTruthy()
+  })
+})
 
 /** Renders the current path and router state so a navigation can be asserted on. */
 function LocationProbe() {
