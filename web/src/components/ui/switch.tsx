@@ -26,7 +26,25 @@ export function Switch({ className, size = 'default', ...props }: SwitchProps) {
         // control and centres its content. `p-0`: the padding squeezed the knob to nothing inside
         // the 32px track. `justify-start`: centred before its translate, an off knob sat mid-track
         // and an on knob ran past the track's right end (found on the authoring screens, #472).
-        'peer inline-flex shrink-0 items-center justify-start rounded-full border border-transparent p-0',
+        //
+        // The track IS this control's boundary, and OFF it is painted `--admin-border-default` —
+        // 1.27:1 on `--admin-bg-outer`, 1.35:1 on a panel. WCAG 1.4.11 wants 3:1, so an off
+        // switch was a control you could not find, on 17 admin screens. It takes the same
+        // `line-control` edge every other control got on 2026-09-22.
+        //
+        // OFF ONLY, and that is not a shortcut. A checked track is a saturated fill that clears
+        // the floor on its own (`accent-blue` is 4.17:1 on the outer ground), so an edge there
+        // buys no contrast — and it costs: callers RE-COLOUR the checked fill
+        // (`NotificationPreferencesNextPage` passes `data-[state=checked]:bg-accent-green`), and
+        // a blue-grey ring around a green pill is a seam the screenshot shows plainly. What is
+        // NOT the fix is recolouring the off FILL to `line-control`: it clears the boundary but
+        // collapses the on/off pair from 3.28:1 to 1.37:1, trading a control you cannot find for
+        // a state you cannot read.
+        //
+        // The border is 1px in both states — transparent when checked, not absent — so nothing
+        // reflows and no knob translate moves. Guarded in `styles/controlBoundaryContrast.test.ts`.
+        'peer inline-flex shrink-0 items-center justify-start rounded-full p-0',
+        'border border-line-control data-[state=checked]:border-transparent',
         size === 'sm' ? 'h-4 w-7' : 'h-4.5 w-8',
         'transition-colors ease-out',
         'bg-line-default data-[state=checked]:bg-accent-blue',

@@ -160,3 +160,80 @@ describe('every control surface in ui/ draws its edge with the control token', (
     ).toEqual([])
   })
 })
+
+/**
+ * The switch is the same rule in the other shape, and the scan above is blind to it.
+ *
+ * A switch paints no control fill — `bg-surface-input` never appears in it — because its
+ * TRACK is both the fill and the boundary. And the track's off colour is the hairline:
+ * `bg-line-default`, **1.27:1** on `--admin-bg-outer` and 1.35:1 on a panel. So on 17 admin
+ * screens an off switch was a control you could not locate. The on state was never at issue
+ * (4.17:1 light, 5.06:1 dark against the outer ground) — it is off that vanishes.
+ *
+ * Recolouring the off FILL to `--admin-line-control` was rejected rather than untried: it
+ * clears the boundary but drops the on/off pair from 3.28:1 to **1.37:1**, which trades a
+ * control you cannot find for a state you cannot read. The border leaves both fills alone.
+ */
+describe('a switch track is a boundary even though it is a fill', () => {
+  const source = readFileSync(join(UI, 'switch.tsx'), 'utf8')
+  const edge = source.split('\n').find((line) => line.trim().startsWith("'border "))
+
+  it('finds the track edge class list at all — the vacuity control', () => {
+    expect(edge, 'switch.tsx no longer has a recognisable track edge class list').toBeDefined()
+  })
+
+  it('draws the UNCHECKED track edge with the control token', () => {
+    expect(
+      edge,
+      'the switch track is its own boundary and its off fill is the hairline, so the edge ' +
+        'must be border-line-control; a transparent border leaves an off switch at 1.27:1 ' +
+        'on --admin-bg-outer, under WCAG 1.4.11',
+    ).toContain('border-line-control')
+  })
+
+  /**
+   * And drops it when checked. A saturated checked fill clears the floor without help, and
+   * callers re-colour it — `NotificationPreferencesNextPage` passes
+   * `data-[state=checked]:bg-accent-green` — so a `line-control` ring there is a seam around
+   * somebody else's colour, buying no contrast. Asserting it keeps a later "make the border
+   * unconditional, it's simpler" from landing without the screenshot that refutes it.
+   */
+  it('drops that edge when checked, where the fill already carries the boundary', () => {
+    expect(edge).toContain('data-[state=checked]:border-transparent')
+  })
+
+  /**
+   * The checked fills actually in use, measured. `bg-accent-blue` is the default and
+   * `bg-accent-green` is what the notification preferences screen passes; both are the
+   * boundary in the checked state, so both have to clear 3:1 on their own.
+   */
+  it.each(['light', 'dark'] as const)(
+    'in %s, every checked fill a caller uses is its own boundary',
+    (theme) => {
+      const p = palettes()
+      const fills = ['--admin-accent-blue', '--admin-accent-green'] as const
+      const failures: string[] = []
+      for (const fill of fills) {
+        expect(p[theme][fill], `${theme} palette has no ${fill}`).toMatch(/^#[0-9a-f]{6}$/i)
+        for (const ground of GROUNDS) {
+          const r = contrast(p[theme][fill], p[theme][ground])
+          if (r < AA_NON_TEXT) failures.push(`${fill} on ${ground} ${r.toFixed(2)}:1`)
+        }
+      }
+      expect(failures, 'a checked switch draws no border, so its fill IS the edge').toEqual([])
+    },
+  )
+
+  it('keeps the two fills apart, so on and off stay tellable', () => {
+    const p = palettes()
+    for (const theme of ['light', 'dark'] as const) {
+      const pair = contrast(p[theme]['--admin-border-default'], p[theme]['--admin-accent-blue'])
+      expect(
+        pair,
+        `the switch's off and on fills are ${pair.toFixed(2)}:1 apart in ${theme}; ` +
+          'below 3:1 the state stops being readable from colour, which is what recolouring ' +
+          'the off fill to --admin-line-control would have done',
+      ).toBeGreaterThanOrEqual(AA_NON_TEXT)
+    }
+  })
+})
