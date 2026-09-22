@@ -75,7 +75,7 @@ export function DatePicker({
             // which set the chosen date in the middle of the field instead of where a text
             // field puts its value (the Tablero de Seguimiento's shot of 10 Sep).
             'flex h-control-lg w-full items-center justify-start gap-inline px-3',
-            'rounded-md border border-line-default bg-surface-input text-base',
+            'rounded-md border border-line-control bg-surface-input text-base',
             'hover:not-disabled:border-line-hover',
             'disabled:cursor-not-allowed disabled:opacity-50',
             'aria-invalid:border-accent-red',
