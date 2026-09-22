@@ -507,7 +507,8 @@
         "accountExistsBody": "Inicie sesión con esa dirección. Si no recuerda la contraseña, pida a un administrador que la restablezca."
       },
       "stageHeadline": "Escuchar a toda una organización sin exponer a nadie.",
-      "stageBody": "Cada respuesta cuenta en el conjunto y ninguna queda ligada a quien la escribió. Los grupos con menos de cinco respuestas nunca muestran una cifra."
+      "stageBody": "Cada respuesta cuenta en el conjunto y ninguna queda ligada a quien la escribió. Los grupos con menos de cinco respuestas nunca muestran una cifra.",
+      "skipToForm": "Ir al formulario"
     },
     "stage": {
       "product": {

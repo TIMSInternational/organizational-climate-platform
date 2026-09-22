@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { LanguageSwitcher, useTranslation } from '../../i18n'
 import { BrandLockup, ThemeSwitcher } from '../../components/layout'
+import { SkipLink } from '../../components/ui'
 import { cn } from '../../lib/cn'
 import { useForcedDarkTheme } from '../../theme/useForcedDarkTheme'
 
@@ -114,16 +115,24 @@ export function AuthCanvas({
   children,
   ground = 'plain',
   stage = 'product',
+  skipLabel,
 }: {
   children: ReactNode
   ground?: 'plain' | 'dark'
   stage?: StageVariant
+  /** Overrides the generic skip label where a screen has a more specific one of its own. */
+  skipLabel?: string
 }) {
   const { t } = useTranslation()
   const dark = ground === 'dark'
 
   return (
     <AuthGround dark={dark}>
+      {/* First focusable thing on the page. `InvitationFrame` and `RespondShell` have had
+          one since they were written; this frame — seven routes, including the one screen
+          every user must pass — did not, so a keyboard user Tabbed through the language
+          and theme pickers to reach the first field. */}
+      <SkipLink href="#main">{skipLabel ?? t('auth.next.skipToForm')}</SkipLink>
       <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-[1.05fr_minmax(30rem,0.95fr)]">
         <AuthStage variant={stage} />
 

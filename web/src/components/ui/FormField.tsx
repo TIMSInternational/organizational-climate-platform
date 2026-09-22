@@ -49,7 +49,12 @@ function Field({
     <FormLabel>
       {label}
       {required && (
-        <span aria-hidden="true" className="text-accent-red">
+        /* Not `text-accent-red`. Since the navy revalue red means destructive
+           (`docs/decisions/palette-navy-not-purple.md`), and a form whose every required
+           field wears the delete colour reads as a form full of errors. The genuine error
+           states — `aria-invalid:border-accent-red`, `form.tsx`'s message ink — keep it.
+           Still `aria-hidden`: `required` on the control is what AT announces. */
+        <span aria-hidden="true" className="text-fg-tertiary">
           *
         </span>
       )}
