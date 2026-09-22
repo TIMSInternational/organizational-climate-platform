@@ -183,7 +183,14 @@ function AdminShell() {
               10 Sep canvas draws the card at x=236 (the rail's edge) and y=52 (the bar's
               foot), with the 12px gutter only on the right and the bottom. Below `md` the
               rail is gone and the gutter keeps the card off the screen's edge. */}
-          <main id="main" className="min-w-0 flex-1 overflow-y-auto p-gutter md:pt-0 md:pl-0">
+          {/* `[scrollbar-gutter:stable]`: this is the admin scroller, so a page taller than
+              the viewport otherwise shifts every centred thing in it sideways by the
+              scrollbar's width, and shifts it back on the next short page. `index.css`
+              does the same for the document scroller the auth and respond screens use. */}
+          <main
+            id="main"
+            className="min-w-0 flex-1 overflow-y-auto p-gutter [scrollbar-gutter:stable] md:pt-0 md:pl-0"
+          >
           {/* Legacy AppShell inset its content by 12px and put it on a panel:
               `background: var(--admin-bg-panel)`, `1px solid
               var(--admin-border-panel)`, `borderRadius: 8`.

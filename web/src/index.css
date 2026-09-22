@@ -61,6 +61,20 @@
     background: var(--admin-bg-outer);
     color: var(--admin-font-primary);
 
+    /* Reserve the scrollbar's width whether or not one is showing.
+
+       Without this, every centred thing on the site JUMPS sideways by the
+       scrollbar's width the moment a page grows past the viewport — and, worse,
+       moves back when navigating to a shorter one. It is most visible where the
+       layout is centred on the viewport rather than on a column: the auth
+       screens, and any dialog. `stable` keeps the gutter there always, so a
+       short page and a long one put the same pixel in the same place.
+
+       On the root, not only on the inner scroller: both scroll in this app —
+       `AdminLayout` scrolls `<main>` while the auth and respond screens scroll
+       the document. */
+    scrollbar-gutter: stable;
+
     /* NB: no `font-synthesis: none` here (the Vite starter had it). The
        'Poppins Fallback' face is a single regular weight by design, so it
        depends on synthesised bold for the few ms before Poppins lands.
