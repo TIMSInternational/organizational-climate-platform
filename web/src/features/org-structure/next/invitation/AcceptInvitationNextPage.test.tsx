@@ -200,3 +200,46 @@ describe('AcceptInvitationNextPage — a refusal the invitee can fix', () => {
     expect(screen.getByRole('button', { name: 'Unirme' })).toBeTruthy()
   })
 })
+
+/**
+ * The wait is a state of THIS screen, and nothing here covered it until 2026-09-22.
+ *
+ * The page used to `return <AuthPending />` above the frame, so pressing the button swapped
+ * the whole window out of `AuthCanvas` and into `AuthShell` — the previous design language —
+ * for as long as the request ran, then back again. Every assertion in this file passed
+ * throughout, because none of them held the screen while the request was in flight.
+ *
+ * So the test is about the FRAME surviving, not about the spinner. A request that never
+ * settles is what holds the state still: `mockReturnValue(new Promise(() => {}))`.
+ */
+describe('AcceptInvitationNextPage — while the account is being created', () => {
+  /** Leaves `submitting` true for the life of the test; nothing awaits it. */
+  function submitAndHang() {
+    vi.mocked(fetch).mockReturnValue(new Promise<Response>(() => {}))
+    renderPage()
+    return fillAndSubmit()
+  }
+
+  it('says it is working, in the reader\'s language', async () => {
+    await submitAndHang()
+    const status = await screen.findByRole('status')
+    expect(status.textContent).toContain('Creando cuenta…')
+    expect(status.textContent).toContain('Esto tarda solo un momento.')
+  })
+
+  it('stays inside the invitation frame, instead of swapping the page for another shell', async () => {
+    await submitAndHang()
+    await screen.findByRole('status')
+
+    // The two things only `AuthCanvas` puts on this route. `AuthShell` has neither, so this
+    // is what fails if the wait ever returns above the frame again.
+    expect(screen.getByRole('link', { name: 'Ir al formulario' })).toBeTruthy()
+    expect(screen.getByText('EL CICLO')).toBeTruthy()
+  })
+
+  it('replaces the form while it waits, so nothing can be submitted twice', async () => {
+    await submitAndHang()
+    await screen.findByRole('status')
+    expect(screen.queryByRole('button', { name: 'Unirme' })).toBeNull()
+  })
+})
