@@ -40,6 +40,8 @@
   /* -- Lines ------------------------------------------------------------- */
   --color-line-default: var(--admin-border-default);
   --color-line-hover: var(--admin-border-hover);
+  /* The edge of a control, at 3:1 — not the hairline between rows. */
+  --color-line-control: var(--admin-line-control);
   --color-line-light: var(--admin-border-light);
   --color-line-panel: var(--admin-border-panel);
 

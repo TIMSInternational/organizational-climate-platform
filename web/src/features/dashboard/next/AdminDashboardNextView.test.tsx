@@ -5,11 +5,12 @@ import { MemoryRouter } from 'react-router'
 import AdminDashboardNextView from './AdminDashboardNextView'
 import { getCompanyDashboardExport } from '../api/dashboardExport'
 import { downloadBlobFile } from '../../../lib/downloadBlobFile'
-import { sampleModel } from './sampleModel'
+import { fullModel } from './__fixture__'
 import type { AdminDashboardModel, RegionStatuses } from './model'
 import { TranslationProvider } from '../../../i18n'
 import { CompanyContextProvider } from '../../../company-context'
 import { setToken } from '../../../auth/token'
+import { ANONYMITY_FLOOR } from '../../../components/charts'
 import { tokenFor } from '../../../test/jwtFixture'
 import en from '../../../i18n/en.json'
 import { calendarDay } from '../../../lib/calendarDay'
@@ -28,7 +29,7 @@ vi.mock('../../../lib/downloadBlobFile', () => ({ downloadBlobFile: vi.fn() }))
  * tests below hand it the others.
  */
 function renderView(
-  model: AdminDashboardModel = sampleModel,
+  model: AdminDashboardModel = fullModel,
   viewer: Record<string, unknown> = { role: 'company_admin' },
   regions?: RegionStatuses,
 ) {
@@ -132,7 +133,7 @@ describe('AdminDashboardNextView', () => {
   })
 
   it('offers an employee viewer none of the top-bar actions and none of the attention actions', () => {
-    renderView(sampleModel, { role: 'employee' })
+    renderView(fullModel, { role: 'employee' })
     expect(screen.queryByRole('link', { name: copy.newSurvey })).toBeNull()
     expect(screen.queryByRole('link', { name: copy.launchMicroclimate })).toBeNull()
     expect(screen.queryByRole('button', { name: copy.export })).toBeNull()
@@ -151,7 +152,7 @@ describe('AdminDashboardNextView', () => {
   })
 
   it('offers a leader their own node’s progress action, and not the company’s export', () => {
-    renderView(sampleModel, { role: 'leader', nodoId: 'nodo-finanzas' })
+    renderView(fullModel, { role: 'leader', nodoId: 'nodo-finanzas' })
     expect(screen.queryByRole('link', { name: copy.newSurvey })).toBeNull()
     expect(screen.queryByRole('link', { name: copy.launchMicroclimate })).toBeNull()
     // The button now fetches `/dashboard/company-admin/export`, which is the whole
@@ -168,7 +169,7 @@ describe('AdminDashboardNextView', () => {
     expect(linksMatching(/^\/microclimates\/[^/]+\/live$/)).toEqual([])
     cleanup()
     // The leader of another node may read the overdue plan but not record on it.
-    renderView(sampleModel, { role: 'leader', nodoId: 'nodo-operaciones' })
+    renderView(fullModel, { role: 'leader', nodoId: 'nodo-operaciones' })
     const other = Array.from(document.querySelectorAll('[data-slot="attention-item"]')) as HTMLElement[]
     expect(within(other[1]).queryByRole('link')).toBeNull()
   })
@@ -181,11 +182,19 @@ describe('AdminDashboardNextView', () => {
     expect(document.querySelectorAll('[data-slot="cycle-step"]')).toHaveLength(5)
   })
 
-  it('shows the sample chip while the model is the sample, and not otherwise', () => {
+  /**
+   * The chip says the SCREEN is incomplete, not that its numbers are invented — there is
+   * no sample any more for it to warn about. `dashboard.next.sampleChip` still exists and
+   * still means sample data, but on the demographic-fields catalogue, which really does
+   * show one (`AdminDemographicFieldsView.tsx`); this screen must not wear it.
+   */
+  it('shows the incomplete chip only while a region is missing, and never the sample chip', () => {
     renderView()
-    expect(screen.getByText(copy.sampleChip)).toBeTruthy()
+    expect(screen.queryByText(copy.unavailableChip)).toBeNull()
+    expect(screen.queryByText(copy.sampleChip)).toBeNull()
     cleanup()
-    renderView({ ...sampleModel, isSample: false })
+    renderView({ ...fullModel, isPartial: true })
+    expect(screen.getByText(copy.unavailableChip)).toBeTruthy()
     expect(screen.queryByText(copy.sampleChip)).toBeNull()
   })
 
@@ -195,6 +204,36 @@ describe('AdminDashboardNextView', () => {
     const card = document.querySelector('[data-slot="trend-card"][data-dimension="pertenencia"]')
     expect(card?.textContent).toContain('+0.3')
     expect(card?.textContent).not.toContain('-0.3')
+  })
+
+  /**
+   * The geometric half of the privacy floor, which is a rule no other test here covers.
+   *
+   * "Quién respondió" draws one dot per respondent. For a group UNDER the floor that would
+   * BE the count — a reader counts the dots and knows the headcount, which is exactly what
+   * the floor of 5 exists to prevent — and it would slip past every assertion that only
+   * checks no NUMBER is rendered, because the disclosure is in the geometry.
+   *
+   * So a withheld band draws a constant number of marks unrelated to its own count, and
+   * the row still appears under its name: absent and withheld are different statements.
+   */
+  it('draws a withheld group a fixed band, never one mark per respondent, and never a count', () => {
+    renderView()
+    const withheld = document.querySelector('[data-slot="population-withheld"]')
+    expect(withheld, 'the withheld band').not.toBeNull()
+
+    const finance = fullModel.map.rows.find((row) => row.responses < ANONYMITY_FLOOR)!
+    expect(finance.responses).toBeGreaterThan(0)
+    // The band's width is a constant of the component, NOT this group's headcount.
+    expect(withheld!.children.length).not.toBe(finance.responses)
+    const row = withheld!.closest('div')!
+    expect(row.textContent).toContain(copy.protectedWord)
+    expect(row.textContent).not.toMatch(/\d/)
+
+    // A disclosed group, by contrast, is drawn a mark per person and says its number.
+    const disclosed = fullModel.map.rows.find((r) => r.responses >= ANONYMITY_FLOOR)!
+    const dotRows = [...document.querySelectorAll('[data-slot="population-dots"]')]
+    expect(dotRows.some((node) => node.children.length === disclosed.responses)).toBe(true)
   })
 
   it('names, in its own section, each region that fell back to the sample — and only those', () => {
@@ -207,26 +246,28 @@ describe('AdminDashboardNextView', () => {
       tracking: { status: 'off' },
       microclimates: { status: 'fallback', reason: 'empty' },
     }
-    renderView(sampleModel, undefined, live)
+    renderView(fullModel, undefined, live)
     const notices = document.querySelectorAll('[data-slot="region-fallback"]')
     expect(Array.from(notices).map((node) => node.getAttribute('data-region'))).toEqual(['map', 'microclimates'])
     expect(notices[0].textContent).toBe(
-      copy.fallbackRegion.replace('{region}', copy.regionMap).replace('{error}', 'Service unavailable'),
+      copy.unavailableRegion.replace('{region}', copy.regionMap).replace('{error}', 'Service unavailable'),
     )
-    expect(notices[1].textContent).toBe(copy.fallbackEmpty.replace('{region}', copy.regionMicroclimates))
+    expect(notices[1].textContent).toBe(copy.unavailableEmpty.replace('{region}', copy.regionMicroclimates))
+    // The sentence no longer calls anything sample data, because nothing is.
+    expect(notices[0].textContent).not.toContain('Sample data')
     // The map notice sits inside the map's own section.
     expect(notices[0].closest('section')?.getAttribute('aria-labelledby')).toBe('next-by-group')
   })
 
   it('offers to create a plan when none covers the lowest cell, and says only what it knows about reminders', () => {
-    const attention = sampleModel.attention.map((item) =>
+    const attention = fullModel.attention.map((item) =>
       item.kind === 'lowest-cell'
         ? { ...item, plan: null }
         : item.kind === 'low-participation'
           ? { ...item, remindersSent: null }
           : item,
     )
-    renderView({ ...sampleModel, attention })
+    renderView({ ...fullModel, attention })
     const items = document.querySelectorAll('[data-slot="attention-item"]')
     expect(items[0].textContent).toContain(copy.lowestCellNoPlanSub)
     expect(within(items[0] as HTMLElement).getByRole('link', { name: copy.createPlan }).getAttribute('href')).toBe(
@@ -265,10 +306,10 @@ describe('AdminDashboardNextView', () => {
   })
 
   it('judges "below target" at the decimal the card prints: a 3.67 reads 3.7 and is on target', () => {
-    const dimensions = sampleModel.dimensions.map((dimension) =>
+    const dimensions = fullModel.dimensions.map((dimension) =>
       dimension.key === 'confianza' ? { ...dimension, values: [2.96, 3.33, 3.67] } : dimension,
     )
-    renderView({ ...sampleModel, dimensions })
+    renderView({ ...fullModel, dimensions })
     const card = document.querySelector('[data-slot="trend-card"][data-dimension="confianza"]') as HTMLElement
     expect(card.textContent).toContain('3.7')
     expect(card.getAttribute('data-below-target')).toBe('false')
@@ -276,7 +317,7 @@ describe('AdminDashboardNextView', () => {
   })
 
   it('draws the trend cards highest latest reading first, whatever order the model holds them in', () => {
-    renderView({ ...sampleModel, dimensions: [...sampleModel.dimensions].reverse() })
+    renderView({ ...fullModel, dimensions: [...fullModel.dimensions].reverse() })
     const order = [...document.querySelectorAll('[data-slot="trend-card"]')].map((card) => card.getAttribute('data-dimension'))
     // 4.0, then the two 3.8s in the order they came, then 3.7, 3.4, 3.3.
     expect(order).toEqual(['pertenencia', 'seguridad', 'desarrollo', 'confianza', 'reconocimiento', 'carga'])
@@ -291,7 +332,7 @@ describe('AdminDashboardNextView', () => {
   })
 
   it('projects the next quarter as a hollow "to plan" step when nothing is planned after the open wave', () => {
-    renderView({ ...sampleModel, waves: sampleModel.waves.filter((wave) => wave.status !== 'planned') })
+    renderView({ ...fullModel, waves: fullModel.waves.filter((wave) => wave.status !== 'planned') })
     const steps = [...document.querySelectorAll('[data-slot="cycle-step"]')]
     expect(steps).toHaveLength(5)
     expect(steps[4].textContent).toContain('Q1 2027')
@@ -320,8 +361,8 @@ describe('AdminDashboardNextView', () => {
     const ambient = process.env.TZ
     process.env.TZ = 'America/Costa_Rica'
     try {
-      const live = sampleModel.liveMicroclimate!
-      renderView({ ...sampleModel, liveMicroclimate: { ...live, closesAt: '2026-09-12T02:06:08.992+00:00' } })
+      const live = fullModel.liveMicroclimate!
+      renderView({ ...fullModel, liveMicroclimate: { ...live, closesAt: '2026-09-12T02:06:08.992+00:00' } })
       const sentence = (date: string) => copy.liveSub.replace('{date}', date).replace('{floor}', '5')
       expect(document.body.textContent).toContain(sentence('Sep 11'))
       expect(document.body.textContent).not.toContain(sentence('Sep 12'))
@@ -334,10 +375,10 @@ describe('AdminDashboardNextView', () => {
   it('fits the shared scale to every reading, so no card draws a point outside its plot', () => {
     // The first dimension reads 3.3–4.0; the last is far below it. A scale taken from any
     // one dimension would push the other's points off the 60px sparkline.
-    const dimensions = sampleModel.dimensions.map((dimension, index) =>
-      index === sampleModel.dimensions.length - 1 ? { ...dimension, values: [1.6, 1.8, 2.0] } : dimension,
+    const dimensions = fullModel.dimensions.map((dimension, index) =>
+      index === fullModel.dimensions.length - 1 ? { ...dimension, values: [1.6, 1.8, 2.0] } : dimension,
     )
-    renderView({ ...sampleModel, dimensions })
+    renderView({ ...fullModel, dimensions })
     const cards = [...document.querySelectorAll('[data-slot="trend-card"]')]
     expect(cards).toHaveLength(6)
     for (const card of cards) {
@@ -396,10 +437,10 @@ describe('AdminDashboardNextView', () => {
   })
 
   it('prints each card’s move as the difference of the readings it prints: 3,33 → 3,67 is +0,4', () => {
-    const dimensions = sampleModel.dimensions.map((dimension) =>
+    const dimensions = fullModel.dimensions.map((dimension) =>
       dimension.key === 'confianza' ? { ...dimension, values: [2.96, 3.33, 3.67] } : dimension,
     )
-    renderView({ ...sampleModel, dimensions })
+    renderView({ ...fullModel, dimensions })
     const card = document.querySelector('[data-slot="trend-card"][data-dimension="confianza"]') as HTMLElement
     expect(card.querySelector('[data-slot="trend-move"]')?.textContent).toBe('+0.4')
   })
@@ -417,8 +458,8 @@ describe('AdminDashboardNextView', () => {
   })
 
   it('names the open survey as a sentence does and the live pulse by its head', () => {
-    const openSurvey = sampleModel.openSurvey ? { ...sampleModel.openSurvey, name: 'Encuesta de Clima Q4 (abierta)' } : null
-    renderView({ ...sampleModel, openSurvey })
+    const openSurvey = fullModel.openSurvey ? { ...fullModel.openSurvey, name: 'Encuesta de Clima Q4 (abierta)' } : null
+    renderView({ ...fullModel, openSurvey })
     const items = document.querySelectorAll('[data-slot="attention-item"]')
     expect(items[2].textContent).toContain('Encuesta de Clima Q4 has')
     expect(items[2].textContent).not.toContain('(abierta)')

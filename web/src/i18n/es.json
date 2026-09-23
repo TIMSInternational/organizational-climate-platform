@@ -505,6 +505,47 @@
         "notFoundBody": "Puede que el enlace llegara cortado en dos líneas. Copie la dirección completa del correo.",
         "accountExistsTitle": "Ya existe una cuenta con este correo",
         "accountExistsBody": "Inicie sesión con esa dirección. Si no recuerda la contraseña, pida a un administrador que la restablezca."
+      },
+      "stageHeadline": "Escuchar a toda una organización sin exponer a nadie.",
+      "stageBody": "Cada respuesta cuenta en el conjunto y ninguna queda ligada a quien la escribió. Los grupos con menos de cinco respuestas nunca muestran una cifra.",
+      "skipToForm": "Ir al formulario",
+      "noAccount": "¿No tiene cuenta?",
+      "createOne": "Crear una"
+    },
+    "stage": {
+      "product": {
+        "eyebrow": "CLIMA ORGANIZACIONAL",
+        "lead": "Un instrumento de medición de clima laboral para instituciones.",
+        "measuresLabel": "MIDE",
+        "measures": "Encuestas de clima por ciclo y microclimas de cinco minutos entre ciclos.",
+        "followsLabel": "SIGUE",
+        "follows": "Planes de acción con fecha, y el avance contra el periodo anterior."
+      },
+      "access": {
+        "eyebrow": "ACCESO",
+        "lead": "Cada persona entra con el rol que su organización le asigna.",
+        "rolesLabel": "ROLES",
+        "roles": "Empleado, líder, supervisor y administración de empresa.",
+        "scopeLabel": "ALCANCE",
+        "scope": "Cada rol ve el nivel que le corresponde: la organización, su equipo o lo suyo."
+      },
+      "cycle": {
+        "eyebrow": "EL CICLO",
+        "lead": "La medición es un ciclo, no un evento aislado.",
+        "surveyLabel": "ENCUESTA",
+        "survey": "Una medición completa por ciclo, con preguntas agrupadas en dimensiones.",
+        "pulseLabel": "MICROCLIMA",
+        "pulse": "Pulsos de cinco minutos entre ciclos, para no esperar al siguiente.",
+        "followUpLabel": "SEGUIMIENTO",
+        "followUp": "Lo que se decide después queda como plan, con fecha."
+      },
+      "administration": {
+        "eyebrow": "ADMINISTRACIÓN",
+        "lead": "Cada organización administra sus propios accesos.",
+        "whoLabel": "QUIÉN",
+        "who": "Una persona de su propia organización, no el proveedor de la plataforma.",
+        "changesLabel": "QUÉ CAMBIA",
+        "changes": "Un acceso desactivado deja de entrar; lo ya registrado no se borra."
       }
     }
   },
@@ -1074,6 +1115,9 @@
       "participationLabel": "Participación · {wave}",
       "participationSub": "respuestas · {percent} completadas",
       "participationProtected": "{group} bajo el umbral de {floor}: protegido",
+      "whoAnsweredHeading": "Quién respondió",
+      "protectedWord": "protegido",
+      "whoAnsweredNote": "Un punto es una persona. Un grupo bajo el umbral de {floor} no dibuja sus puntos —contarlos sería decir el número— y sigue en la lista con su nombre.",
       "openSurveyLabel": "Encuesta abierta · {wave}",
       "openSurveySub": "de {audience} · cierra el {date}",
       "openSurveyProgress": "{responses} de {audience} respuestas recibidas",
@@ -1110,8 +1154,9 @@
       "liveSub": "respuestas · abierto hasta el {date} · palabras protegidas hasta {floor}",
       "viewSession": "Ver sesión",
       "loadingRegion": "Cargando {region}…",
-      "fallbackRegion": "Datos de muestra — no se pudo leer {region}: {error}.",
-      "fallbackEmpty": "Datos de muestra — {region}: todavía no hay nada que mostrar.",
+      "unavailableChip": "Datos incompletos",
+      "unavailableRegion": "No se pudo leer {region}: {error}. Esta sección no muestra nada en lugar de datos que no son suyos.",
+      "unavailableEmpty": "{region}: todavía no hay nada que mostrar.",
       "fallbackNoReason": "el servidor no indicó el motivo",
       "regionCompany": "el resumen de la empresa",
       "regionSurveys": "las encuestas",
@@ -6535,6 +6580,57 @@
       "countWord8": "ocho",
       "countWord9": "nueve",
       "countWord10": "diez"
+    }
+  },
+  "signal": {
+    "eyebrow": "Lenguaje visual",
+    "meta": "Propuesta · 21 sept",
+    "displayLead": "Menos cromo, más señal.",
+    "displayTrail": "Que la pantalla diga cuánta gente hay detrás de cada número.",
+    "lede": "Una dirección más densa y más callada para las pantallas de administración: una regla fina antes de cada sección, un acento por pantalla y las cifras siempre en cifras. Nada de esto reemplaza todavía ninguna pantalla; vive en /dev para poder mirarlo al lado de los artboards aprobados.",
+    "whoHeading": "Quién respondió",
+    "whoMeta": "Encuesta de Clima Q3",
+    "whoNote": "Un punto es una persona. Un grupo bajo el umbral no dibuja sus puntos: contarlos sería decir el número. Se dibuja una banda de ancho fijo, y el grupo sigue estando en la lista con su nombre.",
+    "protected": "protegido",
+    "railHeading": "La encuesta",
+    "railWave": "Ola",
+    "railClosed": "Cerró",
+    "railFloor": "Umbral",
+    "railGroups": "Grupos con cifra",
+    "movedHeading": "Qué se movió",
+    "movedMeta": "Q2 → Q3",
+    "contrastQuestion": "Reconocimiento subió medio punto entre dos olas.",
+    "contrastLeftLabel": "Q2",
+    "contrastLeft": "Reconocimiento 3,1 — la dimensión más baja de la empresa, y ningún plan la atendía.",
+    "contrastRightLabel": "Q3",
+    "contrastRight": "Reconocimiento 3,6. Operaciones sigue bajo la meta; el resto de los grupos la cruzó.",
+    "contrastOutcomeLabel": "Resultado",
+    "contrastOutcome": "El plan abierto en mayo se cerró en agosto.",
+    "contrastAction": "Ver la dimensión",
+    "workHeading": "Trabajo en curso",
+    "workMeta": "Pasos 1–4",
+    "tabConfig": "Configuración",
+    "tabQuestions": "Preguntas",
+    "tabAudience": "Audiencia",
+    "tabResults": "Resultados",
+    "primaryAction": "Lanzar",
+    "objectivesLabel": "Objetivos",
+    "objectiveOne": "Saber si la carga de trabajo bajó desde la última ola.",
+    "objectiveTwo": "Ver qué grupos quedan bajo la meta después del plan.",
+    "objectiveThree": "Decidir si la encuesta de enero repite las mismas preguntas.",
+    "attentionLabel": "Qué necesita atención",
+    "attentionOne": "Operaciones en carga de trabajo: 2,2, la celda más baja del mapa.",
+    "attentionTwo": "La encuesta abierta lleva 3 de 24 respuestas y cierra en nueve días.",
+    "footerLabel": "Qué no se tomó de la referencia",
+    "footerNote": "Ni el azul de marca, ni las lentes circulares, ni el logotipo, ni una línea de su texto: eso es la identidad de otra empresa y no puede ir en una entrega de este cliente. Lo que se tomó es composición, densidad y contención.",
+    "sample": {
+      "engineering": "Ingeniería",
+      "operations": "Operaciones",
+      "people": "Personas",
+      "sales": "Ventas",
+      "finance": "Finanzas",
+      "waveQ3": "Encuesta de Clima Q3",
+      "closedOn": "6 ago 2026"
     }
   }
 }

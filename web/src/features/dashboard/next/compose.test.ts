@@ -6,6 +6,7 @@ import type { SurveyListItem } from '../../surveys/api/surveys'
 import type { PlanAccion } from '../../tracking/api/trackingApi'
 import type { CompanyAdminDashboard } from '../api/dashboard'
 import {
+  CLIMATE_TARGET,
   composeModel,
   coveringPlan,
   currentOpenSurvey,
@@ -19,7 +20,6 @@ import {
   type ModelParts,
 } from './compose'
 import { lowestCell } from './derive'
-import { sampleModel } from './sampleModel'
 
 /**
  * Fixtures shaped like the payloads the local API returned on 2026-09-10 for the
@@ -271,14 +271,14 @@ function live(): ModelParts {
 const NAMES: Record<string, string> = { workload: 'Workload', trust: 'Trust' }
 
 function options(): ComposeOptions {
-  return { asOf: ASOF, floor: 5, dimensionName: (key) => NAMES[key] ?? key, sample: sampleModel }
+  return { asOf: ASOF, floor: 5, dimensionName: (key) => NAMES[key] ?? key }
 }
 
 describe('composeModel', () => {
   it('composes every region from the payloads, with real ids on every link and no sample anywhere', () => {
     const { model, regions } = composeModel(live(), options())
 
-    expect(model.isSample).toBe(false)
+    expect(model.isPartial).toBe(false)
     expect(Object.values(regions).every((region) => region.status === 'live')).toBe(true)
     expect(model.companyName).toBe('Acme Corporation')
     expect(model.asOf).toBe(ASOF)
@@ -344,19 +344,71 @@ describe('composeModel', () => {
     })
   })
 
-  it("a failed region takes the sample's part, and only that part, and says why", () => {
+  /**
+   * The rule this file exists for. A failed region contributes NOTHING: not a borrowed
+   * series, not a borrowed company name, not a borrowed number of any kind. Until
+   * 2026-09-21 `compose.ts` filled seventeen fields from `sampleModel.ts` — the approved
+   * mockup's Grupo Meridiano figures — so this same call handed back another company's
+   * climate, and the page printed it in the same type as a measurement.
+   */
+  it('a failed region contributes nothing, leaves every other region alone, and says why', () => {
     const parts = live()
     parts.trends = { status: 'fallback', reason: 'failed', error: 'Service unavailable' }
     const { model, regions } = composeModel(parts, options())
 
-    expect(model.isSample).toBe(true)
+    expect(model.isPartial).toBe(true)
     expect(regions.trends).toEqual({ status: 'fallback', reason: 'failed', error: 'Service unavailable' })
-    expect(model.dimensions).toBe(sampleModel.dimensions)
+    // The trends region's two fields, and only those, are absent.
+    expect(model.dimensions).toEqual([])
+    expect(model.participation.completed).toBeNull()
     // Everything else is still the tenant's own.
     expect(regions.company).toEqual({ status: 'live' })
     expect(model.companyName).toBe('Acme Corporation')
     expect(model.map.rows[1]).toMatchObject({ name: 'Operaciones' })
-    expect(model.latestClosedWave.id).toBe('sv-q3')
+    expect(model.latestClosedWave?.id).toBe('sv-q3')
+    // The surveys region's half of participation is untouched by the trends failure.
+    expect(model.participation.responses).toBe(24)
+  })
+
+  /**
+   * The same rule stated as the thing that must never happen again, region by region, so
+   * a fallback cannot be reintroduced for just one of them unnoticed. Grupo Meridiano is
+   * the mockup tenant every substituted field used to come from.
+   */
+  it('borrows no field from anywhere when EVERY region fails', () => {
+    const failed = { status: 'fallback', reason: 'failed', error: 'Service unavailable' } as const
+    const { model, regions } = composeModel(
+      {
+        company: failed,
+        surveys: failed,
+        trends: failed,
+        map: failed,
+        actionPlans: failed,
+        tracking: failed,
+        microclimates: failed,
+      },
+      options(),
+    )
+
+    expect(Object.values(regions).every((region) => region.status === 'fallback')).toBe(true)
+    expect(model.isPartial).toBe(true)
+    expect(model.companyName).toBeNull()
+    expect(model.latestClosedWave).toBeNull()
+    expect(model.previousWave).toBeNull()
+    expect(model.openSurvey).toBeNull()
+    expect(model.participation).toEqual({ responses: null, completed: null })
+    expect(model.dimensions).toEqual([])
+    expect(model.waves).toEqual([])
+    expect(model.map).toEqual({ dimensionKeys: [], rows: [] })
+    expect(model.plans).toBeNull()
+    expect(model.attention).toEqual([])
+    expect(model.liveMicroclimate).toBeNull()
+
+    // Nothing of the mockup tenant survives anywhere in the model, by any route.
+    expect(JSON.stringify(model)).not.toContain('Meridiano')
+    // `asOf` and the target are the reader's own inputs, not a region's, so they stay.
+    expect(model.asOf).toBe(ASOF)
+    expect(model.target).toBe(CLIMATE_TARGET)
   })
 
   it('a tenant with no closed survey is an empty fallback, not a failure', () => {
@@ -365,8 +417,10 @@ describe('composeModel', () => {
     const { model, regions } = composeModel(parts, options())
 
     expect(regions.surveys).toEqual({ status: 'fallback', reason: 'empty' })
-    expect(model.isSample).toBe(true)
-    expect(model.waves).toBe(sampleModel.waves)
+    expect(model.isPartial).toBe(true)
+    // Empty is not a licence to substitute either: no waves means no waves.
+    expect(model.waves).toEqual([])
+    expect(model.latestClosedWave).toBeNull()
   })
 
   it('with no tracking service, the plans are the company payload and no overdue plan is named', () => {
@@ -375,7 +429,7 @@ describe('composeModel', () => {
     const { model, regions } = composeModel(parts, options())
 
     expect(regions.tracking).toEqual({ status: 'off' })
-    expect(model.isSample).toBe(false)
+    expect(model.isPartial).toBe(false)
     expect(model.plans).toEqual({ open: 4, overdue: 0, overdueNodo: null })
     expect(model.attention.map((item) => item.kind)).toEqual(['lowest-cell', 'low-participation'])
   })
@@ -454,12 +508,12 @@ describe('the derivations', () => {
     expect(model.map.dimensionKeys).toEqual(['trust', 'workload'])
     // Each row's scores move with their columns: Operaciones is trust 3.0, workload 2.4.
     expect(model.map.rows.find((row) => row.name === 'Operaciones')?.scores).toEqual([3.0, 2.4])
-    expect(model.isSample).toBe(false)
+    expect(model.isPartial).toBe(false)
     parts.questionOrder = { status: 'fallback', reason: 'failed', error: null }
     const failed = composeModel(parts, options())
     expect(failed.model.map.dimensionKeys).toEqual(['workload', 'trust'])
-    // An order that could not be read is not a sample: nothing on the page is invented.
-    expect(failed.model.isSample).toBe(false)
+    // An order that could not be read costs no region: the map is still the tenant's.
+    expect(failed.model.isPartial).toBe(false)
   })
 
   it('reads a survey’s question order as the dimensions it asks, in order, each once', () => {

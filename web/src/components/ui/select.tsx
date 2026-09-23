@@ -38,7 +38,7 @@ export function SelectTrigger({
       data-size={size}
       className={cn(
         'flex w-full items-center justify-between gap-inline whitespace-nowrap',
-        'rounded-md border border-line-default bg-surface-input px-3 text-base text-fg-primary',
+        'rounded-md border border-line-control bg-surface-input px-3 text-base text-fg-primary',
         'transition-[border-color] ease-out',
         'data-[size=default]:h-control-lg data-[size=sm]:h-control-md',
         'data-[placeholder]:text-fg-tertiary',

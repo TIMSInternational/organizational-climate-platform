@@ -2,8 +2,7 @@ import type { FormEvent, ReactNode } from 'react'
 import { Link, useParams } from 'react-router'
 import { CheckCircle2, ShieldCheck } from 'lucide-react'
 import { useTranslation } from '../../../../i18n'
-import { Alert, AlertDescription, Button, TextField } from '../../../../components/ui'
-import { AuthPending } from '../../../../auth/AuthPending'
+import { Alert, AlertDescription, Button, Spinner, TextField } from '../../../../components/ui'
 import { InvitationFrame } from './InvitationFrame'
 import { cn } from '../../../../lib/cn'
 import { useAcceptInvitationModel } from './useAcceptInvitationModel'
@@ -60,13 +59,11 @@ export default function AcceptInvitationNextPage() {
     void model.submit()
   }
 
-  if (model.submitting) {
-    return <AuthPending label={t('auth.creatingAccount')} />
-  }
-
   return (
     <InvitationFrame skipLabel={t('auth.next.accept.skip')}>
-      {model.accountCreated ? (
+      {model.submitting ? (
+        <PendingState />
+      ) : model.accountCreated ? (
         <CreatedState />
       ) : model.failure?.terminal ? (
         <DeadState
@@ -204,6 +201,39 @@ function DeadState({
 }
 
 /** The account exists but its token names no company, so there is nowhere to send them. */
+/**
+ * The wait, in the SAME frame as everything either side of it.
+ *
+ * This branch used to `return <AuthPending />` before the frame was reached — a whole-page
+ * swap out of `AuthCanvas` and into `AuthShell`, the previous design language. So the one
+ * screen most users of this product ever meet went: "La sede" while they typed, last
+ * month's shell for as long as the request took, then "La sede" again to tell them it
+ * worked. The redesign made that worse rather than better: while this page drew its own
+ * frame the two halves merely differed, and now one of them is the full treatment.
+ *
+ * A pending state is a state of this screen, so it is a `StateCard` like its siblings, and
+ * the only thing that changes between typing, waiting and done is the card.
+ *
+ * `role="status"` rather than a bare spinner: `AuthPending` announced the wait to a screen
+ * reader and that must not be lost in the move. `StateCard`'s `live` prop carries it, and
+ * the spinner itself is `aria-hidden` — the sentence is what gets announced, not the mark.
+ */
+function PendingState() {
+  const { t } = useTranslation()
+
+  return (
+    <StateCard
+      label={t('auth.next.accept.eyebrow')}
+      title={t('auth.creatingAccount')}
+      body={t('auth.pendingDetail')}
+      live="status"
+      // Default `md` is `size-icon`, the size CreatedState and DeadState give their marks.
+      // Spinner is aria-hidden of its own accord; the announced text is the title.
+      icon={<Spinner />}
+    />
+  )
+}
+
 function CreatedState() {
   const { t } = useTranslation()
 

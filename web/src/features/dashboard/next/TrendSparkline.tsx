@@ -31,9 +31,9 @@ export interface TrendSparklineProps {
   height?: number
 }
 
-const LINE = '#6a6ece'
+const LINE = '#4d76c7'
 const BELOW_TARGET = '#dd0c15'
-const TARGET = '#b9b6cc'
+const TARGET = '#b3b8ca'
 const PAD_X = 12
 const PAD_TOP = 6
 /** From the bottom: the hairline the canvas draws under the line. */

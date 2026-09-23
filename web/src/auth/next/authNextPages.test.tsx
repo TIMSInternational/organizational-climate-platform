@@ -14,6 +14,66 @@ import type { Locale } from '../../i18n'
 import { getToken, setToken, clearToken } from '../token'
 import { beginGoogleSignIn, peekGoogleHandshake } from '../googleOAuth'
 import { tokenFor } from '../../test/jwtFixture'
+import {
+  ADMIN_THEME_ATTRIBUTE,
+  ADMIN_THEME_STORAGE_KEY,
+  applyAdminTheme,
+} from '../../theme/adminTheme'
+
+/**
+ * The login screen is drawn dark for everyone, and that must not become a change to the
+ * reader's own setting. Three separate guarantees, because each has failed in a different
+ * codebase: the pin applies, it is NOT persisted, and it is undone on the way out.
+ */
+/**
+ * Login is dark because of the PHOTOGRAPH, not because of a theme pin.
+ *
+ * It used to be pinned: `useForcedDarkTheme` forced the dark palette for the life of the
+ * screen, and three tests here held that shape. The artboard Federico chose on 2026-09-22
+ * ("La sede") puts a white card on a navy-washed photograph, and a pinned dark palette makes
+ * that card dark — so the pin was working against the design it was written to serve.
+ *
+ * The darkness now comes from `AuthBackdrop`, which is behind the whole page and owes
+ * nothing to the theme. What these tests hold instead: the reader's own setting survives
+ * the visit, and the picker that changes it is still reachable.
+ */
+describe('the login screen leaves the reader\'s theme alone', () => {
+  const stored = () => window.localStorage.getItem(ADMIN_THEME_STORAGE_KEY)
+  const attr = () => document.documentElement.getAttribute(ADMIN_THEME_ATTRIBUTE)
+
+  it('neither pins a theme nor writes one', () => {
+    window.localStorage.setItem(ADMIN_THEME_STORAGE_KEY, 'light')
+    applyAdminTheme('light')
+
+    const { unmount } = renderAuthRoutes('/login')
+    // The old behaviour was `dark` here. A pin would make the card dark on a screen whose
+    // whole composition is a white card on a dark photograph.
+    expect(attr()).toBe('light')
+    expect(stored()).toBe('light')
+
+    unmount()
+    expect(attr()).toBe('light')
+    expect(stored()).toBe('light')
+  })
+
+  it('keeps the theme picker, which now changes something', () => {
+    renderAuthRoutes('/login')
+    // It was dropped while the screen was pinned, on the grounds that it would do nothing.
+    // It does something again.
+    expect(screen.getByRole('combobox', { name: 'Theme' })).toBeTruthy()
+    // The LANGUAGE picker was never dropped and matters more: a reader who cannot read the
+    // page cannot sign in.
+    expect(screen.getAllByRole('combobox').length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('leaves the other screens on this frame alone', () => {
+    window.localStorage.setItem(ADMIN_THEME_STORAGE_KEY, 'light')
+    applyAdminTheme('light')
+    renderAuthRoutes('/register')
+    expect(attr()).toBe('light')
+    expect(screen.getByRole('combobox', { name: 'Theme' })).toBeTruthy()
+  })
+})
 
 /** Renders the current path and router state so a navigation can be asserted on. */
 function LocationProbe() {
@@ -70,15 +130,35 @@ afterEach(() => {
 })
 
 describe('LoginNextPage', () => {
-  it('draws the artboard: the eyebrow, the serif heading, both fields, the assurance line', () => {
+  it('draws the artboard, and does NOT repeat the privacy promise under the card', () => {
     renderAuthRoutes('/login')
 
     expect(screen.getByRole('heading', { level: 1, name: 'Sign in' })).toBeTruthy()
     expect(screen.getByLabelText(/Email address/)).toBeTruthy()
     expect(screen.getByLabelText(/^Password/)).toBeTruthy()
-    // The line the board puts UNDER the card, which is the question an employee about to
-    // answer an anonymous survey is actually asking.
-    expect(screen.getByText(/signing in only checks that you were invited/i)).toBeTruthy()
+
+    // This line used to sit under the card. It is gone on purpose, and the purpose is
+    // measurable: `es.json` stated some version of the promise in 89 strings, four of
+    // them on the auth surface, two of those byte-identical. A guarantee restated in
+    // four wordings reads as imprecision about the one thing this product exists to do.
+    //
+    // It is stated ONCE now, in full, where it is load-bearing — `AnonymityNotice`, the
+    // first block of `SurveyRespondForm`, on the screen before anyone answers. Signing in
+    // is not that moment: a returning person has already been told.
+    expect(screen.queryByText(/signing in only checks that you were invited/i)).toBeNull()
+  })
+
+  it('explains the product on the stage instead, and a different slice per screen', () => {
+    renderAuthRoutes('/login')
+    expect(screen.getByText(/An instrument for measuring workplace climate/i)).toBeTruthy()
+    expect(screen.getByText(/Climate surveys by cycle/i)).toBeTruthy()
+
+    // The same panel on every screen would be furniture. `/register` answers the question
+    // its own visitor has — what role am I about to get — and says nothing about cycles.
+    cleanup()
+    renderAuthRoutes('/register')
+    expect(screen.getByText(/Each person signs in with the role/i)).toBeTruthy()
+    expect(screen.queryByText(/An instrument for measuring workplace climate/i)).toBeNull()
   })
 
   /**

@@ -88,27 +88,49 @@ export type AttentionItem =
    */
   | { kind: 'low-participation'; surveyId: string; remindersSent: number | null }
 
+/**
+ * ## Every field a region cannot supply is nullable, and that is the point
+ *
+ * A region whose read failed has NO data, and this model says so rather than borrowing
+ * some. Before 2026-09-21 `compose.ts` filled seventeen fields from a sample built on
+ * the approved mockup's tenant, so a company whose surveys endpoint was down read
+ * another company's climate under a chip it could skim past. The types below are what
+ * makes that impossible: there is nothing to substitute, and the compiler makes every
+ * reader of `latestClosedWave`, `companyName`, `plans` and `participation` decide what
+ * absence looks like. `dimensions`, `waves` and `map` say it by being empty.
+ */
 export interface AdminDashboardModel {
   /**
-   * True while any region of the model is the sample — the whole of it before wiring,
-   * and since wiring only a region whose fetch failed (`RegionState`). The page shows a
-   * chip saying so, and names the region.
+   * True while any region of the model is missing — its read failed, or the tenant has
+   * nothing in it yet (`RegionState`). The page shows a chip saying the screen is
+   * incomplete, and each section names its own region in a sentence.
    */
-  isSample: boolean
+  isPartial: boolean
   /** ISO date the model was read at; day counts are computed against it. */
   asOf: string
-  companyName: string
+  /** `null` when the company region failed: the page names no tenant rather than another's. */
+  companyName: string | null
   /** The climate target on the 1–5 scale. */
   target: number
-  latestClosedWave: Wave
+  /** `null` when the surveys region failed, or the tenant has closed no wave. */
+  latestClosedWave: Wave | null
   previousWave: Wave | null
   openSurvey: OpenSurvey | null
-  /** Participation of the latest closed wave. */
-  participation: { responses: number; completed: number }
+  /**
+   * Participation of the latest closed wave. `responses` is the surveys region's and
+   * `completed` the trends region's, so either can be absent on its own — and
+   * `completed` is never defaulted to `responses`, which would print 100%.
+   */
+  participation: { responses: number | null; completed: number | null }
+  /** Empty when the trends region failed: no card is drawn rather than a borrowed series. */
   dimensions: readonly DimensionSeries[]
+  /** Empty when the surveys region failed: the cycle draws no steps. */
   waves: readonly Wave[]
+  /** Empty rows when the map region failed: the grid is not drawn at all. */
   map: { dimensionKeys: readonly string[]; rows: readonly MapRow[] }
-  plans: { open: number; overdue: number; overdueNodo: string | null }
+  /** `null` when the region that counts plans failed — tracking when it is on, else the company. */
+  plans: { open: number; overdue: number; overdueNodo: string | null } | null
+  /** Only items whose own region is live; a failed region contributes none. */
   attention: readonly AttentionItem[]
   liveMicroclimate: { id: string; name: string; responses: number; closesAt: string } | null
 }
@@ -129,9 +151,9 @@ export type RegionKey =
 export type RegionState =
   /** Read from the API. */
   | { status: 'live' }
-  /** The fetch failed; the sample stands in for this region and the page says so. */
+  /** The fetch failed; this region's fields are absent and the section says why. */
   | { status: 'fallback'; reason: 'failed'; error: string | null }
-  /** The fetch succeeded but the tenant has nothing to show; the sample stands in. */
+  /** The fetch succeeded but the tenant has nothing to show; the section says so. */
   | { status: 'fallback'; reason: 'empty' }
   /** Not part of this deployment: no tracking service is configured. */
   | { status: 'off' }

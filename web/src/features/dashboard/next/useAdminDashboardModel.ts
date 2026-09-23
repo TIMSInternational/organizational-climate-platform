@@ -21,9 +21,10 @@ export interface AdminDashboardModelState {
 
 /**
  * The model behind the company administrator's `/dashboard`, composed from the
- * existing clients (`loadModel.ts` fetches, `compose.ts` derives). Each region falls
- * back to `sampleModel.ts` only when its own fetch fails, `isSample` says whether any
- * did, and `regions` says which — the page shows the chip and names the region.
+ * existing clients (`loadModel.ts` fetches, `compose.ts` derives). A region whose own
+ * fetch fails contributes nothing — no substitute, no borrowed numbers — `isPartial`
+ * says whether any did, and `regions` says which: the page shows the incomplete chip
+ * and each section names its own region.
  *
  * `companyId` is the scope `DashboardPage` resolved: set only for a SuperAdmin, who has
  * no tenant of their own and must name one, and `undefined` for a CompanyAdmin, whose

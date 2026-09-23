@@ -1,8 +1,8 @@
 import { Link } from 'react-router'
-import { Mail, ShieldCheck } from 'lucide-react'
+import { Mail } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import { Alert, AlertDescription, AlertTitle, Button, Input } from '../../components/ui'
-import { AuthCanvas, AuthCard, AuthField, AuthFootnote, AuthHeadline } from './AuthCanvas'
+import { AuthCanvas, AuthCard, AuthField, AuthHeadline } from './AuthCanvas'
 import { AuthTransitionCard } from './AuthTransitionCard'
 import { useRegisterModel } from './useRegisterModel'
 
@@ -43,7 +43,7 @@ export default function RegisterNextPage() {
   }
 
   return (
-    <AuthCanvas>
+    <AuthCanvas stage="access">
       <AuthCard>
         <AuthHeadline
           eyebrow={t('auth.next.eyebrow')}
@@ -147,7 +147,6 @@ export default function RegisterNextPage() {
         </Link>
       </p>
 
-      <AuthFootnote icon={<ShieldCheck aria-hidden="true" />}>{t('auth.next.registerAssurance')}</AuthFootnote>
     </AuthCanvas>
   )
 }

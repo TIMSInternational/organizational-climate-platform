@@ -40,8 +40,8 @@ describe('public/maintenance.html', () => {
 
   it('renders in both colour schemes from literals and bakes in no clock', () => {
     expect(html).toMatch(/@media \(prefers-color-scheme: dark\)/)
-    expect(html).toContain('#f8f7fb') // storefront ground, light
-    expect(html).toContain('#120b2b') // storefront ground, dark
+    expect(html).toContain('#f5f8fc') // storefront ground, light
+    expect(html).toContain('#061120') // storefront ground, dark
     expect(visible).not.toMatch(/\b20\d\d-\d\d-\d\d\b|\d{1,2}:\d\d\s?(am|pm|utc)\b|\bETA\b/i)
     expect(html).toMatch(/<meta name="robots" content="noindex, nofollow">/)
   })

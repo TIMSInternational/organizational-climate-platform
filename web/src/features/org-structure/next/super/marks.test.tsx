@@ -11,7 +11,7 @@ import { CanvasChip, CanvasSelect, EmptyNote, MiniBar, Note } from './parts'
 afterEach(cleanup)
 
 describe('the marks the shots showed missing', () => {
-  it('paints the mini bar’s track in line-default: line-light IS the dark card’s colour (#1f173b)', () => {
+  it('paints the mini bar’s track in line-default: line-light IS the dark card’s colour (#111d31)', () => {
     const { container } = render(<MiniBar percent={40} />)
     const track = container.firstElementChild as HTMLElement
     expect(track.className.split(/\s+/)).toContain('bg-line-default')

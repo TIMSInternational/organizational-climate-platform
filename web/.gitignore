@@ -26,3 +26,6 @@ dist-ssr
 
 # Output of scripts/e2e.mjs — the live API journal and per-route summary.
 .e2e/
+
+# `scripts/sweep.mjs` output: ~12 MB of PNGs, regenerated on demand.
+.sweep/

@@ -36,7 +36,7 @@ const STANDING_TONE: Record<Standing, 'good' | 'neutral' | 'critical'> = {
 }
 
 /** The target rule's hex, as `DimensionTrendChart` draws it, for the legend's swatch. */
-const TARGET_RULE = '#b9b6cc'
+const TARGET_RULE = '#b3b8ca'
 
 /**
  * `/surveys/climate-trends` — the redesigned Clima en el tiempo, which replaced

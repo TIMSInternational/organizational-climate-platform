@@ -24,7 +24,7 @@ export function RadioGroupItem({
     <RadioGroupPrimitive.Item
       data-slot="radio-group-item"
       className={cn(
-        'aspect-square size-3.5 shrink-0 rounded-full border border-line-default bg-surface-input',
+        'aspect-square size-3.5 shrink-0 rounded-full border border-line-control bg-surface-input',
         'transition-[background-color,border-color] ease-out',
         'hover:not-disabled:border-line-hover',
         'data-[state=checked]:border-accent-blue',

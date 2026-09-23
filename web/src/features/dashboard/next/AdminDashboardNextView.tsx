@@ -3,12 +3,13 @@ import { Link } from 'react-router'
 import { AlertCircle, ArrowRight, Clock, FileText, Plus, Send, Waves } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
-import { ANONYMITY_FLOOR, ClimateMap, KpiTile } from '../../../components/charts'
+import { ANONYMITY_FLOOR, ClimateMap, KpiTile, isSuppressed } from '../../../components/charts'
 import { Button, Chip, LoadingRegion, SkeletonText } from '../../../components/ui'
 import { useViewerCapabilities, type ViewerCapabilities } from '../../../auth/viewerCapabilities'
 import { calendarDay, instantDay } from '../../../lib/calendarDay'
 import { cn } from '../../../lib/cn'
-import { KpiRow, SectionHeading } from '../components/dashboardGrammar'
+import { KpiRow } from '../components/dashboardGrammar'
+import { Eyebrow, PopulationGrid, SectionRule } from '../../../components/signal/SignalPrimitives'
 import type { AdminDashboardModel, AttentionItem, DimensionSeries, RegionKey, RegionStatuses, Wave } from './model'
 import {
   closedWaveCount,
@@ -34,7 +35,7 @@ import CycleTimeline, { type CycleStep } from './CycleTimeline'
 import DashboardExportMenu from './DashboardExportMenu'
 
 /** The target rule's hex, as the sparklines draw it, for the legend's swatch. */
-const TARGET_RULE = '#b9b6cc'
+const TARGET_RULE = '#b3b8ca'
 
 /**
  * The body of the redesigned Panel de Control, drawn as the Dashboard artboard (10 Sep):
@@ -77,7 +78,12 @@ export default function AdminDashboardNextView({
   const move = latest !== null && previous !== null ? printedMove(latest, previous, 2) : null
   const rises = risesInARow(model)
   const withheld = protectedRows(model, ANONYMITY_FLOOR)
-  const completion = percent(model.participation.completed, model.participation.responses)
+  // The two halves come from different regions (trends and surveys), so a completion
+  // needs both; with either absent the tile prints a dash rather than a rate.
+  const completion =
+    model.participation.completed !== null && model.participation.responses !== null
+      ? percent(model.participation.completed, model.participation.responses)
+      : null
   const open = model.openSurvey
   const openProgress = open ? percent(open.responses, open.audience) : null
   const waveCodes = model.waves.filter((wave) => wave.status === 'closed').map((wave) => wave.code)
@@ -96,16 +102,20 @@ export default function AdminDashboardNextView({
   return (
     <div>
       <PageTopBar
-        eyebrow={model.companyName}
+        eyebrow={model.companyName ?? undefined}
         title={t('dashboard.next.title')}
         description={t('dashboard.next.description')}
-        // The one honest marker on a screen fed by a sample: nobody may read these
-        // numbers as measurements while `isSample` holds.
-        badge={model.isSample ? { text: t('dashboard.next.sampleChip'), variant: 'warning' } : undefined}
+        // The one honest marker on a screen missing a section: nobody may read this page
+        // as the whole picture while `isPartial` holds. It does NOT say the numbers are
+        // invented — every number still on the page is this tenant's own measurement.
+        badge={model.isPartial ? { text: t('dashboard.next.unavailableChip'), variant: 'warning' } : undefined}
         actions={
           showExport || capabilities.canLaunchMicroclimate || capabilities.canAuthorSurveys ? (
             <>
-              {showExport && <DashboardExportMenu subject={model.companyName} companyId={companyId} />}
+              {/* The export is the server's own file and works whatever this page read; with
+                  no company name it is named `dashboard-<day>` rather than after a tenant
+                  nobody confirmed (`dashboardExportFileName`). */}
+              {showExport && <DashboardExportMenu subject={model.companyName ?? ''} companyId={companyId} />}
               {capabilities.canLaunchMicroclimate && (
                 <Button asChild variant="outline">
                   <Link to="/microclimates/new">
@@ -130,15 +140,23 @@ export default function AdminDashboardNextView({
       {/* `-mt-1`: PageTopBar leaves the 24px the list and trends artboards carry under the
           rule, but Dashboard.dc.html opens its first section at `margin-top: 20px`. */}
       <div data-slot="dashboard-sections" className="-mt-1 flex flex-col gap-section">
-        <section aria-labelledby="next-where">
-          <SectionHeading>
-            <span id="next-where">{t('dashboard.next.whereHeading')}</span>
-          </SectionHeading>
+        <section aria-labelledby="next-where" className="flex flex-col gap-3.5">
+          {/* `labelAs="plain"`: the heading stays an `<h2 id>`, because `aria-labelledby`
+              and three tests point at it. The rule and the meta are what this adds. */}
+          <SectionRule
+            labelAs="plain"
+            label={
+              <h2 id="next-where" className="m-0 text-2xl">
+                {t('dashboard.next.whereHeading')}
+              </h2>
+            }
+            meta={model.latestClosedWave?.code}
+          />
           <RegionNotice regions={regions} region="company" t={t} />
           <KpiRow>
             <KpiTile
               size="hero"
-              label={t('dashboard.next.climateLabel', { wave: model.latestClosedWave.code })}
+              label={t('dashboard.next.climateLabel', { wave: model.latestClosedWave?.code ?? '—' })}
               value={latest}
               format={{ kind: 'number', decimals: 2 }}
               unit={t('dashboard.next.climateSub', { target: reading(target, locale) })}
@@ -156,7 +174,7 @@ export default function AdminDashboardNextView({
             />
             <KpiTile
               size="hero"
-              label={t('dashboard.next.participationLabel', { wave: model.latestClosedWave.code })}
+              label={t('dashboard.next.participationLabel', { wave: model.latestClosedWave?.code ?? '—' })}
               value={model.participation.responses}
               unit={t('dashboard.next.participationSub', {
                 percent: completion === null ? '—' : percentReading(completion, locale),
@@ -211,11 +229,11 @@ export default function AdminDashboardNextView({
             <KpiTile
               size="hero"
               label={t('dashboard.next.plansLabel')}
-              value={model.plans.open}
+              value={model.plans?.open ?? null}
               unit={t('dashboard.next.plansOpen')}
               locale={locale}
               sub={
-                model.plans.overdue > 0 ? (
+                model.plans && model.plans.overdue > 0 ? (
                   <span className="flex items-center gap-1.5 text-accent-red-ink">
                     <AlertCircle aria-hidden="true" className="size-3.5 shrink-0" />
                     <span>
@@ -237,17 +255,23 @@ export default function AdminDashboardNextView({
             aria-labelledby="next-moved"
             className="flex min-w-0 flex-col gap-3 rounded-lg border border-line-default bg-surface-card px-5 pt-4 pb-4.5 shadow-xs xl:col-span-7"
           >
-            <div className="flex flex-wrap items-baseline justify-between gap-3">
-              <h2 id="next-moved" className="m-0 text-2xl">
-                {t('dashboard.next.movedHeading')}
-              </h2>
-              <span className="inline-flex items-center gap-2 text-sm text-fg-label">
-                <svg aria-hidden="true" width="18" height="2" viewBox="0 0 18 2" className="shrink-0">
-                  <line x1="0" x2="18" y1="1" y2="1" stroke={TARGET_RULE} strokeDasharray="3 2" />
-                </svg>
-                {movedLegend(closedWaveCount(model), reading(target, locale), t, locale)}
-              </span>
-            </div>
+            <SectionRule
+              labelAs="plain"
+              metaAs="plain"
+              label={
+                <h2 id="next-moved" className="m-0 text-2xl">
+                  {t('dashboard.next.movedHeading')}
+                </h2>
+              }
+              meta={
+                <span className="inline-flex items-center gap-2 text-sm text-fg-label">
+                  <svg aria-hidden="true" width="18" height="2" viewBox="0 0 18 2" className="shrink-0">
+                    <line x1="0" x2="18" y1="1" y2="1" stroke={TARGET_RULE} strokeDasharray="3 2" />
+                  </svg>
+                  {movedLegend(closedWaveCount(model), reading(target, locale), t, locale)}
+                </span>
+              }
+            />
             <RegionNotice regions={regions} region="trends" t={t} />
             <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
               {ordered.map((dimension) => (
@@ -268,23 +292,33 @@ export default function AdminDashboardNextView({
             aria-labelledby="next-by-group"
             className="flex min-w-0 flex-col gap-3 rounded-lg border border-line-default bg-surface-card px-5 pt-4 pb-4.5 shadow-xs xl:col-span-5"
           >
-            <div className="flex flex-wrap items-baseline justify-between gap-3">
-              <h2 id="next-by-group" className="m-0 text-2xl">
-                {t('dashboard.next.byGroupHeading', { wave: model.latestClosedWave.code })}
-              </h2>
-              {/* `GET /surveys/{id}/results` is `CanAdminister` (`SurveyResultsEndpoints.cs:199`):
-                  an admin with a company, for any survey of the scoped tenant. */}
-              {capabilities.seesWholeCompany && (
-                <Link
-                  to={`/surveys/${model.latestClosedWave.id}/results`}
-                  className="inline-flex items-center gap-1 text-sm text-fg-secondary hover:text-fg-primary"
-                >
-                  {t('dashboard.next.openResults')}
-                  <ArrowRight aria-hidden="true" className="size-3.5" />
-                </Link>
-              )}
-            </div>
+            {/* `GET /surveys/{id}/results` is `CanAdminister` (`SurveyResultsEndpoints.cs:199`):
+                an admin with a company, for any survey of the scoped tenant. And: no wave,
+                no link — there is no results page for a survey nobody read. */}
+            <SectionRule
+              labelAs="plain"
+              metaAs="plain"
+              label={
+                <h2 id="next-by-group" className="m-0 text-2xl">
+                  {t('dashboard.next.byGroupHeading', { wave: model.latestClosedWave?.code ?? '—' })}
+                </h2>
+              }
+              meta={
+                capabilities.seesWholeCompany && model.latestClosedWave ? (
+                  <Link
+                    to={`/surveys/${model.latestClosedWave.id}/results`}
+                    className="inline-flex items-center gap-1 text-sm text-fg-secondary hover:text-fg-primary"
+                  >
+                    {t('dashboard.next.openResults')}
+                    <ArrowRight aria-hidden="true" className="size-3.5" />
+                  </Link>
+                ) : undefined
+              }
+            />
             <RegionNotice regions={regions} region="map" t={t} />
+            {/* No rows, no grid. An empty ClimateMap is a set of headers promising a
+                table that never arrives; the notice above has already said why. */}
+            {model.map.rows.length > 0 && (
             <div className="overflow-x-auto">
               <ClimateMap
                 // The artboard's grid: whole names set small and cut by their column (the
@@ -309,16 +343,46 @@ export default function AdminDashboardNextView({
                 threshold={ANONYMITY_FLOOR}
               />
             </div>
+            )}
+            {/* How many people are behind each row of the map above — the one thing the
+                grid does not say. A group under the floor draws a fixed band and no
+                count: `PopulationGrid` records why `n` dots would BE the count. */}
+            {model.map.rows.length > 0 && (
+              <div className="flex flex-col gap-3 border-t border-line-light pt-3.5">
+                <Eyebrow>{t('dashboard.next.whoAnsweredHeading')}</Eyebrow>
+                <PopulationGrid
+                  bands={model.map.rows.map((row) => ({
+                    name: row.name,
+                    responses: row.responses,
+                    isProtected: isSuppressed(row.responses, ANONYMITY_FLOOR),
+                  }))}
+                  protectedLabel={t('dashboard.next.protectedWord')}
+                />
+                <p className="m-0 text-xs text-fg-tertiary">
+                  {t('dashboard.next.whoAnsweredNote', { floor: ANONYMITY_FLOOR })}
+                </p>
+              </div>
+            )}
           </section>
         </div>
 
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
           <section aria-labelledby="next-attention" className="flex min-w-0 flex-col gap-2.5 xl:col-span-7">
-            <h2 id="next-attention" className="m-0 text-2xl">
-              {t('dashboard.next.attentionHeading')}
-            </h2>
+            <SectionRule
+              labelAs="plain"
+              label={
+                <h2 id="next-attention" className="m-0 text-2xl">
+                  {t('dashboard.next.attentionHeading')}
+                </h2>
+              }
+              meta={model.attention.length > 0 ? model.attention.length : undefined}
+            />
             <RegionNotice regions={regions} region="actionPlans" t={t} />
             <RegionNotice regions={regions} region="tracking" t={t} />
+            {/* An empty list still draws its card border and reads as a rule across the
+                section — only the rendered screen shows it, since every assertion about
+                the list passes either way. No items, no card. */}
+            {model.attention.length > 0 && (
             <ul
               data-slot="attention-list"
               className="m-0 list-none divide-y divide-line-light rounded-lg border border-line-default bg-surface-card p-0 shadow-xs"
@@ -334,20 +398,30 @@ export default function AdminDashboardNextView({
                 />
               ))}
             </ul>
+            )}
           </section>
 
           <section aria-labelledby="next-cycle" className="flex min-w-0 flex-col gap-2.5 xl:col-span-5">
-            <h2 id="next-cycle" className="m-0 text-2xl">
-              {t('dashboard.next.cycleHeading')}
-            </h2>
+            <SectionRule
+              labelAs="plain"
+              label={
+                <h2 id="next-cycle" className="m-0 text-2xl">
+                  {t('dashboard.next.cycleHeading')}
+                </h2>
+              }
+            />
             <RegionNotice regions={regions} region="surveys" t={t} />
-            <div className="flex flex-col gap-3.5 rounded-lg border border-line-default bg-surface-card px-5 pt-4.5 pb-4 shadow-xs">
-              <CycleTimeline steps={steps} label={t('dashboard.next.cycleLabel')} />
-              <p className="m-0 flex items-center gap-2.5 rounded-md bg-surface-outer px-3 py-2.5 text-sm text-fg-secondary">
-                <FileText aria-hidden="true" className="size-3.5 shrink-0" />
-                <span>{t('dashboard.next.cycleNote')}</span>
-              </p>
-            </div>
+            {/* Same rule as the map: no waves, no timeline — and no note about a cycle
+                nobody read. */}
+            {steps.length > 0 && (
+              <div className="flex flex-col gap-3.5 rounded-lg border border-line-default bg-surface-card px-5 pt-4.5 pb-4 shadow-xs">
+                <CycleTimeline steps={steps} label={t('dashboard.next.cycleLabel')} />
+                <p className="m-0 flex items-center gap-2.5 rounded-md bg-surface-outer px-3 py-2.5 text-sm text-fg-secondary">
+                  <FileText aria-hidden="true" className="size-3.5 shrink-0" />
+                  <span>{t('dashboard.next.cycleNote')}</span>
+                </p>
+              </div>
+            )}
             <RegionNotice regions={regions} region="microclimates" t={t} />
             {model.liveMicroclimate && (
               <div
@@ -641,7 +715,12 @@ function AttentionRow({
 
   const survey = model.openSurvey
   if (!survey || survey.id !== item.surveyId) return null
-  const previousRate = percent(model.participation.completed, model.participation.responses)
+  // The closed wave's completion, for "last time X% answered". Absent unless BOTH
+  // halves were read — the sentence then takes its unknown-rate wording.
+  const previousRate =
+    model.participation.completed !== null && model.participation.responses !== null
+      ? percent(model.participation.completed, model.participation.responses)
+      : null
   return (
     <AttentionItemRow
       icon={<Send aria-hidden="true" className="size-4" />}
@@ -672,7 +751,7 @@ function AttentionRow({
             ? 'dashboard.next.lowParticipationSubNoReminder'
             : 'dashboard.next.lowParticipationSubReminders',
         {
-          wave: model.latestClosedWave.code,
+          wave: model.latestClosedWave?.code ?? '—',
           percent: previousRate === null ? '—' : percentReading(previousRate, locale),
           count: item.remindersSent ?? 0,
         },
@@ -738,7 +817,7 @@ const REGION_NAME_KEYS: Record<RegionKey, string> = {
 }
 
 /**
- * The honest sentence a section carries when its region is the sample: which region,
+ * The honest sentence a section carries when its region is missing: which region,
  * and the server's own reason when it gave one. Drawn nowhere otherwise — a live
  * region says nothing, and neither does a deployment with no tracking service.
  */
@@ -762,8 +841,8 @@ function RegionNotice({
       className="m-0 mb-inline rounded-md bg-accent-amber-soft px-3 py-2 text-xs text-accent-amber-ink"
     >
       {state.reason === 'empty'
-        ? t('dashboard.next.fallbackEmpty', { region: name })
-        : t('dashboard.next.fallbackRegion', {
+        ? t('dashboard.next.unavailableEmpty', { region: name })
+        : t('dashboard.next.unavailableRegion', {
             region: name,
             error: state.error ?? t('dashboard.next.fallbackNoReason'),
           })}
@@ -790,10 +869,17 @@ export function AdminDashboardNextSkeleton() {
       <PageTopBar title={t('dashboard.next.title')} description={t('dashboard.next.description')} />
       <div className="flex flex-col gap-section">
         {SECTION_REGIONS.map((section) => (
-          <section key={section.id} aria-labelledby={section.id}>
-            <SectionHeading>
-              <span id={section.id}>{t(section.headingKey)}</span>
-            </SectionHeading>
+          <section key={section.id} aria-labelledby={section.id} className="flex flex-col gap-3.5">
+            {/* The same rule the loaded screen draws, so the skeleton does not reflow
+                into a different shape the moment the data lands. */}
+            <SectionRule
+              labelAs="plain"
+              label={
+                <h2 id={section.id} className="m-0 text-2xl">
+                  {t(section.headingKey)}
+                </h2>
+              }
+            />
             <LoadingRegion
               loading
               label={t('dashboard.next.loadingRegion', { region: t(REGION_NAME_KEYS[section.region]) })}

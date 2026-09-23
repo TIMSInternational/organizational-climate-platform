@@ -61,6 +61,20 @@
     background: var(--admin-bg-outer);
     color: var(--admin-font-primary);
 
+    /* Reserve the scrollbar's width whether or not one is showing.
+
+       Without this, every centred thing on the site JUMPS sideways by the
+       scrollbar's width the moment a page grows past the viewport — and, worse,
+       moves back when navigating to a shorter one. It is most visible where the
+       layout is centred on the viewport rather than on a column: the auth
+       screens, and any dialog. `stable` keeps the gutter there always, so a
+       short page and a long one put the same pixel in the same place.
+
+       On the root, not only on the inner scroller: both scroll in this app —
+       `AdminLayout` scrolls `<main>` while the auth and respond screens scroll
+       the document. */
+    scrollbar-gutter: stable;
+
     /* NB: no `font-synthesis: none` here (the Vite starter had it). The
        'Poppins Fallback' face is a single regular weight by design, so it
        depends on synthesised bold for the few ms before Poppins lands.
@@ -466,6 +480,45 @@
    * measures a token pairing that this rule silently did not use. On the raised
    * navy it is 10.46:1 in light and 11.93:1 in dark.
    * ------------------------------------------------------------------------- */
+  /* -------------------------------------------------------------------------
+   * `.climate-mark` — the product mark's nine cells.
+   *
+   * The mark is a 3x3 heat grid: a pale-to-deep ramp with one alert cell, which is
+   * the Panel de Control's own "Por grupo" matrix reduced to a logo. Its ramp lives
+   * here rather than in `tokens.css` for the reason `.on-shell` does: it is one
+   * component's palette, not a role any other surface reaches for, and
+   * `tokenDiscipline.test.ts` forbids the component itself from naming a colour.
+   *
+   * ## Two ramps, because three cells vanish otherwise
+   *
+   * The light ramp bottoms out at the ink (#070f21). Measured on `--admin-bg-shell`
+   * (#0c1c3a, the rail, which is navy in BOTH themes) that cell is **1.13:1** and
+   * the one above it 1.25:1 — three of the nine disappear and the mark reads as
+   * broken. So the ramp is MIRRORED on a dark ground: the step that was the ink
+   * becomes the light ink, and every cell clears its ground. The faintest cell is
+   * 1.44:1 on white and 2.10:1 on the shell, so the pale end stays as quiet in both.
+   *
+   * `[data-tone='shell']` takes the dark ramp whatever the theme, because the rail
+   * and the auth stage are navy in light mode too. `auto` follows the theme.
+   * ------------------------------------------------------------------------- */
+  .climate-mark {
+    --climate-mark-1: #c9d8f0;
+    --climate-mark-2: #7ba0f6;
+    --climate-mark-3: #4d76c7;
+    --climate-mark-4: #122478;
+    --climate-mark-5: #070f21;
+    --climate-mark-alert: #e40508;
+  }
+
+  :root[data-admin-theme='dark'] .climate-mark,
+  .climate-mark[data-tone='shell'] {
+    --climate-mark-1: #2f4e8f;
+    --climate-mark-2: #4d76c7;
+    --climate-mark-3: #7ba0f6;
+    --climate-mark-4: #c9d8f0;
+    --climate-mark-5: #edf0f9;
+  }
+
   .on-shell {
     --admin-font-primary: var(--admin-shell-font-strong);
     --admin-font-secondary: var(--admin-shell-font);
@@ -475,6 +528,11 @@
     --admin-bg-hover: var(--admin-shell-bg-hover);
     --admin-bg-active: var(--admin-shell-bg-active);
     --admin-bg-overlay: var(--admin-shell-bg-raised);
+    /* The brand lockup's tile (`.brand-lockup`, line ~175) is painted with this. Left out
+       of `.on-shell` until 2026-09-22, so on the auth panel it was a near-white square on
+       a dark photograph. Translucent rather than a hex, for the same reason
+       `--admin-shell-border` is: it composites correctly on the rail AND on the image. */
+    --admin-bg-icon-box: var(--admin-shell-bg-active);
     --admin-bg-input: var(--admin-shell-bg-raised);
     --admin-border-light: var(--admin-shell-border);
     --admin-border-hover: var(--admin-shell-border);

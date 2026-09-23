@@ -14,11 +14,33 @@ function renderShell(children: React.ReactNode = <p>body</p>) {
   )
 }
 
-/** The `d` of every path in an element's first `<svg>`, i.e. the glyph itself. */
+/**
+ * The drawn geometry of an element's first `<svg>` — the mark itself, whatever it is made of.
+ *
+ * It read `<path d>` alone until 2026-09-23, which was right while the mark was a lucide
+ * glyph and silently returned `''` the moment `ClimateMark` drew it as nine `<rect>`s. The
+ * assertion below has a vacuity guard, so that surfaced as a failure rather than as a test
+ * comparing two empty strings — but the lesson is that the helper has to describe the SHAPE,
+ * not one way of expressing it.
+ *
+ * `data-tone` is deliberately not part of this: the rail asks for the shell ramp and the
+ * respond header follows the reader's theme, so the two differ in colour by design. What
+ * must not differ is the mark.
+ */
 function glyph(root: Element | null | undefined): string {
   const svg = root?.querySelector('svg')
   if (!svg) return ''
-  return [...svg.querySelectorAll('path')].map((path) => path.getAttribute('d')).join('|')
+  const shapes = [...svg.querySelectorAll('path, rect, circle')]
+  return shapes
+    .map((el) =>
+      [
+        el.tagName,
+        ...['d', 'x', 'y', 'width', 'height', 'rx', 'cx', 'cy', 'r', 'fill'].map(
+          (name) => el.getAttribute(name) ?? '',
+        ),
+      ].join(','),
+    )
+    .join('|')
 }
 
 afterEach(() => {
@@ -130,11 +152,38 @@ describe('RespondShell', () => {
   })
 
   /**
-   * "Reuse rather than re-draw." Comparing the rendered path data is the assertion
-   * that actually holds: two components can both *say* `Waves` in a comment, and a
-   * later edit that reaches for a different lucide glyph here compiles, renders and
-   * looks deliberate. This fails.
+   * "Reuse rather than re-draw." Comparing the rendered geometry is the assertion that
+   * actually holds: two components can both *say* they draw the mark, and a later edit
+   * that re-draws it here compiles, renders and looks deliberate. This fails.
    */
+  /**
+   * The ramp the rail asks for, and why it is not the reader's.
+   *
+   * `--admin-bg-shell` is navy in the LIGHT theme too (#0c1c3a). Measured against it, the
+   * light ramp's two deepest cells are 1.13:1 and 1.25:1 — three of the nine do not dim,
+   * they disappear, and the mark loses a third of itself with every test still green. So
+   * the rail pins `tone="shell"`, and this is what stops a later "why does the rail not
+   * follow the theme?" from quietly removing it.
+   *
+   * The respond header is the control: it sits on the page surface, so it SHOULD follow.
+   */
+  it('pins the shell ramp in the rail and lets the respond header follow the theme', () => {
+    const rail = render(
+      <TranslationProvider>
+        <SidebarBrand collapsed={false} onToggleCollapsed={() => {}} />
+      </TranslationProvider>,
+    )
+    expect(
+      rail.container.querySelector('[data-slot="climate-mark"]')?.getAttribute('data-tone'),
+    ).toBe('shell')
+    cleanup()
+
+    const respond = render(<BrandLockup />)
+    expect(
+      respond.container.querySelector('[data-slot="climate-mark"]')?.getAttribute('data-tone'),
+    ).toBe('auto')
+  })
+
   it('draws the same mark the signed-in rail draws, not a second one', () => {
     const respond = render(<BrandLockup />)
     const respondMark = glyph(respond.container.querySelector('[data-slot="brand-lockup"]'))

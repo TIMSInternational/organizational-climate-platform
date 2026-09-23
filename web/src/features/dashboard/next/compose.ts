@@ -26,12 +26,19 @@ import type {
  * against fixtures shaped like the payloads the local API was observed to return
  * (`compose.test.ts`), and the page never sees a number this file did not derive.
  *
- * ## Regions, and the sample as the fallback
+ * ## Regions, and absence as the fallback
  *
  * Each region below is one existing client, and each fails on its own. A region that
- * fell back takes the sample's fields for that region and nothing else, `isSample`
- * turns on, and the page names the region — so a tenant whose tracking service is down
- * still reads its own climate, and the sample never stands in silently.
+ * failed contributes NOTHING — its fields are null or empty, `isPartial` turns on, and
+ * the page names the region — so a tenant whose tracking service is down still reads
+ * its own climate, and never another company's.
+ *
+ * Until 2026-09-21 a failed region took its fields from a sample built on the approved
+ * mockup's tenant. The disclosure was real (a per-section sentence, and a chip), but a
+ * reader who skimmed past it saw "Grupo Meridiano S.A." and a full climate map that was
+ * not theirs, printed in the same type as a measurement. Absence cannot be misread that
+ * way, so this file now reaches for nothing: `composeModel` takes no sample, and there
+ * is none to take.
  *
  * | Region          | Client                                            | Fields                                                |
  * |-----------------|---------------------------------------------------|-------------------------------------------------------|
@@ -127,7 +134,6 @@ export interface ComposeOptions {
   floor: number
   /** The display name of a dimension key, from the reader's catalogue. */
   dimensionName: (key: string) => string
-  sample: AdminDashboardModel
 }
 
 export interface ComposedModel {
@@ -349,8 +355,11 @@ function toRegionState(part: Part<unknown>): RegionState {
 
 const EMPTY: Part<never> = { status: 'fallback', reason: 'empty' }
 
+/** What the map is when its region gave nothing: no columns, no rows, so no grid. */
+const NO_MAP: AdminDashboardModel['map'] = { dimensionKeys: [], rows: [] }
+
 export function composeModel(parts: ModelParts, options: ComposeOptions): ComposedModel {
-  const { sample, asOf, floor, dimensionName } = options
+  const { asOf, floor, dimensionName } = options
   const statuses: Record<RegionKey, RegionState> = {
     company: toRegionState(parts.company),
     surveys: toRegionState(parts.surveys),
@@ -363,32 +372,37 @@ export function composeModel(parts: ModelParts, options: ComposeOptions): Compos
 
   // company
   const company = parts.company.status === 'live' ? parts.company.value : null
-  const companyName = company?.companyName ?? sample.companyName
+  const companyName = company?.companyName ?? null
 
   // surveys
   const surveys = parts.surveys.status === 'live' ? composeSurveys(parts.surveys.value) : null
   if (parts.surveys.status === 'live' && surveys === null) statuses.surveys = toRegionState(EMPTY)
-  const waves = surveys?.waves ?? sample.waves
-  const latestClosedWave = surveys?.latestClosedWave ?? sample.latestClosedWave
-  const previousWave = surveys ? surveys.previousWave : sample.previousWave
-  const openSurvey = surveys ? surveys.openSurvey : sample.openSurvey
+  const waves = surveys?.waves ?? []
+  const latestClosedWave = surveys?.latestClosedWave ?? null
+  const previousWave = surveys?.previousWave ?? null
+  const openSurvey = surveys?.openSurvey ?? null
 
   // trends
   const trends = parts.trends.status === 'live' ? parts.trends.value : null
-  const dimensions = trends ? composeDimensions(trends, dimensionName) : sample.dimensions
+  const dimensions = trends ? composeDimensions(trends, dimensionName) : []
   if (trends && dimensions.every((dimension) => dimension.values.length === 0)) statuses.trends = toRegionState(EMPTY)
-  const trendsDimensions = statuses.trends.status === 'live' ? dimensions : sample.dimensions
-  const completedOnWire = trends?.surveys.find((survey) => survey.surveyId === latestClosedWave.id)?.completedCount
-  const participation = surveys
-    ? { responses: surveys.latest.responseCount, completed: completedOnWire ?? surveys.latest.responseCount }
-    : sample.participation
+  const trendsDimensions = statuses.trends.status === 'live' ? dimensions : []
+  // `completed` is the trends region's number. With no trends there is no completion,
+  // and it is NOT defaulted to `responses`, which would print a 100% nobody measured.
+  const completedOnWire = latestClosedWave
+    ? trends?.surveys.find((survey) => survey.surveyId === latestClosedWave.id)?.completedCount
+    : undefined
+  const participation = {
+    responses: surveys ? surveys.latest.responseCount : null,
+    completed: completedOnWire ?? null,
+  }
 
   // map
   const grouped = parts.map.status === 'live' ? parts.map.value : null
   const questionOrder = parts.questionOrder?.status === 'live' ? parts.questionOrder.value : null
-  const map = grouped ? composeMap(grouped, surveys ? surveys.latestClosedWave.id : null, questionOrder) : sample.map
+  const map = grouped ? composeMap(grouped, surveys ? surveys.latestClosedWave.id : null, questionOrder) : NO_MAP
   if (grouped && map.rows.length === 0) statuses.map = toRegionState(EMPTY)
-  const mapOrSample = statuses.map.status === 'live' ? map : sample.map
+  const mapOrNothing = statuses.map.status === 'live' ? map : NO_MAP
 
   // plans: one source per deployment, matching the nav — tracking when it is on.
   const tracking = parts.tracking.status === 'live' ? parts.tracking.value : null
@@ -403,53 +417,42 @@ export function composeModel(parts: ModelParts, options: ComposeOptions): Compos
         overdueNodo: mostOverdue ? (tracking.nodoNames.get(mostOverdue.nodoExternalId) ?? mostOverdue.nodoExternalId) : null,
       }
     : parts.tracking.status === 'fallback'
-      ? sample.plans
+      ? null
       : company
         ? { open: company.openActionPlanCount, overdue: company.overdueActionPlanCount, overdueNodo: null }
-        : sample.plans
-
-  // attention
-  const attention: AttentionItem[] = []
-  const partial: AdminDashboardModel = {
-    ...sample,
-    dimensions: trendsDimensions,
-    map: mapOrSample,
-  }
-  const cell = lowestCell(partial, floor)
-  if (cell) {
-    if (parts.actionPlans.status === 'live') {
-      const { plans: candidates, covering } = parts.actionPlans.value
-      const candidate = coveringPlan(candidates, cell, dimensionName(cell.dimensionKey))
-      const plan: PlanRef | null = candidate
-        ? {
-            id: candidate.id,
-            name: covering && covering.id === candidate.id ? covering.title : candidate.title,
-            progress: covering && covering.id === candidate.id ? planProgress(covering) : 0,
-          }
         : null
-      attention.push({ kind: 'lowest-cell', plan })
-    } else {
-      const sampleItem = sample.attention.find((item) => item.kind === 'lowest-cell')
-      attention.push({ kind: 'lowest-cell', plan: sampleItem?.kind === 'lowest-cell' ? sampleItem.plan : null })
-    }
+
+  // attention — one item per live region, and none from a region that failed. An item
+  // is a named claim about this tenant ("nobody covers this cell", "this plan is late"),
+  // so a region with no data contributes no item and its section says why instead.
+  const attention: AttentionItem[] = []
+  const cell = lowestCell({ map: mapOrNothing }, floor)
+  // `plan: null` means "no plan covers this cell", so it may only be said when the
+  // action plans were actually read; otherwise the item is not drawn at all.
+  if (cell && parts.actionPlans.status === 'live') {
+    const { plans: candidates, covering } = parts.actionPlans.value
+    const candidate = coveringPlan(candidates, cell, dimensionName(cell.dimensionKey))
+    const plan: PlanRef | null = candidate
+      ? {
+          id: candidate.id,
+          name: covering && covering.id === candidate.id ? covering.title : candidate.title,
+          progress: covering && covering.id === candidate.id ? planProgress(covering) : 0,
+        }
+      : null
+    attention.push({ kind: 'lowest-cell', plan })
   }
-  if (tracking) {
-    if (mostOverdue) {
-      attention.push({
-        kind: 'overdue-plan',
-        nodo: tracking.nodoNames.get(mostOverdue.nodoExternalId) ?? mostOverdue.nodoExternalId,
-        plan: {
-          id: mostOverdue.id,
-          name: mostOverdue.descripcionQue,
-          progress: mostOverdue.porcentajeAvance,
-          owner: tracking.personaNames.get(mostOverdue.responsableEjecucionExternalId),
-          dueAt: mostOverdue.fechaCompromiso,
-        },
-      })
-    }
-  } else if (parts.tracking.status === 'fallback') {
-    const sampleItem = sample.attention.find((item) => item.kind === 'overdue-plan')
-    if (sampleItem) attention.push(sampleItem)
+  if (tracking && mostOverdue) {
+    attention.push({
+      kind: 'overdue-plan',
+      nodo: tracking.nodoNames.get(mostOverdue.nodoExternalId) ?? mostOverdue.nodoExternalId,
+      plan: {
+        id: mostOverdue.id,
+        name: mostOverdue.descripcionQue,
+        progress: mostOverdue.porcentajeAvance,
+        owner: tracking.personaNames.get(mostOverdue.responsableEjecucionExternalId),
+        dueAt: mostOverdue.fechaCompromiso,
+      },
+    })
   }
   if (surveys) {
     const open = surveys.openSurvey
@@ -460,16 +463,13 @@ export function composeModel(parts: ModelParts, options: ComposeOptions): Compos
         remindersSent: parts.reminders?.status === 'live' ? parts.reminders.value : null,
       })
     }
-  } else {
-    const sampleItem = sample.attention.find((item) => item.kind === 'low-participation')
-    if (sampleItem) attention.push(sampleItem)
   }
 
   // the live microclimate
   const micro = parts.microclimates.status === 'live' ? parts.microclimates.value : null
   const active = micro?.list.find((item) => item.status === 'active')
-  const liveMicroclimate = micro
-    ? active && micro.live && micro.live.id === active.id
+  const liveMicroclimate =
+    micro && active && micro.live && micro.live.id === active.id
       ? {
           id: active.id,
           name: active.title?.trim() || active.id.slice(0, 8),
@@ -477,13 +477,12 @@ export function composeModel(parts: ModelParts, options: ComposeOptions): Compos
           closesAt: micro.live.endTime,
         }
       : null
-    : sample.liveMicroclimate
 
   const regions: RegionStatuses = statuses
-  const isSample = Object.values(regions).some((region) => region.status === 'fallback')
+  const isPartial = Object.values(regions).some((region) => region.status === 'fallback')
   return {
     model: {
-      isSample,
+      isPartial,
       asOf,
       companyName,
       target: CLIMATE_TARGET,
@@ -493,7 +492,7 @@ export function composeModel(parts: ModelParts, options: ComposeOptions): Compos
       participation,
       dimensions: trendsDimensions,
       waves,
-      map: mapOrSample,
+      map: mapOrNothing,
       plans,
       attention,
       liveMicroclimate,

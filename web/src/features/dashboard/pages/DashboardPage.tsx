@@ -45,7 +45,7 @@ import { useCompanyScope } from '../../../company-context'
  * A CompanyAdmin — and a SuperAdmin with a tenant selected — gets the redesigned Panel
  * de Control from `../next`, which replaced `CompanyAdminDashboardView` on this route.
  * `useAdminDashboardModel` composes it from the existing clients; a region whose fetch
- * fails falls back to `sampleModel.ts`, and the page says so with a chip and a sentence.
+ * fails draws nothing at all, and the page says so with a chip and a sentence.
  * The old view stays in the tree, unrouted, as the reference for that composition.
  *
  * ## The SuperAdmin's two dashboards

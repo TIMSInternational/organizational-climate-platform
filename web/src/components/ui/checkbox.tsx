@@ -27,7 +27,7 @@ export function Checkbox({ className, ...props }: CheckboxProps) {
     <CheckboxPrimitive.Root
       data-slot="checkbox"
       className={cn(
-        'peer size-3.5 shrink-0 p-0 rounded-sm border border-line-default bg-surface-input',
+        'peer size-3.5 shrink-0 p-0 rounded-sm border border-line-control bg-surface-input',
         'transition-[background-color,border-color] ease-out',
         'hover:not-disabled:border-line-hover',
         'data-[state=checked]:border-accent-blue data-[state=checked]:bg-accent-blue',

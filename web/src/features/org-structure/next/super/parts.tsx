@@ -3,17 +3,22 @@ import { Link } from 'react-router'
 import { ArrowRight, ChevronDown } from 'lucide-react'
 import { cn } from '../../../../lib/cn'
 import { Chip, type ChipTone } from '../../../../components/ui'
+import { SectionRule } from '../../../../components/signal/SignalPrimitives'
 
 /**
  * The per-role canvas's building blocks for the super administrator's screens, drawn
  * once so the six screens agree: the white card on the hairline (`.card` in the
- * artboards — 8px radius, `#e0dbee`, a 1px shadow), the icon box, the labelled field,
+ * artboards — 8px radius, `line-default`, a 1px shadow), the icon box, the labelled field,
  * the recessed note, the dashed empty state and the thin bar.
  *
- * Every colour is a token (`fg-*`, `line-*`, `surface-*`, `accent-*`) — the artboard's
- * palette is exactly this app's: ink `#110a29` is `fg-primary`, `#4a3d72` is
- * `fg-secondary`, `#6e648b` `fg-tertiary`, `#8a82a5` `fg-light`, `#e0dbee`
- * `line-default`, `#eeedf6` `line-light`, `#f3f1fa` `surface-icon-box`.
+ * Every colour is a token (`fg-*`, `line-*`, `surface-*`, `accent-*`). The artboards
+ * were drawn against the violet palette this app had then — ink `#110a29` as
+ * `fg-primary`, `#4a3d72` as `fg-secondary`, `#6e648b` `fg-tertiary`, `#8a82a5`
+ * `fg-light`, `#e0dbee` `line-default`, `#eeedf6` `line-light`, `#f3f1fa`
+ * `surface-icon-box` — so those hexes record what the ARTBOARDS draw, not what the
+ * tokens now hold. The 2026-09-22 de-purpling moved every one of them to navy at the
+ * same relative luminance (`docs/decisions/palette-navy-not-purple.md`), which is
+ * precisely why this file names tokens and not hexes: it needed no edit to follow.
  *
  * Components only: `react(only-export-components)` fails a module that exports a
  * component beside a plain value, and the lint budget has no room.
@@ -47,10 +52,15 @@ export function Panel({
       )}
     >
       {(heading !== undefined || meta !== undefined) && (
-        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-          {heading}
-          {meta !== undefined && <span className="text-xs text-fg-tertiary">{meta}</span>}
-        </div>
+        // The hairline under a panel's header is the "signal" rhythm
+        // (`components/signal/SignalPrimitives.tsx`), applied here rather than at each call
+        // site so every panel on the platform and org-structure screens gets it at once.
+        <SectionRule
+          labelAs="plain"
+          metaAs="plain"
+          label={heading}
+          meta={meta !== undefined ? <span className="text-xs text-fg-tertiary">{meta}</span> : undefined}
+        />
       )}
       {children}
     </section>
@@ -70,15 +80,19 @@ export function SectionHead({
   note?: ReactNode
 }) {
   return (
-    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-      <div className="flex items-baseline gap-2.5">
-        <h2 id={id} className="m-0 text-2xl">
-          {heading}
-        </h2>
-        {count !== undefined && <span className="font-mono text-xs text-fg-tertiary tabular-nums">{count}</span>}
-      </div>
-      {note !== undefined && <span className="text-xs text-fg-tertiary sm:text-right">{note}</span>}
-    </div>
+    <SectionRule
+      labelAs="plain"
+      metaAs="plain"
+      label={
+        <div className="flex items-baseline gap-2.5">
+          <h2 id={id} className="m-0 text-2xl">
+            {heading}
+          </h2>
+          {count !== undefined && <span className="font-mono text-xs text-fg-tertiary tabular-nums">{count}</span>}
+        </div>
+      }
+      meta={note !== undefined ? <span className="text-xs text-fg-tertiary sm:text-right">{note}</span> : undefined}
+    />
   )
 }
 
@@ -232,7 +246,7 @@ export function MiniBar({
 /**
  * The canvas's select: a 32px field on the hairline with a lucide chevron, as every
  * artboard of the per-role canvas draws it (`.select` — `height: 32px; padding: 0 10px;
- * border: 1px solid #e0dbee; border-radius: 4px`, a 14px chevron; `fg-tertiary`, since `inkContrast.test.ts` keeps the non-text ink `fg-light` to its two exempt sites).
+ * border: 1px solid` the artboards' `#e0dbee`, now `line-default`; `border-radius: 4px`, a 14px chevron; `fg-tertiary`, since `inkContrast.test.ts` keeps the non-text ink `fg-light` to its two exempt sites).
  *
  * Still a native `<select>` underneath — `appearance-none` only drops the browser's own
  * chevron — so it keeps the platform's keyboard and screen-reader behaviour and every
@@ -268,7 +282,7 @@ const CHIP_BORDER: Record<ChipTone, string> = {
 
 /**
  * The canvas's chip: the app's `Chip` with the hairline every `.chip` in the artboards
- * carries (`border: 1px solid` the tone's ink at 20%, `#e0dbee` when neutral). A
+ * carries (`border: 1px solid` the tone's ink at 20%, `line-default` when neutral). A
  * variant local to these screens, so the `Chip` primitive every other screen uses is
  * untouched.
  */

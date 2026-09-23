@@ -1,71 +1,37 @@
 import type { ReactNode } from 'react'
-import { LanguageSwitcher } from '../../../../i18n'
-import { BrandLockup, ThemeSwitcher } from '../../../../components/layout'
-import { SkipLink } from '../../../../components/ui'
+import { AuthCanvas } from '../../../../auth/next/AuthCanvas'
 
 /**
- * The frame the AcceptInvitation artboard draws (10 Sep): a full-bleed strip carrying the
- * lockup on the left edge and the language and theme chips on the right, over one centred
- * column.
+ * The invitation screen's frame — now `AuthCanvas`, which is what this file asked for.
  *
- * ## Why this is not `RespondShell`
+ * It used to build its own: a strip with the lockup and the two switchers over a centred
+ * column, because when it was written the unauthenticated pages had no shared frame worth
+ * joining. Its own comment set the condition — *"when the rest of the unauthenticated pages
+ * are drawn from their own artboards … this and whatever they build should become the same
+ * component, and this file should go."* They have been, so it has.
  *
- * It is the same strip, and the respond pages are where it came from — but `RespondShell`
- * caps its header at the column's own width, deliberately, "so on a wide screen the lockup
- * sits over the questions rather than stranded at the window's edge". That is right for a
- * surface the canvas draws as a 390px phone, where the cap never binds and the lockup IS at
- * the edge. This artboard is 1440 wide and draws the strip full width with the lockup at
- * the left margin, so on a desktop the two disagree — measured: at 1440 the lockup rendered
- * centred over the card, 668px in.
+ * What the reader gains: the stage. An invitation is first contact with this product, and
+ * `cycle` is the slice that answers what someone is being asked to take part in — a
+ * measurement per cycle, five-minute pulses between them, and a plan afterwards.
  *
- * ## Why it is not `AuthShell` either
+ * What nobody loses: the skip link. `AuthCanvas` had none until this conversion needed one,
+ * which is how a gap on seven other routes got found.
  *
- * `AuthShell`'s admin variant floats the brand centred *above* the card and puts the two
- * switchers *below* it. Neither is what this artboard draws.
- *
- * It is local to this lane rather than added to `components/layout` because one screen
- * needs it. When the rest of the unauthenticated pages are drawn from their own artboards —
- * Login, Register, AuthError, AccountInactive, AuthTransition all have one — this and
- * whatever they build should become the same component, in `components/layout`, and this
- * file should go.
+ * The file stays, rather than every caller learning `AuthCanvas`, because the NAME is the
+ * documentation: an invitation frame is a thing this lane has, and one indirection is
+ * cheaper than the next reader wondering which stage variant an invitation takes.
  */
 export function InvitationFrame({
   skipLabel,
-  contentId = 'invitation',
   children,
 }: {
   /** Already-translated label for the skip link. */
   skipLabel: string
-  contentId?: string
   children: ReactNode
 }) {
   return (
-    <div className="flex min-h-dvh flex-col bg-surface-outer">
-      {/* First focusable thing on the page, so a keyboard user is not made to Tab through
-          the language and theme pickers on the way to the form. */}
-      <SkipLink href={`#${contentId}`}>{skipLabel}</SkipLink>
-
-      {/* Transparent and unruled, like the shell's own top strip: the card below is the
-          only surface, and a filled bar here would read as a second one with a seam between
-          them. 16px in from the edge and 14px down, as the artboard sets it. */}
-      <header className="flex w-full flex-wrap items-center justify-between gap-inline px-4 py-3.5">
-        <BrandLockup size="compact" />
-        <span className="flex flex-wrap items-center gap-1.5">
-          <LanguageSwitcher variant="chip" />
-          <ThemeSwitcher variant="chip" />
-        </span>
-      </header>
-
-      <main
-        id={contentId}
-        // `max-w-invitation-card` does not exist and should not: 28rem is the artboard's
-        // 440px card plus the 16px gutter either side of it, and this is the only screen
-        // drawn at that measure. `flex flex-col` so a short state — a dead invitation — is
-        // a card at the top of the column rather than a stub stranded mid-page.
-        className="mx-auto flex w-full max-w-lg flex-1 flex-col px-4 pb-6 pt-2"
-      >
-        {children}
-      </main>
-    </div>
+    <AuthCanvas stage="cycle" skipLabel={skipLabel}>
+      {children}
+    </AuthCanvas>
   )
 }

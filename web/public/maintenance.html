@@ -31,21 +31,21 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='46' viewBox='0 0 48 46'%3E%3Ccircle cx='24' cy='23' r='20' fill='%23863bff'/%3E%3C/svg%3E">
 <style>
   :root {
-    --ground: #f8f7fb;   /* storefront.css:73 */
+    --ground: #f5f8fc;   /* storefront.css:73 */
     --surface: #ffffff;  /* :74 */
-    --ink: #1f114c;      /* :78  16.90:1 on surface */
-    --heading: #3a3364;  /* :79  11.43:1 on surface */
+    --ink: #0c1c3a;      /* :78  16.90:1 on surface */
+    --heading: #2d3958;  /* :79  11.43:1 on surface */
     --body: #5b5e74;     /* :80   6.37:1 on surface */
-    --faint: #6e708a;    /* :81   4.53:1 on ground */
+    --faint: #6a7283;    /* :81   4.53:1 on ground */
     --accent: #dd0c15;   /* :92   5.08:1 on surface */
     --border: rgb(31 17 76 / 12%);
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --ground: #120b2b;   /* storefront.css:141 */
-      --surface: #1b1240;  /* :142 */
-      --ink: #dad2f5;      /* :145  12.03:1 on surface */
-      --heading: #dad2f5;  /* :146 */
+      --ground: #061120;   /* storefront.css:141 */
+      --surface: #0f1933;  /* :142 */
+      --ink: #c7d8f1;      /* :145  12.03:1 on surface */
+      --heading: #c7d8f1;  /* :146 */
       --body: #a1a4b5;     /* :147   7.04:1 */
       --faint: #8f91a6;    /* :148   5.61:1 */
       --accent: #f4363e;   /* :154   4.51:1 */
@@ -78,7 +78,10 @@
     font-weight: 700; letter-spacing: 0.04em; font-size: 14px;
     margin-bottom: 28px;
   }
-  .brand .mark { width: 22px; height: 22px; border-radius: 50%; background: var(--accent); flex: none; }
+  /* The product mark, inlined: this page is served without the app's bundle, so it
+     cannot reach `ClimateMark`. Kept in step with `public/favicon.svg` by hand — the
+     same nine cells and the same ramp. */
+  .brand .mark { width: 22px; height: 22px; flex: none; display: block; }
   h1 {
     font-family: Georgia, 'Times New Roman', serif; /* storefront.css:69 — the web font is not loaded here */
     font-weight: 400; font-size: 32px; line-height: 1.15;
@@ -93,7 +96,7 @@
 </head>
 <body>
   <main>
-    <div class="brand" aria-hidden="true"><span class="mark"></span>CLIMATE</div>
+    <div class="brand" aria-hidden="true"><svg class="mark" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="29.2" height="29.2" rx="7.2" fill="#c9d8f0"/><rect x="35.4" y="0" width="29.2" height="29.2" rx="7.2" fill="#c9d8f0"/><rect x="70.8" y="0" width="29.2" height="29.2" rx="7.2" fill="#7ba0f6"/><rect x="0" y="35.4" width="29.2" height="29.2" rx="7.2" fill="#4d76c7"/><rect x="35.4" y="35.4" width="29.2" height="29.2" rx="7.2" fill="#4d76c7"/><rect x="70.8" y="35.4" width="29.2" height="29.2" rx="7.2" fill="#122478"/><rect x="0" y="70.8" width="29.2" height="29.2" rx="7.2" fill="#070f21"/><rect x="35.4" y="70.8" width="29.2" height="29.2" rx="7.2" fill="#070f21"/><rect x="70.8" y="70.8" width="29.2" height="29.2" rx="7.2" fill="#e40508"/></svg>CLIMATE</div>
     <section lang="es">
       <h1>En mantenimiento</h1>
       <p>La plataforma está en mantenimiento en este momento. Vuelva a intentarlo en breve.</p>

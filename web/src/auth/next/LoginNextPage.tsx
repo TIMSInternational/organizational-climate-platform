@@ -1,8 +1,9 @@
-import { CircleAlert, ShieldCheck } from 'lucide-react'
+import { CircleAlert } from 'lucide-react'
+import { Link } from 'react-router'
 import { useTranslation } from '../../i18n'
 import { Alert, AlertDescription, AlertTitle, Button, Input } from '../../components/ui'
 import { beginGoogleSignIn, googleClientId } from '../googleOAuth'
-import { AuthCanvas, AuthCard, AuthDivider, AuthField, AuthFootnote, AuthHeadline } from './AuthCanvas'
+import { AuthCanvas, AuthCard, AuthDivider, AuthField, AuthHeadline } from './AuthCanvas'
 import { AuthTransitionCard } from './AuthTransitionCard'
 import { useSignInModel } from './useSignInModel'
 
@@ -30,6 +31,31 @@ import { useSignInModel } from './useSignInModel'
  *   always fails is worse than no button. Same rule the previous page had; the artboard
  *   records it.
  *
+ * ## 2026-09-21: dark — and 2026-09-22, how
+ *
+ * Federico's call. This screen alone is drawn dark whatever the reader's stored theme is.
+ *
+ * **Why dark only here.** It is the threshold. Everything past it — the admin surfaces and
+ * the respond flow — is light by default and stays that way; making the one screen reached
+ * without a session a different weight says "outside" and "inside" without a word of copy.
+ *
+ * **It is a ground, not a palette pin — and it was the other thing first.** Until "La sede"
+ * this screen called `useForcedDarkTheme`, which pinned `data-admin-theme` dark for as long
+ * as it was mounted. That was right when the artboard's card was dark. The artboard
+ * Federico chose puts a WHITE card on a navy-washed photograph, and a pinned palette turned
+ * that card dark — the mechanism working against the design it was written for. So the pin
+ * went (with `ground="dark"` and the hook itself), and the darkness is `AuthBackdrop`,
+ * behind the whole page and owing nothing to the theme.
+ *
+ * Two things follow that the pinned version did not allow. The reader's stored theme is
+ * untouched because nothing writes it — not merely because the pin was careful. And the
+ * theme picker stays in the strip: it used to be dropped here, because under a pin it would
+ * have appeared to do nothing, and now it genuinely changes the card.
+ *
+ * A drifting dot lattice rode on this ground for part of 21 Sep — one mark per person, no
+ * mark picked out. Federico ruled it out the same day. The ground is the photograph now, and
+ * the anonymity line under the card carries that idea on its own, in words.
+ *
  * There is no "create an account" link, and that is not an omission: `POST /auth/signup`
  * derives the company from the email domain and refuses an address whose domain no company
  * has registered, which is most of the people who reach this page. `/register` is still
@@ -49,7 +75,6 @@ export default function LoginNextPage() {
     <AuthCanvas>
       <AuthCard>
         <AuthHeadline
-          eyebrow={t('auth.next.eyebrow')}
           title={t('auth.next.signIn')}
           description={t('auth.next.signInDetail')}
         />
@@ -73,7 +98,7 @@ export default function LoginNextPage() {
             </Alert>
           )}
 
-          <AuthField htmlFor="auth-email" fieldLabel={t('auth.next.emailLabel')} required>
+          <AuthField htmlFor="auth-email" fieldLabel={t('auth.next.emailLabel')}>
             <Input
               id="auth-email"
               type="email"
@@ -88,7 +113,6 @@ export default function LoginNextPage() {
           <AuthField
             htmlFor="auth-password"
             fieldLabel={t('auth.next.passwordLabel')}
-            required
             helper={t('auth.next.passwordHelp')}
           >
             <Input
@@ -97,15 +121,15 @@ export default function LoginNextPage() {
               autoComplete="current-password"
               required
               value={model.password}
-              placeholder={t('auth.next.passwordPlaceholder')}
               onChange={(event) => model.setPassword(event.target.value)}
             />
           </AuthField>
 
-          {/* `size="canvas"` is the artboard's 34px control; `variant="primary"` is its red
-              (`--admin-accent-blue-fill` is #dd0c15 — the identity fill, recoloured for
-              this canvas). `outline` is deliberately untouched: index.css gives every
-              button its focus ring in `@layer base`, and setting it here removes it. */}
+          {/* `size="canvas"` is the artboard's 34px control. `variant="primary"` is
+              `--admin-accent-blue-fill`, which was #dd0c15 when this comment was written and
+              is navy since `palette-navy-not-purple.md`: red means destructive now.
+              `outline` is deliberately untouched — index.css gives every button its focus
+              ring in `@layer base`, and setting it here removes it. */}
           <Button type="submit" variant="primary" size="canvas" className="w-full">
             {t('auth.next.signIn')}
           </Button>
@@ -128,10 +152,17 @@ export default function LoginNextPage() {
               </Button>
             </>
           )}
+          {/* Register has the mirror of this and login had nothing, so the only route to an
+              account was knowing the URL. */}
+          <p className="m-0 flex flex-wrap gap-1.5 text-sm text-fg-secondary">
+            <span>{t('auth.next.noAccount')}</span>
+            <Link to="/register" className="text-accent-blue underline">
+              {t('auth.next.createOne')}
+            </Link>
+          </p>
         </form>
       </AuthCard>
 
-      <AuthFootnote icon={<ShieldCheck aria-hidden="true" />}>{t('auth.next.signInAssurance')}</AuthFootnote>
     </AuthCanvas>
   )
 }

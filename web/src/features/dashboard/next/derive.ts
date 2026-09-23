@@ -40,8 +40,15 @@ export function waveAverage(model: AdminDashboardModel, index: number): number |
   return mean(readings)
 }
 
-/** How many closed waves the dimension series cover. */
+/**
+ * How many closed waves the dimension series cover.
+ *
+ * Zero when there are no series at all: `Math.min()` of nothing is `Infinity`, which
+ * the legend would have printed as a wave count once a failed trends region started
+ * handing this an empty list instead of the sample's six dimensions.
+ */
 export function closedWaveCount(model: AdminDashboardModel): number {
+  if (model.dimensions.length === 0) return 0
   return Math.min(...model.dimensions.map((dimension) => dimension.values.length))
 }
 
@@ -184,8 +191,13 @@ export interface MapCell {
   score: number
 }
 
-/** The lowest cell among DISCLOSED rows. A protected row cannot be the lowest anything. */
-export function lowestCell(model: AdminDashboardModel, floor: number): MapCell | null {
+/**
+ * The lowest cell among DISCLOSED rows. A protected row cannot be the lowest anything.
+ *
+ * Takes the map alone, not a whole model: `compose.ts` needs this before it has one,
+ * and used to build a throwaway model out of the sample to get it.
+ */
+export function lowestCell(model: Pick<AdminDashboardModel, 'map'>, floor: number): MapCell | null {
   let lowest: MapCell | null = null
   for (const row of model.map.rows) {
     if (isSuppressed(row.responses, floor)) continue

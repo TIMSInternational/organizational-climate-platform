@@ -260,11 +260,11 @@ describe('status chip contrast', () => {
     // blue-biased now); what this test asserts is unchanged — that the resolver
     // FOLLOWS the reference instead of returning a default.
     const { light, dark } = palettes()
-    expect(resolve(light['--admin-chip-ink-neutral'], light)).toBe('#4a3d72')
-    expect(resolve(dark['--admin-chip-ink-neutral'], dark)).toBe('#afa7ca')
-    expect(resolve(light['--admin-chip-bg-neutral'], light)).toBe('#f3f1fa')
-    expect(resolve(dark['--admin-chip-bg-neutral'], dark)).toBe('#1b1433')
-    expect(resolve(dark['--admin-chip-ink-accent'], dark)).toBe('#9882df')
+    expect(resolve(light['--admin-chip-ink-neutral'], light)).toBe('#374565')
+    expect(resolve(dark['--admin-chip-ink-neutral'], dark)).toBe('#a0acc5')
+    expect(resolve(light['--admin-chip-bg-neutral'], light)).toBe('#eff2fb')
+    expect(resolve(dark['--admin-chip-bg-neutral'], dark)).toBe('#10192a')
+    expect(resolve(dark['--admin-chip-ink-accent'], dark)).toBe('#6a90d8')
   })
 
   it('measures a known failure, so a broken measurement cannot pass everything', () => {

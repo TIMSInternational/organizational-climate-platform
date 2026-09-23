@@ -248,7 +248,7 @@ describe('DashboardPage', () => {
    * The tenant dashboard is the redesigned Panel de Control (`../next`), which replaced
    * `CompanyAdminDashboardView` on this route. `useAdminDashboardModel` composes it from
    * the existing clients region by region; this stub answers every one of them 503, so
-   * every region falls back to the sample and the page says so — the chip, and a sentence
+   * every region comes back empty and the page says so, substituting nothing — the chip, and a sentence
    * carrying the server's own message. What THIS file proves is the dispatch: the scope
    * the page hands the hook reaches `GET /dashboard/company-admin`. The composition and
    * the fallback rules are `loadModel.test.ts`'s and `compose.test.ts`'s.
@@ -260,7 +260,7 @@ describe('DashboardPage', () => {
 
     renderDashboard()
 
-    expect(await screen.findByText(nextCopy.sampleChip)).toBeTruthy()
+    expect(await screen.findByText(nextCopy.unavailableChip)).toBeTruthy()
     expect(screen.getByRole('heading', { level: 1, name: nextCopy.title })).toBeTruthy()
     expect(screen.getByRole('heading', { level: 2, name: nextCopy.whereHeading })).toBeTruthy()
     expect(screen.getAllByText(/Service unavailable/).length).toBeGreaterThan(0)
@@ -275,7 +275,7 @@ describe('DashboardPage', () => {
 
     renderDashboard()
 
-    expect(await screen.findByText(nextCopy.sampleChip)).toBeTruthy()
+    expect(await screen.findByText(nextCopy.unavailableChip)).toBeTruthy()
     expect(screen.getByRole('heading', { level: 1, name: nextCopy.title })).toBeTruthy()
     expect(screen.getByRole('heading', { level: 2, name: nextCopy.whereHeading })).toBeTruthy()
     const company = dashboardRequests().filter((url) => url.includes('/dashboard/company-admin'))
@@ -305,7 +305,7 @@ describe('DashboardPage', () => {
       expect(screen.queryByRole('heading', { name: nextCopy.whereHeading })).toBeNull()
       expect(screen.queryByRole('heading', { name: nextCopy.movedHeading })).toBeNull()
       expect(screen.queryByRole('heading', { name: nextCopy.attentionHeading })).toBeNull()
-      expect(screen.queryByText(nextCopy.sampleChip)).toBeNull()
+      expect(screen.queryByText(nextCopy.unavailableChip)).toBeNull()
     },
   )
 

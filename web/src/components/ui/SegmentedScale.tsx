@@ -203,7 +203,7 @@ export function SegmentedScale({
                 checked
                   ? 'border-fg-primary bg-fg-primary text-surface-card'
                   : cn(
-                      'border-line-default bg-surface-card text-fg-primary',
+                      'border-line-control bg-surface-card text-fg-primary',
                       'hover:not-disabled:border-line-hover',
                     ),
               )}
