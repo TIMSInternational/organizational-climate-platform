@@ -11,6 +11,9 @@ import { CanvasChip, EmptyNote, Panel } from '../../../org-structure/next/super/
 import { cohortPhrase, companyProfile, globalBenchmarks, isUnscored, lastClosedSurvey } from './derive'
 import { useSuperAnalyticsModel } from './useSuperAnalyticsModel'
 
+/** What `QualityScoreReading` prints for a reference the quality rule has never run on. */
+const EM_DASH = '—'
+
 const SCORE = { minimumFractionDigits: 2, maximumFractionDigits: 2 } as const
 
 /** Stands in for the score inside a translated sentence, so the number can take the mono face. */
@@ -55,7 +58,12 @@ export default function SuperAnalyticsView() {
   const closed = state.surveys ? lastClosedSurvey(state.surveys) : null
   const globals = state.all ? globalBenchmarks(state.all) : null
   const unreviewed = state.insights?.filter((insight) => !insight.isAcknowledged).length ?? 0
-  const score = (value: number) => new Intl.NumberFormat(locale, SCORE).format(value)
+  // `number | null` since #463: an unscored reference carries no number, and the em-dash is
+  // what `QualityScoreReading` prints for one. Without this, the one call site below that
+  // has no `isUnscored` guard would format a null as "0,00" — a failing grade nobody
+  // measured, which is the defect #463 exists to remove.
+  const score = (value: number | null) =>
+    value === null ? EM_DASH : new Intl.NumberFormat(locale, SCORE).format(value)
 
   const ownSub =
     state.own && state.own.length > 0
