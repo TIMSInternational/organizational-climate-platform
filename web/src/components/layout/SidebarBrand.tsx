@@ -1,5 +1,6 @@
-import { PanelLeftClose, PanelLeftOpen, Waves } from 'lucide-react'
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { useTranslation } from '../../i18n'
+import { ClimateMark } from './ClimateMark'
 
 /**
  * The head of the sidebar: the mark, the wordmark, and the collapse control.
@@ -17,12 +18,16 @@ import { useTranslation } from '../../i18n'
  *
  * ## What is not theirs
  *
- * **The mark.** ForMaps ships `/logo-icon.svg`; this product has no logo asset at
- * all (`public/favicon.svg` is still the stock Vite lightning bolt). Rather than
- * invent one, the mark is the `Waves` glyph the nav already uses for
- * Microclimates, set in a 28px tinted tile at `borderRadius: 7` — the same tile
- * and the same radius as the avatar in `SidebarUserMenu`, so the rail opens and
- * closes on the same shape.
+ * **The mark.** ForMaps ships `/logo-icon.svg`. This product had no logo asset at all
+ * until 2026-09-23 — the rail drew the `Waves` glyph the nav uses for Microclimates, in a
+ * tinted tile, as a stand-in, and `public/favicon.svg` was the stock Vite lightning bolt.
+ * It now draws `ClimateMark`, and the tinted tile went with the placeholder: the mark is
+ * itself a square of nine cells, so a box behind it would be a second surface around a
+ * shape that already has edges.
+ *
+ * `tone="shell"` and not the default: `--admin-bg-shell` is navy in the LIGHT theme too
+ * (#0c1c3a), so a mark that followed the reader's theme would put its two darkest cells
+ * at 1.13:1 and 1.25:1 here and lose a third of itself.
  *
  * **The collapsed toggle sits under the mark, not below the bar.** ForMaps pins it
  * `position: absolute; bottom: -32`, which works because their bar is the only
@@ -119,30 +124,10 @@ export function SidebarBrand({ collapsed, onToggleCollapsed }: SidebarBrandProps
 }
 
 /**
- * The mark. `aria-hidden` because the wordmark beside it already names the
- * product, and while collapsed the rail's own `aria-label` does — an announced
- * "Waves" would be noise either way.
+ * The mark, at the rail's two sizes. `ClimateMark` is `aria-hidden` of its own accord:
+ * the wordmark beside it names the product, and while collapsed the rail's own
+ * `aria-label` does.
  */
 function Mark({ size }: { size: number }) {
-  return (
-    <span
-      aria-hidden="true"
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: size,
-        height: size,
-        flexShrink: 0,
-        // 7px, matching the avatar tile in `SidebarUserMenu` — ForMaps' own
-        // `borderRadius: 7`, which is between `--admin-radius-lg` (6) and
-        // `--admin-radius-xl` (8) and so has no token of its own.
-        borderRadius: 7,
-        background: 'var(--admin-accent-bg-blue)',
-        color: 'var(--admin-accent-blue)',
-      }}
-    >
-      <Waves style={{ width: Math.round(size * 0.6), height: Math.round(size * 0.6) }} />
-    </span>
-  )
+  return <ClimateMark tone="shell" style={{ width: size, height: size, flexShrink: 0 }} />
 }

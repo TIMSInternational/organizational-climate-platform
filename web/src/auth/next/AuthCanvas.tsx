@@ -139,7 +139,7 @@ export function AuthCanvas({
           {/* The lockup rides here only until the panel appears and takes it — two lockups
               on one screen is the kind of thing nobody reports and everybody notices. */}
           <header className="flex w-full flex-wrap items-center gap-inline px-4 py-3.5 lg:invisible">
-            <BrandLockup size="compact" />
+            <BrandLockup size="compact" tone="shell" />
           </header>
 
           {/* Centred in its own column now rather than on the whole page. The card used to
@@ -210,7 +210,7 @@ function AuthStage({ variant }: { variant: StageVariant }) {
       className="on-shell relative hidden lg:flex lg:flex-col"
     >
       <div className="relative flex shrink-0 flex-col gap-3 px-12 pt-10">
-        <BrandLockup size="compact" />
+        <BrandLockup size="compact" tone="shell" />
       </div>
 
       {/* Centred in the space under the lockup, so it sits with the card rather than on the

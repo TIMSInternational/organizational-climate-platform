@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
-import { Waves } from 'lucide-react'
 import { LanguageSwitcher } from '../../i18n'
+import { ClimateMark } from './ClimateMark'
 import { SkipLink } from '../ui'
 import { ThemeSwitcher } from './ShellControls'
 
@@ -147,12 +147,17 @@ export function RespondShell({ skipLabel, contentId = 'respond', children }: Res
  *
  * So the lockup is defined once, here, and the two shells that are not
  * `AdminLayout` — the respond header and `auth/LoginPage` — both render *this*.
- * Every part of it is `SidebarBrand`'s verbatim: the same `Waves` glyph (this
- * product has no logo asset; `public/favicon.svg` is still the stock Vite bolt),
- * the same 28px tinted tile, the same two-tone `CLIMA|TE`. The one deliberate
- * follow-up is that `SidebarBrand` should call this too rather than keep its own
- * copy — that is an edit to the rail, with the rail's own tests, not a side effect
- * of giving the respondent a wordmark.
+ * Every part of it is `SidebarBrand`'s verbatim: the same `ClimateMark`, the same box,
+ * the same two-tone `CLIMA|TE`. The one deliberate follow-up is that `SidebarBrand`
+ * should call this too rather than keep its own copy — that is an edit to the rail, with
+ * the rail's own tests, not a side effect of giving the respondent a wordmark.
+ *
+ * ## The mark replaced a placeholder, and the tile went with it
+ *
+ * Until 2026-09-23 this drew the lucide `Waves` glyph inside a tinted tile, because the
+ * product had no logo at all. `ClimateMark` IS a tile — nine cells on a square — so a
+ * tinted box behind it would be a second surface around a shape that already has its own
+ * edges. The box is now the mark's own size and nothing else.
  *
  * ## The two sizes that are not tokens
  *
@@ -172,7 +177,14 @@ export function RespondShell({ skipLabel, contentId = 'respond', children }: Res
  */
 export function BrandLockup({
   size = 'default',
+  tone = 'auto',
 }: {
+  /**
+   * Handed to `ClimateMark`. `shell` for the navy surfaces that do not follow the reader's
+   * theme — the auth stage and the strip over `AuthBackdrop`'s photograph. The respond and
+   * shared-report headers sit on the page surface and keep `auto`.
+   */
+  tone?: 'auto' | 'shell'
   /**
    * `compact` is the respond strip's lockup as the canvas draws it (RespondSurveyPhone
    * and its siblings, 10 Sep): a 24px tile on the recessed surface with the mark in the
@@ -184,18 +196,7 @@ export function BrandLockup({
   const compact = size === 'compact'
   return (
     <span data-slot="brand-lockup" data-size={size} className="flex items-center gap-inline">
-      {/* `aria-hidden` for `SidebarBrand`'s reason: the wordmark beside it already
-          names the product, and an announced "Waves" would be noise. */}
-      <span
-        aria-hidden="true"
-        className={
-          compact
-            ? 'grid size-6 shrink-0 place-items-center rounded-lg bg-surface-icon-box text-fg-secondary'
-            : 'grid size-icon-box shrink-0 place-items-center rounded-md bg-accent-blue-soft text-accent-blue'
-        }
-      >
-        <Waves className={compact ? 'size-3.5' : 'size-icon'} />
-      </span>
+      <ClimateMark tone={tone} className={compact ? 'size-6 shrink-0' : 'size-icon-box shrink-0'} />
       {/* One `<span>`, two coloured halves — not two words with a space, which is
           what a screen reader would otherwise announce. */}
       <span

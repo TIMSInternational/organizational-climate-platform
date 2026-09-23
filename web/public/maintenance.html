@@ -78,7 +78,10 @@
     font-weight: 700; letter-spacing: 0.04em; font-size: 14px;
     margin-bottom: 28px;
   }
-  .brand .mark { width: 22px; height: 22px; border-radius: 50%; background: var(--accent); flex: none; }
+  /* The product mark, inlined: this page is served without the app's bundle, so it
+     cannot reach `ClimateMark`. Kept in step with `public/favicon.svg` by hand — the
+     same nine cells and the same ramp. */
+  .brand .mark { width: 22px; height: 22px; flex: none; display: block; }
   h1 {
     font-family: Georgia, 'Times New Roman', serif; /* storefront.css:69 — the web font is not loaded here */
     font-weight: 400; font-size: 32px; line-height: 1.15;
@@ -93,7 +96,7 @@
 </head>
 <body>
   <main>
-    <div class="brand" aria-hidden="true"><span class="mark"></span>CLIMATE</div>
+    <div class="brand" aria-hidden="true"><svg class="mark" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="29.2" height="29.2" rx="7.2" fill="#c9d8f0"/><rect x="35.4" y="0" width="29.2" height="29.2" rx="7.2" fill="#c9d8f0"/><rect x="70.8" y="0" width="29.2" height="29.2" rx="7.2" fill="#7ba0f6"/><rect x="0" y="35.4" width="29.2" height="29.2" rx="7.2" fill="#4d76c7"/><rect x="35.4" y="35.4" width="29.2" height="29.2" rx="7.2" fill="#4d76c7"/><rect x="70.8" y="35.4" width="29.2" height="29.2" rx="7.2" fill="#122478"/><rect x="0" y="70.8" width="29.2" height="29.2" rx="7.2" fill="#070f21"/><rect x="35.4" y="70.8" width="29.2" height="29.2" rx="7.2" fill="#070f21"/><rect x="70.8" y="70.8" width="29.2" height="29.2" rx="7.2" fill="#e40508"/></svg>CLIMATE</div>
     <section lang="es">
       <h1>En mantenimiento</h1>
       <p>La plataforma está en mantenimiento en este momento. Vuelva a intentarlo en breve.</p>
