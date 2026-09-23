@@ -2807,6 +2807,8 @@
       "scheduleNext": "{pattern} · next on {date}",
       "containsSurvey": "{survey} · {responses} responses",
       "containsSurveySuppressed": "{survey} · under the floor, no numbers",
+      "containsSurveys": "{count} surveys · {responses} responses",
+      "containsSurveysSuppressed": "{count} surveys · under the floor, no numbers",
       "containsGroups": "{shown} of {total} groups",
       "containsProtectedOne": "{group} protected",
       "containsProtectedMany": "{count} protected",

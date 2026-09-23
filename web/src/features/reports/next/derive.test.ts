@@ -19,7 +19,7 @@ import {
   scheduleReading,
 } from './derive'
 import type { ReportRow } from './model'
-import { sampleContents } from './sampleModel'
+import { contentsFixture } from './__fixture__'
 
 const es = createTranslator(CATALOGUES.es, CATALOGUES.en)
 
@@ -48,7 +48,7 @@ function row(over: Partial<ReportRow> = {}): ReportRow {
     recurrencePattern: null,
     nextGeneration: null,
     shares: [],
-    contents: sampleContents,
+    contents: contentsFixture,
     ...over,
   }
 }
@@ -143,7 +143,7 @@ describe('reports derive — tiles', () => {
 
   it('names the survey only when every row names the same one', () => {
     expect(commonSurvey([row(), row({ id: 'b' })])).toBe('Encuesta de Clima Q3')
-    expect(commonSurvey([row(), row({ id: 'b', contents: { ...sampleContents, surveyName: 'Otra' } })])).toBeNull()
+    expect(commonSurvey([row(), row({ id: 'b', contents: { ...contentsFixture, surveyName: 'Otra' } })])).toBeNull()
     expect(commonSurvey([row(), row({ id: 'b', contents: null })])).toBeNull()
     expect(commonSurvey([])).toBeNull()
   })
@@ -156,7 +156,7 @@ describe('reports derive — tiles', () => {
 
 describe('reports derive — contents under the floor', () => {
   it('counts the groups it prints and names the protected ones without a number', () => {
-    expect(contentsReading(sampleContents)).toEqual({
+    expect(contentsReading(contentsFixture)).toEqual({
       shown: 4,
       total: 5,
       protectedGroups: ['Finanzas'],
@@ -165,7 +165,7 @@ describe('reports derive — contents under the floor', () => {
   })
 
   it('marks a whole survey under the floor as suppressed, so no response count is printed', () => {
-    expect(contentsReading({ ...sampleContents, responses: 4 }).suppressed).toBe(true)
-    expect(contentsReading({ ...sampleContents, responses: 5 }).suppressed).toBe(false)
+    expect(contentsReading({ ...contentsFixture, responses: 4 }).suppressed).toBe(true)
+    expect(contentsReading({ ...contentsFixture, responses: 5 }).suppressed).toBe(false)
   })
 })

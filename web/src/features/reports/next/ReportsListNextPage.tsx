@@ -133,16 +133,6 @@ export default function ReportsListNextPage() {
   const schedule = scheduleReading(rows)
   const survey = commonSurvey(rows)
   const formats = formatsSentence(t, rows)
-  // `normal-case tracking-normal`: the chip also rides in a small-caps column head, whose
-  // uppercase and spacing it must not inherit — it is a word, not a label.
-  const sampleChip = state.model.isSample ? (
-    <Chip
-      data-slot="sample-chip"
-      tone="warning"
-      label={t('dashboard.next.sampleChip')}
-      className="normal-case tracking-normal"
-    />
-  ) : null
 
   return (
     <div>
@@ -201,10 +191,7 @@ export default function ReportsListNextPage() {
                   locale={locale}
                   unit={
                     survey ? (
-                      <span className="inline-flex flex-wrap items-center gap-2">
-                        {t('reports.next.tileReportsOf', { survey })}
-                        {sampleChip}
-                      </span>
+                      t('reports.next.tileReportsOf', { survey })
                     ) : rows.length === 1 ? (
                       t('reports.next.tileReportsUnitOne')
                     ) : (
@@ -288,12 +275,7 @@ export default function ReportsListNextPage() {
                           {/* Wraps below xl: at 1024 the column is too narrow for the head and
                               its chip on one line, and a nowrap head would run into "Formato". */}
                           <th className={cn(HEAD, GAP_CELL, 'whitespace-normal xl:whitespace-nowrap')}>
-                            <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
-                              {t('reports.next.colContains')}
-                              {/* `-my-1`: the 22px chip rides in the head's 8px padding instead of
-                                  growing the row, which is the artboard's 32px with or without it. */}
-                              {sampleChip && <span className="-my-1 inline-flex">{sampleChip}</span>}
-                            </span>
+                            {t('reports.next.colContains')}
                           </th>
                           <th className={cn(HEAD, GAP_CELL)}>{t('reports.format')}</th>
                           <th className={cn(HEAD, GAP_CELL)}>{t('common.status')}</th>
@@ -554,9 +536,16 @@ function ContentsCell({ contents, t }: { contents: ReportContents; t: TranslateF
     // 11px below xl so each line stays one line in the 1024 column; the artboard's 12px from xl.
     <div data-slot="report-contents" className="flex flex-col gap-0.5 text-xs text-fg-secondary xl:text-sm">
       <span>
-        {reading.suppressed
-          ? t('reports.next.containsSurveySuppressed', { survey: contents.surveyName })
-          : t('reports.next.containsSurvey', { survey: contents.surveyName, responses: contents.responses })}
+        {/* A report made in this app carries a section per survey of the company
+            (`ReportFilters.SurveyIds` defaults to null), so one name would describe a
+            quarter of a four-survey document. Named only when there is one to name. */}
+        {contents.surveyName !== null
+          ? reading.suppressed
+            ? t('reports.next.containsSurveySuppressed', { survey: contents.surveyName })
+            : t('reports.next.containsSurvey', { survey: contents.surveyName, responses: contents.responses })
+          : reading.suppressed
+            ? t('reports.next.containsSurveysSuppressed', { count: contents.surveyCount })
+            : t('reports.next.containsSurveys', { count: contents.surveyCount, responses: contents.responses })}
       </span>
       {!reading.suppressed && reading.total > 0 && (
         <span>

@@ -24,12 +24,39 @@ export interface ReportGroup {
   isProtected: boolean
 }
 
-/** What a report contains — the artboard's "Contiene" column. */
+/**
+ * What a report contains — the artboard's "Contiene" column, read from the report's own
+ * stored document (`reportOutput` → `parseReportDocument` → `contentsOf`).
+ *
+ * ## Why a count and not just a name
+ *
+ * A report created through this app carries a section for EVERY survey of the company:
+ * `CreateReportInput` has no survey field and `ReportFilters.SurveyIds` defaults to null,
+ * which the generator records as `AllSurveys` (`ReportDtos.cs:217`). One name and one
+ * response count would therefore describe one quarter of a four-survey document and read
+ * as the whole of it, so `surveyCount` decides which sentence the cell says.
+ */
 export interface ReportContents {
-  surveyName: string
-  /** Whole-survey responses. Under `floor` the report is suppressed and prints none. */
+  /**
+   * The survey's own title — only when the document carries exactly one section that has
+   * one. `null` otherwise, and the cell names the count instead of a survey.
+   */
+  surveyName: string | null
+  /** How many survey sections the document carries. */
+  surveyCount: number
+  /**
+   * Responses across every section. Under `floor` the report prints none — an absent
+   * count is not a 0.
+   */
   responses: number
   groups: readonly ReportGroup[]
+  /**
+   * The document's OWN suppression decision, carried rather than recomputed: true when
+   * every section it holds is suppressed, so no section's numbers may be printed however
+   * the totals add up. `derive.contentsReading` ORs it with its own re-floor, the same way
+   * the leader dashboard re-floors what the server already floored (#490).
+   */
+  isSuppressed: boolean
   /** The floor the document was generated under (`minimumGroupSize`). */
   floor: number
 }
@@ -52,12 +79,15 @@ export interface ReportRow {
    * the read failed. `null` is never shown as "none": that would be a claim nobody made.
    */
   shares: readonly ReportShareSummary[] | null
-  /** What the report contains. Sample-fed until phase 2 — see `sampleModel.ts`. */
+  /**
+   * What the report contains, from `GET /admin/reports/{id}`'s `reportOutput`. `null` when
+   * there is nothing to describe: the report is not completed, so no document exists; or
+   * the detail read failed, and a report whose document could not be read describes itself
+   * as nothing rather than borrowing another's summary.
+   */
   contents: ReportContents | null
 }
 
 export interface ReportsListModel {
-  /** True while any row's `contents` comes from `sampleModel.ts`; drives the sample chip. */
-  isSample: boolean
   rows: readonly ReportRow[]
 }
