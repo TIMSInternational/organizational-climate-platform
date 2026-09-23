@@ -229,6 +229,33 @@ export const router = createBrowserRouter([
       // The six elements are the 10 Sep canvas's (`auth/next/`). The pages they replaced
       // stay in the tree, unrouted and still tested, as the wiring reference — the same
       // way `NotificationsInboxPage` did when the Notifications artboard landed.
+      //
+      // ## The set that ruling covers, named — because twice it was got wrong
+      //
+      // Nine files, all of them unrouted AND still tested (`node scripts/unrouted.mjs`
+      // prints the two buckets and puts every one of these in the first):
+      //
+      //   auth/LoginPage.tsx            auth/AuthErrorPage.tsx
+      //   auth/RegisterPage.tsx         auth/AuthSuccessPage.tsx
+      //   auth/AccountInactivePage.tsx  auth/AuthLoadingPage.tsx
+      //   auth/AuthShell.tsx            auth/AuthPending.tsx
+      //   features/org-structure/pages/AcceptInvitationPage.tsx
+      //
+      // They are kept for what the `next/` pages did NOT reimplement from scratch:
+      // `returnPath`, `authReason`, and the `/auth/loading` OAuth `redirect_uri` handshake
+      // all took their shape here first, and these files are the only record of that shape
+      // under test.
+      //
+      // **`AuthShell` and `AuthPending` joined the list on 2026-09-22 and were LIVE before
+      // it.** `AcceptInvitationNextPage` rendered `AuthPending` while the account was being
+      // created, and `AuthPending` renders `AuthShell` — so the invitation screen swapped
+      // the whole window into the previous design language mid-submit. That branch now draws
+      // a `PendingState` inside `InvitationFrame`, which is what made the pair unrouted.
+      //
+      // Do not delete from a remembered list: a session did, named `AuthShell` among the
+      // dead while a route still reached it, and missed three that were genuinely
+      // unreachable. Run the script; a name greps into its own tests and into the doc block
+      // of the page that replaced it, so hit counts say nothing.
       { path: '/register', element: <RegisterNextPage /> },
       { path: '/auth/error', element: <AuthErrorNextPage /> },
       { path: '/auth/inactive', element: <AccountInactiveNextPage /> },
