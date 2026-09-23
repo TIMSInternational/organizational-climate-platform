@@ -4,14 +4,22 @@ namespace ClimateProject.Application.Reports;
 
 public sealed record BenchmarkMetricDto(Guid Id, string MetricName, double Value, string Unit, double? Percentile, int? SampleSize);
 
+/// <param name="QualityScore">
+/// The quality rule's verdict, 0..100 -- or null when the rule has never run on this
+/// benchmark, which is every row whose validation status is <c>pending</c>. Null is not 0:
+/// the rule scores a benchmark that measures nothing at exactly 0, and that zero is a
+/// verdict. Derived in <see cref="BenchmarkQuality.ReportedScore"/>, the one place the two
+/// are told apart.
+/// </param>
 public sealed record BenchmarkListItem(
-    Guid Id, string Name, string Type, string Category, Guid? CompanyId, bool IsActive, double QualityScore,
+    Guid Id, string Name, string Type, string Category, Guid? CompanyId, bool IsActive, double? QualityScore,
     string PriorPeriodStatus);
 
 public sealed record BenchmarkDetail(
     Guid Id, string Name, string Description, string Type, string Category, string Source,
     string? Industry, string? CompanySize, string? Region, Guid? CompanyId, bool IsActive,
-    string ValidationStatus, double QualityScore,
+    // Null while ValidationStatus is `pending`, and only then -- see BenchmarkListItem.
+    string ValidationStatus, double? QualityScore,
     // The prior period's id AS THIS CALLER MAY SEE IT: null when the row it points at belongs
     // to a tenant they cannot read, on the same terms as PriorPeriod below. A stored pointer
     // is not a permission, and returning the id while withholding the numbers still discloses

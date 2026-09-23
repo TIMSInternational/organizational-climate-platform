@@ -45,7 +45,7 @@ describe('lastClosedSurvey', () => {
 })
 
 describe('benchmarks', () => {
-  const benchmark = (id: string, companyId: string | null, qualityScore: number): BenchmarkListItem => ({
+  const benchmark = (id: string, companyId: string | null, qualityScore: number | null): BenchmarkListItem => ({
     id,
     name: id,
     type: 'industry',
@@ -60,8 +60,16 @@ describe('benchmarks', () => {
     expect(globalBenchmarks([benchmark('g', null, 0), benchmark('own', 'm', 70)]).map((item) => item.id)).toEqual(['g'])
   })
 
-  it('reads a zero quality score as unscored, as the triage ruled', () => {
-    expect(isUnscored(benchmark('g', null, 0))).toBe(true)
+  /**
+   * It read a ZERO as unscored until #463, which is what the endpoint sent for a benchmark
+   * the quality rule had never run on. #463 changed the wire to `null` (`BenchmarkDtos.cs`,
+   * `BenchmarkQuality.cs`), so this asserts the new encoding — and, more importantly, that a
+   * genuine zero is now a MEASUREMENT: a reference somebody validated and that scored 0 must
+   * print 0, not be hidden behind "nobody scored this".
+   */
+  it('reads a null quality score as unscored, and a zero as a real measurement', () => {
+    expect(isUnscored(benchmark('g', null, null))).toBe(true)
+    expect(isUnscored(benchmark('g0', null, 0))).toBe(false)
     expect(isUnscored(benchmark('own', 'm', 72.5))).toBe(false)
   })
 })

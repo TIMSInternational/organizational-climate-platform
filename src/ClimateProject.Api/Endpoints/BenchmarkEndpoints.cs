@@ -139,10 +139,14 @@ public static partial class BenchmarkEndpoints
         // so two same-named benchmarks cannot swap places between reads.
         var locale = ContentLanguages.NormaliseLocale(lang) ?? ContentLanguages.FallbackLocale;
         var benchmarks = (await query
-                .Select(b => new { b.Id, b.NameEn, b.NameEs, b.Type, b.Category, b.CompanyId, b.IsActive, b.QualityScore, b.PriorPeriodStatus })
+                .Select(b => new { b.Id, b.NameEn, b.NameEs, b.Type, b.Category, b.CompanyId, b.IsActive, b.ValidationStatus, b.QualityScore, b.PriorPeriodStatus })
                 .ToListAsync(cancellationToken))
             .Select(b => new BenchmarkListItem(
-                b.Id, AuthoredContent.ResolveRequired(b.NameEn, b.NameEs, locale), b.Type, b.Category, b.CompanyId, b.IsActive, b.QualityScore, b.PriorPeriodStatus))
+                b.Id, AuthoredContent.ResolveRequired(b.NameEn, b.NameEs, locale), b.Type, b.Category, b.CompanyId, b.IsActive,
+                // Null for a row the rule has never scored -- the stored 0 is a column
+                // default, not a verdict. BenchmarkQuality.ReportedScore says which.
+                BenchmarkQuality.ReportedScore(b.ValidationStatus, b.QualityScore),
+                b.PriorPeriodStatus))
             .OrderBy(b => b.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(b => b.Id)
             .ToList();
@@ -666,7 +670,8 @@ public static partial class BenchmarkEndpoints
 
         return new BenchmarkDetail(
             b.Id, name, description, b.Type, b.Category, b.Source, b.Industry, b.CompanySize,
-            b.Region, b.CompanyId, b.IsActive, b.ValidationStatus, b.QualityScore, visiblePriorPeriodId, metrics,
+            b.Region, b.CompanyId, b.IsActive, b.ValidationStatus,
+            BenchmarkQuality.ReportedScore(b.ValidationStatus, b.QualityScore), visiblePriorPeriodId, metrics,
             b.PriorPeriodStatus, priorPeriod, fallbackFields);
     }
 }

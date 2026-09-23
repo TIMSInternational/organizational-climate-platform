@@ -38,11 +38,24 @@ export function globalBenchmarks(all: readonly BenchmarkListItem[]): BenchmarkLi
 
 /**
  * A reference nobody has scored. The triage's P0 row: "Puntaje de calidad 0,00" on a
- * reference nobody scored reads as a measurement; it says so instead. A quality score is
- * derived from a benchmark's metrics, so zero is what an unmeasured one carries.
+ * reference nobody scored reads as a measurement; it says so instead.
+ *
+ * **It tested `=== 0` until #463.** That was right while the endpoint sent zero for a
+ * benchmark the quality rule had never run on, and it silently stopped being right when
+ * #463 made the wire send `null` instead (`BenchmarkDtos.cs`, `BenchmarkQuality.cs`). This
+ * screen was written after that PR was opened and before it landed, so it kept testing the
+ * old encoding: a `null` score would have slipped past this guard and been formatted as
+ * "0,00" — the failing grade on an unvalidated reference that #463 exists to remove,
+ * reappearing on the redesigned screen. Caught by typecheck only after rebasing #463 onto
+ * this branch; its own CI was 12/12 green against a main 276 commits older.
+ *
+ * A type predicate, not a `boolean`, so the else-branch narrows `qualityScore` to `number`
+ * and a future caller cannot format a null by accident.
  */
-export function isUnscored(benchmark: Pick<BenchmarkListItem, 'qualityScore'>): boolean {
-  return benchmark.qualityScore === 0
+export function isUnscored(
+  benchmark: Pick<BenchmarkListItem, 'qualityScore'>,
+): benchmark is Pick<BenchmarkListItem, 'qualityScore'> & { qualityScore: null } {
+  return benchmark.qualityScore === null
 }
 
 /**
