@@ -43,7 +43,7 @@ or from a developer machine that ran a legacy build, at any point between 2026-0
 Ordered so that the disruptive, coordination-heavy item is planned rather than stumbled
 into. Rotate top-down.
 
-### A. Shared JWT signing key — **do this deliberately, it logs everyone out**
+### A. Shared JWT signing key — **rolling since #70; nobody is logged out**
 
 | Field | Value |
 |---|---|
@@ -57,20 +57,24 @@ not "the tracking secret plus the new stack's own signing key" — they are the 
 
 - `src/ClimateProject.Infrastructure/Auth/JwtTokenService.cs:17` reads `TrackingJwtSecret`
   and uses it as the HMAC-SHA256 **signing** key for tokens this API issues.
-- `src/ClimateProject.Api/Program.cs:206` reads it and `Program.cs:219` uses it as
-  `IssuerSigningKey` for **validation**, with a comment that it must match
-  climate-tracking's `Program.cs` exactly for token compatibility.
+- `src/ClimateProject.Api/Program.cs` reads it and passes it to
+  `JwtSigningKeys.ForValidation` for **validation**, alongside the optional
+  `TrackingJwtSecretPrevious`. It must match climate-tracking's `Program.cs` exactly for token
+  compatibility.
 - climate-tracking's API and Workers read the same value.
 
 Consequences to plan for:
 
-- Rotation invalidates every live session in **both** products simultaneously.
-- `JwtTokenService.cs:12` sets `TokenLifetime = TimeSpan.FromHours(24)`, so a validation-only
-  grace window of 24h would be needed to avoid a hard cutover. The current single-key
-  `TokenValidationParameters` cannot accept two keys at once — an overlap window requires a
-  code change (`IssuerSigningKeys` with both the old and new key, old one removed after 24h).
-  **Decide before starting** whether to accept a hard logout or to do the two-key change
-  first; a hard logout is simpler and probably fine, but it should be a choice.
+- **No longer a hard cutover.** Both services accept the previous key alongside the current
+  one for the length of the overlap, so a rotation logs nobody out. Set
+  `TrackingJwtSecretPrevious` to the outgoing value, deploy, then **clear it** once a token
+  lifetime has passed. Shipped 2026-09-24; the decision this bullet used to ask you to make
+  ("accept a hard logout, or do the two-key change first") no longer arises.
+- `JwtTokenService.cs` sets `TokenLifetime = TimeSpan.FromHours(24)`, which is exactly how
+  long the overlap must last: every token minted under the old key has expired by then.
+- ⚠️ **The overlap widens what both services accept, so clearing it is part of the rotation,
+  not cleanup.** Leave `TrackingJwtSecretPrevious` set and the value you rotated away from
+  still opens the door — the rotation will have bought nothing.
 - Both services must be redeployed against the new value. Deploying one and not the other
   breaks cross-service auth silently — tokens issued by one are rejected by the other.
 - `Program.cs` calls `.ValidateOnStart()`, so a missing or empty value fails fast at

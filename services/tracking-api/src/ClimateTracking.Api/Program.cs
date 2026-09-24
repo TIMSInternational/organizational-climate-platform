@@ -20,6 +20,9 @@ builder.Services.AddDbContext<ClimateTrackingDbContext>(options =>
 var trackingJwtSecret = builder.Configuration["TrackingJwtSecret"]
     ?? throw new InvalidOperationException("Missing TrackingJwtSecret configuration.");
 
+// Set only while a rotation is in flight; unset is the steady state, so this must not throw (#70).
+var previousTrackingJwtSecret = builder.Configuration["TrackingJwtSecretPrevious"];
+
 // IsNullOrWhiteSpace, not `?? throw` (#153). appsettings.json ships `"ProcomerCompanyId": ""`,
 // so a deployment that forgets to override it has a present-but-blank value: the null check
 // this replaced never fired, the host started, and MatchingTenantRequirement was built with
@@ -52,7 +55,8 @@ builder.Services
         // handful of literals in a startup file (#153). ClimateProject.IntegrationTests
         // compiles against that same type to prove a token minted over there is accepted here.
         options.MapInboundClaims = TrackingTokenValidation.MapInboundClaims;
-        options.TokenValidationParameters = TrackingTokenValidation.CreateParameters(trackingJwtSecret);
+        options.TokenValidationParameters = TrackingTokenValidation.CreateParameters(
+            trackingJwtSecret, previousTrackingJwtSecret);
     });
 
 // ONE PROCESS, TWO JOBS (#219). This host IS the scheduler: CacheSyncWorker and

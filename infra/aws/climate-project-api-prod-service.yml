@@ -108,6 +108,17 @@ Parameters:
   TrackingJwtSecretArn:
     Type: String
     Description: Secrets Manager ARN holding the TrackingJwtSecret value (JWT signing key shared with climate-tracking).
+  TrackingJwtSecretPreviousArn:
+    Type: String
+    Default: ""
+    Description: >-
+      Secrets Manager ARN holding the PREVIOUS TrackingJwtSecret, set only while a rotation is in
+      flight (#70). Both services accept the previous key alongside the current one so a rotation
+      does not log every user out; empty -- the steady state -- means no overlap. Same
+      empty-means-absent rule as CorsAdditionalAllowedOrigin, and here it drops both the runtime
+      secret AND the IAM grant, so no ARN is read that was not supplied. CLEAR IT once a token
+      lifetime (24h) has passed: while it is set, the value being rotated away from still
+      authenticates. See docs/security/rotation-runbook.md section A.
   DatabaseConnectionStringSecretArn:
     Type: String
     Description: Secrets Manager ARN holding the Supabase Postgres connection string.
@@ -145,6 +156,9 @@ Conditions:
   # only way to make an index genuinely absent rather than present-and-empty.
   HasAdditionalAllowedOrigin: !Not [!Equals [!Ref CorsAdditionalAllowedOrigin, ""]]
   HasAdditionalAllowedWildcardOrigin: !Not [!Equals [!Ref CorsAdditionalAllowedWildcardOrigin, ""]]
+  # The rotation overlap (#70). Absent by default: a deployment that has never rotated supplies
+  # no ARN, and must neither mount an empty secret nor hold a grant on one.
+  HasPreviousTrackingJwtSecret: !Not [!Equals [!Ref TrackingJwtSecretPreviousArn, ""]]
 
 Resources:
   AppRunnerInstanceRole:
@@ -167,6 +181,10 @@ Resources:
                 Action: secretsmanager:GetSecretValue
                 Resource:
                   - !Ref TrackingJwtSecretArn
+                  - !If
+                    - HasPreviousTrackingJwtSecret
+                    - !Ref TrackingJwtSecretPreviousArn
+                    - !Ref AWS::NoValue
                   - !Ref DatabaseConnectionStringSecretArn
                   - !Ref InternalApiKeySecretArn
                   - !Ref EmailSmtpUsernameSecretArn
@@ -295,6 +313,14 @@ Resources:
             RuntimeEnvironmentSecrets:
               - Name: TrackingJwtSecret
                 Value: !Ref TrackingJwtSecretArn
+              # Present only mid-rotation. Dropped entirely when no ARN is supplied rather than
+              # mounted empty -- JwtSigningKeys treats blank as absent, but not mounting it at all
+              # is the honest expression of "there is no overlap right now".
+              - !If
+                - HasPreviousTrackingJwtSecret
+                - Name: TrackingJwtSecretPrevious
+                  Value: !Ref TrackingJwtSecretPreviousArn
+                - !Ref AWS::NoValue
               - Name: ConnectionStrings__ClimateProject
                 Value: !Ref DatabaseConnectionStringSecretArn
               - Name: InternalApiKey

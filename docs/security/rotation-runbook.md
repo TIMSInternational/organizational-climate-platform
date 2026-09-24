@@ -24,20 +24,20 @@ sitting, top to bottom, without opening the code.**
   fix it with another new value. The one exception is A's emergency rollback, described
   there.
 
-## The one decision to make before sitting down
+## Section A is a rolling change now — no decision to make
 
-**Section A (`TrackingJwtSecret`) logs every user out of both products** the moment both
-services restart on the new key. Two ways to do it:
+**This used to be the one decision before sitting down**, and it no longer is. Rotating
+`TrackingJwtSecret` used to log every user out of both products the moment both services
+restarted, because validation accepted exactly one key. It now accepts the previous key
+alongside the current one, so a rotation is a rolling change and nobody is logged out
+(#70, shipped 2026-09-24).
 
-1. **Hard logout (recommended).** One secret change, two redeploys, every live session dies
-   at once, users log in again. Simple, loud, done in an hour.
-2. **Two-key overlap.** Requires a **code change first** — `TokenValidationParameters` today
-   accepts a single `IssuerSigningKey`; an overlap needs `IssuerSigningKeys` with old + new,
-   shipped to both stacks, then the old key removed after the 24h token lifetime.
+What that costs instead is **one extra step you must not skip**: the overlap widens what both
+services accept, so clearing `TrackingJwtSecretPrevious` afterwards is part of the rotation,
+not cleanup. Leave it set and the value you rotated away from still opens the door.
 
-If you choose (2), **stop here and file the code change** — it cannot be improvised
-mid-rotation. Everything below assumes (1). Either way, schedule A for a low-traffic hour
-and tell whoever answers user questions that a mass logout is expected.
+A is still ordered last, and still worth a quiet hour — it touches authentication on both
+stacks — but nobody needs warning about a mass logout.
 
 ## Access you need open before starting
 
@@ -106,8 +106,8 @@ aws secretsmanager put-secret-value --region us-east-1 \
 ```
 
 **Execution order — B, C, D, E, then A.** Same as the inventory: independent,
-non-disruptive items first; the one that logs everyone out goes last, scheduled, not
-stumbled into.
+non-disruptive items first; the one that touches authentication on both stacks goes last,
+scheduled, not stumbled into.
 
 ---
 
@@ -384,11 +384,9 @@ secret (inventory row E, verified against the App Runner template).
 
 ## A. `TrackingJwtSecret` — last, deliberately
 
-*Logs every user out of **both** products the moment both services restart. Do it in the
-scheduled window from "The one decision", not opportunistically at the end of the sitting.*
-
-**Decision check:** if the decision was the two-key overlap — stop; ship that code change
-first. This section is the hard-logout path.
+*A rolling change since #70: nobody is logged out. The price is that it finishes **two steps,
+a day apart** — set the overlap now, clear it tomorrow. Do not treat step 9 as optional
+tidying; until it is done the old key still works.*
 
 Names: Secrets Manager `climate-project-api/prod/tracking-jwt-secret` → climate API env
 `TrackingJwtSecret`. The **same value, byte-identical**, must reach climate-tracking's API
@@ -396,30 +394,40 @@ and Workers (`TrackingJwtSecret` in their config) — but first apply C step 0's
 the tracking services are not deployed in production, this is a single-service rotation and
 the coordination constraint is moot.
 
-1. Confirm the window is now; whoever supports users knows a mass logout is coming. Note
-   that every token issued before the rotation dies **immediately** — the 24h lifetime stops
-   mattering.
-2. Generate: `openssl rand -base64 64` (HMAC-SHA256 key; ≥32 bytes required, 64 is right).
-3. SECRET-UPDATE `climate-project-api/prod/tracking-jwt-secret`.
-4. Set the same value on the tracking side's config/secret store (if deployed).
+1. **Record the outgoing value** — you need it for the overlap. Read it once
+   (`get-secret-value` on `climate-project-api/prod/tracking-jwt-secret`) and keep it in the
+   terminal only; it never goes in a file.
+2. Generate the new one: `openssl rand -base64 64` (HMAC-SHA256 key; ≥32 bytes required, 64 is right).
+3. SECRET-UPDATE `climate-project-api/prod/tracking-jwt-secret` with the NEW value, and set
+   `TrackingJwtSecretPrevious` to the OLD one (see the infra note below for where it is wired).
+4. Set the same pair on the tracking side's config/secret store (if deployed). **Both sides
+   need the overlap** — if only one has it, rotating still cuts every session on the other.
 5. **Before redeploying**, log in once and keep the bearer token in a terminal — it is the
-   negative probe in step 7. (It is about to become worthless; it still never goes in a
-   file.)
+   positive probe in step 7 and the negative probe in step 9.
 6. REDEPLOY the climate API; redeploy tracking API + Workers as close together as possible.
-   Between the two restarts, cross-service tokens fail with 401s — the known, bounded cost.
-7. **Verify — all four:**
+   The old-key overlap means the gap between the two restarts is no longer a 401 window.
+7. **Verify the rotation took, and that it is rolling — all four:**
    - PROBE-READY, 20/20;
    - PROBE-LOGIN — a *fresh* login works and an authed page renders;
-   - the **saved old token** against any authed endpoint → **401**. This is the probe that
-     proves the rotation actually happened — a green login alone cannot distinguish "rotated"
-     from "nothing changed";
-   - if tracking is live: one cross-service flow works end-to-end.
-8. Failure modes, both loud: a blank/mangled secret refuses to boot
-   (`ValidateOnStart`) and the deploy fails — fix the secret and redeploy, don't roll back;
-   one side redeployed and the other not shows as cross-service 401s until step 6 completes.
+   - the **saved old token** against any authed endpoint → **200**. That is the overlap
+     working: a session from before the rotation survived it;
+   - if tracking is live: one cross-service flow works end-to-end on the saved old token.
+8. **Wait one token lifetime — 24h** (`JwtTokenService.TokenLifetime`). Every token minted
+   under the old key has now expired on its own.
+9. **Close the window, and this is the step that makes the rotation real.** Clear
+   `TrackingJwtSecretPrevious` on both sides, redeploy both. Then verify with the **saved old
+   token → 401**: this is the probe that proves the old key is dead. A green login alone
+   cannot distinguish "rotated and closed" from "still accepting the compromised value".
+   Tick the inventory only after this.
+10. Failure modes, all loud: a blank/mangled *current* secret refuses to boot
+    (`ValidateOnStart`) and the deploy fails — fix the secret and redeploy, don't roll back. A
+    blank *previous* is simply no overlap, which is safe but means step 7's third probe returns
+    401 instead of 200 — if that happens, the overlap did not reach the service; check the
+    wiring before continuing, because step 9 will then have nothing to close.
 
-**Emergency rollback (the one exception to roll-forward):** restore `AWSPREVIOUS` on the
-same secret (`aws secretsmanager put-secret-value` with the previous string via
+**Emergency rollback (the one exception to roll-forward):** during the overlap you rarely need
+this — old tokens still work, so a broken *new* value shows up as failed logins rather than mass
+401s. If the new value itself is unusable, restore `AWSPREVIOUS` on the same secret (`aws secretsmanager put-secret-value` with the previous string via
 `get-secret-value --version-stage AWSPREVIOUS`), mirror it on the tracking side, redeploy
 both. This restores the old sessions too. Use it only if the new value itself is broken,
 then schedule the rotation again with a fresh value — the old key was to be retired for a

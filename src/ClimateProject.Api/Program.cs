@@ -225,6 +225,10 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
             throw new InvalidOperationException("Missing TrackingJwtSecret configuration.");
         }
 
+        // Set only while a rotation is in flight, and deliberately NOT required: an unset value
+        // is the normal steady state and must not stop the service starting (#70).
+        var previousTrackingJwtSecret = configuration["TrackingJwtSecretPrevious"];
+
         // Without this, the handler remaps well-known claim names ("sub" -> NameIdentifier
         // URI, "role" -> Role URI, etc.) before CurrentUser reads them by their raw names.
         // Must match climate-tracking's Program.cs exactly for token compatibility.
@@ -232,7 +236,14 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(trackingJwtSecret)),
+
+            // IssuerSigningKeyS, plural, and that is the rotation window (#70). A token signed
+            // with either the current secret or the previous one validates, so changing the
+            // secret no longer logs every user of both products out at the same instant.
+            // Signing still uses the current secret alone (JwtTokenService), so the previous key
+            // can verify but never mint.
+            IssuerSigningKeys = JwtSigningKeys.ForValidation(trackingJwtSecret, previousTrackingJwtSecret),
+
             ValidateIssuer = false,
             ValidateAudience = false,
             ValidateLifetime = true,
