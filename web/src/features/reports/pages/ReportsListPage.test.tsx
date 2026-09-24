@@ -3,7 +3,7 @@ import { render, screen, cleanup, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import ReportsListPage from './ReportsListPage'
-import { TranslationProvider } from '../../../i18n'
+import { TranslationProvider, LOCALE_STORAGE_KEY } from '../../../i18n'
 import { setToken } from '../../../auth/token'
 import { downloadBlobFile } from '../../../lib/downloadBlobFile'
 import type { ReportListItem } from '../api/reports'
@@ -76,14 +76,16 @@ describe('ReportsListPage', () => {
   it('asks for the titles in the reader\'s language, as the survey lists do', async () => {
     // The reports list was the one admin screen that still omitted `lang`, so a Spanish
     // reader saw the English half of every bilingual title here and again in the share
-    // dialog that repeats it. The provider's default locale is what must reach the wire.
+    // dialog that repeats it. A *stored* choice, not the provider's default: a hardcoded
+    // 'en' would pass a test rendered in English.
+    window.localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
     vi.mocked(fetch).mockResolvedValueOnce(jsonResponse([reportRow()]))
     renderPage()
 
     await waitFor(() => expect(fetch).toHaveBeenCalled())
     const url = new URL(String(vi.mocked(fetch).mock.calls[0][0]), 'http://test.local')
     expect(url.searchParams.get('companyId')).toBe('c1')
-    expect(url.searchParams.get('lang')).toBe('en')
+    expect(url.searchParams.get('lang')).toBe('es')
   })
 
   it('shows a loading state before the first response arrives, announced once', async () => {
@@ -161,6 +163,18 @@ describe('ReportsListPage', () => {
     expect(screen.getByText('bespoke')).toBeTruthy()
   })
 
+  it('labels the type the product itself writes, so a seeded tenant\'s reports do not read as slugs', async () => {
+    // `climate_summary` is never offered by the form: it is what the seeds and the scheduled
+    // runner write, and it was the type of every report on the first list a client saw --
+    // printed as `climate_summary` under "Type".
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse([reportRow({ type: 'climate_summary' })]))
+    renderPage()
+
+    await screen.findByText('Q3 climate summary')
+    expect(screen.getByText('Climate summary')).toBeTruthy()
+    expect(screen.queryByText('climate_summary')).toBeNull()
+  })
+
   it('only offers Download for a completed report, because the backend 400s otherwise', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(
       jsonResponse([
@@ -197,6 +211,28 @@ describe('ReportsListPage', () => {
     const notice = await screen.findByText(/Downloaded Q3 climate summary/)
     expect(notice.getAttribute('role')).toBe('status')
     expect(notice.textContent).toContain('report-r1.csv')
+  })
+
+  it('asks for the document in the reader\'s language, as it asks for the titles', async () => {
+    // The server heads the PDF/CSV for `lang`; the page carried the locale on the list request
+    // and not on the download, so a Spanish reader's file opened under an English heading.
+    // Rendered for a Spanish reader, so that a hardcoded 'en' cannot pass: the button is
+    // "Descargar" (`reports.download`).
+    window.localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse([reportRow({ format: 'csv' })]))
+      .mockResolvedValueOnce(new Response(new Blob(['"section"\r\n']), { status: 200 }))
+    renderPage()
+
+    await screen.findByText('Q3 climate summary')
+    await userEvent.click(screen.getByRole('button', { name: 'Descargar' }))
+
+    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2))
+    const [input, init] = vi.mocked(fetch).mock.calls[1]
+    const url = new URL(String(input), 'http://test.local')
+    expect(init).toEqual(expect.objectContaining({ method: 'POST' }))
+    expect(url.pathname.endsWith('/admin/reports/r1/download')).toBe(true)
+    expect(url.searchParams.get('lang')).toBe('es')
   })
 
   it('shows the backend refusal and saves nothing when the download fails', async () => {

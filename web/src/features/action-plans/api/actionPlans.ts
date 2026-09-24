@@ -179,8 +179,19 @@ export async function getActionPlan(baseUrl: string, id: string, lang?: string):
   return response.json() as Promise<ActionPlanDetail>
 }
 
-export async function updateActionPlan(baseUrl: string, id: string, input: UpdateActionPlanInput): Promise<ActionPlanDetail> {
-  const response = await authFetch(`${baseUrl}/action-plans/${id}`, {
+/**
+ * `lang` decides the language of the detail that comes back. The detail page renders the
+ * response in place of the plan it already holds, so without it a status change flipped a
+ * bilingual title to the server's fallback language mid-screen.
+ */
+export async function updateActionPlan(
+  baseUrl: string,
+  id: string,
+  input: UpdateActionPlanInput,
+  lang?: string,
+): Promise<ActionPlanDetail> {
+  const query = lang ? `?lang=${encodeURIComponent(lang)}` : ''
+  const response = await authFetch(`${baseUrl}/action-plans/${id}${query}`, {
     method: 'PUT',
     body: JSON.stringify({ ...input, dueDate: input.dueDate ? normalizeDueDate(input.dueDate) : input.dueDate }),
   })

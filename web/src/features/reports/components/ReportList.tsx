@@ -46,12 +46,17 @@ const STATUS_KEYS: Record<string, string> = {
  *
  * Both columns are free text on the wire (`CreateReportRequest` validates neither), so an
  * unknown value falls back to the raw string rather than to a missing key.
+ *
+ * `climate_summary` is not offered by the form: it is the type the product's own seeds and
+ * scheduled runs write (`scripts/seed-demo-company.mjs`, `ScheduledReportRunnerTests`), and
+ * it printed as a slug on the one list a client sees first.
  */
 const TYPE_KEYS: Record<string, string> = {
   summary: 'reports.type_summary',
   detailed: 'reports.type_detailed',
   comparison: 'reports.type_comparison',
   executive: 'reports.type_executive',
+  climate_summary: 'reports.type_climate_summary',
 }
 
 const FORMAT_KEYS: Record<string, string> = {

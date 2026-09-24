@@ -130,3 +130,24 @@ describe('MicroclimateDetailPage', () => {
     expect(await screen.findByRole('heading', { name: 'Untitled microclimate' })).toBeTruthy()
   })
 })
+
+describe('MicroclimateDetailPage locale on the wire', () => {
+  it('asks for the updated session in the reader\'s language, because it renders the response', async () => {
+    // A status change replaces the session on screen with the PUT's response. The GET
+    // carried `lang`; the PUT did not, so the title flipped to the server's fallback the
+    // moment a reader launched or ended a bilingual session. Rendered for a Spanish
+    // reader, so that a hardcoded 'en' in the page cannot pass: the button is "Lanzar".
+    // A fresh Response per call: a body can only be read once, and the PUT is the second read.
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
+    vi.mocked(fetch).mockImplementation(() => Promise.resolve(ok(detail())))
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Lanzar' }))
+
+    const isPut = ([, init]: [RequestInfo | URL, RequestInit?]) => init?.method === 'PUT'
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(isPut)).toBe(true))
+    const url = new URL(String(vi.mocked(fetch).mock.calls.find(isPut)![0]), 'http://test.local')
+    expect(url.pathname.endsWith('/microclimates/m1')).toBe(true)
+    expect(url.searchParams.get('lang')).toBe('es')
+  })
+})
