@@ -1,6 +1,6 @@
 import type { PlanAccion } from '../api/trackingApi'
 import type { PersonaPickerItem } from '../api/trackingPickers'
-import { canManagePlan, type TrackingClaims } from '../trackingAccess'
+import { canManagePlan, isNamedOnPlan, type TrackingClaims } from '../trackingAccess'
 import { toSemaforoEstado, type SemaforoEstado } from '../semaforo'
 import { byCompromiso, hasRecordedProgress, isOverdue, planLine, type Viewer } from './derive'
 import type { PlanLine } from './model'
@@ -21,6 +21,15 @@ export interface ListRow extends PlanLine {
   responsableIsViewer: boolean
   /** The service lets this viewer record progress on it (`canManagePlan`). */
   canManage: boolean
+  /**
+   * The plan NAMES this viewer — responsable de ejecución or involucrado
+   * (`trackingAccess.isNamedOnPlan`, `PlanAccessHandler`'s `isInvolved`).
+   *
+   * Independent of {@link canManage}: a node leader reaches their own nodo's plans without
+   * being named on any of them, and is named on plans of other nodos they cannot touch. The
+   * leader board's "Alcance de la lista" is exactly those two facts as two tabs.
+   */
+  named: boolean
 }
 
 export interface GroupedRows {
@@ -49,6 +58,7 @@ export function toRows(
     hasProgress: hasRecordedProgress(plan),
     responsableIsViewer: plan.responsableEjecucionExternalId !== '' && plan.responsableEjecucionExternalId === viewer.personaExternalId,
     canManage: canManagePlan(plan, claims),
+    named: isNamedOnPlan(plan, claims),
   }))
 }
 

@@ -72,7 +72,7 @@ export interface LinkableNotification {
  *
  * Returns a path rather than a boolean plus an id so a caller cannot build the URL a
  * second, differently-shaped way — the `/surveys/:id/respond` literal is written here and
- * on `MySurveysPage`, and one of those is one too many already.
+ * on `MySurveysNextPage`, and one of those is one too many already.
  */
 export function surveyRespondPathFor(notification: LinkableNotification): string | null {
   if (!LINK_CARRYING_TYPES.includes(notification.type)) return null
