@@ -55,10 +55,30 @@ public static class TrackingTokenValidation
     /// The signature and lifetime half of the contract. Tenant scoping is authorization, not
     /// authentication, and lives in <see cref="MatchingTenantRequirement"/>.
     /// </summary>
-    public static TokenValidationParameters CreateParameters(string trackingJwtSecret) => new()
+    /// <param name="trackingJwtSecret">The current shared secret. Required.</param>
+    /// <param name="previousTrackingJwtSecret">
+    /// The secret being rotated away from, or null outside a rotation (#70).
+    /// <para>
+    /// <b>Required as a parameter rather than defaulted, on purpose.</b> This service validates
+    /// tokens the other one mints, and a rolling rotation only works if BOTH sides accept the
+    /// old key during the overlap — if this side quietly kept accepting one key, rotating would
+    /// still cut every tracking session dead and the other side's window would be decoration.
+    /// No default means a call site cannot forget to have an opinion.
+    /// </para>
+    /// <para>
+    /// It widens what this service accepts, so it is temporary by construction: clear it once
+    /// one token lifetime has passed, or the value being rotated away from still opens the door.
+    /// </para>
+    /// </param>
+    public static TokenValidationParameters CreateParameters(
+        string trackingJwtSecret,
+        string? previousTrackingJwtSecret) => new()
     {
         ValidateIssuerSigningKey = true,
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(trackingJwtSecret)),
+
+        // Plural, and it mirrors JwtSigningKeys.ForValidation on the climate-project side. Blank
+        // is absent, not an error (an unset env var arrives that way); a duplicate is dropped.
+        IssuerSigningKeys = SigningKeys(trackingJwtSecret, previousTrackingJwtSecret),
 
         // climate-project-api's JwtTokenService mints neither an `iss` nor an `aud`, so both
         // checks are off: turning either on rejects every token the other service issues.
@@ -69,4 +89,18 @@ public static class TrackingTokenValidation
         ValidateLifetime = true,
         NameClaimType = NameClaimType,
     };
+
+    private static IReadOnlyList<SecurityKey> SigningKeys(string current, string? previous)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(current);
+
+        var keys = new List<SecurityKey> { new SymmetricSecurityKey(Encoding.UTF8.GetBytes(current)) };
+
+        if (!string.IsNullOrWhiteSpace(previous) && !string.Equals(previous, current, StringComparison.Ordinal))
+        {
+            keys.Add(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(previous)));
+        }
+
+        return keys;
+    }
 }

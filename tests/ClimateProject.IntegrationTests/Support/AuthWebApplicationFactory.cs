@@ -57,7 +57,7 @@ public class AuthWebApplicationFactory(string connectionString) : WebApplication
     /// its own work cannot give, because it only ever measures its own window.
     /// </para>
     /// <para>
-    /// The seven, and why each is allowed:
+    /// The eight, and why each is allowed:
     /// <list type="number">
     ///   <item><description>
     ///     <see cref="PostgresContainerFixture"/> -- the one host the whole collection shares.
@@ -100,6 +100,19 @@ public class AuthWebApplicationFactory(string connectionString) : WebApplication
     ///     the suite stayed green for months while the product mailed link-less invitations,
     ///     because nothing anywhere read a body.
     ///   </description></item>
+    ///   <item><description>
+    ///     <c>TrackingJwtRotationTests</c> -- ONE host for the whole class, held in a static class
+    ///     fixture, and the same reason as 2 and 4-6: the CONFIGURATION is the experiment. It runs
+    ///     with a different <c>TrackingJwtSecret</c> and the suite's usual one as
+    ///     <c>TrackingJwtSecretPrevious</c>, which is what a deployment mid-rotation looks like
+    ///     (#70). It cannot be varied per request -- <c>JwtBearerOptions</c> resolves that
+    ///     configuration once -- and it cannot be folded into the shared host, whose whole job is
+    ///     to be the ordinary no-rotation case every other test needs.
+    ///     Proved rather than assumed: misspelling the configuration key in <c>Program.cs</c> as
+    ///     <c>TrackingJwtSecretPrevius</c> leaves all 10 <c>JwtSigningKeysTests</c> and 21 of 22
+    ///     <c>CrossServiceTokenTests</c> passing -- the rotation window would ship silently
+    ///     absent, and this host is the only thing that notices.
+    ///   </description></item>
     /// </list>
     /// </para>
     /// <para>
@@ -108,7 +121,7 @@ public class AuthWebApplicationFactory(string connectionString) : WebApplication
     /// another. If you need one more host, say which of the reasons above yours is like.
     /// </para>
     /// </summary>
-    public const int HostBudget = 8;
+    public const int HostBudget = 9;
 
     /// <summary>
     /// Counts the database commands this application sends. Reset it immediately before the

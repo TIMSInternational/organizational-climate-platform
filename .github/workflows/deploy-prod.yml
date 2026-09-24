@@ -341,6 +341,11 @@ jobs:
       - name: Deploy App Runner service stack
         run: |
           set -euo pipefail
+          # TRACKING_JWT_SECRET_PREVIOUS_ARN is deliberately NOT in the required-variables check
+          # above. Empty is the steady state and means "no rotation in flight" (#70); the template
+          # drops both the runtime secret and the IAM grant when it is unset. It is set only for
+          # the ~24h overlap and then cleared -- while it is set, the secret being rotated away
+          # from still authenticates. Do not make it mandatory.
           aws cloudformation deploy \
             --stack-name "$SERVICE_STACK_NAME" \
             --template-file infra/aws/climate-project-api-prod-service.yml \
@@ -360,6 +365,7 @@ jobs:
               CorsAdditionalAllowedOrigin="${{ vars.CORS_ADDITIONAL_ALLOWED_ORIGIN }}" \
               CorsAdditionalAllowedWildcardOrigin="${{ vars.CORS_ADDITIONAL_ALLOWED_WILDCARD_ORIGIN }}" \
               TrackingJwtSecretArn="${{ vars.TRACKING_JWT_SECRET_ARN }}" \
+              TrackingJwtSecretPreviousArn="${{ vars.TRACKING_JWT_SECRET_PREVIOUS_ARN }}" \
               DatabaseConnectionStringSecretArn="${{ vars.DATABASE_CONNECTION_STRING_SECRET_ARN }}" \
               InternalApiKeySecretArn="${{ vars.INTERNAL_API_KEY_SECRET_ARN }}" \
               EmailSmtpUsernameSecretArn="${{ vars.EMAIL_SMTP_USERNAME_SECRET_ARN }}" \

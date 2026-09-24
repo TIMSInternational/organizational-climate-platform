@@ -640,9 +640,12 @@ unaffected.** The order of 3 and 4 does not matter for correctness — both
 directions produce the same symmetric 401 window — but *both must happen*, and
 nothing else should be dispatched in between.
 
-`TrackingJwtSecret` is the same two-sided shape with a much larger blast radius: it
-is one value doing three jobs and rotating it logs everyone out of **both** products
-at once. See `docs/security/rotation-inventory.md` §A before touching it.
+`TrackingJwtSecret` is the same two-sided shape and the same "both must happen" rule, but it
+no longer logs everyone out: since #70 both services accept the previous key alongside the
+current one, so rotating is rolling. The catch is the other end — the overlap widens what both
+services accept until `TrackingJwtSecretPrevious` is cleared, which is a step of the rotation
+and not cleanup. See `docs/security/rotation-inventory.md` §A and the runbook's §A before
+touching it.
 
 ---
 

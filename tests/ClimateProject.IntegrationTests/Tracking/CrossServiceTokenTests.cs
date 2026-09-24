@@ -132,7 +132,10 @@ public class CrossServiceTokenTests : IAsyncLifetime
         return new ClaimsPrincipal(result.ClaimsIdentity);
     }
 
-    private static Task<TokenValidationResult> ValidateAsync(string token, string trackingJwtSecret)
+    private static Task<TokenValidationResult> ValidateAsync(
+        string token,
+        string trackingJwtSecret,
+        string? previousTrackingJwtSecret = null)
     {
         var handler = new JsonWebTokenHandler
         {
@@ -141,8 +144,14 @@ public class CrossServiceTokenTests : IAsyncLifetime
 
         return handler.ValidateTokenAsync(
             token,
-            TrackingAuth.TrackingTokenValidation.CreateParameters(trackingJwtSecret));
+            TrackingAuth.TrackingTokenValidation.CreateParameters(trackingJwtSecret, previousTrackingJwtSecret));
     }
+
+    /// <summary>A secret this suite never mints with — stands in for the value a rotation moves to.</summary>
+    private const string RotatedToSecret = "rotated-to-a-brand-new-tracking-jwt-secret-value-0123456789";
+
+    /// <summary>A secret that was never in service — a forger's key, not a retired one.</summary>
+    private const string UnrelatedSecret = "an-attackers-own-signing-key-that-was-never-ours-0123456789";
 
     /// <summary>
     /// climate-tracking's tenant gate, the requirement its default authorization policy adds
@@ -477,4 +486,81 @@ public class CrossServiceTokenTests : IAsyncLifetime
         Assert.True(string.IsNullOrEmpty(jwt.Issuer), $"unexpected iss: {jwt.Issuer}");
         Assert.Empty(jwt.Audiences);
     }
+    // ---------------------------------------------------------------------
+    // The rotation window (#70). These use a token minted by the REAL path
+    // above, then validate it under the key set the other service would hold
+    // at each stage of a rotation -- so what is under test is which keys are
+    // accepted, with a genuine token rather than a hand-built one.
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// <b>The property that makes rotating survivable.</b> Mid-rotation the other service holds
+    /// the new secret as current and the old one as previous; a token already in a user's browser
+    /// was signed with the old one and must keep working until it expires on its own.
+    /// </summary>
+    /// <remarks>
+    /// Without this, rotating <c>TrackingJwtSecret</c> invalidates every live session in BOTH
+    /// products at the same instant — tokens live 24 hours, so the blast radius is every signed-in
+    /// user at whatever moment the rotation lands. That is what made an urgent rotation something
+    /// nobody wanted to perform.
+    /// </remarks>
+    [Fact]
+    public async Task A_token_signed_with_the_previous_secret_is_accepted_during_a_rotation()
+    {
+        var client = _factory.CreateClient();
+        var token = await LeaderTokenAsync(client, $"rotation-during@{_emailDomain}");
+
+        var result = await ValidateAsync(token, RotatedToSecret, previousTrackingJwtSecret: SharedTrackingJwtSecret);
+
+        Assert.True(result.IsValid, $"a token minted before the rotation was refused: {result.Exception?.Message}");
+    }
+
+    /// <summary>
+    /// The other half, and the half that makes the rotation worth doing: once the window is closed
+    /// the old key opens nothing. A previous key left configured for ever would mean a rotation
+    /// bought nothing at all — the compromised value would still be accepted.
+    /// </summary>
+    [Fact]
+    public async Task A_token_signed_with_the_previous_secret_is_refused_once_the_window_closes()
+    {
+        var client = _factory.CreateClient();
+        var token = await LeaderTokenAsync(client, $"rotation-closed@{_emailDomain}");
+
+        var result = await ValidateAsync(token, RotatedToSecret, previousTrackingJwtSecret: null);
+
+        Assert.False(result.IsValid, "the retired secret still validated after the rotation window closed");
+    }
+
+    /// <summary>
+    /// Fail closed: the window admits exactly the one retired key, not any key. A token signed
+    /// with a secret that was never in service is refused whether a rotation is in flight or not.
+    /// </summary>
+    [Fact]
+    public async Task A_token_signed_with_a_secret_that_was_never_ours_is_refused_during_a_rotation()
+    {
+        var client = _factory.CreateClient();
+        var token = await LeaderTokenAsync(client, $"rotation-forged@{_emailDomain}");
+
+        // The real token is fine; it is the KEY SET that is wrong here -- neither entry is the
+        // secret this token was minted with.
+        var result = await ValidateAsync(token, RotatedToSecret, previousTrackingJwtSecret: UnrelatedSecret);
+
+        Assert.False(result.IsValid, "a key set containing neither the minting secret nor a retired one accepted the token");
+    }
+
+    /// <summary>
+    /// The steady state is unchanged: with no rotation in flight, the current secret alone still
+    /// validates a real token. A regression here would mean the plural key set broke the normal path.
+    /// </summary>
+    [Fact]
+    public async Task The_current_secret_alone_still_validates_when_no_rotation_is_in_flight()
+    {
+        var client = _factory.CreateClient();
+        var token = await LeaderTokenAsync(client, $"rotation-steady@{_emailDomain}");
+
+        var result = await ValidateAsync(token, SharedTrackingJwtSecret, previousTrackingJwtSecret: null);
+
+        Assert.True(result.IsValid, $"the ordinary no-rotation path was refused: {result.Exception?.Message}");
+    }
+
 }
