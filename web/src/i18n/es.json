@@ -1806,6 +1806,7 @@
     "respondClosedTitle": "Esta sesión no está recibiendo respuestas",
     "respondLoadFailedTitle": "No se pudo cargar esta sesión",
     "respondSubmitFailedTitle": "No se pudieron enviar sus respuestas",
+    "respondNoSeatsBody": "Esta sesi\u00f3n no puede aceptar nuevas respuestas en este momento, as\u00ed que no se registr\u00f3 nada de lo que acaba de enviar. Sus respuestas siguen en esta p\u00e1gina: d\u00e9jela abierta y contacte a quien le invit\u00f3 a la sesi\u00f3n.",
     "noMicroclimatesFound": "No se encontraron microclimas.",
     "anonymousResponses": "Respuestas Anónimas",
     "optionsCommaSeparatedMin2": "Opciones (separadas por comas, al menos 2)",

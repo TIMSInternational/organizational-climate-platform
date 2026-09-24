@@ -259,6 +259,28 @@ export async function getLiveResults(baseUrl: string, id: string): Promise<LiveR
   return response.json() as Promise<LiveResults>
 }
 
+/**
+ * A refused `POST /microclimates/{id}/responses`, carrying the status alongside the message.
+ *
+ * The status is the point. The server's body is a fixed English string, so a caller that has
+ * only `message` can do nothing but print it — which is how a Costa Rican respondent came to
+ * be shown English on an otherwise Spanish page (#495, on the survey path). Microclimates
+ * reach the same fork now that they meter licence seats and can answer 402 (#496), so they
+ * need the same handle: match on the status, and take the sentence from the catalogue.
+ *
+ * Mirrors `SurveyRespondError` in `features/surveys/api/surveyResponses.ts`, deliberately —
+ * the two respond paths are separate code with the same obligation.
+ */
+export class MicroclimateRespondError extends Error {
+  readonly status: number
+
+  constructor(status: number, message: string) {
+    super(message)
+    this.name = 'MicroclimateRespondError'
+    this.status = status
+  }
+}
+
 // Deliberately does not use authFetch -- this is called from the unauthenticated
 // public respond page (Task 7) when the microclimate allows anonymous responses.
 // A token IS still attached if one happens to be present, and that is load-bearing
@@ -290,6 +312,9 @@ export async function submitResponse(
 
   if (!response.ok) {
     const body = await response.json().catch(() => null)
-    throw new Error((body && body.message) || `Request failed: ${response.status}`)
+    throw new MicroclimateRespondError(
+      response.status,
+      (body && body.message) || `Request failed: ${response.status}`,
+    )
   }
 }

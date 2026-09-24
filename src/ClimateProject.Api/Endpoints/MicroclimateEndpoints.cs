@@ -331,6 +331,20 @@ public static class MicroclimateEndpoints
     /// </summary>
     internal const string NotAcceptingResponsesMessage = "This microclimate is not currently accepting responses";
 
+    /// <summary>
+    /// The refusal a respondent gets when the company's <c>microclimate</c> licence has no seat
+    /// for this submission. Deliberately the same sentence as
+    /// <see cref="NotAcceptingResponsesMessage"/>, on a different status code (#496).
+    /// </summary>
+    /// <remarks>
+    /// The status code carries the distinction — 402, so an admin surface and the client can tell
+    /// "out of licence seats" from a closed session's 400 — while the prose does not, because the
+    /// person reading it is a respondent, not the customer. A respondent must never be shown the
+    /// client's commercial state; "your employer has run out of seats" is not theirs to see and
+    /// not theirs to act on. Matches the survey path's <c>NoLicenseSeats</c> for the same reason.
+    /// </remarks>
+    internal const string NoLicenseSeatsMessage = "This microclimate is not currently accepting new responses";
+
     /// <summary>The refusal for editing the window of a session that is already over.</summary>
     internal const string ClosedWindowEditMessage =
         "This microclimate is closed, so its end time can no longer be changed. A closed microclimate "
@@ -1578,75 +1592,150 @@ public static class MicroclimateEndpoints
             .Select(kv => kv.Value)
             .ToList();
 
+        // This submission spends one seat of the company's "microclimate" licence (#496).
+        //
+        // The service is passed as a literal and not read off the row, because a microclimate IS
+        // the microclimate service by construction. Giving the entity a ServiceType field would
+        // add a column that can only ever hold one value and a way for it to hold the wrong one.
+        //
+        // WHY THE SEAT IS TAKEN HERE, BEFORE THE LOOP, AND GIVEN BACK BELOW. The survey path
+        // consumes inside the completion's transaction, so a refusal rolls the seat back for
+        // free. That shape is not available here: the write below is a read-modify-write
+        // aggregate under an optimistic-concurrency retry, because a live microclimate is a
+        // burst -- a room answering at once. A transaction spanning that loop would hold the
+        // microclimate row from the first SaveChangesAsync to commit and convoy the exact path
+        // the loop exists to keep lock-free. So: consume (one statement), write (the loop),
+        // and release (one statement) if the write does not stand. Nothing holds a lock across
+        // anything else, and the burst path keeps the shape it was designed with.
+        //
+        // Taking the seat FIRST is what makes the refusal honest. Consuming after a successful
+        // write would mean the response is already committed and visible in ResponseCount by the
+        // time the licence says no -- there would be nothing left to refuse, and the ceiling
+        // would not be a ceiling. All validation is already done by this point, so a seat is
+        // never spent on a submission that was going to be rejected on its merits anyway.
+        var now = DateTimeOffset.UtcNow;
+        var seat = await CompanyLicenses.TryConsumeSeatAsync(
+            db, microclimate.CompanyId, ClimateServiceTypes.Microclimate, now, cancellationToken);
+        if (!seat.Allows())
+        {
+            return Results.Json(new { message = NoLicenseSeatsMessage }, statusCode: 402);
+        }
+
+        // Only a seat that was actually taken can be given back. NotMetered/NoLicense consumed
+        // nothing (a company with no licence row is grandfathered), and releasing on those would
+        // decrement a licence this submission never touched.
+        var seatTaken = seat == SeatConsumeOutcome.Consumed;
+
+        // Read off the company now: the loop below reassigns `microclimate` on every conflict,
+        // and the release must name the company this request consumed against.
+        var licensedCompanyId = microclimate.CompanyId;
+
+        // CancellationToken.None, and that is the whole point of this line. The commonest way
+        // for the write below to fail is the respondent closing the tab, which cancels
+        // `cancellationToken` -- and a release passed that token would throw on the way in,
+        // before giving anything back, leaking the seat AND replacing the original exception
+        // with its own from inside the catch. Compensation has to outlive the request it is
+        // compensating for. It is one short statement against an already-open connection.
+        async Task ReleaseSeatIfTakenAsync()
+        {
+            if (seatTaken)
+            {
+                // Cleared first: a release that throws must not leave this true for the catch
+                // below to retry, which would give back a second seat this request never took.
+                seatTaken = false;
+                await CompanyLicenses.ReleaseSeatAsync(
+                    db, licensedCompanyId, ClimateServiceTypes.Microclimate, DateTimeOffset.UtcNow, CancellationToken.None);
+            }
+        }
+
         // ResponseCount and LiveResults.WordCloudData are a read-modify-write aggregate with
         // no natural per-response row to insert into, so concurrent submissions (the normal
         // case for a live microclimate) can race. Retry on optimistic-concurrency conflict
         // (backed by the "xmin" token configured in MicroclimateConfiguration.cs) instead of
         // silently losing one submission's increment/word counts.
+        //
+        // try/catch, not try/finally: the seat is released on the paths where the submission does
+        // NOT stand. A finally would also run on the success path and hand back the seat that was
+        // just legitimately spent.
         const int maxAttempts = 20;
-        for (var attempt = 1; ; attempt++)
+        try
         {
-            var existingCloud = string.IsNullOrWhiteSpace(microclimate.LiveResults.WordCloudData)
-                ? new Dictionary<(string Language, string Word), int>()
-                : System.Text.Json.JsonSerializer.Deserialize<List<WordCloudEntry>>(microclimate.LiveResults.WordCloudData)!
-                    .ToDictionary(w => (Language: w.Language, Word: w.Text), w => w.Value);
-
-            foreach (var (key, count) in CountWordFrequencies(openTextAnswers, respondentLanguage))
+            for (var attempt = 1; ; attempt++)
             {
-                existingCloud[key] = existingCloud.GetValueOrDefault(key) + count;
-            }
+                var existingCloud = string.IsNullOrWhiteSpace(microclimate.LiveResults.WordCloudData)
+                    ? new Dictionary<(string Language, string Word), int>()
+                    : System.Text.Json.JsonSerializer.Deserialize<List<WordCloudEntry>>(microclimate.LiveResults.WordCloudData)!
+                        .ToDictionary(w => (Language: w.Language, Word: w.Text), w => w.Value);
 
-            // Top 20 PER LANGUAGE, not top 20 overall -- one busy language would
-            // otherwise crowd the other out of the stored cloud entirely, and the
-            // minority language is precisely the one an admin needs to see.
-            var topWords = existingCloud
-                .GroupBy(kv => kv.Key.Language)
-                .SelectMany(g => g
-                    .OrderByDescending(kv => kv.Value)
-                    .Take(20)
-                    .Select(kv => new WordCloudEntry(kv.Key.Word, kv.Value, kv.Key.Language)))
-                .ToList();
-
-            microclimate.ResponseCount += 1;
-            microclimate.LiveResults.WordCloudData = System.Text.Json.JsonSerializer.Serialize(topWords);
-            microclimate.LiveResults.EngagementLevel = ComputeEngagementLevel(microclimate.ResponseCount, microclimate.TargetParticipantCount);
-            microclimate.LiveResults.SentimentScore = 0;
-            microclimate.UpdatedAt = DateTimeOffset.UtcNow;
-
-            try
-            {
-                await db.SaveChangesAsync(cancellationToken);
-                break;
-            }
-            catch (DbUpdateConcurrencyException) when (attempt < maxAttempts)
-            {
-                // Another submission won the race and committed first. Discard our stale
-                // tracked state entirely and re-read the now-current row, then reapply this
-                // submission's word counts/increment on top of it.
-                db.ChangeTracker.Clear();
-                microclimate = await db.Microclimates.FirstAsync(m => m.Id == id, cancellationToken);
-
-                // ...but re-read the STATUS too, not just the aggregate, and stand down if the
-                // session shut while this submission was in flight.
-                //
-                // The gate above ran against the row as it was when this request started. That
-                // was sufficient while every other writer of this row was another respondent --
-                // a conflict meant "somebody else answered first", never "the session ended".
-                // MicroclimateLifecycleJob is now a routine writer of microclimates.status, on a
-                // timer, and its close lands precisely when respondents are finishing. Without
-                // this the whole point of #376 is lost on the one path it was about: the
-                // increment would be reapplied on top of a row that says `closed`, the answer
-                // counted after the deadline, and 201 returned -- and unlike a survey there is no
-                // per-response row to identify it by afterwards, so it could never be unpicked.
-                //
-                // The message is the pre-check's, deliberately: from the respondent's side these
-                // are the same event -- they answered after the session ended -- and the
-                // difference is milliseconds of server timing they cannot see or act on.
-                if (!MicroclimateStatuses.AcceptsResponses(microclimate.Status))
+                foreach (var (key, count) in CountWordFrequencies(openTextAnswers, respondentLanguage))
                 {
-                    return Results.Json(new { message = NotAcceptingResponsesMessage }, statusCode: 400);
+                    existingCloud[key] = existingCloud.GetValueOrDefault(key) + count;
+                }
+
+                // Top 20 PER LANGUAGE, not top 20 overall -- one busy language would
+                // otherwise crowd the other out of the stored cloud entirely, and the
+                // minority language is precisely the one an admin needs to see.
+                var topWords = existingCloud
+                    .GroupBy(kv => kv.Key.Language)
+                    .SelectMany(g => g
+                        .OrderByDescending(kv => kv.Value)
+                        .Take(20)
+                        .Select(kv => new WordCloudEntry(kv.Key.Word, kv.Value, kv.Key.Language)))
+                    .ToList();
+
+                microclimate.ResponseCount += 1;
+                microclimate.LiveResults.WordCloudData = System.Text.Json.JsonSerializer.Serialize(topWords);
+                microclimate.LiveResults.EngagementLevel = ComputeEngagementLevel(microclimate.ResponseCount, microclimate.TargetParticipantCount);
+                microclimate.LiveResults.SentimentScore = 0;
+                microclimate.UpdatedAt = DateTimeOffset.UtcNow;
+
+                try
+                {
+                    await db.SaveChangesAsync(cancellationToken);
+                    break;
+                }
+                catch (DbUpdateConcurrencyException) when (attempt < maxAttempts)
+                {
+                    // Another submission won the race and committed first. Discard our stale
+                    // tracked state entirely and re-read the now-current row, then reapply this
+                    // submission's word counts/increment on top of it.
+                    db.ChangeTracker.Clear();
+                    microclimate = await db.Microclimates.FirstAsync(m => m.Id == id, cancellationToken);
+
+                    // ...but re-read the STATUS too, not just the aggregate, and stand down if the
+                    // session shut while this submission was in flight.
+                    //
+                    // The gate above ran against the row as it was when this request started. That
+                    // was sufficient while every other writer of this row was another respondent --
+                    // a conflict meant "somebody else answered first", never "the session ended".
+                    // MicroclimateLifecycleJob is now a routine writer of microclimates.status, on a
+                    // timer, and its close lands precisely when respondents are finishing. Without
+                    // this the whole point of #376 is lost on the one path it was about: the
+                    // increment would be reapplied on top of a row that says `closed`, the answer
+                    // counted after the deadline, and 201 returned -- and unlike a survey there is no
+                    // per-response row to identify it by afterwards, so it could never be unpicked.
+                    //
+                    // The message is the pre-check's, deliberately: from the respondent's side these
+                    // are the same event -- they answered after the session ended -- and the
+                    // difference is milliseconds of server timing they cannot see or act on.
+                    if (!MicroclimateStatuses.AcceptsResponses(microclimate.Status))
+                    {
+                        // The session shut while this submission was in flight, so the answer is
+                        // not going to be recorded -- give the seat back. Without this the
+                        // respondent is refused AND the customer is charged for it.
+                        await ReleaseSeatIfTakenAsync();
+                        return Results.Json(new { message = NotAcceptingResponsesMessage }, statusCode: 400);
+                    }
                 }
             }
+        }
+        catch
+        {
+            // Anything that escapes the retry -- 20 lost races in a row, a dropped connection,
+            // a cancelled request -- means no response was recorded, so the seat must not stay
+            // spent. Rethrown untouched: this compensates, it does not swallow.
+            await ReleaseSeatIfTakenAsync();
+            throw;
         }
 
         return Results.StatusCode(201);

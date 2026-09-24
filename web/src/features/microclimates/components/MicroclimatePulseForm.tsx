@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { EyeOff, Info, Send } from 'lucide-react'
 import {
   getMicroclimatePublic,
+  MicroclimateRespondError,
   submitResponse,
   type PublicMicroclimateDetail,
   type Question,
@@ -313,13 +314,35 @@ function EmojiScale({
  * The message from a real API error is already human-readable and locale-agnostic
  * here; only the fallback needs translating, and doing that at render keeps `t`
  * out of the fetch effect's dependency array.
+ *
+ * **`status` is carried for the one case where the server's own sentence must not be
+ * shown at all.** That premise above — "already human-readable and locale-agnostic" —
+ * is not true of every refusal: a 402 body is a fixed English string, so printing it
+ * puts English on a Spanish page. The status is what lets the render reach for the
+ * catalogue instead of the body. See `isNoSeats`.
  */
 interface PageError {
   message: string | null
+  status: number | null
 }
 
 function toPageError(err: unknown): PageError {
-  return { message: err instanceof Error ? err.message : null }
+  return {
+    message: err instanceof Error ? err.message : null,
+    status: err instanceof MicroclimateRespondError ? err.status : null,
+  }
+}
+
+/**
+ * A licensing refusal from `POST /microclimates/{id}/responses` (#496).
+ *
+ * 402 is the status the licensing layer picked precisely so a client could tell "out of
+ * seats" apart from a closed session's 400 (`MicroclimateEndpoints.cs`, the comment on
+ * `NoLicenseSeatsMessage`). Matching on the status rather than the message is the whole
+ * point: the message is the English string this exists to keep off the screen.
+ */
+function isNoSeats(error: PageError | null): boolean {
+  return error?.status === 402
 }
 
 /**
@@ -572,7 +595,16 @@ export default function MicroclimatePulseForm({
             <Alert variant="warning" role="alert">
               <Info aria-hidden="true" />
               <AlertTitle>{t('microclimates.respondSubmitFailedTitle')}</AlertTitle>
-              <AlertDescription>{submitError.message ?? t('errors.generic')}</AlertDescription>
+              {/* A 402 never reaches the screen as the server wrote it. The copy is about
+                the session and not about the company — a respondent is never told that
+                their employer has run out of licences — and it has to say that NOTHING
+                was recorded, because somebody who just pressed Send will otherwise
+                assume their answers landed. The seat is given back server-side. */}
+              <AlertDescription>
+                {isNoSeats(submitError)
+                  ? t('microclimates.respondNoSeatsBody')
+                  : (submitError.message ?? t('errors.generic'))}
+              </AlertDescription>
             </Alert>
           ) : null}
 
