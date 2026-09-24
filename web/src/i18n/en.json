@@ -1806,6 +1806,7 @@
     "respondClosedTitle": "This session is not taking answers",
     "respondLoadFailedTitle": "This session could not be loaded",
     "respondSubmitFailedTitle": "Your answers could not be sent",
+    "respondNoSeatsBody": "This session cannot accept new answers at the moment, so nothing you just sent has been recorded. Your answers are still on this page \u2014 leave it open and contact whoever invited you to the session.",
     "noMicroclimatesFound": "No microclimates found.",
     "anonymousResponses": "Anonymous responses",
     "optionsCommaSeparatedMin2": "Options (comma-separated, at least 2)",

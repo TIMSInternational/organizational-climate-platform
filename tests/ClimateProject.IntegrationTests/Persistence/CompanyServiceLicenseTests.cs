@@ -161,4 +161,111 @@ public class CompanyServiceLicenseTests(PostgresContainerFixture postgres)
         var lic = await verify.CompanyServiceLicenses.AsNoTracking().SingleAsync(l => l.CompanyId == company.Id);
         Assert.Equal(3, lic.SeatsUsed);
     }
+
+    // -----------------------------------------------------------------------
+    // Release (#496) -- the compensation the microclimate submission path needs,
+    // because it has no transaction to roll a seat back for it.
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public async Task Release_gives_a_consumed_seat_back()
+    {
+        await using var db = CreateContext();
+        await db.Database.MigrateAsync();
+        var company = await SeedCompanyAsync(db);
+        var now = DateTimeOffset.UtcNow;
+        await CompanyLicenses.GrantOrUpdateAsync(db, company.Id, ClimateServiceTypes.Microclimate, 5, null, now, default);
+
+        Assert.Equal(
+            SeatConsumeOutcome.Consumed,
+            await CompanyLicenses.TryConsumeSeatAsync(db, company.Id, ClimateServiceTypes.Microclimate, now, default));
+        Assert.True(await CompanyLicenses.ReleaseSeatAsync(db, company.Id, ClimateServiceTypes.Microclimate, now, default));
+
+        await using var verify = CreateContext();
+        var lic = await verify.CompanyServiceLicenses.AsNoTracking().SingleAsync(l => l.CompanyId == company.Id);
+        Assert.Equal(0, lic.SeatsUsed);
+    }
+
+    /// <summary>
+    /// The guard that stops a release from manufacturing entitlement. Exhaustion is derived from
+    /// <c>SeatsUsed &gt;= SeatsTotal</c>, so a negative count is not a harmless off-by-one: it is a
+    /// licence reporting free seats nobody bought.
+    /// </summary>
+    [Fact]
+    public async Task Release_cannot_drive_the_seat_count_below_zero()
+    {
+        await using var db = CreateContext();
+        await db.Database.MigrateAsync();
+        var company = await SeedCompanyAsync(db);
+        var now = DateTimeOffset.UtcNow;
+        await CompanyLicenses.GrantOrUpdateAsync(db, company.Id, ClimateServiceTypes.Microclimate, 5, null, now, default);
+
+        // Nothing was ever consumed, so there is nothing to give back -- and saying so is the
+        // point: the caller can tell "released" from "there was nothing to release".
+        Assert.False(await CompanyLicenses.ReleaseSeatAsync(db, company.Id, ClimateServiceTypes.Microclimate, now, default));
+
+        await using var verify = CreateContext();
+        var lic = await verify.CompanyServiceLicenses.AsNoTracking().SingleAsync(l => l.CompanyId == company.Id);
+        Assert.Equal(0, lic.SeatsUsed);
+    }
+
+    /// <summary>
+    /// A licence suspended between the consume and the release must still give the seat back.
+    /// Suspension stops new consumption; it is not a reason to keep a seat that bought nothing.
+    /// </summary>
+    [Fact]
+    public async Task Release_works_on_a_licence_suspended_after_the_consume()
+    {
+        await using var db = CreateContext();
+        await db.Database.MigrateAsync();
+        var company = await SeedCompanyAsync(db);
+        var now = DateTimeOffset.UtcNow;
+        await CompanyLicenses.GrantOrUpdateAsync(db, company.Id, ClimateServiceTypes.Microclimate, 5, null, now, default);
+        await CompanyLicenses.TryConsumeSeatAsync(db, company.Id, ClimateServiceTypes.Microclimate, now, default);
+
+        await CompanyLicenses.SetStatusAsync(db, company.Id, ClimateServiceTypes.Microclimate, LicenseStatuses.Suspended, now, default);
+        Assert.True(await CompanyLicenses.ReleaseSeatAsync(db, company.Id, ClimateServiceTypes.Microclimate, now, default));
+
+        await using var verify = CreateContext();
+        var lic = await verify.CompanyServiceLicenses.AsNoTracking().SingleAsync(l => l.CompanyId == company.Id);
+        Assert.Equal(0, lic.SeatsUsed);
+        Assert.Equal(LicenseStatuses.Suspended, lic.Status);
+    }
+
+    [Fact]
+    public async Task Release_does_nothing_for_an_unmetered_service_or_a_company_with_no_licence()
+    {
+        await using var db = CreateContext();
+        await db.Database.MigrateAsync();
+        var company = await SeedCompanyAsync(db);
+        var now = DateTimeOffset.UtcNow;
+
+        Assert.False(await CompanyLicenses.ReleaseSeatAsync(db, company.Id, "custom", now, default));
+        Assert.False(await CompanyLicenses.ReleaseSeatAsync(db, company.Id, null, now, default));
+        Assert.False(await CompanyLicenses.ReleaseSeatAsync(db, company.Id, ClimateServiceTypes.Microclimate, now, default));
+    }
+
+    /// <summary>
+    /// Release touches only the service it names. Without this, "releases a seat" and "releases
+    /// the right seat" pass identically.
+    /// </summary>
+    [Fact]
+    public async Task Release_is_scoped_to_its_own_service()
+    {
+        await using var db = CreateContext();
+        await db.Database.MigrateAsync();
+        var company = await SeedCompanyAsync(db);
+        var now = DateTimeOffset.UtcNow;
+        await CompanyLicenses.GrantOrUpdateAsync(db, company.Id, ClimateServiceTypes.Microclimate, 5, null, now, default);
+        await CompanyLicenses.GrantOrUpdateAsync(db, company.Id, ClimateServiceTypes.GeneralClimate, 5, null, now, default);
+        await CompanyLicenses.TryConsumeSeatAsync(db, company.Id, ClimateServiceTypes.Microclimate, now, default);
+        await CompanyLicenses.TryConsumeSeatAsync(db, company.Id, ClimateServiceTypes.GeneralClimate, now, default);
+
+        Assert.True(await CompanyLicenses.ReleaseSeatAsync(db, company.Id, ClimateServiceTypes.Microclimate, now, default));
+
+        await using var verify = CreateContext();
+        var rows = await CompanyLicenses.ListAsync(verify, company.Id, default);
+        Assert.Equal(0, rows.Single(l => l.ServiceType == ClimateServiceTypes.Microclimate).SeatsUsed);
+        Assert.Equal(1, rows.Single(l => l.ServiceType == ClimateServiceTypes.GeneralClimate).SeatsUsed);
+    }
 }

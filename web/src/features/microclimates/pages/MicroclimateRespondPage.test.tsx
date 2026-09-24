@@ -693,4 +693,40 @@ describe('MicroclimateRespondPage emoji scale', () => {
     // Both answers reach the server, each against its own question.
     expect(body.answers).toEqual({ q1: '3', q2: '2' })
   })
+
+  /**
+   * A licence refusal speaks the respondent's language, not the server's English (#496).
+   *
+   * Microclimates began metering licence seats with #496, so `POST .../responses` can now
+   * answer **402** — a status this path had never produced before. Its body is a fixed
+   * English string, and the submit alert printed `error.message` verbatim, so the first
+   * Costa Rican respondent to hit an exhausted licence would have read
+   * "This microclimate is not currently accepting new responses" on an otherwise Spanish
+   * page. This is the same defect #495 fixed on the survey path, arriving on this one by
+   * way of a server change rather than a client one.
+   *
+   * The English sentence is asserted ABSENT as well as the Spanish one present: a render
+   * that showed both — the catalogue copy plus the raw body underneath — would satisfy a
+   * present-only assertion while still leaking the server's English onto the screen.
+   */
+  it('answers a licence refusal in the respondent\'s language, not the server\'s English', async () => {
+    const serverEnglish = 'This microclimate is not currently accepting new responses'
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(new Response(JSON.stringify(spanishMicroclimate()), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ message: serverEnglish }), { status: 402 }),
+      )
+    renderPage()
+
+    await userEvent.click(await screen.findByLabelText('Muy de acuerdo'))
+    await userEvent.click(screen.getByRole('button', { name: /enviar|submit/i }))
+
+    const alert = await screen.findByRole('alert')
+    expect(within(alert).getByText(/no puede aceptar nuevas respuestas/i)).toBeTruthy()
+    expect(screen.queryByText(serverEnglish)).toBeNull()
+
+    // And it has to say that nothing was recorded: somebody who has just pressed Send
+    // will otherwise assume their answers landed.
+    expect(within(alert).getByText(/no se registr\u00f3 nada/i)).toBeTruthy()
+  })
 })

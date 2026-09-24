@@ -1,7 +1,9 @@
 # Decision: a licensed service is its own field on a survey, not its `Type` (#496)
 
-**Status: DECIDED and implemented for surveys. Microclimates are deliberately still unmetered
-and the decision for them is OPEN — see "What is not decided" below. Owner: Federico.**
+**Status: DECIDED and implemented for surveys. The microclimate half was left OPEN here and has
+since been DECIDED and implemented — see
+[`microclimate-seats-are-consumed-and-released.md`](microclimate-seats-are-consumed-and-released.md)
+(#496, 2026-09-24). Owner: Federico.**
 Recorded 2026-09-17 against `main` at `15c0a80c`, after the fact: #493 shipped the licensing
 layer on 2026-09-16 and deployed it to production the same day, and this record exists because
 that layer could not meter anything.
@@ -92,6 +94,14 @@ together fails loudly instead of silently restoring the defect.
 survey types. Metering wired back onto the cadence field fails all seven.
 
 ## What is not decided
+
+> **Superseded 2026-09-24.** Everything in this section was true when it was written and is no
+> longer: microclimates now meter, on the ruling recorded in
+> [`microclimate-seats-are-consumed-and-released.md`](microclimate-seats-are-consumed-and-released.md).
+> A seat is one completed response, taken before the aggregate write and released if that write
+> does not stand; neither candidate below was chosen. The paragraphs are kept because the
+> obstacle they describe is why the fix took the shape it did. `Survey.Type` still has no
+> validation — that part remains open.
 
 **Microclimates are still unmetered, and the fix is not obvious.** `TryConsumeSeatAsync` has one
 call site, `SurveyResponseEndpoints.cs`. A microclimate is a separate entity submitting through

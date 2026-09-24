@@ -104,6 +104,68 @@ public static class CompanyLicenses
         SeatConsumeOutcome.Consumed or SeatConsumeOutcome.NotMetered or SeatConsumeOutcome.NoLicense;
 
     /// <summary>
+    /// Gives back a seat this request took and then could not use. The counterpart to
+    /// <see cref="TryConsumeSeatAsync"/> on a caller that has no transaction to roll back.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Why this exists at all, given the survey path does not need it.</b> A survey completion
+    /// consumes inside <c>BeginTransactionAsync</c>, so a refusal rolls the increment back for
+    /// free and there is deliberately no release path. The microclimate submission path cannot
+    /// borrow that: its <c>ResponseCount</c>/word-cloud write is a read-modify-write aggregate
+    /// run under an optimistic-concurrency retry loop, because a live microclimate is a burst.
+    /// Holding a transaction across that loop would pin the microclimate row from the first
+    /// <c>SaveChangesAsync</c> to commit and convoy the very path the loop exists to keep
+    /// lock-free. So that caller consumes first, writes, and calls this if the write does not
+    /// stand -- three single statements, no lock held across any of them (#496).
+    /// </para>
+    /// <para>
+    /// <b>The guard is <c>SeatsUsed &gt; 0</c> and it is not decoration.</b> Without it a release
+    /// that ran twice, or ran against a licence an admin had meanwhile reset, would drive the
+    /// counter negative and manufacture seats nobody granted -- exhaustion is derived from
+    /// <c>SeatsUsed &gt;= SeatsTotal</c>, so a negative count is a licence with free seats that
+    /// were never bought. Returns whether a seat was actually given back, so a caller that wants
+    /// to know can tell "released" from "there was nothing to release".
+    /// </para>
+    /// <para>
+    /// This is compensation, not a transaction, and the difference is worth stating: if the
+    /// process dies between the consume and the release, the seat stays spent. That window is
+    /// one aggregate write wide, and it errs toward charging for a response that was not
+    /// recorded rather than recording one that was not charged -- the direction that cannot
+    /// oversell a licence.
+    /// </para>
+    /// </remarks>
+    public static async Task<bool> ReleaseSeatAsync(
+        ClimateProjectDbContext db,
+        Guid companyId,
+        string? serviceType,
+        DateTimeOffset nowUtc,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(db);
+
+        if (string.IsNullOrWhiteSpace(serviceType) || !ClimateServiceTypes.IsMetered(serviceType))
+        {
+            return false;
+        }
+
+        // Deliberately NOT filtered on Status: a licence suspended between the consume and the
+        // release must still give the seat back. Suspension stops new consumption; it is not a
+        // reason to keep a seat that bought nothing.
+        var written = await db.CompanyServiceLicenses
+            .Where(l => l.CompanyId == companyId
+                && l.ServiceType == serviceType
+                && l.SeatsUsed > 0)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(l => l.SeatsUsed, l => l.SeatsUsed - 1)
+                    .SetProperty(l => l.UpdatedAt, nowUtc),
+                cancellationToken);
+
+        return written >= 1;
+    }
+
+    /// <summary>
     /// Creates or updates the licence for a company+service. Does not change status — use
     /// <see cref="SetStatusAsync"/> to suspend or reactivate. Reducing <paramref name="seatsTotal"/>
     /// below the seats already used is allowed and simply leaves the licence exhausted.
