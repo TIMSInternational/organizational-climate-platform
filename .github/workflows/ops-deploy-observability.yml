@@ -88,20 +88,31 @@ jobs:
           ALERT_FALLBACK_EMAIL: ${{ vars.ALERT_FALLBACK_EMAIL }}
         run: |
           set -euo pipefail
+
+          # Only TWO things are genuinely required, and NEITHER is a secret anybody has to
+          # obtain from a third party. FallbackEmail is a decision about who gets woken up.
           missing=0
-          for name in AWS_ACCOUNT_ID TEAMS_WEBHOOK_URL ALERT_FALLBACK_EMAIL; do
+          for name in AWS_ACCOUNT_ID ALERT_FALLBACK_EMAIL; do
             if [ -z "${!name:-}" ]; then
-              echo "::error::$name is empty. Set it on the 'production' environment (TEAMS_WEBHOOK_URL as a secret, the others as repository variables) before dispatching this workflow." >&2
+              echo "::error::$name is empty. AWS_ACCOUNT_ID is a repository variable; set ALERT_FALLBACK_EMAIL as one too (a distribution list, not a person)." >&2
               missing=1
             fi
           done
-          # Fail here rather than let CloudFormation fail deeper in: FallbackEmail carries an
-          # AllowedPattern, so an empty value is a stack-level error with a worse message, and
-          # TeamsWebhookUrl is NoEcho, so an empty one deploys a forwarder that posts nowhere
-          # and returns success.
+          # Checked here rather than left to CloudFormation: FallbackEmail carries an
+          # AllowedPattern, so an empty value arrives as a stack-level parameter error with a
+          # much worse message than this one.
           if [ "$missing" -ne 0 ]; then
             echo "Refusing to deploy observability with incomplete configuration." >&2
             exit 1
+          fi
+
+          # TEAMS_WEBHOOK_URL is OPTIONAL and its absence is not a degraded deploy. It used to
+          # be required, which meant the email channel -- needing no secret at all -- could not
+          # deploy until somebody minted a webhook in the Teams tenant. Measured 2026-09-25:
+          # nobody ever did, and no SNS subscription in this account is Teams-shaped. Email
+          # alone ends "the alarms notify nobody", which is the whole point of #158.
+          if [ -z "${TEAMS_WEBHOOK_URL:-}" ]; then
+            echo "::notice::No TEAMS_WEBHOOK_URL set. Deploying the EMAIL channel only -- the forwarder and its subscriptions are dropped, not deployed inert. Add the secret and re-run to add Teams; nothing else changes."
           fi
 
       - name: Configure AWS credentials
