@@ -15,6 +15,58 @@ statement of the same problem and the one a reader should carry: the probe DETEC
 TELL. The 22 alarms in `climate-project-observability.yml` remain undeployed.] #158 is not an
 instrumentation problem; it is a wiring problem, and the wiring is the last mile.
 
+### Deploying it TODAY, with an admin profile (2026-09-25)
+
+The CI workflow cannot do this yet. Measured on `climate-project-github-deploy-prod`: it has the
+CloudFormation deploy actions and IAM role actions, and **no `sns`, `logs`, `cloudwatch` or
+`lambda` actions at all**. `aws cloudformation deploy` creates resources with the *caller's*
+permissions, so that role cannot create two topics, twenty metric filters, twenty-two alarms and
+a dashboard. **This is very likely why the stack sat undeployed for a month** — the command below
+has always worked for a human with `AdministratorAccess`, and never from CI, and nothing said so.
+
+Only two parameters are required. `TeamsWebhookUrl` defaults to empty since 2026-09-25, so the
+**email channel deploys with no secret at all**:
+
+```bash
+AWS_PROFILE=formmaps-deploy aws cloudformation deploy \
+  --region us-east-1 \
+  --stack-name climate-project-observability-prod \
+  --template-file infra/aws/climate-project-observability.yml \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --no-fail-on-empty-changeset \
+  --parameter-overrides \
+    ServiceId=126c3f282524450896385975cb3bcba9 \
+    FallbackEmail=alerts@timsint.com \
+    AlarmsEnabled=false
+```
+
+`ServiceId` is the service stack's own output — re-read it rather than trusting the literal above
+if the service has been recreated:
+
+```bash
+AWS_PROFILE=formmaps-deploy aws cloudformation describe-stacks --region us-east-1 \
+  --stack-name climate-project-api-prod \
+  --query "Stacks[0].Outputs[?OutputKey=='ServiceId'].OutputValue | [0]" --output text
+```
+
+Then wire the three probe alarms — whose green-periods gate is met — to the critical topic:
+
+```bash
+AWS_PROFILE=formmaps-deploy aws cloudformation deploy \
+  --region us-east-1 \
+  --stack-name climate-project-synthetic-probe-prod \
+  --template-file infra/aws/climate-project-synthetic-probe.yml \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --no-fail-on-empty-changeset \
+  --parameter-overrides \
+    AlarmTopicArn=arn:aws:sns:us-east-1:747814092517:climate-project-api-prod-alerts-critical
+```
+
+⚠️ That second command re-deploys a **live** stack. Any parameter it does not pass reverts to the
+template default, so check `describe-stacks --stack-name climate-project-synthetic-probe-prod
+--query 'Stacks[0].Parameters'` first and carry forward anything non-default. The CI workflow does
+this automatically; a hand-run does not.
+
 **Update 2026-09-24.** The last mile now has a button:
 `.github/workflows/ops-deploy-observability.yml` deploys the observability stack and optionally
 wires this probe's alarms to its critical topic. The green-periods gate that §9 set before wiring
