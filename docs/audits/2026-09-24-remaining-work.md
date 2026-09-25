@@ -52,9 +52,29 @@ $ aws cloudformation describe-stacks --query 'Stacks[?contains(StackName,`climat
 alerting runbook specifies, 3 are deployed and muted and the rest do not exist.
 
 **Why this row is first.** An alarm with no action is worse than no alarm: it produces the
-appearance of monitoring. A 24-hour outage would be discovered by the client, not by us. This is
-#158 (P1), and the human part of it is two values and one click — a Teams webhook URL, a fallback
-address, and confirming the SNS subscription.
+appearance of monitoring. A 24-hour outage would be discovered by the client, not by us.
+
+**In fairness to whoever built it, the darkness was deliberate and correct.** `alerting.md:688`
+sets the gate explicitly — *"Only wire `AlarmTopicArn` after you have seen a run of green
+periods"* — because a probe warming up legitimately goes `ALARM` once, and a channel whose first
+message is a false alarm teaches people to ignore it. The failure is not the dark deploy. It is
+that **step two never happened, and the gate has been met for three weeks**:
+
+```
+$ aws cloudwatch describe-alarm-history --alarm-name climate-project-api-prod-synthetic-probe-api-down
+  2026-09-02T18:39:32  Alarm updated from ALARM to OK
+  2026-09-02T18:37:32  Alarm updated from INSUFFICIENT_DATA to ALARM
+```
+
+One early `ALARM` on `api-down` and `web-down`, cleared in two minutes exactly as predicted
+(`api-slow` went straight to `OK`), then **zero state changes on all three alarms for 22 days**.
+The derived-period reasoning held and nothing flapped. There was nothing left to wait for.
+
+What was actually missing was a button: **no workflow deploys
+`climate-project-observability.yml` at all**, so the only route was a hand-pasted command from the
+runbook. Addressed by `.github/workflows/ops-deploy-observability.yml` (#510). The human part is
+unchanged and small — a Teams webhook URL, a fallback distribution list, and clicking the SNS
+confirmation link, which is silently discarded if nobody does.
 
 ## 2. The standing risk, unchanged since 3 September
 
