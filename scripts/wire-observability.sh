@@ -21,6 +21,14 @@ REGION="${REGION:-us-east-1}"
 OBS_STACK=climate-project-observability-prod
 PROBE_STACK=climate-project-synthetic-probe-prod
 SERVICE_STACK=climate-project-api-prod
+# Prefer the repository variable over the literal: it is the same value the CI workflow reads,
+# so the two cannot drift into alerting two different addresses. The literal stays as the last
+# resort for a machine with no gh.
+FALLBACK_EMAIL="${FALLBACK_EMAIL:-}"
+if [ -z "$FALLBACK_EMAIL" ] && command -v gh >/dev/null 2>&1; then
+  FALLBACK_EMAIL=$(gh variable list --json name,value \
+    --jq '.[]|select(.name=="ALERT_FALLBACK_EMAIL").value' 2>/dev/null || true)
+fi
 FALLBACK_EMAIL="${FALLBACK_EMAIL:-alerts@timsint.com}"
 EXPECT_ACCOUNT=747814092517
 
