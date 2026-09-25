@@ -39,8 +39,18 @@ name: ops-deploy-observability
 # AdministratorAccess (docs/security/agent-aws-permissions.md) -- which is exactly the kind of
 # difference between "documented" and "reproducible" that leaves a stack undeployed for a month.
 #
-# Until the role carries those actions, deploy the stack with an admin profile locally; the
-# command is in docs/runbooks/alerting.md section 9.
+# Until the role carries those actions, deploy the stack with an admin profile locally:
+#
+#     bash scripts/wire-observability.sh      (DRY=1 to build the changesets and execute nothing)
+#
+# That script, not a pasted command. The runbook's version is ~400 characters on one line; pasted
+# into a terminal it wraps, zsh takes the wrap as end-of-command, and you get "Parameters:
+# [FallbackEmail, ServiceId] must have values" followed by "command not found:
+# --parameter-overrides". It did that three times on 2026-09-25, and one of the truncated runs
+# printed "No changes to deploy. Stack is up to date" -- a success message for a command that had
+# silently dropped its only override. The script also guards the account: the default profile on a
+# dev machine is a DIFFERENT AWS account, and every read-only check run without AWS_PROFILE
+# answers about the wrong one.
 
 on:
   workflow_dispatch:
