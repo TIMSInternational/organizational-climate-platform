@@ -15,6 +15,12 @@ statement of the same problem and the one a reader should carry: the probe DETEC
 TELL. The 22 alarms in `climate-project-observability.yml` remain undeployed.] #158 is not an
 instrumentation problem; it is a wiring problem, and the wiring is the last mile.
 
+**Update 2026-09-24.** The last mile now has a button:
+`.github/workflows/ops-deploy-observability.yml` deploys the observability stack and optionally
+wires this probe's alarms to its critical topic. The green-periods gate that §9 set before wiring
+is **met** — see the measurement beside it below. What is still missing is only the two values and
+the one click, which no workflow can supply.
+
 ---
 
 ## 1. What is verified, and what I could not check
@@ -679,6 +685,29 @@ aws cloudwatch describe-alarms --region us-east-1 \
 on. A period showing 1 is a displaced publish — harmless by construction, but if it is the
 common case rather than the rare one, the derived period is not buying what it claims and the
 mapping should go to 3x.
+
+> ### ✅ The green-periods gate below is MET, measured 2026-09-24
+>
+> ```
+> $ aws cloudwatch describe-alarm-history --alarm-name climate-project-api-prod-synthetic-probe-api-down
+>   2026-09-02T18:39:32  Alarm updated from ALARM to OK
+>   2026-09-02T18:37:32  Alarm updated from INSUFFICIENT_DATA to ALARM
+> ```
+>
+> One early `ALARM` on `api-down` and `web-down`, cleared in two minutes, exactly as predicted
+> below — `api-slow` went straight to `OK`. Then **zero state changes on all three alarms for 22
+> days**. The derived-period reasoning held and no threshold flapped.
+>
+> So the condition this paragraph sets — *"only wire `AlarmTopicArn` after you have seen a run of
+> green periods"* — has been satisfied since early September, and the wiring simply never
+> happened. `.github/workflows/ops-deploy-observability.yml` is now the button: it deploys the
+> 22-alarm observability stack (which has **never** been deployed) and, with
+> `wire_probe_alarms=true`, re-deploys this probe stack with `AlarmTopicArn` pointed at the
+> critical topic, carrying every other parameter forward from the live stack rather than
+> restating it.
+>
+> **The human part is unchanged and small:** a Teams webhook URL, a fallback distribution list,
+> and clicking the SNS confirmation link. An unconfirmed subscription is silently discarded.
 
 **Expect one early `ALARM`, and do not go hunting for a bug in it.** On stack creation the
 alarm starts `INSUFFICIENT_DATA`; the first `rate()` fire is up to 15 minutes out, and the

@@ -29,11 +29,23 @@ Parameters:
   TeamsWebhookUrl:
     Type: String
     NoEcho: true
+    Default: ""
     Description: >-
-      Microsoft Teams incoming-webhook URL. The channel decision is settled; this is the
-      wire. See docs/runbooks/alerting.md -- which flavour of webhook your tenant issues
-      changes the payload the forwarder must send, and getting that wrong fails silently
-      with an HTTP 200.
+      Microsoft Teams incoming-webhook URL. See docs/runbooks/alerting.md -- which flavour of
+      webhook your tenant issues changes the payload the forwarder must send, and getting that
+      wrong fails silently with an HTTP 200.
+
+      EMPTY IS ALLOWED AND IS NOT A DEGRADED DEPLOY. It used to be required, which meant the
+      whole stack -- including the email channel, which needs no secret at all -- could not
+      deploy until somebody minted a webhook in the Teams tenant. Nobody ever did: measured
+      2026-09-25, no webhook exists in Secrets Manager or SSM in this account, and no SNS
+      subscription anywhere in it is Teams-shaped (the two `https` ones are event webhooks for
+      other products). Meanwhile FallbackEmail needs only a decision about who gets woken up.
+      So blocking email alerting on a Teams credential nobody had was the tail wagging the dog.
+
+      When empty, the forwarder Lambda, its role, its two invoke permissions, the two Teams
+      subscriptions and the forwarder's own failure alarm are all dropped -- not deployed inert.
+      Add the webhook later and re-deploy; nothing else changes.
 
   FallbackEmail:
     Type: String
@@ -57,6 +69,11 @@ Parameters:
 
 Conditions:
   NotifyingEnabled: !Equals [!Ref AlarmsEnabled, "true"]
+
+  # The Teams half is optional so the email half does not wait on it. Independent of
+  # NotifyingEnabled: this says "is there a Teams channel at all", that says "may alarms
+  # notify anyone yet". Both false is a legal, useful state -- alarms up, nothing wired.
+  HasTeamsWebhook: !Not [!Equals [!Ref TeamsWebhookUrl, ""]]
 
 # EVERY FilterPattern BELOW IS A QUOTED SUBSTRING, deliberately. Two reasons.
 #
@@ -134,6 +151,7 @@ Resources:
   # ---------------------------------------------------------------------------------------
 
   TeamsForwarderRole:
+    Condition: HasTeamsWebhook
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub ${ServiceName}-teams-forwarder
@@ -150,6 +168,7 @@ Resources:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
 
   TeamsForwarder:
+    Condition: HasTeamsWebhook
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub ${ServiceName}-teams-forwarder
@@ -211,6 +230,7 @@ Resources:
               return {"ok": True}
 
   TeamsForwarderInvokeFromCritical:
+    Condition: HasTeamsWebhook
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !GetAtt TeamsForwarder.Arn
@@ -219,6 +239,7 @@ Resources:
       SourceArn: !Ref CriticalTopic
 
   TeamsForwarderInvokeFromWarning:
+    Condition: HasTeamsWebhook
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !GetAtt TeamsForwarder.Arn
@@ -227,6 +248,7 @@ Resources:
       SourceArn: !Ref WarningTopic
 
   CriticalTeamsSubscription:
+    Condition: HasTeamsWebhook
     Type: AWS::SNS::Subscription
     Properties:
       TopicArn: !Ref CriticalTopic
@@ -234,6 +256,7 @@ Resources:
       Endpoint: !GetAtt TeamsForwarder.Arn
 
   WarningTeamsSubscription:
+    Condition: HasTeamsWebhook
     Type: AWS::SNS::Subscription
     Properties:
       TopicArn: !Ref WarningTopic
@@ -244,6 +267,7 @@ Resources:
   # because every one of them routes THROUGH it. Alarmed on its own error count, delivered to
   # the email fallback only -- routing a broken-Teams alert through Teams is a loop.
   TeamsForwarderFailingAlarm:
+    Condition: HasTeamsWebhook
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub ${ServiceName}-teams-forwarder-failing
@@ -1056,6 +1080,7 @@ Outputs:
       Name: !Sub ${AWS::StackName}-warning-topic
 
   TeamsForwarderName:
+    Condition: HasTeamsWebhook
     Description: Lambda that translates SNS into a Teams Adaptive Card.
     Value: !Ref TeamsForwarder
 
