@@ -1,0 +1,265 @@
+name: ops-deploy-observability
+
+# The missing half of #158.
+#
+# `infra/aws/climate-project-observability.yml` has been written since 2026-09-02 -- 22 alarms,
+# 20 log metric filters, two SNS topics and a Teams forwarder -- and NOTHING HAS EVER DEPLOYED
+# IT. `deploy-prod.yml` deploys the service stack and the bootstrap stack; no workflow deploys
+# this one, so the only route was a hand-pasted `aws cloudformation deploy` from the runbook that
+# nobody ran. That is the whole gap: not authoring, not thresholds, a missing button.
+#
+# It also finishes the deliberate two-step the runbook set out. `climate-project-synthetic-probe`
+# was deployed DARK on purpose (`AlarmTopicArn=''`), with the gate written down at
+# alerting.md:688 -- "Only wire AlarmTopicArn after you have seen a run of green periods", because
+# a probe warming up legitimately goes ALARM once and a channel whose first message is a false
+# alarm teaches people to ignore it.
+#
+# THAT GATE IS MET, and this workflow exists because nobody noticed. Measured 2026-09-24:
+#
+#   $ aws cloudwatch describe-alarm-history --alarm-name climate-project-api-prod-synthetic-probe-api-down
+#     2026-09-02T18:39:32  Alarm updated from ALARM to OK
+#     2026-09-02T18:37:32  Alarm updated from INSUFFICIENT_DATA to ALARM
+#
+# One early ALARM, exactly as predicted, cleared in two minutes -- then ZERO state changes on all
+# three alarms for 22 days. The derived-period reasoning held and the thresholds did not flap.
+#
+# What this workflow does NOT do: decide the thresholds (the runbook reasons them), page anybody
+# on its own, or touch anything the API runs on. What a human still has to supply is unchanged and
+# small -- a Teams webhook URL, a fallback distribution list, and clicking the SNS confirmation
+# link, which is silently discarded if nobody does.
+
+on:
+  workflow_dispatch:
+    inputs:
+      alarms_enabled:
+        description: >-
+          "false" creates/updates the alarms without letting them notify -- the template's own
+          recommendation for a first deploy, because several thresholds here are reasoned from
+          code rather than from observed production traffic. Run once with "false", read the
+          dashboard, then run again with "true". Only the synthetic-probe alarms have earned
+          "true" so far; the 22 in the observability stack have never evaluated at all.
+        required: true
+        default: "false"
+        type: choice
+        options: ["false", "true"]
+      wire_probe_alarms:
+        description: >-
+          "true" re-deploys the ALREADY-LIVE synthetic-probe stack with AlarmTopicArn pointed at
+          this stack's critical topic. Safe to do on the first run: those three alarms have been
+          OK for 22 days with no state change (see the header), so they are the one set whose
+          gate is met. Leave "false" if you want the observability stack up first and nothing
+          else changed.
+        required: true
+        default: "false"
+        type: choice
+        options: ["false", "true"]
+
+# Never two of these at once, and never one of these while a service deploy is in flight: this
+# stack reads the service's log group and its ServiceId, both of which a service deploy can
+# replace. Same group as deploy-prod for that reason, and queueing rather than pre-empting for
+# the same reason it gives.
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: us-east-1
+  SERVICE_NAME: climate-project-api-prod
+  SERVICE_STACK_NAME: climate-project-api-prod
+  OBSERVABILITY_STACK_NAME: climate-project-observability-prod
+  PROBE_STACK_NAME: climate-project-synthetic-probe-prod
+
+jobs:
+  deploy-observability:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Refuse to deploy with incomplete configuration
+        env:
+          AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+          ALERT_FALLBACK_EMAIL: ${{ vars.ALERT_FALLBACK_EMAIL }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in AWS_ACCOUNT_ID TEAMS_WEBHOOK_URL ALERT_FALLBACK_EMAIL; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name is empty. Set it on the 'production' environment (TEAMS_WEBHOOK_URL as a secret, the others as repository variables) before dispatching this workflow." >&2
+              missing=1
+            fi
+          done
+          # Fail here rather than let CloudFormation fail deeper in: FallbackEmail carries an
+          # AllowedPattern, so an empty value is a stack-level error with a worse message, and
+          # TeamsWebhookUrl is NoEcho, so an empty one deploys a forwarder that posts nowhere
+          # and returns success.
+          if [ "$missing" -ne 0 ]; then
+            echo "Refusing to deploy observability with incomplete configuration." >&2
+            exit 1
+          fi
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/climate-project-github-deploy-prod
+
+      - name: Read the App Runner service id
+        id: service
+        run: |
+          set -euo pipefail
+          # Read, never hard-code. The template's own parameter doc says there is no way to
+          # derive this from the service name, and it changes if the service is recreated -- a
+          # stale value silently points every metric filter at a log group that does not exist,
+          # which is a monitoring stack that deploys clean and watches nothing.
+          SERVICE_ID="$(aws apprunner list-services --region "$AWS_REGION" \
+            --query "ServiceSummaryList[?ServiceName=='${SERVICE_NAME}'].ServiceId | [0]" \
+            --output text)"
+
+          if [ -z "$SERVICE_ID" ] || [ "$SERVICE_ID" = "None" ]; then
+            echo "::error::Could not read a ServiceId for ${SERVICE_NAME}." >&2
+            exit 1
+          fi
+
+          # 32 lowercase hex, matching the template's AllowedPattern. Asserted here so the
+          # failure names the cause instead of arriving as a parameter-validation error.
+          if ! printf '%s' "$SERVICE_ID" | grep -Eq '^[0-9a-f]{32}$'; then
+            echo "::error::ServiceId '$SERVICE_ID' is not 32 hex characters." >&2
+            exit 1
+          fi
+
+          echo "service_id=$SERVICE_ID" >> "$GITHUB_OUTPUT"
+          echo "Service id: $SERVICE_ID"
+
+          LOG_GROUP="/aws/apprunner/${SERVICE_NAME}/${SERVICE_ID}/application"
+          if ! aws logs describe-log-groups --region "$AWS_REGION" \
+               --log-group-name-prefix "$LOG_GROUP" \
+               --query 'length(logGroups)' --output text | grep -q '^[1-9]'; then
+            echo "::error::Log group $LOG_GROUP does not exist. Every metric filter in this stack would watch nothing." >&2
+            exit 1
+          fi
+          echo "Log group present: $LOG_GROUP"
+
+      - name: Deploy the observability stack
+        run: |
+          set -euo pipefail
+          aws cloudformation deploy \
+            --region "$AWS_REGION" \
+            --stack-name "$OBSERVABILITY_STACK_NAME" \
+            --template-file infra/aws/climate-project-observability.yml \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides \
+              ServiceName="$SERVICE_NAME" \
+              ServiceId="${{ steps.service.outputs.service_id }}" \
+              TeamsWebhookUrl="${{ secrets.TEAMS_WEBHOOK_URL }}" \
+              FallbackEmail="${{ vars.ALERT_FALLBACK_EMAIL }}" \
+              AlarmsEnabled="${{ inputs.alarms_enabled }}"
+
+      - name: Read the critical topic ARN
+        id: topics
+        run: |
+          set -euo pipefail
+          CRITICAL="$(aws cloudformation describe-stacks \
+            --region "$AWS_REGION" \
+            --stack-name "$OBSERVABILITY_STACK_NAME" \
+            --query "Stacks[0].Outputs[?OutputKey=='CriticalTopicArn'].OutputValue | [0]" \
+            --output text)"
+          if [ -z "$CRITICAL" ] || [ "$CRITICAL" = "None" ]; then
+            echo "::warning::No CriticalTopicArn output on $OBSERVABILITY_STACK_NAME; probe wiring will be skipped."
+          fi
+          echo "critical=$CRITICAL" >> "$GITHUB_OUTPUT"
+          echo "Critical topic: $CRITICAL"
+
+      - name: Wire the synthetic-probe alarms to the critical topic
+        if: inputs.wire_probe_alarms == 'true' && steps.topics.outputs.critical != '' && steps.topics.outputs.critical != 'None'
+        run: |
+          set -euo pipefail
+          # Re-deploying a LIVE stack, so every other parameter must be the one it already has or
+          # this silently reconfigures the probe while claiming to wire it. Read them back rather
+          # than restating them: a literal repeated here is a second source of truth that drifts.
+          mapfile -t params < <(aws cloudformation describe-stacks \
+            --region "$AWS_REGION" --stack-name "$PROBE_STACK_NAME" \
+            --query "Stacks[0].Parameters[?ParameterKey!='AlarmTopicArn'].[ParameterKey,ParameterValue]" \
+            --output text | awk -F'\t' '{printf "%s=%s\n", $1, $2}')
+
+          if [ "${#params[@]}" -eq 0 ]; then
+            echo "::error::Read no existing parameters from $PROBE_STACK_NAME. Refusing to re-deploy it blind." >&2
+            exit 1
+          fi
+
+          printf 'Carrying forward %d existing parameter(s):\n' "${#params[@]}"
+          printf '  %s\n' "${params[@]}"
+
+          aws cloudformation deploy \
+            --region "$AWS_REGION" \
+            --stack-name "$PROBE_STACK_NAME" \
+            --template-file infra/aws/climate-project-synthetic-probe.yml \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides \
+              "${params[@]}" \
+              AlarmTopicArn="${{ steps.topics.outputs.critical }}"
+
+      - name: Report which alarms can reach a human
+        env:
+          ALARMS_ENABLED: ${{ inputs.alarms_enabled }}
+        run: |
+          set -euo pipefail
+
+          # Always the climate prefix, never a bare describe-alarms: this account holds another
+          # product's 43 alarms and the unfiltered total reads as monitoring this product does
+          # not have. That is the mistake this very workflow was written after making.
+          aws cloudwatch describe-alarms --region "$AWS_REGION" \
+            --alarm-name-prefix climate \
+            --query "MetricAlarms[].[AlarmName,StateValue,length(AlarmActions)]" \
+            --output text > alarms.tsv
+
+          TOTAL="$(wc -l < alarms.tsv | tr -d " ")"
+          # Column 3 is the action count. `|| true` because grep -c exits 1 on zero matches,
+          # and "no muted alarms" is the outcome we most want to be able to report.
+          MUTE="$(cut -f3 alarms.tsv | grep -cx 0 || true)"
+
+          {
+            echo "## Alarms and their delivery"
+            echo ""
+            echo "| Alarm | State | Actions |"
+            echo "|---|---|---|"
+            while IFS="$(printf %b '\t')" read -r name state actions; do
+              echo "| $name | $state | $actions |"
+            done < alarms.tsv
+            echo ""
+            echo "**${TOTAL} alarm(s), ${MUTE} of them notifying nobody.**"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # Stated as a number rather than implied by a green tick, because that is the whole
+          # point of the workflow. An alarm with no action is worse than no alarm: it produces
+          # the appearance of monitoring.
+          if [ "$ALARMS_ENABLED" = "true" ] && [ "$MUTE" != "0" ]; then
+            echo "::warning::${MUTE} of ${TOTAL} alarms still have no action after a run with alarms_enabled=true. Confirm the SNS subscription and re-check; an unconfirmed subscription is silently discarded."
+          fi
+
+      - name: Remind about the click nobody can automate
+        run: |
+          set -euo pipefail
+          cat >> "$GITHUB_STEP_SUMMARY" <<"MARKDOWN"
+
+          ### Still needs a human
+
+          - Confirm the SNS email subscription. AWS emails a confirmation link to the fallback
+            address; an UNCONFIRMED subscription is silently discarded, which is the exact
+            failure #158 exists to end. Check it with:
+
+                aws sns list-subscriptions-by-topic --topic-arn <critical> \
+                  --query "Subscriptions[].[Endpoint,SubscriptionArn]" --output table
+
+            A SubscriptionArn of PendingConfirmation means nobody clicked.
+          - Send one routing test before trusting the channel. docs/runbooks/alerting.md
+            carries the sns publish command for it.
+          MARKDOWN
