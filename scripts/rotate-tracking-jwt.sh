@@ -240,11 +240,22 @@ printf 'Type CLOSE to continue: '
 read -r confirm
 [ "$confirm" = "CLOSE" ] || die "aborted"
 
-say "clearing $GH_VAR..."
+say "removing $GH_VAR..."
 if command -v gh >/dev/null; then
-  gh variable set "$GH_VAR" --body "" || say "could not set it with gh; clear it in the UI"
+  # DELETE, not set-to-empty: `gh variable set --body ""` prompts "Paste your variable" and hangs
+  # the script here -- after the CLOSE confirmation and before the secret is deleted, which is the
+  # worst possible place to stop. deploy-prod.yml reads ${vars.X} and treats absent and empty the
+  # same, so removing it is exactly equivalent and cannot block.
+  if gh variable delete "$GH_VAR" >/dev/null 2>&1; then
+    say "removed."
+  elif gh variable list --json name --jq '.[].name' 2>/dev/null | grep -qx "$GH_VAR"; then
+    die "could not remove $GH_VAR and it is still present. The old key would stay accepted after
+the deploy, so stop here and remove it in the GitHub UI before going further."
+  else
+    say "already absent."
+  fi
 else
-  say "gh not found -- clear $GH_VAR manually"
+  die "gh not found. $GH_VAR must be removed before the deploy, or the retired key stays accepted."
 fi
 
 say "scheduling the previous secret for deletion (7-day recovery window)..."

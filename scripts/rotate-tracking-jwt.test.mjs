@@ -40,6 +40,14 @@ exit 0
 
 const GH_STUB = `#!/usr/bin/env bash
 printf '%s\\n' "gh $*" >> "$STUB_LOG"
+case "$*" in
+  *"variable delete"*) [ "$STUB_GH_DELETE_FAILS" = "1" ] && exit 1; exit 0 ;;
+  *"variable list"*)   [ "$STUB_GH_STILL_THERE" = "1" ] && printf 'TRACKING_JWT_SECRET_PREVIOUS_ARN\\n'; exit 0 ;;
+  *"variable set"*)
+      # \`gh variable set --body ""\` PROMPTS for the value. Reproduce that: read stdin and hang
+      # until it closes, which is what stalled phase 2 mid-run on 2026-09-28.
+      printf '? Paste your variable ' >&2; cat >/dev/null; exit 1 ;;
+esac
 exit 0
 `;
 
@@ -122,7 +130,7 @@ test('after the wait it proceeds, and only then does it clear and delete', async
   });
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /elapsed\s+25\.\d+ h of 24/);
-  assert.match(r.calls, /gh variable set TRACKING_JWT_SECRET_PREVIOUS_ARN/);
+  assert.match(r.calls, /gh variable delete TRACKING_JWT_SECRET_PREVIOUS_ARN/);
   assert.match(r.calls, /delete-secret/);
   assert.match(r.stdout, /must now return 401/, 'it must state the verification that makes it real');
 });
@@ -153,4 +161,42 @@ test('closing with no phase-1 secret at all says so instead of comparing nothing
   assert.equal(r.status, 1);
   assert.match(r.stderr, /Has phase 1 \(apply open\) run at all\?/);
   assert.doesNotMatch(r.calls, DESTRUCTIVE);
+});
+
+test('the previous-ARN variable is DELETED, never set to empty', async () => {
+  // `gh variable set --body ""` prompts "? Paste your variable" and hung phase 2 on 2026-09-28 --
+  // after the CLOSE confirmation and before the secret deletion, which is the worst place for a
+  // destructive step to stop.
+  const r = await run(['apply', 'close'], {
+    env: { STUB_PREVIOUS_CREATED: hoursAgo(25) },
+    stdin: 'CLOSE\n',
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.calls, /gh variable delete TRACKING_JWT_SECRET_PREVIOUS_ARN/);
+  assert.doesNotMatch(r.calls, /gh variable set/, 'set --body "" is interactive and must never be used here');
+});
+
+test('if the variable cannot be removed it STOPS, because the old key would stay accepted', async () => {
+  const r = await run(['apply', 'close'], {
+    env: {
+      STUB_PREVIOUS_CREATED: hoursAgo(25),
+      STUB_GH_DELETE_FAILS: '1',
+      STUB_GH_STILL_THERE: '1',
+    },
+    stdin: 'CLOSE\n',
+  });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /could not remove/);
+  assert.match(r.stderr, /old key would stay accepted/);
+  assert.doesNotMatch(r.calls, /delete-secret/, 'it must not delete the secret it can no longer un-wire');
+});
+
+test('a variable that is already absent is not an error', async () => {
+  const r = await run(['apply', 'close'], {
+    env: { STUB_PREVIOUS_CREATED: hoursAgo(25), STUB_GH_DELETE_FAILS: '1', STUB_GH_STILL_THERE: '0' },
+    stdin: 'CLOSE\n',
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /already absent/);
+  assert.match(r.calls, /delete-secret/);
 });

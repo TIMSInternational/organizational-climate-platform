@@ -61,6 +61,25 @@ function ghStub(prevArn) {
   return dir;
 }
 
+/** An aws that answers the three read-only calls `config` makes. */
+function awsStub(hasPrevious, account = '747814092517') {
+  const dir = mkdtempSync(join(tmpdir(), 'aws-stub-'));
+  const secrets = hasPrevious
+    ? '{"TrackingJwtSecretArn":"a","DatabaseConnectionStringSecretArn":"b","InternalApiKeySecretArn":"c","EmailSmtpUsernameSecretArn":"d","EmailSmtpPasswordSecretArn":"e","TrackingJwtSecretPrevious":"f"}'
+    : '{"TrackingJwtSecretArn":"a","DatabaseConnectionStringSecretArn":"b","InternalApiKeySecretArn":"c","EmailSmtpUsernameSecretArn":"d","EmailSmtpPasswordSecretArn":"e"}';
+  writeFileSync(join(dir, 'aws'), [
+    '#!/usr/bin/env bash',
+    'printf \'%s\\n\' "aws $*" >> "${STUB_LOG:-/dev/null}"',
+    'case "$*" in',
+    `  *"sts get-caller-identity"*) printf '%s\\n' '${account}' ;;`,
+    "  *ServiceArn*) printf '%s\\n' 'arn:aws:apprunner:us-east-1:747814092517:service/climate-project-api-prod/126c3f28' ;;",
+    `  *"apprunner describe-service"*) printf '%s\\n' '${secrets}' ;;`,
+    'esac',
+    'exit 0',
+  ].join('\n'), { mode: 0o755 });
+  return dir;
+}
+
 function run(mode, { api, store, stdin, baseline, ghDir } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn('bash', [SCRIPT, mode], {
@@ -89,7 +108,8 @@ const freshStore = () => join(mkdtempSync(join(tmpdir(), 'jwt-verify-')), 'token
 test('no mode prints usage and does nothing', async () => {
   const r = await run('');
   assert.equal(r.status, 1);
-  assert.match(r.stderr, /usage: .*capture\|check\|forget/);
+  assert.match(r.stderr, /usage: .*capture\|check\|config\|forget/);
+  assert.match(r.stderr, /config\s+ask the RUNNING service/, 'the new mode must be documented in the usage');
 });
 
 test('capture stores the token and NEVER prints it', async () => {
@@ -234,4 +254,33 @@ test('forget removes the stored token and is safe to run twice', async () => {
   const second = await run('forget', { store });
   assert.equal(second.status, 0, 'forget must be idempotent');
   assert.match(second.stdout, /Nothing stored/);
+});
+
+test('config: a service that still holds a previous key says so, and exits 2', async () => {
+  // Correct during the overlap. After phase 2 and its deploy, it means the rotation has not taken.
+  const dir = awsStub(true);
+  const r = await run('config', { ghDir: dir });
+  assert.equal(r.status, 2, 'a "not done yet" answer must not share an exit code with success');
+  assert.match(r.stdout, /TrackingJwtSecretPrevious:\s+PRESENT/);
+  assert.match(r.stdout, /THE OLD KEY IS STILL LOADED/);
+});
+
+test('config: with no previous key it reports the structural proof AND its limit', async () => {
+  // This is the proof that survives `forget`. It must not overclaim: absence of the key is not
+  // the same as a request being rejected.
+  const dir = awsStub(false);
+  const r = await run('config', { ghDir: dir });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /TrackingJwtSecretPrevious:\s+ABSENT/);
+  assert.match(r.stdout, /THE OLD KEY IS NOT LOADED/);
+  assert.match(r.stdout, /not the same as a rejected request/, 'it must state what it does not prove');
+  assert.match(r.stdout, /TrackingJwtRotationTests\.cs/, 'and point at what closes the gap');
+});
+
+test('config: the wrong account is refused, not answered', async () => {
+  const dir = awsStub(false, '795965600143');
+  const r = await run('config', { ghDir: dir });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /credentials are for account 795965600143/);
+  assert.doesNotMatch(r.stdout, /OLD KEY IS NOT LOADED/);
 });

@@ -5,6 +5,7 @@
 #
 #   bash scripts/verify-jwt-rotation.sh capture   # BEFORE the phase-1 deploy finishes
 #   bash scripts/verify-jwt-rotation.sh check     # after each deploy
+#   bash scripts/verify-jwt-rotation.sh config    # read-only: is the old key still loaded?
 #   bash scripts/verify-jwt-rotation.sh forget    # shred the stored token
 #
 # ## Why a script and not a curl one-liner
@@ -38,6 +39,9 @@
 set -euo pipefail
 
 API="${API:-https://api.climate.timsint.com}"
+REGION="${AWS_REGION:-us-east-1}"
+SERVICE_STACK="${SERVICE_STACK:-climate-project-api-prod}"
+EXPECT_ACCOUNT="${EXPECT_ACCOUNT:-747814092517}"
 STORE="${STORE:-${TMPDIR:-/tmp}/climate-jwt-rotation-token}"
 BASELINE="${BASELINE:-${STORE:-${TMPDIR:-/tmp}/climate-jwt-rotation-token}.commit}"
 MODE="${1:-}"
@@ -170,6 +174,61 @@ the signing key and this evidence cannot be obtained again."
     esac
     ;;
 
+  config)
+    # ---------------------------------------------------------------------------------------
+    # The structural proof, and why it exists.
+    #
+    # The end-to-end proof is a pre-rotation token returning 401. It is the best evidence and it
+    # is also fragile: it cannot be re-obtained once the phase-1 deploy lands, so `forget` run at
+    # the wrong moment destroys it. That happened on 2026-09-28, before phase 2 had run.
+    #
+    # This is the proof that survives. The running service holds its keys in App Runner's
+    # RuntimeEnvironmentSecrets; the app reads the previous key from TrackingJwtSecretPrevious
+    # (JwtSigningKeys.cs, #508) and accepts nothing it was not given. So if that entry is absent
+    # from the live service, the old key is not loaded and a token signed with it cannot validate
+    # -- which is the same conclusion, reached from configuration rather than from a request.
+    #
+    # It is weaker in one specific way, stated rather than glossed: it shows the key is not
+    # PRESENT, not that a request carrying one is rejected. tests/.../TrackingJwtRotationTests.cs
+    # is what closes that gap, and it runs in CI.
+    #
+    # Read-only: describe-stacks and describe-service.
+    # ---------------------------------------------------------------------------------------
+    command -v aws >/dev/null || die "aws CLI not found."
+    account="$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo unknown)"
+    if [ "$account" != "$EXPECT_ACCOUNT" ]; then
+      die "credentials are for account $account, not $EXPECT_ACCOUNT.
+Set AWS_PROFILE=formmaps-deploy (or claude) and try again."
+    fi
+
+    arn="$(aws cloudformation describe-stacks --region "$REGION" --stack-name "$SERVICE_STACK" \
+      --query "Stacks[0].Outputs[?OutputKey=='ServiceArn'].OutputValue | [0]" --output text)"
+    [ -n "$arn" ] && [ "$arn" != "None" ] || die "no ServiceArn output on $SERVICE_STACK."
+
+    secrets_json="$(aws apprunner describe-service --region "$REGION" --service-arn "$arn" \
+      --query 'Service.SourceConfiguration.ImageRepository.ImageConfiguration.RuntimeEnvironmentSecrets' \
+      --output json)"
+    total="$(printf '%s' "$secrets_json" | jq 'length')"
+    has_prev="$(printf '%s' "$secrets_json" | jq 'has("TrackingJwtSecretPrevious")')"
+
+    printf '\naccount %s   service %s\n' "$account" "${arn##*/}"
+    printf 'RuntimeEnvironmentSecrets entries: %s\n' "$total"
+    printf 'TrackingJwtSecretPrevious:         %s\n\n' "$([ "$has_prev" = true ] && echo PRESENT || echo ABSENT)"
+
+    if [ "$has_prev" = true ]; then
+      printf 'THE OLD KEY IS STILL LOADED. The service was given a previous key, so a token signed\n'
+      printf 'with the retired value is still accepted. Correct DURING the overlap (after phase 1);\n'
+      printf 'after phase 2 and its deploy it means the rotation has not taken effect.\n\n'
+      exit 2
+    fi
+    printf 'THE OLD KEY IS NOT LOADED. The service holds no previous key, so nothing signed with\n'
+    printf 'the retired value can validate against it.\n\n'
+    printf 'This is the structural proof, and it is not the same as a rejected request: it shows the\n'
+    printf 'key is absent, not that a token carrying it 401s. That gap is closed by\n'
+    printf 'tests/ClimateProject.IntegrationTests/Security/TrackingJwtRotationTests.cs, in CI.\n\n'
+    exit 0
+    ;;
+
   forget)
     if [ -f "$STORE" ]; then
       # Overwrite before unlinking: a bearer token left in a freed block is still a bearer token.
@@ -182,10 +241,11 @@ the signing key and this evidence cannot be obtained again."
     ;;
 
   *)
-    die "usage: bash $0 capture|check|forget
+    die "usage: bash $0 capture|check|config|forget
 
   capture   sign in and store a pre-rotation token (run BEFORE the phase-1 deploy lands)
   check     report what that token does now -- 200 after phase 1, 401 after phase 2
+  config    ask the RUNNING service whether it still holds a previous key (needs no token)
   forget    shred it"
     ;;
 esac
