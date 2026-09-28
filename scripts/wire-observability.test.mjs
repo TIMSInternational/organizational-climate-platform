@@ -235,3 +235,24 @@ test('an unset PROD_API_BASE_URL is correct now, and says so instead of nagging'
   assert.match(r.stdout, /unset, and that is now correct/);
   assert.doesNotMatch(r.stdout, /gh variable set PROD_API_BASE_URL/);
 });
+
+test('a placeholder address is refused before anything is deployed', () => {
+  // This happened: `you@timsint.com` came from a handoff, was pasted verbatim, and every layer
+  // accepted it -- gh, CloudFormation and SNS -- because it is a valid address. 24 alarms ended
+  // up armed behind a subscriber that can never confirm.
+  for (const bad of ['you@timsint.com', 'your.name@timsint.com', 'ops@example.com', '<ops@timsint.com>', 'YOUR-ADDRESS@timsint.com']) {
+    const r = run({ FALLBACK_EMAIL: bad });
+    assert.equal(r.status, 1, `expected a refusal for ${bad}`);
+    assert.match(r.stderr, /looks like a placeholder/);
+    assert.doesNotMatch(r.calls, /cloudformation deploy/, `${bad} must be caught before any deploy`);
+    assert.doesNotMatch(r.calls, /sns subscribe/, `${bad} must never reach SNS`);
+  }
+});
+
+test('a real address is not mistaken for a placeholder', () => {
+  for (const good of ['alerts@timsint.com', 'federico.tafur@timsint.com', 'ti@timsint.com']) {
+    const r = run({ FALLBACK_EMAIL: good, STUB_SUBS: 'confirmed' });
+    assert.equal(r.status, 0, `${good} was refused: ${r.stderr}`);
+    assert.doesNotMatch(r.stderr, /placeholder/);
+  }
+});

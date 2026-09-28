@@ -35,6 +35,25 @@ if [ -z "$FALLBACK_EMAIL" ] && command -v gh >/dev/null 2>&1; then
     --jq '.[]|select(.name=="ALERT_FALLBACK_EMAIL").value' 2>/dev/null || true)
 fi
 FALLBACK_EMAIL="${FALLBACK_EMAIL:-alerts@timsint.com}"
+
+# Refuse a placeholder. On 2026-09-28 a handoff wrote the command with `you@timsint.com` meant to
+# be filled in, it was pasted verbatim, and the run succeeded: `gh variable set` took it, the
+# stack took it, SNS took it, 24 alarms were armed, and the only subscriber on the critical topic
+# was an address that will never confirm and expires in 3 days. Every layer accepted it because
+# it is a syntactically valid address -- so the check has to be for the SHAPE of a stand-in, not
+# for validity. Cheaper than another three-day countdown spent on nothing.
+case "$FALLBACK_EMAIL" in
+  you@*|your@*|your.*|*@example.*|*@domain.*|*'<'*|*'>'*|*YOUR*|name@*)
+    echo "Refusing to run: FALLBACK_EMAIL is [$FALLBACK_EMAIL], which looks like a placeholder" >&2
+    echo "rather than a mailbox somebody reads. Set the real address and re-run:" >&2
+    echo >&2
+    echo "    gh variable set ALERT_FALLBACK_EMAIL --body 'real.name@timsint.com'" >&2
+    echo >&2
+    echo "The subscription this creates is the ONLY path an alarm has to a human, and AWS" >&2
+    echo "deletes it 3 days after creation if nobody clicks the mail." >&2
+    exit 1
+    ;;
+esac
 EXPECT_ACCOUNT=747814092517
 
 # Armed, not dark. The 21 alarms in the observability stack were deployed AlarmsEnabled=false on
