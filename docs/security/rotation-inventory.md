@@ -1,6 +1,42 @@
 # Secret rotation inventory — #70
 
-**Status: NOT STARTED. No credential below has been rotated.**
+**Status: IN PROGRESS. `TrackingJwtSecret` is half-rotated — phase 1 done 2026-09-28, phase 2
+NOT done, and until it is the retired key still authenticates.**
+
+## `TrackingJwtSecret` — phase 1 complete 2026-09-28, phase 2 OPEN
+
+Recorded per this file's own rule: what was rotated, when, and that the new value was verified
+working. No value appears here.
+
+| | |
+|---|---|
+| Phase 1 applied | 2026-09-28 18:07:58Z, `scripts/rotate-tracking-jwt.sh apply open` |
+| Old / new key fingerprints | `1cf877ebbd10` → `fdce34423013` (sha256, first 12 hex — not the keys) |
+| Deployed | run `36463186666`, revision moved `649fd077` → `32cda8e6` at 18:32:34Z |
+| Overlap verified | a token minted at `649fd077` returned **HTTP 200** against `32cda8e6` — `scripts/verify-jwt-rotation.sh check` |
+| Wiring verified independently | the App Runner service went from 5 to **6** `RuntimeEnvironmentSecrets`, the new one `TrackingJwtSecretPrevious` (read-only `describe-service`, baseline recorded before the deploy) |
+| Nobody signed out | that 200 is the proof: a session that existed before the rotation still worked |
+
+🔴 **PHASE 2 IS NOT DONE, and phase 1 alone has bought nothing.** The value rotated away from is
+still accepted, and it is the value the migration spec said to reuse from the malware-compromised
+legacy app (`docs/legacy-issues/climate-project-issues.md:560`). Phase 2 is what makes the
+rotation real:
+
+```
+# not before 2026-09-29 18:32Z — one token lifetime (24h) after the revision went live
+./scripts/rotate-tracking-jwt.sh apply close
+gh workflow run deploy-prod.yml --ref main
+bash scripts/verify-jwt-rotation.sh check     # MUST read 401
+bash scripts/verify-jwt-rotation.sh forget
+```
+
+Do not tick this item on the strength of phase 1. The only evidence that the rotation happened is
+that same pre-rotation token returning **401**, and it cannot be re-obtained if the captured token
+is discarded first — `verify-jwt-rotation.sh` holds it at mode 600 in `$TMPDIR`.
+
+⚠️ A caution learned the same day: a `200` measured **before** the deploy lands is meaningless,
+because the pre-rotation revision signs and validates with the old key. `check` now refuses to
+interpret anything until the running commit differs from the one that minted the token.
 
 **Enumeration (step 1 of the close-out, "enumerate first, rotate second") was executed
 2026-08-15 with real console access — read-only, nothing rotated.** Findings are filled into
