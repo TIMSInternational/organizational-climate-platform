@@ -240,8 +240,15 @@ if [ -z "$BASE_URL" ]; then
   BASE_URL="https://${SERVICE_URL}"
 fi
 
+# The deadline and interval are overridable for one reason: the failure this block exists to
+# catch -- the stack update succeeded, the rollout did not take, and /version never reports the
+# target -- takes ten minutes to reach, so nothing could afford to test it and nothing did. The
+# defaults are the real ones; scripts/rollback-api-image.test.mjs drives them down to seconds.
+VERIFY_DEADLINE_SECONDS="${VERIFY_DEADLINE_SECONDS:-600}"
+VERIFY_INTERVAL_SECONDS="${VERIFY_INTERVAL_SECONDS:-10}"
+
 echo "--- waiting for $BASE_URL/version to report $TARGET_SHA ---"
-DEADLINE=$(( $(date -u +%s) + 600 ))
+DEADLINE=$(( $(date -u +%s) + VERIFY_DEADLINE_SECONDS ))
 while [ "$(date -u +%s)" -lt "$DEADLINE" ]; do
   LIVE_SHA="$(curl -sS --max-time 20 "${BASE_URL%/}/version" 2>/dev/null | jq -r '.commit // empty' || true)"
   if [ "$LIVE_SHA" = "$TARGET_SHA" ]; then
@@ -257,10 +264,10 @@ while [ "$(date -u +%s)" -lt "$DEADLINE" ]; do
     exit 0
   fi
   echo "  /version reports '${LIVE_SHA:-<unreachable>}', waiting..."
-  sleep 10
+  sleep "$VERIFY_INTERVAL_SECONDS"
 done
 
-die "after 600s, $BASE_URL/version still does not report $TARGET_SHA.
+die "after ${VERIFY_DEADLINE_SECONDS}s, $BASE_URL/version still does not report $TARGET_SHA.
 The stack update may have succeeded while the App Runner rollout did not take.
 Check the service's operation history:
   aws apprunner list-operations --region $REGION --service-arn <arn> --max-results 5"
