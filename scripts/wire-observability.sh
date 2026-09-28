@@ -37,6 +37,28 @@ fi
 FALLBACK_EMAIL="${FALLBACK_EMAIL:-alerts@timsint.com}"
 EXPECT_ACCOUNT=747814092517
 
+# Armed, not dark. The 21 alarms in the observability stack were deployed AlarmsEnabled=false on
+# 2026-09-25 to see whether they flap before anybody is paged. Measured 2026-09-28, three days
+# later: all 24 read OK, and there has been NO state transition since 12:08 CDT on the 25th. The
+# only seven that ever reached ALARM did it between 12:01 and 12:08 -- INSUFFICIENT_DATA ->
+# ALARM -> OK, every one a job-*-stopped alarm going off before the first heartbeat of a freshly
+# created stack landed. That is a creation artifact, not flapping, so the green-periods gate the
+# runbook set is met. ALARMS_ENABLED=false puts them back to dark.
+ALARMS_ENABLED="${ALARMS_ENABLED:-true}"
+
+# The probe watched the raw App Runner hostname while every user reaches the API through
+# api.climate.timsint.com (live since 2026-09-14, #484). A failure in the custom domain alone --
+# DNS, the Route53 delegation, or the App Runner-managed certificate, which took three attempts
+# to get right -- would leave all three probe alarms GREEN while the web app can reach nothing.
+# Watching the custom domain covers strictly more than watching the App Runner host did: the
+# domain fronts this same service, so if App Runner is down the domain in front of it is too.
+# Ruled 2026-09-28.
+#
+# The other half lives on GitHub: ops-synthetic-probe.yml:87 and deploy-drift.yml:38 both read
+# vars.PROD_API_BASE_URL with the same App Runner fallback. This script checks that variable at
+# the end and prints the command rather than changing repository config behind your back.
+PROBE_API_URL="${PROBE_API_URL:-https://api.climate.timsint.com}"
+
 # DRY=1 stops short of executing: CloudFormation still builds and prices the changeset, so a
 # template or parameter error surfaces exactly as it would on the real run.
 DEPLOY_FLAGS=(--no-fail-on-empty-changeset)
@@ -181,7 +203,7 @@ SERVICE_ID=$(aws cloudformation describe-stacks --stack-name "$SERVICE_STACK" --
 echo "ServiceId $SERVICE_ID"
 
 echo
-echo "== 1/5  $OBS_STACK  (AlarmsEnabled=false -- these 22 alarms have never evaluated) =="
+echo "== 1/5  $OBS_STACK  (AlarmsEnabled=$ALARMS_ENABLED) =="
 aws cloudformation deploy \
   --region "$REGION" \
   --stack-name "$OBS_STACK" \
@@ -191,7 +213,7 @@ aws cloudformation deploy \
   --parameter-overrides \
     ServiceId="$SERVICE_ID" \
     FallbackEmail="$FALLBACK_EMAIL" \
-    AlarmsEnabled=false
+    AlarmsEnabled="$ALARMS_ENABLED"
 
 if [ "${DRY:-0}" = "1" ]; then
   echo
@@ -220,17 +242,24 @@ if [ -n "$WARNING_TOPIC" ] && [ "$WARNING_TOPIC" != "None" ]; then
   reconcile_email_subscription "$WARNING_TOPIC" "warning "
 fi
 
-# Only AlarmTopicArn is overridden; cloudformation deploy keeps previous values for every
-# parameter not named, so the probe's thresholds and interval carry over untouched.
+# Two overrides, and everything else carries over: `aws cloudformation deploy` sends
+# UsePreviousValue=True for every template parameter NOT named in --parameter-overrides, so the
+# probe's interval, latency threshold and log retention keep their live values rather than
+# reverting to template defaults. Verified in the CLI's own source rather than assumed, because
+# the runbook asserted the opposite: awscli/customizations/cloudformation/deploy.py:455-461 sets
+# UsePreviousValue for the unnamed, and deployer.py:117-132 keeps it for an UPDATE (aws-cli
+# 2.33.4). It is stripped only on a CREATE, where there is no previous value to use.
 echo
-echo "== 4/5  wire the three probe alarms (their 22-day gate is met) =="
+echo "== 4/5  wire the three probe alarms, and point them at the host users actually use =="
 aws cloudformation deploy \
   --region "$REGION" \
   --stack-name "$PROBE_STACK" \
   --template-file infra/aws/climate-project-synthetic-probe.yml \
   --capabilities CAPABILITY_NAMED_IAM \
   --no-fail-on-empty-changeset \
-  --parameter-overrides AlarmTopicArn="$TOPIC"
+  --parameter-overrides \
+    AlarmTopicArn="$TOPIC" \
+    ApiBaseUrl="$PROBE_API_URL"
 
 echo
 echo "== 5/5  verify -- the action count must read 1, not 0 =="
@@ -245,6 +274,23 @@ echo
 # The gate. A run that ends with an empty topic has produced armed alarms that reach nobody,
 # and that must not exit 0 -- reporting this state as done is precisely what failed on
 # 2026-09-25 and cost three days.
+# The CloudFormation probe now watches $PROBE_API_URL. The GitHub-side probe and the drift
+# check read a repository variable instead, and if the two disagree one of them is watching a
+# host nobody uses. Advisory, never a gate: a machine without gh, or without a token, is still
+# a machine that can deploy the stack.
+if command -v gh >/dev/null 2>&1; then
+  prod_var=$(gh variable list --json name,value \
+    --jq '.[]|select(.name=="PROD_API_BASE_URL").value' 2>/dev/null || true)
+  if [ "$prod_var" != "$PROBE_API_URL" ]; then
+    echo "NOTE: vars.PROD_API_BASE_URL is [${prod_var:-unset}], but this stack now probes"
+    echo "      $PROBE_API_URL. ops-synthetic-probe.yml and deploy-drift.yml read that variable"
+    echo "      and fall back to the App Runner hostname. To move both:"
+    echo
+    echo "          gh variable set PROD_API_BASE_URL --body \"$PROBE_API_URL\""
+    echo
+  fi
+fi
+
 STATE=$(delivery_state "$TOPIC")
 case "$STATE" in
   none)

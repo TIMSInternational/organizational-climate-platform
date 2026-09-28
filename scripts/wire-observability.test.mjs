@@ -86,6 +86,10 @@ function run(env = {}) {
   writeFileSync(log, '');
   writeFileSync(join(dir, 'aws'), STUB);
   chmodSync(join(dir, 'aws'), 0o755);
+  // The script consults `gh variable list` for the PROD_API_BASE_URL advisory. Stub it so no
+  // test depends on the network, on a token, or on who is logged in.
+  writeFileSync(join(dir, 'gh'), '#!/usr/bin/env bash\nprintf \'%s\\n\' "$*" >> "$STUB_LOG"\nexit 0\n');
+  chmodSync(join(dir, 'gh'), 0o755);
 
   const res = spawnSync('bash', [SCRIPT], {
     cwd: REPO,
@@ -180,4 +184,33 @@ test('DRY=1 builds a changeset and executes nothing', () => {
   assert.match(r.calls, /--no-execute-changeset/);
   assert.doesNotMatch(r.calls, /sns subscribe/, 'a dry run must not send mail');
   assert.match(r.stdout, /critical topic: none/, 'a dry run should still say whether a delivery path exists');
+});
+
+test('the alarms are deployed ARMED -- dark alarms tell nobody anything', () => {
+  // Deployed AlarmsEnabled=false on 2026-09-25 to watch for flapping. Three days later: 24 of 24
+  // OK, no state transition since 12:08 on the 25th, and the only 7 ALARM blips were all
+  // INSUFFICIENT_DATA -> ALARM -> OK inside the first 7 minutes, before the first heartbeat.
+  const r = run({ STUB_SUBS: 'empty' });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.calls, /AlarmsEnabled=true/);
+  assert.doesNotMatch(r.calls, /AlarmsEnabled=false/);
+});
+
+test('ALARMS_ENABLED=false still puts them back to dark', () => {
+  const r = run({ STUB_SUBS: 'empty', ALARMS_ENABLED: 'false' });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.calls, /AlarmsEnabled=false/);
+});
+
+test('the probe watches the host users reach, not the App Runner hostname', () => {
+  // A custom-domain failure -- DNS, the Route53 delegation, the App Runner-managed cert -- would
+  // otherwise leave all three probe alarms green while the web app can reach nothing.
+  const r = run({ STUB_SUBS: 'empty' });
+  assert.equal(r.status, 0, r.stderr);
+  const probe = r.calls
+    .split('\n')
+    .find((l) => l.includes('cloudformation deploy') && l.includes('climate-project-synthetic-probe-prod'));
+  assert.ok(probe, `no probe deploy in:\n${r.calls}`);
+  assert.match(probe, /ApiBaseUrl=https:\/\/api\.climate\.timsint\.com/);
+  assert.doesNotMatch(probe, /awsapprunner\.com/, 'the raw App Runner host is what this change moves away from');
 });

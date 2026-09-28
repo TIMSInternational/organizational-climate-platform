@@ -62,10 +62,21 @@ AWS_PROFILE=formmaps-deploy aws cloudformation deploy \
     AlarmTopicArn=arn:aws:sns:us-east-1:747814092517:climate-project-api-prod-alerts-critical
 ```
 
-⚠️ That second command re-deploys a **live** stack. Any parameter it does not pass reverts to the
-template default, so check `describe-stacks --stack-name climate-project-synthetic-probe-prod
---query 'Stacks[0].Parameters'` first and carry forward anything non-default. The CI workflow does
-this automatically; a hand-run does not.
+⚠️ That second command re-deploys a **live** stack, so know what it carries over. **Corrected
+2026-09-28:** an earlier version of this line said any parameter not passed "reverts to the
+template default". It does not. `aws cloudformation deploy` sends `UsePreviousValue=True` for
+every template parameter absent from `--parameter-overrides`, so the unnamed ones keep their
+**current stack values** — read from the CLI's own source rather than assumed, because the wrong
+version of this sentence would have sent somebody hunting a parameter drift that cannot happen:
+
+| file (aws-cli 2.33.4) | what it does |
+|---|---|
+| `awscli/customizations/cloudformation/deploy.py:455-461` | every parameter not in the overrides gets `UsePreviousValue: True` |
+| `awscli/customizations/cloudformation/deployer.py:117-132` | that flag is kept for an `UPDATE`, and stripped only on a `CREATE`, where there is no previous value to use |
+
+The one thing to check is still worth checking, for a different reason: `describe-stacks
+--stack-name climate-project-synthetic-probe-prod --query 'Stacks[0].Parameters'` tells you what
+those carried-over values *are*, and a value that was wrong before a hand-run stays wrong after it.
 
 **Update 2026-09-24.** The last mile now has a button:
 `.github/workflows/ops-deploy-observability.yml` deploys the observability stack and optionally
@@ -125,6 +136,34 @@ AWS_PROFILE=claude CHECK=1 bash scripts/wire-observability.sh
 
 Only exit 0 and the word `CONFIRMED` is evidence that alerting works. `PendingConfirmation` is not
 progress, it is a countdown, and reporting it as the last step is what cost 2026-09-25 three days.
+
+#### Two rulings taken the same day
+
+**The 21 dark alarms are armed.** They were deployed `AlarmsEnabled=false` on 2026-09-25 to see
+whether they flap before anybody is paged. Measured on the 28th: 24 of 24 read `OK`, and there has
+been **no state transition since 12:08 CDT on the 25th**. Seven did reach `ALARM` — all seven
+between 12:01 and 12:08, all `INSUFFICIENT_DATA → ALARM → OK`, and all `job-*-stopped` alarms
+going off before the first heartbeat of a newly created stack landed. That is a creation artifact,
+not flapping, so the green-periods gate §9 set is met. `scripts/wire-observability.sh` now deploys
+with `AlarmsEnabled=true`; `ALARMS_ENABLED=false` on the command line puts them back to dark.
+
+**The probe now watches `api.climate.timsint.com`, not the App Runner hostname.** Until today both
+probes watched `https://bhgrdkd4gt.us-east-1.awsapprunner.com` while every user reaches the API
+through the custom domain (live since 2026-09-14, #484). A failure in the custom domain alone —
+DNS, the Route53 delegation, or the App Runner-managed certificate, none of which the raw hostname
+touches — would have left all three probe alarms **green while the web app reached nothing**. This
+is not a trade-off against watching App Runner directly: the custom domain fronts that same
+service, so if App Runner is down the domain in front of it is down too, and watching the domain
+covers strictly more. `vars.PROD_API_BASE_URL` is the other half — `ops-synthetic-probe.yml:87`
+and `deploy-drift.yml:38` both read it with the same App Runner fallback, and it is **unset**, so
+setting it moves both:
+
+```bash
+gh variable set PROD_API_BASE_URL --body "https://api.climate.timsint.com"
+```
+
+The script checks that variable against what it just deployed and prints this command if the two
+disagree, so the stack and the workflows cannot quietly watch different hosts.
 
 ---
 
