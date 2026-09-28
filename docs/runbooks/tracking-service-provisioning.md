@@ -25,11 +25,58 @@ pasted. Where a value is not knowable from this repository it is marked
 | The `production` GitHub environment already holds `INTERNAL_API_KEY_SECRET_ARN` and `TRACKING_JWT_SECRET_ARN`. | `gh api /repos/TIMSInternational/organizational-climate-platform/environments/production/variables`. Exact values in §4. |
 | The web tracking module is **already in the production bundle**, dormant. `06a1531` shipped `web/src/features/tracking/**` and Vercel deploys on every merge. | `git show --stat 06a1531`; `web/src/features/tracking/api/config.ts`. This is the whole of the §7 ordering risk. |
 | `https://climate.timsint.com` is live and IS the API's allowed CORS origin. | `curl -I` → 200; `OPTIONS` preflight with that `Origin` returns `access-control-allow-origin: https://climate.timsint.com`. The "known break" in README.md §Frontend is **fixed**; that paragraph is stale. |
-| **Supabase PITR is OFF and there are zero listed backups** for the production database. | `supabase backups list --project-ref uleeeziiceduvmiftgby -o json` → `{"backups": [], "pitr_enabled": false, "walg_enabled": true}`. Confirms the standing risk. `walg_enabled: true` only means the physical-backup engine exists; nothing restorable is listed. |
+| **Supabase PITR is OFF and there are zero listed backups** for the production database. | `supabase backups list --project-ref uleeeziiceduvmiftgby -o json` → `{"backups": [], "pitr_enabled": false, "walg_enabled": true}`. Confirms the standing risk. `walg_enabled: true` only means the physical-backup engine exists; nothing restorable is listed. **Re-measured 2026-09-28: byte-identical, 25 days later. It now has an owner and a decision file — `docs/decisions/database-backups.md` and issue #512.** |
 | `deploy-prod.yml` takes **~21–22 minutes** per run. | `gh run list --workflow=deploy-prod.yml` — five successful runs, 21m04s to 22m36s. Budget the same for tracking. |
 | `deploy-staging.yml` has **never run**, and there is **no `staging` GitHub environment**. | `gh run list --workflow=deploy-staging.yml` → empty; `gh api .../environments` → only `Preview` and `production`. **There is no place to rehearse this.** |
 
 ---
+
+### AMENDED 2026-09-28 — what the last dispatch actually refused on, and what is left
+
+`deploy-tracking-prod.yml` has run once, on 2026-08-27 (run `33117754195`), and **failed its own
+configuration preflight** before touching AWS. Read from the run's annotations rather than the log
+body, because the log echoes the step's script and reads like five errors that are really the
+script's source:
+
+```
+TRACKING_MIGRATION_DATABASE_CONNECTION_STRING is empty
+TRACKING_DATABASE_CONNECTION_STRING_SECRET_ARN is empty
+PROCOMER_COMPANY_ID is empty
+CLIMATE_PROJECT_BASE_URL is empty
+TRACKING_CORS_ALLOWED_ORIGIN is empty
+```
+
+Five then. **Three now** — two were set in the meantime, which is why "the tracking deploy is
+broken" is the wrong description: it has never been broken, it has been *unconfigured*, and it
+says so in seconds without spending anything.
+
+| value | state 2026-09-28 | gate |
+|---|---|---|
+| `TRACKING_CORS_ALLOWED_ORIGIN` | ✅ `https://climate.timsint.com` | — |
+| `CLIMATE_PROJECT_BASE_URL` | ⚠️ set, but to the **App Runner hostname** — see below | — |
+| `TRACKING_DATABASE_CONNECTION_STRING_SECRET_ARN` | ❌ empty | the database (§4) |
+| `TRACKING_MIGRATION_DATABASE_CONNECTION_STRING` | ❌ empty (secret) | the database (§4) |
+| `PROCOMER_COMPANY_ID` | ❌ empty | a human decision (§9.1) |
+
+So P10 is two values from the database purchase plus one GUID somebody has to choose. Neither
+`climate-tracking-api-prod` nor `climate-tracking-api-bootstrap` exists yet, as expected.
+
+⚠️ **`CLIMATE_PROJECT_BASE_URL` is `https://bhgrdkd4gt.us-east-1.awsapprunner.com`.** On
+2026-09-28 the probe and the drift check were moved off that hostname onto
+`api.climate.timsint.com` (`docs/runbooks/alerting.md`, that date) because a custom-domain failure
+is invisible from the generated host. This variable is the same claim in a third place, and it was
+missed by that sweep for a reason worth remembering: **a GitHub environment variable is not in the
+working tree, so `git grep` cannot see it.** `ClimateProjectClient` sets it as
+`HttpClient.BaseAddress`, and nothing consumes it today because the tracking service has no stack —
+so it is free to correct now, before the first deploy makes it load-bearing:
+
+```bash
+gh variable set CLIMATE_PROJECT_BASE_URL --env production --body 'https://api.climate.timsint.com'
+```
+
+Left as a recommendation rather than applied: it is production configuration, and the host that
+serves it has been verified from outside (`/version`, `/health`, `/ready` all 200 on 2026-09-28)
+but the tracking service's own call path has not, because it does not run yet.
 
 ## 1. The shape, and why it is this shape
 

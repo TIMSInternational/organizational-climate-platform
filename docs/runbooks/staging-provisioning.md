@@ -592,6 +592,57 @@ to their response — an anonymous response carries no user id by design, so a p
 seeded as anonymous respondents yields surveys that have responses and a climate map with
 nothing on it.
 
+## Step 8b — check it before you dispatch, and seed it after (added 2026-09-28)
+
+Two scripts now exist for the two questions this runbook used to answer only in prose. Both are
+read-only about production and neither invents data outside the product's own endpoints.
+
+**Before Step 6, ask whether the deploy can succeed at all:**
+
+```bash
+AWS_PROFILE=<a profile on the staging account> bash scripts/staging-preflight.sh
+```
+
+It reads the `staging` GitHub environment — the same values the workflow expands — and then checks
+each one **resolves**, which `deploy-staging.yml`'s own preflight cannot: that one verifies a
+variable is non-empty, and a secret ARN pointing at another account or at a deleted secret is
+non-empty and still wrong. It exits 0 only when everything the deploy needs is present, 1 when
+something is missing, and **2 when it could check the GitHub side but not the AWS side** — a
+partial answer deliberately does not share an exit code with a pass.
+
+Measured 2026-09-28: the deploy role, the bootstrap stack and both existing secret ARNs are
+present and resolve. Only `DATABASE_CONNECTION_STRING_SECRET_ARN` and
+`MIGRATION_DATABASE_CONNECTION_STRING` are missing, and both come from Step 2. **Staging is two
+values away, not a project away.**
+
+⚠️ Note which account: the staging environment's own `AWS_ACCOUNT_ID` is **795965600143**, which
+on a dev machine is the `default` profile — the reverse of every other script in this repository,
+where `default` is the wrong account. Reading the environment variable rather than assuming is the
+only reliable way round it.
+
+**After Step 8, fill it with data a tester can see:**
+
+```bash
+node scripts/seed-staging.mjs --api https://<staging-api> --email <admin> --password <pw> --dry-run
+node scripts/seed-staging.mjs --api https://<staging-api> --email <admin> --password <pw>
+```
+
+It wraps `seed-surveys.mjs` rather than duplicating it, and adds the three things staging needs
+that local does not:
+
+- **It refuses production**, twice: a hostname list before any network call, and `GET /version` →
+  `environment`, so a custom domain or a new alias cannot slip past a string match. Nothing
+  overrides an explicit `Production` answer.
+- **A 401 points here, to Step 8**, instead of reading as a wrong password.
+- **It reports the privacy floor per department, and FAILS if no department reaches 5.** That is
+  not pedantry: the floor is applied at read time, so an environment where every segment is
+  suppressed shows a tester nothing but hatching, and they would reasonably report the product as
+  broken. It also says so when *nothing* is under the floor, because UAT then never exercises
+  suppression — the behaviour a client is most likely to ask about.
+
+The tracking half (`seed-local.mjs`) runs only with `--tracking`, since no tracking service is
+deployed; see Step 9.
+
 ## Step 9 — the parity gap this runbook cannot close: `services/tracking-api`
 
 **Staging cannot honestly claim "production parity" while this is true — though the reason
