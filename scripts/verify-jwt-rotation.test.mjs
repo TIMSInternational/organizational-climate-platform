@@ -34,7 +34,7 @@ async function withStub(state, fn) {
       res.writeHead(code, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(body));
     };
-    if (req.url.startsWith('/version')) return send(200, { commit: COMMIT });
+    if (req.url.startsWith('/version')) return send(200, { commit: state.commit ?? COMMIT });
     if (req.url.startsWith('/auth/login')) {
       if (state.loginStatus && state.loginStatus !== 200) return send(state.loginStatus, { message: 'Invalid email or password' });
       return send(200, { token: TOKEN });
@@ -52,11 +52,26 @@ async function withStub(state, fn) {
   }
 }
 
-function run(mode, { api, store, stdin } = {}) {
+/** A gh that reports TRACKING_JWT_SECRET_PREVIOUS_ARN as set or cleared, so `check` can tell
+ *  phase 1 from phase 2 without the reader having to remember which they are in. */
+function ghStub(prevArn) {
+  const dir = mkdtempSync(join(tmpdir(), 'gh-stub-'));
+  const body = JSON.stringify([{ name: 'TRACKING_JWT_SECRET_PREVIOUS_ARN', value: prevArn }]);
+  writeFileSync(join(dir, 'gh'), `#!/usr/bin/env bash\nprintf '%s' ${JSON.stringify(body)} | jq -r '.[]|select(.name=="TRACKING_JWT_SECRET_PREVIOUS_ARN").value'\n`, { mode: 0o755 });
+  return dir;
+}
+
+function run(mode, { api, store, stdin, baseline, ghDir } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn('bash', [SCRIPT, mode], {
       cwd: REPO,
-      env: { ...process.env, ...(api ? { API: api } : {}), ...(store ? { STORE: store } : {}) },
+      env: {
+        ...process.env,
+        ...(api ? { API: api } : {}),
+        ...(store ? { STORE: store } : {}),
+        ...(baseline ? { BASELINE: baseline } : {}),
+        ...(ghDir ? { PATH: `${ghDir}:${process.env.PATH}` } : {}),
+      },
     });
     let stdout = '';
     let stderr = '';
@@ -91,6 +106,8 @@ test('capture stores the token and NEVER prints it', async () => {
   });
   assert.equal(readFileSync(store, 'utf8'), TOKEN, 'the token must be stored verbatim');
   assert.equal(statSync(store).mode & 0o777, 0o600, 'the store must be owner-only');
+  // The baseline is what lets `check` refuse to interpret a status code before the deploy lands.
+  assert.equal(readFileSync(`${store}.commit`, 'utf8'), COMMIT.slice(0, 8), 'the serving commit must be recorded');
 });
 
 test('a failed login says wrong password, NOT a rotation problem', async () => {
@@ -123,41 +140,87 @@ test('check without a captured token explains that the evidence cannot be recrea
   assert.match(r.stderr, /cannot be obtained again/);
 });
 
-test('200 is reported as the overlap being real, and says what phase 2 must show instead', async () => {
+/** A captured token plus a baseline commit, ready for `check`. */
+function stored(baselineCommit) {
   const store = freshStore();
   writeFileSync(store, TOKEN, { mode: 0o600 });
-  await withStub({ profileStatus: 200 }, async (api) => {
-    const r = await run('check', { api, store });
-    assert.equal(r.status, 0, r.stderr);
-    assert.match(r.stdout, /HTTP 200/);
-    assert.match(r.stdout, /THE OVERLAP IS REAL/);
-    assert.match(r.stdout, /correct result after PHASE 1/);
-    assert.match(r.stdout, /After phase 2 it must read 401/);
-    assert.ok(!r.stdout.includes(TOKEN), 'the token leaked');
+  const baseline = `${store}.commit`;
+  if (baselineCommit) writeFileSync(baseline, baselineCommit, { mode: 0o600 });
+  return { store, baseline };
+}
+
+test('THE GATE: while the deploy has not landed, no status code is interpreted', async () => {
+  // 2026-09-28, for real: `check` printed "THE OVERLAP IS REAL" on a 200 that came from the
+  // PRE-rotation revision, because the deploy was still on step 5 of 15. That revision signs AND
+  // validates with the old key, so its 200 only proves it accepts its own tokens.
+  const { store, baseline } = stored(COMMIT.slice(0, 8));
+  await withStub({ commit: COMMIT, profileStatus: 200 }, async (api) => {
+    const r = await run('check', { api, store, baseline });
+    assert.equal(r.status, 3, 'inconclusive must not share an exit code with a verdict');
+    assert.match(r.stdout, /INCONCLUSIVE/);
+    assert.match(r.stdout, /still serving 649fd077 -- the same revision that minted this token/);
+    assert.doesNotMatch(r.stdout, /OVERLAP IS REAL|ROTATION IS REAL/, 'it must not claim anything');
   });
 });
 
-test('401 is reported as BOTH meanings, because it is the opposite verdict in each phase', async () => {
-  const store = freshStore();
-  writeFileSync(store, TOKEN, { mode: 0o600 });
-  await withStub({ profileStatus: 401 }, async (api) => {
-    const r = await run('check', { api, store });
-    assert.match(r.stdout, /HTTP 401/);
-    assert.match(r.stdout, /After PHASE 2 this is the result that makes the rotation real/);
-    assert.match(r.stdout, /After PHASE 1 this is a FAILURE/);
-    assert.match(r.stdout, /TRACKING_JWT_SECRET_PREVIOUS_ARN was set BEFORE the deploy/);
-    assert.ok(!r.stdout.includes(TOKEN), 'the token leaked');
+test('once the revision has moved, a 200 with the previous key SET is the overlap working', async () => {
+  const { store, baseline } = stored('649fd077');
+  const ghDir = ghStub('arn:aws:secretsmanager:us-east-1:000000000000:secret:jwt-previous-test-fixture');
+  await withStub({ commit: 'aaaa1111bbbb2222cccc3333dddd4444eeee5555', profileStatus: 200 }, async (api) => {
+    const r = await run('check', { api, store, baseline, ghDir });
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /revision moved 649fd077 -> aaaa1111/);
+    assert.match(r.stdout, /is set, so this is PHASE 1/);
+    assert.match(r.stdout, /THE OVERLAP IS REAL/);
+    assert.match(r.stdout, /Phase 1 is correct and complete/);
+    assert.ok(!r.stdout.includes(TOKEN));
+  });
+});
+
+test('a 200 with the previous key CLEARED is a FAILURE, not a success', async () => {
+  // Phase 2 removed the previous key and the old token still works: the value rotated away from
+  // is still accepted, so the rotation bought nothing. The old wording called 200 "correct".
+  const { store, baseline } = stored('649fd077');
+  const ghDir = ghStub('');
+  await withStub({ commit: 'aaaa1111bbbb2222cccc3333dddd4444eeee5555', profileStatus: 200 }, async (api) => {
+    const r = await run('check', { api, store, baseline, ghDir });
+    assert.match(r.stdout, /is cleared, so this is PHASE 2/);
+    assert.match(r.stdout, /FAILURE/);
+    assert.match(r.stdout, /still accepted and the rotation has bought\nnothing/);
+    assert.doesNotMatch(r.stdout, /THE OVERLAP IS REAL/);
+  });
+});
+
+test('a 401 with the previous key CLEARED is the rotation being real', async () => {
+  const { store, baseline } = stored('649fd077');
+  const ghDir = ghStub('');
+  await withStub({ commit: 'aaaa1111bbbb2222cccc3333dddd4444eeee5555', profileStatus: 401 }, async (api) => {
+    const r = await run('check', { api, store, baseline, ghDir });
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /THE ROTATION IS REAL/);
+    assert.match(r.stdout, /rotation-inventory\.md/, 'it should say where to record it');
+  });
+});
+
+test('a 401 with the previous key SET means everyone was signed out', async () => {
+  const { store, baseline } = stored('649fd077');
+  const ghDir = ghStub('arn:aws:secretsmanager:us-east-1:000000000000:secret:jwt-previous-test-fixture');
+  await withStub({ commit: 'aaaa1111bbbb2222cccc3333dddd4444eeee5555', profileStatus: 401 }, async (api) => {
+    const r = await run('check', { api, store, baseline, ghDir });
+    assert.match(r.stdout, /FAILURE/);
+    assert.match(r.stdout, /every existing session has\nbeen signed out/);
+    assert.match(r.stdout, /set BEFORE the deploy/);
+    assert.doesNotMatch(r.stdout, /THE ROTATION IS REAL/);
   });
 });
 
 test('anything other than 200 or 401 is reported as saying nothing about the keys', async () => {
-  const store = freshStore();
-  writeFileSync(store, TOKEN, { mode: 0o600 });
-  await withStub({ profileStatus: 503 }, async (api) => {
-    const r = await run('check', { api, store });
+  const { store, baseline } = stored('649fd077');
+  await withStub({ commit: 'aaaa1111bbbb2222cccc3333dddd4444eeee5555', profileStatus: 503 }, async (api) => {
+    const r = await run('check', { api, store, baseline });
     assert.match(r.stdout, /HTTP 503/);
     assert.match(r.stdout, /says nothing about the keys/);
-    assert.doesNotMatch(r.stdout, /OVERLAP IS REAL|makes the rotation real/);
+    assert.doesNotMatch(r.stdout, /OVERLAP IS REAL|ROTATION IS REAL/);
   });
 });
 

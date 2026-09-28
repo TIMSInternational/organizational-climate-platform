@@ -39,6 +39,7 @@ set -euo pipefail
 
 API="${API:-https://api.climate.timsint.com}"
 STORE="${STORE:-${TMPDIR:-/tmp}/climate-jwt-rotation-token}"
+BASELINE="${BASELINE:-${STORE:-${TMPDIR:-/tmp}/climate-jwt-rotation-token}.commit}"
 MODE="${1:-}"
 
 die() { printf '\nERROR: %s\n\n' "$*" >&2; exit 1; }
@@ -75,8 +76,13 @@ anything yet."
     printf '%s' "$token" > "$STORE"
     chmod 600 "$STORE"
 
-    # The commit is worth recording: it says which key era the token belongs to.
+    # Record WHICH revision minted it, not as a nicety but as the baseline `check` compares
+    # against. Without it, a 200 from the pre-rotation revision -- which validates with the old
+    # key because it IS the old deployment -- reads exactly like a working overlap. That happened
+    # on 2026-09-28: the check said "THE OVERLAP IS REAL" while the deploy was still on step 5.
     commit="$(curl -sS --max-time 20 "$API/version" | jq -r '.commit // "unknown"' | cut -c1-8)"
+    printf '%s' "$commit" > "$BASELINE"
+    chmod 600 "$BASELINE"
     printf 'Captured %d characters, mode 600, at:\n  %s\n' "${#token}" "$STORE"
     printf 'Minted while %s was serving commit %s.\n\n' "$API" "$commit"
     printf 'Now let the phase-1 deploy finish, then:  bash %s check\n\n' "$0"
@@ -90,6 +96,26 @@ the signing key and this evidence cannot be obtained again."
     token="$(cat "$STORE")"
     commit="$(curl -sS --max-time 20 "$API/version" | jq -r '.commit // "unknown"' | cut -c1-8)"
 
+    # THE GATE. A status code only means something once the deploy has replaced the revision that
+    # minted the token. Before that, the service still holds the old key as its SIGNING key and a
+    # 200 says nothing about whether a previous key is accepted.
+    if [ -f "$BASELINE" ]; then
+      baseline="$(cat "$BASELINE")"
+      if [ "$commit" = "$baseline" ]; then
+        printf '\n%s is still serving %s -- the same revision that minted this token.\n\n' "$API" "$commit"
+        printf 'INCONCLUSIVE. The deploy has not landed yet, so the running service still uses the\n'
+        printf 'OLD key to sign AND to validate. A 200 here would only prove that the old deployment\n'
+        printf 'accepts its own tokens, which was never in question.\n\n'
+        printf 'Wait for the deploy to finish, then run this again.\n\n'
+        exit 3
+      fi
+      printf '\nrevision moved %s -> %s since the token was minted.\n' "$baseline" "$commit"
+    else
+      printf '\nNo baseline commit recorded (token captured before this check existed).\n'
+      printf 'Confirm yourself that the deploy has LANDED before trusting anything below: a 200\n'
+      printf 'from the pre-rotation revision proves nothing.\n'
+    fi
+
     # -o /dev/null: the body of an authenticated production response is not something to print.
     # The status code is the whole measurement.
     status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 \
@@ -98,20 +124,44 @@ the signing key and this evidence cannot be obtained again."
     printf '\n%s is serving commit %s\n' "$API" "$commit"
     printf 'the pre-rotation token -> HTTP %s\n\n' "$status"
 
+    # Which phase are we in? The repository variable is the answer: phase 1 sets it, phase 2
+    # clears it. Reading it turns two conditional readings into one verdict -- worth doing,
+    # because the two runs are a day apart and "which phase was I in" is exactly what a person
+    # gets wrong at that distance.
+    phase=unknown
+    if command -v gh >/dev/null 2>&1; then
+      prev_arn="$(gh variable list --json name,value \
+        --jq '.[]|select(.name=="TRACKING_JWT_SECRET_PREVIOUS_ARN").value' 2>/dev/null || true)"
+      [ -n "$prev_arn" ] && phase=1 || phase=2
+      printf 'TRACKING_JWT_SECRET_PREVIOUS_ARN is %s, so this is PHASE %s.\n' \
+        "$([ -n "$prev_arn" ] && echo set || echo cleared)" "$phase"
+    fi
+
     case "$status" in
       200)
-        printf 'THE OVERLAP IS REAL. A session that existed before the rotation still works, so\n'
-        printf 'rotating logged nobody out. This is the correct result after PHASE 1.\n\n'
-        printf 'After phase 2 it must read 401 instead -- if it still reads 200 then, the key you\n'
-        printf 'rotated away from is still accepted and the rotation has bought nothing.\n\n'
+        case "$phase" in
+          1) printf '\nTHE OVERLAP IS REAL. A session from before the rotation still works, so\n'
+             printf 'rotating logged nobody out. Phase 1 is correct and complete.\n\n'
+             printf 'Next: wait one token lifetime (24h), then rotate-tracking-jwt.sh apply close,\n'
+             printf 'deploy, and run this again -- it must read 401.\n\n' ;;
+          2) printf '\nFAILURE. The previous key is CLEARED and a pre-rotation token still works, so\n'
+             printf 'the key you rotated away from is still accepted and the rotation has bought\n'
+             printf 'nothing. Did the phase-2 deploy actually run?\n\n' ;;
+          *) printf '\nA pre-rotation token still works. That is correct after PHASE 1 and a FAILURE\n'
+             printf 'after phase 2. Install gh, or check TRACKING_JWT_SECRET_PREVIOUS_ARN by hand.\n\n' ;;
+        esac
         ;;
       401)
-        printf 'THE OLD KEY IS REJECTED.\n\n'
-        printf 'After PHASE 2 this is the result that makes the rotation real -- run it only if\n'
-        printf 'you have completed rotate-tracking-jwt.sh apply close AND its deploy.\n\n'
-        printf 'After PHASE 1 this is a FAILURE: the overlap did not reach the service, and every\n'
-        printf 'existing session has been signed out. Check that\n'
-        printf 'TRACKING_JWT_SECRET_PREVIOUS_ARN was set BEFORE the deploy, then redeploy.\n\n'
+        case "$phase" in
+          2) printf '\nTHE ROTATION IS REAL. The previous key is cleared and a token signed with it is\n'
+             printf 'rejected. This is the result #70 was asking for.\n\n'
+             printf 'Next: bash %s forget, and record the date in docs/security/rotation-inventory.md.\n\n' "$0" ;;
+          1) printf '\nFAILURE. The previous key is still SET, so a pre-rotation token should work and\n'
+             printf 'does not: the overlap never reached the service and every existing session has\n'
+             printf 'been signed out. Confirm the variable was set BEFORE the deploy, then redeploy.\n\n' ;;
+          *) printf '\nA pre-rotation token is rejected. That is success after PHASE 2 and a FAILURE\n'
+             printf 'after phase 1. Install gh, or check TRACKING_JWT_SECRET_PREVIOUS_ARN by hand.\n\n' ;;
+        esac
         ;;
       *)
         printf 'Neither 200 nor 401, so this says nothing about the keys. Is the deploy still\n'
@@ -124,7 +174,7 @@ the signing key and this evidence cannot be obtained again."
     if [ -f "$STORE" ]; then
       # Overwrite before unlinking: a bearer token left in a freed block is still a bearer token.
       dd if=/dev/urandom of="$STORE" bs=1 count=2048 conv=notrunc 2>/dev/null || true
-      rm -f "$STORE"
+      rm -f "$STORE" "$BASELINE"
       printf 'Shredded %s\n' "$STORE"
     else
       printf 'Nothing stored at %s\n' "$STORE"
