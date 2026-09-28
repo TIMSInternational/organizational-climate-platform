@@ -88,7 +88,10 @@ function run(env = {}) {
   chmodSync(join(dir, 'aws'), 0o755);
   // The script consults `gh variable list` for the PROD_API_BASE_URL advisory. Stub it so no
   // test depends on the network, on a token, or on who is logged in.
-  writeFileSync(join(dir, 'gh'), '#!/usr/bin/env bash\nprintf \'%s\\n\' "$*" >> "$STUB_LOG"\nexit 0\n');
+  writeFileSync(
+    join(dir, 'gh'),
+    '#!/usr/bin/env bash\nprintf \'%s\\n\' "$*" >> "$STUB_LOG"\nprintf \'%s\' "$STUB_PROD_VAR"\nexit 0\n',
+  );
   chmodSync(join(dir, 'gh'), 0o755);
 
   const res = spawnSync('bash', [SCRIPT], {
@@ -102,6 +105,7 @@ function run(env = {}) {
       STUB_CRITICAL: CRITICAL,
       STUB_CONFIRMED_ARN: CONFIRMED_ARN,
       STUB_SUBS: 'empty',
+      STUB_PROD_VAR: '',
       // Set explicitly so the script never shells out to `gh` for the repo variable.
       FALLBACK_EMAIL: 'alerts@timsint.com',
       AWS_PROFILE: 'stub',
@@ -213,4 +217,21 @@ test('the probe watches the host users reach, not the App Runner hostname', () =
   assert.ok(probe, `no probe deploy in:\n${r.calls}`);
   assert.match(probe, /ApiBaseUrl=https:\/\/api\.climate\.timsint\.com/);
   assert.doesNotMatch(probe, /awsapprunner\.com/, 'the raw App Runner host is what this change moves away from');
+});
+
+test('a PROD_API_BASE_URL naming a different host is surfaced, not silently tolerated', () => {
+  // ops-synthetic-probe.yml and deploy-drift.yml follow the variable. If it disagrees with what
+  // this stack probes, the CloudWatch alarms and the GitHub probe watch different hosts -- which
+  // is how "the two are in agreement by accident" became a blind spot in the first place.
+  const r = run({ STUB_SUBS: 'empty', STUB_PROD_VAR: 'https://bhgrdkd4gt.us-east-1.awsapprunner.com' });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /vars\.PROD_API_BASE_URL is \[https:\/\/bhgrdkd4gt\.us-east-1\.awsapprunner\.com\]/);
+  assert.match(r.stdout, /gh variable set PROD_API_BASE_URL --body "https:\/\/api\.climate\.timsint\.com"/);
+});
+
+test('an unset PROD_API_BASE_URL is correct now, and says so instead of nagging', () => {
+  const r = run({ STUB_SUBS: 'empty', STUB_PROD_VAR: '' });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /unset, and that is now correct/);
+  assert.doesNotMatch(r.stdout, /gh variable set PROD_API_BASE_URL/);
 });

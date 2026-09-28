@@ -154,16 +154,28 @@ DNS, the Route53 delegation, or the App Runner-managed certificate, none of whic
 touches — would have left all three probe alarms **green while the web app reached nothing**. This
 is not a trade-off against watching App Runner directly: the custom domain fronts that same
 service, so if App Runner is down the domain in front of it is down too, and watching the domain
-covers strictly more. `vars.PROD_API_BASE_URL` is the other half — `ops-synthetic-probe.yml:87`
-and `deploy-drift.yml:38` both read it with the same App Runner fallback, and it is **unset**, so
-setting it moves both:
+covers strictly more.
+
+Three things named the old host and they now all name the new one, because a switch that depends
+on somebody remembering a fourth step is the failure this whole section is about:
+
+| where | what changed |
+|---|---|
+| `infra/aws/climate-project-synthetic-probe.yml` | `ApiBaseUrl` default, and a Description that still claimed "no custom domain is attached (#160)" — untrue since 2026-09-14 |
+| `.github/workflows/ops-synthetic-probe.yml` | the `vars.PROD_API_BASE_URL` fallback |
+| `.github/workflows/deploy-drift.yml` | the same fallback, so drift is measured against the host users reach |
+
+`vars.PROD_API_BASE_URL` is **unset**, and that is now the correct state: both workflows fall back
+to the customer-facing host, so they agree with the CloudFormation probe by configuration rather
+than by accident. Set it only to override all three at once:
 
 ```bash
 gh variable set PROD_API_BASE_URL --body "https://api.climate.timsint.com"
 ```
 
-The script checks that variable against what it just deployed and prints this command if the two
-disagree, so the stack and the workflows cannot quietly watch different hosts.
+`scripts/wire-observability.sh` reads that variable at the end of a run and says so when it names
+a different host than the stack it just deployed — the stack and the workflows cannot quietly
+watch different things.
 
 ---
 

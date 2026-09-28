@@ -274,17 +274,20 @@ echo
 # The gate. A run that ends with an empty topic has produced armed alarms that reach nobody,
 # and that must not exit 0 -- reporting this state as done is precisely what failed on
 # 2026-09-25 and cost three days.
-# The CloudFormation probe now watches $PROBE_API_URL. The GitHub-side probe and the drift
-# check read a repository variable instead, and if the two disagree one of them is watching a
-# host nobody uses. Advisory, never a gate: a machine without gh, or without a token, is still
-# a machine that can deploy the stack.
+# This stack now probes $PROBE_API_URL. The GitHub-side probe and the drift check follow
+# vars.PROD_API_BASE_URL, so if that variable names a different host, one of them is watching
+# something nobody uses. Advisory, never a gate: a machine without gh, or without a token, is
+# still a machine that can deploy the stack.
 if command -v gh >/dev/null 2>&1; then
   prod_var=$(gh variable list --json name,value \
     --jq '.[]|select(.name=="PROD_API_BASE_URL").value' 2>/dev/null || true)
-  if [ "$prod_var" != "$PROBE_API_URL" ]; then
-    echo "NOTE: vars.PROD_API_BASE_URL is [${prod_var:-unset}], but this stack now probes"
-    echo "      $PROBE_API_URL. ops-synthetic-probe.yml and deploy-drift.yml read that variable"
-    echo "      and fall back to the App Runner hostname. To move both:"
+  if [ -z "$prod_var" ]; then
+    echo "vars.PROD_API_BASE_URL is unset, and that is now correct: ops-synthetic-probe.yml and"
+    echo "deploy-drift.yml fall back to $PROBE_API_URL, the same host this stack probes."
+  elif [ "$prod_var" != "$PROBE_API_URL" ]; then
+    echo "NOTE: vars.PROD_API_BASE_URL is [$prod_var] but this stack probes $PROBE_API_URL. The"
+    echo "      GitHub probe and deploy-drift follow the variable, so they are watching a"
+    echo "      different host than these alarms. To make all three agree:"
     echo
     echo "          gh variable set PROD_API_BASE_URL --body \"$PROBE_API_URL\""
     echo
