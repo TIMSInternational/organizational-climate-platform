@@ -42,13 +42,19 @@ while the old value still exists in the scheduled-for-deletion secret.
 the pre-rotation revision signs and validates with the old key. `check` now exits 3 INCONCLUSIVE
 until the running commit differs from the one that minted the token.
 
-### Still unverified: that anyone can log in with the NEW key
+### Verified 2026-09-28: logins work on the NEW key
 
-Phase 1 proved the *old* key still worked. Nothing has yet proved the **new** one does. A broken
-signing key would not show up in any alarm — a failed login is a 401, not a 5xx, and `/health` and
-the readiness canary are both unauthenticated. `bash scripts/verify-jwt-rotation.sh capture`
-performs a real login and is the cheapest check: if it prints `Captured N characters`, authentication
-works on the new key.
+Phase 1 proved the *old* key still worked; that says nothing about the new one, and a broken signing
+key is invisible to every alarm here — a failed login is a 401, not a 5xx, and both `/health` and
+the readiness canary are unauthenticated.
+
+Checked directly: a real sign-in as `companyadmin@nexadev.ai` against `api.climate.timsint.com`
+while it served `32cda8e6` minted a **539-character** token — the same length as the pre-rotation
+token, so the new key produces well-formed tokens rather than merely being accepted. The token was
+shredded immediately afterwards.
+
+So all three properties of this rotation are now measured rather than assumed: the old key still
+worked during the overlap, the old key is no longer loaded, and the new key signs usable tokens.
 
 **Enumeration (step 1 of the close-out, "enumerate first, rotate second") was executed
 2026-08-15 with real console access — read-only, nothing rotated.** Findings are filled into

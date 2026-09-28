@@ -52,8 +52,14 @@ command -v jq >/dev/null || die "jq is required."
 
 case "$MODE" in
   capture)
-    printf 'Signing in to %s to capture a PRE-rotation token.\n' "$API"
+    printf 'Signing in to %s and storing the token it mints, with the revision that minted it.\n' "$API"
     printf 'Nothing is echoed and nothing is written to your shell history.\n\n'
+    # This wording used to say "a PRE-rotation token", which misread its second, equally useful
+    # job: run AFTER a rotation it is the cheapest proof that the NEW key signs working tokens --
+    # a check nothing else performs, because a broken signing key returns 401 and every alarm here
+    # watches for 5xx and unauthenticated health.
+    printf 'Before a rotation this is the evidence phase 2 needs. After one it proves the new key\n'
+    printf 'signs working tokens, which no alarm can tell you.\n\n'
 
     # `read -r -s` keeps the password off the screen; neither value is ever passed as an
     # argument, only on stdin to curl via a here-doc, so it stays out of `ps`.
@@ -89,7 +95,10 @@ anything yet."
     chmod 600 "$BASELINE"
     printf 'Captured %d characters, mode 600, at:\n  %s\n' "${#token}" "$STORE"
     printf 'Minted while %s was serving commit %s.\n\n' "$API" "$commit"
-    printf 'Now let the phase-1 deploy finish, then:  bash %s check\n\n' "$0"
+    printf 'If this is the pre-rotation capture: let the phase-1 deploy land, then run\n'
+    printf '  bash %s check\n' "$0"
+    printf 'If you were checking that logins work after a rotation: they do, and this token is a\n'
+    printf 'live production credential -- run  bash %s forget  now.\n\n' "$0"
     ;;
 
   check)
