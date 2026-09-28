@@ -1,6 +1,60 @@
 # Secret rotation inventory — #70
 
-**Status: NOT STARTED. No credential below has been rotated.**
+**Status: IN PROGRESS. One item of roughly sixteen is rotated.** `TrackingJwtSecret` is **done,
+both phases, 2026-09-28**. Everything else below is still `☐`, and the issue is titled *rotate
+every secret exposed by the incident* — so the JWT being finished is a start, not a close-out.
+
+## `TrackingJwtSecret` — phase 1 complete 2026-09-28, phase 2 OPEN
+
+Recorded per this file's own rule: what was rotated, when, and that the new value was verified
+working. No value appears here.
+
+| | |
+|---|---|
+| Phase 1 applied | 2026-09-28 18:07:58Z, `scripts/rotate-tracking-jwt.sh apply open` |
+| Old / new key fingerprints | `1cf877ebbd10` → `fdce34423013` (sha256, first 12 hex — not the keys) |
+| Deployed | run `36463186666`, revision moved `649fd077` → `32cda8e6` at 18:32:34Z |
+| Overlap verified | a token minted at `649fd077` returned **HTTP 200** against `32cda8e6` — `scripts/verify-jwt-rotation.sh check` |
+| Wiring verified independently | the App Runner service went from 5 to **6** `RuntimeEnvironmentSecrets`, the new one `TrackingJwtSecretPrevious` (read-only `describe-service`, baseline recorded before the deploy) |
+| Nobody signed out | that 200 is the proof: a session that existed before the rotation still worked |
+
+### Phase 2 complete 2026-09-28 — and the evidence is the WEAKER of the two, deliberately stated
+
+| | |
+|---|---|
+| Phase 2 applied | 2026-09-28 18:57Z, `apply close` with `FORCE_CLOSE_EARLY=1` |
+| Why forced | the 24h overlap protects live sessions, and this system has no invited client users yet (UAT `NOT EXECUTED`). Closing early cost only dry-run sessions and retired the key a day sooner. A deliberate decision, not an accident |
+| Variable | `TRACKING_JWT_SECRET_PREVIOUS_ARN` **removed** |
+| Previous secret | scheduled for deletion 18:57:56Z, **7-day recovery window — recoverable until ~2026-10-05** |
+| Deploy | run `36468907451`, completed success |
+| Verified | `verify-jwt-rotation.sh config` → `RuntimeEnvironmentSecrets` went **6 → 5**, `TrackingJwtSecretPrevious` **ABSENT**. The service holds no previous key, so nothing signed with the retired value can validate against it |
+
+⚠️ **This is the structural proof, not the end-to-end one, and the difference is worth recording.**
+The intended evidence was the pre-rotation token returning **401**. That token was shredded by
+`verify-jwt-rotation.sh forget`, run before phase 2 — and it cannot be re-obtained, because a fresh
+login is signed with the new key. **No 401 was ever observed.** What is recorded instead is that the
+old key is not loaded by the running service, plus
+`tests/ClimateProject.IntegrationTests/Security/TrackingJwtRotationTests.cs` in CI, which proves the
+code accepts only the keys it is given. The stronger proof remains obtainable until ~2026-10-05,
+while the old value still exists in the scheduled-for-deletion secret.
+
+⚠️ Also learned the same day: a `200` measured **before** the deploy lands is meaningless, because
+the pre-rotation revision signs and validates with the old key. `check` now exits 3 INCONCLUSIVE
+until the running commit differs from the one that minted the token.
+
+### Verified 2026-09-28: logins work on the NEW key
+
+Phase 1 proved the *old* key still worked; that says nothing about the new one, and a broken signing
+key is invisible to every alarm here — a failed login is a 401, not a 5xx, and both `/health` and
+the readiness canary are unauthenticated.
+
+Checked directly: a real sign-in as `companyadmin@nexadev.ai` against `api.climate.timsint.com`
+while it served `32cda8e6` minted a **539-character** token — the same length as the pre-rotation
+token, so the new key produces well-formed tokens rather than merely being accepted. The token was
+shredded immediately afterwards.
+
+So all three properties of this rotation are now measured rather than assumed: the old key still
+worked during the overlap, the old key is no longer loaded, and the new key signs usable tokens.
 
 **Enumeration (step 1 of the close-out, "enumerate first, rotate second") was executed
 2026-08-15 with real console access — read-only, nothing rotated.** Findings are filled into
@@ -14,6 +68,42 @@ legacy stack actually used — sources are cited per row.
 
 **Never record a secret value in this file.** Record what was rotated, when, by whom, and
 that the new value was verified working.
+
+## The production IAM walk, done 2026-09-28 (the row above had said "still needs the same walk")
+
+Read-only `list-users` + `list-access-keys` + `get-access-key-last-used` on **747814092517**.
+
+**The criterion, stated first, because it is easy to get wrong.** The exposure window is
+**~25.5 hours: 2026-07-29T02:26Z → 2026-07-30T03:17Z** (`40fc19a` → `81363af`,
+`docs/security/2026-07-30-tailwind-payload-analysis.md:145-146`). So the test is **not** "was the
+key created during those hours" — it is "did the key **exist** during them **and** was it reachable
+by the compromised build", i.e. present in the legacy build environment (Coolify) or on a developer
+machine that ran legacy builds. Creation date alone answers only the first half.
+
+14 users, 13 with an Active long-lived key. **Nine production keys pre-date 2026-07-30 and therefore
+existed during the window:** `alto-ses-sender` (07-23), `claude-code-agent` (07-28), `Federico`
+(07-26 and 07-28), `formmaps-landing-ses` (07-01), `nodelabz-ai` (04-01), `pca-ses-sender` (07-08),
+`tims-ats-bedrock` (06-25), `tims-suite-ses` (07-06), `tims-suite-smtp` (07-24). Four post-date it
+and are out of scope: `tims-ats-smtp` (07-31), `BedrockAPIKey-*` (08-01), `tims-marketing-web`
+(08-10), `climate-project-smtp` (08-26).
+
+**Most of those users belong to other products sharing this account** — `alto-`, `formmaps-`,
+`nodelabz-`, `pca-`, `tims-suite-`, `tims-ats-`. Whether each was reachable by the climate legacy
+build is the half of the criterion this walk cannot answer from IAM alone; it needs whoever knows
+what was in that build's environment. **Enumeration is no longer the blocker — scoping is.**
+
+Two findings that stand regardless of that scoping:
+
+1. **`Federico` key ending `…IOGK` — existed during the window, last used 2026-08-01 (bedrock),
+   still Active.** Unused for eight weeks. Deleting it costs nothing and removes an exposed-era
+   credential; there is no reason to rotate what nothing uses.
+2. **`tims-ats-dev` in 795965600143 — key created 2026-05-28, still Active.** The 2026-08-15
+   enumeration already called this one "in scope, rotate" because a `[tims-ats]` profile sits on a
+   developer machine that ran legacy builds. Six weeks later it is unchanged.
+
+`claude-code-agent` carries **two** Active keys (07-28 and 08-18), both used on 2026-09-28. That is
+not an incident finding but it is poor hygiene for a user that holds `AdministratorAccess`
+(`docs/security/agent-aws-permissions.md`) — one key per identity makes "which key did that" answerable.
 
 ## Why this is needed
 
@@ -50,7 +140,7 @@ into. Rotate top-down.
 | Item | `TrackingJwtSecret` |
 | Where it lives now | AWS Secrets Manager → App Runner `RuntimeEnvironmentSecrets` (`infra/aws/climate-project-api-prod-service.yml`, param `TrackingJwtSecretArn`). **Enumerated 2026-08-15:** secret name `climate-project-api/prod/tracking-jwt-secret`, account `747814092517`, us-east-1 — ARN published as the `TRACKING_JWT_SECRET_ARN` variable on the `production` GitHub environment (set 2026-08-04). |
 | Also configured in | `services/tracking-api/src/ClimateTracking.Api/appsettings.json`, local `dotnet user-secrets` |
-| Rotated? | ☐ |
+| Rotated? | ☑ **2026-09-28, both phases** — see the record at the top of this file |
 
 **This is one value doing three jobs, which #70's description splits into two rows.** It is
 not "the tracking secret plus the new stack's own signing key" — they are the same string:
@@ -210,7 +300,7 @@ Consequences to plan for:
 |---|---|---|---|
 | Vercel project environment variables | Vercel dashboard → project `climate` **(new)** and the legacy project **(account unknown — see note)** | Everything in the legacy project's env was readable **in-process during the build** — this is the highest-confidence exposure of the whole incident, not a hypothetical. Enumerate and rotate all of it. **Enumerated 2026-08-15:** the NEW `climate` project (team `federicos-projects-21f2ff63`) holds exactly **one** variable — `VITE_API_BASE_URL` (Production + Preview, created ~2026-07-31; Development empty). It is the public API base URL baked into the client bundle, not a secret, and it post-dates the window — **nothing to rotate in the new project, and nothing dashboard-only missing from this inventory there**. The **legacy project is not visible from this account**: `federico-4412` belongs to one team, whose 16 projects include no `climate-project`. The legacy env walk is therefore still blocked on *locating the owning Vercel account* — runbook **E1**. | ☐ (legacy walk blocked) |
 | Vercel account/team API tokens | Vercel account settings | Rotate any token that existed during the window. **Enumerated 2026-08-15:** tokens cannot be listed from the CLI — this is a dashboard-only step, which is why enumeration could not pre-fill it. Runbook **E2**. | ☐ |
-| AWS access keys (long-lived) | IAM | Only keys that are **not** instance-role based. App Runner uses an instance role, so there may be none — confirm and mark N/A. Note the local dev credentials in use are for account `795965600143`, while production is `747814092517` (`AWS_ACCOUNT_ID` repo variable); check both. **DEV account walked 2026-08-15** (3 users): `tims-ats-dev`'s single access key (ID ending `…M75LO`; the repo's secret-scan gate rightly rejects full AKIA ids, and one key per user keeps this unambiguous) is **Active, created 2026-05-28 12:29 UTC — inside the window** — and a `[tims-ats]` profile sits in `~/.aws/credentials` on a developer machine that ran legacy builds: **in scope, rotate** (runbook E3). `Federico`'s key (2026-08-01) and `BedrockAPIKey-7mqw`'s Bedrock service credential (2026-08-01) post-date the window. **Production account still needs the same walk** by someone with access. | ☐ |
+| AWS access keys (long-lived) — **PRODUCTION WALK DONE 2026-09-28**, see the section below this table | IAM | Only keys that are **not** instance-role based. App Runner uses an instance role, so there may be none — confirm and mark N/A. Note the local dev credentials in use are for account `795965600143`, while production is `747814092517` (`AWS_ACCOUNT_ID` repo variable); check both. **DEV account walked 2026-08-15** (3 users): `tims-ats-dev`'s single access key (ID ending `…M75LO`; the repo's secret-scan gate rightly rejects full AKIA ids, and one key per user keeps this unambiguous) is **Active, created 2026-05-28 12:29 UTC — inside the window** — and a `[tims-ats]` profile sits in `~/.aws/credentials` on a developer machine that ran legacy builds: **in scope, rotate** (runbook E3). `Federico`'s key (2026-08-01) and `BedrockAPIKey-7mqw`'s Bedrock service credential (2026-08-01) post-date the window. **Production account still needs the same walk** by someone with access. | ☐ |
 | GitHub Actions OIDC deploy role | `climate-project-github-deploy-prod` | Not a secret (no static credential — that is the point of OIDC). **N/A for rotation**, but see #68: its trust policy may still reference the pre-rename repo, which is a separate correctness bug. | ☐ N/A |
 | SMTP / email credentials — **legacy** | Brevo (per legacy `ENV_VARIABLES.md`) | Vendor hosting env (Coolify), so in scope and readable by the build there. Rotate at Brevo. Independent of the new stack's mail settings in the row below. | ☐ |
 | SMTP / email credentials — **new stack** | `Email:SmtpUsername` / `Email:SmtpPassword` (`EmailOptions.cs:79-81`), bound from the `Email` section | **This row is new: the previous revision said "no SMTP config key found in this repo", and that is no longer true.** The stack grew a real mail path — `SmtpEmailTransport` is registered at `Program.cs:321` and `EmailOptions` carries a username/password pair. **Nothing to rotate today**, and that is a verified statement rather than an assumption: `appsettings.json` sets `Email:Provider` to `"none"`, and the production App Runner template wires exactly three secret ARNs — `TrackingJwtSecretArn`, `DatabaseConnectionStringSecretArn`, `InternalApiKeySecretArn` — with no `Email__*` variable or secret anywhere in it. So no live SMTP credential exists in production to be compromised. **What this row is for:** the moment someone sets `Email:Provider=smtp`, a new production secret enters the system, and it must arrive as a Secrets Manager entry added to `RuntimeEnvironmentSecrets` — not as a plaintext `RuntimeEnvironmentVariables` value — and be added to this inventory. | ☐ N/A — not configured in production |

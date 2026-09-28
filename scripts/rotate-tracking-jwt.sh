@@ -179,16 +179,83 @@ PLAN
   exit 0
 fi
 
+# ---------------------------------------------------------------------------
+# The wait is a guard, not advice.
+#
+# Phase 2 stops the old key working. Run it before every old-key token has expired and those
+# sessions are signed out -- which is the single harm the two-phase design exists to avoid, so
+# "wait 24 hours" cannot live only in a sentence at the end of phase 1's output.
+#
+# On 2026-09-28 phase 2 was attempted FOUR MINUTES after phase 1. It was stopped by the account
+# preflight above, because the shell had lost AWS_PROFILE -- luck, not design. Nothing in this
+# script knew it was 23 hours early.
+#
+# The reference is the PREVIOUS secret's creation, which is when the rotation began. Note that the
+# new key only started signing when phase 1's deploy landed, typically some minutes later, so the
+# true floor is that much later again -- the message prints both so the operator can see the gap.
+# ---------------------------------------------------------------------------
+LIFETIME_HOURS="${TOKEN_LIFETIME_HOURS:-24}"
+command -v python3 >/dev/null || die "python3 is required to compare timestamps."
+
+created="$(aws secretsmanager describe-secret --region "$REGION" \
+  --secret-id "$PREVIOUS_SECRET" --query CreatedDate --output text 2>/dev/null || true)"
+[ -n "$created" ] && [ "$created" != "None" ] \
+  || die "cannot read $PREVIOUS_SECRET. Has phase 1 (apply open) run at all?"
+
+if ! wait_report="$(python3 - "$created" "$LIFETIME_HOURS" <<'PY'
+import sys
+from datetime import datetime, timedelta, timezone
+
+created = datetime.fromisoformat(sys.argv[1])
+if created.tzinfo is None:
+    created = created.replace(tzinfo=timezone.utc)
+hours = float(sys.argv[2])
+now = datetime.now(timezone.utc)
+elapsed = (now - created).total_seconds() / 3600
+safe = created + timedelta(hours=hours)
+
+print(f"  phase 1 began   {created.astimezone(timezone.utc):%Y-%m-%d %H:%M}Z")
+print(f"  elapsed         {elapsed:.2f} h of {hours:g}")
+print(f"  earliest close  {safe.astimezone(timezone.utc):%Y-%m-%d %H:%M}Z")
+sys.exit(0 if elapsed >= hours else 3)
+PY
+)"; then
+  printf '\n%s\n\n' "$wait_report" >&2
+  if [ "${FORCE_CLOSE_EARLY:-0}" = "1" ]; then
+    printf 'FORCE_CLOSE_EARLY=1: proceeding anyway. Every session still on the old key will be\n' >&2
+    printf 'signed out, including any minted in the last %s hours.\n\n' "$LIFETIME_HOURS" >&2
+  else
+    die "too early to close. Closing now signs out every session still holding an old-key token,
+which is exactly what the overlap exists to prevent. The clock that matters starts when phase 1's
+DEPLOY landed -- a few minutes after the time above -- so add that gap if you want to be exact.
+
+Wait, or set FORCE_CLOSE_EARLY=1 if signing everyone out is an accepted cost right now."
+  fi
+else
+  printf '\n%s\n' "$wait_report"
+fi
+
 printf '\nThis retires the old key. Sessions still on it will be signed out.\n'
 printf 'Type CLOSE to continue: '
 read -r confirm
 [ "$confirm" = "CLOSE" ] || die "aborted"
 
-say "clearing $GH_VAR..."
+say "removing $GH_VAR..."
 if command -v gh >/dev/null; then
-  gh variable set "$GH_VAR" --body "" || say "could not set it with gh; clear it in the UI"
+  # DELETE, not set-to-empty: `gh variable set --body ""` prompts "Paste your variable" and hangs
+  # the script here -- after the CLOSE confirmation and before the secret is deleted, which is the
+  # worst possible place to stop. deploy-prod.yml reads ${vars.X} and treats absent and empty the
+  # same, so removing it is exactly equivalent and cannot block.
+  if gh variable delete "$GH_VAR" >/dev/null 2>&1; then
+    say "removed."
+  elif gh variable list --json name --jq '.[].name' 2>/dev/null | grep -qx "$GH_VAR"; then
+    die "could not remove $GH_VAR and it is still present. The old key would stay accepted after
+the deploy, so stop here and remove it in the GitHub UI before going further."
+  else
+    say "already absent."
+  fi
 else
-  say "gh not found -- clear $GH_VAR manually"
+  die "gh not found. $GH_VAR must be removed before the deploy, or the retired key stays accepted."
 fi
 
 say "scheduling the previous secret for deletion (7-day recovery window)..."
