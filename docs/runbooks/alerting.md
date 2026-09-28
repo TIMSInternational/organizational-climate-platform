@@ -15,11 +15,167 @@ statement of the same problem and the one a reader should carry: the probe DETEC
 TELL. The 22 alarms in `climate-project-observability.yml` remain undeployed.] #158 is not an
 instrumentation problem; it is a wiring problem, and the wiring is the last mile.
 
+### Deploying it TODAY, with an admin profile (2026-09-25)
+
+The CI workflow cannot do this yet. Measured on `climate-project-github-deploy-prod`: it has the
+CloudFormation deploy actions and IAM role actions, and **no `sns`, `logs`, `cloudwatch` or
+`lambda` actions at all**. `aws cloudformation deploy` creates resources with the *caller's*
+permissions, so that role cannot create two topics, twenty metric filters, twenty-two alarms and
+a dashboard. **This is very likely why the stack sat undeployed for a month** — the command below
+has always worked for a human with `AdministratorAccess`, and never from CI, and nothing said so.
+
+Only two parameters are required. `TeamsWebhookUrl` defaults to empty since 2026-09-25, so the
+**email channel deploys with no secret at all**:
+
+```bash
+AWS_PROFILE=formmaps-deploy aws cloudformation deploy \
+  --region us-east-1 \
+  --stack-name climate-project-observability-prod \
+  --template-file infra/aws/climate-project-observability.yml \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --no-fail-on-empty-changeset \
+  --parameter-overrides \
+    ServiceId=126c3f282524450896385975cb3bcba9 \
+    FallbackEmail=alerts@timsint.com \
+    AlarmsEnabled=false
+```
+
+`ServiceId` is the service stack's own output — re-read it rather than trusting the literal above
+if the service has been recreated:
+
+```bash
+AWS_PROFILE=formmaps-deploy aws cloudformation describe-stacks --region us-east-1 \
+  --stack-name climate-project-api-prod \
+  --query "Stacks[0].Outputs[?OutputKey=='ServiceId'].OutputValue | [0]" --output text
+```
+
+Then wire the three probe alarms — whose green-periods gate is met — to the critical topic:
+
+```bash
+AWS_PROFILE=formmaps-deploy aws cloudformation deploy \
+  --region us-east-1 \
+  --stack-name climate-project-synthetic-probe-prod \
+  --template-file infra/aws/climate-project-synthetic-probe.yml \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --no-fail-on-empty-changeset \
+  --parameter-overrides \
+    AlarmTopicArn=arn:aws:sns:us-east-1:747814092517:climate-project-api-prod-alerts-critical
+```
+
+⚠️ That second command re-deploys a **live** stack, so know what it carries over. **Corrected
+2026-09-28:** an earlier version of this line said any parameter not passed "reverts to the
+template default". It does not. `aws cloudformation deploy` sends `UsePreviousValue=True` for
+every template parameter absent from `--parameter-overrides`, so the unnamed ones keep their
+**current stack values** — read from the CLI's own source rather than assumed, because the wrong
+version of this sentence would have sent somebody hunting a parameter drift that cannot happen:
+
+| file (aws-cli 2.33.4) | what it does |
+|---|---|
+| `awscli/customizations/cloudformation/deploy.py:455-461` | every parameter not in the overrides gets `UsePreviousValue: True` |
+| `awscli/customizations/cloudformation/deployer.py:117-132` | that flag is kept for an `UPDATE`, and stripped only on a `CREATE`, where there is no previous value to use |
+
+The one thing to check is still worth checking, for a different reason: `describe-stacks
+--stack-name climate-project-synthetic-probe-prod --query 'Stacks[0].Parameters'` tells you what
+those carried-over values *are*, and a value that was wrong before a hand-run stays wrong after it.
+
 **Update 2026-09-24.** The last mile now has a button:
 `.github/workflows/ops-deploy-observability.yml` deploys the observability stack and optionally
 wires this probe's alarms to its critical topic. The green-periods gate that §9 set before wiring
 is **met** — see the measurement beside it below. What is still missing is only the two values and
 the one click, which no workflow can supply.
+
+### 2026-09-28: the subscription expired, and re-running the deploy does NOT bring it back
+
+Three days after the stack was created, alerting reached nobody:
+
+```
+aws sns list-subscriptions-by-topic --topic-arn <critical> \
+  --query 'Subscriptions[].SubscriptionArn'   ->   []
+```
+
+24 alarms existed, three were wired to the critical topic, and the topic had **zero subscribers**.
+AWS deletes an unconfirmed email subscription after **3 days**. Nobody clicked the confirmation
+mail, so the pending row did not sit there waiting — it expired and took the whole delivery path
+with it.
+
+**The trap, and it is a sharp one: `aws cloudformation deploy` cannot repair this, and reports
+success.** Measured 2026-09-28:
+
+| query | answer |
+|---|---|
+| `describe-stack-resources` → `CriticalEmailSubscription` | `CREATE_COMPLETE`, physical id `…alerts-critical:0dc4fc5a-1c40-416d-bafa-c41de85d7b07` |
+| `get-subscription-attributes --subscription-arn …:0dc4fc5a-…` | `NotFound: Subscription does not exist` |
+| `list-subscriptions-by-topic` | `[]` |
+
+CloudFormation still records the subscription as created, holding the ARN of a subscription AWS
+has deleted underneath it. Every stack parameter was already identical to what a re-run would
+pass (`ServiceId=126c3f282524450896385975cb3bcba9`, `FallbackEmail=alerts@timsint.com`,
+`AlarmsEnabled=false`), so `deploy` builds an **empty changeset**, prints `No changes to deploy.
+Stack … is up to date`, and exits 0 — having recreated nothing. The console does not help either:
+24 armed alarms pointing at an empty topic look *more* finished than the muted state they
+replaced.
+
+So `scripts/wire-observability.sh` subscribes with `aws sns subscribe` directly instead of leaving
+it to the template, and **exits 1 if the critical topic is still empty when it finishes**.
+`scripts/wire-observability.test.mjs` holds that gate against a stubbed CLI.
+
+Accepted drift, stated so the next person is not surprised: the email subscription is no longer
+the stack's to manage. If `FallbackEmail` ever changes, unsubscribe the old address by hand —
+CloudFormation will replace a resource that is already absent and leave the live subscription in
+place.
+
+**The verification. It is read-only, so any profile on the account can answer it, and it
+distinguishes all three states rather than just the one:**
+
+```bash
+AWS_PROFILE=claude CHECK=1 bash scripts/wire-observability.sh
+#   exit 0  CONFIRMED         a uuid ARN — an alarm reaches a human
+#   exit 2  PENDING           nobody clicked; AWS deletes it 3 days after it was created
+#   exit 1  NO DELIVERY PATH  zero subscribers; every alarm fires into a void
+```
+
+Only exit 0 and the word `CONFIRMED` is evidence that alerting works. `PendingConfirmation` is not
+progress, it is a countdown, and reporting it as the last step is what cost 2026-09-25 three days.
+
+#### Two rulings taken the same day
+
+**The 21 dark alarms are armed.** They were deployed `AlarmsEnabled=false` on 2026-09-25 to see
+whether they flap before anybody is paged. Measured on the 28th: 24 of 24 read `OK`, and there has
+been **no state transition since 12:08 CDT on the 25th**. Seven did reach `ALARM` — all seven
+between 12:01 and 12:08, all `INSUFFICIENT_DATA → ALARM → OK`, and all `job-*-stopped` alarms
+going off before the first heartbeat of a newly created stack landed. That is a creation artifact,
+not flapping, so the green-periods gate §9 set is met. `scripts/wire-observability.sh` now deploys
+with `AlarmsEnabled=true`; `ALARMS_ENABLED=false` on the command line puts them back to dark.
+
+**The probe now watches `api.climate.timsint.com`, not the App Runner hostname.** Until today both
+probes watched `https://bhgrdkd4gt.us-east-1.awsapprunner.com` while every user reaches the API
+through the custom domain (live since 2026-09-14, #484). A failure in the custom domain alone —
+DNS, the Route53 delegation, or the App Runner-managed certificate, none of which the raw hostname
+touches — would have left all three probe alarms **green while the web app reached nothing**. This
+is not a trade-off against watching App Runner directly: the custom domain fronts that same
+service, so if App Runner is down the domain in front of it is down too, and watching the domain
+covers strictly more.
+
+Three things named the old host and they now all name the new one, because a switch that depends
+on somebody remembering a fourth step is the failure this whole section is about:
+
+| where | what changed |
+|---|---|
+| `infra/aws/climate-project-synthetic-probe.yml` | `ApiBaseUrl` default, and a Description that still claimed "no custom domain is attached (#160)" — untrue since 2026-09-14 |
+| `.github/workflows/ops-synthetic-probe.yml` | the `vars.PROD_API_BASE_URL` fallback |
+| `.github/workflows/deploy-drift.yml` | the same fallback, so drift is measured against the host users reach |
+
+`vars.PROD_API_BASE_URL` is **unset**, and that is now the correct state: both workflows fall back
+to the customer-facing host, so they agree with the CloudFormation probe by configuration rather
+than by accident. Set it only to override all three at once:
+
+```bash
+gh variable set PROD_API_BASE_URL --body "https://api.climate.timsint.com"
+```
+
+`scripts/wire-observability.sh` reads that variable at the end of a run and says so when it names
+a different host than the stack it just deployed — the stack and the workflows cannot quietly
+watch different things.
 
 ---
 

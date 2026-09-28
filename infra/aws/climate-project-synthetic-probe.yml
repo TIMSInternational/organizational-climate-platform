@@ -82,16 +82,20 @@ Parameters:
 
   ApiBaseUrl:
     Type: String
-    Default: https://bhgrdkd4gt.us-east-1.awsapprunner.com
+    Default: https://api.climate.timsint.com
     AllowedPattern: "https://.+"
     Description: >-
-      Origin the probe hits, no trailing slash. Default is the App Runner default hostname,
-      which is what production answers on today -- no custom domain is attached (#160). The
-      workflow reads the same value from `vars.PROD_API_BASE_URL` with this same fallback
-      (.github/workflows/ops-synthetic-probe.yml:87); when #160 lands, BOTH have to move.
-      `gh variable list` on 2026-09-02 returned only AWS_ACCOUNT_ID, so PROD_API_BASE_URL is
-      unset and the workflow is on the fallback today -- the two are in agreement by accident,
-      not by configuration.
+      Origin the probe hits, no trailing slash. The customer-facing host, which is what the web
+      app actually calls -- CHANGED 2026-09-28, and the old default was a real blind spot. It
+      used to be the App Runner hostname on the grounds that "no custom domain is attached
+      (#160)", which stopped being true on 2026-09-14 when #484 attached one. While it stayed,
+      a failure in the custom domain ALONE -- DNS, the Route53 delegation, or the App
+      Runner-managed certificate, none of which the generated hostname touches -- would have
+      left all three probe alarms green while every user saw nothing. Watching this host covers
+      strictly more, because it fronts the same App Runner service: if App Runner is down, so
+      is the domain in front of it. The GitHub-side probe reads `vars.PROD_API_BASE_URL` and
+      falls back to this same host (.github/workflows/ops-synthetic-probe.yml), so the two now
+      agree by configuration rather than by accident.
 
   WebBaseUrl:
     Type: String

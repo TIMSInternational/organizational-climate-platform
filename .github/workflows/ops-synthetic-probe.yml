@@ -84,7 +84,7 @@ permissions:
 env:
   # Same override shape deploy-drift.yml uses, so #160's cutover to a customer-facing domain
   # is one repository variable rather than an edit in two files that can disagree.
-  API_BASE_URL: ${{ vars.PROD_API_BASE_URL || 'https://bhgrdkd4gt.us-east-1.awsapprunner.com' }}
+  API_BASE_URL: ${{ vars.PROD_API_BASE_URL || 'https://api.climate.timsint.com' }}
 
 jobs:
   # -------------------------------------------------------------------------------------

@@ -35,7 +35,7 @@ env:
   # infra/aws/README.md ("Live production URL"). It is a `vars` override rather than a
   # constant because #160 replaces it with a customer-facing domain; when that lands,
   # set PROD_API_BASE_URL on the repository and this keeps working unchanged.
-  API_BASE_URL: ${{ vars.PROD_API_BASE_URL || 'https://bhgrdkd4gt.us-east-1.awsapprunner.com' }}
+  API_BASE_URL: ${{ vars.PROD_API_BASE_URL || 'https://api.climate.timsint.com' }}
   # Thresholds, not equality. An alert that fires on every merge to main gets muted,
   # and a muted drift alert is precisely the failure #158 describes -- so these are set
   # where they mean "a release has been skipped", not "a PR landed". Being a handful of
