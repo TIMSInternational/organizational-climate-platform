@@ -179,6 +179,62 @@ PLAN
   exit 0
 fi
 
+# ---------------------------------------------------------------------------
+# The wait is a guard, not advice.
+#
+# Phase 2 stops the old key working. Run it before every old-key token has expired and those
+# sessions are signed out -- which is the single harm the two-phase design exists to avoid, so
+# "wait 24 hours" cannot live only in a sentence at the end of phase 1's output.
+#
+# On 2026-09-28 phase 2 was attempted FOUR MINUTES after phase 1. It was stopped by the account
+# preflight above, because the shell had lost AWS_PROFILE -- luck, not design. Nothing in this
+# script knew it was 23 hours early.
+#
+# The reference is the PREVIOUS secret's creation, which is when the rotation began. Note that the
+# new key only started signing when phase 1's deploy landed, typically some minutes later, so the
+# true floor is that much later again -- the message prints both so the operator can see the gap.
+# ---------------------------------------------------------------------------
+LIFETIME_HOURS="${TOKEN_LIFETIME_HOURS:-24}"
+command -v python3 >/dev/null || die "python3 is required to compare timestamps."
+
+created="$(aws secretsmanager describe-secret --region "$REGION" \
+  --secret-id "$PREVIOUS_SECRET" --query CreatedDate --output text 2>/dev/null || true)"
+[ -n "$created" ] && [ "$created" != "None" ] \
+  || die "cannot read $PREVIOUS_SECRET. Has phase 1 (apply open) run at all?"
+
+if ! wait_report="$(python3 - "$created" "$LIFETIME_HOURS" <<'PY'
+import sys
+from datetime import datetime, timedelta, timezone
+
+created = datetime.fromisoformat(sys.argv[1])
+if created.tzinfo is None:
+    created = created.replace(tzinfo=timezone.utc)
+hours = float(sys.argv[2])
+now = datetime.now(timezone.utc)
+elapsed = (now - created).total_seconds() / 3600
+safe = created + timedelta(hours=hours)
+
+print(f"  phase 1 began   {created.astimezone(timezone.utc):%Y-%m-%d %H:%M}Z")
+print(f"  elapsed         {elapsed:.2f} h of {hours:g}")
+print(f"  earliest close  {safe.astimezone(timezone.utc):%Y-%m-%d %H:%M}Z")
+sys.exit(0 if elapsed >= hours else 3)
+PY
+)"; then
+  printf '\n%s\n\n' "$wait_report" >&2
+  if [ "${FORCE_CLOSE_EARLY:-0}" = "1" ]; then
+    printf 'FORCE_CLOSE_EARLY=1: proceeding anyway. Every session still on the old key will be\n' >&2
+    printf 'signed out, including any minted in the last %s hours.\n\n' "$LIFETIME_HOURS" >&2
+  else
+    die "too early to close. Closing now signs out every session still holding an old-key token,
+which is exactly what the overlap exists to prevent. The clock that matters starts when phase 1's
+DEPLOY landed -- a few minutes after the time above -- so add that gap if you want to be exact.
+
+Wait, or set FORCE_CLOSE_EARLY=1 if signing everyone out is an accepted cost right now."
+  fi
+else
+  printf '\n%s\n' "$wait_report"
+fi
+
 printf '\nThis retires the old key. Sessions still on it will be signed out.\n'
 printf 'Type CLOSE to continue: '
 read -r confirm
