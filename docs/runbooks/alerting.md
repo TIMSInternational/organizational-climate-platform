@@ -73,6 +73,59 @@ wires this probe's alarms to its critical topic. The green-periods gate that §9
 is **met** — see the measurement beside it below. What is still missing is only the two values and
 the one click, which no workflow can supply.
 
+### 2026-09-28: the subscription expired, and re-running the deploy does NOT bring it back
+
+Three days after the stack was created, alerting reached nobody:
+
+```
+aws sns list-subscriptions-by-topic --topic-arn <critical> \
+  --query 'Subscriptions[].SubscriptionArn'   ->   []
+```
+
+24 alarms existed, three were wired to the critical topic, and the topic had **zero subscribers**.
+AWS deletes an unconfirmed email subscription after **3 days**. Nobody clicked the confirmation
+mail, so the pending row did not sit there waiting — it expired and took the whole delivery path
+with it.
+
+**The trap, and it is a sharp one: `aws cloudformation deploy` cannot repair this, and reports
+success.** Measured 2026-09-28:
+
+| query | answer |
+|---|---|
+| `describe-stack-resources` → `CriticalEmailSubscription` | `CREATE_COMPLETE`, physical id `…alerts-critical:0dc4fc5a-1c40-416d-bafa-c41de85d7b07` |
+| `get-subscription-attributes --subscription-arn …:0dc4fc5a-…` | `NotFound: Subscription does not exist` |
+| `list-subscriptions-by-topic` | `[]` |
+
+CloudFormation still records the subscription as created, holding the ARN of a subscription AWS
+has deleted underneath it. Every stack parameter was already identical to what a re-run would
+pass (`ServiceId=126c3f282524450896385975cb3bcba9`, `FallbackEmail=alerts@timsint.com`,
+`AlarmsEnabled=false`), so `deploy` builds an **empty changeset**, prints `No changes to deploy.
+Stack … is up to date`, and exits 0 — having recreated nothing. The console does not help either:
+24 armed alarms pointing at an empty topic look *more* finished than the muted state they
+replaced.
+
+So `scripts/wire-observability.sh` subscribes with `aws sns subscribe` directly instead of leaving
+it to the template, and **exits 1 if the critical topic is still empty when it finishes**.
+`scripts/wire-observability.test.mjs` holds that gate against a stubbed CLI.
+
+Accepted drift, stated so the next person is not surprised: the email subscription is no longer
+the stack's to manage. If `FallbackEmail` ever changes, unsubscribe the old address by hand —
+CloudFormation will replace a resource that is already absent and leave the live subscription in
+place.
+
+**The verification. It is read-only, so any profile on the account can answer it, and it
+distinguishes all three states rather than just the one:**
+
+```bash
+AWS_PROFILE=claude CHECK=1 bash scripts/wire-observability.sh
+#   exit 0  CONFIRMED         a uuid ARN — an alarm reaches a human
+#   exit 2  PENDING           nobody clicked; AWS deletes it 3 days after it was created
+#   exit 1  NO DELIVERY PATH  zero subscribers; every alarm fires into a void
+```
+
+Only exit 0 and the word `CONFIRMED` is evidence that alerting works. `PendingConfirmation` is not
+progress, it is a countdown, and reporting it as the last step is what cost 2026-09-25 three days.
+
 ---
 
 ## 1. What is verified, and what I could not check

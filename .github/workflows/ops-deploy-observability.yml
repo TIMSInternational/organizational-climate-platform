@@ -294,14 +294,18 @@ jobs:
 
           ### Still needs a human
 
-          - Confirm the SNS email subscription. AWS emails a confirmation link to the fallback
-            address; an UNCONFIRMED subscription is silently discarded, which is the exact
-            failure #158 exists to end. Check it with:
+          - Confirm the SNS email subscription, WITHIN 3 DAYS. AWS emails a confirmation link
+            to the fallback address and DELETES the subscription if nobody clicks it, which is
+            the exact failure #158 exists to end -- and the one that happened anyway on
+            2026-09-25, discovered on the 28th with the topic at zero subscribers. Re-running
+            this workflow does not repair that state: CloudFormation still records the deleted
+            subscription as CREATE_COMPLETE, so the deploy is an empty changeset that reports
+            success. See docs/runbooks/alerting.md, 2026-09-28. Check it with:
 
-                aws sns list-subscriptions-by-topic --topic-arn <critical> \
-                  --query "Subscriptions[].[Endpoint,SubscriptionArn]" --output table
+                CHECK=1 bash scripts/wire-observability.sh
 
-            A SubscriptionArn of PendingConfirmation means nobody clicked.
+            which reads only, and exits 0 CONFIRMED / 2 PendingConfirmation / 1 no subscriber
+            at all. Only exit 0 means an alarm reaches a human.
           - Send one routing test before trusting the channel. docs/runbooks/alerting.md
             carries the sns publish command for it.
           MARKDOWN

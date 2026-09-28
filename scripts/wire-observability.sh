@@ -11,8 +11,13 @@
 # Order matters and is the whole point: the probe alarms cannot be wired to a topic that does
 # not exist yet, and climate-project-observability-prod is what creates it.
 #
-#   usage:  bash scripts/wire-observability.sh          # deploy for real
-#           DRY=1 bash scripts/wire-observability.sh    # build the changesets, execute nothing
+#   usage:  bash scripts/wire-observability.sh           # deploy for real
+#           DRY=1   bash scripts/wire-observability.sh   # build the changesets, execute nothing
+#           CHECK=1 bash scripts/wire-observability.sh   # read-only: IS there a delivery path?
+#
+# CHECK=1 exits 0 only when a subscription is CONFIRMED, 2 when one is merely pending, and 1
+# when the topic has no subscriber at all. It is the command to re-run after clicking the mail,
+# and it writes nothing, so a read-only profile can answer it.
 #
 set -euo pipefail
 
@@ -39,6 +44,125 @@ DEPLOY_FLAGS=(--no-fail-on-empty-changeset)
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
+# ---------------------------------------------------------------------------------------------
+# The delivery path, and the three states it can be in.
+#
+# This is the only query that tells alerting's real state apart, and only the third is done:
+#
+#   (nothing)            the topic has NO subscriber. Every alarm fires into a void.
+#   PendingConfirmation  nobody clicked. AWS DELETES IT AFTER 3 DAYS and it becomes the above.
+#   arn:aws:sns:…:<uuid> confirmed. An alarm actually reaches a human.
+#
+# It reads worse than it looks from the console, where 24 armed alarms pointing at an empty
+# topic look MORE finished than the muted state they replaced.
+# ---------------------------------------------------------------------------------------------
+delivery_state() {
+  local topic="$1" arns
+  arns=$(aws sns list-subscriptions-by-topic --topic-arn "$topic" --region "$REGION" \
+    --output text --query "Subscriptions[].SubscriptionArn")
+  if [ -z "${arns//[[:space:]]/}" ]; then
+    echo none
+  elif printf '%s\n' "$arns" | tr '\t' '\n' | grep -q '^arn:aws:sns:'; then
+    echo confirmed
+  else
+    echo pending
+  fi
+}
+
+show_subscriptions() {
+  local topic="$1"
+  aws sns list-subscriptions-by-topic --topic-arn "$topic" --region "$REGION" \
+    --output text --query "Subscriptions[].[Protocol,Endpoint,SubscriptionArn]"
+}
+
+topic_arn() {
+  local key="$1"
+  aws cloudformation describe-stacks --stack-name "$OBS_STACK" --region "$REGION" \
+    --query "Stacks[0].Outputs[?OutputKey=='${key}'].OutputValue" --output text
+}
+
+# ---------------------------------------------------------------------------------------------
+# Why this subscribes directly instead of leaving it to the template.
+#
+# CloudFormation CANNOT heal an expired email subscription, and nothing in a deploy will tell
+# you so. Measured 2026-09-28, three days after the stack was created:
+#
+#   describe-stack-resources  CriticalEmailSubscription  CREATE_COMPLETE  …:0dc4fc5a-1c40-…
+#   get-subscription-attributes --subscription-arn …:0dc4fc5a-1c40-…
+#       -> NotFound: Subscription does not exist
+#   list-subscriptions-by-topic -> []
+#
+# AWS had deleted the real subscription out from under a resource CloudFormation still records
+# as CREATE_COMPLETE. Because every stack parameter was already identical, `deploy` then built
+# an EMPTY changeset, printed "No changes to deploy. Stack is up to date", exited 0 -- and
+# recreated nothing. Re-running the deploy is not a fix for this failure; it is a way to be told
+# everything is fine while alerting reaches nobody.
+#
+# `sns subscribe` is the right shape here because it is idempotent for email: an already
+# confirmed endpoint returns its existing ARN and sends no mail, and a pending one re-sends the
+# confirmation (which also restarts the 3-day clock, the one thing worth restarting).
+#
+# The drift this accepts, stated plainly: the subscription is then not the stack's to manage. If
+# FallbackEmail ever changes, CloudFormation will replace its own (already absent) resource and
+# leave the address subscribed here behind -- unsubscribe the old one by hand, or it keeps
+# receiving alerts.
+# ---------------------------------------------------------------------------------------------
+reconcile_email_subscription() {
+  local topic="$1" label="$2" state
+  state=$(delivery_state "$topic")
+  case "$state" in
+    confirmed)
+      echo "  $label  already confirmed -- nothing to do, no mail sent"
+      ;;
+    pending)
+      echo "  $label  pending: nobody has clicked. Re-sending the confirmation to $FALLBACK_EMAIL"
+      aws sns subscribe --topic-arn "$topic" --protocol email \
+        --notification-endpoint "$FALLBACK_EMAIL" --region "$REGION" >/dev/null
+      ;;
+    none)
+      echo "  $label  NO subscriber (expired, or never created). Subscribing $FALLBACK_EMAIL"
+      aws sns subscribe --topic-arn "$topic" --protocol email \
+        --notification-endpoint "$FALLBACK_EMAIL" --region "$REGION" >/dev/null
+      ;;
+  esac
+}
+
+# ---------------------------------------------------------------------------------------------
+# CHECK=1 -- read-only. No deploy, no subscribe, no changeset.
+# ---------------------------------------------------------------------------------------------
+if [ "${CHECK:-0}" = "1" ]; then
+  account=$(aws sts get-caller-identity --query Account --output text)
+  if [ "$account" != "$EXPECT_ACCOUNT" ]; then
+    echo "Refusing to run: account is $account, expected $EXPECT_ACCOUNT (AWS_PROFILE=$AWS_PROFILE)." >&2
+    exit 1
+  fi
+  TOPIC=$(topic_arn CriticalTopicArn)
+  [ -n "$TOPIC" ] && [ "$TOPIC" != "None" ] || { echo "No CriticalTopicArn output on $OBS_STACK -- the stack is not deployed." >&2; exit 1; }
+  echo "account  $account   profile $AWS_PROFILE   region $REGION"
+  echo "topic    $TOPIC"
+  echo
+  echo "subscriptions:"
+  show_subscriptions "$TOPIC"
+  echo
+  case "$(delivery_state "$TOPIC")" in
+    confirmed)
+      echo "CONFIRMED -- an alarm on this topic reaches a human."
+      exit 0
+      ;;
+    pending)
+      echo "PENDING -- the confirmation mail to $FALLBACK_EMAIL has NOT been clicked." >&2
+      echo "Alarms still reach nobody, and AWS DELETES this subscription 3 days after it was" >&2
+      echo "created. Click the mail, then re-run this check." >&2
+      exit 2
+      ;;
+    none)
+      echo "NO DELIVERY PATH -- the critical topic has zero subscribers. Every alarm fires into" >&2
+      echo "a void. Run: bash scripts/wire-observability.sh   (with an admin profile)" >&2
+      exit 1
+      ;;
+  esac
+fi
+
 # The default profile on this machine is a DIFFERENT AWS account (795965600143). Every
 # read-only check run without AWS_PROFILE set answers about the wrong one, which is a very
 # quiet way to be wrong.
@@ -57,7 +181,7 @@ SERVICE_ID=$(aws cloudformation describe-stacks --stack-name "$SERVICE_STACK" --
 echo "ServiceId $SERVICE_ID"
 
 echo
-echo "== 1/4  $OBS_STACK  (AlarmsEnabled=false — these 22 alarms have never evaluated) =="
+echo "== 1/5  $OBS_STACK  (AlarmsEnabled=false -- these 22 alarms have never evaluated) =="
 aws cloudformation deploy \
   --region "$REGION" \
   --stack-name "$OBS_STACK" \
@@ -72,20 +196,34 @@ aws cloudformation deploy \
 if [ "${DRY:-0}" = "1" ]; then
   echo
   echo "DRY run: changeset built, nothing executed. Re-run without DRY=1 to apply."
+  echo "The subscription state below is read live and is NOT changed by a dry run:"
+  TOPIC=$(topic_arn CriticalTopicArn)
+  if [ -n "$TOPIC" ] && [ "$TOPIC" != "None" ]; then
+    echo "  critical topic: $(delivery_state "$TOPIC")   (none | pending | confirmed)"
+  else
+    echo "  the stack has no CriticalTopicArn output yet -- a real run creates the topic."
+  fi
   exit 0
 fi
 
 echo
-echo "== 2/4  critical topic arn =="
-TOPIC=$(aws cloudformation describe-stacks --stack-name "$OBS_STACK" --region "$REGION" \
-  --query "Stacks[0].Outputs[?OutputKey=='CriticalTopicArn'].OutputValue" --output text)
+echo "== 2/5  topic arns =="
+TOPIC=$(topic_arn CriticalTopicArn)
 [ -n "$TOPIC" ] && [ "$TOPIC" != "None" ] || { echo "No CriticalTopicArn output on $OBS_STACK." >&2; exit 1; }
+WARNING_TOPIC=$(topic_arn WarningTopicArn)
 echo "TOPIC $TOPIC"
+
+echo
+echo "== 3/5  the email subscriptions -- CloudFormation cannot heal these (see above) =="
+reconcile_email_subscription "$TOPIC" "critical"
+if [ -n "$WARNING_TOPIC" ] && [ "$WARNING_TOPIC" != "None" ]; then
+  reconcile_email_subscription "$WARNING_TOPIC" "warning "
+fi
 
 # Only AlarmTopicArn is overridden; cloudformation deploy keeps previous values for every
 # parameter not named, so the probe's thresholds and interval carry over untouched.
 echo
-echo "== 3/4  wire the three probe alarms (their 22-day gate is met) =="
+echo "== 4/5  wire the three probe alarms (their 22-day gate is met) =="
 aws cloudformation deploy \
   --region "$REGION" \
   --stack-name "$PROBE_STACK" \
@@ -95,20 +233,50 @@ aws cloudformation deploy \
   --parameter-overrides AlarmTopicArn="$TOPIC"
 
 echo
-echo "== 4/4  verify — the action count must read 1, not 0 =="
+echo "== 5/5  verify -- the action count must read 1, not 0 =="
 aws cloudwatch describe-alarms --alarm-name-prefix climate --region "$REGION" \
   --output text --query "MetricAlarms[].[AlarmName,length(AlarmActions)]"
 
 echo
 echo "subscriptions on the critical topic:"
-aws sns list-subscriptions-by-topic --topic-arn "$TOPIC" --region "$REGION" \
-  --output text --query "Subscriptions[].[Protocol,Endpoint,SubscriptionArn]"
+show_subscriptions "$TOPIC"
+echo
 
-cat <<EOF
+# The gate. A run that ends with an empty topic has produced armed alarms that reach nobody,
+# and that must not exit 0 -- reporting this state as done is precisely what failed on
+# 2026-09-25 and cost three days.
+STATE=$(delivery_state "$TOPIC")
+case "$STATE" in
+  none)
+    echo "FAILED: the critical topic has ZERO subscribers after this run. The alarms are armed" >&2
+    echo "and fire into a void. Do not report alerting as working." >&2
+    exit 1
+    ;;
+  pending)
+    # Put the expiry in the sentence, not a bullet at the end: the state decays back to broken
+    # on its own. GNU date first, BSD date second -- this runs on a Mac and in CI.
+    deadline=$(date -u -d '+3 days' '+%Y-%m-%d %H:%M UTC' 2>/dev/null \
+      || date -u -v+3d '+%Y-%m-%d %H:%M UTC')
+    cat >&2 <<EOF
+NOT DONE YET, and this one has a deadline.
 
-Done. One thing is still manual and nothing can automate it:
+  A confirmation mail is waiting at $FALLBACK_EMAIL. Until somebody clicks it the alarms
+  still reach NOBODY, and AWS DELETES the subscription -- taking the whole delivery path with
+  it -- by about:
 
-  If SubscriptionArn above reads PendingConfirmation, the alarms STILL reach nobody.
-  Open the SNS confirmation email sent to $FALLBACK_EMAIL and click it.
+      $deadline
 
+  Then prove it, with any profile on this account:
+
+      CHECK=1 bash scripts/wire-observability.sh
+
+  Exit 0 and the word CONFIRMED is the only evidence that alerting works. PendingConfirmation
+  is not progress; it is a countdown.
 EOF
+    exit 0
+    ;;
+  confirmed)
+    echo "CONFIRMED: the critical topic has a confirmed subscriber. Alerting reaches a human."
+    exit 0
+    ;;
+esac
