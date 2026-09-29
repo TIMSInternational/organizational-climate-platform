@@ -4462,6 +4462,56 @@
     }
   },
   "users": {
+    "intake": {
+      "step": {
+        "template": "{n}. Plantilla",
+        "review": "{n}. Revisión",
+        "done": "{n}. Listo"
+      },
+      "templateBody": "Descargue el libro, complete una fila por persona y súbalo aquí. Las columnas Rol y Departamento son listas desplegables con los valores de esta empresa, así que no hay nada que escribir.",
+      "downloadTemplate": "Descargar plantilla",
+      "uploadLabel": "Suba el libro completado",
+      "templateFileName": "plantilla-personas.xlsx",
+      "reviewBody": "Se leyeron {count} fila(s). Corrija aquí lo que esté mal y luego valide.",
+      "validate": "Validar",
+      "approve": "Crear invitaciones",
+      "removeRow": "Quitar",
+      "roleMissing": "(sin rol)",
+      "role": {
+        "employee": "Colaborador",
+        "leader": "Líder",
+        "supervisor": "Supervisor"
+      },
+      "rowStatus": {
+        "valid": "Válida",
+        "duplicate": "Duplicada",
+        "error": "Error",
+        "invited": "Invitada"
+      },
+      "validateFirst": "Valide las filas antes de crear las invitaciones.",
+      "fixBeforeApproving": "Corrija las filas marcadas con error y valide de nuevo.",
+      "doneBody": "Se creó una invitación para cada persona. Al aceptarla, cada una define su propio nombre y contraseña.",
+      "startOver": "Importar otro archivo",
+      "reason": {
+        "name_required": "Falta el nombre.",
+        "invalid_email": "El correo no tiene un formato válido.",
+        "invalid_role": "Rol no válido: «{value}». Use Colaborador, Líder o Supervisor.",
+        "department_not_found": "El departamento «{value}» no existe o no está activo en esta empresa.",
+        "already_user": "Ya existe una persona con este correo.",
+        "already_invited": "Este correo ya tiene una invitación pendiente.",
+        "repeated_in_file": "Este correo aparece más de una vez en el archivo."
+      },
+      "problem": {
+        "no_people_sheet": "El libro no tiene la hoja «{value}». Use la plantilla descargada.",
+        "no_header": "No se encontró la fila de encabezados. La hoja necesita al menos las columnas «Nombre» y «Correo».",
+        "missing_column": "No se encontró la columna «{value}», así que a ninguna fila le llegará ese dato.",
+        "no_data_rows": "La hoja tiene encabezados, pero ninguna fila con datos."
+      },
+      "notAWorkbook": "Este archivo no se pudo leer como un libro de Excel (.xlsx). Suba la plantilla completada.",
+      "emptyBody": "No hay filas que revisar. Complete al menos una fila de la plantilla y súbala de nuevo.",
+      "chooseFile": "Elegir archivo",
+      "noFileChosen": "Ningún archivo seleccionado"
+    },
     "userManagement": "Gestión de Usuarios",
     "manageUsersDescription": "Administración integral de usuarios y gestión de roles",
     "addUser": "Agregar Usuario",
@@ -4567,7 +4617,7 @@
     "closeInvite": "Cerrar",
     "bulkImportDescription": "Pegue o cargue un CSV para invitar a muchas personas a la vez.",
     "next": {
-      "description": "Quién está en la empresa, en qué departamento y quién no ha entrado todavía. Para sumar personas se invita o se importa un CSV.",
+      "description": "Quién está en la empresa, en qué departamento y quién no ha entrado todavía. Para sumar personas se invita o se importa una planilla.",
       "bulkImport": "Importación masiva",
       "invite": "Invitar persona",
       "forbidden": "Esta página es de la administración de la empresa: tu rol no gestiona a sus personas.",

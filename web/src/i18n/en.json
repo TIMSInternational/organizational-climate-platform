@@ -4462,6 +4462,56 @@
     }
   },
   "users": {
+    "intake": {
+      "step": {
+        "template": "{n}. Template",
+        "review": "{n}. Review",
+        "done": "{n}. Done"
+      },
+      "templateBody": "Download the workbook, fill in one row per person, and upload it here. The Role and Department columns are dropdowns of this company's own values, so there is nothing to spell.",
+      "downloadTemplate": "Download template",
+      "uploadLabel": "Upload the completed workbook",
+      "templateFileName": "people-template.xlsx",
+      "reviewBody": "{count} row(s) were read. Correct anything wrong here, then validate.",
+      "validate": "Validate",
+      "approve": "Create invitations",
+      "removeRow": "Remove",
+      "roleMissing": "(no role)",
+      "role": {
+        "employee": "Employee",
+        "leader": "Leader",
+        "supervisor": "Supervisor"
+      },
+      "rowStatus": {
+        "valid": "Valid",
+        "duplicate": "Duplicate",
+        "error": "Error",
+        "invited": "Invited"
+      },
+      "validateFirst": "Validate the rows before creating invitations.",
+      "fixBeforeApproving": "Fix the rows marked with an error, then validate again.",
+      "doneBody": "An invitation was created for each person. On accepting it, each one sets their own name and password.",
+      "startOver": "Import another file",
+      "reason": {
+        "name_required": "The name is missing.",
+        "invalid_email": "The email is not in a valid format.",
+        "invalid_role": "Invalid role: “{value}”. Use Employee, Leader or Supervisor.",
+        "department_not_found": "The department “{value}” does not exist or is not active in this company.",
+        "already_user": "A person with this email already exists.",
+        "already_invited": "This email already holds a pending invitation.",
+        "repeated_in_file": "This email appears more than once in the file."
+      },
+      "problem": {
+        "no_people_sheet": "The workbook has no “{value}” sheet. Use the downloaded template.",
+        "no_header": "No header row was found. The sheet needs at least the “Nombre” and “Correo” columns.",
+        "missing_column": "No “{value}” column was found, so no row will carry that value.",
+        "no_data_rows": "The sheet has headers but no rows with data."
+      },
+      "notAWorkbook": "This file could not be read as an Excel workbook (.xlsx). Upload the completed template.",
+      "emptyBody": "There are no rows to review. Fill in at least one row of the template and upload it again.",
+      "chooseFile": "Choose file",
+      "noFileChosen": "No file chosen"
+    },
     "userManagement": "User Management",
     "manageUsersDescription": "Comprehensive user administration and role management",
     "addUser": "Add User",
@@ -4567,7 +4617,7 @@
     "closeInvite": "Close",
     "bulkImportDescription": "Paste or upload a CSV to invite many people at once.",
     "next": {
-      "description": "Who is in the company, in which department, and who has not signed in yet. To add people, invite them or import a CSV.",
+      "description": "Who is in the company, in which department, and who has not signed in yet. To add people, invite them or import a spreadsheet.",
       "bulkImport": "Bulk import",
       "invite": "Invite someone",
       "forbidden": "This page belongs to the company's administration: your role does not manage its people.",

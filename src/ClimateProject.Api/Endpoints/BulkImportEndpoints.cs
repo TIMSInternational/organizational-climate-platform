@@ -12,11 +12,32 @@ public static class BulkImportEndpoints
 {
     public static void MapBulkImportEndpoints(this WebApplication app)
     {
-        // The one route in the app that legitimately accepts a multi-megabyte body (a CSV
-        // upload), so it is opted out of the default request-body ceiling #146 applies
-        // everywhere else. It still has a ceiling -- Security:MaxUploadBodyBytes -- and it is
-        // authenticated, unlike the surfaces the strict default exists for.
+        // The routes in the app that legitimately accept a multi-megabyte body (a CSV or
+        // workbook upload), so they are opted out of the default request-body ceiling #146
+        // applies everywhere else. They still have a ceiling -- Security:MaxUploadBodyBytes --
+        // and they are authenticated, unlike the surfaces the strict default exists for.
         app.MapPost("/admin/users/bulk-import", ImportAsync)
+            .RequireAuthorization()
+            .WithMetadata(new LargeRequestBodyMetadata());
+
+        // The workbook the client fills in, generated for one company so its departments are a
+        // dropdown rather than something to spell correctly.
+        app.MapGet("/admin/users/bulk-import/template", TemplateAsync)
+            .RequireAuthorization();
+
+        // READ, never write. Turns an uploaded workbook into rows for the wizard to show; it
+        // touches no table and creates nothing, which is what lets the admin upload a file they
+        // are not yet sure about. The Bedrock extraction step described in
+        // IntakeParseResult replaces THIS route's body and nothing else.
+        app.MapPost("/admin/users/bulk-import/parse", ParseAsync)
+            .RequireAuthorization()
+            .WithMetadata(new LargeRequestBodyMetadata());
+
+        // The reviewed rows, as JSON. Deliberately not "the same CSV again": by this point the
+        // admin has edited the table on screen, and CsvUserImportParser splits on commas with
+        // no quoting (its own comment says not to extend it), so re-serialising an edited name
+        // like "Rojas, Ana" would silently import two broken columns. The rows travel as rows.
+        app.MapPost("/admin/users/bulk-import/rows", ImportRowsAsync)
             .RequireAuthorization()
             .WithMetadata(new LargeRequestBodyMetadata());
     }
@@ -76,7 +97,33 @@ public static class BulkImportEndpoints
         var csv = await reader.ReadToEndAsync(cancellationToken);
         var parsedRows = CsvUserImportParser.Parse(csv);
 
-        var departments = await db.Departments.Where(d => d.CompanyId == companyId).ToListAsync(cancellationToken);
+        return Results.Ok(await ProcessRowsAsync(
+            parsedRows, companyId, isPreview, currentUser, db, emailSender, cancellationToken));
+    }
+
+    /// <summary>
+    /// Validate every row, and unless this is a preview, invite the ones that pass.
+    ///
+    /// <para>Extracted from <see cref="ImportAsync"/> unchanged so that the CSV upload and the
+    /// reviewed-rows submission cannot validate differently. The wizard shows an admin the
+    /// verdict of a preview and then asks them to approve it; if the approval ran through a
+    /// second copy of these rules, the screen they approved would not be the thing that
+    /// happened. One body, two callers, is the only shape that keeps that promise.</para>
+    /// </summary>
+    private static async Task<BulkImportResponse> ProcessRowsAsync(
+        IReadOnlyList<ParsedImportRow> parsedRows,
+        Guid companyId,
+        bool isPreview,
+        CurrentUser currentUser,
+        ClimateProjectDbContext db,
+        IInvitationEmailSender emailSender,
+        CancellationToken cancellationToken)
+    {
+        // Active only, as the template's dropdown is: a department that has been retired is not
+        // somewhere a new person can be placed, and matching it here would invite them into one.
+        var departments = await db.Departments
+            .Where(d => d.CompanyId == companyId && d.IsActive)
+            .ToListAsync(cancellationToken);
 
         // Intentionally NOT scoped to `companyId`: UserConfiguration.cs puts a GLOBAL
         // unique index on users.email (no company_id in it), matching signup/login,
@@ -113,16 +160,19 @@ public static class BulkImportEndpoints
         foreach (var row in parsedRows)
         {
             var errors = new List<string>();
+            var issues = new List<BulkImportIssue>();
             var email = row.Email.ToLowerInvariant();
 
             if (string.IsNullOrWhiteSpace(row.Name))
             {
                 errors.Add("Name is required");
+                issues.Add(new BulkImportIssue("name_required"));
             }
 
             if (!IsValidEmail(email))
             {
                 errors.Add("Invalid email format");
+                issues.Add(new BulkImportIssue("invalid_email"));
             }
 
             // super_admin/company_admin are excluded from bulk-importable roles, not just
@@ -136,6 +186,7 @@ public static class BulkImportEndpoints
             if (!Roles.All.Contains(row.Role) || row.Role == Roles.SuperAdmin || row.Role == Roles.CompanyAdmin)
             {
                 errors.Add($"Invalid role: {row.Role}");
+                issues.Add(new BulkImportIssue("invalid_role", row.Role));
             }
 
             Department? department = null;
@@ -145,6 +196,7 @@ public static class BulkImportEndpoints
                 if (department is null)
                 {
                     errors.Add($"Department not found: {row.Department}");
+                    issues.Add(new BulkImportIssue("department_not_found", row.Department));
                 }
             }
 
@@ -153,10 +205,26 @@ public static class BulkImportEndpoints
             {
                 status = "error";
             }
-            else if (existingEmails.Contains(email) || invitedEmails.Contains(email) || !seenInThisFile.Add(email))
+            else if (existingEmails.Contains(email))
+            {
+                // Three causes, told apart: each sends the admin somewhere different (the people
+                // list, the pending invitations, their own file), and one sentence naming all
+                // three sent them to all three.
+                status = "duplicate";
+                errors.Add("A user with this email already exists");
+                issues.Add(new BulkImportIssue("already_user"));
+            }
+            else if (invitedEmails.Contains(email))
             {
                 status = "duplicate";
-                errors.Add("A user with this email already exists, already holds an invitation, or appears twice in this file");
+                errors.Add("This email already holds a pending invitation");
+                issues.Add(new BulkImportIssue("already_invited"));
+            }
+            else if (!seenInThisFile.Add(email))
+            {
+                status = "duplicate";
+                errors.Add("This email appears more than once in this file");
+                issues.Add(new BulkImportIssue("repeated_in_file"));
             }
             else if (isPreview)
             {
@@ -197,7 +265,7 @@ public static class BulkImportEndpoints
                 status = "invited";
             }
 
-            results.Add(new BulkImportRowResult(row.RowNumber, row.Name, email, row.Role, row.Department, status, errors));
+            results.Add(new BulkImportRowResult(row.RowNumber, row.Name, email, row.Role, row.Department, status, errors, issues));
         }
 
         if (!isPreview)
@@ -222,6 +290,140 @@ public static class BulkImportEndpoints
         var successCount = results.Count(r => r.Status is "valid" or "invited");
         var errorCount = results.Count - successCount;
 
-        return Results.Ok(new BulkImportResponse(results, successCount, errorCount));
+        return new BulkImportResponse(results, successCount, errorCount);
+    }
+
+    private static async Task<IResult> TemplateAsync(
+        string? companyId,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var currentUser = principal.GetCurrentUser();
+
+        if (!Guid.TryParse(companyId, out var companyGuid))
+        {
+            return Results.Json(new { message = "A valid companyId is required" }, statusCode: 400);
+        }
+
+        if (!CanAccessCompany(currentUser, companyGuid))
+        {
+            return Results.Forbid();
+        }
+
+        var company = await db.Companies
+            .FirstOrDefaultAsync(c => c.Id == companyGuid, cancellationToken);
+        if (company is null)
+        {
+            return Results.Json(new { message = "Company not found" }, statusCode: 404);
+        }
+
+        // Ordered so the dropdown reads like a list rather than like insertion order, which is
+        // what the admin scrolling it expects.
+        var departments = await db.Departments
+            .Where(d => d.CompanyId == companyGuid && d.IsActive)
+            .OrderBy(d => d.Name)
+            .Select(d => d.Name)
+            .ToListAsync(cancellationToken);
+
+        var workbook = IntakeTemplateWorkbook.Build(company.Name, departments);
+
+        return Results.File(
+            workbook,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "plantilla-personas.xlsx");
+    }
+
+    private static async Task<IResult> ParseAsync(
+        HttpRequest httpRequest,
+        ClaimsPrincipal principal,
+        CancellationToken cancellationToken)
+    {
+        var currentUser = principal.GetCurrentUser();
+
+        if (!httpRequest.HasFormContentType)
+        {
+            return Results.Json(new { message = "Expected multipart form data" }, statusCode: 400);
+        }
+
+        var form = await httpRequest.ReadFormAsync(cancellationToken);
+        var file = form.Files["file"];
+        if (file is null || file.Length == 0)
+        {
+            return Results.Json(new { message = "A file is required" }, statusCode: 400);
+        }
+
+        if (!Guid.TryParse(form["companyId"], out var companyId))
+        {
+            return Results.Json(new { message = "A valid companyId is required" }, statusCode: 400);
+        }
+
+        // Checked even though this route reads nothing from the database: it is the check that
+        // stops one company's admin using the platform as a parser for a file they then import
+        // elsewhere, and a route that authorises differently from its siblings is how that
+        // stops being obvious.
+        if (!CanAccessCompany(currentUser, companyId))
+        {
+            return Results.Forbid();
+        }
+
+        IntakeParseResult parsed;
+        try
+        {
+            await using var stream = file.OpenReadStream();
+            using var buffer = new MemoryStream();
+            // ClosedXML needs a seekable stream; the form's stream is not one.
+            await stream.CopyToAsync(buffer, cancellationToken);
+            buffer.Position = 0;
+            parsed = XlsxUserImportParser.Parse(buffer);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // A file that is not a workbook at all (a .csv renamed, a PDF, a corrupt download)
+            // throws from deep inside the reader with a message written for whoever wrote the
+            // reader. Answering 400 with our own sentence keeps that off the admin's screen,
+            // and keeps a malformed upload from being recorded as a server fault.
+            return Results.Json(
+                new { message = "This file could not be read as an Excel workbook (.xlsx).", code = "not_a_workbook" },
+                statusCode: 400);
+        }
+
+        return Results.Ok(parsed);
+    }
+
+    private static async Task<IResult> ImportRowsAsync(
+        BulkImportRowsRequest request,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        IInvitationEmailSender emailSender,
+        CancellationToken cancellationToken)
+    {
+        var currentUser = principal.GetCurrentUser();
+
+        if (request.CompanyId == Guid.Empty)
+        {
+            return Results.Json(new { message = "A valid companyId is required" }, statusCode: 400);
+        }
+
+        if (!CanAccessCompany(currentUser, request.CompanyId))
+        {
+            return Results.Forbid();
+        }
+
+        var rows = (request.Rows ?? [])
+            .Select(r => new ParsedImportRow(
+                RowNumber: r.RowNumber,
+                Name: (r.Name ?? string.Empty).Trim(),
+                Email: (r.Email ?? string.Empty).Trim(),
+                // Resolved again rather than trusted: the admin may have retyped the cell in the
+                // review table, and the word they type there deserves the same Spanish synonyms
+                // the workbook column accepts. An unrecognised word passes through so the
+                // validation below can name it back.
+                Role: IntakeWorkbook.ResolveRole(r.Role) ?? (r.Role ?? string.Empty).Trim(),
+                Department: string.IsNullOrWhiteSpace(r.Department) ? null : r.Department.Trim()))
+            .ToList();
+
+        return Results.Ok(await ProcessRowsAsync(
+            rows, request.CompanyId, request.Preview, currentUser, db, emailSender, cancellationToken));
     }
 }
