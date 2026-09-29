@@ -80,6 +80,10 @@ Also not done, and deliberately: refactoring survey and microclimate creation in
 is 8+ existing pages and they are the exact flows being demonstrated on 2026-10-01. Right
 feature, wrong week.
 
+**2026-09-29:** the AI step now exists beside this, not instead of it — `ai-intake.md`. Our
+template is still read by header words with no model; any other spreadsheet is mapped by Claude
+from a masked profile.
+
 ## Superseding this
 
 An extraction step in front of the parser does not supersede this file; it is the paragraph above

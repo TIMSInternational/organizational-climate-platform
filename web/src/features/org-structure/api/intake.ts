@@ -3,16 +3,16 @@ import { getToken } from '../../../auth/token'
 import type { BulkImportResponse } from './bulkImport'
 
 /**
- * The Excel intake: a template the client fills in, a parse that turns it into reviewable rows,
- * and the reviewed rows going in.
+ * The people intake: any spreadsheet the client already has (or our template), read and mapped
+ * by the server into reviewable rows, and the reviewed rows going in.
  *
  * ## The seam this module is shaped around
  *
- * `parseIntakeWorkbook` is the ONLY function here that knows the payload is a spreadsheet. The
- * wizard downstream of it consumes `IntakeParseResult` and nothing else, so the eventual
- * document-extraction step (Bedrock, #92/#111/#119, blocked on provider approval) replaces this
- * one call and leaves the review table, the validation and the invitation creation untouched.
- * Keep the row-shaped types free of anything spreadsheet-specific for that reason.
+ * `understandIntakeFile` is the ONLY function the wizard calls that knows the payload is a
+ * spreadsheet. Everything downstream of it — the review table, the validation and the invitation
+ * creation — consumes `IntakeRow[]` and nothing else, whoever wrote the mapping (Claude, our
+ * template's fixed headers, header words, or the admin's correction). `parseIntakeWorkbook` is
+ * the older template-only route, kept because the server still serves it.
  */
 
 /** A problem with the file itself rather than with one of its rows. */
@@ -48,6 +48,11 @@ export interface IntakeRow {
   email: string
   role: string
   department: string | null
+  /**
+   * Pre-assigned demographic answers keyed by field (the stored option value, not its label).
+   * Only `/understand` produces these; the template path leaves them out.
+   */
+  demographics?: Record<string, string | null> | null
 }
 
 export interface IntakeParseResult {
@@ -126,10 +131,16 @@ export async function submitIntakeRows(
   companyId: string,
   rows: IntakeRow[],
   preview: boolean,
+  /**
+   * Departments the admin approved creating. Sent on the preview AND the approval: a row naming
+   * one is only valid when the server has been told it is approved, so a preview without it
+   * would show errors the approval then does not have.
+   */
+  newDepartments: string[] = [],
 ): Promise<BulkImportResponse> {
   const response = await authFetch(`${baseUrl}/admin/users/bulk-import/rows`, {
     method: 'POST',
-    body: JSON.stringify({ companyId, preview, rows }),
+    body: JSON.stringify({ companyId, preview, rows, newDepartments }),
   })
 
   if (!response.ok) {
@@ -137,4 +148,160 @@ export async function submitIntakeRows(
   }
 
   return (await response.json()) as BulkImportResponse
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * `/understand`: any spreadsheet the client already has, read and mapped by the server.
+ * ------------------------------------------------------------------------------------------- */
+
+/** Who wrote the mapping: Claude, our template's fixed headers, header words, or the admin. */
+export type IntakeSource = 'template' | 'ai' | 'heuristic' | 'manual'
+export type IntakeConfidence = 'high' | 'medium' | 'low'
+export type IntakeColumnTarget =
+  | 'name'
+  | 'first_name'
+  | 'last_name'
+  | 'email'
+  | 'role'
+  | 'department'
+  | 'demographic'
+  | 'ignore'
+export type IntakeRoleTarget = 'employee' | 'leader' | 'supervisor'
+
+export interface IntakeColumnMapping {
+  column: number
+  header: string
+  target: IntakeColumnTarget
+  demographicField: string | null
+  confidence: IntakeConfidence
+  reason: string | null
+}
+
+export interface IntakeRoleValueMapping {
+  source: string
+  target: IntakeRoleTarget
+  confidence: IntakeConfidence
+  reason: string | null
+}
+
+export interface IntakeDepartmentValueMapping {
+  source: string
+  department: string | null
+  createNew: boolean
+  confidence: IntakeConfidence
+  reason: string | null
+}
+
+export interface IntakeDemographicValueMapping {
+  field: string
+  source: string
+  target: string | null
+  confidence: IntakeConfidence
+}
+
+export interface IntakeMapping {
+  sheet: string
+  headerRow: number
+  nameOrder: 'first_last' | 'last_first'
+  defaultRole: IntakeRoleTarget
+  columns: IntakeColumnMapping[]
+  roleValues: IntakeRoleValueMapping[]
+  departmentValues: IntakeDepartmentValueMapping[]
+  demographicValues: IntakeDemographicValueMapping[]
+  /** Written by the model in the requested language; null from the template and header paths. */
+  summary: string | null
+}
+
+/** Something worth a look before approving, with the spreadsheet rows it is about. */
+export interface IntakeInsight {
+  code: string
+  rows: number[]
+  value: string | null
+  suggestion: string | null
+}
+
+export interface IntakeAiFacts {
+  model: string
+  inputTokens: number | null
+  outputTokens: number | null
+  durationMs: number
+  cached: boolean
+  /** Columns whose distinct values the model was shown (areas, job titles). */
+  categoryColumns: string[]
+  /** Columns the model saw only as masked samples (names, emails). */
+  maskedColumns: string[]
+}
+
+export interface IntakeDemographicTarget {
+  field: string
+  label: string | null
+  type: 'select' | 'text' | 'number' | 'date'
+  options: string[] | null
+  /** Each stored value's label in the reader's language ("san_jose" → "San José"). */
+  optionLabels?: Record<string, string> | null
+}
+
+export interface IntakeTargets {
+  companyName: string
+  emailDomain: string | null
+  departments: string[]
+  demographics: IntakeDemographicTarget[]
+}
+
+export interface IntakeUnderstanding {
+  source: IntakeSource
+  failureCode: string | null
+  mapping: IntakeMapping
+  rows: IntakeRow[]
+  newDepartments: string[]
+  problems: IntakeParseProblem[]
+  insights: IntakeInsight[]
+  file: {
+    fileName: string
+    sheets: { name: string; rows: number; columns: number }[]
+    namesNormalised: number
+    /**
+     * Rows under the header that held no person (a "Total colaboradores: 22" footer), skipped by
+     * the server. Optional: a server older than this field simply omits it.
+     */
+    skippedRows?: number[]
+  }
+  ai: IntakeAiFacts | null
+  targets: IntakeTargets
+}
+
+/**
+ * Read any spreadsheet into a proposed mapping and the rows it produces. Creates nothing.
+ *
+ * With `mapping`, the server re-applies the admin's corrected mapping to the same file and calls
+ * no model (the response's `source` is then `manual`); without it the server recognises its own
+ * template, or asks the model, or — when the model cannot run — maps by header words and says so
+ * in `failureCode`. `language` is the reader's: the model writes its summary and reasons in it.
+ */
+export async function understandIntakeFile(
+  baseUrl: string,
+  companyId: string,
+  file: File,
+  language: 'es' | 'en',
+  mapping?: IntakeMapping,
+): Promise<IntakeUnderstanding> {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('companyId', companyId)
+  form.append('language', language)
+  if (mapping) {
+    form.append('mapping', JSON.stringify(mapping))
+  }
+
+  const response = await fetch(`${baseUrl}/admin/users/bulk-import/understand`, {
+    method: 'POST',
+    headers: multipartHeaders(),
+    body: form,
+  })
+
+  if (!response.ok) {
+    throw await failure(response)
+  }
+
+  return (await response.json()) as IntakeUnderstanding
 }

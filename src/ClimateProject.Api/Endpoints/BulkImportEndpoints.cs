@@ -1,10 +1,16 @@
+using System.Diagnostics;
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using ClimateProject.Api.Infrastructure;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.OrgStructure;
+using ClimateProject.Application.OrgStructure.Intake;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace ClimateProject.Api.Endpoints;
 
@@ -25,11 +31,18 @@ public static class BulkImportEndpoints
         app.MapGet("/admin/users/bulk-import/template", TemplateAsync)
             .RequireAuthorization();
 
-        // READ, never write. Turns an uploaded workbook into rows for the wizard to show; it
-        // touches no table and creates nothing, which is what lets the admin upload a file they
-        // are not yet sure about. The Bedrock extraction step described in
-        // IntakeParseResult replaces THIS route's body and nothing else.
+        // READ, never write. Turns an uploaded copy of OUR template into rows. The AI intake is
+        // the route below; this one stays as the template-only path it always was.
         app.MapPost("/admin/users/bulk-import/parse", ParseAsync)
+            .RequireAuthorization()
+            .WithMetadata(new LargeRequestBodyMetadata());
+
+        // READ, never write. Any spreadsheet the client has — their own HR export, not our
+        // template — read, profiled, mapped (by Claude from a masked profile, by our template's
+        // fixed headers, or by the admin's corrected mapping) and applied to every row here.
+        // Nothing is created: what comes back is a proposal for the review step, which still
+        // validates through ProcessRowsAsync like every other path.
+        app.MapPost("/admin/users/bulk-import/understand", UnderstandAsync)
             .RequireAuthorization()
             .WithMetadata(new LargeRequestBodyMetadata());
 
@@ -98,7 +111,7 @@ public static class BulkImportEndpoints
         var parsedRows = CsvUserImportParser.Parse(csv);
 
         return Results.Ok(await ProcessRowsAsync(
-            parsedRows, companyId, isPreview, currentUser, db, emailSender, cancellationToken));
+            parsedRows, [], companyId, isPreview, currentUser, db, emailSender, cancellationToken));
     }
 
     /// <summary>
@@ -112,6 +125,7 @@ public static class BulkImportEndpoints
     /// </summary>
     private static async Task<BulkImportResponse> ProcessRowsAsync(
         IReadOnlyList<ParsedImportRow> parsedRows,
+        IReadOnlyCollection<string> approvedNewDepartments,
         Guid companyId,
         bool isPreview,
         CurrentUser currentUser,
@@ -124,6 +138,26 @@ public static class BulkImportEndpoints
         var departments = await db.Departments
             .Where(d => d.CompanyId == companyId && d.IsActive)
             .ToListAsync(cancellationToken);
+
+        // Departments the admin approved creating. A name that already exists — active or
+        // retired, at the top level — is not new: an active one simply matches, and a retired
+        // one would be a duplicate the department endpoint itself refuses, so rows naming it
+        // are told the department is not active instead of silently creating a twin.
+        var retiredNames = (await db.Departments
+                .Where(d => d.CompanyId == companyId && !d.IsActive && d.ParentDepartmentId == null)
+                .Select(d => d.Name)
+                .ToListAsync(cancellationToken))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var approvedNew = approvedNewDepartments
+            .Select(n => n.Trim())
+            .Where(n => n.Length is > 0 and <= 100
+                        && !departments.Any(d => string.Equals(d.Name, n, StringComparison.OrdinalIgnoreCase))
+                        && !retiredNames.Contains(n))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var createdDepartments = new Dictionary<string, Department>(StringComparer.OrdinalIgnoreCase);
+
+        // Loaded only when a row carries demographics: the CSV and template paths never do.
+        List<DemographicFieldDefinition>? demographicDefinitions = null;
 
         // Intentionally NOT scoped to `companyId`: UserConfiguration.cs puts a GLOBAL
         // unique index on users.email (no company_id in it), matching signup/login,
@@ -190,13 +224,46 @@ public static class BulkImportEndpoints
             }
 
             Department? department = null;
+            string? newDepartmentName = null;
             if (row.Department is not null)
             {
                 department = departments.FirstOrDefault(d => d.Name == row.Department);
-                if (department is null)
+                if (department is null && approvedNew.TryGetValue(row.Department, out var approvedName))
+                {
+                    newDepartmentName = approvedName;
+                }
+                else if (department is null && retiredNames.Contains(row.Department))
+                {
+                    errors.Add($"Department is not active: {row.Department}");
+                    issues.Add(new BulkImportIssue("department_inactive", row.Department));
+                }
+                else if (department is null)
                 {
                     errors.Add($"Department not found: {row.Department}");
                     issues.Add(new BulkImportIssue("department_not_found", row.Department));
+                }
+            }
+
+            // Validated exactly as a single invitation's pre-assigned demographics are
+            // (InvitationEndpoints.CreateAsync): partial is fine, a wrong key or a value outside
+            // a select field's options is not.
+            IReadOnlyList<ResolvedDemographicValue> demographicValues = [];
+            if (row.Demographics is { Count: > 0 })
+            {
+                demographicDefinitions ??= await DemographicValueStore.LoadDefinitionsAsync(db, companyId, cancellationToken);
+                var validated = DemographicValueValidation.Validate(row.Demographics, demographicDefinitions, enforceRequired: false);
+                if (validated.IsValid)
+                {
+                    demographicValues = validated.Values;
+                }
+                else
+                {
+                    foreach (var error in validated.Errors)
+                    {
+                        errors.Add(error);
+                    }
+
+                    issues.Add(new BulkImportIssue("invalid_demographic", string.Join(", ", row.Demographics.Keys)));
                 }
             }
 
@@ -245,6 +312,24 @@ public static class BulkImportEndpoints
                 // their name beats a spreadsheet cell's. The name still reaches the admin in
                 // this endpoint's own result row, which is where they check what they
                 // uploaded.
+                if (newDepartmentName is not null && !createdDepartments.TryGetValue(newDepartmentName, out department))
+                {
+                    // Created once, and only because a row that is actually being invited uses
+                    // it — an approved name that every row using it failed validation for is
+                    // not created at all.
+                    department = new Department
+                    {
+                        Id = Guid.NewGuid(),
+                        CompanyId = companyId,
+                        Name = newDepartmentName,
+                        IsActive = true,
+                        CreatedAt = now,
+                        UpdatedAt = now,
+                    };
+                    db.Departments.Add(department);
+                    createdDepartments[newDepartmentName] = department;
+                }
+
                 var invitation = new UserInvitation
                 {
                     Id = Guid.NewGuid(),
@@ -260,6 +345,7 @@ public static class BulkImportEndpoints
                     ReminderCount = 0,
                 };
                 db.UserInvitations.Add(invitation);
+                DemographicValueStore.AddForInvitation(db, invitation.Id, demographicValues);
                 created.Add(invitation);
                 invitedEmails.Add(email);
                 status = "invited";
@@ -420,10 +506,225 @@ public static class BulkImportEndpoints
                 // the workbook column accepts. An unrecognised word passes through so the
                 // validation below can name it back.
                 Role: IntakeWorkbook.ResolveRole(r.Role) ?? (r.Role ?? string.Empty).Trim(),
-                Department: string.IsNullOrWhiteSpace(r.Department) ? null : r.Department.Trim()))
+                Department: string.IsNullOrWhiteSpace(r.Department) ? null : r.Department.Trim(),
+                Demographics: r.Demographics))
             .ToList();
 
         return Results.Ok(await ProcessRowsAsync(
-            rows, request.CompanyId, request.Preview, currentUser, db, emailSender, cancellationToken));
+            rows, request.NewDepartments ?? [], request.CompanyId, request.Preview, currentUser, db, emailSender, cancellationToken));
+    }
+
+    private static readonly JsonSerializerOptions IntakeJson = new(JsonSerializerDefaults.Web);
+
+    /// <summary>How long an identical file's mapping is reused: long enough for "upload again", not a store.</summary>
+    private static readonly TimeSpan MappingCacheLifetime = TimeSpan.FromMinutes(30);
+
+    private static async Task<IResult> UnderstandAsync(
+        HttpRequest httpRequest,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        IIntakeMappingModel model,
+        IMemoryCache cache,
+        CancellationToken cancellationToken)
+    {
+        var currentUser = principal.GetCurrentUser();
+        if (!httpRequest.HasFormContentType)
+        {
+            return Results.Json(new { message = "Expected multipart form data", code = "bad_request" }, statusCode: 400);
+        }
+
+        var form = await httpRequest.ReadFormAsync(cancellationToken);
+        var file = form.Files["file"];
+        if (file is null || file.Length == 0)
+        {
+            return Results.Json(new { message = "A file is required", code = "no_file" }, statusCode: 400);
+        }
+
+        if (!Guid.TryParse(form["companyId"], out var companyId))
+        {
+            return Results.Json(new { message = "A valid companyId is required", code = "bad_request" }, statusCode: 400);
+        }
+
+        if (!CanAccessCompany(currentUser, companyId))
+        {
+            return Results.Forbid();
+        }
+
+        var company = await db.Companies.FirstOrDefaultAsync(c => c.Id == companyId, cancellationToken);
+        if (company is null)
+        {
+            return Results.Json(new { message = "Company not found", code = "not_found" }, statusCode: 404);
+        }
+
+        var language = form["language"] == "en" ? "en" : "es";
+
+        IReadOnlyList<SheetGrid> sheets;
+        try
+        {
+            await using var stream = file.OpenReadStream();
+            sheets = SpreadsheetReader.Read(stream, file.FileName);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return Results.Json(
+                new { message = "This file could not be read as a spreadsheet (.xlsx or .csv).", code = "not_a_spreadsheet" },
+                statusCode: 400);
+        }
+
+        if (sheets.All(s => s.Rows.Count == 0))
+        {
+            return Results.Json(new { message = "The file has no rows.", code = "empty_file" }, statusCode: 400);
+        }
+
+        var targets = await LoadIntakeTargetsAsync(db, company, language, cancellationToken);
+        var profile = IntakeProfiler.Build(sheets);
+
+        IntakeMapping mapping;
+        string source;
+        string? failureCode = null;
+        IntakeAiFacts? ai = null;
+
+        if (form["mapping"] is { Count: > 0 } submitted && !string.IsNullOrWhiteSpace(submitted.ToString()))
+        {
+            // The admin's corrected mapping: applied as given (after the same sanitising as the
+            // model's), with no model call — editing a dropdown must not cost a request.
+            IntakeMapping? corrected;
+            try
+            {
+                corrected = JsonSerializer.Deserialize<IntakeMapping>(submitted.ToString(), IntakeJson);
+            }
+            catch (JsonException)
+            {
+                corrected = null;
+            }
+
+            if (corrected is null)
+            {
+                return Results.Json(new { message = "The mapping could not be read.", code = "bad_mapping" }, statusCode: 400);
+            }
+
+            mapping = IntakeMappingSanitizer.Sanitize(corrected, sheets, targets);
+            source = "manual";
+        }
+        else if (sheets.FirstOrDefault(IntakeHeuristicMapping.IsTemplate) is { } template)
+        {
+            mapping = IntakeHeuristicMapping.Build(template, targets);
+            source = "template";
+        }
+        else
+        {
+            var clock = Stopwatch.StartNew();
+            var cacheKey = "intake-mapping:" + companyId + ":" + language + ":" + Hash(profile, targets);
+            var cached = cache.TryGetValue(cacheKey, out IntakeModelResult? result) && result is not null;
+            if (!cached)
+            {
+                result = await model.MapAsync(profile, targets, language, cancellationToken);
+                if (result.Mapping is not null)
+                {
+                    cache.Set(cacheKey, result, MappingCacheLifetime);
+                }
+            }
+
+            var roster = profile.Sheets.FirstOrDefault(s => s.Name == result!.Mapping?.Sheet) ?? profile.Sheets[0];
+            if (result!.Mapping is { } proposed)
+            {
+                mapping = IntakeMappingSanitizer.Sanitize(proposed, sheets, targets);
+                source = "ai";
+                roster = profile.Sheets.FirstOrDefault(s => s.Name == mapping.Sheet) ?? roster;
+            }
+            else
+            {
+                var fallbackSheet = sheets.Where(s => s.Rows.Count > 0).MaxBy(s => s.Rows.Count)!;
+                mapping = IntakeHeuristicMapping.Build(fallbackSheet, targets);
+                source = "heuristic";
+                failureCode = result.FailureCode ?? "ai_failed";
+            }
+
+            // Facts about a request that was never made would be a false privacy claim: "the AI
+            // saw only the structure" when it saw nothing. Unavailable means not sent.
+            ai = result.FailureCode == "ai_unavailable" ? null : new IntakeAiFacts(
+                result.Model ?? "unknown",
+                result.InputTokens,
+                result.OutputTokens,
+                clock.ElapsedMilliseconds,
+                cached,
+                roster.Columns.Where(c => c.Values is not null).Select(c => c.Header).ToList(),
+                roster.Columns.Where(c => c.MaskedSamples is not null).Select(c => c.Header).ToList());
+        }
+
+        var sheet = sheets.First(s => s.Name == mapping.Sheet);
+        var applied = IntakeMappingApplier.Apply(sheet, mapping, targets);
+        var insights = IntakeInsights.Compute(applied.Rows, company.EmailDomain, applied.NewDepartments);
+
+        return Results.Ok(new IntakeUnderstandResponse(
+            source,
+            failureCode,
+            mapping,
+            applied.Rows,
+            applied.NewDepartments,
+            applied.Problems,
+            insights,
+            new IntakeFileFacts(
+                file.FileName,
+                sheets.Select(s => new IntakeSheetFacts(s.Name, s.Rows.Count, s.ColumnCount)).ToList(),
+                applied.NamesNormalised,
+                applied.SkippedRows),
+            ai,
+            targets));
+    }
+
+    /// <summary>
+    /// The company's mapping targets: ACTIVE departments (the same list the template offers) and
+    /// ACTIVE demographic fields with their allowed stored values and a label in the reader's
+    /// language.
+    /// </summary>
+    private static async Task<IntakeTargets> LoadIntakeTargetsAsync(
+        ClimateProjectDbContext db,
+        Company company,
+        string language,
+        CancellationToken cancellationToken)
+    {
+        var departments = await db.Departments
+            .Where(d => d.CompanyId == company.Id && d.IsActive)
+            .OrderBy(d => d.Name)
+            .Select(d => d.Name)
+            .ToListAsync(cancellationToken);
+
+        var definitions = await DemographicValueStore.LoadDefinitionsAsync(db, company.Id, cancellationToken);
+        var labels = await db.DemographicFields
+            .Where(f => f.CompanyId == company.Id)
+            .Select(f => new { f.Field, f.LabelEs, f.LabelEn })
+            .ToListAsync(cancellationToken);
+
+        var fieldIds = definitions.Select(d => d.Id).ToList();
+        var optionLabels = (await db.DemographicFieldOptions
+                .Where(o => fieldIds.Contains(o.DemographicFieldId))
+                .Select(o => new { o.DemographicFieldId, o.Value, o.LabelEs, o.LabelEn })
+                .ToListAsync(cancellationToken))
+            .GroupBy(o => o.DemographicFieldId)
+            .ToDictionary(
+                g => g.Key,
+                g => (IReadOnlyDictionary<string, string>)g.ToDictionary(
+                    o => o.Value,
+                    o => (language == "en" ? o.LabelEn ?? o.LabelEs : o.LabelEs ?? o.LabelEn) ?? o.Value));
+
+        var demographics = definitions
+            .Where(d => d.IsActive)
+            .Select(d =>
+            {
+                var label = labels.FirstOrDefault(l => l.Field == d.Field);
+                var text = language == "en" ? label?.LabelEn ?? label?.LabelEs : label?.LabelEs ?? label?.LabelEn;
+                return new IntakeDemographicTarget(d.Field, text, d.Type, d.Options, optionLabels.GetValueOrDefault(d.Id));
+            })
+            .ToList();
+
+        return new IntakeTargets(company.Name, company.EmailDomain, departments, demographics);
+    }
+
+    /// <summary>Identifies an identical question: same masked profile, same company targets.</summary>
+    private static string Hash(IntakeProfile profile, IntakeTargets targets)
+    {
+        var json = JsonSerializer.Serialize(new { profile, targets }, IntakeJson);
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(json)));
     }
 }

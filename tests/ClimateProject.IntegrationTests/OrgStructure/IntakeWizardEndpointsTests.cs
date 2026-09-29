@@ -251,7 +251,9 @@ public class IntakeWizardEndpointsTests : IAsyncLifetime
         var rows = (await response.Content.ReadFromJsonAsync<BulkImportResponse>())!.Rows.ToDictionary(r => r.RowNumber);
         Assert.Equal(["name_required", "invalid_email"], rows[5].Issues.Select(i => i.Code));
         Assert.Equal(new BulkImportIssue("invalid_role", "Gerente"), Assert.Single(rows[6].Issues));
-        Assert.Equal(new BulkImportIssue("department_not_found", RetiredDepartment), Assert.Single(rows[7].Issues));
+        // Retired, not unknown: the more specific reason, which sends the admin to reactivate it
+        // rather than to hunt for a typo.
+        Assert.Equal(new BulkImportIssue("department_inactive", RetiredDepartment), Assert.Single(rows[7].Issues));
         Assert.Equal("already_user", Assert.Single(rows[8].Issues).Code);
         Assert.Equal("already_invited", Assert.Single(rows[9].Issues).Code);
         Assert.Equal("valid", rows[10].Status);

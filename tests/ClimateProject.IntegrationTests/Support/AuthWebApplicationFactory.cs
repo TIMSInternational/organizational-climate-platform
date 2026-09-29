@@ -280,6 +280,11 @@ public class AuthWebApplicationFactory(string connectionString) : WebApplication
                 ["InternalApiKey"] = TestInternalApiKey,
                 ["GoogleClientId"] = "test-google-client-id",
 
+                // The AI intake never reaches a real model from a test host, even on a machine
+                // whose shell exports ANTHROPIC_API_KEY: a test that spends money and depends on
+                // a network is not a test. Intake tests substitute a fake IIntakeMappingModel.
+                ["Intake:Ai:Enabled"] = "false",
+
                 // One trusted hop, so ClientIpResolver reads the X-Forwarded-For that
                 // ConfigureClient stamps. Without this the header is ignored (hop count 0
                 // trusts nothing) and every client shares one rate-limit partition.
@@ -308,6 +313,11 @@ public class AuthWebApplicationFactory(string connectionString) : WebApplication
             services.RemoveAll<IGoogleTokenVerifier>();
             services.AddScoped<IGoogleTokenVerifier, FakeGoogleTokenVerifier>();
 
+            // The AI intake's model, replaced once for the whole collection (see
+            // TestIntakeMappingModel): a real model is a network call that costs money.
+            services.RemoveAll<ClimateProject.Application.OrgStructure.Intake.IIntakeMappingModel>();
+            services.AddSingleton<ClimateProject.Application.OrgStructure.Intake.IIntakeMappingModel>(IntakeModel);
+
             // ConfigureDbContext, not a second AddDbContext and not AddSingleton<IInterceptor>.
             // The first would be ignored (AddDbContext TryAdds its options) and the second
             // does nothing at all — EF has no convention that discovers loose IInterceptor
@@ -318,6 +328,9 @@ public class AuthWebApplicationFactory(string connectionString) : WebApplication
                 options => options.AddInterceptors(CommandCounter));
         });
     }
+
+    /// <summary>The intake model every host built by this factory uses; tests set its answer.</summary>
+    public TestIntakeMappingModel IntakeModel { get; } = new();
 
     public async Task ApplyMigrationsAsync()
     {

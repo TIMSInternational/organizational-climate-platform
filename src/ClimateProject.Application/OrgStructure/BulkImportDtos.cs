@@ -23,7 +23,18 @@ public sealed record BulkImportResponse(
     int SuccessCount,
     int ErrorCount);
 
-public sealed record ParsedImportRow(int RowNumber, string Name, string Email, string Role, string? Department);
+/// <param name="Demographics">
+/// Pre-assigned demographic answers keyed by field, validated and stored exactly as a single
+/// invitation's are (<c>DemographicValueValidation</c>, <c>user_invitation_demographics</c>) and
+/// copied onto the person when they accept. Null from the CSV and template paths, which carry none.
+/// </param>
+public sealed record ParsedImportRow(
+    int RowNumber,
+    string Name,
+    string Email,
+    string Role,
+    string? Department,
+    IReadOnlyDictionary<string, string?>? Demographics = null);
 
 /// <summary>
 /// One row as the wizard hands it back after the admin has reviewed and possibly edited it.
@@ -38,9 +49,16 @@ public sealed record BulkImportRowInput(
     string? Name,
     string? Email,
     string? Role,
-    string? Department);
+    string? Department,
+    Dictionary<string, string?>? Demographics = null);
 
+/// <param name="NewDepartments">
+/// Departments the admin approved creating (the AI intake proposes them for areas the company
+/// does not have yet). A row naming one is valid in preview and, on approval, the department is
+/// created — once, and only if a row that is actually invited uses it.
+/// </param>
 public sealed record BulkImportRowsRequest(
     Guid CompanyId,
     bool Preview,
-    IReadOnlyList<BulkImportRowInput>? Rows);
+    IReadOnlyList<BulkImportRowInput>? Rows,
+    IReadOnlyList<string>? NewDepartments = null);
