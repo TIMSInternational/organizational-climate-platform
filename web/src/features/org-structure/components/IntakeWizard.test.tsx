@@ -17,6 +17,17 @@ vi.mock('../api/intake', async (importOriginal) => ({
   getIntakeTemplate: (...args: unknown[]) => getIntakeTemplate(...(args as [])),
 }))
 
+const listDepartments = vi.fn()
+vi.mock('../api/departments', () => ({
+  listDepartments: (...args: unknown[]) => listDepartments(...(args as [])),
+}))
+
+const departments = [
+  { id: 'd1', companyId: 'c1', name: 'Ingeniería', description: null, parentDepartmentId: null, isActive: true, employeeCount: 3 },
+  { id: 'd2', companyId: 'c1', name: 'Finanzas', description: null, parentDepartmentId: null, isActive: true, employeeCount: 2 },
+  { id: 'd3', companyId: 'c1', name: 'Calidad retirada', description: null, parentDepartmentId: null, isActive: false, employeeCount: 0 },
+]
+
 const downloadBlobFile = vi.fn()
 vi.mock('../../../lib/downloadBlobFile', () => ({
   downloadBlobFile: (...args: unknown[]) => downloadBlobFile(...(args as [])),
@@ -63,6 +74,8 @@ beforeEach(() => {
   submitIntakeRows.mockReset()
   getIntakeTemplate.mockReset()
   downloadBlobFile.mockReset()
+  listDepartments.mockReset()
+  listDepartments.mockResolvedValue(departments)
 })
 
 afterEach(() => {
@@ -180,6 +193,37 @@ describe('IntakeWizard', () => {
     await user.upload(screen.getByLabelText(/Upload the completed workbook/), xlsx())
 
     expect(await screen.findByText('The workbook has no “Personas” sheet. Use the downloaded template.')).toBeTruthy()
+  })
+
+  it("offers the company's active departments as a select, keeping what the file said until it is corrected", async () => {
+    const user = userEvent.setup()
+    parseIntakeWorkbook.mockResolvedValue({
+      rows: [{ rowNumber: 5, name: 'Ana Rojas', email: 'ana@meridiano.test', role: 'employee', department: 'Marketing' }],
+      problems: [],
+    })
+    renderWizard(vi.fn(), 'es')
+    await user.upload(screen.getByLabelText(/Suba el libro completado/), xlsx())
+
+    const select = (await screen.findByRole('combobox', { name: 'Departamento' })) as HTMLSelectElement
+    const options = [...select.options].map((option) => option.textContent)
+    expect(options).toEqual(['(sin departamento)', 'Marketing', 'Finanzas', 'Ingeniería'])
+    expect(select.value).toBe('Marketing')
+    expect(options).not.toContain('Calidad retirada')
+
+    await user.selectOptions(select, 'Finanzas')
+    submitIntakeRows.mockResolvedValue(allValid)
+    await user.click(screen.getByRole('button', { name: 'Validar' }))
+
+    const [, , sent] = submitIntakeRows.mock.calls[0] as unknown as [string, string, { department: string | null }[]]
+    expect(sent[0].department).toBe('Finanzas')
+  })
+
+  it('keeps the department a text box when the list cannot be read, rather than a select of nothing', async () => {
+    listDepartments.mockRejectedValue(new Error('offline'))
+    await uploadAndReachReview()
+
+    expect(screen.queryByRole('combobox', { name: 'Department' })).toBeNull()
+    expect(screen.getByDisplayValue('Ingeniería').tagName).toBe('INPUT')
   })
 
   it('offers a way back from a file with no rows, rather than a dead end', async () => {

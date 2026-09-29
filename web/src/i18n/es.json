@@ -3356,9 +3356,9 @@
         "import": {
           "heading": "Importación masiva",
           "meta": "vista previa antes de importar",
-          "text": "Columnas: nombre, correo, rol, departamento. La vista previa muestra fila por fila qué entraría y qué no; nada se escribe hasta confirmar.",
-          "choose": "Elegir archivo",
-          "format": ".csv · una fila por persona"
+          "text": "Descargue la plantilla de esta empresa, complétela y súbala. La revisión muestra fila por fila qué entraría y qué no; nada se escribe hasta confirmar.",
+          "choose": "Importar desde Excel",
+          "format": ".xlsx · una fila por persona"
         },
         "loadFailed": "No se pudo leer la lista de personas",
         "roles": {
@@ -4492,6 +4492,7 @@
       "fixBeforeApproving": "Corrija las filas marcadas con error y valide de nuevo.",
       "doneBody": "Se creó una invitación para cada persona. Al aceptarla, cada una define su propio nombre y contraseña.",
       "startOver": "Importar otro archivo",
+      "noDepartment": "(sin departamento)",
       "reason": {
         "name_required": "Falta el nombre.",
         "invalid_email": "El correo no tiene un formato válido.",

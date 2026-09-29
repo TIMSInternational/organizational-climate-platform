@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { Download, Upload } from 'lucide-react'
 import { useTranslation } from '../../../i18n'
 import { Alert, AlertDescription, Button, Input, Table, type ChipTone } from '../../../components/ui'
@@ -13,6 +13,7 @@ import {
   type IntakeRow,
 } from '../api/intake'
 import type { BulkImportIssue, BulkImportResponse, BulkImportRowResult } from '../api/bulkImport'
+import { listDepartments } from '../api/departments'
 
 /**
  * The Excel intake, as three steps: take the template, review what it read, approve it.
@@ -84,6 +85,7 @@ export default function IntakeWizard({ baseUrl, companyId, onImported }: IntakeW
   const [result, setResult] = useState<BulkImportResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const departmentNames = useActiveDepartmentNames(baseUrl, companyId)
 
   /** Every verdict is about the rows as they were when it was asked for. */
   function invalidateVerdict() {
@@ -305,14 +307,37 @@ export default function IntakeWizard({ baseUrl, companyId, onImported }: IntakeW
                           </CanvasSelect>
                         </td>
                         <td>
-                          <Input
-                            className="min-w-32"
-                            aria-label={t('users.department')}
-                            value={row.department ?? ''}
-                            onChange={(e) =>
-                              patchRow(row.rowNumber, { department: e.target.value === '' ? null : e.target.value })
-                            }
-                          />
+                          {departmentNames ? (
+                            <CanvasSelect
+                              className="min-w-32"
+                              aria-label={t('users.department')}
+                              value={row.department ?? ''}
+                              onChange={(e) =>
+                                patchRow(row.rowNumber, { department: e.target.value === '' ? null : e.target.value })
+                              }
+                            >
+                              <option value="">{t('users.intake.noDepartment')}</option>
+                              {/* Kept, like an unknown role: the cell shows what the file said, and
+                                  the verdict names it, until the admin picks a real one. */}
+                              {row.department !== null && !departmentNames.includes(row.department) && (
+                                <option value={row.department}>{row.department}</option>
+                              )}
+                              {departmentNames.map((name) => (
+                                <option key={name} value={name}>
+                                  {name}
+                                </option>
+                              ))}
+                            </CanvasSelect>
+                          ) : (
+                            <Input
+                              className="min-w-32"
+                              aria-label={t('users.department')}
+                              value={row.department ?? ''}
+                              onChange={(e) =>
+                                patchRow(row.rowNumber, { department: e.target.value === '' ? null : e.target.value })
+                              }
+                            />
+                          )}
                         </td>
                         {/* The reason sits under its chip rather than in a column of its own: eight
                             columns with readable inputs overran the panel at 1440 and cut the
@@ -409,4 +434,37 @@ export default function IntakeWizard({ baseUrl, companyId, onImported }: IntakeW
       )}
     </div>
   )
+}
+
+/**
+ * The company's active departments, for the review table's Departamento select — the same list
+ * the template's dropdown carries (`TemplateAsync` reads active only), so a row can be corrected
+ * to exactly the values an import accepts.
+ *
+ * `null` until it loads, and `null` if it fails: the cell then stays a text box, which the
+ * server's verdict still checks. A department list that did not arrive must not leave the admin
+ * with a select that offers nothing.
+ */
+function useActiveDepartmentNames(baseUrl: string, companyId: string): string[] | null {
+  const [names, setNames] = useState<string[] | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    listDepartments(baseUrl, companyId)
+      .then((departments) => {
+        if (cancelled) return
+        setNames(
+          departments
+            .filter((department) => department.isActive)
+            .map((department) => department.name)
+            .sort((a, b) => a.localeCompare(b)),
+        )
+      })
+      .catch(() => {
+        if (!cancelled) setNames(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [baseUrl, companyId])
+  return names
 }

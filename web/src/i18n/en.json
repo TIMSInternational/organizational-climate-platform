@@ -3356,9 +3356,9 @@
         "import": {
           "heading": "Bulk import",
           "meta": "preview before importing",
-          "text": "Columns: name, email, role, department. The preview shows row by row what would go in and what would not; nothing is written until you confirm.",
-          "choose": "Choose file",
-          "format": ".csv · one row per person"
+          "text": "Download this company's template, fill it in and upload it. The review shows row by row what would go in and what would not; nothing is written until you confirm.",
+          "choose": "Import from Excel",
+          "format": ".xlsx · one row per person"
         },
         "loadFailed": "The list of people could not be read",
         "roles": {
@@ -4492,6 +4492,7 @@
       "fixBeforeApproving": "Fix the rows marked with an error, then validate again.",
       "doneBody": "An invitation was created for each person. On accepting it, each one sets their own name and password.",
       "startOver": "Import another file",
+      "noDepartment": "(no department)",
       "reason": {
         "name_required": "The name is missing.",
         "invalid_email": "The email is not in a valid format.",
