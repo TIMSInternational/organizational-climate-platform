@@ -641,7 +641,8 @@ public static class BulkImportEndpoints
             }
 
             // Facts about a request that was never made would be a false privacy claim: "the AI
-            // saw only the structure" when it saw nothing. Unavailable means not sent.
+            // saw only the structure" when it saw nothing. Unavailable means no model read it:
+            // either nothing was sent, or the provider refused the key or the model before it ran.
             ai = result.FailureCode == "ai_unavailable" ? null : new IntakeAiFacts(
                 result.Model ?? "unknown",
                 result.InputTokens,

@@ -81,6 +81,15 @@ public sealed class ClaudeIntakeMappingModel(IConfiguration configuration, ILogg
         return string.IsNullOrWhiteSpace(key) ? null : key.Trim();
     }
 
+    /// <summary>
+    /// A rejected key (401), a model this account may not use (403 — on Bedrock, a model whose
+    /// agreement is not in place) or a model id the endpoint does not serve (404). All three are
+    /// the deployment, never the file: the admin is told the AI is unavailable, not that their
+    /// spreadsheet could not be read.
+    /// </summary>
+    internal static bool IsNoAccess(AnthropicApiException ex) =>
+        ex is AnthropicUnauthorizedException or AnthropicForbiddenException or AnthropicNotFoundException;
+
     private static bool IsBedrock(IConfiguration configuration) =>
         string.Equals(configuration["Intake:Ai:Provider"], "bedrock", StringComparison.OrdinalIgnoreCase);
 
@@ -192,9 +201,11 @@ public sealed class ClaudeIntakeMappingModel(IConfiguration configuration, ILogg
             logger.LogWarning("Intake mapping timed out after {Ms} ms on {Model}", clock.ElapsedMilliseconds, model);
             return IntakeModelResult.Failed("ai_failed", model);
         }
-        catch (AnthropicUnauthorizedException)
+        catch (AnthropicApiException ex) when (IsNoAccess(ex))
         {
-            logger.LogError("Intake mapping: the Anthropic key was rejected (401). Check Anthropic:ApiKey.");
+            logger.LogError(
+                "Intake mapping: {Model} is not reachable with this configuration ({Status}). Check the key and, on Bedrock, the model's agreement in the account.",
+                requestModel, (int)ex.StatusCode);
             return IntakeModelResult.Failed("ai_unavailable", model);
         }
         catch (AnthropicRateLimitException)
