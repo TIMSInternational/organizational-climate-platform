@@ -4090,6 +4090,7 @@
           "en": "inglés"
         },
         "countUsed": "{count} preguntas · usada {used} veces",
+        "countUsedOnce": "{count} preguntas · usada una vez",
         "use": "Usar plantilla",
         "questions": "Preguntas",
         "firstIn": "Primero en",

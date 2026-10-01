@@ -128,7 +128,7 @@ export default function TemplateDetailNextPage() {
             <Chip tone="neutral" label={categoryLabel(t, primary.category)} />
             <Chip tone="neutral" label={locales.map((l) => copy(`language.${l}`)).join(' · ')} />
             {scaleChipLabel && <Chip tone="neutral" label={scaleChipLabel} />}
-            <span>{copy('countUsed', { count: n, used: primary.usageCount })}</span>
+            <span>{copy(primary.usageCount === 1 ? 'countUsedOnce' : 'countUsed', { count: n, used: primary.usageCount })}</span>
           </>
         }
         actions={
