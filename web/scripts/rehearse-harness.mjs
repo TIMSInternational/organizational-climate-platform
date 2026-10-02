@@ -17,9 +17,9 @@ export const NAMES = {
   preview: /Vista previa|Preview/i,
   share: /Compartir|Share/i,
   yourTeam: /Tu equipo|Your team/i,
-  drillIn: /Cada pregunta se compara|compared/i,
+  drillIn: /Celda abierta|Open cell/i,
   submitAnswers: /Enviar mis respuestas|Enviar|Submit/i,
-  openPlan: /Programa|Reponer|Rotación|Reuniones|Plan/i,
+  openPlan: /^(Abrir|Open)$/i,
 }
 
 /**

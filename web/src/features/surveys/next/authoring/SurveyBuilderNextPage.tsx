@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 import { ArrowRight, Check, EyeOff, FileIcon, GripVertical, Lock, MoreHorizontal, Plus, ShieldCheck, Trash2 } from 'lucide-react'
 import { PageTopBar } from '../../../../components/layout'
+import CompanyContextBar from '../../../../components/layout/CompanyContextBar'
 import {
   Alert,
   AlertDescription,
@@ -12,6 +13,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  EmptyState,
   ErrorState,
   Select,
   SelectContent,
@@ -92,12 +94,21 @@ export default function SurveyBuilderNextPage() {
   const caps = useViewerCapabilities()
   const scope = useCompanyScope()
   const { t } = useTranslation()
+  // A super administrator does author surveys — on a company's behalf, once one is chosen
+  // (`canAuthorSurveys` waits for that choice). Every link here is gated on it, so this is the
+  // typed or bookmarked URL: asked where it can be answered, as the other company-scoped pages
+  // ask it, and never "this account does not create surveys", which is false for them.
+  if (scope.isSuperAdmin && scope.status === 'needs-selection') {
+    return (
+      <>
+        <CompanyContextBar note={t('surveys.next.builder.pickCompany')} />
+        <EmptyState title={t('companyContext.chooseACompany')} description={t('surveys.next.builder.pickCompany')} />
+      </>
+    )
+  }
   if (!caps.canAuthorSurveys || scope.companyId === undefined) {
     return (
-      <ErrorState
-        title={t('surveys.next.builder.cannotAuthorTitle')}
-        description={scope.isSuperAdmin ? t('surveys.next.builder.pickCompany') : t('surveys.next.builder.cannotAuthorBody')}
-      />
+      <ErrorState title={t('surveys.next.builder.cannotAuthorTitle')} description={t('surveys.next.builder.cannotAuthorBody')} />
     )
   }
   return <SurveyBuilder companyId={scope.companyId} />

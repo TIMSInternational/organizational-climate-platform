@@ -63,6 +63,10 @@ vi.mock('../../api/surveyDistribution', async (importOriginal) => ({
   listSurveyInvitations: vi.fn(),
 }))
 vi.mock('../../../org-structure/api/users', () => ({ listUsers: vi.fn(async () => []) }))
+vi.mock('../../../org-structure/api/companies', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  listCompanies: vi.fn(async () => [{ id: 'co-meridiano', name: 'Grupo Meridiano S.A.' }]),
+}))
 vi.mock('../../api/surveys', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../api/surveys')>()),
   listSurveyDimensions: vi.fn(async () => []),
@@ -609,6 +613,21 @@ describe('Nueva encuesta (SurveyBuilder artboard)', () => {
     renderAs('employee', <SurveyBuilderNextPage />)
     expect(screen.getByText('Esta cuenta no crea encuestas')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Siguiente' })).toBeNull()
+  })
+
+  it('asks a super administrator with no company for one, where it can be answered, and never says the account cannot author', async () => {
+    renderAs('super_admin', <SurveyBuilderNextPage />, '')
+    expect(screen.getByText('Elija una empresa')).toBeTruthy()
+    expect(await screen.findByRole('option', { name: 'Grupo Meridiano S.A.' })).toBeTruthy()
+    expect(screen.queryByText('Esta cuenta no crea encuestas')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Siguiente' })).toBeNull()
+  })
+
+  it('opens the builder for a super administrator once a company is chosen', async () => {
+    localStorage.setItem(COMPANY_CONTEXT_STORAGE_KEY, 'co-meridiano')
+    renderAs('super_admin', <SurveyBuilderNextPage />, '')
+    expect(await screen.findByRole('combobox', { name: 'Idioma del contenido' })).toBeTruthy()
+    expect(screen.queryByText('Elija una empresa')).toBeNull()
   })
 
   it("starts in the reader's language, as PR #459 rules", async () => {

@@ -386,6 +386,13 @@ builder.Services.AddScoped<IEmailTransport, SmtpEmailTransport>();
 // Unconfigured keeps the logging stubs, which deliver nothing and report success. That state
 // is announced by a startup WARNING (EmailDeliveryStartupReport) so it cannot be mistaken for
 // working delivery.
+// The AI intake's model. Singleton: it holds one HTTP client, and it reads its key lazily so a
+// test's configuration override is seen. With no Anthropic:ApiKey it reports IsConfigured =
+// false and /bulk-import/understand falls back to header words — never a request that must fail.
+builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<ClimateProject.Application.OrgStructure.Intake.IIntakeMappingModel,
+    ClimateProject.Infrastructure.OrgStructure.ClaudeIntakeMappingModel>();
+
 builder.Services.AddScoped<IInvitationEmailSender>(sp => sp.GetRequiredService<EmailOptions>().IsConfigured
     ? ActivatorUtilities.CreateInstance<EmailInvitationEmailSender>(sp)
     : ActivatorUtilities.CreateInstance<LoggingInvitationEmailSender>(sp));
