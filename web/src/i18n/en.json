@@ -5295,6 +5295,7 @@
       "groupsSub": "of {total} readable",
       "groupsProtected": "{groups} under the floor of {floor}: protected",
       "groupsAllReadable": "every group is above the floor of {floor}",
+      "groupsNoneReached": "no group reached the floor of {floor}",
       "belowLabel": "Below the average",
       "belowSub": "dimensions",
       "belowNone": "no dimension below the survey average",
@@ -6783,7 +6784,8 @@
       "whereNone": "Every cell on the map is in the {band}.",
       "reasonLowest": "The lowest cell on the map",
       "reasonOnlyCriticalOutside": "The only {band} cell outside {group}",
-      "mapSub": "three result areas · select a cell to see its question"
+      "mapSub": "three result areas · select a cell to see its question",
+      "mapSubCompanyOnly": "no group reached {minimum} responses, so the map shows the whole company only"
     },
     "dashboard": {
       "movedLegend": "area boundaries {low} and {high} · {count} closed surveys, whole company",

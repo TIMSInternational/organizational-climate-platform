@@ -44,6 +44,7 @@ import {
   cellDetail,
   criticalCells,
   companyDelta,
+  companyCriticalCells,
   companyMean,
   companyScores,
   dimensionDeltas,
@@ -142,7 +143,14 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
   const rows = useMemo(() => groupRows(model), [model])
   const company = useMemo(() => ({ scores: companyScores(model), mean: companyMean(model) }), [model])
   const bands = model.bands
-  const critical = useMemo(() => criticalCells(model), [model])
+  // The breakdown held no group, so the map is the company row alone
+  // (`companyOnlyClimateMap`): there is no group finding to rank, and the critical tile
+  // reads the company's own cells.
+  const companyOnly = climate !== null && climate.rows.length === 0
+  const critical = useMemo(
+    () => (companyOnly ? companyCriticalCells(model) : criticalCells(model)),
+    [model, companyOnly],
+  )
   const groups = useMemo(() => legibleGroups(model), [model])
   const findings = useMemo(() => whereToLookFirst(model), [model])
   const detail = useMemo(() => (selection ? cellDetail(model, selection) : null), [model, selection])
@@ -388,12 +396,14 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
             unit={t('surveyResults.next.groupsSub', { total: groups.total })}
             sub={
               <span className="text-fg-label">
-                {protectedGroups.length === 0
-                  ? t('surveyResults.next.groupsAllReadable', { floor: model.minimumGroupSize })
-                  : t('surveyResults.next.groupsProtected', {
-                      groups: protectedGroups.join(', '),
-                      floor: model.minimumGroupSize,
-                    })}
+                {groups.total === 0
+                  ? t('surveyResults.next.groupsNoneReached', { floor: model.minimumGroupSize })
+                  : protectedGroups.length === 0
+                    ? t('surveyResults.next.groupsAllReadable', { floor: model.minimumGroupSize })
+                    : t('surveyResults.next.groupsProtected', {
+                        groups: protectedGroups.join(', '),
+                        floor: model.minimumGroupSize,
+                      })}
               </span>
             }
           />
@@ -413,7 +423,7 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
                 <span className="text-chip-critical-ink" data-testid="critical-cells">
                   {critical
                     .map((cell) =>
-                      criticalOneGroup
+                      criticalOneGroup || companyOnly
                         ? `${dimensionName(cell.dimensionKey)} ${score(cell.score)}`
                         : `${cell.rowName} · ${dimensionName(cell.dimensionKey)} ${score(cell.score)}`,
                     )
@@ -428,85 +438,87 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
           <ResultsSuppressionNotice reason={null} minimumGroupSize={model.minimumGroupSize} />
         ) : (
           <>
-            <section aria-labelledby="results-next-where" className="flex flex-col gap-3">
-              <div className="flex flex-wrap items-baseline justify-between gap-3">
-                <div className="flex items-baseline gap-2.5">
-                  <h2 id="results-next-where" className="mb-0 text-2xl">
-                    {t('surveyResults.next.whereHeading')}
-                  </h2>
-                  <span className="font-mono text-sm tabular-nums text-fg-label">{findings.length}</span>
+            {!companyOnly && (
+              <section aria-labelledby="results-next-where" className="flex flex-col gap-3">
+                <div className="flex flex-wrap items-baseline justify-between gap-3">
+                  <div className="flex items-baseline gap-2.5">
+                    <h2 id="results-next-where" className="mb-0 text-2xl">
+                      {t('surveyResults.next.whereHeading')}
+                    </h2>
+                    <span className="font-mono text-sm tabular-nums text-fg-label">{findings.length}</span>
+                  </div>
+                  {findings.length > 0 && (
+                    <p className="m-0 text-sm text-fg-label">
+                      {findings.length === 1
+                        ? t('resultBands.results.whereSubOne', { band: strengthName })
+                        : findings.length === 2
+                          ? t('resultBands.results.whereSubTwo', { band: strengthName })
+                          : t('resultBands.results.whereSubThree', { band: strengthName })}
+                    </p>
+                  )}
                 </div>
-                {findings.length > 0 && (
-                  <p className="m-0 text-sm text-fg-label">
-                    {findings.length === 1
-                      ? t('resultBands.results.whereSubOne', { band: strengthName })
-                      : findings.length === 2
-                        ? t('resultBands.results.whereSubTwo', { band: strengthName })
-                        : t('resultBands.results.whereSubThree', { band: strengthName })}
-                  </p>
+                {findings.length === 0 ? (
+                  <p className="m-0 text-sm text-fg-secondary">{t('resultBands.results.whereNone', { band: strengthName })}</p>
+                ) : (
+                  // Three across from `xl`; at 1024 three columns cut every name, so they stack.
+                  <ul className="m-0 grid list-none gap-3 p-0 xl:grid-cols-3" data-testid="findings">
+                    {findings.map((finding) => (
+                      <li
+                        key={`${finding.rowId}:${finding.dimensionKey}`}
+                        className={cn(CARD, 'flex min-w-0 flex-col gap-2 px-3.5 py-3')}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <span
+                            data-band={finding.band}
+                            className="flex h-7 w-11 shrink-0 items-center justify-center rounded border font-mono text-sm font-semibold tabular-nums"
+                            style={bandCellStyle(finding.band)}
+                          >
+                            {score(finding.score)}
+                            <span className="sr-only">{` — ${bandName(finding.band, bands, t)}`}</span>
+                          </span>
+                          <span className="flex min-w-0 flex-col">
+                            <span className="truncate text-base font-semibold text-fg-primary">
+                              {finding.rowName} · {dimensionName(finding.dimensionKey)}
+                            </span>
+                            <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-fg-label">
+                              {finding.reason !== 'band' && <span>{reasonOf(finding, t, bands)}</span>}
+                              <BandChip band={finding.band} bands={bands} />
+                            </span>
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          {finding.plan === undefined ? (
+                            <span className="text-xs text-fg-label">{t('surveyResults.next.plansUnavailable')}</span>
+                          ) : finding.plan === null ? (
+                            <span className="text-xs text-fg-label">{t('surveyResults.next.planNone')}</span>
+                          ) : (
+                            // Plans carry a department, not a dimension: the plan covers
+                            // the GROUP, and the sentence says no more than that.
+                            <span className="inline-flex items-center gap-1 text-xs text-accent-green-ink">
+                              <Check aria-hidden="true" className="size-3" />
+                              {t('surveyResults.next.planCovers')}
+                              {finding.plan.status === 'not_started' && ` · ${t('surveyResults.next.planNoProgress')}`}
+                            </span>
+                          )}
+                          {/* The artboard's link: 12px regular text, a 4px gap, a 12px arrow.
+                              The Button's medium weight, 6px gap and 16px icon drew it 109px
+                              against the artboard's 102px. */}
+                          <Button
+                            variant="link"
+                            size="sm"
+                            className="h-auto gap-1 p-0 text-sm font-normal text-fg-secondary hover:text-fg-primary"
+                            onClick={() => openCell(finding.rowId, finding.dimensionKey, true)}
+                          >
+                            {t('surveyResults.next.viewQuestion')}
+                            <ArrowRight aria-hidden="true" className="size-3 text-fg-label" />
+                          </Button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
                 )}
-              </div>
-              {findings.length === 0 ? (
-                <p className="m-0 text-sm text-fg-secondary">{t('resultBands.results.whereNone', { band: strengthName })}</p>
-              ) : (
-                // Three across from `xl`; at 1024 three columns cut every name, so they stack.
-                <ul className="m-0 grid list-none gap-3 p-0 xl:grid-cols-3" data-testid="findings">
-                  {findings.map((finding) => (
-                    <li
-                      key={`${finding.rowId}:${finding.dimensionKey}`}
-                      className={cn(CARD, 'flex min-w-0 flex-col gap-2 px-3.5 py-3')}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <span
-                          data-band={finding.band}
-                          className="flex h-7 w-11 shrink-0 items-center justify-center rounded border font-mono text-sm font-semibold tabular-nums"
-                          style={bandCellStyle(finding.band)}
-                        >
-                          {score(finding.score)}
-                          <span className="sr-only">{` — ${bandName(finding.band, bands, t)}`}</span>
-                        </span>
-                        <span className="flex min-w-0 flex-col">
-                          <span className="truncate text-base font-semibold text-fg-primary">
-                            {finding.rowName} · {dimensionName(finding.dimensionKey)}
-                          </span>
-                          <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-fg-label">
-                            {finding.reason !== 'band' && <span>{reasonOf(finding, t, bands)}</span>}
-                            <BandChip band={finding.band} bands={bands} />
-                          </span>
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        {finding.plan === undefined ? (
-                          <span className="text-xs text-fg-label">{t('surveyResults.next.plansUnavailable')}</span>
-                        ) : finding.plan === null ? (
-                          <span className="text-xs text-fg-label">{t('surveyResults.next.planNone')}</span>
-                        ) : (
-                          // Plans carry a department, not a dimension: the plan covers
-                          // the GROUP, and the sentence says no more than that.
-                          <span className="inline-flex items-center gap-1 text-xs text-accent-green-ink">
-                            <Check aria-hidden="true" className="size-3" />
-                            {t('surveyResults.next.planCovers')}
-                            {finding.plan.status === 'not_started' && ` · ${t('surveyResults.next.planNoProgress')}`}
-                          </span>
-                        )}
-                        {/* The artboard's link: 12px regular text, a 4px gap, a 12px arrow.
-                            The Button's medium weight, 6px gap and 16px icon drew it 109px
-                            against the artboard's 102px. */}
-                        <Button
-                          variant="link"
-                          size="sm"
-                          className="h-auto gap-1 p-0 text-sm font-normal text-fg-secondary hover:text-fg-primary"
-                          onClick={() => openCell(finding.rowId, finding.dimensionKey, true)}
-                        >
-                          {t('surveyResults.next.viewQuestion')}
-                          <ArrowRight aria-hidden="true" className="size-3 text-fg-label" />
-                        </Button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
+              </section>
+            )}
 
             <section aria-labelledby="results-next-map" className={cn(CARD, 'flex min-w-0 flex-col gap-3 px-5 pt-4 pb-4.5')}>
               <div className="flex flex-wrap items-baseline justify-between gap-3">
@@ -514,9 +526,11 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
                   {t('surveyResults.next.mapHeadingWave', { wave: model.code })}
                 </h2>
                 <p className="m-0 text-sm text-fg-label">
-                  {climate.target === null
-                    ? t('surveyResults.climateAllProtected', { minimum: climate.threshold })
-                    : t('resultBands.results.mapSub')}
+                  {companyOnly
+                    ? t('resultBands.results.mapSubCompanyOnly', { minimum: climate.threshold })
+                    : climate.target === null
+                      ? t('surveyResults.climateAllProtected', { minimum: climate.threshold })
+                      : t('resultBands.results.mapSub')}
                 </p>
               </div>
               <ResultsClimateGrid
