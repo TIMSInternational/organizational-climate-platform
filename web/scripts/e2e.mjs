@@ -114,6 +114,13 @@ const SUPER_DOMAIN = values.accounts ? 'acme.test' : values.domain
  * `deriveMatrix` is what stops this list from silently rotting — a router path that is in
  * neither this list nor a role's capabilities fails the run.
  */
+const DEV_ONLY_ROUTES = new Set([
+  // #501's signal gallery. Reachable only by typing the URL in a dev build; it is in no role's
+  // capabilities, and before this entry existed its mere presence in the router aborted every
+  // run of this harness with a FATAL. Excluded rather than covered: it is not a product screen.
+  '/dev/signal',
+])
+
 const PUBLIC_ROUTES = {
   '/': { anonymous: true },
   '/login': { anonymous: true },
@@ -281,7 +288,7 @@ async function main() {
     for (const route of reachableRoutes(role, true)) coverage[route] ??= {}
   }
 
-  const matrix = deriveMatrix(routerPaths, coverage)
+  const matrix = deriveMatrix(routerPaths.filter((p) => !DEV_ONLY_ROUTES.has(p)), coverage)
   log(`e2e: ${routerPaths.length} routes in router.tsx, ${matrix.covered.length} covered`)
   if (matrix.unknown.length > 0) log(`e2e: stale coverage entries: ${matrix.unknown.join(', ')}`)
   if (matrix.missing.length > 0) {

@@ -199,12 +199,18 @@ function requestedPath(): string {
 describe('DashboardPage', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn())
+    // Tracking pinned off: these cases are about which role dashboard is asked for, and the
+    // stubbed fetch answers no tracking read. Left to the environment, a local `.env.local`
+    // that sets the tracking URL turns the supervisor's `mis-tareas` read on, and the page
+    // fails on a payload no case here serves.
+    vi.stubEnv('VITE_TRACKING_API_BASE_URL', '')
   })
 
   afterEach(() => {
     cleanup()
     window.localStorage.clear()
     vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
     // A no-op unless a case pinned the clock, and the reason one can: the employee heading
     // is a greeting chosen from the reader's own hour.
     vi.useRealTimers()

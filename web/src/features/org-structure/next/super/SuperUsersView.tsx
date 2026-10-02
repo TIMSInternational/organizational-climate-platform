@@ -22,7 +22,7 @@ import { cn } from '../../../../lib/cn'
 import { createInvitation, createShareableLink, resendInvitation, type Invitation } from '../../api/invitations'
 import { updateUser, updateUserRole, type User } from '../../api/users'
 import type { Department } from '../../api/departments'
-import BulkImportPanel from '../../components/BulkImportPanel'
+import IntakeWizard from '../../components/IntakeWizard'
 import InvitationForm, { type InvitationFormValues } from '../../components/InvitationForm'
 import InvitationList from '../../components/InvitationList'
 import ShareableLinkPanel from '../../components/ShareableLinkPanel'
@@ -191,7 +191,7 @@ export default function SuperUsersView() {
           }
           meta={t('superadmin.next.users.import.meta')}
         >
-          <BulkImportPanel baseUrl={baseUrl} companyId={companyId} onImported={state.reload} />
+          <IntakeWizard baseUrl={baseUrl} companyId={companyId} onImported={state.reload} />
           <div>
             <Button type="button" variant="ghost" onClick={() => setOpen('none')}>
               {t('superadmin.next.users.invitations.close')}

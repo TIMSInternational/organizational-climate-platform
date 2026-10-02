@@ -6,6 +6,24 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authorization" Version="10.0.0" />
+    <!--
+      The intake workbook: read by XlsxUserImportParser, written by IntakeTemplateWorkbook.
+
+      Not a new vendor to this repository. ClimateTracking.Application already pins the same
+      package at the same version for TrackingSheetExport, for the same reason given there:
+      an .xlsx is a zip of XML parts, and hand-rolling the reader is hundreds of lines whose
+      every branch is a place to get the client's file wrong. The hand-rolled PDF and CSV
+      writers in Exports/ stay hand-rolled because they EMIT a format we choose; this one
+      PARSES a format the client's spreadsheet program chose, which is the opposite problem.
+      See docs/decisions/pdf-rendering.md for the distinction.
+
+      Version pinned here, matching tracking, because this repository has no
+      Directory.Packages.props.
+
+      Referenced from Application rather than Api so the column contract stays unit-testable
+      without spinning up the web host, exactly the reason ClimateTracking gives.
+    -->
+    <PackageReference Include="ClosedXML" Version="0.105.1" />
   </ItemGroup>
 
   <PropertyGroup>

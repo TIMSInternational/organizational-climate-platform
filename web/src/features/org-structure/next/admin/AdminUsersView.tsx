@@ -23,7 +23,7 @@ import { countWord } from '../../../../lib/countWord'
 import { createInvitation, createShareableLink, resendInvitation, type Invitation } from '../../api/invitations'
 import { updateUser, type User } from '../../api/users'
 import type { Department } from '../../api/departments'
-import BulkImportPanel from '../../components/BulkImportPanel'
+import IntakeWizard from '../../components/IntakeWizard'
 import InvitationForm, { type InvitationFormValues } from '../../components/InvitationForm'
 import ShareableLinkPanel from '../../components/ShareableLinkPanel'
 import { roleText } from '../super/labels'
@@ -197,7 +197,7 @@ export default function AdminUsersView() {
           }
           meta={t('users.next.panel.importMeta')}
         >
-          <BulkImportPanel baseUrl={baseUrl} companyId={companyId} onImported={state.reload} />
+          <IntakeWizard baseUrl={baseUrl} companyId={companyId} onImported={state.reload} />
           <div>
             <Button type="button" variant="ghost" onClick={() => setOpen('none')}>
               {t('users.next.panel.close')}

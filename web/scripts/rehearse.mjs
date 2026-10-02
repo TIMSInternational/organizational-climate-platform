@@ -224,9 +224,13 @@ await step('06 action plans and one detail', values.admin, async ({ page }) => {
   await page.waitForTimeout(1000)
   const t = await mainText(page)
   await snap(page, '06a-action-plans')
-  const link = page.getByRole('link', { name: NAMES.openPlan }).first()
-  if (await link.count()) { await link.click(); await page.waitForTimeout(1500); await snap(page, '06b-action-plan-detail') }
-  return `${(t.match(/Cancelad/g) ?? []).length} cancelled labels visible; detail ${await link.count() ? 'opened' : 'NOT opened'}`
+  // Inside <main>: the rail's "Planes de Acción" link also matched a loose name, and led to
+  // the tracking listing while this step reported "detail opened".
+  const open = page.locator('main').getByRole('link', { name: NAMES.openPlan }).or(page.locator('main').getByRole('button', { name: NAMES.openPlan })).first()
+  await open.waitFor({ timeout: 10000 }); await open.click()
+  await page.waitForURL(/\/action-plans\/[0-9a-f-]{36}/, { timeout: 15000 }); await page.waitForTimeout(1500)
+  await snap(page, '06b-action-plan-detail')
+  return `${(t.match(/Cancelad/g) ?? []).length} cancelled labels visible; detail opened at ${new URL(page.url()).pathname}`
 })
 
 await step('07 tracking consolidado and planes', values.admin, async ({ page }) => {
@@ -308,7 +312,9 @@ await step('12 reports and share dialog', values.admin, async ({ page, profile }
   const t = await mainText(page)
   await snap(page, '12a-reports')
   // Opens the dialog and photographs it; it does NOT press "Crear enlace" — that would mint.
-  await click(page, NAMES.share)
+  // Compartir lives in each row's ⋯ menu ("Compartir y Programar están en el menú de cada fila").
+  await page.getByRole('row').filter({ hasText: /T3 2026/ }).last().getByRole('button').last().click()
+  await click(page, NAMES.share, 'menuitem')
   await page.getByRole('dialog').first().waitFor({ timeout: 10000 })
   await page.waitForTimeout(800)
   await snap(page, '12b-share-dialog')

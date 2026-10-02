@@ -3356,9 +3356,9 @@
         "import": {
           "heading": "Importación masiva",
           "meta": "vista previa antes de importar",
-          "text": "Columnas: nombre, correo, rol, departamento. La vista previa muestra fila por fila qué entraría y qué no; nada se escribe hasta confirmar.",
-          "choose": "Elegir archivo",
-          "format": ".csv · una fila por persona"
+          "text": "Descargue la plantilla de esta empresa, complétela y súbala. La revisión muestra fila por fila qué entraría y qué no; nada se escribe hasta confirmar.",
+          "choose": "Importar desde Excel",
+          "format": ".xlsx · una fila por persona"
         },
         "loadFailed": "No se pudo leer la lista de personas",
         "roles": {
@@ -4090,6 +4090,7 @@
           "en": "inglés"
         },
         "countUsed": "{count} preguntas · usada {used} veces",
+        "countUsedOnce": "{count} preguntas · usada una vez",
         "use": "Usar plantilla",
         "questions": "Preguntas",
         "firstIn": "Primero en",
@@ -4462,6 +4463,219 @@
     }
   },
   "users": {
+    "intake": {
+      "step": {
+        "template": "{n}. Plantilla",
+        "review": "{n}. Revisión",
+        "done": "{n}. Listo",
+        "upload": "{n}. Subir",
+        "understand": "{n}. Entender"
+      },
+      "templateBody": "Descargue el libro, complete una fila por persona y súbalo aquí. Las columnas Rol y Departamento son listas desplegables con los valores de esta empresa, así que no hay nada que escribir.",
+      "downloadTemplate": "Descargar plantilla",
+      "uploadLabel": "Suba el libro completado",
+      "templateFileName": "plantilla-personas.xlsx",
+      "reviewBody": "Se leyeron {count} fila(s). Corrija aquí lo que esté mal y luego valide.",
+      "validate": "Validar",
+      "approve": "Crear invitaciones",
+      "removeRow": "Quitar",
+      "roleMissing": "(sin rol)",
+      "role": {
+        "employee": "Colaborador",
+        "leader": "Líder",
+        "supervisor": "Supervisor"
+      },
+      "rowStatus": {
+        "valid": "Válida",
+        "duplicate": "Duplicada",
+        "error": "Error",
+        "invited": "Invitada"
+      },
+      "validateFirst": "Valide las filas antes de crear las invitaciones.",
+      "fixBeforeApproving": "Corrija las filas marcadas con error y valide de nuevo.",
+      "doneBody": "Se creó una invitación para cada persona. Al aceptarla, cada una define su propio nombre y contraseña.",
+      "startOver": "Importar otro archivo",
+      "noDepartment": "(sin departamento)",
+      "reason": {
+        "name_required": "Falta el nombre.",
+        "invalid_email": "El correo no tiene un formato válido.",
+        "invalid_role": "Rol no válido: «{value}». Use Colaborador, Líder o Supervisor.",
+        "department_not_found": "El departamento «{value}» no existe o no está activo en esta empresa.",
+        "already_user": "Ya existe una persona con este correo.",
+        "already_invited": "Este correo ya tiene una invitación pendiente.",
+        "repeated_in_file": "Este correo aparece más de una vez en el archivo.",
+        "department_inactive": "El departamento «{value}» existe, pero no está activo en esta empresa.",
+        "invalid_demographic": "Un dato demográfico no coincide con las opciones de su campo ({value})."
+      },
+      "problem": {
+        "no_people_sheet": "El libro no tiene la hoja «{value}». Use la plantilla descargada.",
+        "no_header": "No se encontró la fila de encabezados. La hoja necesita al menos las columnas «Nombre» y «Correo».",
+        "missing_column": "No se encontró la columna «{value}», así que a ninguna fila le llegará ese dato.",
+        "no_data_rows": "La hoja tiene encabezados, pero ninguna fila con datos.",
+        "no_email_column": "Ninguna columna contiene el correo. Marque una como «Correo» en el mapeo.",
+        "no_name_column": "Ninguna columna contiene el nombre. Marque una como «Nombre completo», o «Nombre» y «Apellidos», en el mapeo."
+      },
+      "notAWorkbook": "Este archivo no se pudo leer como un libro de Excel (.xlsx). Suba la plantilla completada.",
+      "emptyBody": "No hay filas que revisar. Complete al menos una fila de la plantilla y súbala de nuevo.",
+      "chooseFile": "Elegir archivo",
+      "noFileChosen": "Ningún archivo seleccionado",
+      "upload": {
+        "title": "Suba la planilla que ya tiene",
+        "body": "Una exportación de Recursos Humanos, una lista de Excel o un CSV, con el formato que ya tenga. La leemos, le mostramos cómo la entendimos y no se crea nada hasta que usted lo apruebe.",
+        "inputLabel": "Archivo de personas",
+        "choose": "Elegir archivo",
+        "dropHint": "o arrástrelo aquí",
+        "dropActive": "Suelte el archivo para leerlo",
+        "chosen": "Archivo elegido: {name}",
+        "formats": "Formatos admitidos: .xlsx y .csv",
+        "templatePrompt": "¿Prefiere empezar de cero?",
+        "templateAction": "Descargue la plantilla"
+      },
+      "progress": {
+        "title": "Entendiendo su archivo",
+        "applyingTitle": "Aplicando sus cambios",
+        "elapsed": "{seconds} s transcurridos",
+        "stage": {
+          "read": "Leyendo el archivo",
+          "detect": "Detectando columnas y valores",
+          "ai": "La IA interpreta la estructura",
+          "apply": "Aplicando el mapeo a cada fila"
+        },
+        "aiSkipped": "Plantilla reconocida: no hizo falta la IA",
+        "aiFailed": "La IA no pudo intervenir; se leyeron los encabezados",
+        "state": {
+          "pending": "pendiente",
+          "active": "en curso",
+          "done": "hecho",
+          "skipped": "omitido",
+          "failed": "no disponible"
+        }
+      },
+      "understand": {
+        "title": "Así entendimos su archivo",
+        "source": {
+          "ai": "Interpretado por IA",
+          "template": "Plantilla reconocida",
+          "heuristic": "Leído por encabezados",
+          "manual": "Mapeo ajustado por usted"
+        },
+        "noSummary": {
+          "template": "Es la plantilla de la plataforma: cada columna se leyó por su encabezado fijo.",
+          "heuristic": "Las columnas se asignaron por las palabras de sus encabezados.",
+          "manual": "Se aplicó al archivo el mapeo que usted ajustó, sin volver a consultar a la IA."
+        },
+        "facts": {
+          "file": "Archivo",
+          "sheet": "Hoja",
+          "people": "Personas",
+          "columns": "Columnas"
+        },
+        "sheetOf": "{sheet} (de {count} hojas)",
+        "namesNormalised": "Se normalizaron {count} nombre(s) escritos todo en mayúsculas o todo en minúsculas.",
+        "model": "{model} · {seconds} s",
+        "modelCached": "{model} · reutilizado (el mismo archivo se interpretó hace un momento)",
+        "tokens": "{input} tokens de entrada · {output} tokens de salida",
+        "privacyLead": "La IA solo vio la estructura del archivo.",
+        "privacyBody": "Ningún nombre ni correo completo salió de la plataforma: a la IA se le mostraron los encabezados, los valores de las categorías y muestras enmascaradas.",
+        "privacyShared": "Compartidas como valores",
+        "privacyMasked": "Solo muestras enmascaradas",
+        "privacyNone": "ninguna",
+        "fallbackTitle": {
+          "ai_unavailable": "La IA no está disponible en este momento",
+          "ai_failed": "La IA no pudo interpretar este archivo",
+          "ai_refused": "La IA no procesó este archivo",
+          "other": "La IA no intervino"
+        },
+        "fallbackBody": "Leímos las columnas por sus encabezados. Revise el mapeo de abajo antes de continuar.",
+        "continue": "Continuar a la revisión",
+        "apply": "Aplicar cambios",
+        "dirtyHint": "Aplique los cambios para ver su efecto antes de continuar.",
+        "noRows": "Con este mapeo no se obtiene ninguna persona. Ajuste las columnas o vuelva atrás y suba otro archivo."
+      },
+      "mapping": {
+        "columnsTitle": "Columnas",
+        "columnsNote": "Qué es cada columna de su archivo",
+        "fileColumn": "Columna del archivo",
+        "usedAs": "Se usa como",
+        "confidence": "Confianza",
+        "reason": "Motivo",
+        "columnRef": "Columna {letter}",
+        "emptyHeader": "(sin encabezado)",
+        "target": {
+          "name": "Nombre completo",
+          "first_name": "Nombre",
+          "last_name": "Apellidos",
+          "email": "Correo",
+          "role": "Rol",
+          "department": "Departamento",
+          "ignore": "Ignorar"
+        },
+        "demographicTarget": "Dato demográfico: {label}",
+        "rolesTitle": "Cargos → rol",
+        "rolesNote": "Cómo se traduce cada cargo del archivo",
+        "sourceValue": "Valor en el archivo",
+        "role": "Rol",
+        "departmentsTitle": "Áreas → departamento",
+        "departmentsNote": "A qué departamento va cada área del archivo",
+        "department": "Departamento",
+        "createDepartment": "Crear «{name}»",
+        "unassigned": "(sin asignar)",
+        "newChip": "Nuevo",
+        "demographicsTitle": "Valores de «{label}»",
+        "demographicsNote": "En qué opción se convierte cada respuesta del archivo",
+        "option": "Opción",
+        "noOption": "(sin valor)",
+        "confidenceLevel": {
+          "high": "Alta",
+          "medium": "Media",
+          "low": "Baja"
+        },
+        "edited": "Ajustado",
+        "lowConfidence": "{count} decisión(es) con confianza baja están resaltadas: revíselas primero.",
+        "settingsTitle": "Ajustes generales",
+        "nameOrder": "Orden del nombre completo",
+        "nameOrderValue": {
+          "first_last": "Nombre y luego apellidos",
+          "last_first": "Apellidos y luego nombre"
+        },
+        "defaultRole": "Rol cuando el archivo no lo indica"
+      },
+      "insight": {
+        "title": "Antes de aprobar",
+        "note": "Lo que conviene revisar",
+        "none": "No encontramos nada que requiera su atención.",
+        "rowsOne": "fila {rows}",
+        "rowsMany": "filas {rows}",
+        "rowsMore": "filas {rows} y {more} más",
+        "email_typo": "Correos con «@{value}», que parece un error de «@{suggestion}» ({rows}).",
+        "email_typoFixed": "Corregido: «@{value}» ahora es «@{suggestion}» ({rows}).",
+        "fix": "Corregir",
+        "invalid_email": "Correos con un formato no válido ({rows}).",
+        "missing_email": "Personas sin correo ({rows}): no se les podrá invitar.",
+        "missing_name": "Personas sin nombre ({rows}).",
+        "duplicate_in_file": "Correos repetidos en el archivo ({rows}).",
+        "outside_domain": "Correos de «@{value}», fuera del dominio de la empresa «@{suggestion}» ({rows}).",
+        "no_department": "Personas sin área ({rows}): entrarán sin departamento.",
+        "new_departmentOne": "Se creará el departamento «{value}» para 1 persona ({rows}).",
+        "new_departmentMany": "Se creará el departamento «{value}» para {count} personas ({rows}).",
+        "skipped_rowsOne": "Se omitió 1 fila que no describe a una persona ({rows}), por ejemplo un total al pie de la tabla.",
+        "skipped_rowsMany": "Se omitieron {count} filas que no describen a una persona ({rows}), por ejemplo totales al pie de la tabla."
+      },
+      "review": {
+        "demographics": "Datos demográficos",
+        "demographicChip": "{field}: {value}",
+        "newDepartmentOption": "{name} (nuevo)"
+      },
+      "done": {
+        "departmentsCreated": "Departamentos creados: {names}."
+      },
+      "error": {
+        "not_a_spreadsheet": "Este archivo no se pudo leer como hoja de cálculo. Si es un Excel antiguo (.xls), guárdelo como .xlsx o .csv y súbalo de nuevo.",
+        "empty_file": "El archivo no tiene filas. Revise que eligió el archivo correcto.",
+        "no_file": "No llegó ningún archivo. Elíjalo de nuevo.",
+        "bad_mapping": "No se pudo leer el mapeo ajustado. Vuelva atrás y suba el archivo de nuevo."
+      }
+    },
     "userManagement": "Gestión de Usuarios",
     "manageUsersDescription": "Administración integral de usuarios y gestión de roles",
     "addUser": "Agregar Usuario",
@@ -4567,7 +4781,7 @@
     "closeInvite": "Cerrar",
     "bulkImportDescription": "Pegue o cargue un CSV para invitar a muchas personas a la vez.",
     "next": {
-      "description": "Quién está en la empresa, en qué departamento y quién no ha entrado todavía. Para sumar personas se invita o se importa un CSV.",
+      "description": "Quién está en la empresa, en qué departamento y quién no ha entrado todavía. Para sumar personas se invita o se importa una planilla.",
       "bulkImport": "Importación masiva",
       "invite": "Invitar persona",
       "forbidden": "Esta página es de la administración de la empresa: tu rol no gestiona a sus personas.",
@@ -4674,7 +4888,7 @@
         "linkTitle": "Enlace compartible",
         "linkText": "Para cuando aún no tienes la dirección. Se acepta una sola vez y lleva el rol elegido.",
         "importTitle": "Importación masiva",
-        "importText": "Un CSV con nombre, correo, rol y departamento. Se revisa fila por fila antes de escribir nada.",
+        "importText": "La planilla que ya tenga, en Excel o CSV: la IA la interpreta y se revisa fila por fila antes de escribir nada.",
         "note": "Ninguna de las tres crea administradores: eso lo hace un super administrador."
       }
     }
