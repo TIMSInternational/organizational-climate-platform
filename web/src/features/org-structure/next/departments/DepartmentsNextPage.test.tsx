@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
+import { getResultBands } from '../../../result-bands/api'
 import { render, screen, waitFor, cleanup } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
@@ -199,5 +200,16 @@ describe('DepartmentsNextPage (/departments)', () => {
     expect(await screen.findByText(copy.notAllowedTitle)).toBeTruthy()
     expect(vi.mocked(listDepartments)).not.toHaveBeenCalled()
     expect(screen.queryByRole('link', { name: copy.importPeople })).toBeNull()
+  })
+
+  it('says so when the company’s scale cannot be read, and claims no observation it could not make', async () => {
+    vi.mocked(getResultBands).mockRejectedValueOnce(new Error('Request failed: 500'))
+    renderAs({ role: 'company_admin', companyId: 'c1' })
+    await screen.findByText('Operaciones', { selector: 'td' })
+    expect((await screen.findByRole('alert')).textContent).toContain(en.resultBands.loadError)
+    // No band is printed for a group, and a scored group's card says nothing rather than
+    // "no observations" — it was never judged.
+    expect(rowOf('Operaciones')!.querySelectorAll('td')[4].textContent).not.toContain('Critical')
+    expect(cardOf('Operaciones').textContent).not.toContain(en.departments.next.noteNone)
   })
 })

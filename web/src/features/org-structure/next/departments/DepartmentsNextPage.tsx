@@ -73,7 +73,8 @@ export default function DepartmentsNextPage() {
   // The bands colour one column of an org page, so they are an enrichment here, not the
   // page: until (or unless) they are read, a climate cell prints its figure and claims no
   // band — never the product default in the company's name.
-  const bands = useResultBands().bands
+  const bandsState = useResultBands()
+  const bands = bandsState.bands
   const header = { eyebrow: companyName, title: t('navigation.departments'), description: t(`${K}.description`, { threshold: ANONYMITY_FLOOR }) }
 
   if (scope.status === 'needs-selection') {
@@ -119,6 +120,8 @@ export default function DepartmentsNextPage() {
       companyName={companyName}
       model={state.model}
       bands={bands}
+      bandsFailed={bandsState.status === 'error'}
+      onRetryBands={bandsState.retry}
       onChanged={state.reload}
     />
   )
@@ -129,12 +132,17 @@ function DepartmentsView({
   companyName,
   model,
   bands,
+  bandsFailed,
+  onRetryBands,
   onChanged,
 }: {
   companyId: string
   companyName: string | null
   model: DepartmentsModel
   bands: ResultBands | null
+  /** The company's scale could not be read: said in words, never left to read as "nothing to observe". */
+  bandsFailed: boolean
+  onRetryBands: () => void
   onChanged: () => void
 }) {
   const { t, locale } = useTranslation()
@@ -194,6 +202,14 @@ function DepartmentsView({
           </>
         }
       />
+      {bandsFailed && (
+        <div role="alert" className="mb-3 flex flex-wrap items-center gap-3 text-sm text-chip-critical-ink">
+          <span>{t('resultBands.loadError')}</span>
+          <Button variant="outline" size="sm" onClick={onRetryBands}>
+            {t('common.retry')}
+          </Button>
+        </div>
+      )}
 
       {(creating || editing) && (
         <Card className="mb-6">
@@ -529,5 +545,8 @@ function CardNoteLine({
     )
   }
   if (note.kind === 'supervisor') return <span className={cn(base, 'text-fg-tertiary')}>{t(`${K}.noteSupervisor`, { names: note.names.join(', ') })}</span>
+  // Without the company's scale a scored group was never judged, so "nothing to observe"
+  // would be a claim the page cannot make: the line stays empty.
+  if (bands === null && row.climate.kind === 'score') return null
   return <span className={cn(base, 'text-fg-tertiary')}>{t(`${K}.noteNone`)}</span>
 }
