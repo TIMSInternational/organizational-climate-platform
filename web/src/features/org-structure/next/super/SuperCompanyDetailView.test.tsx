@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { render, screen, cleanup, waitFor } from '@testing-library/react'
+import { render, screen, cleanup, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import CompanyDetailPage from '../../pages/CompanyDetailPage'
@@ -35,6 +35,8 @@ const SETTINGS = {
   branding: { logoUrl: null, primaryColor: '#0d9488', secondaryColor: '#0f766e', fontFamily: 'Poppins', customCss: null },
 }
 
+const BANDS = { opportunityMin: 3, strengthMin: 4, criticalName: null, opportunityName: null, strengthName: null }
+
 function user(name: string, role: string) {
   return { id: name, email: `${name}@meridiano.test`, name, role, departmentId: null, isActive: true, lastLoginAt: null, createdAt: '2026-09-10T00:00:00Z' }
 }
@@ -47,7 +49,7 @@ interface Call {
 
 let calls: Call[] = []
 
-function serve({ settings = 'ok' as 'ok' | 'forbidden', openWave = false } = {}) {
+function serve({ settings = 'ok' as 'ok' | 'forbidden', openWave = false, bands = true } = {}) {
   calls = []
   vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
@@ -55,7 +57,11 @@ function serve({ settings = 'ok' as 'ok' | 'forbidden', openWave = false } = {})
     calls.push({ method, url, body: typeof init?.body === 'string' ? init.body : undefined })
     const ok = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: 200 }))
     if (url.includes(`/admin/companies/${C}/settings`)) {
-      return settings === 'ok' ? ok(SETTINGS) : Promise.resolve(new Response(JSON.stringify({ message: 'no' }), { status: 403 }))
+      if (settings !== 'ok') return Promise.resolve(new Response(JSON.stringify({ message: 'no' }), { status: 403 }))
+      // An API older than the bands sends none; a write answers with the scale it kept.
+      if (!bands) return ok(SETTINGS)
+      const sent = (typeof init?.body === 'string' ? JSON.parse(init.body) : {}) as { resultBands?: typeof BANDS }
+      return ok({ ...SETTINGS, resultBands: sent.resultBands ?? BANDS })
     }
     if (url.includes(`/admin/companies/${C}`)) return ok(DETAIL)
     if (url.includes('/admin/departments')) {
@@ -124,7 +130,7 @@ describe('SuperCompanyDetailView', () => {
     serve()
     renderPage()
     expect(await screen.findByRole('heading', { level: 1, name: copy.title })).toBeTruthy()
-    expect((screen.getByLabelText(new RegExp(`^${copy.company.name}`)) as HTMLInputElement).value).toBe('Grupo Meridiano S.A.')
+    expect((screen.getByLabelText(new RegExp(`^${copy.company.name}( \\*)?$`)) as HTMLInputElement).value).toBe('Grupo Meridiano S.A.')
     expect((screen.getByLabelText(new RegExp(`^${copy.surveys.language}`)) as HTMLSelectElement).value).toBe('es')
     expect((screen.getByLabelText(copy.surveys.retention) as HTMLInputElement).value).toBe('2555')
     // As wide as its digits (monospace), so the unit follows the value instead of the field's edge.
@@ -195,7 +201,7 @@ describe('SuperCompanyDetailView', () => {
   it('puts the form back on Discard, and offers no save for a retention it would refuse', async () => {
     serve()
     renderPage()
-    const name = await screen.findByLabelText(new RegExp(`^${copy.company.name}`))
+    const name = await screen.findByLabelText(new RegExp(`^${copy.company.name}( \\*)?$`))
     await userEvent.type(name, ' Holding')
     expect(screen.getByRole('button', { name: copy.save }).hasAttribute('disabled')).toBe(false)
     await userEvent.click(screen.getByRole('button', { name: copy.discard }))
@@ -225,5 +231,61 @@ describe('SuperCompanyDetailView Encuestas card', () => {
     renderPage()
     await screen.findByText(copy.onlyHereLead)
     expect(screen.queryByText(copy.surveys.aiInsights)).toBeNull()
+  })
+})
+
+describe('SuperCompanyDetailView Escala de resultados', () => {
+  const bandsCopy = en.resultBands.settings
+  const box = (name: string) => screen.getByLabelText(name) as HTMLInputElement
+
+  it('draws the company’s scale, read with its settings', async () => {
+    serve()
+    renderPage()
+    const card = (await screen.findByRole('heading', { name: bandsCopy.heading })).closest('section') as HTMLElement
+    expect(box(bandsCopy.nameLabel.replace('{colour}', 'red')).value).toBe(en.resultBands.name.critical)
+    expect(box(bandsCopy.fromLabel.replace('{band}', en.resultBands.name.opportunity)).value).toBe('3.00')
+    expect(box(bandsCopy.fromLabel.replace('{band}', en.resultBands.name.strength)).value).toBe('4.00')
+    expect(within(card).getByRole('status').textContent).toBe(bandsCopy.valid)
+  })
+
+  it('names a gap and holds Guardar cambios while the scale is not whole', async () => {
+    serve()
+    renderPage()
+    await screen.findByRole('heading', { name: bandsCopy.heading })
+    const from = box(bandsCopy.fromLabel.replace('{band}', en.resultBands.name.opportunity))
+    await userEvent.clear(from)
+    await userEvent.type(from, '3.10')
+    expect(screen.getByRole('alert').textContent).toContain(
+      bandsCopy.errorGap.replace('{from}', '2.99').replace('{to}', '3.10').replace('{example}', '3.05'),
+    )
+    expect(screen.getByRole('button', { name: copy.save }).hasAttribute('disabled')).toBe(true)
+    expect(writes()).toEqual([])
+  })
+
+  it('sends the whole scale to this company’s settings — the defaults as null — and nothing else', async () => {
+    serve()
+    renderPage()
+    await screen.findByRole('heading', { name: bandsCopy.heading })
+    const from = box(bandsCopy.fromLabel.replace('{band}', en.resultBands.name.opportunity))
+    await userEvent.clear(from)
+    await userEvent.type(from, '3.10')
+    const to = box(bandsCopy.toLabel.replace('{band}', en.resultBands.name.critical))
+    await userEvent.clear(to)
+    await userEvent.type(to, '3.09')
+    expect(screen.queryByRole('alert')).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: copy.save }))
+
+    await waitFor(() => expect(writes()).toHaveLength(1))
+    expect(writes()[0].url).toMatch(new RegExp(`/admin/companies/${C}/settings$`))
+    expect(JSON.parse(writes()[0].body ?? '')).toEqual({
+      resultBands: { opportunityMin: 3.1, strengthMin: 4, criticalName: null, opportunityName: null, strengthName: null },
+    })
+  })
+
+  it('draws no card when the settings carry no scale', async () => {
+    serve({ bands: false })
+    renderPage()
+    await screen.findByRole('heading', { level: 1, name: copy.title })
+    expect(screen.queryByRole('heading', { name: bandsCopy.heading })).toBeNull()
   })
 })
