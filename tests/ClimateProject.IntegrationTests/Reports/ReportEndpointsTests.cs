@@ -167,6 +167,36 @@ public class ReportEndpointsTests : IAsyncLifetime
     /// the aggregation's decoder drops it. Seeding it wrong is how a breakdown test comes
     /// back green over a survey that produced no breakdown at all.
     /// </param>
+    /// <summary>
+    /// A complete response that answered nothing and carries no department -- an anonymous
+    /// respondent who skipped every optional question. It counts toward the completed total
+    /// and moves no average, which is what a fixture needs to put five people outside its
+    /// disclosed segments (<c>SurveyAggregation.WithholdComplement</c>) without changing a
+    /// single reading it asserts.
+    /// </summary>
+    private Task SeedSilentResponseAsync(Guid surveyId)
+        => WithDbAsync(async db =>
+        {
+            db.Responses.Add(new Response
+            {
+                Id = Guid.NewGuid(),
+                SurveyId = surveyId,
+                CompanyId = _companyId,
+                UserId = null,
+                DepartmentId = null,
+                SessionId = Guid.NewGuid().ToString("N"),
+                Language = "en",
+                IsComplete = true,
+                IsAnonymous = true,
+                StartTime = DateTimeOffset.UtcNow.AddMinutes(-5),
+                CompletionTime = DateTimeOffset.UtcNow,
+                TotalTimeSeconds = 300,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        });
+
     private Task SeedAnswerAsync(
         Guid surveyId,
         Guid questionId,
@@ -294,6 +324,14 @@ public class ReportEndpointsTests : IAsyncLifetime
         await SeedAnswerAsync(survey.Id, questionId, salesId, "2");
         await SeedAnswerAsync(survey.Id, questionId, salesId, "2");
 
+        // Three who answered nothing and carry no department: with Sales's two, the people
+        // outside Engineering are five, so Engineering stays disclosed. Without them the
+        // company's 7 minus Engineering's 5 is Sales.
+        for (var i = 0; i < 3; i++)
+        {
+            await SeedSilentResponseAsync(survey.Id);
+        }
+
         var response = await client.PostAsJsonAsync("/admin/reports", new CreateReportRequest(
             "Q3 Climate Report", null, "climate_summary", _companyId, "pdf", null));
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -304,7 +342,7 @@ public class ReportEndpointsTests : IAsyncLifetime
         Assert.Equal(survey.Id, section.SurveyId);
         Assert.Equal("Q3 Climate", section.Title);
         Assert.False(section.IsSuppressed);
-        Assert.Equal(7, section.Participation.CompletedCount);
+        Assert.Equal(10, section.Participation.CompletedCount);
 
         // The same survey through the results screen's route. Agreement here is the
         // whole point of sharing the aggregation.
@@ -510,6 +548,8 @@ public class ReportEndpointsTests : IAsyncLifetime
         var newcomer = new Dictionary<string, string>(StringComparer.Ordinal) { ["tenure"] = "0-1" };
         for (var i = 0; i < 5; i++) await SeedAnswerAsync(survey.Id, questionId, engineeringId, "4", senior);
         for (var i = 0; i < 2; i++) await SeedAnswerAsync(survey.Id, questionId, engineeringId, "1", newcomer);
+        // Three who gave no tenure and answered nothing, so the people outside "2-5" are five.
+        for (var i = 0; i < 3; i++) await SeedSilentResponseAsync(survey.Id);
 
         var document = await GenerateAsync(client);
         var section = Assert.Single(document.Surveys);

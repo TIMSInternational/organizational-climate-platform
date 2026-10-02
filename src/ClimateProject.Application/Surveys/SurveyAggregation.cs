@@ -98,6 +98,7 @@ public static class SurveyAggregation
             DepartmentBreakdown(questions, completed, counted, departments),
         };
         breakdowns.AddRange(DemographicBreakdowns(questions, completed, counted));
+        breakdowns = [.. breakdowns.Select(breakdown => WithholdComplement(breakdown, completed.Count))];
 
         return new SurveyAggregate(
             summary,
@@ -697,6 +698,67 @@ public static class SurveyAggregation
                 suppressedRespondents,
                 completed.Count(r => !r.Demographics.ContainsKey(field)));
         }
+    }
+
+    /// <summary>
+    /// Secondary suppression: the floor applied to what a reader can SUBTRACT, not only to
+    /// what is printed.
+    /// </summary>
+    /// <remarks>
+    /// Every breakdown sits beside the whole survey's figures, so the people outside the
+    /// disclosed segments -- the withheld ones and the unsegmented ones together -- are
+    /// readable as a group: their count is the completed total minus the disclosed counts,
+    /// and their per-question means fall out of the survey's means the same way. When that
+    /// remainder is 1 to 4 people it is a segment under the floor in all but name. The TIMS
+    /// dry run measured it: femenino 6 disclosed, masculino 3 withheld, n = 9, and the
+    /// three men's mean on the first question came back as (3,22 x 9 - 3,00 x 6) / 3 =
+    /// 3,66 against a true 3,67. So the smallest disclosed segment is withheld too, and
+    /// again, until the remainder reaches the floor or nothing is disclosed. The team-vs-
+    /// company reading in <c>DashboardEndpoints.OrganizationClimate</c> already applies
+    /// this rule to its one subtraction; this applies it to every breakdown.
+    ///
+    /// A segment withheld here is indistinguishable from one withheld by the plain floor,
+    /// and its people are added to <see cref="SurveyBreakdown.SuppressedRespondentCount"/>,
+    /// so the totals still reconcile against the participation counters.
+    /// </remarks>
+    private static SurveyBreakdown WithholdComplement(SurveyBreakdown breakdown, int completedCount)
+    {
+        var segments = breakdown.Segments.ToList();
+        var suppressedSegments = breakdown.SuppressedSegmentCount;
+        var suppressedRespondents = breakdown.SuppressedRespondentCount;
+        var remainder = completedCount - segments.Where(s => !s.IsSuppressed).Sum(s => s.RespondentCount);
+
+        while (remainder > 0 && !SurveyResultsPrivacy.MeetsSegmentFloor(remainder))
+        {
+            var smallest = segments
+                .Select((segment, index) => (segment, index))
+                .Where(entry => !entry.segment.IsSuppressed)
+                .OrderBy(entry => entry.segment.RespondentCount)
+                .ThenBy(entry => entry.segment.Key, StringComparer.Ordinal)
+                .Select(entry => (int?)entry.index)
+                .FirstOrDefault();
+            if (smallest is not { } index) break;
+
+            var withheld = segments[index];
+            segments[index] = withheld with
+            {
+                RespondentCount = 0,
+                ParticipationRate = null,
+                Headcount = null,
+                IsSuppressed = true,
+                Questions = [],
+            };
+            suppressedSegments++;
+            suppressedRespondents += withheld.RespondentCount;
+            remainder += withheld.RespondentCount;
+        }
+
+        return breakdown with
+        {
+            Segments = segments,
+            SuppressedSegmentCount = suppressedSegments,
+            SuppressedRespondentCount = suppressedRespondents,
+        };
     }
 
     private static IReadOnlyList<SurveySegmentQuestionResult> SegmentQuestions(

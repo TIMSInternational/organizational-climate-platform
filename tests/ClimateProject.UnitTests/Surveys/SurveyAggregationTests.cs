@@ -383,7 +383,10 @@ public class SurveyAggregationTests
     {
         var question = Choice(options: [new AggregationOption(0, "remote", "Remote")]);
 
-        // Five in Sales (at the floor), two in Engineering (below it).
+        // Five in Sales (at the floor), two in Engineering (below it), and three with no
+        // department -- so the people outside Sales number five and Sales can be shown
+        // without its complement falling under the floor (see
+        // A_segment_whose_complement_is_under_the_floor_is_withheld_with_it).
         var responses = new List<AggregationResponse>
         {
             Response(ResponseId(1), departmentId: Sales),
@@ -393,6 +396,9 @@ public class SurveyAggregationTests
             Response(ResponseId(5), departmentId: Sales),
             Response(ResponseId(6), departmentId: Engineering),
             Response(ResponseId(7), departmentId: Engineering),
+            Response(ResponseId(8)),
+            Response(ResponseId(9)),
+            Response(ResponseId(10)),
         };
 
         var answers = responses
@@ -509,6 +515,11 @@ public class SurveyAggregationTests
             Response(ResponseId(4), demographics: Tenure("1-2")),
             Response(ResponseId(5), demographics: Tenure("1-2")),
             Response(ResponseId(6), demographics: Tenure("10+")),
+            // Four who gave no tenure, so the people outside "1-2" number five.
+            Response(ResponseId(7)),
+            Response(ResponseId(8)),
+            Response(ResponseId(9)),
+            Response(ResponseId(10)),
         };
 
         var aggregate = SurveyAggregation.Compute([], responses, [], [], null);
@@ -524,6 +535,75 @@ public class SurveyAggregationTests
 
         Assert.Equal(1, breakdown.SuppressedSegmentCount);
         Assert.Equal(1, breakdown.SuppressedRespondentCount);
+    }
+
+    /// <summary>
+    /// The TIMS dry run, as measured: femenino 6 disclosed beside masculino 3 withheld, in a
+    /// survey of 9. The survey's own means sit beside the breakdown, so the three men's
+    /// per-question mean was (3,22 x 9 - 3,00 x 6) / 3 = 3,66 against a true 3,67 -- a
+    /// withheld segment yielding a number by subtraction. Both go: with femenino withheld
+    /// too, nothing is left to subtract from.
+    ///
+    /// Mutation-proved: dropping the <c>WithholdComplement</c> pass fails this with
+    /// femenino disclosed.
+    /// </summary>
+    [Fact]
+    public void A_segment_whose_complement_is_under_the_floor_is_withheld_with_it()
+    {
+        static Dictionary<string, string> Gender(string value)
+            => new(StringComparer.Ordinal) { ["genero"] = JsonSerializer.Serialize(value) };
+
+        var question = Scale(QuestionId, 0, "leadership");
+        var responses = Enumerable.Range(1, 6).Select(n => Response(ResponseId(n), demographics: Gender("femenino")))
+            .Concat(Enumerable.Range(7, 3).Select(n => Response(ResponseId(n), demographics: Gender("masculino"))))
+            .ToList();
+        var answers = responses
+            .Select((r, i) => new AggregationAnswer(r.ResponseId, QuestionId, Stored(i < 6 ? "2" : "4"), null))
+            .ToList();
+
+        var aggregate = SurveyAggregation.Compute([question], responses, answers, [], null);
+        var breakdown = aggregate.Breakdowns.Single(b => b.Dimension == "genero");
+
+        Assert.All(breakdown.Segments, segment =>
+        {
+            Assert.True(segment.IsSuppressed);
+            Assert.Equal(0, segment.RespondentCount);
+            Assert.Empty(segment.Questions);
+        });
+        Assert.Equal(2, breakdown.SuppressedSegmentCount);
+        Assert.Equal(9, breakdown.SuppressedRespondentCount);
+        Assert.Equal(0, breakdown.UnsegmentedRespondentCount);
+        // The survey-level reading is not touched: it is a group of 9.
+        Assert.Equal(9, aggregate.Questions.Single().AnsweredCount);
+    }
+
+    /// <summary>
+    /// The secondary withholding takes the SMALLEST disclosed segment and stops as soon as
+    /// the people outside the disclosed segments reach the floor: one withheld segment of
+    /// 2 takes the 5 with it (2 + 5 = 7) and leaves the 6 and the 7 standing. Withholding
+    /// more than that deletes results nobody could have subtracted.
+    /// </summary>
+    [Fact]
+    public void The_secondary_withholding_stops_once_the_complement_reaches_the_floor()
+    {
+        static Dictionary<string, string> Site(string value)
+            => new(StringComparer.Ordinal) { ["site"] = JsonSerializer.Serialize(value) };
+
+        var sizes = new (string Site, int Count)[] { ("a", 5), ("b", 6), ("c", 7), ("d", 2) };
+        var n = 0;
+        var responses = sizes
+            .SelectMany(entry => Enumerable.Range(0, entry.Count).Select(_ => Response(ResponseId(++n), demographics: Site(entry.Site))))
+            .ToList();
+
+        var aggregate = SurveyAggregation.Compute([], responses, [], [], null);
+        var breakdown = aggregate.Breakdowns.Single(b => b.Dimension == "site");
+
+        Assert.True(breakdown.Segments.Single(s => s.Key == "d").IsSuppressed);
+        Assert.True(breakdown.Segments.Single(s => s.Key == "a").IsSuppressed);
+        Assert.Equal(6, breakdown.Segments.Single(s => s.Key == "b").RespondentCount);
+        Assert.Equal(7, breakdown.Segments.Single(s => s.Key == "c").RespondentCount);
+        Assert.Equal(2, breakdown.SuppressedSegmentCount);
+        Assert.Equal(7, breakdown.SuppressedRespondentCount);
     }
 
     /// <summary>

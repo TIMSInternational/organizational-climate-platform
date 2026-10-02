@@ -180,19 +180,25 @@ public class DepartmentDashboardFloorTests : IAsyncLifetime
         Assert.Equal<double?>(2.5, Score(organization.Dimensions, "workload"));
     }
 
+    /// <summary>
+    /// Engineering five, everyone else three: the company's reading and the team's, with both
+    /// counts, give the other three's reading by subtraction. This surface used to keep the
+    /// team's reading and withhold only the organisation side, but an administrator reads the
+    /// company's means on the results page, so the team's reading beside them still yielded
+    /// the three. Ruled 2026-10-02 after the TIMS dry run: one rule everywhere -- a segment
+    /// whose complement is 1 to 4 people is withheld on every surface
+    /// (<c>SurveyAggregation.WithholdComplement</c>), the leader's team included.
+    /// </summary>
     [Fact]
-    public async Task The_organisation_side_is_withheld_when_the_rest_of_the_company_is_under_the_floor()
+    public async Task A_team_is_withheld_whole_when_the_rest_of_the_company_is_under_the_floor()
     {
-        // Engineering five, everyone else three: the company's reading and the team's, with
-        // both counts, give the other three's reading by subtraction.
         await SeedScoredSurveyAsync("Q3", SurveyStatuses.Closed, DateTimeOffset.UtcNow.AddDays(-30), engineering: 5, sales: 3);
 
         var climate = (await ReadAsync(await LeaderAsync())).Climate!;
 
-        // The team's own reading is disclosed, so this passes because of the rest and not
-        // because the whole block was withheld.
-        Assert.False(climate.IsSuppressed);
-        Assert.Equal<double?>(4.0, Score(climate.Dimensions, "trust"));
+        Assert.True(climate.IsSuppressed);
+        Assert.Equal(0, climate.RespondentCount);
+        Assert.All(climate.Dimensions, d => Assert.Null(d.AverageScore));
         Assert.Null(climate.Organization);
     }
 

@@ -21,8 +21,8 @@ namespace ClimateProject.IntegrationTests.Dashboard;
 /// <para>
 /// The fixture is built so that every wrong answer is a <em>different number</em> rather
 /// than an absent one. The tenant under test holds three closed-or-open surveys whose
-/// response profiles disagree on purpose — the latest closed one has 14 completed answers
-/// across three departments, the older closed one has 6 across one, the still-open one has
+/// response profiles disagree on purpose — the latest closed one has 15 completed answers,
+/// 14 of them across three departments, the older closed one has 6 across one, the still-open one has
 /// 7 across one — so picking the wrong survey cannot coincidentally produce the right body.
 /// A second tenant closes a survey <em>more recently</em> than any of them, which is the
 /// row a query missing its company predicate would return.
@@ -51,8 +51,8 @@ public class EmployeeLastOutcomeEndpointTests : IAsyncLifetime
     /// <summary>Completed responses from the department that stays below the floor.</summary>
     private const int ProtectedDepartmentRespondents = 4;
 
-    /// <summary>Completed responses to the latest closed survey: 5 + 5 + 4, across three departments.</summary>
-    private const int LatestClosedResponseCount = 14;
+    /// <summary>Completed responses to the latest closed survey: 5 + 5 + 4 across three departments, and 1 with none.</summary>
+    private const int LatestClosedResponseCount = 15;
 
     private string EngineeringName => $"Engineering-{_token}";
     private string OperationsName => $"Operations-{_token}";
@@ -142,6 +142,11 @@ public class EmployeeLastOutcomeEndpointTests : IAsyncLifetime
         await SeedResponsesAsync(
             db, _latestClosedSurveyId, companyA.Id, finance.Id, ProtectedDepartmentRespondents, isComplete: true);
         await SeedResponsesAsync(db, _latestClosedSurveyId, companyA.Id, engineering.Id, 1, isComplete: false);
+        // And one complete response with no department (an anonymous one whose department was
+        // stripped at write time): with Finance's four it makes the people outside the two
+        // disclosed departments five, so neither is withheld for what a subtraction from the
+        // company's total would reveal (SurveyAggregation.WithholdComplement).
+        await SeedResponsesAsync(db, _latestClosedSurveyId, companyA.Id, null, 1, isComplete: true);
 
         // Deliberately different profiles, so a wrong survey yields a wrong number.
         await SeedResponsesAsync(db, _olderClosedSurveyId, companyA.Id, engineering.Id, 6, isComplete: true);
@@ -219,7 +224,7 @@ public class EmployeeLastOutcomeEndpointTests : IAsyncLifetime
     }
 
     private static async Task SeedResponsesAsync(
-        ClimateProjectDbContext db, Guid surveyId, Guid companyId, Guid departmentId, int count, bool isComplete)
+        ClimateProjectDbContext db, Guid surveyId, Guid companyId, Guid? departmentId, int count, bool isComplete)
     {
         var now = DateTimeOffset.UtcNow;
         for (var i = 0; i < count; i++)
@@ -433,7 +438,7 @@ public class EmployeeLastOutcomeEndpointTests : IAsyncLifetime
         Assert.DoesNotContain(_protectedDepartmentId.ToString(), raw, StringComparison.OrdinalIgnoreCase);
 
         // Not its size either. 4 is the number that would single it out; the body's real
-        // figures are 14 / 3 / 1 / 5 / 3.
+        // figures are 15 / 3 / 1 / 5 / 3.
         var document = JsonDocument.Parse(raw);
         Assert.DoesNotContain(ProtectedDepartmentRespondents, Numbers(document.RootElement));
 

@@ -405,7 +405,7 @@ public class ReportRendererTests
         var completed = Cell(rows, ReportRenderer.SurveySection, "completed_count", "value", healthy);
         var engineering = Cell(rows, ReportRenderer.DepartmentSection, Engineering.ToString(), "respondent_count");
 
-        Assert.Equal("9", completed);
+        Assert.Equal("12", completed);
         Assert.Equal("6", engineering);
 
         // Drawn as cells, not inferred from the bytes.
@@ -433,13 +433,13 @@ public class ReportRendererTests
         Assert.Contains("Reservado", spanish, StringComparison.Ordinal);
         Assert.Contains("Withheld", english, StringComparison.Ordinal);
 
-        // And the decimal separator with it: 9 of 13 invited is 69.23, a rate with decimals,
-        // which is what makes the separator observable at all -- 9 of 12 is exactly 75 and
+        // And the decimal separator with it: 12 of 17 invited is 70.59, a rate with decimals,
+        // which is what makes the separator observable at all -- 12 of 16 is exactly 75 and
         // would prove nothing. A Spanish report writing 69.23 is as wrong as an English one
         // writing 69,23, and it is decided in ReportRenderCopy rather than by the host's ICU.
-        Assert.Contains("69,23 %", spanish, StringComparison.Ordinal);
-        Assert.Contains("69.23 %", english, StringComparison.Ordinal);
-        Assert.DoesNotContain("69.23", spanish, StringComparison.Ordinal);
+        Assert.Contains("70,59 %", spanish, StringComparison.Ordinal);
+        Assert.Contains("70.59 %", english, StringComparison.Ordinal);
+        Assert.DoesNotContain("70.59", spanish, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -604,9 +604,13 @@ public class ReportRendererTests
                     "Clima anual",
                     SurveyStatuses.Active,
                     healthyLocale,
+                    // 6 + 3 by department and 7 + 2 by nationality, plus three who carry
+                        // neither: so the people outside Engineering, and outside
+                        // Costarricense, are at least five and neither is withheld for
+                        // what a subtraction would reveal (SurveyAggregation.WithholdComplement).
                     Aggregate(
-                        respondentCount: 9,
-                        invited: 13,
+                        respondentCount: 12,
+                        invited: 17,
                         departments: [(Engineering, "Ingeniería", 20, 6), (Direction, "Dirección", 4, 3)],
                         demographics: [("nationality", "Costarricense", 7), ("nationality", "Venezolana", 2)])),
                 // A second measurable survey, so "one row per question per survey" is a claim

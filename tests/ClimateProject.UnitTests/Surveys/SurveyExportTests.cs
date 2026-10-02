@@ -101,7 +101,9 @@ public class SurveyExportTests
     public async Task A_segment_below_the_floor_is_neither_answered_for_nor_named()
     {
         var context = Context(Aggregate(
-            respondentCount: 9,
+            // 6 + 3 + 2 with no department: the 5 outside Engineering keep it disclosable
+            // (SurveyAggregation.WithholdComplement).
+            respondentCount: 11,
             departments: [(Engineering, "Ingeniería", 20, 6), (Direction, "Dirección", 4, 3)]));
 
         var rows = await CsvRowsAsync(context);
@@ -149,7 +151,9 @@ public class SurveyExportTests
     public async Task A_demographic_value_below_the_floor_never_reaches_the_file()
     {
         var context = Context(Aggregate(
-            respondentCount: 12,
+            // Three who gave no nationality, so the 5 outside Costarricense keep it
+            // disclosable (SurveyAggregation.WithholdComplement).
+            respondentCount: 15,
             demographics:
             [
                 ("nationality", "Costarricense", 10),
@@ -242,7 +246,9 @@ public class SurveyExportTests
     public async Task A_segments_per_question_rows_name_which_question_they_are_about()
     {
         var rows = await CsvRowsAsync(Context(Aggregate(
-            respondentCount: 9,
+            // 6 + 3 + 2 with no department: the 5 outside Engineering keep it disclosable
+            // (SurveyAggregation.WithholdComplement).
+            respondentCount: 11,
             departments: [(Engineering, "Ingeniería", 20, 6), (Direction, "Dirección", 4, 3)],
             openText: true)));
 
@@ -315,7 +321,9 @@ public class SurveyExportTests
         // exporter never trips it -- across every section, including the ones a small fixture
         // would not reach.
         var bytes = await CsvBytesAsync(Context(Aggregate(
-            respondentCount: 9,
+            // 6 + 3 + 2 with no department: the 5 outside Engineering keep it disclosable
+            // (SurveyAggregation.WithholdComplement).
+            respondentCount: 11,
             departments: [(Engineering, "Ingeniería", 20, 6), (Direction, "Dirección", 4, 3)],
             openText: true)));
 
@@ -358,7 +366,9 @@ public class SurveyExportTests
         // documents. Held separately from the CSV's test because a filter dropped from either
         // projection has to fail on its own.
         var document = SurveyExport.BuildPdf(Context(Aggregate(
-            respondentCount: 9,
+            // 6 + 3 + 2 with no department: the 5 outside Engineering keep it disclosable
+            // (SurveyAggregation.WithholdComplement).
+            respondentCount: 11,
             departments: [(Engineering, "Ingeniería", 20, 6), (Direction, "Dirección", 4, 3)])));
 
         var drawn = DrawnText(document);
@@ -409,7 +419,9 @@ public class SurveyExportTests
         // the failure that makes an export untrustworthy, and it is only impossible if
         // something asserts it.
         var context = Context(Aggregate(
-            respondentCount: 9,
+            // 6 + 3 + 2 with no department: the 5 outside Engineering keep it disclosable
+            // (SurveyAggregation.WithholdComplement).
+            respondentCount: 11,
             departments: [(Engineering, "Ingeniería", 20, 6), (Direction, "Dirección", 4, 3)]));
 
         var rows = await CsvRowsAsync(context);
@@ -418,7 +430,7 @@ public class SurveyExportTests
         var completed = Summary(rows, "completed_count");
         var engineeringRespondents = SegmentMetric(rows, $"department:{Engineering}", "respondent_count");
 
-        Assert.Equal("9", completed);
+        Assert.Equal("11", completed);
         Assert.Equal("6", engineeringRespondents);
 
         // Both figures appear in the document, drawn as text rather than inferred.
