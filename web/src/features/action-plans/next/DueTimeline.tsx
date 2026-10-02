@@ -85,6 +85,10 @@ export default function DueTimeline({
   const xs = timeline.points.map((point) => xOf(point.position))
   const slots = timelineLabelSlots(xs, axisStart, axisEnd, width)
   const todayLabel = calendarDay(Date.parse(asOf), locale)
+  // A plan due today, or past due (`dueTimeline` pins those to today's mark), draws its own
+  // date and name exactly where today's would go; printing both overprints them. Its red dot
+  // then marks the spot, and the table below says "vence hoy" or "vencido" in words.
+  const planOnToday = timeline.points.some((point) => point.position === 0)
   const svgAnchor = (anchor: TimelineAnchor) => anchor
 
   return (
@@ -109,12 +113,16 @@ export default function DueTimeline({
           />
         )}
         <circle cx={axisStart} cy={AXIS_Y} r={5} className="fill-fg-primary stroke-surface-card" strokeWidth={2} />
-        <text x={axisStart} y={46} fontSize={11} textAnchor="middle" className="fill-fg-primary font-mono" fontWeight={600}>
-          {todayLabel}
-        </text>
-        <text x={axisStart} y={60} fontSize={10} textAnchor="middle" className="fill-accent-red">
-          {t('actionPlans.next.timelineToday')}
-        </text>
+        {!planOnToday && (
+          <>
+            <text x={axisStart} y={46} fontSize={11} textAnchor="middle" className="fill-fg-primary font-mono" fontWeight={600}>
+              {todayLabel}
+            </text>
+            <text x={axisStart} y={60} fontSize={10} textAnchor="middle" className="fill-accent-red" data-slot="due-timeline-today">
+              {t('actionPlans.next.timelineToday')}
+            </text>
+          </>
+        )}
         {timeline.points.map((point, index) => (
           <g key={point.id} data-urgent={point.urgent ? 'true' : 'false'}>
             <circle

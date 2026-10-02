@@ -3356,9 +3356,9 @@
         "import": {
           "heading": "Bulk import",
           "meta": "preview before importing",
-          "text": "Columns: name, email, role, department. The preview shows row by row what would go in and what would not; nothing is written until you confirm.",
-          "choose": "Choose file",
-          "format": ".csv · one row per person"
+          "text": "Download this company's template, fill it in and upload it. The review shows row by row what would go in and what would not; nothing is written until you confirm.",
+          "choose": "Import from Excel",
+          "format": ".xlsx · one row per person"
         },
         "loadFailed": "The list of people could not be read",
         "roles": {
@@ -4090,6 +4090,7 @@
           "en": "English"
         },
         "countUsed": "{count} questions · used {used} times",
+        "countUsedOnce": "{count} questions · used once",
         "use": "Use template",
         "questions": "Questions",
         "firstIn": "First in",
@@ -4462,6 +4463,219 @@
     }
   },
   "users": {
+    "intake": {
+      "step": {
+        "template": "{n}. Template",
+        "review": "{n}. Review",
+        "done": "{n}. Done",
+        "upload": "{n}. Upload",
+        "understand": "{n}. Understand"
+      },
+      "templateBody": "Download the workbook, fill in one row per person, and upload it here. The Role and Department columns are dropdowns of this company's own values, so there is nothing to spell.",
+      "downloadTemplate": "Download template",
+      "uploadLabel": "Upload the completed workbook",
+      "templateFileName": "people-template.xlsx",
+      "reviewBody": "{count} row(s) were read. Correct anything wrong here, then validate.",
+      "validate": "Validate",
+      "approve": "Create invitations",
+      "removeRow": "Remove",
+      "roleMissing": "(no role)",
+      "role": {
+        "employee": "Employee",
+        "leader": "Leader",
+        "supervisor": "Supervisor"
+      },
+      "rowStatus": {
+        "valid": "Valid",
+        "duplicate": "Duplicate",
+        "error": "Error",
+        "invited": "Invited"
+      },
+      "validateFirst": "Validate the rows before creating invitations.",
+      "fixBeforeApproving": "Fix the rows marked with an error, then validate again.",
+      "doneBody": "An invitation was created for each person. On accepting it, each one sets their own name and password.",
+      "startOver": "Import another file",
+      "noDepartment": "(no department)",
+      "reason": {
+        "name_required": "The name is missing.",
+        "invalid_email": "The email is not in a valid format.",
+        "invalid_role": "Invalid role: “{value}”. Use Employee, Leader or Supervisor.",
+        "department_not_found": "The department “{value}” does not exist or is not active in this company.",
+        "already_user": "A person with this email already exists.",
+        "already_invited": "This email already holds a pending invitation.",
+        "repeated_in_file": "This email appears more than once in the file.",
+        "department_inactive": "The department “{value}” exists but is not active in this company.",
+        "invalid_demographic": "A demographic value does not match its field's options ({value})."
+      },
+      "problem": {
+        "no_people_sheet": "The workbook has no “{value}” sheet. Use the downloaded template.",
+        "no_header": "No header row was found. The sheet needs at least the “Nombre” and “Correo” columns.",
+        "missing_column": "No “{value}” column was found, so no row will carry that value.",
+        "no_data_rows": "The sheet has headers but no rows with data.",
+        "no_email_column": "No column holds the email address. Mark one as “Email” in the mapping.",
+        "no_name_column": "No column holds the name. Mark one as “Full name”, or “First name” and “Last names”, in the mapping."
+      },
+      "notAWorkbook": "This file could not be read as an Excel workbook (.xlsx). Upload the completed template.",
+      "emptyBody": "There are no rows to review. Fill in at least one row of the template and upload it again.",
+      "chooseFile": "Choose file",
+      "noFileChosen": "No file chosen",
+      "upload": {
+        "title": "Upload the spreadsheet you already have",
+        "body": "An HR export, an Excel list or a CSV, in whatever layout it already has. We read it, show you how we understood it, and nothing is created until you approve it.",
+        "inputLabel": "People file",
+        "choose": "Choose file",
+        "dropHint": "or drag it here",
+        "dropActive": "Drop the file to read it",
+        "chosen": "Chosen file: {name}",
+        "formats": "Accepted formats: .xlsx and .csv",
+        "templatePrompt": "Would you rather start from scratch?",
+        "templateAction": "Download the template"
+      },
+      "progress": {
+        "title": "Understanding your file",
+        "applyingTitle": "Applying your changes",
+        "elapsed": "{seconds} s elapsed",
+        "stage": {
+          "read": "Reading the file",
+          "detect": "Detecting columns and values",
+          "ai": "The AI interprets the structure",
+          "apply": "Applying the mapping to every row"
+        },
+        "aiSkipped": "Template recognised: the AI was not needed",
+        "aiFailed": "The AI could not take part; the headers were read instead",
+        "state": {
+          "pending": "pending",
+          "active": "in progress",
+          "done": "done",
+          "skipped": "skipped",
+          "failed": "not available"
+        }
+      },
+      "understand": {
+        "title": "How we understood your file",
+        "source": {
+          "ai": "Interpreted by AI",
+          "template": "Template recognised",
+          "heuristic": "Read by headers",
+          "manual": "Mapping adjusted by you"
+        },
+        "noSummary": {
+          "template": "This is the platform's own template: every column was read by its fixed header.",
+          "heuristic": "The columns were assigned by the words in their headers.",
+          "manual": "Your adjusted mapping was applied to the file, without asking the AI again."
+        },
+        "facts": {
+          "file": "File",
+          "sheet": "Sheet",
+          "people": "People",
+          "columns": "Columns"
+        },
+        "sheetOf": "{sheet} (of {count} sheets)",
+        "namesNormalised": "{count} name(s) written in all capitals or all lower case were normalised.",
+        "model": "{model} · {seconds} s",
+        "modelCached": "{model} · reused (the same file was interpreted moments ago)",
+        "tokens": "{input} input tokens · {output} output tokens",
+        "privacyLead": "The AI only saw the structure of the file.",
+        "privacyBody": "No full name or email left the platform: the AI was shown the headers, the category values and masked samples.",
+        "privacyShared": "Shared as values",
+        "privacyMasked": "Masked samples only",
+        "privacyNone": "none",
+        "fallbackTitle": {
+          "ai_unavailable": "The AI is not available right now",
+          "ai_failed": "The AI could not interpret this file",
+          "ai_refused": "The AI did not process this file",
+          "other": "The AI did not take part"
+        },
+        "fallbackBody": "We read the columns by their headers. Check the mapping below before you continue.",
+        "continue": "Continue to review",
+        "apply": "Apply changes",
+        "dirtyHint": "Apply your changes to see their effect before you continue.",
+        "noRows": "This mapping yields nobody. Adjust the columns, or go back and upload another file."
+      },
+      "mapping": {
+        "columnsTitle": "Columns",
+        "columnsNote": "What each column of your file is",
+        "fileColumn": "File column",
+        "usedAs": "Used as",
+        "confidence": "Confidence",
+        "reason": "Reason",
+        "columnRef": "Column {letter}",
+        "emptyHeader": "(no header)",
+        "target": {
+          "name": "Full name",
+          "first_name": "First name",
+          "last_name": "Last names",
+          "email": "Email",
+          "role": "Role",
+          "department": "Department",
+          "ignore": "Ignore"
+        },
+        "demographicTarget": "Demographic: {label}",
+        "rolesTitle": "Job titles → role",
+        "rolesNote": "How each job title in the file translates",
+        "sourceValue": "Value in the file",
+        "role": "Role",
+        "departmentsTitle": "Areas → department",
+        "departmentsNote": "Where each area in the file goes",
+        "department": "Department",
+        "createDepartment": "Create “{name}”",
+        "unassigned": "(unassigned)",
+        "newChip": "New",
+        "demographicsTitle": "Values of “{label}”",
+        "demographicsNote": "Which option each answer in the file becomes",
+        "option": "Option",
+        "noOption": "(no value)",
+        "confidenceLevel": {
+          "high": "High",
+          "medium": "Medium",
+          "low": "Low"
+        },
+        "edited": "Adjusted",
+        "lowConfidence": "{count} low-confidence decision(s) are highlighted: check them first.",
+        "settingsTitle": "General settings",
+        "nameOrder": "Order of the full name",
+        "nameOrderValue": {
+          "first_last": "First name, then last names",
+          "last_first": "Last names, then first name"
+        },
+        "defaultRole": "Role when the file does not say"
+      },
+      "insight": {
+        "title": "Before approving",
+        "note": "What is worth a look",
+        "none": "We found nothing that needs your attention.",
+        "rowsOne": "row {rows}",
+        "rowsMany": "rows {rows}",
+        "rowsMore": "rows {rows} and {more} more",
+        "email_typo": "Emails at “@{value}”, which looks like a typo for “@{suggestion}” ({rows}).",
+        "email_typoFixed": "Corrected: “@{value}” is now “@{suggestion}” ({rows}).",
+        "fix": "Correct",
+        "invalid_email": "Emails that are not in a valid format ({rows}).",
+        "missing_email": "People with no email ({rows}): they cannot be invited.",
+        "missing_name": "People with no name ({rows}).",
+        "duplicate_in_file": "Emails repeated in the file ({rows}).",
+        "outside_domain": "Emails at “@{value}”, outside the company's domain “@{suggestion}” ({rows}).",
+        "no_department": "People with no area ({rows}): they will join with no department.",
+        "new_departmentOne": "The department “{value}” will be created for 1 person ({rows}).",
+        "new_departmentMany": "The department “{value}” will be created for {count} people ({rows}).",
+        "skipped_rowsOne": "1 row that describes no person was skipped ({rows}), such as a total at the foot of the table.",
+        "skipped_rowsMany": "{count} rows that describe no person were skipped ({rows}), such as totals at the foot of the table."
+      },
+      "review": {
+        "demographics": "Demographics",
+        "demographicChip": "{field}: {value}",
+        "newDepartmentOption": "{name} (new)"
+      },
+      "done": {
+        "departmentsCreated": "Departments created: {names}."
+      },
+      "error": {
+        "not_a_spreadsheet": "This file could not be read as a spreadsheet. If it is an old Excel file (.xls), save it as .xlsx or .csv and upload it again.",
+        "empty_file": "The file has no rows. Check that you chose the right file.",
+        "no_file": "No file arrived. Choose it again.",
+        "bad_mapping": "The adjusted mapping could not be read. Go back and upload the file again."
+      }
+    },
     "userManagement": "User Management",
     "manageUsersDescription": "Comprehensive user administration and role management",
     "addUser": "Add User",
@@ -4567,7 +4781,7 @@
     "closeInvite": "Close",
     "bulkImportDescription": "Paste or upload a CSV to invite many people at once.",
     "next": {
-      "description": "Who is in the company, in which department, and who has not signed in yet. To add people, invite them or import a CSV.",
+      "description": "Who is in the company, in which department, and who has not signed in yet. To add people, invite them or import a spreadsheet.",
       "bulkImport": "Bulk import",
       "invite": "Invite someone",
       "forbidden": "This page belongs to the company's administration: your role does not manage its people.",
@@ -4674,7 +4888,7 @@
         "linkTitle": "Shareable link",
         "linkText": "For when you do not have the address yet. It is accepted once and carries the chosen role.",
         "importTitle": "Bulk import",
-        "importText": "A CSV with name, email, role and department. It is checked row by row before anything is written.",
+        "importText": "The spreadsheet you already have, Excel or CSV: the AI reads it and it is checked row by row before anything is written.",
         "note": "None of the three creates administrators: a super administrator does that."
       }
     }

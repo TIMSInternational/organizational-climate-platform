@@ -7,7 +7,16 @@ export interface BulkImportRowResult {
   role: string
   department: string | null
   status: string
+  /** English sentences, one per reason. The screen prefers `issues`, which it can translate. */
   errors: string[]
+  /** The same reasons as stable codes, in the same order as `errors`. */
+  issues?: BulkImportIssue[]
+}
+
+export interface BulkImportIssue {
+  code: string
+  /** What the reason is about, when it is about something: the role or department named. */
+  value?: string | null
 }
 
 export interface BulkImportResponse {
