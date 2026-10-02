@@ -176,7 +176,10 @@ public class CompanySettingsEndpointTests : IAsyncLifetime
 
     [Theory]
     [MemberData(nameof(RefusedScales))]
-    public async Task A_scale_with_a_gap_overlap_or_out_of_range_boundary_is_refused_and_nothing_is_saved(decimal opportunityMin, decimal strengthMin)
+    // No case here is a gap: the API stores two boundaries, so a gap cannot be expressed on
+    // the wire at all. What it can be sent is an empty or inverted area, a boundary off the
+    // scale, or a third decimal — each refused, with nothing of the request saved.
+    public async Task An_empty_inverted_or_out_of_range_scale_is_refused_and_nothing_is_saved(decimal opportunityMin, decimal strengthMin)
     {
         var client = _factory.CreateClient();
         var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);

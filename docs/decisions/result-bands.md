@@ -59,8 +59,8 @@ A gap cannot be stored at all: there is no field that could hold one (`ResultBan
 
 The settings PUT validates the scale before it writes anything, so a refused scale saves
 nothing (`CompanyEndpoints.cs:230-241`). The integration test
-`A_scale_with_a_gap_overlap_or_out_of_range_boundary_is_refused_and_nothing_is_saved` pins
-this (`CompanySettingsEndpointTests.cs:167-179`).
+`An_empty_inverted_or_out_of_range_scale_is_refused_and_nothing_is_saved` pins
+this (`CompanySettingsEndpointTests.cs:167-200`).
 
 Every member of the company can read the scale. Another tenant cannot
 (`GET /admin/companies/{id}/result-bands`, `CompanyEndpoints.cs:21`, `:271`).
