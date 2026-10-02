@@ -1361,7 +1361,9 @@ function Submitted({
             </span>
           </AlertTitle>
           <AlertDescription>
-            {t('suppressedBody', { fields: result.suppressedDemographics.join(', ') })}
+            {t('suppressedBody', {
+              fields: (result.suppressedDemographicLabels ?? result.suppressedDemographics).join(', '),
+            })}
           </AlertDescription>
         </Alert>
       )}

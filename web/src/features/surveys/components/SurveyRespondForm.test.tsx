@@ -105,6 +105,7 @@ interface SubmissionOverrides {
   questionCount?: number
   alreadySubmitted?: boolean
   suppressedDemographics?: string[]
+  suppressedDemographicLabels?: string[]
 }
 
 function respondWith(payload: SurveyRespondView, submission: SubmissionOverrides = {}) {
@@ -122,6 +123,9 @@ function respondWith(payload: SurveyRespondView, submission: SubmissionOverrides
             answeredQuestionCount: submission.answeredQuestionCount ?? 1,
             questionCount: submission.questionCount ?? payload.questions.length,
             suppressedDemographics: submission.suppressedDemographics ?? [],
+            ...(submission.suppressedDemographicLabels && {
+              suppressedDemographicLabels: submission.suppressedDemographicLabels,
+            }),
           }),
           { status: 201 },
         ),
@@ -1009,5 +1013,19 @@ describe('SurveyRespondForm confirmation', () => {
     // Named in the suppression notice specifically — "departamento" also appears in
     // the what-happens-now row about where results go.
     expect(screen.getByText(/no se guardaron con ella deliberadamente: departamento/)).toBeTruthy()
+  })
+
+  /**
+   * The TIMS dry run: every respondent read "edad, tiempo_de_laborar_en_tims_anos". The
+   * labels the API now sends beside the keys are what is printed; the keys are only the
+   * fallback for an API that does not send them yet.
+   */
+  it('names a suppressed demographic by its label, never its key, when the API sends one', async () => {
+    await submitOnce({
+      suppressedDemographics: ['edad', 'tiempo_de_laborar_en_tims_anos'],
+      suppressedDemographicLabels: ['Edad', 'Tiempo de laborar en TIMS (años)'],
+    })
+    expect(screen.getByText(/deliberadamente: Edad, Tiempo de laborar en TIMS \(años\)/)).toBeTruthy()
+    expect(screen.queryByText(/tiempo_de_laborar_en_tims_anos/)).toBeNull()
   })
 })

@@ -836,6 +836,38 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
         Assert.Equal("\"10_plus_years\"", demographic.Value);
     }
 
+    /// <summary>
+    /// The TIMS dry run: the confirmation screen told every respondent that
+    /// "edad, tiempo_de_laborar_en_tims_anos" were not recorded -- the keys, because the keys
+    /// were all the result carried. It now carries each field's label beside it, in the
+    /// response's language, and the key only where the field has no label at all.
+    /// </summary>
+    [Fact]
+    public async Task A_suppressed_demographic_is_named_by_its_label_not_its_key()
+    {
+        var survey = await ActiveSurveyAsync(settings: new SurveySettingsInput(Anonymous: true));
+        var (employee, userId) = await EmployeeWithIdAsync(_departmentId);
+        await SeedDemographicAsync(userId, "tiempo_de_laborar_en_tims_anos", "10_plus_years");
+        await _harness.WithDbAsync(async db =>
+        {
+            var field = await db.DemographicFields.SingleAsync(
+                f => f.CompanyId == _companyId && f.Field == "tiempo_de_laborar_en_tims_anos");
+            field.LabelEs = "Tiempo de laborar en TIMS (años)";
+            field.LabelEn = "Years at TIMS";
+            await db.SaveChangesAsync();
+        });
+
+        var http = await SubmitAsync(employee, survey.Id, new SubmitSurveyResponseRequest(
+            Answers: [new SurveyAnswerInput(survey.Questions[0].Id, "remote")],
+            SessionId: Guid.NewGuid().ToString("N")));
+        http.EnsureSuccessStatusCode();
+        var result = (await http.Content.ReadFromJsonAsync<SurveySubmissionResult>())!;
+
+        Assert.Equal(["tiempo_de_laborar_en_tims_anos"], result.SuppressedDemographics);
+        var expected = result.Language == ContentLanguages.Spanish ? "Tiempo de laborar en TIMS (años)" : "Years at TIMS";
+        Assert.Equal([expected], result.SuppressedDemographicLabels);
+    }
+
     [Fact]
     public async Task An_anonymous_response_suppresses_a_demographic_that_would_identify_the_respondent()
     {

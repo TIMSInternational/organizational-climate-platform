@@ -150,6 +150,13 @@ export interface SurveySubmissionResult {
    * silently — the respondent is entitled to know what was and was not kept.
    */
   suppressedDemographics: string[]
+  /**
+   * The same fields as the respondent should read them — each field's label in the
+   * response's language. Absent from an API older than the field, so the screen falls
+   * back to the keys; on the TIMS dry run the keys were all it had, and every respondent
+   * read `tiempo_de_laborar_en_tims_anos`.
+   */
+  suppressedDemographicLabels?: string[]
 }
 
 /**
