@@ -5,6 +5,7 @@
  *   node scripts/import-climate-workbook.mjs --file <workbook.xlsx>
  *        (--company-id <guid> | --company-name "Name" --domain example.com [--country "Costa Rica"])
  *        [--api http://127.0.0.1:5080] [--email E --password P] [--apply]
+ *        [--skip-demographic "<column>"]...
  *
  * Without `--apply` it is a DRY RUN: it reads the workbook, reports every problem at once, and
  * prints what it would create. Nothing is written until `--apply`.
@@ -285,6 +286,30 @@ export function parseClimate(sheets) {
   }
 }
 
+/**
+ * Leave demographic columns out of the import: no field is created for them and no person's
+ * value is sent. A name matches a column by its header (accents and case aside) or its field
+ * key. A name that matches no column is a problem, not a silent no-op -- a typo would
+ * otherwise collect exactly what the operator meant to leave out.
+ *
+ * Why it exists: TIMS's Edad and Tiempo are numbers, a number field is never split into
+ * groups, and with 15 people no group reaches the floor of 5 anyway -- so those answers
+ * could never be shown, while every respondent was told they were "not recorded".
+ */
+export function skipDemographics(climate, names) {
+  const wanted = (names ?? []).map((name) => ({ name, key: norm(name), field: slug(name) }))
+  const matches = (column, entry) => norm(column.header) === entry.key || column.field === entry.field
+  const problems = wanted
+    .filter((entry) => !climate.columns.some((column) => matches(column, entry)))
+    .map((entry) => `--skip-demographic "${entry.name}": no hay una columna demográfica con ese nombre (hay: ${climate.columns.map((c) => c.header).join(', ')}).`)
+  const skipped = climate.columns.filter((column) => wanted.some((entry) => matches(column, entry)))
+  return {
+    problems,
+    skipped: skipped.map((column) => column.header),
+    climate: { ...climate, columns: climate.columns.filter((column) => !skipped.includes(column)) },
+  }
+}
+
 // ---------------------------------------------------------------------------------------
 // Request shapes: what each endpoint receives. Pure, tested.
 // ---------------------------------------------------------------------------------------
@@ -395,15 +420,20 @@ async function main() {
       email: { type: 'string', default: 'fede.super@acme.test' },
       password: { type: 'string', default: 'Local1234!' },
       apply: { type: 'boolean', default: false },
+      'skip-demographic': { type: 'string', multiple: true, default: [] },
     },
   })
   if (!values.file) throw new Error('--file <workbook.xlsx> is required')
   if (!values['company-id'] && !(values['company-name'] && values.domain)) throw new Error('name the company: --company-id <guid>, or --company-name and --domain to find or create it')
   if (values['company-id'] && !GUID.test(values['company-id'])) throw new Error('--company-id is not a GUID')
 
-  const { problems, climate } = parseClimate(readWorkbook(values.file))
+  const parsed = parseClimate(readWorkbook(values.file))
+  const skipping = skipDemographics(parsed.climate, values['skip-demographic'])
+  const problems = [...parsed.problems, ...skipping.problems]
+  const climate = skipping.climate
   log(`import-climate-workbook: ${values.file}`)
   for (const line of summarise(climate)) log(`  ${line}`)
+  if (skipping.skipped.length) log(`  sin importar (--skip-demographic): ${skipping.skipped.join(' · ')}`)
   if (problems.length) {
     log(`\n${problems.length} problem(s) in the workbook — nothing was sent:`)
     for (const problem of problems) log(`  - ${problem}`)

@@ -31,16 +31,26 @@ workbook ("18–29", "30–44", "45+") so the column becomes a list.
 ```sh
 # 1. Dry run: reads the workbook, lists every problem at once, prints what it would create.
 node scripts/import-climate-workbook.mjs --file "<workbook>.xlsx" \
-  --company-name "TIMS International" --domain timsinternational.net
+  --company-name "TIMS International" --domain timsint.com
 
 # 2. Apply.
 node scripts/import-climate-workbook.mjs --file "<workbook>.xlsx" \
-  --company-name "TIMS International" --domain timsinternational.net --apply
+  --company-name "TIMS International" --domain timsint.com --apply
 ```
 
 `--api` (default `http://127.0.0.1:5080`), `--email` / `--password` (default the local
 super_admin), `--company-id` instead of name+domain for an existing company, `--title` for the
-survey (default `Clima Organizacional <company> <year>`).
+survey (default `Clima Organizacional <company> <year>`), and `--skip-demographic "<column>"`
+(repeatable) to leave a demographic column out: no field is created for it and no value is
+sent. A name that matches no column stops the run.
+
+**For TIMS, skip Edad and Tiempo** (`--skip-demographic Edad --skip-demographic "Tiempo de
+laborar en TIMS (años)"`, or their field keys). They are numbers, a number field is never split
+into groups, and with 15 people no group reaches the floor of 5 — so those answers can never be
+shown, while every respondent is told they were not recorded. The company domain is
+`timsint.com` (ruled 2026-10-02): staff addresses span timshr.com, timsinternational.net and
+timsla.com, personal invitations accept any of them, and the domain only gates shared links
+and self-signup.
 
 **Re-running is safe.** The company is matched by domain or name, a field by its key, a person
 by email (already invited or registered → left as they are), the survey by title. A second run
