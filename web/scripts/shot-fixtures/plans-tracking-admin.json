@@ -1,4 +1,5 @@
 {
+  "GET /admin/companies/*/result-bands": {"opportunityMin": 3, "strengthMin": 4, "criticalName": null, "opportunityName": null, "strengthName": null},
   "_comment": "Plans-and-tracking lane, company_admin (ana.rojas@meridiano.test) on the Grupo Meridiano demo tenant. Every body is a response captured read-only from the local stack on 2026-09-10 (GET only, after POST /auth/login) and pasted verbatim; nothing is shaped by hand. The tablero body is the Ingeniería board as GET /api/tablero-seguimiento?nodoId= answers it.",
   "GET /notifications/mine": {
     "notifications": []

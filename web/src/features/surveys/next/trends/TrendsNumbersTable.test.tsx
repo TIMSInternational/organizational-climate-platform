@@ -1,3 +1,4 @@
+import { DEFAULT_RESULT_BANDS } from '../../../../components/charts'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, it, expect, afterEach, beforeEach } from 'vitest'
@@ -22,7 +23,7 @@ function renderTable(dimensions: TrendDimension[], withheld = [false, false], re
         withheld={withheld}
         respondents={respondents}
         dimensions={dimensions}
-        target={3.7}
+        bands={DEFAULT_RESULT_BANDS}
         floor={5}
         caption="caption"
       />
@@ -37,29 +38,30 @@ describe('TrendsNumbersTable', () => {
     window.localStorage.clear()
   })
 
-  it('tints the reading each cell PRINTS by the Panel de Control’s bands, at every band edge', () => {
+  it('paints and names the band of the reading each cell PRINTS, at both band edges', () => {
     renderTable([
-      { key: 'a', name: 'A', values: [3.74, 4.04] },
-      { key: 'b', name: 'B', values: [3.46, 2.64] },
-      { key: 'c', name: 'C', values: [3.44, 4.06] },
+      { key: 'a', name: 'A', values: [3.96, 3.94] },
+      { key: 'b', name: 'B', values: [2.96, 2.94] },
+      { key: 'c', name: 'C', values: [4.04, 1.0] },
     ])
-    const tints = [...document.querySelectorAll('[data-slot="trends-cell"]')].map((cell) => ({
-      text: cell.textContent,
-      tint: cell.getAttribute('data-tint'),
+    const cells = [...document.querySelectorAll('[data-slot="trends-cell"]')].map((cell) => ({
+      text: cell.querySelector('.font-mono')?.textContent,
+      band: cell.getAttribute('data-band'),
     }))
-    // Row by row: Q1's three cells, then Q2's. Steps 0..4 run far-below → far-above. Four
-    // of these six land on a different step when the RAW reading is judged (3.74 raw is
-    // above, 3.44 raw is on, 4.04 raw is far above, 2.64 raw is only below), so this pins
-    // the printed-reading rule, not just the width of the bands. 3.46 → "3.5" is the
-    // canvas's grey "en la meta", where the table used to paint pale red.
-    expect(tints).toEqual([
-      { text: '3.7', tint: '2' },
-      { text: '3.5', tint: '2' },
-      { text: '3.4', tint: '1' },
-      { text: '4.0', tint: '3' },
-      { text: '2.6', tint: '0' },
-      { text: '4.1', tint: '4' },
+    // Row by row: Q1's three cells, then Q2's. Judged RAW, 3,96 would be opportunity and 2,96
+    // critical; the printed "4,0" and "3,0" are strength and opportunity, which is what the
+    // reader holds against the legend.
+    expect(cells).toEqual([
+      { text: '4.0', band: 'strength' },
+      { text: '3.0', band: 'opportunity' },
+      { text: '4.0', band: 'strength' },
+      { text: '3.9', band: 'opportunity' },
+      { text: '2.9', band: 'critical' },
+      { text: '1.0', band: 'critical' },
     ])
+    // Colour is never alone: every cell prints its band's word.
+    const first = document.querySelector('[data-slot="trends-cell"]') as HTMLElement
+    expect(first.textContent).toContain(en.resultBands.short.strength)
   })
 
   it('gives the dimension columns equal widths beside a fixed survey column', () => {

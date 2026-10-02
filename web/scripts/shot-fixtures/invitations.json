@@ -1,4 +1,5 @@
 {
+  "GET /admin/companies/*/result-bands": {"opportunityMin": 3, "strengthMin": 4, "criticalName": null, "opportunityName": null, "strengthName": null},
   "GET /microclimate-invitations/live": {
     "invitationId": "8f2a4c11-0d3e-4a62-9b71-2c5e8a10dd44",
     "microclimateId": "3b6d9e02-77a1-4c8f-9a20-51bb6f0c1d33",

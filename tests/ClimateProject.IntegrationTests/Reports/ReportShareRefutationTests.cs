@@ -1005,8 +1005,18 @@ public class ReportShareRefutationTests : IAsyncLifetime
         var root = envelope.RootElement;
         Assert.Equal(JsonValueKind.Object, root.ValueKind);
         Assert.Equal(
-            new[] { "description", "generatedAt", "reportOutput", "title", "type" },
+            new[] { "description", "generatedAt", "reportOutput", "resultBands", "title", "type" },
             root.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal).ToArray());
+
+        // The result bands, exactly: two boundaries the shipped client checks as numbers and
+        // three names it reads as strings or null (`web/src/features/reports/api/sharedReports.ts`,
+        // `parseResultBands`). Nothing else rides along — no company id, no settings.
+        var bands = root.GetProperty("resultBands");
+        Assert.Equal(
+            new[] { "criticalName", "opportunityMin", "opportunityName", "strengthMin", "strengthName" },
+            bands.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal).ToArray());
+        Assert.Equal(JsonValueKind.Number, bands.GetProperty("opportunityMin").ValueKind);
+        Assert.Equal(JsonValueKind.Number, bands.GetProperty("strengthMin").ValueKind);
 
         Assert.Equal(JsonValueKind.String, root.GetProperty("title").ValueKind);
         Assert.Equal("Wire Check", root.GetProperty("title").GetString());

@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using ClimateProject.Api.Endpoints;
 using ClimateProject.Application.Auth;
+using ClimateProject.Application.OrgStructure;
 using ClimateProject.Application.Reports;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
@@ -130,6 +131,37 @@ public class ReportShareEndpointsTests : IAsyncLifetime
         Assert.NotNull(body.ReportOutput);
         using var document = JsonDocument.Parse(body.ReportOutput!);
         Assert.True(document.RootElement.ValueKind == JsonValueKind.Object);
+    }
+
+    /// <summary>
+    /// The link carries the company's result bands as they are when it is OPENED, so a scale
+    /// changed after the link was minted recolours the public page exactly as it recolours
+    /// the authenticated screens -- and the bands carry no identifier of the company.
+    /// </summary>
+    [Fact]
+    public async Task A_share_link_carries_the_companys_result_bands_read_when_it_is_opened()
+    {
+        var admin = await AdminClientAsync();
+        var reportId = await CreateReportAsync(admin, _companyId);
+        var share = await MintAsync(admin, reportId);
+
+        var before = await AnonymousClient().GetFromJsonAsync<SharedReportResponse>($"/shared/reports/{share.Token}");
+        Assert.Equal(new ResultBandsDto(3.00m, 4.00m, null, null, null), before!.ResultBands);
+
+        await WithDbAsync(async db =>
+        {
+            var company = await db.Companies.FirstAsync(c => c.Id == _companyId);
+            company.Settings.ResultBandOpportunityMin = 2.50m;
+            company.Settings.ResultBandStrengthMin = 4.50m;
+            company.Settings.ResultBandCriticalName = "Zona roja";
+            await db.SaveChangesAsync();
+        });
+
+        var response = await AnonymousClient().GetAsync($"/shared/reports/{share.Token}");
+        var raw = await response.Content.ReadAsStringAsync();
+        var after = JsonSerializer.Deserialize<SharedReportResponse>(raw, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.Equal(new ResultBandsDto(2.50m, 4.50m, "Zona roja", null, null), after!.ResultBands);
+        Assert.DoesNotContain(_companyId.ToString(), raw, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -366,7 +398,9 @@ public class ReportShareEndpointsTests : IAsyncLifetime
         using var json = JsonDocument.Parse(raw);
         var properties = json.RootElement.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal).ToList();
         Assert.Equal(
-            new[] { "description", "generatedAt", "reportOutput", "title", "type" },
+            // `resultBands` admitted deliberately: two boundaries and three names, the scale the
+            // page colours by — see `A_share_link_carries_the_companys_result_bands_read_when_it_is_opened`.
+            new[] { "description", "generatedAt", "reportOutput", "resultBands", "title", "type" },
             properties);
 
         // Belt and braces against the identifiers appearing anywhere at all, including nested

@@ -127,13 +127,16 @@ describe('the survey results on the tenant’s real payload', () => {
     expect(screen.getByText('Qué encontró esta encuesta, qué cambió desde Q2 y por dónde empezar a mirar.')).toBeTruthy()
   })
 
-  it('measures the tiles against the target of 3,7, and the change against Q2’s own analytics', async () => {
+  it('reads the tiles in the company’s bands, and the change against Q2’s own analytics', async () => {
     await open()
     const tiles = screen.getByRole('region', { name: 'Resumen' }).textContent ?? ''
     expect(tiles).toContain('Clima · Q3')
     // The unrounded mean of the six dimension means — the Panel de Control's figure.
     expect(tiles).toContain('3,65')
-    expect(tiles).toContain('de 5 · meta 3,7')
+    // 3,65 at two decimals is in the opportunity area, and the tile names it.
+    expect(tiles).toContain('de 5')
+    expect(tiles).toContain('Área de oportunidad')
+    expect(tiles).not.toContain('meta')
     // 3,6533 against Q2's 3,3600; Q1 3,03 → Q2 3,36 → Q3 3,65 makes this the second rise.
     const delta = screen.getByTestId('climate-delta')
     expect(delta.textContent).toBe('+0,29 frente a Q2 · segunda alza seguida')
@@ -142,8 +145,12 @@ describe('the survey results on the tenant’s real payload', () => {
     expect(tiles).toContain('cerró el 6 de agosto · sin lista de invitados')
     expect(tiles).toContain('de 5 legibles')
     expect(tiles).toContain('Finanzas bajo el umbral de 5: protegido')
-    expect(tiles).toContain('Bajo la meta')
-    expect(screen.getByTestId('below-target').textContent).toBe('Carga de trabajo 3,3 · Reconocimiento 3,4')
+    // The fourth tile counts the map's cells in the critical area — all three Operaciones'.
+    expect(tiles).toContain('Área crítica')
+    expect(tiles).toContain('celdas, todas de Operaciones')
+    expect(screen.getByTestId('critical-cells').textContent).toBe(
+      'Carga de trabajo 2,4 · Seguridad psicológica 2,6 · Reconocimiento 2,8',
+    )
     expect(tiles).not.toContain('media')
     // Every figure on the tiles is measured: no sample chip among them.
     expect(tiles).not.toContain(SAMPLE)
@@ -155,25 +162,29 @@ describe('the survey results on the tenant’s real payload', () => {
     expect(requested().some((url) => url.endsWith(`/surveys/${Q2}/analytics?lang=es`))).toBe(true)
   })
 
-  it('lists the artboard’s three cells, each with its reason and whether a plan covers its group', async () => {
+  it('lists three cells outside the strength area, each with its reason, its band and whether a plan covers its group', async () => {
     await open()
-    expect(screen.getByText('Las tres celdas más lejos de la meta · cada una abre su pregunta')).toBeTruthy()
+    expect(screen.getByText('Las tres celdas más bajas fuera de Área de fortaleza · cada una abre su pregunta')).toBeTruthy()
     const items = within(screen.getByTestId('findings')).getAllByRole('listitem')
     expect(items).toHaveLength(3)
     expect(items[0].textContent).toContain('Operaciones · Carga de trabajo')
-    expect(items[0].textContent).toContain('La celda más baja del mapa · 1,3 bajo la meta')
+    expect(items[0].textContent).toContain('La celda más baja del mapa')
+    expect(items[0].textContent).toContain('Área crítica')
     expect(items[0].textContent).toContain('Un plan atiende este grupo · sin avances')
     expect(items[1].textContent).toContain('Operaciones · Seguridad psicológica')
     expect(items[1].textContent).toContain('Segunda más baja · mismo grupo')
     expect(items[2].textContent).toContain('Ventas · Carga de trabajo')
-    expect(items[2].textContent).toContain('Única celda roja fuera de Operaciones')
+    // No critical cell outside Operaciones: the breadth rule's slot is the lowest cell outside
+    // it, which is in the opportunity area — and the card says which area.
+    expect(items[2].textContent).toContain('La más baja fuera de Operaciones')
+    expect(items[2].textContent).toContain('Área de oportunidad')
     expect(items[2].textContent).toContain('Sin plan todavía')
   })
 
   it('draws ONE grid: the columns, the whole company first, then every group with its change since Q2', async () => {
     await open()
     const map = screen.getByRole('region', { name: 'Clima por grupo y dimensión · Q3' })
-    expect(within(map).getByText('meta 3,7 · selecciona una celda para ver su pregunta')).toBeTruthy()
+    expect(within(map).getByText('tres áreas de resultado · selecciona una celda para ver su pregunta')).toBeTruthy()
     expect(within(map).getAllByRole('table')).toHaveLength(1)
     const grid = screen.getByTestId('climate-grid')
     expect(within(grid).getAllByRole('columnheader').map((header) => header.textContent)).toEqual([
@@ -206,7 +217,20 @@ describe('the survey results on the tenant’s real payload', () => {
     expect(screen.getByTestId('delta-note').textContent).toBe(
       '«Frente a Q2» por grupo aparece cuando la encuesta anterior tiene ese mismo grupo por encima del umbral.',
     )
-    expect(within(screen.getByTestId('grid-legend')).getByText('protegido, menos de 5 respuestas')).toBeTruthy()
+    const legend = screen.getByTestId('grid-legend')
+    expect(within(legend).getByText('protegido, menos de 5 respuestas')).toBeTruthy()
+    for (const [name, range] of [
+      ['Área de fortaleza', '4,00 a 5,00'],
+      ['Área de oportunidad', '3,00 a 3,99'],
+      ['Área crítica', 'menos de 3,00'],
+    ]) {
+      expect(within(legend).getByText(name)).toBeTruthy()
+      expect(within(legend).getByText(range)).toBeTruthy()
+    }
+    // Every disclosed cell prints its band's word under the number: colour is never alone.
+    const operaciones = screen.getByTestId(`group-row-${OPS}`)
+    expect(operaciones.querySelectorAll('[data-band="critical"]')).toHaveLength(3)
+    expect(operaciones.textContent).toContain('Crítica')
   })
 
   it('never prints a number for the protected group: every cell hatched, mean and delta included, none a button', async () => {
@@ -227,7 +251,9 @@ describe('the survey results on the tenant’s real payload', () => {
   it('opens the lowest cell with its three columns: the question twice, the other groups, what is being done', async () => {
     const panel = await open()
     expect(within(panel).getByRole('heading', { level: 2, name: 'Operaciones · Carga de trabajo' })).toBeTruthy()
-    expect(panel.textContent).toContain('Media 2,4 · 1,3 bajo la meta · la celda más baja del mapa')
+    // The band named in its chip, then its range — never "1,3 bajo la meta".
+    expect(panel.textContent).toContain('Media 2,4 · Área crítica menos de 3,00 · la celda más baja del mapa')
+    expect(panel.textContent).not.toContain('meta')
     const question = within(panel).getByTestId('cell-question').textContent ?? ''
     expect(question).toContain('Pregunta de Carga de trabajo · Operaciones')
     expect(question).toContain('La misma pregunta · toda la empresa')

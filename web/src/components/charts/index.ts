@@ -23,6 +23,32 @@ export { default as SentimentVisualization } from './SentimentVisualization'
 export { default as RecommendationCard } from './RecommendationCard'
 export { default as ChartFrame } from './ChartFrame'
 export { default as ChartCanvas } from './ChartCanvas'
+export { default as BandGlyph } from './BandGlyph'
+export { default as BandChip } from './BandChip'
+export { default as BandLegend } from './BandLegend'
+export { default as BandScaleBar } from './BandScaleBar'
+export {
+  BAND_PAINT,
+  BOUNDARY_STEP,
+  BAND_TONE,
+  DEFAULT_RESULT_BANDS,
+  RESULT_BAND_ORDER,
+  SCALE_MAX,
+  SCALE_MIN,
+  bandCellStyle,
+  bandName,
+  bandOf,
+  bandRange,
+  bandRangeText,
+  bandReading,
+  bandShortName,
+  boundaryText,
+  printed,
+  segmentsOf,
+  type BandScaleSegment,
+  type ResultBandKey,
+  type ResultBands,
+} from './resultBands'
 
 export type { ChartDatum, ChartSeries, ChartSizeProps, ChartStateProps } from './types'
 export type { PieSlice } from './foldSlices'

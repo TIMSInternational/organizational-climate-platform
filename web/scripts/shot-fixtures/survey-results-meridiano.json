@@ -1,4 +1,5 @@
 {
+  "GET /admin/companies/*/result-bands": {"opportunityMin": 3, "strengthMin": 4, "criticalName": null, "opportunityName": null, "strengthName": null},
   "GET /surveys/climate-trends": {
     "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
     "groupBy": null,

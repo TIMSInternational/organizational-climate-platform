@@ -18,6 +18,7 @@ public static class CompanyEndpoints
         group.MapGet("/{id:guid}", GetAsync);
         group.MapPut("/{id:guid}", UpdateAsync);
         group.MapPut("/{id:guid}/settings", UpdateSettingsAsync);
+        group.MapGet("/{id:guid}/result-bands", GetResultBandsAsync);
     }
 
     private static async Task<IResult> ListAsync(
@@ -226,6 +227,19 @@ public static class CompanyEndpoints
             return Results.Json(new { message = "Company not found" }, statusCode: 404);
         }
 
+        // Validated before anything is written, so a refused scale leaves the rest of the
+        // request unapplied too rather than half-saving the page.
+        if (request.ResultBands is not null)
+        {
+            var refusal = ResultBandsValidation.Validate(request.ResultBands);
+            if (refusal is not null)
+            {
+                return Results.Json(new { message = refusal }, statusCode: 400);
+            }
+
+            ResultBandsValidation.Apply(company.Settings, request.ResultBands);
+        }
+
         if (!string.IsNullOrWhiteSpace(request.SurveyFrequency)) company.Settings.SurveyFrequency = request.SurveyFrequency;
         if (request.MicroclimateEnabled.HasValue) company.Settings.MicroclimateEnabled = request.MicroclimateEnabled.Value;
         if (request.AiInsightsEnabled.HasValue) company.Settings.AiInsightsEnabled = request.AiInsightsEnabled.Value;
@@ -245,6 +259,38 @@ public static class CompanyEndpoints
         return Results.Ok(new CompanySettingsResponse(
             company.Id,
             new CompanySettingsDto(company.Settings.SurveyFrequency, company.Settings.MicroclimateEnabled, company.Settings.AiInsightsEnabled, company.Settings.AnonymousSurveys, company.Settings.DataRetentionDays, company.Settings.Timezone, company.Settings.Language),
-            new CompanyBrandingDto(company.Branding.LogoUrl, company.Branding.PrimaryColor, company.Branding.SecondaryColor, company.Branding.FontFamily, company.Branding.CustomCss)));
+            new CompanyBrandingDto(company.Branding.LogoUrl, company.Branding.PrimaryColor, company.Branding.SecondaryColor, company.Branding.FontFamily, company.Branding.CustomCss),
+            ResultBandsDto.From(company.Settings)));
+    }
+
+    /// <summary>
+    /// The company's result bands, for every screen that colours a mean — so every member of
+    /// the company may read them, not only an administrator (a leader's dashboard and a
+    /// supervisor's team view read the same scale). Another tenant's scale is refused.
+    /// </summary>
+    private static async Task<IResult> GetResultBandsAsync(
+        Guid id,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var currentUser = principal.GetCurrentUser();
+        if (currentUser.Role != Roles.SuperAdmin && currentUser.CompanyId != id.ToString())
+        {
+            return Results.Forbid();
+        }
+
+        // No tracking: EF refuses to track an owned type projected without its owner.
+        var settings = await db.Companies
+            .AsNoTracking()
+            .Where(c => c.Id == id)
+            .Select(c => c.Settings)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (settings is null)
+        {
+            return Results.Json(new { message = "Company not found" }, statusCode: 404);
+        }
+
+        return Results.Ok(ResultBandsDto.From(settings));
     }
 }

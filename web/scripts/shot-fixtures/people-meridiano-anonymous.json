@@ -1,4 +1,5 @@
 {
+  "GET /admin/companies/*/result-bands": {"opportunityMin": 3, "strengthMin": 4, "criticalName": null, "opportunityName": null, "strengthName": null},
   "_comment": "Grupo Meridiano S.A. as the local API answered carlos.mata@meridiano.test (employee, Ingenieria) on 11 Sep 2026: GET /profile, /notifications/mine, /dashboard/employee/last-outcome, /surveys/4c9c8c8c-.../respond and /microclimates/5e4cf7fd-... verbatim. Three departures, each named: the respond view has inProgress null (Carlos has already answered Q4, which renders the already-answered state); /dashboard/employee lists the two surveys open to him on the canvas date (10 Sep), built from the Q4 respond view and the admin GET /surveys row of its copy, where his live payload today lists none; the POST bodies are SurveySubmissionResult and the empty 201, shaped from the client types. ONE further departure: Settings.Anonymous is true on the surveys and the submission, the state the canvas artboards draw. The tenant Q4 is identified; see people-meridiano.json for it.",
   "GET /notifications/mine": {
     "notifications": []

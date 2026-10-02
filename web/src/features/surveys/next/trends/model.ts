@@ -1,3 +1,4 @@
+import type { ResultBands } from '../../../../components/charts'
 /**
  * The typed model behind the redesigned Clima en el tiempo (`/surveys/climate-trends`).
  *
@@ -7,10 +8,9 @@
  * `GET /surveys/climate-trends` (`api/climateTrends.ts`) and `GET /surveys`; the
  * components below it never fetch.
  *
- * Nothing here is a sample. The target is the product's `CLIMATE_TARGET`
- * (`features/dashboard/next/compose.ts`), the same constant the Panel de Control reads,
- * so the two screens can never disagree about "meta 3,7"; no company setting holds a
- * target yet.
+ * Nothing here is a sample. The bands are the company's own result bands
+ * (`GET /admin/companies/{id}/result-bands`), the same scale the Panel de Control reads,
+ * so the two screens can never put one reading in two areas.
  *
  * Naming follows `features/dashboard/next/model.ts`: payload content is `name`, never
  * `title`/`label`, so `noHardcodedStrings.test.ts` does not read it as UI copy.
@@ -53,8 +53,8 @@ export interface OpenWave {
 
 export interface ClimateTrendsNextModel {
   companyName: string | null
-  /** The climate target on the 1–5 scale — `CLIMATE_TARGET`. */
-  target: number
+  /** The company's result bands — every chart, chip and cell on the page is read in them. */
+  bands: ResultBands
   /** The floor the server applied (`minimumGroupSize`), never a local constant. */
   floor: number
   /**

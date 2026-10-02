@@ -4799,6 +4799,35 @@ namespace ClimateProject.Infrastructure.Migrations
                                 .HasDefaultValue(true)
                                 .HasColumnName("settings_microclimate_enabled");
 
+                            b1.Property<string>("ResultBandCriticalName")
+                                .HasMaxLength(60)
+                                .HasColumnType("character varying(60)")
+                                .HasColumnName("settings_band_critical_name");
+
+                            b1.Property<decimal>("ResultBandOpportunityMin")
+                                .ValueGeneratedOnAdd()
+                                .HasPrecision(3, 2)
+                                .HasColumnType("numeric(3,2)")
+                                .HasDefaultValue(3.00m)
+                                .HasColumnName("settings_band_opportunity_min");
+
+                            b1.Property<string>("ResultBandOpportunityName")
+                                .HasMaxLength(60)
+                                .HasColumnType("character varying(60)")
+                                .HasColumnName("settings_band_opportunity_name");
+
+                            b1.Property<decimal>("ResultBandStrengthMin")
+                                .ValueGeneratedOnAdd()
+                                .HasPrecision(3, 2)
+                                .HasColumnType("numeric(3,2)")
+                                .HasDefaultValue(4.00m)
+                                .HasColumnName("settings_band_strength_min");
+
+                            b1.Property<string>("ResultBandStrengthName")
+                                .HasMaxLength(60)
+                                .HasColumnType("character varying(60)")
+                                .HasColumnName("settings_band_strength_name");
+
                             b1.Property<string>("SurveyFrequency")
                                 .IsRequired()
                                 .ValueGeneratedOnAdd()

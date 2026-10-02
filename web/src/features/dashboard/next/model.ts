@@ -1,3 +1,4 @@
+import type { ResultBands } from '../../../components/charts'
 /**
  * The typed model behind the redesigned Panel de Control — the company administrator's
  * `/dashboard`.
@@ -110,8 +111,8 @@ export interface AdminDashboardModel {
   asOf: string
   /** `null` when the company region failed: the page names no tenant rather than another's. */
   companyName: string | null
-  /** The climate target on the 1–5 scale. */
-  target: number
+  /** The company's result bands — every tile, card and cell on the page is read in them. */
+  bands: ResultBands
   /** `null` when the surveys region failed, or the tenant has closed no wave. */
   latestClosedWave: Wave | null
   previousWave: Wave | null
@@ -159,3 +160,6 @@ export type RegionState =
   | { status: 'off' }
 
 export type RegionStatuses = Readonly<Record<RegionKey, RegionState>>
+
+/** The model as `compose.ts` derives it from the dashboard's own regions, before the bands join it. */
+export type ComposedAdminDashboardModel = Omit<AdminDashboardModel, 'bands'>

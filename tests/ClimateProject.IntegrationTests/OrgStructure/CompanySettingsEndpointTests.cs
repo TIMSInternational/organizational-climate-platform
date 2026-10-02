@@ -112,4 +112,99 @@ public class CompanySettingsEndpointTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
+
+    private static UpdateCompanySettingsRequest BandsOnly(UpdateResultBandsRequest bands, string? surveyFrequency = null) =>
+        new(surveyFrequency, null, null, null, null, null, null, null, null, null, null, null, bands);
+
+    [Fact]
+    public async Task Any_member_of_the_company_reads_the_default_result_bands()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.Employee, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.GetAsync($"/admin/companies/{_companyAId}/result-bands");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var bands = await response.Content.ReadFromJsonAsync<ResultBandsDto>();
+        Assert.Equal(new ResultBandsDto(3.00m, 4.00m, null, null, null), bands);
+    }
+
+    [Fact]
+    public async Task A_member_of_another_company_cannot_read_its_result_bands()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.GetAsync($"/admin/companies/{_companyBId}/result-bands");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CompanyAdmin_saves_result_bands_and_every_member_then_reads_them()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.PutAsJsonAsync($"/admin/companies/{_companyAId}/settings",
+            BandsOnly(new UpdateResultBandsRequest(2.75m, 4.25m, "  Zona roja  ", "", "Fortaleza")));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var saved = (await response.Content.ReadFromJsonAsync<CompanySettingsResponse>())!.ResultBands;
+        // Trimmed, and a blank name returns to the product's default (null).
+        Assert.Equal(new ResultBandsDto(2.75m, 4.25m, "Zona roja", null, "Fortaleza"), saved);
+
+        var reader = _factory.CreateClient();
+        var leaderToken = await SignUpAndGetTokenAsync(reader, Roles.Leader, _companyADomain, _companyAId);
+        reader.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", leaderToken);
+        var read = await reader.GetFromJsonAsync<ResultBandsDto>($"/admin/companies/{_companyAId}/result-bands");
+        Assert.Equal(saved, read);
+    }
+
+    public static TheoryData<decimal, decimal> RefusedScales => new()
+    {
+        { 1.00m, 4.00m },   // no room for the critical area
+        { 0.50m, 4.00m },
+        { 3.00m, 3.00m },   // strength must start above opportunity
+        { 3.50m, 3.00m },
+        { 3.00m, 5.01m },   // strength past the scale
+        { 3.005m, 4.00m },  // three decimals
+    };
+
+    [Theory]
+    [MemberData(nameof(RefusedScales))]
+    public async Task A_scale_with_a_gap_overlap_or_out_of_range_boundary_is_refused_and_nothing_is_saved(decimal opportunityMin, decimal strengthMin)
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.PutAsJsonAsync($"/admin/companies/{_companyAId}/settings",
+            BandsOnly(new UpdateResultBandsRequest(opportunityMin, strengthMin, null, null, null), surveyFrequency: "weekly"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        var company = await db.Companies.AsNoTracking().FirstAsync(c => c.Id == _companyAId);
+        Assert.Equal(3.00m, company.Settings.ResultBandOpportunityMin);
+        Assert.Equal(4.00m, company.Settings.ResultBandStrengthMin);
+        // The rest of the same request is not applied either.
+        Assert.NotEqual("weekly", company.Settings.SurveyFrequency);
+    }
+
+    [Fact]
+    public async Task A_name_longer_than_sixty_characters_is_refused()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.PutAsJsonAsync($"/admin/companies/{_companyAId}/settings",
+            BandsOnly(new UpdateResultBandsRequest(3.00m, 4.00m, new string('x', 61), null, null)));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
 }

@@ -1,4 +1,5 @@
 {
+  "GET /admin/companies/*/result-bands": {"opportunityMin": 3, "strengthMin": 4, "criticalName": null, "opportunityName": null, "strengthName": null},
   "_comment": "Mis tareas, empty (MisTareas artboard): Sofia Vargas, supervisora de Ingenieria, whose list comes back empty today.",
   "GET /notifications/mine": {
     "notifications": []

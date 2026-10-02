@@ -1,4 +1,5 @@
 {
+  "GET /admin/companies/*/result-bands": {"opportunityMin": 3, "strengthMin": 4, "criticalName": null, "opportunityName": null, "strengthName": null},
   "_comment": "Grupo Meridiano S.A. for the org lane (CompanySettings, Departments, Notifications, Templates), as the local API answered on 10-11 Sep 2026 to read-only GETs as the company administrator (ana.rojas@meridiano.test). The token came from POST /auth/login on 10-11 Sep, which sets users.last_login_at (AuthEndpoints.cs:80) - the one write the brief allows, and the reason GET /admin/users shows her last login; the 11 Sep reads reused an unexpired token and logged in again nowhere. Every body below is a real payload except \"PUT /admin/companies/*/settings\". That one cannot be captured read-only: the API maps no GET for settings (CompanyEndpoints.cs:16-20) and a PUT is a write. It is CompanySettingsResponse filled with what the source says Meridiano holds unless someone saved a settings form by hand: scripts/seed-demo-company.mjs:48,101 creates the tenant with POST /admin/companies, whose handler builds the Company with no Settings or Branding (CompanyEndpoints.cs:86-96), so the entity defaults apply (Company.cs:20,28-34: quarterly, microclimates on, AI on, anonymous false, 2555 days, UTC, en, #3B82F6); no script under scripts/ or web/scripts/ calls /settings. A shot of the settings screen therefore prints those values, not the artboard's illustrative Español / Anónima / Sin límite definido / America/Costa_Rica / #dd0c15. GET /surveys/4c9c8c8c-03e1-4033-8224-8c80b242c558 (the running Q4, ?lang=es, read 11 Sep) is the survey the anonymity helper names.",
   "GET /profile": {
     "id": "7b34dd6e-3472-4180-9873-ec5cf7d2af65",
@@ -1428,6 +1429,7 @@
     ]
   },
   "PUT /admin/companies/*/settings": {
+    "resultBands": {"opportunityMin": 3, "strengthMin": 4, "criticalName": null, "opportunityName": null, "strengthName": null},
     "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
     "settings": {
       "surveyFrequency": "quarterly",

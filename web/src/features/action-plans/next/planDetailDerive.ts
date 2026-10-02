@@ -1,6 +1,6 @@
 import { ANONYMITY_FLOOR, isSuppressed } from '../../../components/charts'
 import { WHOLE_COMPANY_KEY, type ClimateTrendsResponse } from '../../surveys/api/climateTrends'
-import { daysBetween, isBelowTarget } from '../../dashboard/next/derive'
+import { daysBetween } from '../../dashboard/next/derive'
 import { waveCode } from '../../dashboard/next/compose'
 
 /**
@@ -56,7 +56,6 @@ export type PlanFinding =
       code: string
       dimensionKey: string
       score: number
-      belowTarget: boolean
       /** The plan's cell is also the lowest disclosed cell of the whole map for that wave. */
       lowestOfMap: boolean
     }
@@ -67,7 +66,6 @@ export function planFinding(
   trends: ClimateTrendsResponse,
   surveyId: string | null,
   departmentId: string | null,
-  target: number,
   floor: number = ANONYMITY_FLOOR,
 ): PlanFinding {
   const survey =
@@ -106,7 +104,6 @@ export function planFinding(
     code,
     dimensionKey: lowest.key,
     score: lowest.score,
-    belowTarget: isBelowTarget(lowest.score, target),
     lowestOfMap: departmentId !== null && lowest.score <= mapLowest,
   }
 }

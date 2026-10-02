@@ -3,8 +3,17 @@ import { Link } from 'react-router'
 import { AlertCircle, ArrowRight, Clock, FileText, Plus, Send, Waves } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
-import { ANONYMITY_FLOOR, ClimateMap, KpiTile, isSuppressed } from '../../../components/charts'
-import { Button, Chip, LoadingRegion, SkeletonText } from '../../../components/ui'
+import {
+  ANONYMITY_FLOOR,
+  BandChip,
+  ClimateMap,
+  KpiTile,
+  bandOf,
+  boundaryText,
+  isSuppressed,
+  type ResultBands,
+} from '../../../components/charts'
+import { Button, LoadingRegion, SkeletonText } from '../../../components/ui'
 import { useViewerCapabilities, type ViewerCapabilities } from '../../../auth/viewerCapabilities'
 import { calendarDay, instantDay } from '../../../lib/calendarDay'
 import { cn } from '../../../lib/cn'
@@ -14,7 +23,6 @@ import type { AdminDashboardModel, AttentionItem, DimensionSeries, RegionKey, Re
 import {
   closedWaveCount,
   daysBetween,
-  isBelowTarget,
   latestAverage,
   lowestCell,
   nameHead,
@@ -28,14 +36,14 @@ import {
   risesInARow,
   sentenceName,
   signedReading,
-  targetStep,
 } from './derive'
 import TrendSparkline from './TrendSparkline'
 import CycleTimeline, { type CycleStep } from './CycleTimeline'
 import DashboardExportMenu from './DashboardExportMenu'
 
 /** The target rule's hex, as the sparklines draw it, for the legend's swatch. */
-const TARGET_RULE = '#b3b8ca'
+/** The band-boundary rule's ink, as the sparklines draw it, for the legend's swatch. */
+const BOUNDARY_RULE = 'var(--admin-line-control)'
 
 /**
  * The body of the redesigned Panel de Control, drawn as the Dashboard artboard (10 Sep):
@@ -71,7 +79,7 @@ export default function AdminDashboardNextView({
   // company. `canExport` alone also admits a leader, whose export is the department's
   // (`DashboardEndpoints.cs:124`) and whose dashboard is not this one.
   const showExport = capabilities.canExport && capabilities.seesWholeCompany
-  const { target } = model
+  const { bands } = model
   const latest = latestAverage(model)
   const previous = previousAverage(model)
   // The move between the two averages AS the tile prints them, at two decimals.
@@ -89,14 +97,18 @@ export default function AdminDashboardNextView({
   const waveCodes = model.waves.filter((wave) => wave.status === 'closed').map((wave) => wave.code)
   const dimensionName = (key: string) =>
     model.dimensions.find((dimension) => dimension.key === key)?.name ?? key
-  // Highest latest reading first, as the canvas orders them: what is under the target
-  // gathers at the end of the grid. Ties keep the server's column order.
+  // Highest latest reading first, as the canvas orders them: the critical area gathers
+  // at the end of the grid. Ties keep the server's column order.
   const ordered = [...model.dimensions].sort(
     (a, b) => (b.values[b.values.length - 1] ?? -Infinity) - (a.values[a.values.length - 1] ?? -Infinity),
   )
-  // One range for all six sparklines, so their slopes are on one scale.
+  // One range for all six sparklines, so their slopes are on one scale — wide enough to
+  // hold both band boundaries, which every card draws.
   const every = model.dimensions.flatMap((dimension) => dimension.values)
-  const domain: readonly [number, number] = [Math.min(...every, target) - 0.25, Math.max(...every, target) + 0.25]
+  const domain: readonly [number, number] = [
+    Math.min(...every, bands.opportunityMin) - 0.25,
+    Math.max(...every, bands.strengthMin) + 0.25,
+  ]
   const steps = cycleSteps(model.waves, t, locale)
 
   return (
@@ -159,7 +171,13 @@ export default function AdminDashboardNextView({
               label={t('dashboard.next.climateLabel', { wave: model.latestClosedWave?.code ?? '—' })}
               value={latest}
               format={{ kind: 'number', decimals: 2 }}
-              unit={t('dashboard.next.climateSub', { target: reading(target, locale) })}
+              unit={
+                <span className="inline-flex flex-wrap items-center gap-2">
+                  {t('resultBands.results.climateUnit')}
+                  {/* Printed at two decimals, so judged at two. */}
+                  {latest !== null && <BandChip band={bandOf(latest, bands, 2)} bands={bands} />}
+                </span>
+              }
               locale={locale}
               sub={
                 move !== null && model.previousWave ? (
@@ -266,9 +284,9 @@ export default function AdminDashboardNextView({
               meta={
                 <span className="inline-flex items-center gap-2 text-sm text-fg-label">
                   <svg aria-hidden="true" width="18" height="2" viewBox="0 0 18 2" className="shrink-0">
-                    <line x1="0" x2="18" y1="1" y2="1" stroke={TARGET_RULE} strokeDasharray="3 2" />
+                    <line x1="0" x2="18" y1="1" y2="1" stroke={BOUNDARY_RULE} strokeDasharray="3 2" />
                   </svg>
-                  {movedLegend(closedWaveCount(model), reading(target, locale), t, locale)}
+                  {movedLegend(closedWaveCount(model), bands, t, locale)}
                 </span>
               }
             />
@@ -278,7 +296,7 @@ export default function AdminDashboardNextView({
                 <SparkCard
                   key={dimension.key}
                   dimension={dimension}
-                  target={target}
+                  bands={bands}
                   labels={waveCodes}
                   domain={domain}
                   t={t}
@@ -333,11 +351,10 @@ export default function AdminDashboardNextView({
                   responses: row.responses,
                   scores: row.scores,
                 }))}
-                target={target}
-                // The one rule every cell and chip on the page judges by — the printed
-                // reading against the canvas's bands — so a cell's tint and its "en / bajo /
-                // sobre la meta" agree with the number on it.
-                tintStep={(score) => targetStep(score, target)}
+                // Something is disclosed, so the grid has a reading to draw; the colour is
+                // the company's bands, judged at the printed decimal like every chip here.
+                target={bands.opportunityMin}
+                bands={bands}
                 decimals={1}
                 // The floor, and never lower: a row under it is hatched and prints nothing.
                 threshold={ANONYMITY_FLOOR}
@@ -467,14 +484,14 @@ export default function AdminDashboardNextView({
 /** One dimension's card in "Qué se movió": its name, its latest reading and move, its sparkline. */
 function SparkCard({
   dimension,
-  target,
+  bands,
   labels,
   domain,
   t,
   locale,
 }: {
   dimension: DimensionSeries
-  target: number
+  bands: ResultBands
   labels: readonly string[]
   domain: readonly [number, number]
   t: TranslateFn
@@ -483,7 +500,7 @@ function SparkCard({
   const value = dimension.values[dimension.values.length - 1]
   const before = dimension.values[dimension.values.length - 2]
   if (value === undefined) return null
-  const below = isBelowTarget(value, target)
+  const band = bandOf(value, bands)
   // The move between the two readings AS PRINTED: Confianza's 3,33 → 3,67 prints "3,3" and
   // "3,7", so its move is "+0,4" — the raw difference printed "+0,3" beside them.
   const move = before === undefined ? null : printedMove(value, before)
@@ -491,10 +508,13 @@ function SparkCard({
     <div
       data-slot="trend-card"
       data-dimension={dimension.key}
-      data-below-target={below ? 'true' : 'false'}
+      data-band={band}
       className="flex min-w-0 flex-col gap-1.5 rounded-md border border-line-light px-3.5 pt-3 pb-2.5"
     >
-      <div className="truncate text-sm text-fg-secondary">{dimension.name}</div>
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <span className="truncate text-sm text-fg-secondary">{dimension.name}</span>
+        <BandChip band={band} bands={bands} short className="h-4.5 shrink-0 px-1.5 text-2xs" />
+      </div>
       <div className="flex flex-wrap items-baseline gap-2">
         <span className="font-mono text-reading leading-none tabular-nums text-fg-primary">{reading(value, locale)}</span>
         {move !== null && (
@@ -505,17 +525,17 @@ function SparkCard({
             {signedReading(move, locale)}
           </span>
         )}
-        {below && <Chip tone="critical" label={t('dashboard.next.belowTarget')} className="h-4.5 px-1.5 text-2xs" />}
       </div>
       <TrendSparkline
         values={dimension.values}
-        target={target}
+        bands={bands}
         labels={labels}
         domain={domain}
-        label={t('dashboard.next.sparklineLabel', {
+        label={t('resultBands.dashboard.sparklineLabel', {
           dimension: dimension.name,
           values: dimension.values.map((v) => reading(v, locale)).join(' → '),
-          target: reading(target, locale),
+          low: boundaryText(bands.opportunityMin, locale),
+          high: boundaryText(bands.strengthMin, locale),
         })}
       />
     </div>
@@ -531,11 +551,16 @@ function risesPhrase(rises: number, t: TranslateFn): string {
   return rises <= 6 ? t(`dashboard.next.riseOrdinal.${rises}`) : t('dashboard.next.risesInARow', { count: rises })
 }
 
-/** "meta 3,7 · tres encuestas cerradas, toda la empresa" — the count in words up to ten, as the artboard writes it. */
-function movedLegend(count: number, target: string, t: TranslateFn, locale: string): string {
-  if (count === 1) return t('dashboard.next.movedLegendOne', { target })
+/**
+ * "límites de área 3,00 y 4,00 · tres encuestas cerradas, toda la empresa" — the count in
+ * words up to ten, as the artboard writes it.
+ */
+function movedLegend(count: number, bands: ResultBands, t: TranslateFn, locale: string): string {
+  const low = boundaryText(bands.opportunityMin, locale)
+  const high = boundaryText(bands.strengthMin, locale)
+  if (count === 1) return t('resultBands.dashboard.movedLegendOne', { low, high })
   const words = count >= 2 && count <= 10 ? t(`dashboard.next.countWord.${count}`) : count.toLocaleString(locale)
-  return t('dashboard.next.movedLegend', { target, count: words })
+  return t('resultBands.dashboard.movedLegend', { low, high, count: words })
 }
 
 /**

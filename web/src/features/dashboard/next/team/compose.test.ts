@@ -1,10 +1,11 @@
+import { DEFAULT_RESULT_BANDS } from '../../../../components/charts'
 import { describe, it, expect } from 'vitest'
 import {
   composeLeaderDashboard,
   composeSupervisorDashboard,
   countFloor,
   dimensionMove,
-  dimensionStanding,
+  dimensionBand,
   flooredCount,
   teamClosedWave,
   teamOpenSurveys,
@@ -101,7 +102,7 @@ function leader(overrides: { department?: DepartmentAdminDashboard; tablero?: Tr
     trackingOn: true,
     viewer: VIEWER,
     asOf: AS_OF,
-    target: 3.7,
+    bands: DEFAULT_RESULT_BANDS,
   })
 }
 
@@ -265,33 +266,22 @@ describe('the team against the organisation', () => {
   })
 
   /**
-   * The SHARED rule, `derive.targetStanding`, judged at the printed decimal — the same rule the
-   * administrator's climate map and Clima en el tiempo apply, whose own docblock calls it "the
-   * ONE rule behind every tint ... and every bajo / en / sobre la meta word".
-   *
-   * **3,5 against a 3,7 target is "en la meta", and the case below is the one that says so.**
-   * `TARGET_BANDS_TENTHS` puts anything within 3 tenths under the target in the grey band.
-   *
-   * The LeaderDashboard artboard disagrees: it draws Reconocimiento 3,5 on a red card with
-   * "bajo la meta 3,7" and a red Crear plan. `2d0bc7cf` closed that gap by giving
-   * `dimensionStanding` its own strict rule, so the same 3,5 was grey on one screen and red on
-   * another for one survey. Reverted 2026-09-15 — which band is right is a product ruling, and
-   * until it is made this file holds the line that one number gets one colour.
+   * The SHARED rule, `bandOf` at the printed decimal — the same rule the administrator's map,
+   * Clima en el tiempo and the results grid apply. It closes the question this file used to
+   * record (the LeaderDashboard artboard drew a 3,5 as under a 3,7 target while the map called
+   * it on target): there is one scale now, the company's, and every screen reads it.
    */
-  it('stands each reading by the shared target rule, so 3,5 against 3,7 is on target', () => {
-    // Outside the band: 3,2 and below is genuinely under the target.
-    expect(dimensionStanding({ key: 'a', team: 3.17, organization: null }, 3.7)).toBe('below')
-    expect(dimensionStanding({ key: 'a', team: 3.38, organization: null }, 3.7)).toBe('below')
-    // THE CASE. Inside the grey band, so "en la meta" — flip this and you have re-opened the
-    // inconsistency, not fixed a bug.
-    expect(dimensionStanding({ key: 'a', team: 3.5, organization: null }, 3.7)).toBe('on')
-    expect(dimensionStanding({ key: 'a', team: 3.64, organization: null }, 3.7)).toBe('on')
-    // 3,67 prints 3,7: on the target, never under it.
-    expect(dimensionStanding({ key: 'a', team: 3.67, organization: null }, 3.7)).toBe('on')
-    expect(dimensionStanding({ key: 'a', team: 3.74, organization: null }, 3.7)).toBe('on')
-    // 3,75 prints 3,8 — three tenths over, the far edge of the band.
-    expect(dimensionStanding({ key: 'a', team: 4.33, organization: null }, 3.7)).toBe('above')
-    expect(dimensionStanding({ key: 'a', team: null, organization: 4 }, 3.7)).toBeNull()
+  it('reads each reading in the company’s bands, at the decimal it prints', () => {
+    expect(dimensionBand({ key: 'a', team: 2.94, organization: null }, DEFAULT_RESULT_BANDS)).toBe('critical')
+    // 2,96 prints 3,0: the opportunity area, never critical.
+    expect(dimensionBand({ key: 'a', team: 2.96, organization: null }, DEFAULT_RESULT_BANDS)).toBe('opportunity')
+    expect(dimensionBand({ key: 'a', team: 3.5, organization: null }, DEFAULT_RESULT_BANDS)).toBe('opportunity')
+    // 3,96 prints 4,0: strength.
+    expect(dimensionBand({ key: 'a', team: 3.96, organization: null }, DEFAULT_RESULT_BANDS)).toBe('strength')
+    expect(dimensionBand({ key: 'a', team: null, organization: 4 }, DEFAULT_RESULT_BANDS)).toBeNull()
+    // The company's own boundaries, not the default.
+    const custom = { ...DEFAULT_RESULT_BANDS, opportunityMin: 3.6 }
+    expect(dimensionBand({ key: 'a', team: 3.5, organization: null }, custom)).toBe('critical')
   })
 })
 

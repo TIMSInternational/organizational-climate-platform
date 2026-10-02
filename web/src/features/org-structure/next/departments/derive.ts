@@ -1,3 +1,4 @@
+import { bandOf, type ResultBands } from '../../../../components/charts'
 import type { Department } from '../../api/departments'
 import type { User } from '../../api/users'
 import type { ActionPlan } from '../../../action-plans/api/actionPlans'
@@ -175,12 +176,14 @@ export type CardNote =
 
 /**
  * The one line under each organigram card, most urgent first: a protected group says so; a
- * department whose mean is under the target names its lowest dimension; otherwise its
+ * department outside the strength area names its lowest dimension; otherwise its
  * supervisor; otherwise nothing to observe.
  */
-export function noteOf(row: DepartmentRow, wave: Wave | null, target: number): CardNote {
+export function noteOf(row: DepartmentRow, wave: Wave | null, bands: ResultBands | null): CardNote {
   if (row.climate.kind === 'protected' && wave) return { kind: 'protected', wave: wave.code }
-  if (row.climate.kind === 'score' && wave && row.climate.mean < target) {
+  // A group outside the strength area names its lowest dimension; without the company's
+  // bands no group is judged at all.
+  if (row.climate.kind === 'score' && wave && bands !== null && bandOf(row.climate.mean, bands) !== 'strength') {
     return { kind: 'lowest', key: row.climate.lowest.key, score: row.climate.lowest.score, wave: wave.code }
   }
   if (row.supervisors && row.supervisors.length > 0) return { kind: 'supervisor', names: row.supervisors }

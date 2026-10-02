@@ -11,7 +11,8 @@ import {
 } from '../../api/climateTrends'
 import { listSurveys, type SurveyListItem } from '../../api/surveys'
 import { dimensionLabel } from '../../dimensionLabel'
-import { CLIMATE_TARGET, waveCode } from '../../../dashboard/next/compose'
+import { waveCode } from '../../../dashboard/next/compose'
+import { useResultBands } from '../../../result-bands/useResultBands'
 import { orderByLatest, withoutArchived } from './derive'
 import type { ClimateTrendsNextModel, OpenWave, TrendDimension, TrendGroup, TrendWave } from './model'
 
@@ -70,6 +71,9 @@ export function useClimateTrendsModel(enabled: boolean): ClimateTrendsModelState
   const [error, setError] = useState<string | null>(null)
   const [attempt, setAttempt] = useState(0)
   const [selectedGroup, setSelectedGroup] = useState<string>(WHOLE_COMPANY_KEY)
+  // The company's scale is part of the reading; a scale that could not be read is the
+  // page's error, never a silent default.
+  const bands = useResultBands()
 
   useEffect(() => {
     // `enabled` is the page's role gate: a leader must never fire this request, which
@@ -100,7 +104,7 @@ export function useClimateTrendsModel(enabled: boolean): ClimateTrendsModelState
   const retry = useCallback(() => setAttempt((previous) => previous + 1), [])
 
   const model = useMemo((): ClimateTrendsNextModel | null => {
-    if (payloads === null) return null
+    if (payloads === null || bands.bands === null) return null
     const { whole, byDepartment, open } = payloads
     const wholeGroup = whole.groups.find((group) => group.key === WHOLE_COMPANY_KEY) ?? whole.groups[0] ?? null
     // The grouped response never carries the `__company__` series on the real API; a
@@ -150,7 +154,7 @@ export function useClimateTrendsModel(enabled: boolean): ClimateTrendsModelState
 
     return {
       companyName,
-      target: CLIMATE_TARGET,
+      bands: bands.bands,
       floor: whole.minimumGroupSize,
       waves,
       withheld,
@@ -162,8 +166,15 @@ export function useClimateTrendsModel(enabled: boolean): ClimateTrendsModelState
       suppressedGroupCount: byDepartment.suppressedGroupCount,
       openWave: openWaveOf(open, scope.companyId),
     }
-  }, [payloads, selectedGroup, companyName, locale, t, scope.companyId])
+  }, [payloads, selectedGroup, companyName, locale, t, scope.companyId, bands.bands])
 
+  const retryAll = () => {
+    bands.retry()
+    retry()
+  }
+  if (bands.status === 'error') {
+    return { status: 'error', model: null, error: t('resultBands.loadError'), retry: retryAll, selectGroup: setSelectedGroup }
+  }
   if (error !== null) return { status: 'error', model: null, error, retry, selectGroup: setSelectedGroup }
   if (model === null) return { status: 'loading', model: null, error: null, retry, selectGroup: setSelectedGroup }
   return { status: 'ready', model, error: null, retry, selectGroup: setSelectedGroup }

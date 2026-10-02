@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
+import { getResultBands } from '../../../result-bands/api'
 import { render, screen, cleanup, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
@@ -153,13 +154,15 @@ describe('ClimateTrendsNextPage', () => {
     window.localStorage.removeItem(COMPANY_CONTEXT_STORAGE_KEY)
   })
 
-  it('draws one chart per dimension from the real payload, judged against the target, with the table below', async () => {
+  it('draws one chart per dimension from the real payload, read in the company’s bands, with the table below', async () => {
     renderAt('company_admin')
     await waitFor(() => expect(document.querySelectorAll('[data-slot="trend-card"]')).toHaveLength(2))
     const belonging = document.querySelector('[data-slot="trend-card"][data-dimension="belonging"]')
     const workload = document.querySelector('[data-slot="trend-card"][data-dimension="workload"]')
-    expect(belonging?.getAttribute('data-standing')).toBe('above')
-    expect(workload?.getAttribute('data-standing')).toBe('below')
+    // Belonging 4,0 is in the strength area; Workload 3,3 in the opportunity area.
+    expect(belonging?.getAttribute('data-band')).toBe('strength')
+    expect(workload?.getAttribute('data-band')).toBe('opportunity')
+    expect(within(belonging as HTMLElement).getByText(en.resultBands.name.strength)).toBeTruthy()
     expect(within(belonging as HTMLElement).getByRole('img').getAttribute('aria-label')).toContain('3.3 → 3.7 → 4.0')
     // Both trends requests carried the resolved company, and the department breakdown was asked for.
     expect(vi.mocked(getClimateTrends).mock.calls.map(([, query]) => [query?.companyId, query?.groupBy])).toEqual([
@@ -172,7 +175,7 @@ describe('ClimateTrendsNextPage', () => {
     const table = screen.getByRole('table')
     expect(screen.getByRole('heading', { name: copy.tableHeading })).toBeTruthy()
     expect(within(table).getAllByRole('row')).toHaveLength(1 + 3 + 1)
-    // The target is CLIMATE_TARGET, as on the Panel de Control: no sample chip.
+    // The bands are the company's own, read from the API: no sample chip.
     expect(screen.queryByText(en.dashboard.next.sampleChip)).toBeNull()
     // The artboard's one footnote: the floor's rule, and that the whole company is never under it.
     const footnote = document.querySelector('[data-slot="trends-footnote"]') as HTMLElement
@@ -231,8 +234,23 @@ describe('ClimateTrendsNextPage', () => {
     expect(tile(copy.closedLabel).querySelector('[data-slot="open-wave"]')?.textContent).toBe(
       copy.openEnters.replace('{wave}', 'Q4').replace('{date}', 'Oct 10'),
     )
-    // The one dimension under the target rose since Q2, and the tile says so.
-    expect(tile(copy.belowLabel).textContent).toContain(copy.risingOne)
+    // With the default bands no dimension is in the critical area, and the tile says so.
+    expect(tile(en.resultBands.name.critical).textContent).toContain(copy.none)
+  })
+
+  it('reads the company’s own bands: a critical area that ends at 3,50 puts Workload in it, rising', async () => {
+    vi.mocked(getResultBands).mockResolvedValueOnce({
+      opportunityMin: 3.5,
+      strengthMin: 4,
+      names: { critical: 'Zona roja', opportunity: null, strength: null },
+    })
+    renderAt('company_admin')
+    await waitFor(() => expect(document.querySelectorAll('[data-slot="trend-card"]')).toHaveLength(2))
+    const workload = document.querySelector('[data-slot="trend-card"][data-dimension="workload"]') as HTMLElement
+    expect(workload.getAttribute('data-band')).toBe('critical')
+    expect(within(workload).getByText('Zona roja')).toBeTruthy()
+    // The one dimension in the critical area rose since Q2 (3,0 → 3,3), and the tile says so.
+    expect(tile('Zona roja').textContent).toContain(copy.risingOne)
   })
 
   it('names only an ACTIVE survey in the open-survey sentence, whatever else the list holds', async () => {

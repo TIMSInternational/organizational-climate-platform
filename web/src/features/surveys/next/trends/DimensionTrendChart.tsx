@@ -1,10 +1,13 @@
-import { standing, trendAxis, type TrendAxis } from './derive'
+import { useTranslation } from '../../../../i18n'
+import { BAND_PAINT, RESULT_BAND_ORDER, SCALE_MAX, SCALE_MIN, bandOf, bandShortName, type ResultBandKey, type ResultBands } from '../../../../components/charts'
+import { trendAxis, type TrendAxis } from './derive'
 
 /**
- * One dimension across the closed waves, against the target — the canvas's chart
- * (ClimateTrends artboard, 10 Sep): a 330×150 figure with a recessive 0.5-step grid, a
- * dashed target rule labelled "meta 3,7", a 2px line with ringed 8px markers and the
- * value over each, the latest marker a step larger, and the wave under each point.
+ * One dimension across the closed waves, read in the company's result bands — the
+ * canvas's chart: a 330×150 figure with the three areas laid behind the line in their
+ * tints and named in their corner, a dashed rule at each boundary, a recessive 0.5-step
+ * grid, a 2px line with ringed 8px markers and the value over each, the latest marker a
+ * step larger and in its band's colour, and the wave under each point.
  *
  * ## One axis for the page
  *
@@ -22,15 +25,17 @@ import { standing, trendAxis, type TrendAxis } from './derive'
  * that is NOT withheld is a wave that did not ask this dimension: the line breaks there
  * too, and nothing claims a protection that was not applied.
  *
- * Colour: the three hexes are the SVG marks only (line, below-target endpoint, target
- * rule), as `TrendSparkline` fixes them for both themes; the grid, the marker rings and
- * every label are theme tokens, so the figure follows the theme.
+ * Colour: the line is the one fixed hex, as `TrendSparkline` draws it; the zones, the
+ * boundaries, the endpoint, the grid, the marker rings and every label are theme tokens,
+ * so the figure follows the theme. The zone names are what keep the areas from being
+ * told by colour alone.
  */
 export interface DimensionTrendChartProps {
   values: readonly (number | null)[]
   /** Per value: `true` when the floor withheld that wave. Omitted means none was. */
   withheld?: readonly boolean[]
-  target: number
+  /** The company's result bands: the zones behind the line, and the endpoint's colour. */
+  bands: ResultBands
   /** The y axis, shared by every chart on the page; derived from `values` when omitted. */
   axis?: TrendAxis
   /** One per value, drawn under the points. */
@@ -39,8 +44,6 @@ export interface DimensionTrendChartProps {
   label: string
   /** Already-translated word drawn where a wave is withheld. */
   withheldText: string
-  /** Already-translated label of the target rule, e.g. "meta 3,7". */
-  targetText: string
   /** How a reading prints: one decimal in the reader's locale. */
   format: (value: number) => string
   width?: number
@@ -48,8 +51,7 @@ export interface DimensionTrendChartProps {
 }
 
 const LINE = '#4d76c7'
-const BELOW_TARGET = '#dd0c15'
-const TARGET = '#b3b8ca'
+const BOUNDARY = 'var(--admin-line-control)'
 /** Where the plot starts; the tick labels end 6px before it. */
 const AXIS_LEFT = 30
 const AXIS_RIGHT = 24
@@ -73,17 +75,17 @@ function overlaps(a: Box, b: Box): boolean {
 export default function DimensionTrendChart({
   values,
   withheld,
-  target,
+  bands,
   axis: sharedAxis,
   labels,
   label,
   withheldText,
-  targetText,
   format,
   width = 330,
   height = 150,
 }: DimensionTrendChartProps) {
-  const { low, high, ticks } = sharedAxis ?? trendAxis(values, target)
+  const { t } = useTranslation()
+  const { low, high, ticks } = sharedAxis ?? trendAxis(values, bands)
   const plotBottom = height - LABEL_BAND
   const firstX = AXIS_LEFT + INSET
   const lastX = width - AXIS_RIGHT - INSET
@@ -111,20 +113,38 @@ export default function DimensionTrendChart({
     if (value !== null) lastIndex = index
   })
 
-  // The target's label goes where it collides with no point and no value printed over
-  // one: left above the rule, then left below, then the same two on the right.
+  // The three areas, clipped to the drawn range. Each zone's name goes in a corner where
+  // it collides with no point and no value printed over one — top left, top right, then
+  // the bottom two — and is left out when the zone is too thin or every corner is taken:
+  // the legend above the charts names every area either way.
   const taken: Box[] = values.flatMap((value, index) =>
     value === null ? [] : [{ x1: x(index) - 16, x2: x(index) + 16, y1: y(value) - 21, y2: y(value) + 6 }],
   )
-  const ruleY = y(target)
-  const labelWidth = targetText.length * 5.2
-  const candidates = [
-    { x: AXIS_LEFT + 2, y: ruleY - 4, anchor: 'start' as const, box: { x1: AXIS_LEFT, x2: AXIS_LEFT + 2 + labelWidth, y1: ruleY - 13, y2: ruleY - 2 } },
-    { x: AXIS_LEFT + 2, y: ruleY + 12, anchor: 'start' as const, box: { x1: AXIS_LEFT, x2: AXIS_LEFT + 2 + labelWidth, y1: ruleY + 2, y2: ruleY + 14 } },
-    { x: width - AXIS_RIGHT, y: ruleY - 4, anchor: 'end' as const, box: { x1: width - AXIS_RIGHT - labelWidth, x2: width - AXIS_RIGHT, y1: ruleY - 13, y2: ruleY - 2 } },
-    { x: width - AXIS_RIGHT, y: ruleY + 12, anchor: 'end' as const, box: { x1: width - AXIS_RIGHT - labelWidth, x2: width - AXIS_RIGHT, y1: ruleY + 2, y2: ruleY + 14 } },
-  ]
-  const targetLabel = candidates.find((candidate) => !taken.some((box) => overlaps(box, candidate.box))) ?? candidates[0]
+  const plotLeft = AXIS_LEFT
+  const plotRight = width - AXIS_RIGHT
+  const edges: Record<ResultBandKey, [number, number]> = {
+    critical: [SCALE_MIN, bands.opportunityMin],
+    opportunity: [bands.opportunityMin, bands.strengthMin],
+    strength: [bands.strengthMin, SCALE_MAX],
+  }
+  const zones = RESULT_BAND_ORDER.flatMap((band) => {
+    const from = Math.max(edges[band][0], low)
+    const to = Math.min(edges[band][1], high)
+    if (to <= from) return []
+    const top = y(to)
+    const bottom = y(from)
+    const name = bandShortName(band, bands, t).toLocaleUpperCase()
+    const labelWidth = name.length * 5.4
+    const candidates = [
+      { x: plotLeft + 4, y: top + 10, anchor: 'start' as const, box: { x1: plotLeft, x2: plotLeft + 4 + labelWidth, y1: top + 1, y2: top + 12 } },
+      { x: plotRight - 4, y: top + 10, anchor: 'end' as const, box: { x1: plotRight - 4 - labelWidth, x2: plotRight, y1: top + 1, y2: top + 12 } },
+      { x: plotLeft + 4, y: bottom - 3, anchor: 'start' as const, box: { x1: plotLeft, x2: plotLeft + 4 + labelWidth, y1: bottom - 12, y2: bottom - 1 } },
+      { x: plotRight - 4, y: bottom - 3, anchor: 'end' as const, box: { x1: plotRight - 4 - labelWidth, x2: plotRight, y1: bottom - 12, y2: bottom - 1 } },
+    ]
+    const spot = bottom - top >= 13 ? candidates.find((candidate) => !taken.some((box) => overlaps(box, candidate.box))) : undefined
+    return [{ band, top, bottom, name, spot }]
+  })
+  const boundaries = [bands.opportunityMin, bands.strengthMin].filter((value) => value > low && value < high)
 
   const anchorAt = (index: number): 'start' | 'middle' | 'end' =>
     values.length > 1 && index === 0 ? 'start' : values.length > 1 && index === values.length - 1 ? 'end' : 'middle'
@@ -137,6 +157,18 @@ export default function DimensionTrendChart({
       viewBox={`0 0 ${width} ${height}`}
       className="block h-auto w-full max-w-full text-fg-label"
     >
+      {zones.map((zone) => (
+        <rect
+          key={zone.band}
+          data-slot="trend-zone"
+          data-band={zone.band}
+          x={plotLeft}
+          y={zone.top}
+          width={plotRight - plotLeft}
+          height={zone.bottom - zone.top}
+          fill={BAND_PAINT[zone.band].zone}
+        />
+      ))}
       {ticks.map((tick) => (
         <g key={tick}>
           <line
@@ -160,26 +192,37 @@ export default function DimensionTrendChart({
           </text>
         </g>
       ))}
-      <line
-        data-slot="trend-target"
-        x1={AXIS_LEFT}
-        x2={width - AXIS_RIGHT}
-        y1={ruleY}
-        y2={ruleY}
-        stroke={TARGET}
-        strokeWidth={1}
-        strokeDasharray="4 3"
-      />
-      <text
-        data-slot="trend-target-label"
-        x={targetLabel.x}
-        y={targetLabel.y}
-        textAnchor={targetLabel.anchor}
-        fill="currentColor"
-        fontSize={10}
-      >
-        {targetText}
-      </text>
+      {boundaries.map((boundary) => (
+        <line
+          key={boundary}
+          data-slot="trend-boundary"
+          x1={plotLeft}
+          x2={plotRight}
+          y1={y(boundary)}
+          y2={y(boundary)}
+          stroke={BOUNDARY}
+          strokeWidth={1}
+          strokeDasharray="4 3"
+        />
+      ))}
+      {zones.map((zone) =>
+        zone.spot ? (
+          <text
+            key={zone.band}
+            data-slot="trend-zone-label"
+            data-band={zone.band}
+            x={zone.spot.x}
+            y={zone.spot.y}
+            textAnchor={zone.spot.anchor}
+            fill={BAND_PAINT[zone.band].ink}
+            fontSize={9}
+            fontWeight={600}
+            letterSpacing="0.06em"
+          >
+            {zone.name}
+          </text>
+        ) : null,
+      )}
       {paths.map((d, index) => (
         <path
           key={index}
@@ -202,7 +245,7 @@ export default function DimensionTrendChart({
                 cy={plotBottom}
                 r={4}
                 className="fill-surface-card"
-                stroke={TARGET}
+                stroke={BOUNDARY}
                 strokeDasharray="2 2"
               />
               <text
@@ -218,16 +261,16 @@ export default function DimensionTrendChart({
           )
         }
         const isLast = index === lastIndex
-        const below = isLast && standing(value, target) === 'below'
+        const band = isLast ? bandOf(value, bands) : null
         return (
           <g key={index}>
             <circle
               data-slot={isLast ? 'trend-end' : 'trend-point'}
-              data-below-target={isLast ? (below ? 'true' : 'false') : undefined}
+              data-band={band ?? undefined}
               cx={x(index)}
               cy={y(value)}
               r={isLast ? 5 : 4}
-              fill={below ? BELOW_TARGET : LINE}
+              fill={band ? BAND_PAINT[band].line : LINE}
               className="stroke-surface-card"
               strokeWidth={2}
             />

@@ -1,4 +1,5 @@
 {
+  "GET /admin/companies/*/result-bands": {"opportunityMin": 3, "strengthMin": 4, "criticalName": null, "opportunityName": null, "strengthName": null},
   "_comment": "Mis tareas with a task (MisTareasAsignadas artboard): Alejandro Retana, empleado de Finanzas, is the responsable of PA-2026-00002 -- a plan of Ingenieria, whose jefatura records its avance. His own department is Finanzas, so the plan's nodo has no name for him.",
   "GET /notifications/mine": {
     "notifications": []

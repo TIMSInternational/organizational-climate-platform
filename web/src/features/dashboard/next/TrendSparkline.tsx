@@ -1,4 +1,4 @@
-import { isBelowTarget } from './derive'
+import { BAND_PAINT, bandOf, type ResultBands } from '../../../components/charts'
 
 /**
  * A 150×60 small multiple, as the Dashboard artboard draws it (10 Sep): one dimension's
@@ -20,7 +20,8 @@ import { isBelowTarget } from './derive'
  */
 export interface TrendSparklineProps {
   values: readonly number[]
-  target: number
+  /** The company's bands: a dashed rule at each boundary, and the last point in its band's colour. */
+  bands: ResultBands
   /** One per value, drawn under the figure. */
   labels: readonly string[]
   /** Already-translated accessible description of the whole figure. */
@@ -32,8 +33,7 @@ export interface TrendSparklineProps {
 }
 
 const LINE = '#4d76c7'
-const BELOW_TARGET = '#dd0c15'
-const TARGET = '#b3b8ca'
+const BOUNDARY = 'var(--admin-line-control)'
 const PAD_X = 12
 const PAD_TOP = 6
 /** From the bottom: the hairline the canvas draws under the line. */
@@ -42,15 +42,15 @@ const HALF_BAND = 0.25
 
 export default function TrendSparkline({
   values,
-  target,
+  bands,
   labels,
   label,
   domain,
   width = 150,
   height = 60,
 }: TrendSparklineProps) {
-  const low = domain ? domain[0] : Math.min(...values, target) - HALF_BAND
-  const high = domain ? domain[1] : Math.max(...values, target) + HALF_BAND
+  const low = domain ? domain[0] : Math.min(...values, bands.opportunityMin) - HALF_BAND
+  const high = domain ? domain[1] : Math.max(...values, bands.strengthMin) + HALF_BAND
   const baseline = height - BASELINE_GAP
   const plotHeight = baseline - 4 - PAD_TOP
   const step = values.length > 1 ? (width - PAD_X * 2) / (values.length - 1) : 0
@@ -63,7 +63,10 @@ export default function TrendSparkline({
     .join(' ')
   const last = points[points.length - 1]
   const lastValue = values[values.length - 1]
-  const below = lastValue !== undefined && isBelowTarget(lastValue, target)
+  const band = lastValue === undefined ? null : bandOf(lastValue, bands)
+  // A boundary outside the drawn range is not drawn: a rule pinned to the edge would
+  // claim a boundary where there is none.
+  const boundaries = [bands.opportunityMin, bands.strengthMin].filter((value) => value > low && value < high)
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -74,16 +77,19 @@ export default function TrendSparkline({
         viewBox={`0 0 ${width} ${height}`}
         className="block h-15 w-full max-w-full"
       >
-        <line
-          data-slot="trend-target"
-          x1={6}
-          x2={width - 6}
-          y1={y(target)}
-          y2={y(target)}
-          stroke={TARGET}
-          strokeWidth={1}
-          strokeDasharray="3 3"
-        />
+        {boundaries.map((boundary) => (
+          <line
+            key={boundary}
+            data-slot="trend-boundary"
+            x1={6}
+            x2={width - 6}
+            y1={y(boundary)}
+            y2={y(boundary)}
+            stroke={BOUNDARY}
+            strokeWidth={1}
+            strokeDasharray="3 3"
+          />
+        ))}
         <line x1={6} x2={width - 6} y1={baseline} y2={baseline} className="stroke-line-light" strokeWidth={1} />
         <path
           data-slot="trend-line"
@@ -100,11 +106,11 @@ export default function TrendSparkline({
         {last && (
           <circle
             data-slot="trend-end"
-            data-below-target={below ? 'true' : 'false'}
+            data-band={band ?? undefined}
             cx={last.x}
             cy={last.y}
             r={4}
-            fill={below ? BELOW_TARGET : LINE}
+            fill={band ? BAND_PAINT[band].line : LINE}
             className="stroke-surface-card"
             strokeWidth={2}
           />

@@ -1,3 +1,4 @@
+import { DEFAULT_RESULT_BANDS } from '../../../components/charts'
 import type { AdminDashboardModel } from './model'
 
 /**
@@ -23,7 +24,7 @@ export const fullModel: AdminDashboardModel = {
   isPartial: false,
   asOf: '2026-09-10',
   companyName: 'Grupo Meridiano S.A.',
-  target: 3.7,
+  bands: DEFAULT_RESULT_BANDS,
   latestClosedWave: {
     id: 's-q3',
     code: 'Q3',

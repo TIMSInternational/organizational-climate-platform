@@ -2,7 +2,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowRight, Check, ChevronDown, Download, MoreHorizontal } from 'lucide-react'
 import { useTranslation } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
-import { KpiTile, WordCloud, formatMetric, type ClimateMapSelection } from '../../../components/charts'
+import {
+  BandChip,
+  KpiTile,
+  WordCloud,
+  bandCellStyle,
+  bandName,
+  bandOf,
+  formatMetric,
+  type ClimateMapSelection,
+  type ResultBands,
+} from '../../../components/charts'
 import {
   Button,
   DropdownMenu,
@@ -31,9 +41,8 @@ import ResultsCellPanel from './ResultsCellPanel'
 import ResultsClimateGrid from './ResultsClimateGrid'
 import SurveyResultsQuestions from './SurveyResultsQuestions'
 import {
-  CLIMATE_TARGET,
-  belowTarget,
   cellDetail,
+  criticalCells,
   companyDelta,
   companyMean,
   companyScores,
@@ -46,7 +55,7 @@ import {
   withheldWords,
   type ResultsFinding,
 } from './derive'
-import { deltaInkOf, tintOf } from './tint'
+import { deltaInkOf } from './tint'
 
 /** The id the open cell's `aria-controls` names. */
 const PANEL_ID = 'results-next-cell-panel'
@@ -69,9 +78,9 @@ interface SurveyResultsNextViewProps {
  * Reads top to bottom the way the design does: four tiles, "where to look first",
  * the map as the hero — ONE grid with the whole company first and a mean and a delta
  * per group — then the opened cell with its question, the same dimension in the
- * other groups and the plan that covers the group. Every figure is measured against
- * the climate target `CLIMATE_TARGET` (3,7), the one the Panel de Control reads, never
- * against the survey's own mean.
+ * other groups and the plan that covers the group. Every figure is read in the company's
+ * result bands (`model.bands`), the scale the Panel de Control reads, never against the
+ * survey's own mean.
  *
  * ## Why the opened cell always opens, and comes into view
  *
@@ -132,7 +141,8 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
 
   const rows = useMemo(() => groupRows(model), [model])
   const company = useMemo(() => ({ scores: companyScores(model), mean: companyMean(model) }), [model])
-  const below = useMemo(() => belowTarget(model), [model])
+  const bands = model.bands
+  const critical = useMemo(() => criticalCells(model), [model])
   const groups = useMemo(() => legibleGroups(model), [model])
   const findings = useMemo(() => whereToLookFirst(model), [model])
   const detail = useMemo(() => (selection ? cellDetail(model, selection) : null), [model, selection])
@@ -194,7 +204,10 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
   const csvPayload = { surveyId: model.surveyId }
 
   const name = model.name ?? t('surveyResults.untitled')
-  const target = score(CLIMATE_TARGET)
+  const strengthName = bandName('strength', bands, t)
+  const criticalName = bandName('critical', bands, t)
+  const criticalGroups = new Set(critical.map((cell) => cell.rowId))
+  const criticalOneGroup = critical.length > 0 && criticalGroups.size === 1 ? critical[0]?.rowName : null
   const isClosed = CLOSED_STATUSES.has(model.status)
   // The closing day, off `GET /surveys/{id}`'s `endDate` — a calendar day, read in UTC.
   const closingDay = model.closesAt ? calendarDayLong(Date.parse(model.closesAt), locale) : null
@@ -332,7 +345,13 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
             value={company.mean}
             format={{ kind: 'number', decimals: 2 }}
             locale={locale}
-            unit={t('surveyResults.next.climateUnit', { target })}
+            unit={
+              <span className="inline-flex flex-wrap items-center gap-2">
+                {t('resultBands.results.climateUnit')}
+                {/* The mean is printed at two decimals, so it is judged at two. */}
+                {company.mean !== null && <BandChip band={bandOf(company.mean, bands, 2)} bands={bands} />}
+              </span>
+            }
             sub={
               company.mean !== null && (
                 // One line in one colour, as the artboard draws it: the change since the
@@ -379,16 +398,26 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
             }
           />
           <KpiTile
-            label={t('surveyResults.next.belowTargetLabel')}
-            value={climate ? below.length : null}
+            label={criticalName}
+            value={climate ? critical.length : null}
             locale={locale}
-            unit={t('surveyResults.next.belowSub')}
+            unit={
+              criticalOneGroup
+                ? t('resultBands.results.cellsAllIn', { group: criticalOneGroup })
+                : t('resultBands.results.cells')
+            }
             sub={
-              below.length === 0 ? (
-                <span className="text-fg-label">{t('surveyResults.next.belowTargetNone', { target })}</span>
+              critical.length === 0 ? (
+                <span className="text-fg-label">{t('resultBands.results.criticalNone', { band: criticalName })}</span>
               ) : (
-                <span className="text-accent-red-ink" data-testid="below-target">
-                  {below.map((entry) => `${dimensionName(entry.key)} ${score(entry.score)}`).join(' · ')}
+                <span className="text-chip-critical-ink" data-testid="critical-cells">
+                  {critical
+                    .map((cell) =>
+                      criticalOneGroup
+                        ? `${dimensionName(cell.dimensionKey)} ${score(cell.score)}`
+                        : `${cell.rowName} · ${dimensionName(cell.dimensionKey)} ${score(cell.score)}`,
+                    )
+                    .join(' · ')}
                 </span>
               )
             }
@@ -410,15 +439,15 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
                 {findings.length > 0 && (
                   <p className="m-0 text-sm text-fg-label">
                     {findings.length === 1
-                      ? t('surveyResults.next.whereSubOne')
+                      ? t('resultBands.results.whereSubOne', { band: strengthName })
                       : findings.length === 2
-                        ? t('surveyResults.next.whereSubTwo')
-                        : t('surveyResults.next.whereSubThree')}
+                        ? t('resultBands.results.whereSubTwo', { band: strengthName })
+                        : t('resultBands.results.whereSubThree', { band: strengthName })}
                   </p>
                 )}
               </div>
               {findings.length === 0 ? (
-                <p className="m-0 text-sm text-fg-secondary">{t('surveyResults.next.whereNoneTarget', { target })}</p>
+                <p className="m-0 text-sm text-fg-secondary">{t('resultBands.results.whereNone', { band: strengthName })}</p>
               ) : (
                 // Three across from `xl`; at 1024 three columns cut every name, so they stack.
                 <ul className="m-0 grid list-none gap-3 p-0 xl:grid-cols-3" data-testid="findings">
@@ -429,16 +458,21 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
                     >
                       <div className="flex items-center gap-2.5">
                         <span
-                          className="flex h-7 w-11 shrink-0 items-center justify-center rounded font-mono text-sm tabular-nums"
-                          style={tintOf(finding.band)}
+                          data-band={finding.band}
+                          className="flex h-7 w-11 shrink-0 items-center justify-center rounded border font-mono text-sm font-semibold tabular-nums"
+                          style={bandCellStyle(finding.band)}
                         >
                           {score(finding.score)}
+                          <span className="sr-only">{` — ${bandName(finding.band, bands, t)}`}</span>
                         </span>
                         <span className="flex min-w-0 flex-col">
                           <span className="truncate text-base font-semibold text-fg-primary">
                             {finding.rowName} · {dimensionName(finding.dimensionKey)}
                           </span>
-                          <span className="text-xs text-fg-label">{reasonOf(finding, t, score)}</span>
+                          <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-fg-label">
+                            {finding.reason !== 'band' && <span>{reasonOf(finding, t, bands)}</span>}
+                            <BandChip band={finding.band} bands={bands} />
+                          </span>
                         </span>
                       </div>
                       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -482,10 +516,11 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
                 <p className="m-0 text-sm text-fg-label">
                   {climate.target === null
                     ? t('surveyResults.climateAllProtected', { minimum: climate.threshold })
-                    : t('surveyResults.next.mapSubTarget', { target })}
+                    : t('resultBands.results.mapSub')}
                 </p>
               </div>
               <ResultsClimateGrid
+                bands={bands}
                 dimensions={climate.dimensions.map((entry) => ({ key: entry.key, name: dimensionName(entry.key) }))}
                 rows={rows}
                 company={company}
@@ -520,6 +555,7 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
             {detail && (
               <div ref={panelRef} className="scroll-mt-4">
                 <ResultsCellPanel
+                  bands={bands}
                   id={PANEL_ID}
                   headingRef={headingRef}
                   detail={detail}
@@ -599,20 +635,27 @@ function climateSentence(
   return { text: rises === null ? change : `${change} · ${rises}`, ink: deltaInkOf(delta, 2) }
 }
 
-/** The one-line reason under a finding's name — derived in `whereToLookFirst`, worded here. */
-function reasonOf(finding: ResultsFinding, t: Translate, score: (value: number) => string): string {
+/**
+ * The one-line reason under a finding's name — derived in `whereToLookFirst`, worded here.
+ * The band itself is always named beside it, in its chip; `band` is the reason that says
+ * nothing more than that.
+ */
+function reasonOf(finding: ResultsFinding, t: Translate, bands: ResultBands): string {
   switch (finding.reason) {
     case 'lowest':
-      return t('surveyResults.next.reasonLowest', { shortfall: score(finding.shortfall) })
+      return t('resultBands.results.reasonLowest')
     case 'second-same-group':
       return t('surveyResults.next.reasonSecond')
     case 'third-same-group':
       return t('surveyResults.next.reasonThird')
-    case 'only-red-outside':
-      return t('surveyResults.next.reasonOnlyRedOutside', { group: finding.outsideOf ?? '' })
+    case 'only-critical-outside':
+      return t('resultBands.results.reasonOnlyCriticalOutside', {
+        band: bandName('critical', bands, t),
+        group: finding.outsideOf ?? '',
+      })
     case 'lowest-outside':
       return t('surveyResults.next.reasonLowestOutside', { group: finding.outsideOf ?? '' })
     default:
-      return t('surveyResults.next.reasonShortfall', { shortfall: score(finding.shortfall) })
+      return bandName(finding.band, bands, t)
   }
 }

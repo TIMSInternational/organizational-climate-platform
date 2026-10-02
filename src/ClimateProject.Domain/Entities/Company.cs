@@ -32,4 +32,13 @@ public class CompanySettings
     public int DataRetentionDays { get; set; } = 2555;
     public string Timezone { get; set; } = "UTC";
     public string Language { get; set; } = "en";
+
+    // The result bands (see Application/OrgStructure/ResultBands.cs). The defaults are the
+    // product default for every tenant: critical under 3,00, opportunity 3,00–3,99,
+    // strength from 4,00. A null name is the product's own name for that area.
+    public decimal ResultBandOpportunityMin { get; set; } = 3.00m;
+    public decimal ResultBandStrengthMin { get; set; } = 4.00m;
+    public string? ResultBandCriticalName { get; set; }
+    public string? ResultBandOpportunityName { get; set; }
+    public string? ResultBandStrengthName { get; set; }
 }

@@ -1,3 +1,4 @@
+import { DEFAULT_RESULT_BANDS } from '../../../../components/charts'
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import { render, screen, cleanup, within, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -28,11 +29,11 @@ const copy = en.dashboard.next.leader
 const DEPARTMENT = '5bfdb04e-8847-4baa-89c8-d4411654a129'
 const KEYS = ['belonging', 'growth', 'psychological_safety', 'recognition', 'trust', 'workload']
 
-/** Ingeniería's Q3 (6 respondents). Reconocimiento prints 3,5, under the 3,7 target. */
+/** Ingeniería's Q3 (6 respondents). Reconocimiento prints 3,5, in the opportunity area. */
 const Q3 = [4.33, 4.17, 4, 3.5, 4, 3.67]
 /** The whole company's Q3 (24 respondents) — the organisation's side of the same survey. */
 const ORG_Q3 = [4, 3.79, 3.75, 3.38, 3.67, 3.33]
-/** Ingeniería's Q2 — Reconocimiento 3,2 and Carga de trabajo 3,5, both under the target. */
+/** Ingeniería's Q2 — every reading under 4,0, so every cell is in the opportunity area. */
 const Q2 = [3.83, 3.83, 3.83, 3.17, 3.67, 3.5]
 
 function organization(scores: readonly number[], respondentCount = 24) {
@@ -130,7 +131,7 @@ function renderLeader({
     trackingOn,
     viewer: { personaExternalId: 'luis', name: 'Luis Mora' },
     asOf: '2026-09-11T15:00:00.000Z',
-    target: 3.7,
+    bands: DEFAULT_RESULT_BANDS,
   })
   return render(
     <TranslationProvider>
@@ -213,39 +214,34 @@ describe('LeaderDashboardView', () => {
   })
 
   /**
-   * The ONE target rule, shared with the administrator's map (`derive.targetStanding`).
+   * The ONE band rule, shared with the administrator's map (`bandOf` at the printed decimal),
+   * in the company's own bands.
    *
-   * Q3 is judged first and **no cell is under the target** — Reconocimiento 3,5 sits inside
-   * the grey band, three tenths being the band's width. So the page offers no plan at all.
-   * The artboard draws that card red with a Crear plan; that difference is OPEN and recorded
-   * on `compose.dimensionStanding`. Do not close it by making this expect 'below'.
-   *
-   * Q2 is where a cell really is under: Reconocimiento 3,2. Carga de trabajo 3,5 is on target
-   * by the same band, so there is exactly ONE offer, not two.
+   * Q3: Reconocimiento 3,5 and Carga de trabajo 3,67 (prints 3,7) are in the opportunity area
+   * and every other cell in the strength area — so two plans are offered and no card is red.
+   * A plan is offered for any cell outside the strength area; only the critical one tints the
+   * whole card.
    */
-  it('judges every cell by the one shared target rule, and offers a plan only where a reading is under it', () => {
+  it('reads every cell in the company’s bands, and offers a plan only outside the strength area', () => {
     renderLeader()
 
-    const recognition = dimensionCard('recognition')
-    // 3,5 against 3,7: inside the band, so on target — as on the administrator's map.
-    expect(recognition.dataset.standing).toBe('on')
-    expect(recognition.className).not.toMatch(/accent-red-soft/)
-    // 3,67 prints 3,7: on the target, not under it.
-    expect(dimensionCard('workload').dataset.standing).toBe('on')
-    expect(dimensionCard('belonging').dataset.standing).toBe('above')
-    expect(screen.queryAllByRole('link', { name: /^Create a plan for/ })).toHaveLength(0)
+    expect(dimensionCard('recognition').dataset.band).toBe('opportunity')
+    expect(dimensionCard('workload').dataset.band).toBe('opportunity')
+    expect(dimensionCard('belonging').dataset.band).toBe('strength')
+    expect(document.querySelectorAll('[data-slot="team-dimension"][class*="accent-red-soft"]')).toHaveLength(0)
+    expect(within(dimensionCard('recognition')).getByText(en.resultBands.name.opportunity)).toBeTruthy()
+    expect(within(dimensionCard('belonging')).getByText(en.resultBands.name.strength)).toBeTruthy()
+    const create = within(dimensionCard('recognition')).getByRole('link', { name: copy.createPlanFor.replace('{dimension}', 'Recognition') })
+    expect(create.getAttribute('href')).toBe('/tracking/planes')
+    expect(screen.getAllByRole('link', { name: /^Create a plan for/ })).toHaveLength(2)
     cleanup()
 
-    // Q2: Reconocimiento 3,2 is genuinely under the target — one cell, one offer.
-    renderLeader({ dashboard: department({ climate: climate(Q2) }) })
-    const q2Recognition = dimensionCard('recognition')
-    expect(q2Recognition.dataset.standing).toBe('below')
-    expect(within(q2Recognition).getByText(copy.standingBelow.replace('{target}', '3.7'))).toBeTruthy()
-    const create = within(q2Recognition).getByRole('link', { name: copy.createPlanFor.replace('{dimension}', 'Recognition') })
-    expect(create.getAttribute('href')).toBe('/tracking/planes')
-    // Carga de trabajo 3,5 is inside the band here too.
-    expect(dimensionCard('workload').dataset.standing).toBe('on')
-    expect(screen.getAllByRole('link', { name: /^Create a plan for/ })).toHaveLength(1)
+    // A critical reading tints its whole card and names the critical area.
+    renderLeader({ dashboard: department({ climate: climate([4.33, 4.17, 4, 2.8, 4, 3.67]) }) })
+    const critical = dimensionCard('recognition')
+    expect(critical.dataset.band).toBe('critical')
+    expect(critical.className).toMatch(/accent-red-soft/)
+    expect(within(critical).getByText(en.resultBands.name.critical)).toBeTruthy()
   })
 
   /**
@@ -253,15 +249,13 @@ describe('LeaderDashboardView', () => {
    * non-administrator on any nodo but their own claim's. A leader whose claim names no nodo
    * would be refused on every node, so the page never offers the button to them.
    */
-  it('offers no Crear plan to a leader who leads no nodo, and still says the cell is below target', () => {
-    // Q2, because under the shared target rule Q3 has no cell below it at all — and a test
-    // for "the word still shows, the button does not" needs a cell that carries the word.
+  it('offers no Crear plan to a leader who leads no nodo, and still names the cell’s band', () => {
     renderLeader({ dashboard: department({ climate: climate(Q2) }), nodoId: 'unassigned-c1', tablero: { status: 'off' } })
 
     const recognition = dimensionCard('recognition')
-    expect(within(recognition).getByText(copy.standingBelow.replace('{target}', '3.7'))).toBeTruthy()
+    expect(within(recognition).getByText(en.resultBands.name.opportunity)).toBeTruthy()
     expect(screen.queryByRole('link', { name: /^Create a plan for/ })).toBeNull()
-    expect(screen.queryByText(copy.planRule)).toBeNull()
+    expect(screen.queryByText(en.resultBands.leader.planRule.replace('{band}', en.resultBands.name.strength))).toBeNull()
   })
 
   it('offers no Crear plan where this deployment has no tracking service', () => {
@@ -288,8 +282,8 @@ describe('LeaderDashboardView', () => {
     })
 
     const compare = card(copy.compareHeading)
-    // No reading in the grid. The card's meta keeps "target 3.7" — the target, which is
-    // everyone's and no group's — so the grid is what is searched.
+    // No reading in the grid. The card's meta keeps the band boundaries — the company's
+    // scale, which is everyone's and no group's — so the grid is what is searched.
     const grid = compare.querySelector<HTMLElement>('[data-slot="team-dimensions"]')!
     expect(grid.textContent).not.toMatch(/\d[.,]\d/)
     expect(document.querySelectorAll('[data-slot="team-reading"]')).toHaveLength(0)
@@ -334,7 +328,7 @@ describe('LeaderDashboardView', () => {
       expect(orgRow.textContent, key).toContain(String(Math.round((ORG_Q3[index] ?? 0) * 10) / 10))
     }
     expect(legend().textContent).toContain(copy.legendOrg.replace('{count}', '24'))
-    expect(legend().textContent).toContain(copy.planRule)
+    expect(legend().textContent).toContain(en.resultBands.leader.planRule.replace('{band}', en.resultBands.name.strength))
     // Every region is live: no "Datos de muestra" anywhere on the page.
     expect(screen.queryAllByText(en.dashboard.next.sampleChip)).toHaveLength(0)
   })
@@ -357,7 +351,7 @@ describe('LeaderDashboardView', () => {
     // The plan rule still stands: the team's own cells are still judged, by the shared rule
     // — Q3's Reconocimiento 3,5 is inside the band, so 'on'. What matters here is that a
     // withheld organisation side does not stop the team's own cell being judged at all.
-    expect(dimensionCard('recognition').dataset.standing).toBe('on')
+    expect(dimensionCard('recognition').dataset.band).toBe('opportunity')
   })
 
   /**

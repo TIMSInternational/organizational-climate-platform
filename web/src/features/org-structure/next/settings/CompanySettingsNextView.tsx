@@ -3,7 +3,7 @@ import { useParams } from 'react-router'
 import { ArrowDownToLine, Check, FileText } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
-import { ANONYMITY_FLOOR } from '../../../../components/charts'
+import { ANONYMITY_FLOOR, DEFAULT_RESULT_BANDS } from '../../../../components/charts'
 import { Button, EmptyState, Input, NetworkError, SkeletonText } from '../../../../components/ui'
 import { readViewerClaims, useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { updateCompanySettings } from '../../api/companySettings'
@@ -19,6 +19,10 @@ import {
   type SettingsDraft,
 } from './derive'
 import { useCompanySettingsModel, type CompanySettingsModel } from './useCompanySettingsModel'
+import ResultBandsCard from './ResultBandsCard'
+import { bandsChanged, bandsDraftOf, bandsOut, judgeBands, type BandsDraft } from './bandsDraft'
+import { fromWire, toWire } from '../../../result-bands/api'
+import { rememberResultBands } from '../../../result-bands/useResultBands'
 
 const DASH = '—'
 const LANGUAGES = ['es', 'en']
@@ -141,6 +145,13 @@ function SettingsForm({
   const [saving, setSaving] = useState(false)
   const [notice, setNotice] = useState<'saved' | 'nothing' | null>(initialNotice)
   const [saveError, setSaveError] = useState<string | null>(null)
+  // The result bands: a draft of their own, saved by the same button. An API older than the
+  // bands sends none, and the card is then not drawn rather than drawn over a default.
+  const savedBands = model.settings.resultBands ? fromWire(model.settings.resultBands) : null
+  const initialBands = savedBands ? bandsDraftOf(savedBands, t, locale) : null
+  const defaultBands = bandsDraftOf(DEFAULT_RESULT_BANDS, t, locale)
+  const [bandsDraft, setBandsDraft] = useState<BandsDraft | null>(initialBands)
+  const bandsValid = bandsDraft === null || judgeBands(bandsDraft).ok
   const set = (patch: Partial<SettingsDraft>) => {
     setDraft((current) => ({ ...current, ...patch }))
     setNotice(null)
@@ -158,6 +169,10 @@ function SettingsForm({
 
   async function save() {
     const changes = changesOf(initial, draft)
+    if (savedBands && bandsDraft && bandsChanged(savedBands, bandsDraft, t)) {
+      const next = bandsOut(bandsDraft, t)
+      if (next) changes.resultBands = toWire(next)
+    }
     if (Object.keys(changes).length === 0) {
       setNotice('nothing')
       return
@@ -166,6 +181,8 @@ function SettingsForm({
     setSaveError(null)
     try {
       const saved = await updateCompanySettings(baseUrl, companyId, changes)
+      // Every banded screen read after this one reads the scale just written.
+      if (saved.resultBands) rememberResultBands(companyId, fromWire(saved.resultBands))
       onSaved(saved)
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : t('errors.generic'))
@@ -189,13 +206,14 @@ function SettingsForm({
               size="canvas"
               onClick={() => {
                 setDraft(initial)
+                setBandsDraft(initialBands)
                 setNotice(null)
                 setSaveError(null)
               }}
             >
               {t(`${K}.discard`)}
             </Button>
-            <Button variant="primary" size="canvas" disabled={saving || !colourValid} onClick={() => void save()}>
+            <Button variant="primary" size="canvas" disabled={saving || !colourValid || !bandsValid} onClick={() => void save()}>
               <Check aria-hidden="true" />
               {saving ? t(`${K}.saving`) : t(`${K}.save`)}
             </Button>
@@ -213,108 +231,121 @@ function SettingsForm({
       )}
 
       <div data-slot="settings-grid" className="-mt-1 grid gap-4 xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
-        <Panel
-          labelledBy={`${ids}-surveys`}
-          heading={
-            <h2 id={`${ids}-surveys`} className="m-0 text-2xl">
-              {t(`${K}.surveysHeading`)}
-            </h2>
-          }
-          meta={t(`${K}.surveysMeta`)}
-          className="gap-4 pb-5"
-        >
-          <div className="grid gap-x-5 gap-y-4 sm:grid-cols-2">
-            <Field fieldLabel={t(`${K}.language`)} htmlFor={`${ids}-language`} required helper={t(`${K}.languageHelp`)}>
-              <CanvasSelect
-                id={`${ids}-language`}
-                className="w-full"
-                value={draft.language}
-                onChange={(event) => set({ language: event.target.value })}
-              >
-                {(LANGUAGES.includes(draft.language) ? LANGUAGES : [draft.language, ...LANGUAGES]).map((code) => (
-                  <option key={code} value={code}>
-                    {LANGUAGES.includes(code) ? t(`${K}.languageOption.${code}`) : code}
-                  </option>
-                ))}
-              </CanvasSelect>
-            </Field>
-            <Field fieldLabel={t(`${K}.frequency`)} htmlFor={`${ids}-frequency`} helper={t(frequencyHelpKey(draft.surveyFrequency))}>
-              <CanvasSelect
-                id={`${ids}-frequency`}
-                className="w-full"
-                value={draft.surveyFrequency}
-                onChange={(event) => set({ surveyFrequency: event.target.value })}
-              >
-                {(FREQUENCIES.includes(draft.surveyFrequency) ? FREQUENCIES : [draft.surveyFrequency, ...FREQUENCIES]).map((value) => {
-                  const key = surveyFrequencyLabelKey(value)
-                  return (
-                    <option key={value} value={value}>
-                      {key ? t(key) : value}
+        <div className="flex min-w-0 flex-col gap-4">
+          <Panel
+            labelledBy={`${ids}-surveys`}
+            heading={
+              <h2 id={`${ids}-surveys`} className="m-0 text-2xl">
+                {t(`${K}.surveysHeading`)}
+              </h2>
+            }
+            meta={t(`${K}.surveysMeta`)}
+            className="gap-4 pb-5"
+          >
+            <div className="grid gap-x-5 gap-y-4 sm:grid-cols-2">
+              <Field fieldLabel={t(`${K}.language`)} htmlFor={`${ids}-language`} required helper={t(`${K}.languageHelp`)}>
+                <CanvasSelect
+                  id={`${ids}-language`}
+                  className="w-full"
+                  value={draft.language}
+                  onChange={(event) => set({ language: event.target.value })}
+                >
+                  {(LANGUAGES.includes(draft.language) ? LANGUAGES : [draft.language, ...LANGUAGES]).map((code) => (
+                    <option key={code} value={code}>
+                      {LANGUAGES.includes(code) ? t(`${K}.languageOption.${code}`) : code}
                     </option>
-                  )
+                  ))}
+                </CanvasSelect>
+              </Field>
+              <Field fieldLabel={t(`${K}.frequency`)} htmlFor={`${ids}-frequency`} helper={t(frequencyHelpKey(draft.surveyFrequency))}>
+                <CanvasSelect
+                  id={`${ids}-frequency`}
+                  className="w-full"
+                  value={draft.surveyFrequency}
+                  onChange={(event) => set({ surveyFrequency: event.target.value })}
+                >
+                  {(FREQUENCIES.includes(draft.surveyFrequency) ? FREQUENCIES : [draft.surveyFrequency, ...FREQUENCIES]).map((value) => {
+                    const key = surveyFrequencyLabelKey(value)
+                    return (
+                      <option key={value} value={value}>
+                        {key ? t(key) : value}
+                      </option>
+                    )
+                  })}
+                </CanvasSelect>
+              </Field>
+              <Field fieldLabel={t(`${K}.anonymity`)} htmlFor={`${ids}-anonymity`} helper={anonymityHelp}>
+                <CanvasSelect
+                  id={`${ids}-anonymity`}
+                  className="w-full"
+                  value={draft.anonymousSurveys ? 'anonymous' : 'named'}
+                  onChange={(event) => set({ anonymousSurveys: event.target.value === 'anonymous' })}
+                >
+                  <option value="anonymous">{t(`${K}.anonymous`)}</option>
+                  <option value="named">{t(`${K}.named`)}</option>
+                </CanvasSelect>
+              </Field>
+              <Field
+                fieldLabel={t(`${K}.retention`)}
+                htmlFor={`${ids}-retention`}
+                // The period's number and unit never split across the helper's lines ("… cerradas. 7 /
+                // años hasta …" on the first shot): the first space becomes a no-break space.
+                helper={t(`${K}.retentionHelpPeriod`, {
+                  period: retentionLabel(t, locale, draft.dataRetentionDays).replace(' ', '\u00a0'),
                 })}
-              </CanvasSelect>
-            </Field>
-            <Field fieldLabel={t(`${K}.anonymity`)} htmlFor={`${ids}-anonymity`} helper={anonymityHelp}>
-              <CanvasSelect
-                id={`${ids}-anonymity`}
-                className="w-full"
-                value={draft.anonymousSurveys ? 'anonymous' : 'named'}
-                onChange={(event) => set({ anonymousSurveys: event.target.value === 'anonymous' })}
               >
-                <option value="anonymous">{t(`${K}.anonymous`)}</option>
-                <option value="named">{t(`${K}.named`)}</option>
-              </CanvasSelect>
-            </Field>
-            <Field
-              fieldLabel={t(`${K}.retention`)}
-              htmlFor={`${ids}-retention`}
-              // The period's number and unit never split across the helper's lines ("… cerradas. 7 /
-              // años hasta …" on the first shot): the first space becomes a no-break space.
-              helper={t(`${K}.retentionHelpPeriod`, {
-                period: retentionLabel(t, locale, draft.dataRetentionDays).replace(' ', '\u00a0'),
-              })}
-            >
-              <CanvasSelect
-                id={`${ids}-retention`}
-                className="w-full"
-                value={String(draft.dataRetentionDays)}
-                onChange={(event) => set({ dataRetentionDays: Number(event.target.value) })}
-              >
-                {retentionOptions(draft.dataRetentionDays).map((days) => (
-                  <option key={days} value={days}>
-                    {retentionLabel(t, locale, days)}
-                  </option>
-                ))}
-              </CanvasSelect>
-            </Field>
-            <Field fieldLabel={t(`${K}.timezone`)} htmlFor={`${ids}-timezone`} helper={t(`${K}.timezoneHelp`)}>
-              <CanvasSelect
-                id={`${ids}-timezone`}
-                className="w-full"
-                value={draft.timezone}
-                onChange={(event) => set({ timezone: event.target.value })}
-              >
-                {timezoneOptions(draft.timezone).map((zone) => {
-                  const offset = utcOffset(zone, now)
-                  return (
-                    <option key={zone} value={zone}>
-                      {offset && offset !== zone ? `${zone} (${offset})` : zone}
+                <CanvasSelect
+                  id={`${ids}-retention`}
+                  className="w-full"
+                  value={String(draft.dataRetentionDays)}
+                  onChange={(event) => set({ dataRetentionDays: Number(event.target.value) })}
+                >
+                  {retentionOptions(draft.dataRetentionDays).map((days) => (
+                    <option key={days} value={days}>
+                      {retentionLabel(t, locale, days)}
                     </option>
-                  )
-                })}
-              </CanvasSelect>
-            </Field>
-            <Field fieldLabel={t(`${K}.floor`)} helper={t(`${K}.floorHelp`, { threshold: ANONYMITY_FLOOR })}>
-              <Readout>{t(`${K}.floorValue`, { threshold: ANONYMITY_FLOOR })}</Readout>
-            </Field>
-            {/* The artboard's six fields and no more. No Microclimas / Información de IA
-                switch: no endpoint reads either flag (`MicroclimateEnabled` and
-                `AiInsightsEnabled` appear only on the entity, the settings PUT and its DTOs),
-                so a switch here would change nothing; the super administrator's company view
-                keeps the microclimate switch (`SuperCompanyDetailView`). */}
-          </div>
-        </Panel>
+                  ))}
+                </CanvasSelect>
+              </Field>
+              <Field fieldLabel={t(`${K}.timezone`)} htmlFor={`${ids}-timezone`} helper={t(`${K}.timezoneHelp`)}>
+                <CanvasSelect
+                  id={`${ids}-timezone`}
+                  className="w-full"
+                  value={draft.timezone}
+                  onChange={(event) => set({ timezone: event.target.value })}
+                >
+                  {timezoneOptions(draft.timezone).map((zone) => {
+                    const offset = utcOffset(zone, now)
+                    return (
+                      <option key={zone} value={zone}>
+                        {offset && offset !== zone ? `${zone} (${offset})` : zone}
+                      </option>
+                    )
+                  })}
+                </CanvasSelect>
+              </Field>
+              <Field fieldLabel={t(`${K}.floor`)} helper={t(`${K}.floorHelp`, { threshold: ANONYMITY_FLOOR })}>
+                <Readout>{t(`${K}.floorValue`, { threshold: ANONYMITY_FLOOR })}</Readout>
+              </Field>
+              {/* The artboard's six fields and no more. No Microclimas / Información de IA
+                  switch: no endpoint reads either flag (`MicroclimateEnabled` and
+                  `AiInsightsEnabled` appear only on the entity, the settings PUT and its DTOs),
+                  so a switch here would change nothing; the super administrator's company view
+                  keeps the microclimate switch (`SuperCompanyDetailView`). */}
+            </div>
+          </Panel>
+          {savedBands && bandsDraft && (
+            <ResultBandsCard
+              draft={bandsDraft}
+              saved={savedBands}
+              defaults={defaultBands}
+              onChange={(next) => {
+                setBandsDraft(next)
+                setNotice(null)
+              }}
+            />
+          )}
+        </div>
 
         <div className="flex min-w-0 flex-col gap-4">
           <Panel

@@ -1,4 +1,5 @@
 {
+  "GET /admin/companies/*/result-bands": {"opportunityMin": 3, "strengthMin": 4, "criticalName": null, "opportunityName": null, "strengthName": null},
   "_comment": "Leaders lane, leader, Q2 STATE: every body is leaders-meridiano.json's except climate, which is the Encuesta de Clima Q2 reading (closed 13 May) -- Ingenieria's Q2 means and the whole company's Q2 row from the same climate-trends payloads -- the page as it read before Q3 closed, when Reconocimiento printed 3,2 and Carga de trabajo 3,5, two cells under the target. A state shot, never the primary. Shoot as leaders-meridiano.json.",
   "GET /notifications/mine": {
     "notifications": []

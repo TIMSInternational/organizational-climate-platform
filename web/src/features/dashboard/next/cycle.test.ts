@@ -1,13 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import {
-  isBelowTarget,
   nameHead,
   nextWaveCode,
   printedMove,
   printedReading,
   sentenceName,
-  targetStanding,
-  targetStep,
 } from './derive'
 import { todayCalendarDay } from '../../../lib/calendarDay'
 
@@ -25,38 +22,9 @@ describe('the next slot of a quarterly cycle', () => {
   })
 })
 
-describe('a reading is judged at the decimal it prints, against the canvas’s bands', () => {
-  it('gives every cell of the Dashboard artboard’s map the step the artboard paints it', () => {
-    // build_admin.py tint(): ≤2,6 deep red · ≤3,4 pale red · ≤3,7 grey · ≤4,0 pale blue · else mid blue.
-    const artboard: [number, number][] = [
-      [2.4, 0], [2.6, 0], [2.8, 1], [3.0, 1], [3.2, 1], [3.4, 1],
-      [3.5, 2], [3.6, 2], [3.7, 2], [3.8, 3], [4.0, 3], [4.2, 4], [4.3, 4], [4.4, 4],
-    ]
-    expect(artboard.map(([value]) => [value, targetStep(value, 3.7)])).toEqual(artboard)
-  })
-
-  it('judges the PRINTED reading at every band edge, never the raw one', () => {
-    expect(targetStep(2.64, 3.7)).toBe(0) // prints 2,6
-    expect(targetStep(2.66, 3.7)).toBe(1) // prints 2,7
-    expect(targetStep(3.44, 3.7)).toBe(1) // prints 3,4
-    expect(targetStep(3.46, 3.7)).toBe(2) // prints 3,5
-    expect(targetStep(3.74, 3.7)).toBe(2) // prints 3,7
-    expect(targetStep(3.75, 3.7)).toBe(3) // prints 3,8
-    expect(targetStep(4.04, 3.7)).toBe(3) // prints 4,0
-    expect(targetStep(4.06, 3.7)).toBe(4) // prints 4,1
-  })
-
-  it('words a reading by the same step, so a chip never contradicts a tint', () => {
-    // 3,67 prints "3,7" beside "meta 3,7": on target. 3,46 prints "3,5": the grey band.
-    expect(targetStanding(3.67, 3.7)).toBe('on')
-    expect(targetStanding(3.46, 3.7)).toBe('on')
-    expect(targetStanding(3.44, 3.7)).toBe('below')
-    expect(targetStanding(3.75, 3.7)).toBe('above')
-    expect(isBelowTarget(3.67, 3.7)).toBe(false)
-    expect(isBelowTarget(3.3, 3.7)).toBe(true)
-    expect(isBelowTarget(3.8, 3.7)).toBe(false)
-  })
-
+// Which band a reading is in — judged at the decimal it prints — is
+// `components/charts/resultBands.test.ts`; this keeps the printing half.
+describe('a reading is printed at the decimal every card prints', () => {
   it('rounds to the decimal a cell prints', () => {
     expect(printedReading(3.79)).toBe(3.8)
     expect(printedReading(3.67)).toBe(3.7)

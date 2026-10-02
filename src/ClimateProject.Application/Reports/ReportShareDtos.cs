@@ -1,3 +1,5 @@
+using ClimateProject.Application.OrgStructure;
+
 namespace ClimateProject.Application.Reports;
 
 /// <summary>Body of <c>POST /admin/reports/{id}/share</c>. Every field optional.</summary>
@@ -57,6 +59,10 @@ public record ReportShareSummary(
 /// Matches, field for field, the <c>SharedReportWire</c> that
 /// <c>web/src/features/reports/api/sharedReports.ts</c> already parses.
 /// </remarks>
+/// <param name="ResultBands">
+/// The company's result bands, read when the link is opened (see <c>ResultBandsDto</c>): two
+/// boundaries and three names, nothing that identifies the tenant.
+/// </param>
 /// <param name="ReportOutput">
 /// <c>reports.report_output</c> projected through <see cref="PublicReportProjection"/> -- an
 /// allow-list of the sections an anonymous reader may have, <b>not</b> the stored document.
@@ -76,4 +82,5 @@ public record SharedReportResponse(
     string? Description,
     string Type,
     DateTimeOffset? GeneratedAt,
-    string? ReportOutput);
+    string? ReportOutput,
+    ResultBandsDto ResultBands);

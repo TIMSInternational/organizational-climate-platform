@@ -1,7 +1,7 @@
 import type { ActionPlan } from '../../action-plans/api/actionPlans'
 import type { ClimateMapSelection, WordFrequency } from '../../../components/charts'
 import type { SurveyDistributionBucket, SurveyQuestionResult, SurveySegmentResult } from '../api/surveyResults'
-import { CLIMATE_TARGET } from '../../dashboard/next/compose'
+import { bandOf, type ResultBandKey } from '../../../components/charts'
 import {
   climateDetail,
   openTextThemes,
@@ -17,12 +17,12 @@ import type { ResultsGroupRow, ResultsPlanRef, SurveyResultsNextModel } from './
  *
  * ## What every figure is measured against
  *
- * The **climate target**, `CLIMATE_TARGET` (3.7) — the same constant the Panel de
- * Control reads (`dashboard/next/compose.ts`), so the two screens cannot classify one
- * dimension two ways. Nothing on the wire carries a target yet; `surveyResultsMap.ts`
- * colours its own map against the survey's mean because it predates the target, and
- * this page deliberately does not: "bajo la meta" and "bajo la media" are different
- * claims, and the approved artboard makes the first one.
+ * The company's **result bands** (`model.bands`, `GET /admin/companies/{id}/result-bands`)
+ * — the same scale the Panel de Control and Clima en el tiempo read, so no two screens can
+ * put one reading in two areas. Every cell is judged at the precision it is printed at
+ * (`bandOf`). `surveyResultsMap.ts` colours its own map against the survey's mean because
+ * it predates the bands, and this page deliberately does not: "área crítica" and "bajo la
+ * media" are different claims.
  *
  * ## Where the rows come from
  *
@@ -46,8 +46,6 @@ import type { ResultsGroupRow, ResultsPlanRef, SurveyResultsNextModel } from './
  * (`likeForLike`) — over the dimensions both waves carry — and a group the previous wave
  * withheld has no change at all, never a 0.
  */
-
-export { CLIMATE_TARGET }
 
 /** One decimal, the precision `surveyResultsMap.ts` rounds every cell to. */
 function round1(value: number): number {
@@ -75,58 +73,6 @@ export function printedChange(now: number, before: number, decimals: number): nu
 function mean(values: readonly number[]): number | null {
   if (values.length === 0) return null
   return values.reduce((sum, value) => sum + value, 0) / values.length
-}
-
-/**
- * Where a one-decimal reading sits against the target: the five steps the map tints.
- *
- * The target is a floor to reach, not a point to hover around, which is why the band
- * is not symmetric: a reading over it is *above* the goal (blue), a reading at it or
- * within `ON_TARGET_TOLERANCE` under it is *on* the goal (grey — the width of two
- * rounding steps on a one-decimal figure), and anything further under is *below*
- * (red). The far steps saturate at `FAR_BELOW_AT` under and `FAR_ABOVE_AT` over. The
- * thresholds are what the approved artboards tint — 3,5 to 3,7 grey, 3,8 to 4,1 light
- * blue, 4,2 and up dark blue, 3,4 down to 2,8 light red, 2,7 and under dark red — and
- * the whole test of this function is that table (`derive.test.ts`).
- */
-export type TargetBand = 'far-below' | 'below' | 'on' | 'above' | 'far-above'
-
-export const ON_TARGET_TOLERANCE = 0.2
-export const FAR_BELOW_AT = 1
-export const FAR_ABOVE_AT = 0.5
-
-export function targetBand(score: number, target: number = CLIMATE_TARGET): TargetBand {
-  // Rounded first: `3.5 - 3.7` is `-0.20000000000000018` in floating point, which is
-  // not `-0.2` and would tip a grey cell into red.
-  const delta = round1(score - target)
-  if (delta <= -FAR_BELOW_AT) return 'far-below'
-  if (delta < -ON_TARGET_TOLERANCE) return 'below'
-  if (delta <= 0) return 'on'
-  if (delta < FAR_ABOVE_AT) return 'above'
-  return 'far-above'
-}
-
-/** The index of each band in `DIVERGING_COLORS` / `DIVERGING_INKS` — one ramp, one meaning per colour. */
-export const BAND_STEP: Readonly<Record<TargetBand, 0 | 1 | 2 | 3 | 4>> = {
-  'far-below': 0,
-  below: 1,
-  on: 2,
-  above: 3,
-  'far-above': 4,
-}
-
-/** A red cell: under the target by more than the on-target tolerance. */
-export function isRed(band: TargetBand): boolean {
-  return band === 'far-below' || band === 'below'
-}
-
-/**
- * "Bajo la meta", the way the Panel de Control says it: a printed reading under the
- * target. Strict, over the one-decimal figure the page prints, so the tile and the
- * dashboard chip agree about a dimension whose reading is exactly 3,7.
- */
-export function isBelowTarget(score: number, target: number = CLIMATE_TARGET): boolean {
-  return round1(score) < target
 }
 
 /** The unrounded mean of a group's per-question means inside one dimension. */
@@ -260,15 +206,31 @@ export function dimensionDeltas(model: SurveyResultsNextModel): (number | null)[
   })
 }
 
-/** Column keys whose whole-survey reading sits under the target, worst first. */
-export function belowTarget(model: SurveyResultsNextModel): { key: string; score: number }[] {
+export interface CriticalCell {
+  rowId: string
+  rowName: string
+  dimensionKey: string
+  score: number
+}
+
+/**
+ * Every disclosed cell of the map in the critical area, lowest first — the fourth tile's
+ * reading. Withheld rows contribute nothing: a protected group's cells are never judged,
+ * so they can never be counted as critical (or as not critical).
+ */
+export function criticalCells(model: SurveyResultsNextModel): CriticalCell[] {
   const climate = model.climate
   if (!climate) return []
-  const scores = companyScores(model)
-  return climate.dimensions
-    .map((dimension, index) => ({ key: dimension.key, score: scores[index] }))
-    .filter((entry): entry is { key: string; score: number } => entry.score !== null && isBelowTarget(entry.score))
-    .sort((a, b) => a.score - b.score)
+  const cells: CriticalCell[] = []
+  for (const row of groupRows(model)) {
+    if (row.isProtected) continue
+    climate.dimensions.forEach((dimension, index) => {
+      const score = row.scores[index]
+      if (score === null || score === undefined || bandOf(score, model.bands) !== 'critical') return
+      cells.push({ rowId: row.id, rowName: row.name, dimensionKey: dimension.key, score })
+    })
+  }
+  return cells.sort((a, b) => a.score - b.score || a.rowName.localeCompare(b.rowName))
 }
 
 /** How many groups the map discloses, and how many it has. */
@@ -297,18 +259,16 @@ export type FindingReason =
   | 'lowest'
   | 'second-same-group'
   | 'third-same-group'
-  | 'only-red-outside'
+  | 'only-critical-outside'
   | 'lowest-outside'
-  | 'shortfall'
+  | 'band'
 
 export interface ResultsFinding {
   rowId: string
   rowName: string
   dimensionKey: string
   score: number
-  /** How far under the target, one decimal, always positive. */
-  shortfall: number
-  band: TargetBand
+  band: ResultBandKey
   reason: FindingReason
   /** The group the two "outside" reasons refer to — the lowest cell's group. */
   outsideOf: string | null
@@ -321,8 +281,7 @@ interface Candidate {
   rowName: string
   dimensionKey: string
   score: number
-  shortfall: number
-  band: TargetBand
+  band: ResultBandKey
 }
 
 /**
@@ -330,7 +289,9 @@ interface Candidate {
  *
  * ## The breadth rule
  *
- * The first two slots are the two cells furthest under the target. The third is too —
+ * Only cells outside the strength area are candidates — the critical area first, then the
+ * opportunity area, lowest first within each. The first two slots are the two lowest
+ * candidates. The third is too —
  * unless all three would be the same group, in which case it goes to the lowest cell
  * *outside* that group, and its reason line says so. One group can be so far under
  * that its whole row fills the list, and a reader then learns nothing about the rest
@@ -341,35 +302,32 @@ interface Candidate {
  *
  * ## The reasons
  *
- * Derived, never typed: the lowest cell says how far under it is; a later cell in the
- * lowest cell's group says which rank it holds; a cell in another group is "the only
- * red cell outside …" when it is exactly that (red: `isRed`), otherwise the lowest
- * outside the group when the breadth rule put it there, otherwise its plain shortfall.
+ * Derived, never typed: the lowest cell says it is the lowest on the map; a later cell in
+ * the lowest cell's group says which rank it holds; a cell in another group is "the only
+ * critical cell outside …" when it is exactly that, otherwise the lowest outside the group
+ * when the breadth rule put it there, otherwise the area it is in.
  */
 export function whereToLookFirst(model: SurveyResultsNextModel, limit = 3): ResultsFinding[] {
   const climate = model.climate
   // `target === null` is `buildClimateMap`'s "nothing disclosed": no cell to rank.
   if (!climate || climate.target === null) return []
+  const rank = (band: ResultBandKey) => (band === 'critical' ? 0 : 1)
 
   const candidates: Candidate[] = []
   for (const row of groupRows(model)) {
     if (row.isProtected) continue
     climate.dimensions.forEach((dimension, index) => {
       const score = row.scores[index]
-      if (score === null || score === undefined || !isBelowTarget(score)) return
-      candidates.push({
-        rowId: row.id,
-        rowName: row.name,
-        dimensionKey: dimension.key,
-        score,
-        shortfall: round1(CLIMATE_TARGET - score),
-        band: targetBand(score),
-      })
+      if (score === null || score === undefined) return
+      const band = bandOf(score, model.bands)
+      if (band === 'strength') return
+      candidates.push({ rowId: row.id, rowName: row.name, dimensionKey: dimension.key, score, band })
     })
   }
   candidates.sort(
     (left, right) =>
-      right.shortfall - left.shortfall ||
+      rank(left.band) - rank(right.band) ||
+      left.score - right.score ||
       left.rowName.localeCompare(right.rowName) ||
       left.dimensionKey.localeCompare(right.dimensionKey),
   )
@@ -386,14 +344,14 @@ export function whereToLookFirst(model: SurveyResultsNextModel, limit = 3): Resu
     }
   }
 
-  const redOutside = candidates.filter((cell) => cell.rowId !== first.rowId && isRed(cell.band))
+  const criticalOutside = candidates.filter((cell) => cell.rowId !== first.rowId && cell.band === 'critical')
   return picked.map((cell, index) => {
-    let reason: FindingReason = 'shortfall'
+    let reason: FindingReason = 'band'
     let outsideOf: string | null = null
     if (index === 0) reason = 'lowest'
     else if (cell.rowId === first.rowId) reason = index === 1 ? 'second-same-group' : 'third-same-group'
-    else if (redOutside.length === 1 && redOutside[0] === cell) {
-      reason = 'only-red-outside'
+    else if (criticalOutside.length === 1 && criticalOutside[0] === cell) {
+      reason = 'only-critical-outside'
       outsideOf = first.rowName
     } else if (cell === substituted) {
       reason = 'lowest-outside'
@@ -460,7 +418,7 @@ export interface ResultsCellOther {
   isProtected: boolean
   /** `null` for a protected row — never 0. */
   score: number | null
-  band: TargetBand | null
+  band: ResultBandKey | null
 }
 
 export interface ResultsCellDetail {
@@ -468,9 +426,7 @@ export interface ResultsCellDetail {
   rowName: string
   dimensionKey: string
   score: number | null
-  band: TargetBand | null
-  /** How far under (positive) or over (negative) the target the cell sits; `null` without a score. */
-  shortfall: number | null
+  band: ResultBandKey | null
   /** Whether this is the lowest disclosed cell on the map. */
   isLowest: boolean
   /** How many scale questions make up this dimension. */
@@ -512,8 +468,7 @@ export function cellDetail(model: SurveyResultsNextModel, selection: ClimateMapS
     rowName: detail.rowLabel,
     dimensionKey,
     score: dimension.score,
-    band: dimension.score === null ? null : targetBand(dimension.score),
-    shortfall: dimension.score === null ? null : round1(CLIMATE_TARGET - dimension.score),
+    band: dimension.score === null ? null : bandOf(dimension.score, model.bands),
     isLowest: dimension.score !== null && lowest !== null && dimension.score === lowest,
     questionCount: kept?.questionIds.length ?? dimension.questions.length,
     oneQuestionPerDimension: climate.dimensions.every((entry) => entry.questionIds.length === 1),
@@ -542,7 +497,7 @@ export function cellDetail(model: SurveyResultsNextModel, selection: ClimateMapS
           name: row.name,
           isProtected: row.isProtected,
           score,
-          band: score === null ? null : targetBand(score),
+          band: score === null ? null : bandOf(score, model.bands),
         }
       }),
     plan: model.plans === null ? undefined : planFor(model.plans, detail.rowId),

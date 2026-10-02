@@ -37,6 +37,11 @@ public class CompanyConfiguration : IEntityTypeConfiguration<Company>
             settings.Property(s => s.DataRetentionDays).HasColumnName("settings_data_retention_days").IsRequired().HasDefaultValue(2555);
             settings.Property(s => s.Timezone).HasColumnName("settings_timezone").HasMaxLength(100).IsRequired().HasDefaultValue("UTC");
             settings.Property(s => s.Language).HasColumnName("settings_language").HasMaxLength(10).IsRequired().HasDefaultValue("en");
+            settings.Property(s => s.ResultBandOpportunityMin).HasColumnName("settings_band_opportunity_min").HasPrecision(3, 2).IsRequired().HasDefaultValue(3.00m);
+            settings.Property(s => s.ResultBandStrengthMin).HasColumnName("settings_band_strength_min").HasPrecision(3, 2).IsRequired().HasDefaultValue(4.00m);
+            settings.Property(s => s.ResultBandCriticalName).HasColumnName("settings_band_critical_name").HasMaxLength(60);
+            settings.Property(s => s.ResultBandOpportunityName).HasColumnName("settings_band_opportunity_name").HasMaxLength(60);
+            settings.Property(s => s.ResultBandStrengthName).HasColumnName("settings_band_strength_name").HasMaxLength(60);
         });
     }
 }

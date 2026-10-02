@@ -79,48 +79,6 @@ export function printedReading(value: number): number {
 }
 
 /**
- * The canvas's bands around the target, each the upper bound of its step in TENTHS of a
- * point between the PRINTED reading and the target (`build_admin.py`'s `tint()`, drawn
- * against "meta 3,7"): 2,6 and under is far below (step 0), 2,7–3,4 below (1), 3,5–3,7
- * on target (2), 3,8–4,0 above (3), 4,1 and over far above (4). The map's legend names
- * the grey middle band "en la meta", so a 3,5 is on target on every screen that judges one.
- */
-export const TARGET_BANDS_TENTHS = [-11, -3, 0, 3] as const
-
-/** An index into `DIVERGING_COLORS` / `DIVERGING_INKS`: 0 far below … 2 on target … 4 far above. */
-export type TargetStep = 0 | 1 | 2 | 3 | 4
-export type TargetStanding = 'below' | 'on' | 'above'
-
-/**
- * The step a reading takes against the target — the ONE rule behind every tint (the
- * Panel de Control's map, Clima en el tiempo's table) and every "bajo / en / sobre la
- * meta" word, judged at the decimal the page prints. The whole company's Confianza is
- * 3,67 on the wire and prints "3,7" beside "meta 3,7"; judged raw it was "bajo la meta"
- * on one screen and "en la meta" on the other. A mark that contradicts the number
- * beside it is read as a bug, so every mark judges the number the reader sees.
- */
-export function targetStep(value: number, target: number): TargetStep {
-  const tenths = Math.round(printedReading(value) * 10) - Math.round(printedReading(target) * 10)
-  const [farBelow, below, on, above] = TARGET_BANDS_TENTHS
-  if (tenths <= farBelow) return 0
-  if (tenths <= below) return 1
-  if (tenths <= on) return 2
-  if (tenths <= above) return 3
-  return 4
-}
-
-/** The word a step reads as: the two red steps are below, the grey one on, the two blue above. */
-export function targetStanding(value: number, target: number): TargetStanding {
-  const step = targetStep(value, target)
-  return step < 2 ? 'below' : step > 2 ? 'above' : 'on'
-}
-
-/** The comparison behind every "bajo la meta" chip and red endpoint — `targetStanding`. */
-export function isBelowTarget(value: number, target: number): boolean {
-  return targetStanding(value, target) === 'below'
-}
-
-/**
  * The move between two readings AS PRINTED: the difference of the rounded readings, never
  * the rounding of the difference. Confianza went 3,33 → 3,67, which the card prints as
  * "3,3" and "3,7"; the raw difference 0,34 printed "+0,3" beside two numbers a reader can

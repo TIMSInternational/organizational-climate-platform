@@ -1,12 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { ANONYMITY_FLOOR } from '../../../../components/charts'
+import { ANONYMITY_FLOOR, DEFAULT_RESULT_BANDS } from '../../../../components/charts'
 import { parseReportDocument } from '../../reportDocument'
 import type {
   ReportDemographicBreakdown,
   ReportSurveySection,
 } from '../../reportDocument'
 import {
-  CLIMATE_TARGET,
   dimensionRowsOf,
   groupCountOf,
   groupRowsOf,
@@ -290,21 +289,22 @@ describe('shared report derive — the floor', () => {
 })
 
 describe('shared report derive — the scale', () => {
-  it('judges a 1-to-5 reading against the target and leaves an off-scale one unjudged', () => {
-    const rows = dimensionRowsOf(
-      section({
-        dimensions: [
-          { dimension: 'workload', questionCount: 3, answeredCount: 168, averageScore: 3.1 },
-          // eNPS is recorded 0 to 10. `CLIMATE_TARGET` is 3,7 OF 5.
-          { dimension: 'enps', questionCount: 1, answeredCount: 172, averageScore: 7.8 },
-        ],
-      }),
-    )
+  it('reads a 1-to-5 reading in the company’s bands and leaves an off-scale one unjudged', () => {
+    const dimensions = section({
+      dimensions: [
+        { dimension: 'workload', questionCount: 3, answeredCount: 168, averageScore: 3.1 },
+        // eNPS is recorded 0 to 10. The bands divide 1 to 5.
+        { dimension: 'enps', questionCount: 1, answeredCount: 172, averageScore: 7.8 },
+      ],
+    })
+    const rows = dimensionRowsOf(dimensions, DEFAULT_RESULT_BANDS)
 
-    expect(rows[0]).toMatchObject({ average: 3.1, band: 'below', offScale: false })
+    expect(rows[0]).toMatchObject({ average: 3.1, band: 'opportunity', offScale: false })
     expect(rows[1]).toMatchObject({ average: 7.8, band: null, offScale: true })
-    expect(onScale(CLIMATE_TARGET)).toBe(true)
+    expect(onScale(5)).toBe(true)
     expect(onScale(7.8)).toBe(false)
+    // A payload with no scale judges nothing: the figure stays, the band is not invented.
+    expect(dimensionRowsOf(dimensions, null)[0]).toMatchObject({ average: 3.1, band: null, offScale: false })
   })
 
   it('carries a missing average across as missing, never as a zero', () => {
@@ -314,6 +314,7 @@ describe('shared report derive — the scale', () => {
           { dimension: 'workload', questionCount: 3, answeredCount: 0, averageScore: null },
         ],
       }),
+      DEFAULT_RESULT_BANDS,
     )
 
     expect(rows[0].average).toBeNull()

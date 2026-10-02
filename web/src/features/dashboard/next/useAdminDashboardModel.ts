@@ -6,6 +6,7 @@ import { CATALOGUES, FALLBACK_LOCALE } from '../../../i18n/locale'
 import { getTrackingApiBaseUrl, isTrackingEnabled } from '../../tracking/api/config'
 import { useDashboardData } from '../useDashboardData'
 import { loadAdminDashboard } from './loadModel'
+import { useResultBands } from '../../result-bands/useResultBands'
 import type { AdminDashboardModel, RegionStatuses } from './model'
 
 export interface AdminDashboardModelState {
@@ -36,7 +37,7 @@ export interface AdminDashboardModelState {
  * from `useTranslation`, so a re-render cannot hand the hook a new function and refetch.
  */
 export function useAdminDashboardModel(companyId?: string): AdminDashboardModelState {
-  const { locale } = useTranslation()
+  const { t, locale } = useTranslation()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
 
   const dimensionName = useMemo(() => {
@@ -64,5 +65,27 @@ export function useAdminDashboardModel(companyId?: string): AdminDashboardModelS
   )
 
   const { data, loading, failed, error, reload } = useDashboardData(load)
-  return { loading, model: data?.model ?? null, regions: data?.regions ?? null, failed, error, reload }
+  // The bands join the model here: the page is ready when both are, and a scale that could
+  // not be read fails the page (with its retry) rather than painting the default.
+  const bands = useResultBands()
+  const model = useMemo(
+    () => (data?.model && bands.bands ? { ...data.model, bands: bands.bands } : null),
+    [data, bands.bands],
+  )
+  const retryBands = bands.retry
+  const reloadAll = useCallback(() => {
+    retryBands()
+    reload()
+  }, [retryBands, reload])
+  if (bands.status === 'error') {
+    return { loading: false, model: null, regions: data?.regions ?? null, failed: true, error: t('resultBands.loadError'), reload: reloadAll }
+  }
+  return {
+    loading: loading || bands.status === 'loading',
+    model,
+    regions: data?.regions ?? null,
+    failed,
+    error,
+    reload: reloadAll,
+  }
 }
