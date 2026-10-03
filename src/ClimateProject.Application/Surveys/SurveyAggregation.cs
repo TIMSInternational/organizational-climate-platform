@@ -538,6 +538,9 @@ public static class SurveyAggregation
 
             foreach (var word in text.ToLowerInvariant().Split(WordSeparators, StringSplitOptions.RemoveEmptyEntries))
             {
+                // Grammar, not theme -- dropped before counting, never withheld (WordStopList).
+                if (WordStopList.Contains(language, word)) continue;
+
                 var key = (language, word);
                 occurrences[key] = occurrences.GetValueOrDefault(key) + 1;
                 if (!respondents.TryGetValue(key, out var set))

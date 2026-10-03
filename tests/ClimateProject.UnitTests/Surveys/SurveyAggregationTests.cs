@@ -290,6 +290,29 @@ public class SurveyAggregationTests
         Assert.Equal(2, result.SuppressedWordCount);
     }
 
+    /// <summary>
+    /// The TIMS dry run's cloud led with "el" 8, "la" 7, "y" 5, "de" 4. Function words are
+    /// dropped before counting -- in the respondent's language only, so English "a" is not
+    /// read as Spanish -- and NOT counted as withheld: no word was protected.
+    ///
+    /// Mutation-proved: dropping the WordStopList check fails this with "el" in the cloud.
+    /// </summary>
+    [Fact]
+    public void Function_words_are_left_out_of_the_cloud_and_not_counted_as_withheld()
+    {
+        var question = Choice(type: QuestionTypes.OpenEnded);
+        var responses = Enumerable.Range(1, 5).Select(n => Response(ResponseId(n), "es")).ToList();
+        var answers = responses
+            .Select(r => new AggregationAnswer(r.ResponseId, QuestionId, Stored("El compromiso de la gente y el equipo"), null))
+            .ToList();
+
+        var aggregate = SurveyAggregation.Compute([question], responses, answers, [], null);
+        var result = Assert.Single(aggregate.Questions);
+
+        Assert.Equal(["compromiso", "equipo", "gente"], result.Words.Select(w => w.Word).Order());
+        Assert.Equal(0, result.SuppressedWordCount);
+    }
+
     /// <summary>Verbatim free text is never returned by this surface -- only counts.</summary>
     [Fact]
     public void Open_text_returns_no_verbatim_answers()
