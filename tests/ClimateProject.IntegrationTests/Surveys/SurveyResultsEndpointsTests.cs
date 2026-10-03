@@ -435,10 +435,19 @@ public class SurveyResultsEndpointsTests : IAsyncLifetime
             await SeedAnswerAsync(survey.Id, questionId, "office", "en", departmentId: _engineeringId);
         }
 
+        // Three with no department, so the people outside Sales are five and Sales is not
+        // withheld for what a subtraction from the survey's total would reveal
+        // (SurveyAggregation.WithholdComplement).
+        for (var i = 0; i < 3; i++)
+        {
+            await SeedAnswerAsync(survey.Id, questionId, "remote", "en");
+        }
+
         var client = await AdminAAsync();
         var stats = await client.GetFromJsonAsync<SurveyStatisticsResponse>($"/surveys/{survey.Id}/statistics");
 
         var breakdown = stats!.Breakdowns.Single(b => b.Dimension == "department");
+        Assert.False(breakdown.Segments.Single(s => s.Key == _salesId.ToString()).IsSuppressed);
         var engineering = breakdown.Segments.Single(s => s.Key == _engineeringId.ToString());
         Assert.True(engineering.IsSuppressed);
         Assert.Equal(0, engineering.RespondentCount);

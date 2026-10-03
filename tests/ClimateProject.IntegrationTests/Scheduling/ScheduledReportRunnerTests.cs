@@ -152,6 +152,14 @@ public class ScheduledReportRunnerTests(PostgresContainerFixture postgres)
         AddCompletedResponse(db, survey, question, sales.Id, "2");
         AddCompletedResponse(db, survey, question, sales.Id, "2");
 
+        // Three who answered nothing and carry no department: with Sales's two, the people
+        // outside Engineering are five, so Engineering is not withheld for what a subtraction
+        // from the survey's total would reveal (SurveyAggregation.WithholdComplement).
+        for (var i = 0; i < 3; i++)
+        {
+            AddCompletedResponse(db, survey, question, null, null);
+        }
+
         await db.SaveChangesAsync();
 
         return new Seeded(company, creator, report, engineering.Id, sales.Id);
@@ -172,7 +180,7 @@ public class ScheduledReportRunnerTests(PostgresContainerFixture postgres)
     /// the column is jsonb. Same rule as <c>ReportEndpointsTests.SeedAnswerAsync</c>.
     /// </summary>
     private static void AddCompletedResponse(
-        ClimateProjectDbContext db, Survey survey, Question question, Guid departmentId, string value)
+        ClimateProjectDbContext db, Survey survey, Question question, Guid? departmentId, string? value)
     {
         var responseId = Guid.NewGuid();
         db.Responses.Add(new Response
@@ -192,6 +200,8 @@ public class ScheduledReportRunnerTests(PostgresContainerFixture postgres)
             CreatedAt = Now.AddDays(-2),
             UpdatedAt = Now.AddDays(-2),
         });
+        // A null value is a respondent who answered nothing: counted, moving no average.
+        if (value is null) return;
         db.QuestionResponses.Add(new QuestionResponse
         {
             ResponseId = responseId,
@@ -280,7 +290,7 @@ public class ScheduledReportRunnerTests(PostgresContainerFixture postgres)
 
         var section = Assert.Single(document.Surveys);
         Assert.False(section.IsSuppressed);
-        Assert.Equal(7, section.Participation.CompletedCount);
+        Assert.Equal(10, section.Participation.CompletedCount);
 
         var engineering = Assert.Single(section.Departments, d => d.DepartmentId == seeded.EngineeringId.ToString());
         Assert.False(engineering.IsSuppressed);

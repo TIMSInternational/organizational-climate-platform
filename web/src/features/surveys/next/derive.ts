@@ -233,6 +233,24 @@ export function criticalCells(model: SurveyResultsNextModel): CriticalCell[] {
   return cells.sort((a, b) => a.score - b.score || a.rowName.localeCompare(b.rowName))
 }
 
+/**
+ * The company row's cells in the critical area, lowest first -- the fourth tile's reading
+ * when the map is the company row alone (`companyOnlyClimateMap`). `criticalCells` reads
+ * group rows only, and with none it would print a 0 the company's own reading may contradict.
+ */
+export function companyCriticalCells(model: SurveyResultsNextModel): CriticalCell[] {
+  const climate = model.climate
+  if (!climate) return []
+  const scores = companyScores(model)
+  const cells: CriticalCell[] = []
+  climate.dimensions.forEach((dimension, index) => {
+    const score = scores[index]
+    if (score === null || score === undefined || bandOf(score, model.bands) !== 'critical') return
+    cells.push({ rowId: '', rowName: '', dimensionKey: dimension.key, score })
+  })
+  return cells.sort((a, b) => a.score - b.score)
+}
+
 /** How many groups the map discloses, and how many it has. */
 export function legibleGroups(model: SurveyResultsNextModel): { legible: number; total: number } {
   const rows = groupRows(model)

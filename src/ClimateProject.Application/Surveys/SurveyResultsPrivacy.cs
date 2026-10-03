@@ -54,6 +54,14 @@ namespace ClimateProject.Application.Surveys;
 /// **Withheld counts are always reported**, never silently dropped, so a reader can
 /// tell "nobody else answered" from "a group was withheld" and so totals still
 /// reconcile against the participation counters.
+///
+/// **The floor also applies to what can be subtracted.** A breakdown sits beside the
+/// whole survey's figures, so the people outside its disclosed segments are a readable
+/// group: their count and their means are the survey's minus the disclosed ones. When
+/// that remainder is 1 to 4 people, the smallest disclosed segments are withheld too
+/// (<c>SurveyAggregation.WithholdComplement</c>), until it reaches the floor or nothing
+/// is disclosed. Measured on the TIMS dry run, where femenino 6 beside a withheld
+/// masculino 3 gave away the three men's means.
 /// </summary>
 public static class SurveyResultsPrivacy
 {

@@ -5,6 +5,7 @@
  *   node scripts/import-climate-workbook.mjs --file <workbook.xlsx>
  *        (--company-id <guid> | --company-name "Name" --domain example.com [--country "Costa Rica"])
  *        [--api http://127.0.0.1:5080] [--email E --password P] [--apply]
+ *        [--skip-demographic "<column>"]... [--start YYYY-MM-DD --end YYYY-MM-DD]
  *
  * Without `--apply` it is a DRY RUN: it reads the workbook, reports every problem at once, and
  * prints what it would create. Nothing is written until `--apply`.
@@ -33,8 +34,9 @@
  *   carrying the answer scale's labels, the open questions as open_ended, the description, and
  *   the invitation subject and message. Matched by title.
  *
- * The result bands are read and validated, and printed; the product has no band setting yet
- * (the dashboard's `CLIMATE_TARGET` is a placeholder), so they are not sent anywhere.
+ * The result bands are read and validated, and printed, but not sent: every company starts on
+ * the product's default bands (docs/decisions/result-bands.md), which are TIMS's own; a company
+ * whose workbook differs has them set by a super_admin in the product.
  *
  * ## What it refuses to decide
  *
@@ -285,6 +287,53 @@ export function parseClimate(sheets) {
   }
 }
 
+/**
+ * Leave demographic columns out of the import: no field is created for them and no person's
+ * value is sent. A name matches a column by its header (accents and case aside) or its field
+ * key. A name that matches no column is a problem, not a silent no-op -- a typo would
+ * otherwise collect exactly what the operator meant to leave out.
+ *
+ * Why it exists: TIMS's Edad and Tiempo are numbers, a number field is never split into
+ * groups, and with 15 people no group reaches the floor of 5 anyway -- so those answers
+ * could never be shown, while every respondent was told they were "not recorded".
+ */
+export function skipDemographics(climate, names) {
+  const wanted = (names ?? []).map((name) => ({ name, key: norm(name), field: slug(name) }))
+  const matches = (column, entry) => norm(column.header) === entry.key || column.field === entry.field
+  const problems = wanted
+    .filter((entry) => !climate.columns.some((column) => matches(column, entry)))
+    .map((entry) => `--skip-demographic "${entry.name}": no hay una columna demográfica con ese nombre (hay: ${climate.columns.map((c) => c.header).join(', ')}).`)
+  const skipped = climate.columns.filter((column) => wanted.some((entry) => matches(column, entry)))
+  return {
+    problems,
+    skipped: skipped.map((column) => column.header),
+    climate: { ...climate, columns: climate.columns.filter((column) => !skipped.includes(column)) },
+  }
+}
+
+/**
+ * The survey's response window. `--start`/`--end` are calendar days in Costa Rica (UTC-6,
+ * no daylight saving): the survey opens at 08:00 on the first and closes at 23:59 on the
+ * last. Without them it keeps the old default -- a week from now, for three weeks -- which
+ * is a placeholder, not a date anyone chose. Returns `{ problems, startDate, endDate }`.
+ */
+export function surveyWindow({ start, end }, now = new Date()) {
+  const day = /^\d{4}-\d{2}-\d{2}$/
+  if (!start && !end) {
+    const from = new Date(now.getTime() + 7 * 864e5)
+    return { problems: [], startDate: from.toISOString(), endDate: new Date(from.getTime() + 21 * 864e5).toISOString() }
+  }
+  if (!start || !end) return { problems: ['--start y --end van juntos: indique ambos días (AAAA-MM-DD).'] }
+  if (!day.test(start) || !day.test(end)) return { problems: [`--start/--end deben ser AAAA-MM-DD (recibido: ${start} / ${end}).`] }
+  const startDate = new Date(`${start}T08:00:00-06:00`)
+  const endDate = new Date(`${end}T23:59:00-06:00`)
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) return { problems: [`--start/--end no son fechas válidas (${start} / ${end}).`] }
+  const problems = []
+  if (endDate <= startDate) problems.push(`--end (${end}) debe ser posterior a --start (${start}).`)
+  if (endDate <= now) problems.push(`--end (${end}) ya pasó.`)
+  return { problems, startDate: startDate.toISOString(), endDate: endDate.toISOString() }
+}
+
 // ---------------------------------------------------------------------------------------
 // Request shapes: what each endpoint receives. Pure, tested.
 // ---------------------------------------------------------------------------------------
@@ -395,15 +444,24 @@ async function main() {
       email: { type: 'string', default: 'fede.super@acme.test' },
       password: { type: 'string', default: 'Local1234!' },
       apply: { type: 'boolean', default: false },
+      'skip-demographic': { type: 'string', multiple: true, default: [] },
+      start: { type: 'string' },
+      end: { type: 'string' },
     },
   })
   if (!values.file) throw new Error('--file <workbook.xlsx> is required')
   if (!values['company-id'] && !(values['company-name'] && values.domain)) throw new Error('name the company: --company-id <guid>, or --company-name and --domain to find or create it')
   if (values['company-id'] && !GUID.test(values['company-id'])) throw new Error('--company-id is not a GUID')
 
-  const { problems, climate } = parseClimate(readWorkbook(values.file))
+  const parsed = parseClimate(readWorkbook(values.file))
+  const skipping = skipDemographics(parsed.climate, values['skip-demographic'])
+  const window = surveyWindow({ start: values.start, end: values.end })
+  const problems = [...parsed.problems, ...skipping.problems, ...window.problems]
+  const climate = skipping.climate
   log(`import-climate-workbook: ${values.file}`)
   for (const line of summarise(climate)) log(`  ${line}`)
+  if (skipping.skipped.length) log(`  sin importar (--skip-demographic): ${skipping.skipped.join(' · ')}`)
+  if (!window.problems.length) log(`  ventana de la encuesta: ${window.startDate} → ${window.endDate}${values.start ? '' : ' (por defecto: sin --start/--end)'}`)
   if (problems.length) {
     log(`\n${problems.length} problem(s) in the workbook — nothing was sent:`)
     for (const problem of problems) log(`  - ${problem}`)
@@ -491,15 +549,13 @@ async function main() {
   if (already) { log(`survey exists: ${already.title} (${already.id}, ${already.status}) — left as it is`) } else {
     const afterImport = await call('GET', `/admin/departments?companyId=${companyId}`, null, token)
     const departmentIds = (afterImport.departments ?? afterImport).filter((d) => d.isActive !== false).map((d) => d.id)
-    const start = new Date(Date.now() + 7 * 864e5)
-    const end = new Date(start.getTime() + 21 * 864e5)
-    const body = toSurveyRequest(climate, { companyId, title: surveyTitle, departmentIds, startDate: start.toISOString(), endDate: end.toISOString() })
+    const body = toSurveyRequest(climate, { companyId, title: surveyTitle, departmentIds, startDate: window.startDate, endDate: window.endDate })
     const created = await call('POST', '/surveys', body, token)
     const id = created?.id ?? created?.survey?.id
     if (!id) throw new Error(`survey create: unexpected body ${JSON.stringify(created).slice(0, 200)}`)
     log(`survey created as a DRAFT: ${surveyTitle} (${id}), ${body.questions.length} questions — review and launch it in the product`)
   }
-  log(`\nbands read but not sent (the product has no band setting yet): ${climate.bands.map((b) => `${b.name} ${b.min}–${b.max}`).join(' · ')}`)
+  log(`\nbands read but not sent — every company starts on the product's default bands (≥4 fortaleza, 3–3,99 oportunidad, <3 crítica); if these differ, set them in the company's result bands as super_admin: ${climate.bands.map((b) => `${b.name} ${b.min}–${b.max}`).join(' · ')}`)
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {

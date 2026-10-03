@@ -75,10 +75,14 @@ public class TrackingCiclosHallazgosEndpointsTests : IAsyncLifetime
 
         // Engineering clears SurveyResultsPrivacy.MinimumSegmentRespondents (5) with six.
         // Sales sits one below it with four -- that gap is the floor ruling's whole subject.
+        // One more with no department (Guid.Empty), so the people outside Engineering are
+        // five: without them the survey's 10 minus Engineering's 6 is Sales, and Engineering
+        // is withheld with it (SurveyAggregation.WithholdComplement).
         _closedSurvey = await SeedClosedSurveyAsync(adminA, _companyA, new Dictionary<Guid, (int Count, int Answer)>
         {
             [_engineering] = (6, 4),
             [_sales] = (4, 2),
+            [Guid.Empty] = (1, 3),
         });
 
         _otherClosedSurvey = await SeedClosedSurveyAsync(adminA, _companyA, new Dictionary<Guid, (int, int)>
@@ -204,7 +208,8 @@ public class TrackingCiclosHallazgosEndpointsTests : IAsyncLifetime
                         Id = responseId,
                         SurveyId = survey.Id,
                         CompanyId = companyId,
-                        DepartmentId = departmentId,
+                        // Guid.Empty is a response with no department.
+                        DepartmentId = departmentId == Guid.Empty ? null : departmentId,
                         SessionId = Guid.NewGuid().ToString("N"),
                         Language = "en",
                         IsComplete = true,

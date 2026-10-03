@@ -105,6 +105,7 @@ interface SubmissionOverrides {
   questionCount?: number
   alreadySubmitted?: boolean
   suppressedDemographics?: string[]
+  suppressedDemographicLabels?: string[]
 }
 
 function respondWith(payload: SurveyRespondView, submission: SubmissionOverrides = {}) {
@@ -122,6 +123,9 @@ function respondWith(payload: SurveyRespondView, submission: SubmissionOverrides
             answeredQuestionCount: submission.answeredQuestionCount ?? 1,
             questionCount: submission.questionCount ?? payload.questions.length,
             suppressedDemographics: submission.suppressedDemographics ?? [],
+            ...(submission.suppressedDemographicLabels && {
+              suppressedDemographicLabels: submission.suppressedDemographicLabels,
+            }),
           }),
           { status: 201 },
         ),
@@ -614,6 +618,35 @@ describe('SurveyRespondForm one question at a time', () => {
   })
 
   /**
+   * The TIMS dry run: 9 of 9 respondents lost the last question. "Siguiente" on the
+   * second-to-last page and the submit on the last were ONE reused `<button>` whose
+   * `type` React flipped to "submit" inside the click, and a real browser runs the
+   * click's default action against the type it finds afterwards — so the click that
+   * turned to the last page also sent the form. happy-dom does not run that default
+   * action, so the guard is on the cause: the submit must be a different element from
+   * the button that was clicked.
+   */
+  it('turns to the last page with a button that is not the submit it is replaced by', async () => {
+    respondWith(
+      view({
+        questions: [question({ id: 'q1', text: 'Pregunta uno' }), question({ id: 'q2', text: 'Pregunta dos', order: 1 })],
+      }),
+    )
+    renderForm()
+
+    await screen.findByText('Pregunta uno')
+    const next = screen.getByRole('button', { name: 'Siguiente' })
+    await userEvent.click(next)
+
+    const submit = await screen.findByRole('button', { name: 'Enviar mis respuestas' })
+    expect(submit).not.toBe(next)
+    expect(next.isConnected).toBe(false)
+    expect(
+      vi.mocked(fetch).mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === 'POST'),
+    ).toHaveLength(0)
+  })
+
+  /**
    * Anything that submits the `<form>` from an early page — Enter on a control, a browser's
    * implicit submission — reaches `handleSubmit`. Before the last page that has to mean
    * "next": a respondent on question 1 has not asked to send. Fired as a raw `submit` so
@@ -980,5 +1013,19 @@ describe('SurveyRespondForm confirmation', () => {
     // Named in the suppression notice specifically — "departamento" also appears in
     // the what-happens-now row about where results go.
     expect(screen.getByText(/no se guardaron con ella deliberadamente: departamento/)).toBeTruthy()
+  })
+
+  /**
+   * The TIMS dry run: every respondent read "edad, tiempo_de_laborar_en_tims_anos". The
+   * labels the API now sends beside the keys are what is printed; the keys are only the
+   * fallback for an API that does not send them yet.
+   */
+  it('names a suppressed demographic by its label, never its key, when the API sends one', async () => {
+    await submitOnce({
+      suppressedDemographics: ['edad', 'tiempo_de_laborar_en_tims_anos'],
+      suppressedDemographicLabels: ['Edad', 'Tiempo de laborar en TIMS (años)'],
+    })
+    expect(screen.getByText(/deliberadamente: Edad, Tiempo de laborar en TIMS \(años\)/)).toBeTruthy()
+    expect(screen.queryByText(/tiempo_de_laborar_en_tims_anos/)).toBeNull()
   })
 })

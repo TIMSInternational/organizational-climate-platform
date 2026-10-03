@@ -463,6 +463,38 @@ export function buildClimateMap(
   }
 }
 
+/**
+ * The map when the breakdown holds no group at all but the survey itself is disclosed:
+ * the columns, no rows, and so only the whole-company row the page draws above them.
+ *
+ * The TIMS dry run is the case: fifteen people in six departments, every one under the
+ * floor, so the respond flow stored no department on any response and the breakdown came
+ * back empty. `buildClimateMap` is right to return `null` for that breakdown -- there is no
+ * group to account for -- but the page read `null` as "hide everything", and nine disclosed
+ * responses read "reservados" with the survey-level results in the payload. The company
+ * row is the survey's own reading, the figure Clima en el tiempo already prints, so drawing
+ * it alone discloses nothing the floor withholds. `target` is `null` because there is no
+ * group cell to average; the whole map is `null` when there is no scale question to draw.
+ */
+export function companyOnlyClimateMap(
+  questions: readonly SurveyQuestionResult[],
+  minimumGroupSize: number,
+): ClimateMapModel | null {
+  const dimensions = climateDimensions(questions)
+  if (dimensions.length === 0) return null
+  const { target, extremeAt, deadBandAt } = climateScale([])
+  return {
+    dimensions,
+    rows: [],
+    target,
+    extremeAt,
+    deadBandAt,
+    threshold: Math.max(1, minimumGroupSize),
+    omittedDimensions: [],
+    omittedSegments: [],
+  }
+}
+
 export interface ClimateFinding {
   /** The segment key, so the page can drill into the group this came from. */
   rowId: string

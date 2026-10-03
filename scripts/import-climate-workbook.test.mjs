@@ -10,7 +10,7 @@ import assert from 'node:assert/strict'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import {
-  readWorkbook, parseClimate, roleForTitle, slug, toImportRows, toSurveyRequest, toFieldRequest, decodeXml, parseStyles,
+  readWorkbook, parseClimate, skipDemographics, surveyWindow, roleForTitle, slug, toImportRows, toSurveyRequest, toFieldRequest, decodeXml, parseStyles,
 } from './import-climate-workbook.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -119,4 +119,35 @@ test('xml helpers: entities and a bold font are read', () => {
   assert.equal(decodeXml('a &amp; b &#241; &#x41;'), 'a & b ñ A')
   const styles = parseStyles('<fonts><font><b/></font><font><sz val="11"/></font></fonts><fills><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF002060"/></patternFill></fill></fills><cellXfs><xf fontId="0" fillId="0"/><xf fontId="1" fillId="1"/></cellXfs>')
   assert.deepEqual(styles, [{ bold: true, filled: false, rgb: null }, { bold: false, filled: true, rgb: 'FF002060' }])
+})
+
+test('--skip-demographic leaves a column out of the fields and out of every row, by header or key', () => {
+  const { climate } = parseClimate(sample())
+  const { problems, skipped, climate: kept } = skipDemographics(climate, ['edad', 'Tiempo de laborar en [Empresa] (años)'])
+  assert.deepEqual(problems, [])
+  assert.deepEqual(skipped.sort(), ['Edad', 'Tiempo de laborar en [Empresa] (años)'])
+  assert.deepEqual(kept.columns.map((c) => c.field).sort(), ['genero', 'pais', 'region'])
+  for (const row of toImportRows(kept)) {
+    assert.equal(row.demographics.edad, undefined)
+    assert.equal(row.demographics[slug('Tiempo de laborar en [Empresa] (años)')], undefined)
+  }
+  // Untouched when nothing is named, and a name that matches nothing is refused, not ignored.
+  assert.equal(skipDemographics(climate, []).climate.columns.length, climate.columns.length)
+  assert.equal(skipDemographics(climate, ['Edadd']).problems.length, 1)
+})
+
+test('--start/--end: Costa Rica days, 08:00 to 23:59; together or not at all; end after start and not past', () => {
+  const now = new Date('2026-10-02T18:00:00Z')
+  const window = surveyWindow({ start: '2026-10-08', end: '2026-10-29' }, now)
+  assert.deepEqual(window.problems, [])
+  assert.equal(window.startDate, '2026-10-08T14:00:00.000Z') // 08:00 at UTC-6
+  assert.equal(window.endDate, '2026-10-30T05:59:00.000Z') // 23:59 on the 29th at UTC-6
+  assert.equal(surveyWindow({ start: '2026-10-08' }, now).problems.length, 1)
+  assert.equal(surveyWindow({ start: '08/10/2026', end: '29/10/2026' }, now).problems.length, 1)
+  assert.equal(surveyWindow({ start: '2026-10-29', end: '2026-10-08' }, now).problems.length, 1)
+  assert.equal(surveyWindow({ start: '2026-09-01', end: '2026-09-20' }, now).problems.length, 1)
+  // No flags: the old placeholder, a week out for three weeks.
+  const fallback = surveyWindow({}, now)
+  assert.equal(fallback.startDate, '2026-10-09T18:00:00.000Z')
+  assert.equal(fallback.endDate, '2026-10-30T18:00:00.000Z')
 })

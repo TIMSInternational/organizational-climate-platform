@@ -145,6 +145,12 @@ public sealed record SurveyRespondView(
 /// in a group smaller than <see cref="SurveyResponsePrivacy.MinimumCohortSize"/>.
 /// Always empty for an identified response.
 /// </param>
+/// <param name="SuppressedDemographicLabels">
+/// The same fields, in the same order, as the respondent should read them: the field's label
+/// in the response's language (falling back to the other language, then to the key). The
+/// keys alone reached the confirmation screen as <c>tiempo_de_laborar_en_tims_anos</c> on the
+/// TIMS dry run.
+/// </param>
 public sealed record SurveySubmissionResult(
     Guid ResponseId,
     string SessionId,
@@ -154,4 +160,5 @@ public sealed record SurveySubmissionResult(
     string Language,
     int AnsweredQuestionCount,
     int QuestionCount,
-    IReadOnlyList<string> SuppressedDemographics);
+    IReadOnlyList<string> SuppressedDemographics,
+    IReadOnlyList<string> SuppressedDemographicLabels);

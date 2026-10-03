@@ -4,7 +4,7 @@ import { isSuppressed } from '../../../components/charts/suppression'
 import { waveCode } from '../../dashboard/next/compose'
 import { WHOLE_COMPANY_KEY, type ClimateTrendSurvey, type ClimateTrendsResponse } from '../api/climateTrends'
 import type { SurveyAnalyticsResponse, SurveyBreakdown } from '../api/surveyResults'
-import { buildClimateMap, dimensionKeyOf } from '../surveyResultsMap'
+import { buildClimateMap, companyOnlyClimateMap, dimensionKeyOf } from '../surveyResultsMap'
 import type { ResultsPrevious, SurveyResultsNextModel } from './model'
 
 /**
@@ -174,9 +174,15 @@ export function composeResultsModel(
   bands: ResultBands,
 ): SurveyResultsNextModel {
   const breakdown = departmentBreakdown(payload)
-  const climate = breakdown
-    ? buildClimateMap(breakdown, payload.questions, payload.minimumGroupSize, (segment) => segment.label ?? segment.key)
-    : null
+  // A breakdown with no group at all is not "nothing to show": the survey's own reading
+  // still stands, as the company row alone (`companyOnlyClimateMap`). A breakdown whose
+  // groups are all withheld keeps `buildClimateMap`'s hatched rows.
+  const climate =
+    breakdown && breakdown.segments.length > 0
+      ? buildClimateMap(breakdown, payload.questions, payload.minimumGroupSize, (segment) => segment.label ?? segment.key)
+      : payload.isSuppressed
+        ? null
+        : companyOnlyClimateMap(payload.questions, payload.minimumGroupSize)
   return {
     surveyId: payload.surveyId,
     bands,

@@ -829,6 +829,22 @@ public static class SurveyResponseEndpoints
         var answered = await db.QuestionResponses.CountAsync(qr => qr.ResponseId == response.Id, cancellationToken);
         var questionCount = await db.Questions.CountAsync(q => q.SurveyId == response.SurveyId, cancellationToken);
 
+        IReadOnlyList<string> labels = [];
+        if (suppressedDemographics.Count > 0)
+        {
+            var fields = await db.DemographicFields
+                .Where(f => f.CompanyId == response.CompanyId && suppressedDemographics.Contains(f.Field))
+                .Select(f => new { f.Field, f.LabelEs, f.LabelEn })
+                .ToListAsync(cancellationToken);
+            var spanish = response.Language == ContentLanguages.Spanish;
+            labels = [.. suppressedDemographics.Select(key =>
+            {
+                var field = fields.FirstOrDefault(f => f.Field == key);
+                var label = spanish ? field?.LabelEs ?? field?.LabelEn : field?.LabelEn ?? field?.LabelEs;
+                return string.IsNullOrWhiteSpace(label) ? key : label;
+            })];
+        }
+
         return new SurveySubmissionResult(
             response.Id,
             response.SessionId,
@@ -838,7 +854,8 @@ public static class SurveyResponseEndpoints
             response.Language,
             answered,
             questionCount,
-            suppressedDemographics);
+            suppressedDemographics,
+            labels);
     }
 
     private static IResult NotFound()

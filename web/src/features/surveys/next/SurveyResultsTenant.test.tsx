@@ -398,6 +398,33 @@ describe('the survey results on the tenant’s real payload', () => {
     expect(requested().some((url) => url.endsWith(`/surveys/${SURVEY}/export/csv?lang=es`))).toBe(true)
   })
 
+  /**
+   * The TIMS dry run: fifteen people in six departments, none of them five strong, so the
+   * respond flow stored no department and the breakdown came back with no group at all.
+   * The survey itself was disclosed -- nine responses, every question -- and the page read
+   * "reservados" from top to bottom. It now draws the company row alone, its climate, and
+   * every question, and says why there is no group to show.
+   */
+  it('draws the whole company when the breakdown holds no group at all, rather than withholding everything', async () => {
+    const noGroups = structuredClone(fixture['GET /surveys/*/analytics']) as SurveyAnalyticsResponse
+    noGroups.breakdowns = noGroups.breakdowns.map((breakdown) => ({ ...breakdown, segments: [] }))
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) =>
+      String(input).includes(`/surveys/${SURVEY}/analytics`) ? Promise.resolve(json(noGroups)) : tenant(input),
+    )
+    renderAs({ role: 'company_admin' })
+
+    const grid = await screen.findByTestId('climate-grid')
+    expect(screen.queryByText('Los resultados por pregunta están reservados')).toBeNull()
+    expect(within(grid).getByTestId('company-row')).toBeTruthy()
+    expect(within(grid).queryAllByTestId(/^group-row-/)).toHaveLength(0)
+    expect(screen.getByText('ningún grupo llegó a 5 respuestas, así que el mapa muestra solo a toda la empresa')).toBeTruthy()
+    expect(screen.getByText('ningún grupo llegó al umbral de 5')).toBeTruthy()
+    // Findings rank GROUP cells; with none, the section would claim "every cell is in
+    // Fortaleza" about a map that has no group cell.
+    expect(screen.queryByRole('heading', { level: 2, name: 'Dónde mirar primero' })).toBeNull()
+    expect(document.getElementById('results-next-questions')).not.toBeNull()
+  })
+
   it('draws the same page for a super administrator who chose the company', async () => {
     window.localStorage.setItem(COMPANY_CONTEXT_STORAGE_KEY, COMPANY)
     renderAs({ role: 'super_admin', companyId: '' })

@@ -54,14 +54,19 @@ public class ReportSurveySectionsTests
     /// <summary>
     /// An aggregate over 5 Engineering respondents answering "4" and 2 Sales
     /// respondents answering "2" -- Sales below the segment floor of
-    /// <see cref="SurveyResultsPrivacy.MinimumSegmentRespondents"/>, Engineering above.
+    /// <see cref="SurveyResultsPrivacy.MinimumSegmentRespondents"/>, Engineering above --
+    /// and 3 with no department who answered nothing, so the people outside Engineering
+    /// are five and Engineering is not withheld for what a subtraction would reveal
+    /// (<c>SurveyAggregation.WithholdComplement</c>). They carry no answer, so every
+    /// reading below is the seven answers' own.
     /// </summary>
     private static SurveyAggregate Aggregate()
     {
-        var responses = Enumerable.Range(1, 5).Select(n => Response(n, Engineering))
+        var answering = Enumerable.Range(1, 5).Select(n => Response(n, Engineering))
             .Concat(Enumerable.Range(6, 2).Select(n => Response(n, Sales)))
             .ToList();
-        var answers = responses
+        var responses = answering.Concat(Enumerable.Range(8, 3).Select(n => Response(n, null))).ToList();
+        var answers = answering
             .Select(r => new AggregationAnswer(r.ResponseId, QuestionId, Stored(r.DepartmentId == Sales ? "2" : "4"), null))
             .ToList();
 
@@ -127,12 +132,14 @@ public class ReportSurveySectionsTests
         Assert.Same(aggregate.Summary, section.Participation);
         Assert.Same(aggregate.Dimensions, section.Dimensions);
         Assert.Same(aggregate.Questions, section.Questions);
-        Assert.Equal(7, section.Participation.CompletedCount);
+        // Seven who answered and three who answered nothing (see Aggregate).
+        Assert.Equal(10, section.Participation.CompletedCount);
 
         var leadership = Assert.Single(section.Dimensions);
         Assert.Equal("leadership", leadership.Dimension);
         // (4 x 5 + 2 x 2) / 7 -- the same number /surveys/{id}/results reports as the
-        // question's Average, because it IS that number.
+        // question's Average, because it IS that number. The three silent respondents
+        // move it not at all.
         Assert.Equal(3.43d, leadership.AverageScore);
         Assert.Equal(Assert.Single(aggregate.Questions).Average, leadership.AverageScore);
     }
@@ -191,8 +198,14 @@ public class ReportSurveySectionsTests
         var newcomers = Enumerable.Range(6, 2).Select(n => Response(n, Engineering,
             new Dictionary<string, string>(StringComparer.Ordinal) { ["tenure"] = Stored("0-1") }));
 
-        var responses = senior.Concat(newcomers).ToList();
-        var answers = responses
+        // Three more who gave no tenure and answered nothing: the people outside "2-5" are
+        // then five, so "2-5" is not withheld for what a subtraction would reveal
+        // (SurveyAggregation.WithholdComplement), and every reading is the seven answers' own.
+        var silent = Enumerable.Range(8, 3).Select(n => Response(n, Engineering));
+
+        var answering = senior.Concat(newcomers).ToList();
+        var responses = answering.Concat(silent).ToList();
+        var answers = answering
             .Select((r, index) => new AggregationAnswer(r.ResponseId, QuestionId, Stored(index < 5 ? "4" : "1"), null))
             .ToList();
 
@@ -382,8 +395,10 @@ public class ReportSurveySectionsTests
         Assert.DoesNotContain("the visa renewal paperwork is stressful", rendered, StringComparison.OrdinalIgnoreCase);
 
         // Withheld words are COUNTED, so a reader can tell an empty cloud from a
-        // censored one: the five words of the one-off sentence, and nothing else.
-        Assert.Equal(5, question.SuppressedWordCount);
+        // censored one: the content words of the one-off sentence, and nothing else.
+        // Four, not five: "the" is a function word (WordStopList), dropped before counting
+        // rather than withheld -- visa, renewal, paperwork, stressful.
+        Assert.Equal(4, question.SuppressedWordCount);
 
         // Every printed word is above the floor. The invariant, not five examples.
         Assert.All(question.Words, w => Assert.True(SurveyResultsPrivacy.MeetsWordFloor(w.ResponseCount)));

@@ -5509,6 +5509,7 @@
       "groupsSub": "de {total} legibles",
       "groupsProtected": "{groups} bajo el umbral de {floor}: protegido",
       "groupsAllReadable": "todos los grupos superan el umbral de {floor}",
+      "groupsNoneReached": "ningún grupo llegó al umbral de {floor}",
       "belowLabel": "Bajo la media",
       "belowSub": "dimensiones",
       "belowNone": "ninguna dimensión bajo la media de la encuesta",
@@ -6997,7 +6998,8 @@
       "whereNone": "Todas las celdas del mapa están en {band}.",
       "reasonLowest": "La celda más baja del mapa",
       "reasonOnlyCriticalOutside": "Única celda en {band} fuera de {group}",
-      "mapSub": "tres áreas de resultado · selecciona una celda para ver su pregunta"
+      "mapSub": "tres áreas de resultado · selecciona una celda para ver su pregunta",
+      "mapSubCompanyOnly": "ningún grupo llegó a {minimum} respuestas, así que el mapa muestra solo a toda la empresa"
     },
     "dashboard": {
       "movedLegend": "límites de área {low} y {high} · {count} encuestas cerradas, toda la empresa",

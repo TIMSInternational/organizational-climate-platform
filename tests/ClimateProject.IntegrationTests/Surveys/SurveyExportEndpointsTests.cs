@@ -175,9 +175,11 @@ public class SurveyExportEndpointsTests : IAsyncLifetime
     public async Task A_department_below_the_segment_floor_contributes_no_answers_to_the_file()
     {
         // Six in Ingeniería, three in Dirección: the survey is well above its own floor and one
-        // segment is below the segment floor.
+        // segment is below the segment floor. Two more with no department, so the people
+        // outside Ingeniería are five and it is not withheld for what a subtraction from the
+        // survey's total would reveal (SurveyAggregation.WithholdComplement).
         var survey = await SeedSurveyAsync(
-            completedResponses: 0,
+            completedResponses: 2,
             byDepartment: [(_engineeringId, 6), (_directionId, 3)]);
 
         var client = await AdminAAsync();
@@ -231,8 +233,9 @@ public class SurveyExportEndpointsTests : IAsyncLifetime
     [Fact]
     public async Task A_demographic_group_below_the_floor_is_named_in_neither_file()
     {
+        // Three who gave no nationality, so the people outside Costarricense are five.
         var survey = await SeedSurveyAsync(
-            completedResponses: 0,
+            completedResponses: 3,
             byDemographic: [("nationality", "Costarricense", 6), ("nationality", "Venezolana", 2)]);
 
         var client = await AdminAAsync();

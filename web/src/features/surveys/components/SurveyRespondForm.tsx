@@ -958,7 +958,12 @@ export default function SurveyRespondForm({
             red on the right and twice as wide. On the last question the way on is the
             submit — the one POST that completes the response, unchanged. Anterior is
             drawn on the first question too, disabled, so the primary action does not
-            jump sideways between the first page and the second. */}
+            jump sideways between the first page and the second.
+
+            The two `key`s are load-bearing. Without them React reuses ONE `<button>` and
+            flips its `type` to "submit" inside the click that turns to the last page; the
+            browser then runs that click's default action against the new type and sends
+            the form, so the last question was never shown (TIMS dry run, 9 of 9). */}
         <div data-slot="respond-nav" className="flex gap-2">
           <Button
             type="button"
@@ -971,11 +976,12 @@ export default function SurveyRespondForm({
             {t('next.previous')}
           </Button>
           {isLast ? (
-            <Button type="submit" variant="primary" className="h-11 flex-2" disabled={busy !== 'idle'}>
+            <Button key="submit" type="submit" variant="primary" className="h-11 flex-2" disabled={busy !== 'idle'}>
               {busy === 'submitting' ? tRoot('common.submitting') : t('submitResponse')}
             </Button>
           ) : (
             <Button
+              key="next"
               type="button"
               variant="primary"
               className="h-11 flex-2"
@@ -1355,7 +1361,9 @@ function Submitted({
             </span>
           </AlertTitle>
           <AlertDescription>
-            {t('suppressedBody', { fields: result.suppressedDemographics.join(', ') })}
+            {t('suppressedBody', {
+              fields: (result.suppressedDemographicLabels ?? result.suppressedDemographics).join(', '),
+            })}
           </AlertDescription>
         </Alert>
       )}

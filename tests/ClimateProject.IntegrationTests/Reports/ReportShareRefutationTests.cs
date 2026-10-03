@@ -431,6 +431,11 @@ public class ReportShareRefutationTests : IAsyncLifetime
         // the large one scoring 5. Eight in total, above the survey floor.
         for (var i = 0; i < 3; i++) await SeedResponseAsync(survey.Id, smallDept, likertId, "1", openId, sentinel);
         for (var i = 0; i < 5; i++) await SeedResponseAsync(survey.Id, bigDept, likertId, "5", openId, "fine as it is");
+        // Two who answered nothing and carry no department, so the people outside Large Team
+        // are five. Without them this very document gave Tiny Team's 1.0 away to anyone with
+        // the link: the survey's 3,5 over 8 minus Large Team's 5,0 over 5 is 1,0 over 3
+        // (SurveyAggregation.WithholdComplement).
+        for (var i = 0; i < 2; i++) await SeedSilentResponseAsync(survey.Id);
 
         // A second survey with two responses: below the survey floor entirely.
         var tiny = await SurveyTestHarness.CreateSurveyAsync(surveyAdmin, SurveyTestHarness.MinimalRequest(
@@ -797,6 +802,30 @@ public class ReportShareRefutationTests : IAsyncLifetime
                 break;
         }
     }
+
+    /// <summary>A complete response that answered nothing and carries no department: counted, moving no average.</summary>
+    private Task SeedSilentResponseAsync(Guid surveyId)
+        => WithDbAsync(async db =>
+        {
+            db.Responses.Add(new Response
+            {
+                Id = Guid.NewGuid(),
+                SurveyId = surveyId,
+                CompanyId = _companyId,
+                UserId = null,
+                DepartmentId = null,
+                SessionId = Guid.NewGuid().ToString("N"),
+                Language = "en",
+                IsComplete = true,
+                IsAnonymous = true,
+                StartTime = DateTimeOffset.UtcNow.AddMinutes(-5),
+                CompletionTime = DateTimeOffset.UtcNow,
+                TotalTimeSeconds = 300,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        });
 
     private Task SeedResponseAsync(Guid surveyId, Guid departmentId, Guid likertId, string likertValue, Guid? openId, string? text)
         => WithDbAsync(async db =>
