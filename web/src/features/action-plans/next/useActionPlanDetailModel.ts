@@ -15,7 +15,7 @@ import { listDepartments } from '../../org-structure/api/departments'
 import { getUser } from '../../org-structure/api/users'
 import { listSurveys } from '../../surveys/api/surveys'
 import { DEPARTMENT_GROUP, getClimateTrends } from '../../surveys/api/climateTrends'
-import { CLIMATE_TARGET, latestClosedSurvey } from '../../dashboard/next/compose'
+import { latestClosedSurvey } from '../../dashboard/next/compose'
 import { planFinding, type PlanFinding } from './planDetailDerive'
 import type { ActionPlanDetailModel, Settled } from './planDetailModel'
 
@@ -138,7 +138,7 @@ export function useActionPlanDetailModel(id: string | undefined, enabled: boolea
         ),
       ])
       const latest = latestClosedSurvey(surveys)
-      return planFinding(trends, latest?.id ?? null, departmentId, CLIMATE_TARGET)
+      return planFinding(trends, latest?.id ?? null, departmentId)
     }).then(apply(setFinding))
 
     return () => {

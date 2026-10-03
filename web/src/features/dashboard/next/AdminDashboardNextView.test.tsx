@@ -108,15 +108,29 @@ describe('AdminDashboardNextView', () => {
     expect(disclosed?.textContent ?? '').toMatch(/2\.4/)
   })
 
-  it('marks exactly the two dimensions below the target as below target', () => {
+  it('names every trend card’s result band in a chip, by the company’s scale', () => {
     renderView()
-    // Counted on the cards: the map's key says the same words, "bajo la meta", by design.
-    const chips = screen.getAllByText(copy.belowTarget).filter((chip) => chip.closest('[data-slot="trend-card"]'))
-    expect(chips).toHaveLength(2)
-    const dimensions = chips
-      .map((chip) => chip.closest('[data-slot="trend-card"]')?.getAttribute('data-dimension'))
-      .sort()
-    expect(dimensions).toEqual(['carga', 'reconocimiento'])
+    const cards = [...document.querySelectorAll('[data-slot="trend-card"]')] as HTMLElement[]
+    expect(cards.map((card) => [card.getAttribute('data-dimension'), card.getAttribute('data-band')])).toEqual([
+      ['pertenencia', 'strength'],
+      ['desarrollo', 'opportunity'],
+      ['seguridad', 'opportunity'],
+      ['confianza', 'opportunity'],
+      ['reconocimiento', 'opportunity'],
+      ['carga', 'opportunity'],
+    ])
+    // The band is said in words on every card, never by colour alone.
+    for (const card of cards) {
+      const band = card.getAttribute('data-band') as 'strength' | 'opportunity'
+      expect(within(card).getByText(en.resultBands.short[band])).toBeTruthy()
+    }
+  })
+
+  it('reads every card in the company’s own bands, not the default', () => {
+    renderView({ ...fullModel, bands: { ...fullModel.bands, opportunityMin: 3.5, names: { ...fullModel.bands.names, critical: 'Zona roja' } } })
+    const carga = document.querySelector('[data-slot="trend-card"][data-dimension="carga"]') as HTMLElement
+    expect(carga.getAttribute('data-band')).toBe('critical')
+    expect(within(carga).getByText('Zona roja')).toBeTruthy()
   })
 
   it('renders the three attention items, each with its action as a link', () => {
@@ -305,15 +319,14 @@ describe('AdminDashboardNextView', () => {
     expect(vi.mocked(downloadBlobFile)).not.toHaveBeenCalled()
   })
 
-  it('judges "below target" at the decimal the card prints: a 3.67 reads 3.7 and is on target', () => {
+  it('judges a card’s band at the decimal it prints: a 3.96 reads 4.0 and is in the strength area', () => {
     const dimensions = fullModel.dimensions.map((dimension) =>
-      dimension.key === 'confianza' ? { ...dimension, values: [2.96, 3.33, 3.67] } : dimension,
+      dimension.key === 'confianza' ? { ...dimension, values: [3.3, 3.6, 3.96] } : dimension,
     )
     renderView({ ...fullModel, dimensions })
     const card = document.querySelector('[data-slot="trend-card"][data-dimension="confianza"]') as HTMLElement
-    expect(card.textContent).toContain('3.7')
-    expect(card.getAttribute('data-below-target')).toBe('false')
-    expect(within(card).queryByText(copy.belowTarget)).toBeNull()
+    expect(card.textContent).toContain('4.0')
+    expect(card.getAttribute('data-band')).toBe('strength')
   })
 
   it('draws the trend cards highest latest reading first, whatever order the model holds them in', () => {
@@ -350,10 +363,11 @@ describe('AdminDashboardNextView', () => {
   })
   it('draws the six sparklines on one scale, so their slopes compare', () => {
     renderView()
-    const rules = [...document.querySelectorAll('[data-slot="trend-card"] line[data-slot="trend-target"]')]
-    expect(rules).toHaveLength(6)
-    // Fitted one by one, each target rule would sit at its own height.
-    expect(new Set(rules.map((rule) => rule.getAttribute('y1'))).size).toBe(1)
+    // Two boundary rules per card, 3,00 and 4,00, each at one height across all six.
+    const rules = [...document.querySelectorAll('[data-slot="trend-card"] line[data-slot="trend-boundary"]')]
+    expect(rules).toHaveLength(12)
+    // Fitted one by one, each card's rules would sit at heights of their own.
+    expect(new Set(rules.map((rule) => rule.getAttribute('y1'))).size).toBe(2)
   })
 
   it('dates the live microclimate by the reader’s clock, since its end is an instant', () => {
@@ -393,32 +407,36 @@ describe('AdminDashboardNextView', () => {
     }
   })
 
-  it('paints every map cell the step the Dashboard artboard paints it, rings none, and keys the steps by word', () => {
+  it('paints every map cell in its result band, with the band’s fill, glyph and name, and keys the three bands', () => {
     renderView()
     const rows = [...document.querySelectorAll('table tbody tr')].filter(
       (row) => row.querySelector('th[scope="row"]')?.textContent !== 'Finanzas',
     )
-    const steps = rows.map((row) =>
-      [...row.querySelectorAll('td div')].map((cell) =>
-        (cell as HTMLElement).style.backgroundColor.replace(/^var\(--admin-chart-div-(.*)\)$/, '$1'),
-      ),
+    const bands = rows.map((row) => [...row.querySelectorAll('td [data-band]')].map((cell) => cell.getAttribute('data-band')))
+    // The approved canvas's map: Ingeniería, Operaciones, Personas, Ventas.
+    expect(bands).toEqual([
+      ['strength', 'opportunity', 'strength', 'opportunity', 'strength', 'strength'],
+      ['critical', 'critical', 'opportunity', 'critical', 'opportunity', 'opportunity'],
+      ['strength', 'strength', 'strength', 'opportunity', 'strength', 'strength'],
+      ['strength', 'opportunity', 'opportunity', 'opportunity', 'opportunity', 'strength'],
+    ])
+    const fills = rows.flatMap((row) =>
+      [...row.querySelectorAll('td [data-band]')].map((cell) => [cell.getAttribute('data-band'), (cell as HTMLElement).style.backgroundColor]),
     )
-    // build_admin.py tint() over the artboard's own cells: Ingeniería, Operaciones, Personas, Ventas.
-    expect(steps).toEqual([
-      ['pos-1', 'mid', 'pos-1', 'mid', 'pos-2', 'pos-2'],
-      ['neg-2', 'neg-2', 'neg-1', 'neg-1', 'neg-1', 'neg-1'],
-      ['pos-2', 'pos-1', 'pos-1', 'mid', 'pos-2', 'pos-2'],
-      ['pos-1', 'neg-1', 'pos-1', 'mid', 'pos-1', 'pos-1'],
+    for (const [band, fill] of fills) {
+      expect(fill).toBe({ strength: 'var(--admin-chip-bg-good)', opportunity: 'var(--admin-chip-bg-warning)', critical: 'var(--admin-chip-bg-critical)' }[band as string])
+    }
+    // Every disclosed cell carries its glyph and says its band to a screen reader.
+    const operaciones = screen.getByRole('rowheader', { name: /Operaciones/ }).closest('tr') as HTMLElement
+    expect(operaciones.querySelectorAll('[data-band-glyph]')).toHaveLength(6)
+    expect(operaciones.textContent).toContain(en.resultBands.name.critical)
+    const legend = document.querySelector('[data-testid="climate-map-legend"]') as HTMLElement
+    expect([...legend.querySelectorAll('[data-band]')].map((entry) => entry.getAttribute('data-band'))).toEqual([
+      'strength',
+      'opportunity',
+      'critical',
     ])
-    expect([...document.querySelectorAll('table td div')].some((cell) => (cell as HTMLElement).style.outline !== '')).toBe(false)
-    const legend = document.querySelector('[data-slot="climate-map-legend"]') as HTMLElement
-    expect(
-      [...legend.querySelectorAll('[data-legend]')].map((group) => [group.textContent, group.querySelectorAll('span').length]),
-    ).toEqual([
-      [en.charts.next.legendBelow, 2],
-      [en.charts.next.legendOn, 1],
-      [en.charts.next.legendAbove, 2],
-    ])
+    expect(legend.textContent).toContain('4.00 to 5.00')
     expect(legend.textContent).toContain(en.charts.next.legendProtected.replace('{threshold}', '5'))
   })
 
@@ -449,8 +467,11 @@ describe('AdminDashboardNextView', () => {
     renderView()
     expect(document.querySelector('[data-slot="climate-move"]')?.textContent).toContain(copy.riseOrdinal['2'])
     expect(document.body.textContent).toContain(
-      copy.movedLegend.replace('{target}', '3.7').replace('{count}', copy.countWord['3']),
+      en.resultBands.dashboard.movedLegend.replace('{low}', '3.00').replace('{high}', '4.00').replace('{count}', copy.countWord['3']),
     )
+    // The climate tile names its band, judged at the two decimals it prints.
+    const tile = document.querySelector('[data-slot="kpi-value"]')?.closest('div')?.parentElement as HTMLElement
+    expect(tile.textContent).toContain(en.resultBands.name.opportunity)
     const steps = [...document.querySelectorAll('[data-slot="cycle-step"]')]
     // The verb is on screen, not only for a screen reader.
     expect(steps[0].textContent).toContain(copy.waveClosed.replace('{date}', calendarDay(Date.parse('2026-02-12'), 'en')))

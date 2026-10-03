@@ -233,4 +233,83 @@ describe('CompanySettingsNextView (/admin/companies/:id for a company administra
     expect(within(failed).queryByText(/^0/)).toBeNull()
     expect(within(failed).getAllByText('—').length).toBe(2)
   })
+
+  describe('Escala de resultados', () => {
+    const withBands: CompanySettingsResponse = {
+      ...stored,
+      resultBands: { opportunityMin: 3, strengthMin: 4, criticalName: null, opportunityName: null, strengthName: null },
+    }
+    const bandsCopy = en.resultBands.settings
+    beforeEach(() => {
+      vi.mocked(updateCompanySettings).mockImplementation(async (_base, _id, input) => ({
+        ...withBands,
+        ...(input.resultBands ? { resultBands: input.resultBands } : {}),
+      }))
+    })
+    const box = (name: string) => screen.getByLabelText(name) as HTMLInputElement
+
+    it('draws the three bands with the default names, a fixed swatch each, and 1,00 and 5,00 fixed', async () => {
+      renderAs({ role: 'company_admin', companyId: 'c1' })
+      const card = (await screen.findByRole('heading', { name: bandsCopy.heading })).closest('section') as HTMLElement
+      expect(box(bandsCopy.nameLabel.replace('{colour}', 'green')).value).toBe(en.resultBands.name.strength)
+      expect(box(bandsCopy.nameLabel.replace('{colour}', 'red')).value).toBe(en.resultBands.name.critical)
+      expect(box(bandsCopy.fromLabel.replace('{band}', en.resultBands.name.critical)).disabled).toBe(true)
+      expect(box(bandsCopy.toLabel.replace('{band}', en.resultBands.name.strength)).disabled).toBe(true)
+      expect(box(bandsCopy.fromLabel.replace('{band}', en.resultBands.name.opportunity)).value).toBe('3.00')
+      // The colour is not a control: three "fixed" swatches and no colour input in the card.
+      expect(within(card).getAllByText(bandsCopy.fixed)).toHaveLength(3)
+      expect(within(card).queryByRole('textbox', { name: /colour/i })).toBeNull()
+      expect(within(card).getByRole('status').textContent).toBe(bandsCopy.valid)
+    })
+
+    it('names a gap, marks the boxes that make it, and holds Save until the scale is whole again', async () => {
+      renderAs({ role: 'company_admin', companyId: 'c1' })
+      await screen.findByRole('heading', { name: bandsCopy.heading })
+      const from = box(bandsCopy.fromLabel.replace('{band}', en.resultBands.name.opportunity))
+      await userEvent.clear(from)
+      await userEvent.type(from, '3.10')
+
+      const alert = screen.getByRole('alert')
+      expect(alert.textContent).toContain(bandsCopy.errorGap.replace('{from}', '2.99').replace('{to}', '3.10').replace('{example}', '3.05'))
+      expect(from.getAttribute('aria-invalid')).toBe('true')
+      expect(from.getAttribute('aria-describedby')).toBe(alert.id)
+      expect((screen.getByRole('button', { name: copy.save }) as HTMLButtonElement).disabled).toBe(true)
+
+      // Close the gap from the other side: the critical area now ends at 3,09.
+      const to = box(bandsCopy.toLabel.replace('{band}', en.resultBands.name.critical))
+      await userEvent.clear(to)
+      await userEvent.type(to, '3.09')
+      expect(screen.queryByRole('alert')).toBeNull()
+      await userEvent.click(screen.getByRole('button', { name: copy.save }))
+      // The whole scale, as two boundaries and three names — the defaults sent as null.
+      expect(vi.mocked(updateCompanySettings).mock.calls[1].slice(1)).toEqual([
+        'c1',
+        { resultBands: { opportunityMin: 3.1, strengthMin: 4, criticalName: null, opportunityName: null, strengthName: null } },
+      ])
+    })
+
+    it('saves a renamed band by its own name, and Discard brings the scale back', async () => {
+      renderAs({ role: 'company_admin', companyId: 'c1' })
+      await screen.findByRole('heading', { name: bandsCopy.heading })
+      const red = box(bandsCopy.nameLabel.replace('{colour}', 'red'))
+      await userEvent.clear(red)
+      await userEvent.type(red, 'Zona roja')
+      await userEvent.click(screen.getByRole('button', { name: copy.discard }))
+      expect(box(bandsCopy.nameLabel.replace('{colour}', 'red')).value).toBe(en.resultBands.name.critical)
+
+      await userEvent.clear(box(bandsCopy.nameLabel.replace('{colour}', 'red')))
+      await userEvent.type(box(bandsCopy.nameLabel.replace('{colour}', 'red')), 'Zona roja')
+      await userEvent.click(screen.getByRole('button', { name: copy.save }))
+      expect(vi.mocked(updateCompanySettings).mock.calls[1][2]).toEqual({
+        resultBands: { opportunityMin: 3, strengthMin: 4, criticalName: 'Zona roja', opportunityName: null, strengthName: null },
+      })
+    })
+
+    it('draws no card over an API that sends no scale, rather than a default in the company’s name', async () => {
+      vi.mocked(updateCompanySettings).mockImplementation(async () => stored)
+      renderAs({ role: 'company_admin', companyId: 'c1' })
+      await screen.findByLabelText(new RegExp(copy.language))
+      expect(screen.queryByRole('heading', { name: bandsCopy.heading })).toBeNull()
+    })
+  })
 })

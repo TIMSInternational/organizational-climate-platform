@@ -5,8 +5,8 @@ import { downloadTextFile } from '../../../../lib/downloadTextFile'
 import { useTranslation } from '../../../../i18n'
 import { useCompanyScope } from '../../../../company-context'
 import { PageTopBar } from '../../../../components/layout'
-import { KpiTile } from '../../../../components/charts'
-import { Button, Chip, EmptyState, LoadingRegion, NetworkError } from '../../../../components/ui'
+import { BandChip, BandLegend, KpiTile, bandName, bandOf, boundaryText, type ResultBandKey } from '../../../../components/charts'
+import { Button, EmptyState, LoadingRegion, NetworkError } from '../../../../components/ui'
 import { KpiRow } from '../../../dashboard/components/dashboardGrammar'
 import { printedMove, reading, signedReading } from '../../../dashboard/next/derive'
 import { calendarDay } from '../../../../lib/calendarDay'
@@ -18,25 +18,21 @@ import {
   deltaSince,
   latestIndex,
   sharedTrendAxis,
-  standing,
   standings,
   waveMean,
   type DimensionStanding,
-  type Standing,
   type TrendAxis,
 } from './derive'
 import { buildTrendsCsv } from './trendsCsv'
 import type { ClimateTrendsNextModel, TrendDimension, TrendWave } from './model'
 import { useClimateTrendsModel } from './useClimateTrendsModel'
 
-const STANDING_TONE: Record<Standing, 'good' | 'neutral' | 'critical'> = {
-  above: 'good',
-  on: 'neutral',
-  below: 'critical',
+/** The ink each band's tile prints its list in: the band's chip ink, measured for AA. */
+const BAND_INK: Record<ResultBandKey, string> = {
+  strength: 'text-chip-good-ink',
+  opportunity: 'text-chip-warning-ink',
+  critical: 'text-chip-critical-ink',
 }
-
-/** The target rule's hex, as `DimensionTrendChart` draws it, for the legend's swatch. */
-const TARGET_RULE = '#b3b8ca'
 
 /**
  * `/surveys/climate-trends` — the redesigned Clima en el tiempo, which replaced
@@ -101,12 +97,7 @@ export default function ClimateTrendsNextPage() {
   )
 }
 
-/** "Pertenencia, Desarrollo y Seguridad psicológica" — the reader's own list grammar. */
-function listOf(names: readonly string[], locale: string): string {
-  return new Intl.ListFormat(locale, { style: 'long', type: 'conjunction' }).format(names)
-}
-
-/** "ambas suben", "sube", "1 de 2 suben" — how the dimensions under the target last moved. */
+/** "ambas suben", "sube", "1 de 2 suben" — how the dimensions in the critical area last moved. */
 function risingPhrase(below: readonly DimensionStanding[], t: (key: string, params?: Record<string, string | number>) => string): string | null {
   const known = below.filter((entry) => entry.lastMove !== null)
   if (known.length === 0 || known.length !== below.length) return null
@@ -127,8 +118,7 @@ function ClimateTrendsNextView({
 }) {
   const { t, locale } = useTranslation()
   const capabilities = useViewerCapabilities()
-  const { target, waves, dimensions } = model
-  const targetText = reading(target, locale)
+  const { bands, waves, dimensions } = model
   const last = waves.length - 1
   const latestWave = waves[last]
   const latestMean = latestWave ? waveMean(dimensions, last) : null
@@ -140,11 +130,13 @@ function ClimateTrendsNextView({
     // The difference of the two averages as the tile prints them, at two decimals.
     return wave && mean !== null && latestMean !== null ? [{ wave, delta: printedMove(latestMean, mean, 2) }] : []
   })
-  const judged = standings(dimensions, target)
-  const above = judged.filter((entry) => entry.standing === 'above')
-  const below = judged.filter((entry) => entry.standing === 'below').sort((a, b) => a.value - b.value)
-  const rising = risingPhrase(below, t)
-  const axis = sharedTrendAxis(dimensions, target)
+  const judged = standings(dimensions, bands)
+  const inBand = (band: ResultBandKey) =>
+    judged.filter((entry) => entry.band === band).sort((a, b) => b.value - a.value)
+  const strength = inBand('strength')
+  const critical = inBand('critical').reverse()
+  const rising = risingPhrase(critical, t)
+  const axis = sharedTrendAxis(dimensions, bands)
   const groupName =
     model.selectedGroup === WHOLE_COMPANY_KEY
       ? t('surveys.next.trends.wholeCompany').toLocaleLowerCase(locale)
@@ -184,7 +176,7 @@ function ClimateTrendsNextView({
       <PageTopBar
         eyebrow={model.companyName}
         title={t('surveys.next.trends.title')}
-        description={t('surveys.next.trends.description', { target: targetText })}
+        description={t('resultBands.trends.description')}
         actions={
           capabilities.canExport && waves.length > 0 ? (
             <Button type="button" variant="outline" onClick={exportTable}>
@@ -210,7 +202,13 @@ function ClimateTrendsNextView({
                   label={t('surveys.next.trends.climateLabel', { wave: latestWave?.code ?? '' })}
                   value={latestMean}
                   format={{ kind: 'number', decimals: 2 }}
-                  unit={t('surveys.next.trends.climateOf')}
+                  unit={
+                    <span className="inline-flex flex-wrap items-center gap-2">
+                      {t('surveys.next.trends.climateOf')}
+                      {/* Printed at two decimals, so judged at two. */}
+                      {latestMean !== null && <BandChip band={bandOf(latestMean, bands, 2)} bands={bands} />}
+                    </span>
+                  }
                   locale={locale}
                   sub={
                     moves.length > 0 ? (
@@ -243,40 +241,32 @@ function ClimateTrendsNextView({
                     ) : undefined
                   }
                 />
-                <KpiTile
-                  size="large"
-                  label={t('surveys.next.trends.aboveLabel')}
-                  value={above.length}
-                  unit={t('surveys.next.trends.ofDimensions', { total: judged.length })}
-                  locale={locale}
-                  sub={
-                    <span className={above.length > 0 ? 'text-accent-green-ink' : undefined}>
-                      {above.length === 0
-                        ? t('surveys.next.trends.none')
-                        : listOf(above.map((entry) => entry.dimension.name), locale)}
-                    </span>
-                  }
-                />
-                <KpiTile
-                  size="large"
-                  label={t('surveys.next.trends.belowLabel')}
-                  value={below.length}
-                  unit={t('surveys.next.trends.ofDimensions', { total: judged.length })}
-                  locale={locale}
-                  sub={
-                    // `text-chip-critical-ink`, not the accent red: `respondContrast.test.ts`
-                    // sweeps this whole feature for `text-accent-red` (4.43:1 on a card);
-                    // the chip ink is the red measured to clear AA in both themes.
-                    <span className={below.length > 0 ? 'text-chip-critical-ink' : undefined}>
-                      {below.length === 0
-                        ? t('surveys.next.trends.none')
-                        : [
-                            ...below.map((entry) => `${entry.dimension.name} ${reading(entry.value, locale)}`),
-                            ...(rising ? [rising] : []),
-                          ].join(' · ')}
-                    </span>
-                  }
-                />
+                {/* The two ends of the scale, where the old page put "sobre / bajo la meta":
+                    how many dimensions are in the strength area and how many in the critical
+                    one. The opportunity area is what is left, and every chart names it. */}
+                {(['strength', 'critical'] as const).map((band) => {
+                  const entries = band === 'strength' ? strength : critical
+                  return (
+                    <KpiTile
+                      key={band}
+                      size="large"
+                      label={bandName(band, bands, t)}
+                      value={entries.length}
+                      unit={t('surveys.next.trends.ofDimensions', { total: judged.length })}
+                      locale={locale}
+                      sub={
+                        <span data-slot={`band-tile-${band}`} className={entries.length > 0 ? BAND_INK[band] : undefined}>
+                          {entries.length === 0
+                            ? t('surveys.next.trends.none')
+                            : [
+                                  ...entries.map((entry) => `${entry.dimension.name} ${reading(entry.value, locale)}`),
+                                  ...(band === 'critical' && rising ? [rising] : []),
+                                ].join(' · ')}
+                        </span>
+                      }
+                    />
+                  )
+                })}
               </KpiRow>
             </section>
 
@@ -308,18 +298,7 @@ function ClimateTrendsNextView({
                     )
                   })}
                 </div>
-                <div className="ml-auto flex flex-wrap items-center gap-3 text-sm text-fg-label">
-                  <span className="inline-flex items-center gap-1.5">
-                    <svg aria-hidden="true" width="18" height="2" viewBox="0 0 18 2" className="shrink-0">
-                      <line x1="0" x2="18" y1="1" y2="1" stroke={TARGET_RULE} strokeDasharray="3 2" />
-                    </svg>
-                    {t('surveys.next.trends.legendTarget', { target: targetText })}
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <span aria-hidden="true" className="inline-block size-2.5 shrink-0 rounded-full bg-accent-red" />
-                    {t('surveys.next.trends.legendBelow')}
-                  </span>
-                </div>
+                <BandLegend bands={bands} short className="ml-auto" />
               </div>
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -350,15 +329,15 @@ function ClimateTrendsNextView({
                 withheld={model.withheld}
                 respondents={model.respondents}
                 dimensions={dimensions}
-                target={target}
+                bands={bands}
                 floor={model.floor}
                 caption={t('surveys.next.trends.tableHeading')}
               />
               {/* The artboard's one line: the floor's rule, and — only while it is true of
                   every wave on the page — that the whole company is never under it. A
                   department withheld in every wave says so in its own segment, where every
-                  cell is hatched; the target is the Panel de Control's, and the subtitle
-                  already names it. */}
+                  cell is hatched; the bands are the company's, and the legend above
+                  already names them. */}
               <p data-slot="trends-footnote" className="m-0 -mt-1 text-xs leading-normal text-fg-label">
                 {t('surveys.next.trends.floorNote', { floor: model.floor })}
                 {!model.companyWithheld.some(Boolean) && <> {t('surveys.next.trends.companyNeverWithheld')}</>}
@@ -383,26 +362,25 @@ function TrendCard({
   tickLabels: readonly string[]
 }) {
   const { t, locale } = useTranslation()
-  const { target, waves } = model
+  const { bands, waves } = model
   const last = latestIndex(dimension.values)
   const value = last === -1 ? null : (dimension.values[last] ?? null)
-  const stand = value === null ? null : standing(value, target)
+  const band = value === null ? null : bandOf(value, bands)
   const sincePrevious = last > 0 ? deltaSince(dimension.values, last - 1) : null
   const sinceFirst = last > 1 ? deltaSince(dimension.values, 0) : null
   const previousWave: TrendWave | undefined = last > 0 ? waves[last - 1] : undefined
   const firstWave: TrendWave | undefined = waves[0]
-  const targetText = reading(target, locale)
 
   return (
     <div
       data-slot="trend-card"
       data-dimension={dimension.key}
-      data-standing={stand ?? 'withheld'}
+      data-band={band ?? 'withheld'}
       className="flex min-w-0 flex-col gap-2 rounded-lg border border-line-default bg-surface-card px-4 pt-3.5 pb-3"
     >
       <div className="flex items-center justify-between gap-2">
         <span className="min-w-0 truncate text-base font-semibold text-fg-primary">{dimension.name}</span>
-        {stand && <Chip tone={STANDING_TONE[stand]} label={t(`surveys.next.trends.standing.${stand}`)} className="h-6" />}
+        {band && <BandChip band={band} bands={bands} className="h-6" />}
       </div>
       {/* `leading-normal` is the canvas's line box: the artboard sets this 22px reading in a
           body of `line-height: 1.5`, so the row is 33px and the card 254px tall
@@ -429,13 +407,12 @@ function TrendCard({
       <DimensionTrendChart
         values={dimension.values}
         withheld={model.withheld}
-        target={target}
+        bands={bands}
         axis={axis}
         labels={tickLabels}
         format={(reading_) => reading(reading_, locale)}
         withheldText={t('surveys.next.trends.withheld')}
-        targetText={t('surveys.next.trends.legendTarget', { target: targetText })}
-        label={t('surveys.next.trends.chartLabel', {
+        label={t('resultBands.trends.chartLabel', {
           dimension: dimension.name,
           values: dimension.values
             .map((entry, index) =>
@@ -446,7 +423,8 @@ function TrendCard({
                 : reading(entry, locale),
             )
             .join(' → '),
-          target: targetText,
+          low: boundaryText(bands.opportunityMin, locale),
+          high: boundaryText(bands.strengthMin, locale),
         })}
       />
     </div>

@@ -116,6 +116,26 @@ describe('getSharedReport', () => {
     expect(report.document?.surveys[0].surveyId).toBe('s1')
   })
 
+  it('reads the company’s result bands off the link, and no scale it cannot trust', async () => {
+    const body = (resultBands: unknown) => jsonResponse({ title: 't', type: 'summary', reportOutput: DOCUMENT, resultBands })
+    vi.mocked(fetch).mockResolvedValueOnce(
+      body({ opportunityMin: 2.5, strengthMin: 4.25, criticalName: 'Zona roja', opportunityName: null, strengthName: '  ' }),
+    )
+    expect((await getSharedReport('http://api.test', 'tok')).resultBands).toEqual({
+      opportunityMin: 2.5,
+      strengthMin: 4.25,
+      // A blank name is the product's default, never an empty chip.
+      names: { critical: 'Zona roja', opportunity: null, strength: null },
+    })
+
+    // An API older than the bands, and scales that are not a scale: the page judges nothing
+    // rather than painting a default in the company's name.
+    for (const bad of [undefined, null, 'x', { opportunityMin: 4, strengthMin: 3 }, { opportunityMin: 1, strengthMin: 4 }, { opportunityMin: 3, strengthMin: 5.5 }, { opportunityMin: '3', strengthMin: 4 }]) {
+      vi.mocked(fetch).mockResolvedValueOnce(body(bad))
+      expect((await getSharedReport('http://api.test', 'tok')).resultBands, JSON.stringify(bad)).toBeNull()
+    }
+  })
+
   /**
    * THE acceptance criterion of #139, from the client side.
    *

@@ -1,4 +1,5 @@
 {
+  "GET /admin/companies/*/result-bands": {"opportunityMin": 3, "strengthMin": 4, "criticalName": null, "opportunityName": null, "strengthName": null},
   "GET /notifications/mine": { "notifications": [] },
   "GET /microclimates/*": {
     "id": "44444444-4444-4444-4444-444444444444",

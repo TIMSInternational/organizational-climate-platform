@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from '../../../i18n'
 import { useCompanyScope } from '../../../company-context'
+import { useResultBands } from '../../result-bands/useResultBands'
 import { listActionPlans, type ActionPlan } from '../../action-plans/api/actionPlans'
 import { getClimateTrends, type ClimateTrendsResponse } from '../api/climateTrends'
 import { getSurveyAnalytics, type SurveyAnalyticsResponse } from '../api/surveyResults'
@@ -46,6 +47,7 @@ export function useSurveyResultsModel(surveyId: string | undefined): SurveyResul
   const scope = useCompanyScope()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const companyId = scope.status === 'ready' ? scope.companyId : undefined
+  const bands = useResultBands()
 
   const [payload, setPayload] = useState<SurveyAnalyticsResponse | null>(null)
   const [plans, setPlans] = useState<ActionPlan[] | null>(null)
@@ -85,11 +87,21 @@ export function useSurveyResultsModel(surveyId: string | undefined): SurveyResul
   }, [reload])
 
   const model = useMemo<SurveyResultsNextModel | null>(
-    () => (payload ? composeResultsModel(payload, plans, closesAt, previous) : null),
-    [payload, plans, closesAt, previous],
+    () => (payload && bands.bands ? composeResultsModel(payload, plans, closesAt, previous, bands.bands) : null),
+    [payload, plans, closesAt, previous, bands.bands],
   )
 
-  return { model, loading, error, reload }
+  // The bands are part of the reading: without them no cell can be coloured, so their
+  // failure is the page's error (with the page's retry), never a silent default.
+  const retryBands = bands.retry
+  const reloadAll = useCallback(async () => {
+    retryBands()
+    await reload()
+  }, [retryBands, reload])
+  if (bands.status === 'error' && error === null) {
+    return { model: null, loading: false, error: t('resultBands.loadError'), reload: reloadAll }
+  }
+  return { model, loading: loading || bands.status === 'loading', error, reload: reloadAll }
 }
 
 /**

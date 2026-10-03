@@ -1,4 +1,5 @@
 {
+  "GET /admin/companies/*/result-bands": {"opportunityMin": 3, "strengthMin": 4, "criticalName": null, "opportunityName": null, "strengthName": null},
   "_comment": "Leader lane, read-only plan detail (TrackingPlanDetailLeaderReadOnly): PA-2026-00001 is Finanzas', and the reader -- the leader of Ingenieria -- is only an involucrado on it. Same bodies as tracking-leader.json.",
   "GET /notifications/mine": {
     "notifications": []

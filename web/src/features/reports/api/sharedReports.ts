@@ -1,3 +1,4 @@
+import { SCALE_MAX, SCALE_MIN, type ResultBands } from '../../../components/charts/resultBands'
 import { parseReportDocument, type ReportDocument } from '../reportDocument'
 
 /**
@@ -97,6 +98,13 @@ export interface SharedReport {
    * something that is not a document — see `parseReportDocument`.
    */
   document: ReportDocument | null
+  /**
+   * The company's result bands as they are when the link is opened — two boundaries and
+   * three names, nothing that identifies the company. `null` when the payload carries no
+   * valid scale (an API older than the bands): the page then prints every figure and
+   * judges none, rather than painting a scale the company may never have chosen.
+   */
+  resultBands: ResultBands | null
 }
 
 /** The wire shape, before `reportOutput` is parsed. Mirrors `ReportDetail`'s subset. */
@@ -106,6 +114,22 @@ interface SharedReportWire {
   type?: unknown
   generatedAt?: unknown
   reportOutput?: unknown
+  resultBands?: unknown
+}
+
+/** A scale the page may paint with, or `null`: every field typed, and the boundaries in order. */
+function parseResultBands(value: unknown): ResultBands | null {
+  if (typeof value !== 'object' || value === null) return null
+  const wire = value as Record<string, unknown>
+  const { opportunityMin, strengthMin } = wire
+  if (typeof opportunityMin !== 'number' || typeof strengthMin !== 'number') return null
+  if (!(SCALE_MIN < opportunityMin && opportunityMin < strengthMin && strengthMin <= SCALE_MAX)) return null
+  const name = (raw: unknown) => (typeof raw === 'string' && raw.trim() !== '' ? raw : null)
+  return {
+    opportunityMin,
+    strengthMin,
+    names: { critical: name(wire.criticalName), opportunity: name(wire.opportunityName), strength: name(wire.strengthName) },
+  }
 }
 
 /**
@@ -163,5 +187,6 @@ export async function getSharedReport(
     document: parseReportDocument(
       typeof wire.reportOutput === 'string' ? wire.reportOutput : null,
     ),
+    resultBands: parseResultBands(wire.resultBands),
   }
 }

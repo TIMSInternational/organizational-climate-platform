@@ -18,7 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from '../../../../components/ui'
-import { ProtectedCell, formatMetric } from '../../../../components/charts'
+import { BandChip, BandLegend, BandScaleBar, ProtectedCell, formatMetric } from '../../../../components/charts'
 import ResultsSuppressionNotice from '../../../surveys/components/ResultsSuppressionNotice'
 import { dimensionLabel } from '../../../surveys/dimensionLabel'
 import type { SurveyQuestionResult } from '../../../surveys/api/surveyResults'
@@ -27,7 +27,6 @@ import { applyNoIndex } from '../../../../lib/noIndex'
 import { getSharedReport, type SharedReport } from '../../api/sharedReports'
 import type { ReportAIInsight, ReportBenchmarkComparison } from '../../reportDocument'
 import {
-  CLIMATE_TARGET,
   viewOf,
   type SharedReportView,
   type SharedSection,
@@ -215,8 +214,8 @@ function Unavailable() {
 function ReportBody({ report }: { report: SharedReport }) {
   const { t, locale } = useTranslation()
   const view: SharedReportView | null = useMemo(
-    () => (report.document === null ? null : viewOf(report.document, report.generatedAt)),
-    [report.document, report.generatedAt],
+    () => (report.document === null ? null : viewOf(report.document, report.generatedAt, report.resultBands)),
+    [report.document, report.generatedAt, report.resultBands],
   )
 
   return (
@@ -264,6 +263,19 @@ function ReportBody({ report }: { report: SharedReport }) {
               <AlertTitle>{t('sharedReport.incompleteTitle')}</AlertTitle>
               <AlertDescription>{t('sharedReport.incompleteBody')}</AlertDescription>
             </Alert>
+          )}
+
+          {/* The key to every colour below, once, before the first reading: the scale
+              the company reads its results in, named in its own words. */}
+          {view.bands !== null && view.sections.length > 0 && (
+            <ReportCard
+              id="report-scale"
+              heading={t('resultBands.report.heading')}
+              meta={t('resultBands.report.meta')}
+            >
+              <BandScaleBar bands={view.bands} />
+              <BandLegend bands={view.bands} />
+            </ReportCard>
           )}
 
           {view.sections.length === 0 ? (
@@ -393,18 +405,16 @@ function SurveyBlock({ section, named }: { section: SharedSection; named: boolea
                   ? t(`${K}.mapHeadingField`, { field: map.field })
                   : t('surveyResults.next.mapHeading')
               }
-              meta={t(`${K}.mapSub`, {
-                target: formatMetric(CLIMATE_TARGET, { kind: 'number', decimals: 1 }, locale),
-              })}
+              meta={t('resultBands.report.mapSub')}
             >
               <ClimateMapGrid
                 map={map}
                 floor={section.floor}
-                target={CLIMATE_TARGET}
+                bands={section.bands}
                 caption={t(`${K}.mapCaption`, { field: map.field, floor: section.floor })}
                 groupHeading={t('surveyResults.next.groupHeading')}
               />
-              <ClimateMapLegend floor={section.floor} />
+              <ClimateMapLegend floor={section.floor} bands={section.bands} />
               {map.withheldCount > 0 && (
                 <p className="m-0 max-w-prose text-xs text-fg-tertiary">
                   {t('sharedReport.groupsWithheld', {
@@ -443,22 +453,10 @@ function SurveyBlock({ section, named }: { section: SharedSection; named: boolea
 /** The artboard's "Clima por dimensión": the figure, the scale, and the reading in words. */
 function DimensionsCard({ section, headingId }: { section: SharedSection; headingId: string }) {
   const { t, locale } = useTranslation()
-  const target = formatMetric(CLIMATE_TARGET, { kind: 'number', decimals: 1 }, locale)
+  const bands = section.bands
 
   return (
-    <ReportCard
-      id={headingId}
-      heading={t(`${K}.dimensionsHeading`)}
-      meta={
-        <span className="inline-flex items-center gap-2">
-          <span
-            aria-hidden="true"
-            className="inline-block w-6 border-t border-dashed border-line-default"
-          />
-          {t(`${K}.targetMeta`, { target })}
-        </span>
-      }
-    >
+    <ReportCard id={headingId} heading={t(`${K}.dimensionsHeading`)} meta={t('resultBands.report.dimensionsMeta')}>
       <Table>
         <TableCaption className="text-left">{t(`${K}.dimensionsCaption`)}</TableCaption>
         <TableHeader>
@@ -490,29 +488,22 @@ function DimensionsCard({ section, headingId }: { section: SharedSection; headin
                   : formatMetric(row.average, { kind: 'number', decimals: 1 }, locale)}
               </TableCell>
               <TableCell>
-                {row.average !== null && row.band !== null && (
-                  <ScaleStrip value={row.average} target={CLIMATE_TARGET} band={row.band} />
+                {row.average !== null && row.band !== null && bands !== null && (
+                  <ScaleStrip value={row.average} bands={bands} band={row.band} />
                 )}
               </TableCell>
               <TableCell className="text-fg-secondary">
                 {row.offScale ? (
-                  // A figure that is not on the 1-to-5 scale the target belongs to keeps
-                  // its number and says so, rather than being judged against a target it
-                  // was never measured against. `derive.ts` `SCALE_MIN` has the argument.
+                  // A figure that is not on the 1-to-5 scale the bands belong to keeps
+                  // its number and says so, rather than being read in an area it was
+                  // never measured on. `derive.ts` `SCALE_MIN` has the argument.
                   t(`${K}.readingOffScale`)
-                ) : row.band === null ? (
+                ) : row.band === null || bands === null ? (
                   t('surveyResults.notApplicable')
-                ) : row.band === 'far-below' || row.band === 'below' ? (
-                  // The one case the artboard paints: a chip, because "bajo la meta" is
-                  // the row a reader is meant to stop at. The word is there either way —
-                  // colour never carries it alone.
-                  <Chip tone="critical" label={t('surveyResults.next.legendBelow')} />
                 ) : (
-                  <span className="text-fg-secondary">
-                    {row.band === 'on'
-                      ? t('surveyResults.next.legendOn')
-                      : t('surveyResults.next.legendAbove')}
-                  </span>
+                  // The band by name, in its chip — the word is there on every row, so
+                  // colour never carries the reading alone.
+                  <BandChip band={row.band} bands={bands} />
                 )}
               </TableCell>
               <TableCell className="font-mono tabular-nums">

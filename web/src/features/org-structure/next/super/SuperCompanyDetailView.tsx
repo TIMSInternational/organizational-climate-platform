@@ -3,13 +3,13 @@ import { useNavigate, useParams } from 'react-router'
 import { BarChart3, Calendar, Check, Clock, FileText, Filter, Mail, Network, Upload, Users } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
-import { ANONYMITY_FLOOR } from '../../../../components/charts'
+import { ANONYMITY_FLOOR, DEFAULT_RESULT_BANDS } from '../../../../components/charts'
 import { Alert, AlertDescription, Button, Input, LiveRegion, NetworkError, SkeletonText, Switch } from '../../../../components/ui'
 import { useCompanyContext } from '../../../../company-context'
 import { calendarDay } from '../../../../lib/calendarDay'
 import { cn } from '../../../../lib/cn'
 import { updateCompany } from '../../api/companies'
-import { updateCompanySettings } from '../../api/companySettings'
+import { updateCompanySettings, type UpdateCompanySettingsInput } from '../../api/companySettings'
 import { CompanyValidation } from '../../components/companyValidation'
 import { surveyFrequencyLabelKey } from '../../labels'
 import { countryOptions } from './countries'
@@ -35,6 +35,10 @@ import { STATUS_COUNT_KEYS, countText, dayWithYear, languageText, sizeText, tier
 import { CanvasSelect, Field, IconBox, LinkCard, Panel } from './parts'
 import CompanyServiceLicensesPanel from './CompanyServiceLicensesPanel'
 import { useSuperCompanyDetailModel, type SuperCompanyDetailModel } from './useSuperCompanyDetailModel'
+import ResultBandsCard from '../settings/ResultBandsCard'
+import { bandsChanged, bandsDraftOf, bandsOut, judgeBands, type BandsDraft } from '../settings/bandsDraft'
+import { fromWire, toWire } from '../../../result-bands/api'
+import { rememberResultBands } from '../../../result-bands/useResultBands'
 
 const FREQUENCIES = ['daily', 'weekly', 'monthly', 'quarterly']
 const LANGUAGES = ['es', 'en']
@@ -53,7 +57,10 @@ const CADENCE_KEY: Readonly<Record<string, string>> = {
  * One form, saved at the end: the tenant's profile (`PUT /admin/companies/{id}`,
  * super-only) and what every new survey inherits (`PUT …/settings`) — the content
  * language the triage's P0 row asked for among them. *Descartar* puts the form back;
- * *Guardar cambios* sends only what changed, profile first, as two requests. Beside it,
+ * *Guardar cambios* sends only what changed, profile first, as two requests. The
+ * company's result bands ride the settings request, judged by the same rules as on
+ * Configuración de empresa, and hold *Guardar cambios* while they are not a whole scale.
+ * Beside it,
  * the four pages this role reaches only from here (`navSections.ts`), each with a reading
  * of its own, and the readings of the tenant that no form edits.
  */
@@ -103,11 +110,21 @@ function DetailForm({ model, onSaved }: { model: SuperCompanyDetailModel; onSave
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [nothing, setNothing] = useState(false)
+  // The result bands: a draft of their own, saved with the settings. An API older than the
+  // bands sends none — and a failed settings read sends nothing — so no card is drawn.
+  const savedBands = settings?.resultBands ? fromWire(settings.resultBands) : null
+  const initialBands = savedBands ? bandsDraftOf(savedBands, t, locale) : null
+  const defaultBands = bandsDraftOf(DEFAULT_RESULT_BANDS, t, locale)
+  const [bands, setBands] = useState<BandsDraft | null>(initialBands)
 
   const profileDiff = profileChanges(initialProfile, profile)
-  const settingsDiff = initialSettings && draft ? settingsChanges(initialSettings, draft) : {}
+  const settingsDiff: UpdateCompanySettingsInput = initialSettings && draft ? settingsChanges(initialSettings, draft) : {}
+  if (savedBands && bands && bandsChanged(savedBands, bands, t)) {
+    const next = bandsOut(bands, t)
+    if (next) settingsDiff.resultBands = toWire(next)
+  }
   const dirty = Object.keys(profileDiff).length > 0 || Object.keys(settingsDiff).length > 0
-  const blocked = draftProblems(profile, draft)
+  const blocked = draftProblems(profile, draft) || (bands !== null && !judgeBands(bands).ok)
 
   async function save() {
     // Both actions are always offered, as the canvas draws them; a save with nothing
@@ -123,7 +140,11 @@ function DetailForm({ model, onSaved }: { model: SuperCompanyDetailModel; onSave
     setSaved(false)
     try {
       if (Object.keys(profileDiff).length > 0) await updateCompany(baseUrl, company.id, profileDiff)
-      if (Object.keys(settingsDiff).length > 0) await updateCompanySettings(baseUrl, company.id, settingsDiff)
+      if (Object.keys(settingsDiff).length > 0) {
+        const written = await updateCompanySettings(baseUrl, company.id, settingsDiff)
+        // Every banded screen read after this one reads the scale just written.
+        if (written.resultBands) rememberResultBands(company.id, fromWire(written.resultBands))
+      }
       setSaved(true)
       onSaved()
     } catch (err) {
@@ -137,6 +158,7 @@ function DetailForm({ model, onSaved }: { model: SuperCompanyDetailModel; onSave
     setNothing(false)
     setProfile(initialProfile)
     setDraft(initialSettings)
+    setBands(initialBands)
     setSaveError(null)
   }
 
@@ -182,6 +204,17 @@ function DetailForm({ model, onSaved }: { model: SuperCompanyDetailModel; onSave
       <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-12">
         <div className="flex min-w-0 flex-col gap-4 xl:col-span-7">
           <SurveysCard model={model} draft={draft} setDraft={setDraft} />
+          {savedBands && bands && (
+            <ResultBandsCard
+              draft={bands}
+              saved={savedBands}
+              defaults={defaultBands}
+              onChange={(next) => {
+                setNothing(false)
+                setBands(next)
+              }}
+            />
+          )}
           <DepartmentsCard model={model} />
         </div>
         <div className="flex min-w-0 flex-col gap-4 xl:col-span-5">

@@ -1,16 +1,22 @@
 import { useTranslation } from '../../../i18n'
 import {
-  DIVERGING_COLORS,
+  BAND_PAINT,
+  BandGlyph,
+  BandLegend,
   ProtectedCell,
+  bandCellStyle,
+  bandName,
+  bandOf,
+  bandShortName,
   formatMetric,
   type ClimateMapSelection,
+  type ResultBands,
 } from '../../../components/charts'
 import { PROTECTED_HATCH } from '../../../components/charts/suppression'
 import { Table } from '../../../components/ui'
 import { cn } from '../../../lib/cn'
-import { CLIMATE_TARGET, targetBand, type TargetBand } from './derive'
 import type { ResultsGroupRow, ResultsPrevious } from './model'
-import { deltaInkOf, tintOf } from './tint'
+import { deltaInkOf } from './tint'
 
 /**
  * The open cell's ring, from the OUTSIDE: a 2px gap in the card's own surface and a
@@ -40,14 +46,9 @@ const STICKY = 'sticky left-0 z-10 bg-surface-card'
 /** `index.css` tints every body row on hover; a grid of coloured cells must not flash. */
 const ROW = 'hover:bg-transparent'
 
-/** Which of the three target sentences a band announces, for the screen reader. */
-function bandKey(band: TargetBand): string {
-  if (band === 'far-below' || band === 'below') return 'charts.belowTarget'
-  if (band === 'on') return 'charts.onTarget'
-  return 'charts.aboveTarget'
-}
-
 export interface ResultsClimateGridProps {
+  /** The company's result bands: every cell is painted and named by the one it falls in. */
+  bands: ResultBands
   /** The columns, in the survey author's order, with their display names. */
   dimensions: readonly { key: string; name: string }[]
   rows: readonly ResultsGroupRow[]
@@ -85,8 +86,9 @@ export interface ResultsClimateGridProps {
  * giving it all three would change the dashboard's map on the way. So the artboard's
  * grid is drawn here, with the same building blocks and the same rules the map has:
  *
- * - **A real table**, so the axes are announced as headers and the colour is a second
- *   encoding, never the only one — every cell says "below the target of 3,7" in words.
+ * - **A real table**, so the axes are announced as headers and the colour is a third
+ *   encoding, never the only one — every cell prints its band's name under the number,
+ *   carries the band's glyph, and says the band in its accessible label.
  * - **`ProtectedCell` for every withheld reading**, and the four-layer privacy rule: a
  *   protected row is hatched in every cell, its mean and its delta included, and never
  *   prints a number anywhere. Its cells are inert — never a button — so a reader who
@@ -95,8 +97,8 @@ export interface ResultsClimateGridProps {
  *   with the base `button` rule turned off (`index.css` styles every bare `button` as
  *   a carded control) and no `outline` of its own, so the app's one focus ring
  *   survives (`keyboardOperable.test.tsx`).
- * - **The tints** are the five diverging tokens (`tint.ts`), the ramp the dashboard's
- *   map and the distribution strips read, so red means the same thing on every screen.
+ * - **The tints** are the band's chip pair (`bandCellStyle`): green, amber and red from
+ *   the product palette, the same three every banded screen paints with.
  *
  * ## The geometry
  *
@@ -108,6 +110,7 @@ export interface ResultsClimateGridProps {
  * row labels stay pinned so a scrolled cell still says whose it is.
  */
 export default function ResultsClimateGrid({
+  bands,
   dimensions,
   rows,
   company,
@@ -142,7 +145,7 @@ export default function ResultsClimateGrid({
         // scrolled inside the card at 1024 (measured in the 1024 shot).
         className="min-w-[59rem] table-fixed border-separate border-spacing-1 text-base"
       >
-        <caption className="sr-only">{t('surveyResults.next.gridCaption', { target: score(CLIMATE_TARGET) })}</caption>
+        <caption className="sr-only">{t('resultBands.results.gridCaption')}</caption>
         <colgroup>
           <col style={{ width: 140 }} />
           {dimensions.map((dimension) => (
@@ -180,11 +183,18 @@ export default function ResultsClimateGrid({
             {dimensions.map((dimension, index) => {
               const value = company.scores[index] ?? null
               const delta = compare ? (dimensionDeltas[index] ?? null) : null
+              const band = value === null ? null : bandOf(value, bands)
               return (
                 <td key={dimension.key} className={cn(CELL, 'text-center')}>
                   <span className="flex flex-col items-center gap-px">
-                    <span className="font-mono text-sm tabular-nums text-fg-primary">
+                    <span className="inline-flex items-center gap-1 font-mono text-sm tabular-nums text-fg-primary">
+                      {band && (
+                        <span style={{ color: BAND_PAINT[band].ink }} className="inline-flex">
+                          <BandGlyph band={band} />
+                        </span>
+                      )}
                       {value === null ? '—' : score(value)}
+                      {band && <span className="sr-only">{` — ${bandName(band, bands, t)}`}</span>}
                     </span>
                     {value !== null && delta !== null && (
                       <span className={cn('font-mono text-2xs tabular-nums', deltaInkOf(delta, 1))}>{signed(delta)}</span>
@@ -193,8 +203,13 @@ export default function ResultsClimateGrid({
                 </td>
               )
             })}
-            <td className={cn(CELL, 'text-center font-mono text-sm tabular-nums text-fg-primary')}>
-              {company.mean === null ? '—' : score2(company.mean)}
+            <td className={cn(CELL, 'text-center')}>
+              {company.mean === null ? (
+                <span className="font-mono text-sm text-fg-primary">—</span>
+              ) : (
+                // The mean is printed at two decimals, so it is judged at two.
+                <MeanChip mean={company.mean} bands={bands} text={score2(company.mean)} />
+              )}
             </td>
             {compare && (
               <td
@@ -243,7 +258,7 @@ export default function ResultsClimateGrid({
                           // The legend under the grid states the hatch once for
                           // every cell; a 40px cell has no room for the word.
                           showWord={false}
-                          suppressedClassName="h-10 w-full"
+                          suppressedClassName="h-11 w-full"
                         >
                           {null}
                         </ProtectedCell>
@@ -258,7 +273,8 @@ export default function ResultsClimateGrid({
                       </td>
                     )
                   }
-                  const band = targetBand(value)
+                  const band = bandOf(value, bands)
+                  const short = bandShortName(band, bands, t)
                   const cellOpen = rowOpen && selection?.dimensionKey === dimension.key
                   return (
                     <td key={dimension.key} className={CELL}>
@@ -273,13 +289,22 @@ export default function ResultsClimateGrid({
                         className="block h-auto w-full cursor-pointer rounded border-0 bg-transparent p-0 shadow-none hover:bg-transparent hover:outline-2 hover:outline-offset-2 hover:outline-fg-primary"
                       >
                         <span
-                          className="flex h-10 w-full items-center justify-center rounded font-mono text-sm tabular-nums"
-                          style={{ ...tintOf(band), ...(cellOpen ? { boxShadow: OPEN_RING } : {}) }}
+                          data-band={band}
+                          className="flex h-11 w-full flex-col items-center justify-center gap-px overflow-hidden rounded border px-1"
+                          style={{ ...bandCellStyle(band), ...(cellOpen ? { boxShadow: OPEN_RING } : {}) }}
+                          title={bandName(band, bands, t)}
                         >
                           <span className="sr-only">{`${description}: `}</span>
-                          {score(value)}
-                          <span className="sr-only">
-                            {` — ${t(bandKey(band), { target: score(CLIMATE_TARGET) })}`}
+                          <span className="font-mono text-sm font-semibold tabular-nums">{score(value)}</span>
+                          <span className="sr-only">{` — ${bandName(band, bands, t)}`}</span>
+                          {/* The band's word under the number, so the cell never speaks in
+                              colour alone; hidden from AT, which already heard the name. */}
+                          <span
+                            aria-hidden="true"
+                            className="inline-flex max-w-full items-center gap-0.75 text-3xs font-semibold uppercase tracking-label"
+                          >
+                            <BandGlyph band={band} />
+                            <span className="truncate">{short}</span>
                           </span>
                         </span>
                       </button>
@@ -298,9 +323,15 @@ export default function ResultsClimateGrid({
                     >
                       {null}
                     </ProtectedCell>
+                  ) : row.mean === null ? (
+                    <span className="font-mono text-base tabular-nums text-fg-primary">—</span>
                   ) : (
-                    <span className="font-mono text-base tabular-nums text-fg-primary">
-                      {row.mean === null ? '—' : score(row.mean)}
+                    <span className="inline-flex items-center gap-1.5 font-mono text-base tabular-nums text-fg-primary">
+                      <span style={{ color: BAND_PAINT[bandOf(row.mean, bands)].ink }} className="inline-flex">
+                        <BandGlyph band={bandOf(row.mean, bands)} />
+                      </span>
+                      {score(row.mean)}
+                      <span className="sr-only">{` — ${bandName(bandOf(row.mean, bands), bands, t)}`}</span>
                     </span>
                   )}
                 </td>
@@ -335,41 +366,40 @@ export default function ResultsClimateGrid({
         </tbody>
       </Table>
 
-      <div className="flex flex-wrap items-center gap-4 text-xs text-fg-label" data-testid="grid-legend">
-        <span className="inline-flex items-center gap-1">
-          <Swatch step={0} />
-          <Swatch step={1} />
-          {t('surveyResults.next.legendBelow')}
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <Swatch step={2} />
-          {t('surveyResults.next.legendOn')}
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <Swatch step={3} />
-          <Swatch step={4} />
-          {t('surveyResults.next.legendAbove')}
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <span aria-hidden="true" className={cn('inline-block size-2.5 rounded-xs bg-surface-icon-box', PROTECTED_HATCH)} />
+      <BandLegend bands={bands} testId="grid-legend">
+        <span className="inline-flex items-center gap-1.5">
+          <span aria-hidden="true" className={cn('inline-block size-4 rounded-xs bg-surface-icon-box', PROTECTED_HATCH)} />
           {t('surveyResults.next.legendProtected', { floor: threshold })}
         </span>
-        <span className="inline-flex items-center gap-1">
+        <span className="inline-flex items-center gap-1.5">
           <span aria-hidden="true" className="inline-block size-3 rounded-xs border-2 border-fg-primary" />
           {t('surveyResults.next.legendOpen')}
         </span>
-      </div>
+      </BandLegend>
     </div>
   )
 }
 
-/** One legend key, painted from the same token the cells of that band are. */
-function Swatch({ step }: { step: 0 | 1 | 2 | 3 | 4 }) {
+/**
+ * The whole company's two-decimal mean with its band's glyph, as the group means below it
+ * are drawn. The artboard put the band's word in a chip here, which does not fit the 96px
+ * column beside "Frente a Q2"; the word is in the CLIMA tile above, in the title, and
+ * said to a screen reader.
+ */
+function MeanChip({ mean, bands, text }: { mean: number; bands: ResultBands; text: string }) {
+  const { t } = useTranslation()
+  const band = bandOf(mean, bands, 2)
   return (
     <span
-      aria-hidden="true"
-      className="inline-block size-2.5 rounded-xs"
-      style={{ backgroundColor: DIVERGING_COLORS[step] }}
-    />
+      data-band={band}
+      title={bandName(band, bands, t)}
+      className="inline-flex items-center gap-1.5 font-mono text-sm tabular-nums text-fg-primary"
+    >
+      <span style={{ color: BAND_PAINT[band].ink }} className="inline-flex">
+        <BandGlyph band={band} />
+      </span>
+      {text}
+      <span className="sr-only">{` — ${bandName(band, bands, t)}`}</span>
+    </span>
   )
 }

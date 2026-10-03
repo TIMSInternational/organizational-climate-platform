@@ -1,4 +1,5 @@
 {
+  "GET /admin/companies/*/result-bands": {"opportunityMin": 3, "strengthMin": 4, "criticalName": null, "opportunityName": null, "strengthName": null},
   "_comment": "Leader lane, 403 (TrackingPlanDetailLeaderForbidden). The refusal carries the WHOLE plan as its body -- Results.Forbid() sends none, but a proxy or a later handler could, and a fixture that published nothing would hide exactly the leak that would matter.",
   "GET /notifications/mine": {
     "notifications": []

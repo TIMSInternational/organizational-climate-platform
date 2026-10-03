@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { getResultBands } from '../../../result-bands/api'
+import { render, screen, waitFor, cleanup } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { TranslationProvider } from '../../../../i18n'
@@ -137,10 +138,11 @@ describe('DepartmentsNextPage (/departments)', () => {
     expect(cardOf('Ventas').textContent).toContain('Protected in Q3')
   })
 
-  it('reads a disclosed group as the mean of its dimensions, names the target when under it, and the lowest dimension on the card', async () => {
+  it('reads a disclosed group as the mean of its dimensions, names its band outside the strength area, and the lowest dimension on the card', async () => {
     renderAs({ role: 'company_admin', companyId: 'c1' })
     await screen.findByText('Operaciones', { selector: 'td' })
-    expect(rowOf('Operaciones')!.querySelectorAll('td')[4].textContent).toBe('2.8· below the 3.7 target')
+    // 2,8 is in the critical area of the company's bands: the cell names it in a chip.
+    await waitFor(() => expect(rowOf('Operaciones')!.querySelectorAll('td')[4].textContent).toBe('2.8Critical'))
     expect(cardOf('Operaciones').textContent).toContain('Workload 2.4 in Q3')
   })
 
@@ -198,5 +200,16 @@ describe('DepartmentsNextPage (/departments)', () => {
     expect(await screen.findByText(copy.notAllowedTitle)).toBeTruthy()
     expect(vi.mocked(listDepartments)).not.toHaveBeenCalled()
     expect(screen.queryByRole('link', { name: copy.importPeople })).toBeNull()
+  })
+
+  it('says so when the company’s scale cannot be read, and claims no observation it could not make', async () => {
+    vi.mocked(getResultBands).mockRejectedValueOnce(new Error('Request failed: 500'))
+    renderAs({ role: 'company_admin', companyId: 'c1' })
+    await screen.findByText('Operaciones', { selector: 'td' })
+    expect((await screen.findByRole('alert')).textContent).toContain(en.resultBands.loadError)
+    // No band is printed for a group, and a scored group's card says nothing rather than
+    // "no observations" — it was never judged.
+    expect(rowOf('Operaciones')!.querySelectorAll('td')[4].textContent).not.toContain('Critical')
+    expect(cardOf('Operaciones').textContent).not.toContain(en.departments.next.noteNone)
   })
 })

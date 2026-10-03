@@ -1,5 +1,7 @@
 {
+  "GET /admin/companies/*/result-bands": {"opportunityMin": 3, "strengthMin": 4, "criticalName": null, "opportunityName": null, "strengthName": null},
   "PUT /admin/companies/*/settings": {
+    "resultBands": {"opportunityMin": 3, "strengthMin": 4, "criticalName": null, "opportunityName": null, "strengthName": null},
     "companyId": "11111111-1111-1111-1111-111111111111",
     "settings": {
       "surveyFrequency": "quarterly",

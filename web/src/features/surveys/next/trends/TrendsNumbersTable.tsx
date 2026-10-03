@@ -1,17 +1,25 @@
 import { useTranslation } from '../../../../i18n'
-import { DIVERGING_COLORS, DIVERGING_INKS, ProtectedCell } from '../../../../components/charts'
+import {
+  BandGlyph,
+  ProtectedCell,
+  bandCellStyle,
+  bandName,
+  bandOf,
+  bandShortName,
+  type ResultBands,
+} from '../../../../components/charts'
 import { Table } from '../../../../components/ui'
 import { calendarDay } from '../../../../lib/calendarDay'
 import { cn } from '../../../../lib/cn'
-import { printedMove, reading, signedReading, targetStep } from '../../../dashboard/next/derive'
+import { printedMove, reading, signedReading } from '../../../dashboard/next/derive'
 import type { TrendDimension, TrendWave } from './model'
 
 /**
  * "Los mismos números, en tabla" — the six charts' readings as the accessible table
  * the canvas draws under them: one row per closed wave (its name, when it closed and
- * how many of the drawn group answered it), one column per dimension, every reading tinted against the
- * target by the Panel de Control's one rule (`targetStep`: the printed reading against
- * the canvas's bands), and a last row with each dimension's move from the first wave to
+ * how many of the drawn group answered it), one column per dimension, every reading painted
+ * and named by its result band (the company's bands, judged at the printed reading like
+ * every banded screen), and a last row with each dimension's move from the first wave to
  * the last, the difference of the two readings as printed (`printedMove`).
  *
  * ## Three kinds of cell, never confused
@@ -35,7 +43,8 @@ export interface TrendsNumbersTableProps {
   /** Per wave, for the drawn group: its respondents, `null` when withheld. */
   respondents: readonly (number | null)[]
   dimensions: readonly TrendDimension[]
-  target: number
+  /** The company's result bands: every reading is painted and named by the one it falls in. */
+  bands: ResultBands
   floor: number
   /** Already-translated accessible caption. */
   caption: string
@@ -53,7 +62,7 @@ export default function TrendsNumbersTable({
   withheld,
   respondents,
   dimensions,
-  target,
+  bands,
   floor,
   caption,
 }: TrendsNumbersTableProps) {
@@ -132,22 +141,29 @@ export default function TrendsNumbersTable({
                   </td>
                 )
               }
-              // The Panel de Control's one rule — the printed reading against the canvas's
-              // bands — so a 3,5 is the grey "en la meta" here as on the map.
-              const step = targetStep(value, target)
-              const fill = DIVERGING_COLORS[step]
-              const ink = DIVERGING_INKS[step]
+              // The company's bands, judged at the printed decimal — the same rule as the
+              // map and the dashboard, so a reading is in one area on every screen.
+              const band = bandOf(value, bands)
               return (
                 <td key={dimension.key} className="border-0 p-0">
                   <span
                     data-slot="trends-cell"
-                    // Which of the five steps, for a reader of the DOM: the fill itself is a
-                    // `var()` reference a test cannot resolve.
-                    data-tint={step}
-                    className="flex h-10 items-center justify-center rounded font-mono text-sm tabular-nums"
-                    style={{ backgroundColor: fill, color: ink }}
+                    // Which band, for a reader of the DOM: the fill itself is a `var()`
+                    // reference a test cannot resolve.
+                    data-band={band}
+                    title={bandName(band, bands, t)}
+                    className="flex h-10 flex-col items-center justify-center gap-px overflow-hidden rounded border px-1"
+                    style={bandCellStyle(band)}
                   >
-                    {reading(value, locale)}
+                    <span className="font-mono text-sm font-semibold tabular-nums">{reading(value, locale)}</span>
+                    <span className="sr-only">{` — ${bandName(band, bands, t)}`}</span>
+                    <span
+                      aria-hidden="true"
+                      className="inline-flex max-w-full items-center gap-0.75 text-3xs font-semibold uppercase tracking-label"
+                    >
+                      <BandGlyph band={band} />
+                      <span className="truncate">{bandShortName(band, bands, t)}</span>
+                    </span>
                   </span>
                 </td>
               )

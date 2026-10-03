@@ -2,18 +2,31 @@ import type { Ref } from 'react'
 import { Link } from 'react-router'
 import { Plus, Shield, Target, TrendingUp, X } from 'lucide-react'
 import { useTranslation } from '../../../i18n'
-import { DistributionStrip, ProtectedCell, formatMetric } from '../../../components/charts'
+import {
+  BandChip,
+  BandGlyph,
+  DistributionStrip,
+  ProtectedCell,
+  bandCellStyle,
+  bandName,
+  bandOf,
+  bandRangeText,
+  bandShortName,
+  formatMetric,
+  type ResultBands,
+} from '../../../components/charts'
 import { Button } from '../../../components/ui'
 import type { ViewerCapabilities } from '../../../auth/viewerCapabilities'
 import { calendarDay } from '../../../lib/calendarDay'
 import { lowShare, type ResultsCellDetail, type ResultsDistributionPoint } from './derive'
-import { tintOf } from './tint'
 
 /** The artboard's `.label`: 10px, bold, uppercase, 0.06em, the tertiary ink. */
 const LABEL = 'm-0 text-2xs font-bold uppercase tracking-label text-fg-label'
 
 export interface ResultsCellPanelProps {
   detail: ResultsCellDetail
+  /** The company's result bands, which the panel names the cell's area by. */
+  bands: ResultBands
   /** Already-translated display name of a dimension key — the view's own lookup. */
   dimensionName: (key: string) => string
   /** This survey's wave code — "Q3" — which the company's strip belongs to. */
@@ -46,6 +59,7 @@ export interface ResultsCellPanelProps {
  */
 export default function ResultsCellPanel({
   detail,
+  bands,
   dimensionName,
   code,
   threshold,
@@ -59,18 +73,11 @@ export default function ResultsCellPanel({
   const score = (value: number) => formatMetric(value, { kind: 'number', decimals: 1 }, locale)
   const dimension = dimensionName(detail.dimensionKey)
 
-  // "1,3 bajo la meta · la celda más baja del mapa · una pregunta por dimensión en
-  // esta encuesta" — each clause derived, joined with the artboard's separator.
+  // "[Área crítica] menos de 3,00 · la celda más baja del mapa · una pregunta por
+  // dimensión en esta encuesta" — the band named in its chip, then each clause derived,
+  // joined with the artboard's separator.
   const clauses: string[] = []
-  if (detail.shortfall !== null) {
-    clauses.push(
-      detail.shortfall > 0
-        ? t('surveyResults.next.cellBelowTarget', { shortfall: score(detail.shortfall) })
-        : detail.shortfall < 0
-          ? t('surveyResults.next.cellAboveTarget', { excess: score(-detail.shortfall) })
-          : t('surveyResults.next.cellOnTarget'),
-    )
-  }
+  if (detail.band !== null) clauses.push(bandRangeText(detail.band, bands, t, locale))
   if (detail.isLowest) clauses.push(t('surveyResults.next.cellLowest'))
   clauses.push(
     detail.oneQuestionPerDimension
@@ -105,6 +112,11 @@ export default function ResultsCellPanel({
                 {' · '}
               </>
             )}
+            {detail.band !== null && (
+              <>
+                <BandChip band={detail.band} bands={bands} className="align-middle" />{' '}
+              </>
+            )}
             {clauses.join(' · ')}
           </p>
         </div>
@@ -124,8 +136,13 @@ export default function ResultsCellPanel({
                   <span className="text-sm font-semibold text-fg-primary">
                     {t('surveyResults.next.groupDistribution', { dimension, group: detail.rowName })}
                   </span>
-                  <span className="font-mono text-lg tabular-nums text-fg-primary">
-                    {question.groupScore === null ? '—' : score(question.groupScore)}
+                  <span className="inline-flex items-center gap-2">
+                    <span className="font-mono text-lg tabular-nums text-fg-primary">
+                      {question.groupScore === null ? '—' : score(question.groupScore)}
+                    </span>
+                    {question.groupScore !== null && (
+                      <BandChip band={bandOf(question.groupScore, bands)} bands={bands} short />
+                    )}
                   </span>
                 </div>
                 {/* No strip for the group: the payload carries its mean per question and
@@ -148,7 +165,10 @@ export default function ResultsCellPanel({
                   <span className="text-sm font-semibold text-fg-primary">
                     {t('surveyResults.next.companyDistribution')}
                   </span>
-                  <span className="font-mono text-lg tabular-nums text-fg-primary">{score(question.surveyScore)}</span>
+                  <span className="inline-flex items-center gap-2">
+                    <span className="font-mono text-lg tabular-nums text-fg-primary">{score(question.surveyScore)}</span>
+                    <BandChip band={bandOf(question.surveyScore, bands)} bands={bands} short />
+                  </span>
                 </div>
                 <DistributionStrip
                   size="compact"
@@ -179,7 +199,7 @@ export default function ResultsCellPanel({
           <p className={LABEL}>{t('surveyResults.next.othersHeading', { dimension })}</p>
           <ul className="m-0 flex list-none flex-col gap-1.5 p-0" data-testid="others-in-dimension">
             {detail.others.map((other) => (
-              <li key={other.id} data-testid={`other-${other.id}`} className="grid grid-cols-[1fr_56px] items-center gap-2">
+              <li key={other.id} data-testid={`other-${other.id}`} className="grid grid-cols-[1fr_9rem] items-center gap-2">
                 <span className="text-sm text-fg-secondary">{other.name}</span>
                 {other.isProtected || other.score === null || other.band === null ? (
                   <ProtectedCell
@@ -187,16 +207,23 @@ export default function ResultsCellPanel({
                     threshold={threshold}
                     description={`${other.name}, ${dimension}`}
                     showWord={false}
-                    suppressedClassName="h-6.5 w-full"
+                    suppressedClassName="h-7.5 w-full"
                   >
                     {null}
                   </ProtectedCell>
                 ) : (
                   <span
-                    className="flex h-6.5 items-center justify-center rounded font-mono text-sm tabular-nums"
-                    style={tintOf(other.band)}
+                    data-band={other.band}
+                    className="flex h-7.5 items-center justify-center gap-1.5 overflow-hidden rounded border px-1.5"
+                    style={bandCellStyle(other.band)}
+                    title={bandName(other.band, bands, t)}
                   >
-                    {score(other.score)}
+                    <span className="font-mono text-sm font-semibold tabular-nums">{score(other.score)}</span>
+                    <span className="sr-only">{` — ${bandName(other.band, bands, t)}`}</span>
+                    <span aria-hidden="true" className="inline-flex min-w-0 items-center gap-0.75 text-3xs font-semibold uppercase tracking-label">
+                      <BandGlyph band={other.band} />
+                      <span className="truncate">{bandShortName(other.band, bands, t)}</span>
+                    </span>
                   </span>
                 )}
               </li>

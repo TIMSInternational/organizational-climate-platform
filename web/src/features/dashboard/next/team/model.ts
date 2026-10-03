@@ -1,3 +1,4 @@
+import type { ResultBands } from '../../../../components/charts'
 /**
  * The typed models behind the two team dashboards — `/dashboard` for a `leader` (the
  * canvas's LeaderDashboard, 10 Sep) and for a `supervisor` (SupervisorDashboard, drawn as a
@@ -168,8 +169,8 @@ export interface LeaderDashboardModel {
   plans: LeaderPlans
   /** A tracking service is configured for this deployment. */
   trackingOn: boolean
-  /** The climate target on the 1–5 scale — `CLIMATE_TARGET`, the canvas's "meta 3,7". */
-  target: number
+  /** The company's result bands — every dimension card is read in them. */
+  bands: ResultBands
 }
 
 /** One line of "Tus tareas". */

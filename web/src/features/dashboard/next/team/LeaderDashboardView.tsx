@@ -2,7 +2,7 @@ import { Link } from 'react-router'
 import { ArrowRight, Plus, Target } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
-import { ProtectedCell } from '../../../../components/charts'
+import { BandChip, ProtectedCell, bandName, boundaryText, type ResultBands } from '../../../../components/charts'
 import { Button, Chip, LoadingRegion, SkeletonText } from '../../../../components/ui'
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { calendarDay } from '../../../../lib/calendarDay'
@@ -14,13 +14,13 @@ import { fullDay } from '../../../tracking/next/derive'
 import { planCalendarDay } from '../../../tracking/planDates'
 import DashboardExportMenu from '../DashboardExportMenu'
 import { percentReading, reading, signedReading } from '../derive'
-import { dimensionMove, dimensionStanding } from './compose'
+import { dimensionBand, dimensionMove } from './compose'
 import { barPercent, count, daysNote } from './format'
 import type { LeaderDashboardModel, TeamClosedWave, TeamDimension, TeamOpenSurvey, TeamPlan } from './model'
 import { HatchedCount, TeamCard, TeamPlanRow } from './parts'
 
-/** The target rule's hex, as every redesigned chart draws it (`AdminDashboardNextView`). */
-const TARGET_RULE = '#b3b8ca'
+/** The band-boundary rule's ink, as every banded chart draws it (`TrendSparkline`). */
+const BOUNDARY_RULE = 'var(--admin-line-control)'
 
 /** How many open plans the card lists before it points at the board for the rest. */
 const PLANS_LISTED = 3
@@ -176,11 +176,11 @@ function OpenSurveysTile({
   )
 }
 
-/** The dashed target mark the canvas draws beside "meta 3,7". */
-function TargetMark() {
+/** The dashed boundary mark, beside "límites de área 3,00 y 4,00". */
+function BoundaryMark() {
   return (
     <svg aria-hidden="true" width="18" height="2" viewBox="0 0 18 2" className="shrink-0">
-      <line x1="0" x2="18" y1="1" y2="1" stroke={TARGET_RULE} strokeDasharray="3 2" />
+      <line x1="0" x2="18" y1="1" y2="1" stroke={BOUNDARY_RULE} strokeDasharray="3 2" />
     </svg>
   )
 }
@@ -197,7 +197,10 @@ function CompareCard({
   locale: string
 }) {
   const wave = model.closedWave
-  const target = reading(model.target, locale)
+  const boundaries = t('resultBands.boundaries', {
+    low: boundaryText(model.bands.opportunityMin, locale),
+    high: boundaryText(model.bands.strengthMin, locale),
+  })
   const surveyName = wave?.name ?? t('surveys.untitled')
   const meta = wave ? (
     <>
@@ -206,7 +209,7 @@ function CompareCard({
         <span>· {t('dashboard.next.leader.compareResponses', { count: count(wave.respondents, locale) })}</span>
       )}
       <span className="inline-flex items-center gap-1.5">
-        · <TargetMark /> {t('dashboard.next.leader.target', { target })}
+        · <BoundaryMark /> {boundaries}
       </span>
     </>
   ) : undefined
@@ -236,7 +239,7 @@ function CompareCard({
               dimension={dimension}
               wave={wave}
               department={model.departmentName}
-              target={model.target}
+              bands={model.bands}
               mayCreatePlan={mayCreatePlan}
               t={t}
               locale={locale}
@@ -274,7 +277,9 @@ function CompareCard({
                 {t('dashboard.next.leader.legendOrgWithheld', { floor: wave.floor })}
               </span>
             ))}
-          {mayCreatePlan && !wave.withheld && <span>{t('dashboard.next.leader.planRule')}</span>}
+          {mayCreatePlan && !wave.withheld && (
+            <span>{t('resultBands.leader.planRule', { band: bandName('strength', model.bands, t) })}</span>
+          )}
         </div>
       )}
     </TeamCard>
@@ -285,7 +290,7 @@ function DimensionCard({
   dimension,
   wave,
   department,
-  target,
+  bands,
   mayCreatePlan,
   t,
   locale,
@@ -293,25 +298,27 @@ function DimensionCard({
   dimension: TeamDimension
   wave: TeamClosedWave
   department: string
-  target: number
+  bands: ResultBands
   mayCreatePlan: boolean
   t: TranslateFn
   locale: string
 }) {
   const name = dimensionLabel(dimension.key, t)
-  const standing = dimensionStanding(dimension, target)
+  const band = dimensionBand(dimension, bands)
   const move = dimensionMove(dimension)
-  const below = standing === 'below'
-  const targetText = reading(target, locale)
+  // A plan is offered for any reading outside the strength area; only the critical one
+  // tints the whole card.
+  const planWorthy = band !== null && band !== 'strength'
+  const critical = band === 'critical'
 
   return (
     <div
       data-slot="team-dimension"
       data-dimension={dimension.key}
-      data-standing={standing ?? 'withheld'}
+      data-band={band ?? 'withheld'}
       className={cn(
         'flex min-w-0 flex-col gap-2 rounded-md border px-3.5 py-3',
-        below ? 'border-accent-red-ring bg-accent-red-soft' : 'border-line-light bg-surface-card',
+        critical ? 'border-accent-red-ring bg-accent-red-soft' : 'border-line-light bg-surface-card',
       )}
     >
       <span className="truncate text-sm text-fg-secondary" title={name}>
@@ -353,22 +360,22 @@ function DimensionCard({
             </span>
           )}
           <div aria-hidden="true" className="mt-0.5 flex flex-col gap-1">
-            <CompareBar who={t('dashboard.next.leader.teamWord')} value={dimension.team} tone="team" target={target} locale={locale} />
+            <CompareBar who={t('dashboard.next.leader.teamWord')} value={dimension.team} tone="team" bands={bands} locale={locale} />
             {dimension.organization !== null && (
               <CompareBar
                 who={t('dashboard.next.leader.orgWord')}
                 value={dimension.organization}
                 tone="org"
-                target={target}
+                bands={bands}
                 locale={locale}
               />
             )}
           </div>
           <div className="mt-auto pt-0.5">
-            {below ? (
+            {planWorthy && band !== null ? (
               <div className="flex flex-col gap-2">
                 <span>
-                  <Chip tone="critical" label={t('dashboard.next.leader.standingBelow', { target: targetText })} />
+                  <BandChip band={band} bands={bands} />
                 </span>
                 {mayCreatePlan && (
                   <Button asChild variant="primary" size="canvas" className="w-full">
@@ -383,10 +390,8 @@ function DimensionCard({
                 )}
               </div>
             ) : (
-              <div className="flex h-5.5 items-center text-sm text-fg-label">
-                {standing === 'on'
-                  ? t('dashboard.next.leader.standingOn', { target: targetText })
-                  : t('dashboard.next.leader.standingAbove', { target: targetText })}
+              <div className="flex h-5.5 items-center">
+                {band !== null && <BandChip band={band} bands={bands} />}
               </div>
             )}
           </div>
@@ -396,18 +401,18 @@ function DimensionCard({
   )
 }
 
-/** One bar of a dimension card: who, the 8px track with the dashed target, the reading. */
+/** One bar of a dimension card: who, the 8px track with a dashed mark at each band boundary, the reading. */
 function CompareBar({
   who,
   value,
   tone,
-  target,
+  bands,
   locale,
 }: {
   who: string
   value: number
   tone: 'team' | 'org'
-  target: number
+  bands: ResultBands
   locale: string
 }) {
   return (
@@ -418,10 +423,13 @@ function CompareBar({
           className={cn('h-full rounded', tone === 'team' ? 'bg-accent-blue' : 'bg-chart-div-mid')}
           style={{ width: `${barPercent(value)}%` }}
         />
-        <span
-          className="absolute -top-[3px] h-3.5 border-l border-dashed"
-          style={{ left: `${barPercent(target)}%`, borderColor: TARGET_RULE }}
-        />
+        {[bands.opportunityMin, bands.strengthMin].map((boundary) => (
+          <span
+            key={boundary}
+            className="absolute -top-[3px] h-3.5 border-l border-dashed"
+            style={{ left: `${barPercent(boundary)}%`, borderColor: BOUNDARY_RULE }}
+          />
+        ))}
       </div>
       <span className="text-right font-mono text-2xs text-fg-label tabular-nums">{reading(value, locale)}</span>
     </div>
@@ -471,7 +479,9 @@ function PlansCard({
       )}
       {plans.source === 'counts' && <p className="m-0 text-sm text-fg-label">{t('dashboard.next.leader.plansCountsOnly')}</p>}
       {plans.source === 'tracking' && plans.plans.length === 0 && (
-        <p className="m-0 text-sm text-fg-label">{t('dashboard.next.leader.plansNoneOpen')}</p>
+        <p className="m-0 text-sm text-fg-label">
+          {t('resultBands.leader.plansNoneOpen', { band: bandName('strength', model.bands, t) })}
+        </p>
       )}
       {plans.source === 'tracking' &&
         plans.plans.slice(0, PLANS_LISTED).map((plan) => (

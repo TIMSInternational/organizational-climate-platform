@@ -3,7 +3,7 @@ import { Link } from 'react-router'
 import { CircleAlert, MoreHorizontal, Network, Plus, Users } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
-import { ANONYMITY_FLOOR, formatMetric } from '../../../../components/charts'
+import { ANONYMITY_FLOOR, BandChip, bandOf, formatMetric, type ResultBands } from '../../../../components/charts'
 import { PROTECTED_HATCH } from '../../../../components/charts/suppression'
 import {
   Button,
@@ -25,7 +25,7 @@ import { useCompanyScope } from '../../../../company-context'
 import { useCompanyName } from '../../../../company-context/useCompanyName'
 import { readViewerClaims, useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { cn } from '../../../../lib/cn'
-import { CLIMATE_TARGET } from '../../../dashboard/next/compose'
+import { useResultBands } from '../../../result-bands/useResultBands'
 import { createDepartment, updateDepartment, type Department } from '../../api/departments'
 import DepartmentForm, { type DepartmentFormValues } from '../../components/DepartmentForm'
 import { CanvasChip } from '../super/parts'
@@ -70,6 +70,11 @@ export default function DepartmentsNextPage() {
   const companyId = capabilities.canManageOrg ? (scope.companyId ?? null) : null
   const superScope = readViewerClaims().role === 'super_admin' ? (scope.companyId ?? undefined) : undefined
   const state = useDepartmentsModel(companyId, superScope)
+  // The bands colour one column of an org page, so they are an enrichment here, not the
+  // page: until (or unless) they are read, a climate cell prints its figure and claims no
+  // band — never the product default in the company's name.
+  const bandsState = useResultBands()
+  const bands = bandsState.bands
   const header = { eyebrow: companyName, title: t('navigation.departments'), description: t(`${K}.description`, { threshold: ANONYMITY_FLOOR }) }
 
   if (scope.status === 'needs-selection') {
@@ -109,18 +114,35 @@ export default function DepartmentsNextPage() {
       </div>
     )
   }
-  return <DepartmentsView companyId={companyId} companyName={companyName} model={state.model} onChanged={state.reload} />
+  return (
+    <DepartmentsView
+      companyId={companyId}
+      companyName={companyName}
+      model={state.model}
+      bands={bands}
+      bandsFailed={bandsState.status === 'error'}
+      onRetryBands={bandsState.retry}
+      onChanged={state.reload}
+    />
+  )
 }
 
 function DepartmentsView({
   companyId,
   companyName,
   model,
+  bands,
+  bandsFailed,
+  onRetryBands,
   onChanged,
 }: {
   companyId: string
   companyName: string | null
   model: DepartmentsModel
+  bands: ResultBands | null
+  /** The company's scale could not be read: said in words, never left to read as "nothing to observe". */
+  bandsFailed: boolean
+  onRetryBands: () => void
   onChanged: () => void
 }) {
   const { t, locale } = useTranslation()
@@ -180,6 +202,14 @@ function DepartmentsView({
           </>
         }
       />
+      {bandsFailed && (
+        <div role="alert" className="mb-3 flex flex-wrap items-center gap-3 text-sm text-chip-critical-ink">
+          <span>{t('resultBands.loadError')}</span>
+          <Button variant="outline" size="sm" onClick={onRetryBands}>
+            {t('common.retry')}
+          </Button>
+        </div>
+      )}
 
       {(creating || editing) && (
         <Card className="mb-6">
@@ -305,7 +335,7 @@ function DepartmentsView({
                     <PlansCell plans={row.plans} t={t} />
                   </dd>
                 </dl>
-                <CardNoteLine row={row} wave={wave} t={t} locale={locale} />
+                <CardNoteLine row={row} wave={wave} bands={bands} t={t} locale={locale} />
               </li>
             ))}
           </ul>
@@ -365,7 +395,7 @@ function DepartmentsView({
                         <PlansCell plans={row.plans} t={t} />
                       </td>
                       <td className={cn(CELL, 'whitespace-nowrap')}>
-                        <ClimateCell climate={row.climate} t={t} locale={locale} />
+                        <ClimateCell climate={row.climate} bands={bands} t={t} locale={locale} />
                       </td>
                       <td className={CELL}>
                         {row.isActive ? <CanvasChip tone="good" label={t(`${K}.active`)} /> : <CanvasChip label={t(`${K}.inactive`)} />}
@@ -451,7 +481,17 @@ function PlansCell({ plans, t }: { plans: PlansReading | null; t: TranslateFn })
   return <span className="font-mono">{plans.open}</span>
 }
 
-function ClimateCell({ climate, t, locale }: { climate: ClimateReading; t: TranslateFn; locale: string }) {
+function ClimateCell({
+  climate,
+  bands,
+  t,
+  locale,
+}: {
+  climate: ClimateReading
+  bands: ResultBands | null
+  t: TranslateFn
+  locale: string
+}) {
   if (climate.kind === 'protected') {
     return (
       <span
@@ -463,12 +503,12 @@ function ClimateCell({ climate, t, locale }: { climate: ClimateReading; t: Trans
     )
   }
   if (climate.kind === 'none') return <span className="font-mono text-fg-tertiary">{DASH}</span>
-  const below = climate.mean < CLIMATE_TARGET
+  const band = bands === null ? null : bandOf(climate.mean, bands)
   return (
     <span className="inline-flex items-center gap-1.5">
       <span className="font-mono tabular-nums">{score(climate.mean, locale)}</span>
-      {below ? (
-        <span className="text-fg-tertiary">{t(`${K}.belowTarget`, { target: score(CLIMATE_TARGET, locale) })}</span>
+      {band !== null && bands !== null && band !== 'strength' ? (
+        <BandChip band={band} bands={bands} short />
       ) : (
         // The note is the one thing left to xl: at 1024 it would push the actions off screen.
         <span className="hidden text-fg-tertiary xl:inline">
@@ -479,8 +519,20 @@ function ClimateCell({ climate, t, locale }: { climate: ClimateReading; t: Trans
   )
 }
 
-function CardNoteLine({ row, wave, t, locale }: { row: DepartmentRow; wave: Wave | null; t: TranslateFn; locale: string }) {
-  const note = noteOf(row, wave, CLIMATE_TARGET)
+function CardNoteLine({
+  row,
+  wave,
+  bands,
+  t,
+  locale,
+}: {
+  row: DepartmentRow
+  wave: Wave | null
+  bands: ResultBands | null
+  t: TranslateFn
+  locale: string
+}) {
+  const note = noteOf(row, wave, bands)
   const base = 'border-t border-line-light pt-1.5 text-2xs'
   if (note.kind === 'protected') return <span className={cn(base, 'text-fg-tertiary')}>{t(`${K}.noteProtected`, { wave: note.wave, threshold: ANONYMITY_FLOOR })}</span>
   if (note.kind === 'lowest') {
@@ -493,5 +545,8 @@ function CardNoteLine({ row, wave, t, locale }: { row: DepartmentRow; wave: Wave
     )
   }
   if (note.kind === 'supervisor') return <span className={cn(base, 'text-fg-tertiary')}>{t(`${K}.noteSupervisor`, { names: note.names.join(', ') })}</span>
+  // Without the company's scale a scored group was never judged, so "nothing to observe"
+  // would be a claim the page cannot make: the line stays empty.
+  if (bands === null && row.climate.kind === 'score') return null
   return <span className={cn(base, 'text-fg-tertiary')}>{t(`${K}.noteNone`)}</span>
 }

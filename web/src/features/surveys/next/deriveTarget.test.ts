@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { DEFAULT_RESULT_BANDS, bandOf, type ResultBandKey } from '../../../components/charts'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { ActionPlan } from '../../action-plans/api/actionPlans'
@@ -6,17 +7,14 @@ import type { ClimateTrendsResponse } from '../api/climateTrends'
 import type { SurveyAnalyticsResponse } from '../api/surveyResults'
 import { composeResultsModel, previousSurveyOf, risesInARow, type PreviousPayloads } from './compose'
 import {
-  CLIMATE_TARGET,
-  belowTarget,
   cellDetail,
   companyDelta,
   companyMean,
   companyScores,
+  criticalCells,
   dimensionDeltas,
   groupRows,
-  targetBand,
   whereToLookFirst,
-  type TargetBand,
 } from './derive'
 
 /**
@@ -54,45 +52,29 @@ function loaded(analytics: SurveyAnalyticsResponse = q2()): PreviousPayloads {
 }
 
 const real = () =>
-  composeResultsModel(fixture['GET /surveys/*/analytics'], fixture['GET /action-plans'].actionPlans, null, loaded())
+  composeResultsModel(fixture['GET /surveys/*/analytics'], fixture['GET /action-plans'].actionPlans, null, loaded(), DEFAULT_RESULT_BANDS)
 /** The tenant's Q3 against a doctored previous wave. */
 const against = (analytics: SurveyAnalyticsResponse) =>
-  composeResultsModel(fixture['GET /surveys/*/analytics'], [], null, loaded(analytics))
+  composeResultsModel(fixture['GET /surveys/*/analytics'], [], null, loaded(analytics), DEFAULT_RESULT_BANDS)
 
-describe('against the climate target, on the tenant’s real payload', () => {
-  it('is the Panel de Control’s target, 3.7', () => {
-    expect(CLIMATE_TARGET).toBe(3.7)
+describe('in the company’s result bands, on the tenant’s real payload', () => {
+  it('carries the bands it was composed with, for every cell and chip on the page', () => {
+    expect(real().bands).toBe(DEFAULT_RESULT_BANDS)
   })
 
-  it('bands a reading the way the artboard tints it', () => {
-    // The SurveyResults artboard's cells, value -> colour, read off its .dc.html.
-    const table: [number, TargetBand][] = [
-      [2.4, 'far-below'],
-      [2.6, 'far-below'],
-      [2.7, 'far-below'],
-      [2.8, 'below'],
-      [3.4, 'below'],
-      [3.5, 'on'],
-      [3.6, 'on'],
-      [3.7, 'on'],
-      [3.8, 'above'],
-      [4.0, 'above'],
-      [4.2, 'far-above'],
-      [4.4, 'far-above'],
-    ]
-    for (const [value, band] of table) expect(targetBand(value), `${value}`).toBe(band)
-  })
-
-  it('tints every disclosed cell of the real map as the artboard does, and hatches Finanzas', () => {
+  it('reads every disclosed cell of the real map as the approved canvas does, and hatches Finanzas', () => {
     const bands = Object.fromEntries(
-      groupRows(real()).map((row) => [row.name, row.isProtected ? 'protected' : row.scores.map((s) => targetBand(s as number))]),
+      groupRows(real()).map((row) => [
+        row.name,
+        row.isProtected ? 'protected' : row.scores.map((s): ResultBandKey => bandOf(s as number, DEFAULT_RESULT_BANDS)),
+      ]),
     )
     expect(bands).toEqual({
       Finanzas: 'protected',
-      Ingeniería: ['above', 'on', 'above', 'on', 'far-above', 'far-above'],
-      Operaciones: ['far-below', 'far-below', 'below', 'below', 'below', 'below'],
-      Personas: ['far-above', 'above', 'above', 'on', 'far-above', 'far-above'],
-      Ventas: ['above', 'below', 'above', 'on', 'above', 'above'],
+      Ingeniería: ['strength', 'opportunity', 'strength', 'opportunity', 'strength', 'strength'],
+      Operaciones: ['critical', 'critical', 'opportunity', 'critical', 'opportunity', 'opportunity'],
+      Personas: ['strength', 'strength', 'strength', 'opportunity', 'strength', 'strength'],
+      Ventas: ['strength', 'opportunity', 'opportunity', 'opportunity', 'opportunity', 'strength'],
     })
   })
 
@@ -118,23 +100,23 @@ describe('against the climate target, on the tenant’s real payload', () => {
     expect(companyMean(model)).toBe(3.65)
   })
 
-  it('names the dimensions under the target, worst first', () => {
-    expect(belowTarget(real())).toEqual([
-      { key: 'workload', score: 3.3 },
-      { key: 'recognition', score: 3.4 },
+  it('names the cells in the critical area, lowest first, and no protected one', () => {
+    expect(criticalCells(real()).map((cell) => [cell.rowName, cell.dimensionKey, cell.score])).toEqual([
+      ['Operaciones', 'workload', 2.4],
+      ['Operaciones', 'psychological_safety', 2.6],
+      ['Operaciones', 'recognition', 2.8],
     ])
   })
 
-  it('picks the artboard’s three cells, with the breadth rule and a derived reason each', () => {
+  it('picks three cells outside the strength area, critical first, with the breadth rule and a derived reason each', () => {
     const findings = whereToLookFirst(real())
-    expect(
-      findings.map((f) => ({ row: f.rowId, key: f.dimensionKey, score: f.score, shortfall: f.shortfall, reason: f.reason })),
-    ).toEqual([
-      { row: OPS, key: 'workload', score: 2.4, shortfall: 1.3, reason: 'lowest' },
-      { row: OPS, key: 'psychological_safety', score: 2.6, shortfall: 1.1, reason: 'second-same-group' },
-      // Operaciones' recognition (2,8) is lower, but a third Operaciones cell would say
-      // nothing about the rest of the organisation: the slot goes outside the group.
-      { row: VEN, key: 'workload', score: 3.4, shortfall: 0.3, reason: 'only-red-outside' },
+    expect(findings.map((f) => ({ row: f.rowId, key: f.dimensionKey, score: f.score, band: f.band, reason: f.reason }))).toEqual([
+      { row: OPS, key: 'workload', score: 2.4, band: 'critical', reason: 'lowest' },
+      { row: OPS, key: 'psychological_safety', score: 2.6, band: 'critical', reason: 'second-same-group' },
+      // Operaciones' recognition (2,8, critical) is lower, but a third Operaciones cell would
+      // say nothing about the rest of the organisation: the slot goes to the lowest cell
+      // outside the group, which is in the opportunity area.
+      { row: VEN, key: 'workload', score: 3.4, band: 'opportunity', reason: 'lowest-outside' },
     ])
     expect(findings[2].outsideOf).toBe('Operaciones')
     // Plans match by GROUP (an ActionPlan carries a department, not a dimension).
@@ -143,21 +125,22 @@ describe('against the climate target, on the tenant’s real payload', () => {
     expect(findings[2].plan).toBeNull()
   })
 
-  it('measures the findings against the target, not the survey’s own mean', () => {
-    // The tenant's payload with every group lifted 1.3: every cell now clears 3,7,
-    // while the map's own mean (what #468 measured against) climbs past 4.
+  it('reads the findings in the bands, not against the survey’s own mean', () => {
+    // The tenant's payload with every group lifted 1,7: the lowest cell (2,4) becomes 4,1, so
+    // every cell is in the strength area, while the map's own mean (what #468 measured
+    // against) climbs past 4.
     const payload = structuredClone(fixture['GET /surveys/*/analytics'])
     for (const segment of payload.breakdowns[0].segments) {
-      for (const entry of segment.questions) entry.average = Math.min(5, (entry.average ?? 0) + 1.3)
+      for (const entry of segment.questions) entry.average = Math.min(5, (entry.average ?? 0) + 1.7)
     }
-    const lifted = composeResultsModel(payload, [], null, { status: 'none' })
+    const lifted = composeResultsModel(payload, [], null, { status: 'none' }, DEFAULT_RESULT_BANDS)
     expect(lifted.climate!.target).toBeGreaterThan(4)
-    // Half the cells sit under that mean; none sits under the target.
+    // Half the cells sit under that mean; none sits outside the strength area.
     expect(whereToLookFirst(lifted)).toEqual([])
   })
 
   it('says "plans could not be loaded" rather than "no plan" when the plans request failed', () => {
-    const model = composeResultsModel(fixture['GET /surveys/*/analytics'], null, null, { status: 'none' })
+    const model = composeResultsModel(fixture['GET /surveys/*/analytics'], null, null, { status: 'none' }, DEFAULT_RESULT_BANDS)
     expect(whereToLookFirst(model).every((f) => f.plan === undefined)).toBe(true)
   })
 
@@ -167,8 +150,7 @@ describe('against the climate target, on the tenant’s real payload', () => {
     expect(detail).toMatchObject({
       rowName: 'Operaciones',
       score: 2.4,
-      band: 'far-below',
-      shortfall: 1.3,
+      band: 'critical',
       isLowest: true,
       questionCount: 1,
       oneQuestionPerDimension: true,
@@ -189,9 +171,9 @@ describe('against the climate target, on the tenant’s real payload', () => {
     expect(question.surveyDistribution.map((point) => point.percentage)).toEqual([0, 16.67, 37.5, 41.67, 4.17])
     expect(detail!.others).toEqual([
       { id: FIN, name: 'Finanzas', isProtected: true, score: null, band: null },
-      { id: ENG, name: 'Ingeniería', isProtected: false, score: 3.7, band: 'on' },
-      { id: 'aac7e1b9-5af4-4e04-872b-c11df8f1d4bd', name: 'Personas', isProtected: false, score: 4, band: 'above' },
-      { id: VEN, name: 'Ventas', isProtected: false, score: 3.4, band: 'below' },
+      { id: ENG, name: 'Ingeniería', isProtected: false, score: 3.7, band: 'opportunity' },
+      { id: 'aac7e1b9-5af4-4e04-872b-c11df8f1d4bd', name: 'Personas', isProtected: false, score: 4, band: 'strength' },
+      { id: VEN, name: 'Ventas', isProtected: false, score: 3.4, band: 'opportunity' },
     ])
   })
 
@@ -300,12 +282,12 @@ describe('against the previous wave, on the tenant’s real payloads', () => {
   })
 
   it('says why there is no comparison rather than printing one: a first wave, a failed request', () => {
-    const first = composeResultsModel(fixture['GET /surveys/*/analytics'], [], null, { status: 'none' })
+    const first = composeResultsModel(fixture['GET /surveys/*/analytics'], [], null, { status: 'none' }, DEFAULT_RESULT_BANDS)
     expect(first.previous).toEqual({ status: 'none' })
     expect(companyDelta(first, 2)).toBeNull()
     expect(dimensionDeltas(first).every((delta) => delta === null)).toBe(true)
     expect(groupRows(first).every((row) => row.vsPrevious === null)).toBe(true)
-    const failed = composeResultsModel(fixture['GET /surveys/*/analytics'], [], null, { status: 'failed' })
+    const failed = composeResultsModel(fixture['GET /surveys/*/analytics'], [], null, { status: 'failed' }, DEFAULT_RESULT_BANDS)
     expect(failed.previous).toEqual({ status: 'failed' })
     expect(companyDelta(failed, 2)).toBeNull()
   })

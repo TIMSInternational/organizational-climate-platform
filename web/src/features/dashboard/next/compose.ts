@@ -8,6 +8,7 @@ import type { CompanyAdminDashboard } from '../api/dashboard'
 import { daysBetween, lowestCell, type MapCell } from './derive'
 import type {
   AdminDashboardModel,
+  ComposedAdminDashboardModel,
   AttentionItem,
   DimensionSeries,
   MapRow,
@@ -68,18 +69,12 @@ import type {
  *
  * ## What no endpoint carries
  *
- * A climate target: `CLIMATE_TARGET` is the mockup's 3.7 until a setting exists.
+ * The result bands: they are the company's setting, read by the hook
+ * (`useAdminDashboardModel`), not by any region here.
  * Reminders are read from the open survey's invitations (`reminderCount`, summed); when
  * that read fails the item carries `remindersSent: null` and the page says nothing about
  * reminders rather than "none sent".
  */
-
-/** The climate target on the 1–5 scale. No endpoint carries one; this is the mockup's. */
-export const CLIMATE_TARGET = 3.7
-
-// How a reading is tinted and worded against the target — `targetStep` and
-// `targetStanding` in `derive.ts` — is judged at the printed decimal with the canvas's
-// bands; every cell and chip on the Panel de Control and Clima en el tiempo reads it.
 
 /** One region's payload, or the reason it has none. */
 export type Part<T> =
@@ -137,7 +132,7 @@ export interface ComposeOptions {
 }
 
 export interface ComposedModel {
-  model: AdminDashboardModel
+  model: ComposedAdminDashboardModel
   regions: RegionStatuses
 }
 
@@ -485,7 +480,6 @@ export function composeModel(parts: ModelParts, options: ComposeOptions): Compos
       isPartial,
       asOf,
       companyName,
-      target: CLIMATE_TARGET,
       latestClosedWave,
       previousWave,
       openSurvey,

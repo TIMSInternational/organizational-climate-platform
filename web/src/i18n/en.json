@@ -6966,5 +6966,84 @@
       "waveQ3": "Q3 Climate Survey",
       "closedOn": "6 Aug 2026"
     }
+  },
+  "resultBands": {
+    "name": {
+      "critical": "Critical area",
+      "opportunity": "Opportunity area",
+      "strength": "Strength area"
+    },
+    "short": {
+      "critical": "Critical",
+      "opportunity": "Opportunity",
+      "strength": "Strength"
+    },
+    "range": {
+      "under": "under {value}",
+      "between": "{min} to {max}"
+    },
+    "reading": "{value} — {band}",
+    "boundaries": "area boundaries {low} and {high}",
+    "loadError": "The company's result scale could not be loaded, so no reading can be coloured.",
+    "results": {
+      "gridCaption": "Each group's climate on each dimension, read in the company's three result areas",
+      "climateUnit": "of 5",
+      "cells": "cells",
+      "cellsAllIn": "cells, all in {group}",
+      "criticalNone": "No cell on the map is in the {band}",
+      "whereSubOne": "The lowest cell outside the {band} · it opens its question",
+      "whereSubTwo": "The two lowest cells outside the {band} · each opens its question",
+      "whereSubThree": "The three lowest cells outside the {band} · each opens its question",
+      "whereNone": "Every cell on the map is in the {band}.",
+      "reasonLowest": "The lowest cell on the map",
+      "reasonOnlyCriticalOutside": "The only {band} cell outside {group}",
+      "mapSub": "three result areas · select a cell to see its question"
+    },
+    "dashboard": {
+      "movedLegend": "area boundaries {low} and {high} · {count} closed surveys, whole company",
+      "movedLegendOne": "area boundaries {low} and {high} · one closed survey, whole company",
+      "sparklineLabel": "{dimension}: {values} across the closed surveys, read in the result areas (boundaries {low} and {high})"
+    },
+    "leader": {
+      "planRule": "A plan is born from a cell outside the {band}; it links to the dimension and the team, never to responses.",
+      "plansNoneOpen": "The team has no open plans. A plan is born from a cell outside the {band}."
+    },
+    "report": {
+      "heading": "How to read this report",
+      "meta": "the company's result scale",
+      "mapSub": "average of each group in each dimension · three result areas",
+      "dimensionsMeta": "whole company · average from 1 to 5"
+    },
+    "trends": {
+      "description": "How each dimension moved between closed surveys, read in the company's three result areas.",
+      "chartLabel": "{dimension}: {values}, read in the result areas (boundaries {low} and {high})"
+    },
+    "settings": {
+      "heading": "Result scale",
+      "meta": "how a mean from 1 to 5 is read",
+      "description": "Every mean of a group or a dimension falls in one of three areas. The names are the company's; the colours are fixed, so green, amber and red mean the same on every screen and in every shared report.",
+      "colourCol": "Colour",
+      "nameCol": "Name",
+      "fromCol": "From",
+      "toCol": "To",
+      "colour": {
+        "strength": "Green",
+        "opportunity": "Amber",
+        "critical": "Red"
+      },
+      "fixed": "fixed",
+      "nameLabel": "Name of the {colour} area",
+      "fromLabel": "From, {band}",
+      "toLabel": "To, {band}",
+      "valid": "The three areas cover 1.00 to 5.00 with no gaps and no overlaps.",
+      "rule": "The three areas must cover 1.00 to 5.00 with no gaps and no overlaps: an area's “To” is the next area's “From” minus 0.01.",
+      "errorGap": "There is a gap between {from} and {to}: a mean of {example} would fall in no area.",
+      "errorOverlap": "{from} to {to} falls in two areas at once.",
+      "errorInvalid": "“{value}” is not a number from 1.00 to 5.00 with up to two decimals.",
+      "errorInverted": "{band} starts at {min} and ends at {max}: an area cannot end before it starts.",
+      "errorNameTooLong": "“{band}…” is too long: a name has at most 60 characters.",
+      "fixedEnds": "1.00 and 5.00 are fixed: the scale always starts and ends there.",
+      "reset": "Restore the defaults"
+    }
   }
 }

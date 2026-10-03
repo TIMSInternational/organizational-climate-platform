@@ -1,4 +1,5 @@
 {
+  "GET /admin/companies/*/result-bands": {"opportunityMin": 3, "strengthMin": 4, "criticalName": null, "opportunityName": null, "strengthName": null},
   "_comment": "Leaders lane, supervisor, over-the-floor STATE: every body is supervisor-meridiano.json's verbatim capture except ONE FIELD: GET /dashboard/department-admin activeSurveys[0].responseCount is 9 instead of the live 3 — the state after the team passes the floor, when both coverage counts are printed. GET /api/mis-tareas is her live []. Shoot with --role supervisor --name 'Sofía Vargas' --company 16c97c29-07f8-4522-86fc-e6cc56298829 --nodo 5bfdb04e-8847-4baa-89c8-d4411654a129 --lang es. GET /dashboard/department-admin is her captured body put through this branch's server rules: activeSurveys[0].responseCount 9 -> 9, companyResponseCount/companyTargetAudienceCount from GET /dashboard/company-admin (16:47Z), completedResponseCount -> 18, and climate the closed-only rule's Q3 reading with its organisation side (leaders-meridiano.json names each source). Her panel draws none of the climate block.",
   "GET /notifications/mine": {
     "notifications": []

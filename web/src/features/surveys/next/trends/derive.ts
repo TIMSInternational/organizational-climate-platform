@@ -1,5 +1,6 @@
 import { WHOLE_COMPANY_KEY, type ClimateTrendsResponse } from '../../api/climateTrends'
-import { printedMove, targetStanding, type TargetStanding } from '../../../dashboard/next/derive'
+import { bandOf, type ResultBandKey, type ResultBands } from '../../../../components/charts'
+import { printedMove } from '../../../dashboard/next/derive'
 import type { TrendDimension } from './model'
 
 /**
@@ -8,20 +9,17 @@ import type { TrendDimension } from './model'
  * this file answers "what is the number", the view answers "how does it read".
  */
 
-export type Standing = TargetStanding
-
 function round1(value: number): number {
   return Math.round(value * 10) / 10
 }
 
 /**
- * Where a reading sits against the target: the Panel de Control's one rule
- * (`targetStanding`), at the decimal the page prints and with the canvas's bands — so a
- * chip, a red endpoint and a table tint on this page never disagree with each other or
- * with the dashboard.
+ * The result band a reading falls in: the company's bands, judged at the decimal the page
+ * prints (`bandOf`) — so a chip, an endpoint and a table cell on this page never disagree
+ * with each other or with the dashboard.
  */
-export function standing(value: number, target: number): Standing {
-  return targetStanding(value, target)
+export function bandOfReading(value: number, bands: ResultBands): ResultBandKey {
+  return bandOf(value, bands)
 }
 
 /**
@@ -105,19 +103,19 @@ export function waveMean(dimensions: readonly TrendDimension[], index: number): 
 export interface DimensionStanding {
   dimension: TrendDimension
   value: number
-  standing: Standing
+  band: ResultBandKey
   /** The move since the wave before the latest reading, or `null` when either end is withheld. */
   lastMove: number | null
 }
 
-/** Every dimension with a latest reading, judged against the target. */
-export function standings(dimensions: readonly TrendDimension[], target: number): DimensionStanding[] {
+/** Every dimension with a latest reading, read in the company's bands. */
+export function standings(dimensions: readonly TrendDimension[], bands: ResultBands): DimensionStanding[] {
   return dimensions.flatMap((dimension) => {
     const index = latestIndex(dimension.values)
     const value = index === -1 ? null : (dimension.values[index] ?? null)
     return value === null
       ? []
-      : [{ dimension, value, standing: standing(value, target), lastMove: index > 0 ? deltaSince(dimension.values, index - 1) : null }]
+      : [{ dimension, value, band: bandOf(value, bands), lastMove: index > 0 ? deltaSince(dimension.values, index - 1) : null }]
   })
 }
 
@@ -141,8 +139,9 @@ export function orderByLatest<T extends TrendDimension>(dimensions: readonly T[]
 }
 
 /**
- * One chart's y axis. The DOMAIN runs from the half-point under every reading and the
- * target (less a margin) to the half-point over them; the TICKS drawn and labelled are
+ * One chart's y axis. The DOMAIN runs from the half-point under every reading and both
+ * band boundaries (less a margin) to the half-point over them — so all three areas are
+ * always on the chart, as the artboard draws them; the TICKS drawn and labelled are
  * the half-points from the lowest printed reading up. That is the canvas's `linechart`
  * (domain 2,5–4,5, gridlines and labels at 3,0 · 3,5 · 4,0 · 4,5 over readings down to
  * 2,8): the domain's floor is room for the lowest point to sit in, not a reading, so it
@@ -154,11 +153,11 @@ export interface TrendAxis {
   ticks: number[]
 }
 
-export function trendAxis(values: readonly (number | null)[], target: number): TrendAxis {
+export function trendAxis(values: readonly (number | null)[], bands: ResultBands): TrendAxis {
   const present = values.filter((value): value is number => typeof value === 'number')
-  const lowest = Math.min(...present, target)
+  const lowest = Math.min(...present, bands.opportunityMin)
   const low = Math.floor((lowest - 0.2) * 2) / 2
-  const high = Math.ceil((Math.max(...present, target) + 0.2) * 2) / 2
+  const high = Math.ceil((Math.max(...present, bands.strengthMin) + 0.2) * 2) / 2
   const first = Math.ceil(round1(lowest) * 2) / 2
   const ticks: number[] = []
   for (let tick = first; tick <= high + 1e-9; tick += 0.5) ticks.push(round1(tick))
@@ -167,14 +166,14 @@ export function trendAxis(values: readonly (number | null)[], target: number): T
 
 /**
  * ONE y axis for all six charts: the ticks that enclose every reading of every
- * dimension, and the target. Small multiples on six different scales invite the eye to
+ * dimension, and both band boundaries. Small multiples on six different scales invite the eye to
  * compare slopes that are not comparable — a 0,3 rise on a 1-point axis looks like a
  * 0,6 rise on a half-point one — so the canvas draws all six on one axis and this does
  * the same from the data.
  */
-export function sharedTrendAxis(dimensions: readonly TrendDimension[], target: number): TrendAxis {
+export function sharedTrendAxis(dimensions: readonly TrendDimension[], bands: ResultBands): TrendAxis {
   return trendAxis(
     dimensions.flatMap((dimension) => dimension.values),
-    target,
+    bands,
   )
 }

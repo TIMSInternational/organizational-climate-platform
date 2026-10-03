@@ -1,3 +1,4 @@
+import { bandOf, type ResultBandKey, type ResultBands } from '../../../../components/charts'
 import type { DashboardTeamClimate, DepartmentAdminDashboard } from '../../api/dashboard'
 import type { MySurveyListItem } from '../../../surveys/api/surveys'
 import type { PlanAccion, TableroResponse } from '../../../tracking/api/trackingApi'
@@ -7,7 +8,7 @@ import { dayDiff, hasRecordedProgress, isOverdue, type Viewer } from '../../../t
 import { ANONYMITY_FLOOR, isSuppressed } from '../../../../components/charts/suppression'
 import { waveCode } from '../compose'
 import { daysUntil } from '../employee/compose'
-import { printedMove, targetStanding, type TargetStanding } from '../derive'
+import { printedMove } from '../derive'
 import type {
   LeaderDashboardModel,
   LeaderPlans,
@@ -116,31 +117,18 @@ export function dimensionMove(dimension: TeamDimension): number | null {
 }
 
 /**
- * Where the team's reading stands against the target on the leader's card: the side of the
- * target the PRINTED reading falls on, strictly — under 3,7 is "bajo la meta", 3,7 itself is
- * "en la meta", over it "sobre la meta". The LeaderDashboard artboard (10 Sep) draws exactly
- * that: Reconocimiento 3,5 on a red card with "bajo la meta 3,7" and Crear plan, Carga de
- * trabajo 3,7 "en la meta", every 3,8 and up "sobre la meta" — and its legend says why: "un
- * plan nace de la celda que está bajo la meta".
+ * The result band the team's reading falls in on the leader's card, judged at the PRINTED
+ * decimal like every banded screen (`bandOf`), so the word never contradicts the number
+ * beside it. `null` for a withheld reading, which is in no band.
  *
- * **It is the shared rule, `derive.targetStanding`, and deliberately not a local one.** That
- * function's banding (`TARGET_BANDS_TENTHS`) is documented as "the ONE rule behind every tint
- * ... and every bajo / en / sobre la meta word", so a cell reading 3,5 against a 3,7 target is
- * "en la meta" here exactly as it is on the administrator's climate map and on Clima en el
- * tiempo. Judged at the printed decimal, so the word never contradicts the number beside it
- * (3,67 prints 3,7 and is on target). `null` for a withheld reading, which stands nowhere.
- *
- * **Known difference, and OPEN — do not close it here.** The LeaderDashboard artboard draws
- * Reconocimiento 3,5 on a red card with "bajo la meta 3,7" and a red "Crear plan"; this build
- * says "en la meta" and offers no plan. `2d0bc7cf` resolved that by giving this function its
- * own strict rule (`tenths < 0 ? 'below'`), which made the card match the board at the cost of
- * colouring the same 3,5 two ways on two screens for one survey. That was reverted on
- * 2026-09-15: it is a product ruling, not a merge decision. Either the band moves for every
- * screen, or the artboard is amended — and whichever is chosen belongs in `docs/decisions/`.
+ * It replaced a strict "bajo / en / sobre la meta 3,7" standing, and with it an open
+ * question (the LeaderDashboard artboard drew a 3,5 as below target while the map called
+ * it on target): a 3,5 is now in the same band on every screen because there is one scale,
+ * the company's own, and no screen has a rule of its own to disagree with.
  */
-export function dimensionStanding(dimension: TeamDimension, target: number): TargetStanding | null {
+export function dimensionBand(dimension: TeamDimension, bands: ResultBands): ResultBandKey | null {
   if (dimension.team === null) return null
-  return targetStanding(dimension.team, target)
+  return bandOf(dimension.team, bands)
 }
 
 /** The surveys open to the team, soonest close first, each count held to the floor. */
@@ -217,7 +205,7 @@ export interface LeaderInput {
   viewer: Viewer
   /** ISO timestamp the model is composed at. */
   asOf: string
-  target: number
+  bands: ResultBands
 }
 
 export function composeLeaderDashboard(input: LeaderInput): LeaderDashboardModel {
@@ -255,7 +243,7 @@ export function composeLeaderDashboard(input: LeaderInput): LeaderDashboardModel
     organizationRespondents: closedWave?.organizationRespondents ?? null,
     plans,
     trackingOn: input.trackingOn,
-    target: input.target,
+    bands: input.bands,
   }
 }
 

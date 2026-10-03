@@ -3,7 +3,10 @@ import { cn } from '../../lib/cn'
 import { Table } from '../ui'
 import { formatMetric } from './formatMetric'
 import { DIVERGING_COLORS, DIVERGING_INKS, divergingPair } from './palette'
+import BandGlyph from './BandGlyph'
+import BandLegend from './BandLegend'
 import ProtectedCell from './ProtectedCell'
+import { BAND_PAINT, bandCellStyle, bandName, bandOf, type ResultBands } from './resultBands'
 import { PROTECTED_HATCH, isSuppressed } from './suppression'
 
 /**
@@ -199,12 +202,19 @@ export interface ClimateMapProps {
    */
   variant?: 'default' | 'canvas'
   /**
-   * The step each disclosed reading takes, when the caller owns the rule — the Panel de
-   * Control judges the PRINTED reading against the canvas's bands (`targetStep`). Its
-   * words for AT follow the same step. Left out, the step comes from `deadBandAt` and
+   * The step each disclosed reading takes, when the caller owns the rule. Its words for
+   * AT follow the same step. (The Panel de Control no longer uses it: it passes `bands`.) Left out, the step comes from `deadBandAt` and
    * `extremeAt`, as before.
    */
   tintStep?: (score: number) => ClimateMapStep
+  /**
+   * The company's result bands. When given, they ARE the rule: every disclosed cell is
+   * painted in its band's chip pair with its glyph beside the reading, says the band's
+   * name to AT, and the legend is the band key (`BandLegend`) — `target`, `tintStep`,
+   * `deadBandAt` and `extremeAt` then only decide whether the grid discloses anything
+   * (`target === null` still withholds every cell).
+   */
+  bands?: ResultBands
 }
 
 export default function ClimateMap({
@@ -222,6 +232,7 @@ export default function ClimateMap({
   selection = null,
   variant = 'default',
   tintStep,
+  bands,
 }: ClimateMapProps) {
   const { t, locale } = useTranslation()
   const canvas = variant === 'canvas'
@@ -377,6 +388,51 @@ export default function ClimateMap({
                   }
 
                   const score = row.scores[index]
+                  const cellOpenHere =
+                    selection?.rowId === row.id && selection.dimensionKey === dimension.key
+                  if (bands) {
+                    // Judged at the precision the cell prints, so the band and the
+                    // figure on it can never disagree.
+                    const band = bandOf(score, bands, decimals ?? 1)
+                    const banded = (
+                      <div
+                        data-band={band}
+                        title={bandName(band, bands, t)}
+                        className={cn(
+                          'flex w-full items-center justify-center gap-1 rounded border font-mono font-semibold tabular-nums',
+                          density.box,
+                          density.reading,
+                        )}
+                        style={{
+                          ...bandCellStyle(band),
+                          ...(cellOpenHere
+                            ? { boxShadow: `inset 0 0 0 2px ${BAND_PAINT[band].fill}, inset 0 0 0 3.5px ${BAND_PAINT[band].ink}` }
+                            : {}),
+                        }}
+                      >
+                        <span className="sr-only">{`${description}: `}</span>
+                        {reading(score)}
+                        <BandGlyph band={band} />
+                        <span className="sr-only">{` — ${bandName(band, bands, t)}`}</span>
+                      </div>
+                    )
+                    return (
+                      <td key={dimension.key} className={canvas ? 'border-0 p-0 pt-1 pl-1' : 'p-px'}>
+                        {onSelectCell ? (
+                          <button
+                            type="button"
+                            onClick={() => onSelectCell(row.id, dimension.key)}
+                            aria-expanded={cellOpenHere}
+                            className="block h-auto w-full cursor-pointer rounded border-0 bg-transparent p-0 hover:bg-transparent hover:outline-2 hover:outline-offset-2 hover:outline-fg-primary"
+                          >
+                            {banded}
+                          </button>
+                        ) : (
+                          banded
+                        )}
+                      </td>
+                    )
+                  }
                   // The caller's rule when it owns one (`tintStep`), else the band that
                   // `deadBandAt` / `extremeAt` describe. Either way the fill and its ink
                   // come from ONE step, so they can never land on different ones.
@@ -505,7 +561,16 @@ export default function ClimateMap({
         </tbody>
       </Table>
 
-      {canvas ? (
+      {bands ? (
+        <BandLegend bands={bands} short testId="climate-map-legend">
+          <span className="inline-flex items-center gap-1.5">
+            <span aria-hidden="true" className={`inline-block size-4 rounded-xs bg-surface-icon-box ${PROTECTED_HATCH}`} />
+            {onSelectCell || onSelectRow
+              ? t('charts.protectedLegendInert', { threshold })
+              : t('charts.next.legendProtected', { threshold })}
+          </span>
+        </BandLegend>
+      ) : canvas ? (
         <CanvasLegend threshold={threshold} hasTarget={target !== null} inert={Boolean(onSelectCell || onSelectRow)} />
       ) : (
       <div className="flex flex-wrap items-center gap-3 text-xs text-fg-secondary">

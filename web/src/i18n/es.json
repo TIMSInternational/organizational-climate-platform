@@ -6966,5 +6966,84 @@
       "waveQ3": "Encuesta de Clima Q3",
       "closedOn": "6 ago 2026"
     }
+  },
+  "resultBands": {
+    "name": {
+      "critical": "Área crítica",
+      "opportunity": "Área de oportunidad",
+      "strength": "Área de fortaleza"
+    },
+    "short": {
+      "critical": "Crítica",
+      "opportunity": "Oportunidad",
+      "strength": "Fortaleza"
+    },
+    "range": {
+      "under": "menos de {value}",
+      "between": "{min} a {max}"
+    },
+    "reading": "{value} — {band}",
+    "boundaries": "límites de área {low} y {high}",
+    "loadError": "No se pudo cargar la escala de resultados de la empresa, así que ninguna lectura puede colorearse.",
+    "results": {
+      "gridCaption": "Clima de cada grupo en cada dimensión, leído en las tres áreas de resultado de la empresa",
+      "climateUnit": "de 5",
+      "cells": "celdas",
+      "cellsAllIn": "celdas, todas de {group}",
+      "criticalNone": "Ninguna celda del mapa está en {band}",
+      "whereSubOne": "La celda más baja fuera de {band} · abre su pregunta",
+      "whereSubTwo": "Las dos celdas más bajas fuera de {band} · cada una abre su pregunta",
+      "whereSubThree": "Las tres celdas más bajas fuera de {band} · cada una abre su pregunta",
+      "whereNone": "Todas las celdas del mapa están en {band}.",
+      "reasonLowest": "La celda más baja del mapa",
+      "reasonOnlyCriticalOutside": "Única celda en {band} fuera de {group}",
+      "mapSub": "tres áreas de resultado · selecciona una celda para ver su pregunta"
+    },
+    "dashboard": {
+      "movedLegend": "límites de área {low} y {high} · {count} encuestas cerradas, toda la empresa",
+      "movedLegendOne": "límites de área {low} y {high} · una encuesta cerrada, toda la empresa",
+      "sparklineLabel": "{dimension}: {values} en las encuestas cerradas, leído en las áreas de resultado (límites {low} y {high})"
+    },
+    "leader": {
+      "planRule": "Un plan nace de una celda fuera de {band}; enlaza a la dimensión y al equipo, nunca a respuestas.",
+      "plansNoneOpen": "El equipo no tiene planes abiertos. Un plan nace de una celda fuera de {band}."
+    },
+    "report": {
+      "heading": "Cómo leer este informe",
+      "meta": "la escala de resultados de la empresa",
+      "mapSub": "media de cada grupo en cada dimensión · tres áreas de resultado",
+      "dimensionsMeta": "toda la empresa · media de 1 a 5"
+    },
+    "trends": {
+      "description": "Cómo se movió cada dimensión entre encuestas cerradas, leída en las tres áreas de resultado de la empresa.",
+      "chartLabel": "{dimension}: {values}, leído en las áreas de resultado (límites {low} y {high})"
+    },
+    "settings": {
+      "heading": "Escala de resultados",
+      "meta": "cómo se lee una media de 1 a 5",
+      "description": "Cada media de un grupo o una dimensión cae en una de tres áreas. Los nombres son de la empresa; los colores son fijos para que verde, ámbar y rojo signifiquen lo mismo en todas las pantallas y en los informes compartidos.",
+      "colourCol": "Color",
+      "nameCol": "Nombre",
+      "fromCol": "Desde",
+      "toCol": "Hasta",
+      "colour": {
+        "strength": "Verde",
+        "opportunity": "Ámbar",
+        "critical": "Rojo"
+      },
+      "fixed": "fijo",
+      "nameLabel": "Nombre del área {colour}",
+      "fromLabel": "Desde, {band}",
+      "toLabel": "Hasta, {band}",
+      "valid": "Las tres áreas cubren de 1,00 a 5,00 sin huecos ni solapes.",
+      "rule": "Las tres áreas deben cubrir de 1,00 a 5,00 sin huecos ni solapes: el «Hasta» de un área es el «Desde» de la siguiente menos 0,01.",
+      "errorGap": "Queda un hueco entre {from} y {to}: una media de {example} no caería en ningún área.",
+      "errorOverlap": "De {from} a {to} cae en dos áreas a la vez.",
+      "errorInvalid": "«{value}» no es un número de 1,00 a 5,00 con hasta dos decimales.",
+      "errorInverted": "{band} empieza en {min} y termina en {max}: un área no puede terminar antes de empezar.",
+      "errorNameTooLong": "«{band}…» es demasiado largo: un nombre tiene como máximo 60 caracteres.",
+      "fixedEnds": "1,00 y 5,00 son fijos: la escala siempre empieza y termina ahí.",
+      "reset": "Restablecer valores predeterminados"
+    }
   }
 }

@@ -1,3 +1,4 @@
+import type { ResultBands } from '../../../components/charts'
 import type { ActionPlan } from '../../action-plans/api/actionPlans'
 import { isSuppressed } from '../../../components/charts/suppression'
 import { waveCode } from '../../dashboard/next/compose'
@@ -170,6 +171,7 @@ export function composeResultsModel(
   plans: readonly ActionPlan[] | null,
   closesAt: string | null,
   previous: PreviousPayloads,
+  bands: ResultBands,
 ): SurveyResultsNextModel {
   const breakdown = departmentBreakdown(payload)
   const climate = breakdown
@@ -177,6 +179,7 @@ export function composeResultsModel(
     : null
   return {
     surveyId: payload.surveyId,
+    bands,
     name: payload.title,
     // "Q3" out of "Encuesta de Clima Q3"; a survey named without a wave code is
     // discussed by the first part of its id rather than by nothing.

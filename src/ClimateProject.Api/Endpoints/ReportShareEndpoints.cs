@@ -5,6 +5,7 @@ using ClimateProject.Api.Infrastructure;
 using ClimateProject.Api.Infrastructure.Auditing;
 using ClimateProject.Application.Auditing;
 using ClimateProject.Application.Auth;
+using ClimateProject.Application.OrgStructure;
 using ClimateProject.Application.Reports;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
@@ -337,12 +338,24 @@ public static class ReportShareEndpoints
         // on it. Returning the stored document verbatim is what made #413's word clouds,
         // demographic breakdowns and benchmarks anonymously readable with nobody deciding.
         var locale = ContentLanguages.NormaliseLocale(lang) ?? ContentLanguages.FallbackLocale;
+
+        // The company's result bands as they are NOW, not as they were when the document was
+        // generated: the bands are a reading of the numbers, applied at read time like the
+        // anonymity floor, so a link and the authenticated screens never disagree on a colour.
+        // Only the two boundaries and the three names -- no identifier of the company.
+        var bandSettings = await db.Companies
+            .AsNoTracking()
+            .Where(c => c.Id == match.Report.CompanyId)
+            .Select(c => c.Settings)
+            .FirstAsync(cancellationToken);
+
         return Results.Ok(new SharedReportResponse(
             AuthoredContent.ResolveRequired(match.Report.TitleEn, match.Report.TitleEs, locale),
             AuthoredContent.ResolveText(match.Report.DescriptionEn, match.Report.DescriptionEs, locale),
             match.Report.Type,
             match.Report.GenerationCompletedAt,
-            PublicReportProjection.ToPublicJson(match.Report.ReportOutput)));
+            PublicReportProjection.ToPublicJson(match.Report.ReportOutput),
+            ResultBandsDto.From(bandSettings)));
     }
 
     /// <summary>

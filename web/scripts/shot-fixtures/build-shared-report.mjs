@@ -287,6 +287,9 @@ const report = {
   type: 'executive',
   generatedAt: '2026-08-01T10:00:00Z',
   reportOutput: JSON.stringify(document),
+  // The company's result bands as `GET /shared/reports/{token}` publishes them: the
+  // product default, as every tenant starts.
+  resultBands: { opportunityMin: 3, strengthMin: 4, criticalName: null, opportunityName: null, strengthName: null },
 }
 
 writeFileSync(

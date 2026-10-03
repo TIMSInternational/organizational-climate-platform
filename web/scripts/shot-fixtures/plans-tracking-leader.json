@@ -1,4 +1,5 @@
 {
+  "GET /admin/companies/*/result-bands": {"opportunityMin": 3, "strengthMin": 4, "criticalName": null, "opportunityName": null, "strengthName": null},
   "_comment": "Plans-and-tracking lane, leader (luis.mora@meridiano.test, nodo Ingeniería) on the Grupo Meridiano demo tenant. Bodies captured read-only from the local stack on 2026-09-10 and pasted verbatim. The directory pickers, /action-plans and /api/consolidado answered this role 403 on the live stack, and answer 403 here.",
   "GET /notifications/mine": {
     "notifications": []

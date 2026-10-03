@@ -1,5 +1,4 @@
-import { ANONYMITY_FLOOR } from '../../../../components/charts'
-import { CLIMATE_TARGET, targetBand, type TargetBand } from '../../../surveys/next/derive'
+import { ANONYMITY_FLOOR, bandOf, type ResultBandKey, type ResultBands } from '../../../../components/charts'
 import type { SurveyQuestionResult } from '../../../surveys/api/surveyResults'
 import type {
   ReportDemographicBreakdown,
@@ -44,24 +43,20 @@ import type {
  * whether a frequency map exists at all, which is what the header chip states.
  */
 
-/** The target every reading on this page is judged against — the app's own constant. */
-export { CLIMATE_TARGET }
-
 /**
- * The scale the target belongs to, and the reason it is checked rather than assumed.
+ * The scale the result bands belong to, and the reason it is checked rather than assumed.
  *
- * `CLIMATE_TARGET` is 3,7 **of 5**. A report's `dimensions` list is every question
+ * The company's bands divide 1 to 5. A report's `dimensions` list is every question
  * category the survey author used, and one of the categories this product ships is `enps`
- * — recorded 0 to 10. Judging a 7,8 eNPS against a 1-to-5 target prints "sobre la meta"
- * beside a figure that is nothing of the sort, and tints its map cell the darkest blue on
- * the ramp: a confident, measured-looking claim about a number that was never on this
- * scale. So a reading outside 1..5 keeps its figure and loses its verdict, which is the
- * honest half of both.
+ * — recorded 0 to 10. Reading a 7,8 eNPS in a 1-to-5 band prints "Área de fortaleza"
+ * beside a figure that is nothing of the sort, and paints its map cell green: a confident,
+ * measured-looking claim about a number that was never on this scale. So a reading outside
+ * 1..5 keeps its figure and loses its verdict, which is the honest half of both.
  */
 export const SCALE_MIN = 1
 export const SCALE_MAX = 5
 
-/** Whether a reading can be judged against the climate target at all. */
+/** Whether a reading can be read in the result bands at all. */
 export function onScale(value: number): boolean {
   return value >= SCALE_MIN && value <= SCALE_MAX
 }
@@ -73,11 +68,12 @@ export interface SharedDimensionRow {
   /** The aggregation's average, carried across. `null` when it computed none. */
   average: number | null
   /**
-   * Where `average` sits against the target. `null` when there is no average **and** when
-   * the average is not on the 1-to-5 scale the target belongs to — see `SCALE_MIN`.
+   * The result band `average` falls in. `null` when there is no average, when the average
+   * is not on the 1-to-5 scale the bands belong to — see `SCALE_MIN` — and when the
+   * payload carried no scale to read it in.
    */
-  band: TargetBand | null
-  /** An average that exists but cannot be judged against the target. */
+  band: ResultBandKey | null
+  /** An average that exists but is not on the 1-to-5 scale. */
   offScale: boolean
   questionCount: number
   answeredCount: number
@@ -134,6 +130,8 @@ export interface SharedGroupCount {
 /** One survey's section of the report. */
 export interface SharedSection {
   surveyId: string
+  /** The scale every reading in this section is read in — the view's, carried for the cards. */
+  bands: ResultBands | null
   title: string | null
   /** `en` or `es` — the language the authored text in this section is printed in. */
   resolvedLocale: string
@@ -160,6 +158,8 @@ export interface SharedSection {
 /** The whole page's model. */
 export interface SharedReportView {
   generatedAt: string | null
+  /** The company's result bands, off the link's payload; `null` when it carried none. */
+  bands: ResultBands | null
   /** The highest floor any section was aggregated under — what the header chip states. */
   floor: number
   hasOpenText: boolean
@@ -259,7 +259,7 @@ export function participationOf(section: ReportSurveySection): SharedParticipati
 }
 
 /** The dimension rows. Empty for a suppressed section, whatever the payload carries. */
-export function dimensionRowsOf(section: ReportSurveySection): SharedDimensionRow[] {
+export function dimensionRowsOf(section: ReportSurveySection, bands: ResultBands | null): SharedDimensionRow[] {
   if (section.isSuppressed) return []
   return section.dimensions.map((dimension) => {
     const average = dimension.averageScore
@@ -267,7 +267,7 @@ export function dimensionRowsOf(section: ReportSurveySection): SharedDimensionRo
     return {
       key: dimension.dimension,
       average,
-      band: judged ? targetBand(average) : null,
+      band: judged && bands !== null ? bandOf(average, bands) : null,
       offScale: average !== null && !judged,
       questionCount: dimension.questionCount,
       answeredCount: dimension.answeredCount,
@@ -332,7 +332,7 @@ export function hasOpenTextOf(section: ReportSurveySection): boolean {
 }
 
 /** One survey's section of the view. */
-export function sectionOf(section: ReportSurveySection): SharedSection {
+export function sectionOf(section: ReportSurveySection, bands: ResultBands | null = null): SharedSection {
   const maps = section.isSuppressed
     ? []
     : section.demographics.map(mapOf).filter((map): map is SharedGroupMap => map !== null)
@@ -351,7 +351,8 @@ export function sectionOf(section: ReportSurveySection): SharedSection {
     completed: section.participation.completedCount,
     completionRate: section.participation.completionRate,
     participation: participationOf(section),
-    dimensions: dimensionRowsOf(section),
+    bands,
+    dimensions: dimensionRowsOf(section, bands),
     maps,
     // Dropped for a suppressed section, like every other breakdown.
     //
@@ -375,10 +376,15 @@ export function sectionOf(section: ReportSurveySection): SharedSection {
 }
 
 /** The whole document as the page reads it. */
-export function viewOf(document: ReportDocument, generatedAt: string | null): SharedReportView {
-  const sections = document.surveys.map(sectionOf)
+export function viewOf(
+  document: ReportDocument,
+  generatedAt: string | null,
+  bands: ResultBands | null = null,
+): SharedReportView {
+  const sections = document.surveys.map((section) => sectionOf(section, bands))
   return {
     generatedAt,
+    bands,
     floor: sections.reduce(
       (highest, section) => Math.max(highest, section.floor),
       ANONYMITY_FLOOR,

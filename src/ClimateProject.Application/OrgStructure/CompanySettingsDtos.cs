@@ -19,7 +19,8 @@ public sealed record CompanyBrandingDto(
 public sealed record CompanySettingsResponse(
     Guid CompanyId,
     CompanySettingsDto Settings,
-    CompanyBrandingDto Branding);
+    CompanyBrandingDto Branding,
+    ResultBandsDto ResultBands);
 
 public sealed record UpdateCompanySettingsRequest(
     string? SurveyFrequency,
@@ -33,4 +34,5 @@ public sealed record UpdateCompanySettingsRequest(
     string? PrimaryColor,
     string? SecondaryColor,
     string? FontFamily,
-    string? CustomCss);
+    string? CustomCss,
+    UpdateResultBandsRequest? ResultBands = null);

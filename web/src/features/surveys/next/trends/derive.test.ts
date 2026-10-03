@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest'
+import { DEFAULT_RESULT_BANDS } from '../../../../components/charts'
 import type { ClimateTrendsResponse } from '../../api/climateTrends'
 import {
   deltaSince,
   latestValue,
   orderByLatest,
+  bandOfReading,
   sharedTrendAxis,
-  standing,
   standings,
   trendAxis,
   waveMean,
@@ -20,17 +21,16 @@ const dims: TrendDimension[] = [
 ]
 
 describe('trends derive', () => {
-  it('judges a reading against the target at one decimal: above, on, below', () => {
-    expect(standing(4.0, 3.7)).toBe('above')
-    expect(standing(3.7, 3.7)).toBe('on')
-    expect(standing(3.71, 3.7)).toBe('on')
-    // 3,67 prints "3,7" beside "meta 3,7": on target, not below it.
-    expect(standing(3.67, 3.7)).toBe('on')
-    expect(standing(3.4, 3.7)).toBe('below')
-    // The canvas's grey band: 3,46 prints "3,5" and is on target; 3,44 prints "3,4" and is below.
-    expect(standing(3.46, 3.7)).toBe('on')
-    expect(standing(3.44, 3.7)).toBe('below')
-    expect(standings(dims, 3.7).map((s) => s.standing)).toEqual(['above', 'on', 'below'])
+  it('reads a reading in the company’s bands at one decimal: strength, opportunity, critical', () => {
+    const B = DEFAULT_RESULT_BANDS
+    expect(bandOfReading(4.0, B)).toBe('strength')
+    // 3,96 prints "4,0": strength, not opportunity.
+    expect(bandOfReading(3.96, B)).toBe('strength')
+    expect(bandOfReading(3.7, B)).toBe('opportunity')
+    // 2,96 prints "3,0": opportunity; 2,94 prints "2,9": critical.
+    expect(bandOfReading(2.96, B)).toBe('opportunity')
+    expect(bandOfReading(2.94, B)).toBe('critical')
+    expect(standings(dims, B).map((s) => s.band)).toEqual(['strength', 'opportunity', 'opportunity'])
   })
 
   it('carries each standing\'s last move, and none across a withheld wave', () => {
@@ -39,7 +39,7 @@ describe('trends derive', () => {
         { key: 'a', name: 'A', values: [3.0, 3.3] },
         { key: 'b', name: 'B', values: [3.0, null, 3.4] },
       ],
-      3.7,
+      DEFAULT_RESULT_BANDS,
     )
     expect(judged[0].lastMove).toBeCloseTo(0.3)
     // The wave before the latest reading is withheld: no move, never a reconstruction.
@@ -90,19 +90,23 @@ describe('trends derive', () => {
     expect(Number(waveMean(q3, 0)?.toFixed(2))).not.toBe(3.67)
   })
 
-  it('spans a domain around every reading and the target, and labels the half-points from the lowest reading up', () => {
+  it('spans a domain around every reading and both band boundaries, and labels the half-points from the lowest up', () => {
+    const B = DEFAULT_RESULT_BANDS
     // The canvas's linechart: domain 2,5–4,5, labels 3,0 · 3,5 · 4,0 · 4,5 over readings down to 2,8.
-    expect(trendAxis([2.8, null, 3.4, 4.0], 3.7)).toEqual({ low: 2.5, high: 4.5, ticks: [3.0, 3.5, 4.0, 4.5] })
-    expect(trendAxis([3.3, 3.7, 4.0], 3.7)).toEqual({ low: 3.0, high: 4.5, ticks: [3.5, 4.0, 4.5] })
+    expect(trendAxis([2.8, null, 3.4, 4.0], B)).toEqual({ low: 2.5, high: 4.5, ticks: [3.0, 3.5, 4.0, 4.5] })
+    // Readings all in 3,3–4,0 still show the critical boundary at 3,00: all three areas are on the chart.
+    expect(trendAxis([3.3, 3.7, 4.0], B)).toEqual({ low: 2.5, high: 4.5, ticks: [3.0, 3.5, 4.0, 4.5] })
+    // …and readings all under 3,5 still reach the strength boundary at 4,00.
+    expect(trendAxis([3.1, 3.2], B).high).toBe(4.5)
     // A lowest reading of 2,75 prints "2,8": the first label is still 3,0.
-    expect(trendAxis([2.75, 3.33], 3.7).ticks[0]).toBe(3.0)
-    // A reading on a half-point is labelled at its own level.
-    expect(trendAxis([3.0, 3.6], 3.7).ticks[0]).toBe(3.0)
+    expect(trendAxis([2.75, 3.33], B).ticks[0]).toBe(3.0)
+    // The company's own boundaries widen the axis: a critical area that ends at 2,0.
+    expect(trendAxis([3.3, 3.7], { ...B, opportunityMin: 2 }).low).toBe(1.5)
   })
 
   it('puts every chart on ONE axis: the domain and the labels of every dimension together', () => {
     // A alone would start its labels at 3,5 and C at 3,0; side by side they must share one scale.
-    expect(sharedTrendAxis(dims, 3.7)).toEqual({ low: 2.5, high: 4.5, ticks: [3.0, 3.5, 4.0, 4.5] })
+    expect(sharedTrendAxis(dims, DEFAULT_RESULT_BANDS)).toEqual({ low: 2.5, high: 4.5, ticks: [3.0, 3.5, 4.0, 4.5] })
   })
 
   it('orders the dimensions by the latest reading, highest first, ties and gaps stable', () => {

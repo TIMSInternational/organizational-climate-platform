@@ -63,8 +63,8 @@ function trends(opsPoint: { respondentCount: number; isSuppressed: boolean; scor
 }
 
 describe('the originating finding', () => {
-  it('is the lowest cell of the plan’s row in the latest closed wave, judged against the target', () => {
-    const finding = planFinding(trends({ respondentCount: 6, isSuppressed: false, scores: [3.2, 2.4] }), 'q3', OPS, 3.7)
+  it('is the lowest cell of the plan’s row in the latest closed wave', () => {
+    const finding = planFinding(trends({ respondentCount: 6, isSuppressed: false, scores: [3.2, 2.4] }), 'q3', OPS)
     expect(finding).toEqual({
       status: 'shown',
       surveyId: 'q3',
@@ -72,34 +72,33 @@ describe('the originating finding', () => {
       code: 'Q3',
       dimensionKey: 'workload',
       score: 2.4,
-      belowTarget: true,
       lowestOfMap: true,
     })
   })
 
   it('says when the plan’s cell is not the lowest of the whole map', () => {
-    const finding = planFinding(trends({ respondentCount: 6, isSuppressed: false, scores: [3.2, 3.0] }), 'q3', OPS, 3.7)
+    const finding = planFinding(trends({ respondentCount: 6, isSuppressed: false, scores: [3.2, 3.0] }), 'q3', OPS)
     expect(finding.status === 'shown' && finding.lowestOfMap).toBe(false)
   })
 
   it('yields no number for a row the server withheld — never the lowest of an empty row', () => {
-    const finding = planFinding(trends({ respondentCount: 0, isSuppressed: true, scores: [null, null] }), 'q3', OPS, 3.7)
+    const finding = planFinding(trends({ respondentCount: 0, isSuppressed: true, scores: [null, null] }), 'q3', OPS)
     expect(finding).toEqual({ status: 'protected', surveyId: 'q3', surveyTitle: 'Encuesta de Clima Q3', code: 'Q3' })
   })
 
   it('protects a row under the floor even when the server sent its scores', () => {
-    const finding = planFinding(trends({ respondentCount: 4, isSuppressed: false, scores: [3.2, 2.4] }), 'q3', OPS, 3.7)
+    const finding = planFinding(trends({ respondentCount: 4, isSuppressed: false, scores: [3.2, 2.4] }), 'q3', OPS)
     expect(finding.status).toBe('protected')
   })
 
   it('finds nothing for a department the map does not have', () => {
-    expect(planFinding(trends({ respondentCount: 6, isSuppressed: false, scores: [3.2, 2.4] }), 'q3', 'unknown', 3.7)).toEqual({
+    expect(planFinding(trends({ respondentCount: 6, isSuppressed: false, scores: [3.2, 2.4] }), 'q3', 'unknown')).toEqual({
       status: 'none',
     })
   })
 
   it('falls back to the latest closed wave the map carries when no survey is named', () => {
-    const finding = planFinding(trends({ respondentCount: 6, isSuppressed: false, scores: [3.2, 2.4] }), null, OPS, 3.7)
+    const finding = planFinding(trends({ respondentCount: 6, isSuppressed: false, scores: [3.2, 2.4] }), null, OPS)
     expect(finding.status === 'shown' && finding.surveyId).toBe('q3')
   })
 })

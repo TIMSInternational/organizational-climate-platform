@@ -1,3 +1,4 @@
+import { afterEach, vi } from 'vitest'
 import { Storage } from 'happy-dom'
 
 /**
@@ -38,3 +39,21 @@ function installStorage(name: 'localStorage' | 'sessionStorage'): void {
 
 installStorage('localStorage')
 installStorage('sessionStorage')
+
+/**
+ * Every banded screen reads the company's result bands (`features/result-bands`). A page
+ * test mocks the endpoints it is about; this answers the bands request for all of them
+ * with the product default, so a test that is not about the scale does not have to know
+ * the request exists. A test that IS about it overrides `getResultBands` (it is a `vi.fn`).
+ * The read cache is module state, so it is cleared after every test.
+ */
+vi.mock('../features/result-bands/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../features/result-bands/api')>()
+  const { DEFAULT_RESULT_BANDS } = await import('../components/charts/resultBands')
+  return { ...actual, getResultBands: vi.fn(async () => DEFAULT_RESULT_BANDS) }
+})
+
+afterEach(async () => {
+  const { forgetResultBands } = await import('../features/result-bands/useResultBands')
+  forgetResultBands()
+})

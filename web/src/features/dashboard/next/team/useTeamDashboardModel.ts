@@ -7,7 +7,7 @@ import { listMySurveys } from '../../../surveys/api/surveys'
 import { getMisTareas, getTablero } from '../../../tracking/api/trackingApi'
 import { isTrackingEnabled } from '../../../tracking/api/config'
 import { readViewer } from '../../../tracking/next/viewer'
-import { CLIMATE_TARGET } from '../compose'
+import { useResultBands } from '../../../result-bands/useResultBands'
 import { composeLeaderDashboard, composeSupervisorDashboard, type TrackingRead } from './compose'
 import type { LeaderDashboardModel, SupervisorDashboardModel } from './model'
 
@@ -104,24 +104,31 @@ export function useLeaderDashboardModel(): TeamDashboardState<LeaderDashboardMod
   // The clock the day counts are measured against, read once per mount.
   const [asOf] = useState(() => new Date().toISOString())
   const { data, reload: reloadDepartment } = department
+  // The company's scale is part of the reading: the cards wait for it, and a scale that
+  // could not be read is the page's failure (with its retry), never a silent default.
+  const bands = useResultBands()
+  const { t } = useTranslation()
 
   const model = useMemo(() => {
-    if (data?.kind !== 'department') return null
+    if (data?.kind !== 'department' || bands.bands === null) return null
     return composeLeaderDashboard({
       department: data.dashboard,
       tablero,
       trackingOn,
       viewer,
       asOf,
-      target: CLIMATE_TARGET,
+      bands: bands.bands,
     })
-  }, [asOf, data, tablero, trackingOn, viewer])
+  }, [asOf, data, tablero, trackingOn, viewer, bands.bands])
 
+  const gate = gateOf(department)
+  const bandsFailed = bands.status === 'error' && gate === 'ready'
   return {
-    gate: gateOf(department),
+    gate: bandsFailed ? 'failed' : gate,
     model,
-    error: department.error,
+    error: bandsFailed ? t('resultBands.loadError') : department.error,
     reload: () => {
+      bands.retry()
       reloadDepartment()
       setNonce((n) => n + 1)
     },

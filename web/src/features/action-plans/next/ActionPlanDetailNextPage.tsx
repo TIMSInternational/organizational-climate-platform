@@ -32,8 +32,9 @@ import { useViewerCapabilities } from '../../../auth/viewerCapabilities'
 import { calendarDay, calendarDayLong } from '../../../lib/calendarDay'
 import { cn } from '../../../lib/cn'
 import { dimensionLabel } from '../../surveys/dimensionLabel'
-import { reading, targetStanding } from '../../dashboard/next/derive'
-import { CLIMATE_TARGET } from '../../dashboard/next/compose'
+import { reading } from '../../dashboard/next/derive'
+import { BandChip, bandOf } from '../../../components/charts'
+import { useResultBands } from '../../result-bands/useResultBands'
 import ProgressUpdateForm from '../components/ProgressUpdateForm'
 import { ACTION_PLAN_PRIORITIES, ACTION_PLAN_STATUSES, kpiProgressPercent, priorityLabel, statusLabel } from '../actionPlanVocabulary'
 import { daysToDue, dueDay, elapsedShare, type PlanFinding } from './planDetailDerive'
@@ -459,14 +460,11 @@ function WhatCard({ model, scopeName }: { model: ActionPlanDetailModel; scopeNam
   )
 }
 
-const STANDING_KEY = {
-  below: 'actionPlans.next.finding.below',
-  on: 'actionPlans.next.finding.on',
-  above: 'actionPlans.next.finding.above',
-} as const
-
 function FindingBlock({ finding, scopeName }: { finding: Settled<PlanFinding>; scopeName: string | null }) {
   const { t, locale } = useTranslation()
+  // The finding's band is the company's scale; until it is read (or if it cannot be), the
+  // reading prints without a band rather than under the product default.
+  const bands = useResultBands().bands
   if (finding.status === 'loading') {
     return <p className="m-0 text-sm text-fg-tertiary">{t('actionPlans.next.finding.loading')}</p>
   }
@@ -501,25 +499,21 @@ function FindingBlock({ finding, scopeName }: { finding: Settled<PlanFinding>; s
       </div>
     )
   }
-  const standing = targetStanding(value.score, CLIMATE_TARGET)
+  const band = bands === null ? null : bandOf(value.score, bands)
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
       <div className="flex flex-wrap items-center gap-2">
         <Chip label={scope} />
         <span className="font-medium text-fg-primary">{dimensionLabel(value.dimensionKey, t)}</span>
-        <span className={cn('font-mono font-semibold tabular-nums', standing === 'below' ? 'text-accent-red-ink' : 'text-fg-primary')}>
+        <span className={cn('font-mono font-semibold tabular-nums', band === 'critical' ? 'text-chip-critical-ink' : 'text-fg-primary')}>
           {reading(value.score, locale)}
         </span>
-        <Chip
-          label={t(STANDING_KEY[standing])}
-          tone={standing === 'below' ? 'critical' : standing === 'above' ? 'good' : 'neutral'}
-        />
+        {band !== null && bands !== null && <BandChip band={band} bands={bands} />}
       </div>
       <span className="text-sm text-fg-tertiary">
         {[
           value.surveyTitle,
           value.lowestOfMap ? t('actionPlans.next.finding.lowestOfMap') : t('actionPlans.next.finding.lowestOfRow', { scope }),
-          t('actionPlans.next.finding.target', { target: reading(CLIMATE_TARGET, locale) }),
         ].join(' · ')}
       </span>
       {openLink}

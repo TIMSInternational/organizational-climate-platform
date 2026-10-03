@@ -6,7 +6,6 @@ import type { SurveyListItem } from '../../surveys/api/surveys'
 import type { PlanAccion } from '../../tracking/api/trackingApi'
 import type { CompanyAdminDashboard } from '../api/dashboard'
 import {
-  CLIMATE_TARGET,
   composeModel,
   coveringPlan,
   currentOpenSurvey,
@@ -406,9 +405,10 @@ describe('composeModel', () => {
 
     // Nothing of the mockup tenant survives anywhere in the model, by any route.
     expect(JSON.stringify(model)).not.toContain('Meridiano')
-    // `asOf` and the target are the reader's own inputs, not a region's, so they stay.
+    // `asOf` is the reader's own input, not a region's, so it stays. The result bands are
+    // not a region at all: the hook joins them, so the composed model carries none.
     expect(model.asOf).toBe(ASOF)
-    expect(model.target).toBe(CLIMATE_TARGET)
+    expect('bands' in model).toBe(false)
   })
 
   it('a tenant with no closed survey is an empty fallback, not a failure', () => {

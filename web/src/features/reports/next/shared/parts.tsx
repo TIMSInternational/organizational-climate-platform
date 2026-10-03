@@ -1,18 +1,24 @@
 import type { ReactNode } from 'react'
 import { useTranslation } from '../../../../i18n'
 import {
+  BAND_PAINT,
+  BandGlyph,
+  BandLegend,
   CHART_AXIS,
   CHART_GRID,
-  DIVERGING_COLORS,
   ProtectedCell,
+  bandCellStyle,
+  bandName,
+  bandOf,
+  bandShortName,
   formatMetric,
+  type ResultBandKey,
+  type ResultBands,
 } from '../../../../components/charts'
 import { PROTECTED_HATCH } from '../../../../components/charts/suppression'
 import { Table } from '../../../../components/ui'
 import { cn } from '../../../../lib/cn'
 import { dimensionLabel } from '../../../surveys/dimensionLabel'
-import { BAND_STEP, targetBand, type TargetBand } from '../../../surveys/next/derive'
-import { tintOf } from '../../../surveys/next/tint'
 import { SCALE_MAX, SCALE_MIN, onScale, type SharedGroupMap } from './derive'
 
 /**
@@ -93,28 +99,27 @@ export function ReadingCard({
 }
 
 /**
- * The 1-to-5 strip in the dimension table: the scale, the target as a dashed rule, and
- * the reading as one dot.
+ * The 1-to-5 strip in the dimension table: the scale with the company's three areas laid
+ * behind it in their tints, a dashed rule at each boundary, and the reading as one dot in
+ * its area's colour.
  *
  * `aria-hidden`, and that is the rule this repository states about colour: the row prints
  * the figure in its own column and the reading in words beside it, so the strip adds a
  * shape to something already said twice. A screen reader that announced it would announce
  * a third copy.
  *
- * The dot takes the accent, not the diverging ramp: `DIVERGING_COLORS` are *fills* behind
- * a number and two of the five are pale enough on the card surface that an 8px dot would
- * disappear. The map below uses the ramp, where it is a fill, and this uses `accent-red`
- * / `accent-blue` — the two inks the artboard draws the dot in.
+ * The dot takes the band's accent (`BAND_PAINT.line`), not its chip fill: the fills are
+ * pale enough on the card surface that an 8px dot would disappear.
  */
 export function ScaleStrip({
   value,
-  target,
+  bands,
   band,
 }: {
   /** On the 1-to-5 scale. A reading off it has no strip at all — see `onScale`. */
   value: number
-  target: number
-  band: TargetBand
+  bands: ResultBands
+  band: ResultBandKey
 }) {
   const width = 200
   const pad = 6
@@ -125,31 +130,41 @@ export function ScaleStrip({
   const at = (score: number) =>
     pad + (Math.min(Math.max(score, SCALE_MIN), SCALE_MAX) - SCALE_MIN) / (SCALE_MAX - SCALE_MIN) * span
   const ticks = Array.from({ length: SCALE_MAX - SCALE_MIN + 1 }, (_, index) => SCALE_MIN + index)
-  const low = band === 'far-below' || band === 'below'
+  const zones: { key: ResultBandKey; from: number; to: number }[] = [
+    { key: 'critical', from: SCALE_MIN, to: bands.opportunityMin },
+    { key: 'opportunity', from: bands.opportunityMin, to: bands.strengthMin },
+    { key: 'strength', from: bands.strengthMin, to: SCALE_MAX },
+  ]
 
   return (
-    <svg
-      aria-hidden="true"
-      focusable="false"
-      width={width}
-      height={14}
-      viewBox={`0 0 ${width} 14`}
-      className={low ? 'text-accent-red' : 'text-accent-blue'}
-    >
+    <svg aria-hidden="true" focusable="false" width={width} height={14} viewBox={`0 0 ${width} 14`} data-band={band}>
+      {zones.map((zone) => (
+        <rect
+          key={zone.key}
+          x={at(zone.from)}
+          y={2}
+          width={Math.max(at(zone.to) - at(zone.from), 0)}
+          height={10}
+          fill={BAND_PAINT[zone.key].zone}
+        />
+      ))}
       <line x1={pad} y1={7} x2={width - pad} y2={7} stroke={CHART_GRID} strokeWidth={2} strokeLinecap="round" />
       {ticks.map((tick) => (
         <line key={tick} x1={at(tick)} y1={4} x2={at(tick)} y2={10} stroke={CHART_GRID} strokeWidth={1} />
       ))}
-      <line
-        x1={at(target)}
-        y1={1}
-        x2={at(target)}
-        y2={13}
-        stroke={CHART_AXIS}
-        strokeWidth={1}
-        strokeDasharray="2 2"
-      />
-      <circle cx={at(value)} cy={7} r={4} fill="currentColor" />
+      {[bands.opportunityMin, bands.strengthMin].map((boundary) => (
+        <line
+          key={boundary}
+          x1={at(boundary)}
+          y1={1}
+          x2={at(boundary)}
+          y2={13}
+          stroke={CHART_AXIS}
+          strokeWidth={1}
+          strokeDasharray="2 2"
+        />
+      ))}
+      <circle cx={at(value)} cy={7} r={4} fill={BAND_PAINT[band].line} />
     </svg>
   )
 }
@@ -160,28 +175,29 @@ export function ScaleStrip({
  *
  * ## The four rules it keeps
  *
- * - **A real table.** The axes are announced as headers and the colour is a second
- *   encoding: every disclosed cell says where it sits against the target in words, for a
- *   screen reader, beside the figure.
+ * - **A real table.** The axes are announced as headers and the colour is never alone:
+ *   every disclosed cell prints its band's name and glyph under the figure, and says the
+ *   name to a screen reader.
  * - **A protected row is hatched in every cell and prints no number anywhere.**
  *   `SharedGroupRow.scores` is all `null` for such a row (`derive.ts`), so there is no
  *   figure on the shape this component receives — it could not print one if it tried.
  * - **The cells are inert.** `ResultsClimateGrid` opens a cell into a question panel
  *   because its reader is inside the tenant; this reader is anonymous and there is
  *   nothing further to open, so nothing here is a button.
- * - **The tints are the five diverging tokens**, the ramp the dashboard's map and the
- *   authenticated results grid read, so red means the same thing on every screen.
+ * - **The tints are the band's chip pair**, the same three the authenticated results grid
+ *   paints with. Without a scale on the payload (`bands === null`) a cell keeps its figure
+ *   and is judged by nothing.
  */
 export function ClimateMapGrid({
   map,
   floor,
-  target,
+  bands,
   caption,
   groupHeading,
 }: {
   map: SharedGroupMap
   floor: number
-  target: number
+  bands: ResultBands | null
   /** Already-translated table caption. */
   caption: string
   /** Already-translated name of the row axis, for the corner header. */
@@ -189,7 +205,6 @@ export function ClimateMapGrid({
 }) {
   const { t, locale } = useTranslation()
   const score = (value: number) => formatMetric(value, { kind: 'number', decimals: 1 }, locale)
-  const targetText = score(target)
 
   return (
     // `w-auto`, not the primitive's `w-full`, and every column a fixed width: the
@@ -259,10 +274,10 @@ export function ClimateMapGrid({
                   </td>
                 )
               }
-              if (!onScale(value)) {
-                // A reading that is not on the 1-to-5 scale the target belongs to — an
-                // eNPS average, say. It keeps its figure and loses its tint: painting it
-                // from the ramp would state a position against a target it was never
+              if (!onScale(value) || bands === null) {
+                // A reading that is not on the 1-to-5 scale the bands belong to — an
+                // eNPS average, say — or a payload with no scale at all. It keeps its
+                // figure and loses its tint: painting it would state an area it was never
                 // measured against. `derive.ts` `SCALE_MIN` records the whole argument.
                 return (
                   <td key={column} className="border-0 p-0">
@@ -273,19 +288,28 @@ export function ClimateMapGrid({
                   </td>
                 )
               }
-              // The product's own band function, with the page's target passed in —
-              // not a second copy of the thresholds. Two implementations of one rule
-              // is how a cell reads red on one screen and grey on another.
-              const band = targetBand(value, target)
+              // The product's own band function with the company's scale — not a second
+              // copy of the thresholds. Two implementations of one rule is how a cell
+              // reads critical on one screen and opportunity on another.
+              const band = bandOf(value, bands)
               return (
                 <td key={column} className="border-0 p-0">
                   <span
-                    className="flex h-8.5 w-full items-center justify-center rounded-md font-mono text-sm tabular-nums"
-                    style={tintOf(band)}
+                    data-band={band}
+                    className="flex h-10 w-full flex-col items-center justify-center gap-px overflow-hidden rounded-md border px-1"
+                    style={bandCellStyle(band)}
+                    title={bandName(band, bands, t)}
                   >
                     <span className="sr-only">{`${description}: `}</span>
-                    {score(value)}
-                    <span className="sr-only">{` — ${t(readingKey(band), { target: targetText })}`}</span>
+                    <span className="font-mono text-sm font-semibold tabular-nums">{score(value)}</span>
+                    <span className="sr-only">{` — ${bandName(band, bands, t)}`}</span>
+                    <span
+                      aria-hidden="true"
+                      className="inline-flex max-w-full items-center gap-0.75 text-3xs font-semibold uppercase tracking-label"
+                    >
+                      <BandGlyph band={band} />
+                      <span className="truncate">{bandShortName(band, bands, t)}</span>
+                    </span>
                   </span>
                 </td>
               )
@@ -297,33 +321,20 @@ export function ClimateMapGrid({
   )
 }
 
-/** The map's key, drawn from the same tokens the cells are. */
-export function ClimateMapLegend({ floor }: { floor: number }) {
+/** The map's key: the company's three areas, then the hatch. */
+export function ClimateMapLegend({ floor, bands }: { floor: number; bands: ResultBands | null }) {
   const { t } = useTranslation()
+  const hatch = (
+    <span className="inline-flex items-center gap-1.5">
+      <span aria-hidden="true" className={cn('inline-block size-4 rounded-xs bg-surface-icon-box', PROTECTED_HATCH)} />
+      {t('surveyResults.next.legendProtected', { floor })}
+    </span>
+  )
+  if (bands === null) return <div className="flex flex-wrap items-center gap-4 text-xs text-fg-tertiary">{hatch}</div>
   return (
-    <div className="flex flex-wrap items-center gap-4 text-xs text-fg-tertiary">
-      <span className="inline-flex items-center gap-1">
-        <Swatch step={0} />
-        <Swatch step={1} />
-        {t('surveyResults.next.legendBelow')}
-      </span>
-      <span className="inline-flex items-center gap-1">
-        <Swatch step={2} />
-        {t('surveyResults.next.legendOn')}
-      </span>
-      <span className="inline-flex items-center gap-1">
-        <Swatch step={3} />
-        <Swatch step={4} />
-        {t('surveyResults.next.legendAbove')}
-      </span>
-      <span className="inline-flex items-center gap-1">
-        <span
-          aria-hidden="true"
-          className={cn('inline-block size-2.5 rounded-xs bg-surface-icon-box', PROTECTED_HATCH)}
-        />
-        {t('surveyResults.next.legendProtected', { floor })}
-      </span>
-    </div>
+    <BandLegend bands={bands} short className="text-fg-tertiary">
+      {hatch}
+    </BandLegend>
   )
 }
 
@@ -352,22 +363,4 @@ export function PrivacyNote({
       </span>
     </div>
   )
-}
-
-/** One legend key, painted from the same token the cells of that band are. */
-function Swatch({ step }: { step: 0 | 1 | 2 | 3 | 4 }) {
-  return (
-    <span
-      aria-hidden="true"
-      className="inline-block size-2.5 rounded-xs"
-      style={{ backgroundColor: DIVERGING_COLORS[step] }}
-    />
-  )
-}
-
-/** Which of the three target sentences a band announces, for the screen reader. */
-function readingKey(band: TargetBand): string {
-  if (BAND_STEP[band] <= 1) return 'charts.belowTarget'
-  if (BAND_STEP[band] === 2) return 'charts.onTarget'
-  return 'charts.aboveTarget'
 }

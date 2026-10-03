@@ -199,11 +199,13 @@ describe('ActionPlanDetailNextPage', () => {
     ).toBeTruthy()
   })
 
-  it('proposes the finding: the lowest cell of the plan’s department in the latest closed wave, below the target', async () => {
+  it('proposes the finding: the lowest cell of the plan’s department in the latest closed wave, in its result band', async () => {
     renderAs({ role: 'company_admin', companyId: COMPANY })
     expect(await screen.findByText('Carga de trabajo')).toBeTruthy()
     expect(screen.getByText('2,4')).toBeTruthy()
-    expect(screen.getByText(copy.finding.below)).toBeTruthy()
+    // 2,4 is in the critical area of the company's bands, named in its chip — no "meta".
+    expect(await screen.findByText(es.resultBands.name.critical)).toBeTruthy()
+    expect(document.body.textContent).not.toContain('meta 3,7')
     expect(screen.getByText(/la celda más baja del mapa/)).toBeTruthy()
     expect(screen.getByRole('link', { name: /Abrir en los resultados de la Q3/ }).getAttribute('href')).toBe('/surveys/q3/results')
     // The department map is the one the grouped read returns, scoped to the plan's company.

@@ -1,3 +1,4 @@
+import type { ResultBands } from '../../../components/charts'
 import type { ActionPlan } from '../../action-plans/api/actionPlans'
 import type { SurveyBreakdown, SurveyQuestionResult, SurveyResultsSummary } from '../api/surveyResults'
 import type { ClimateMapModel } from '../surveyResultsMap'
@@ -94,6 +95,8 @@ export type ResultsPrevious =
 
 export interface SurveyResultsNextModel {
   surveyId: string
+  /** The company's result bands — every cell, chip and tile on the page is read in them. */
+  bands: ResultBands
   /** The survey's own name, off the wire; `null` when it has none. */
   name: string | null
   /** The wave the survey is discussed as — "Q3" out of "Encuesta de Clima Q3" (`waveCode`). */

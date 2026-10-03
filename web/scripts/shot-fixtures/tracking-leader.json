@@ -1,4 +1,5 @@
 {
+  "GET /admin/companies/*/result-bands": {"opportunityMin": 3, "strengthMin": 4, "criticalName": null, "opportunityName": null, "strengthName": null},
   "_comment": "Leader/supervisor tracking lane. Bodies taken from scripts/shot-fixtures/plans-tracking-leader.json (captured read-only from the local stack on 2026-09-10) and kept field for field; the only edits are the ids of the people the plans name, which are set to the shot harness's own `sub` claim (00000000-0000-0000-0000-000000000001) so the screens render the reader's relation to each plan rather than a stranger's. PA-2026-00002 is Ingenieria's own plan; PA-2026-00001 is a Finanzas plan the reader is merely named on. The directory pickers, /action-plans and /api/consolidado answered this role 403 on the live stack, and answer 403 here.",
   "GET /notifications/mine": { "notifications": [] },
   "GET /profile": {
