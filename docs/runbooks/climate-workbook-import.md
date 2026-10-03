@@ -42,7 +42,9 @@ node scripts/import-climate-workbook.mjs --file "<workbook>.xlsx" \
 super_admin), `--company-id` instead of name+domain for an existing company, `--title` for the
 survey (default `Clima Organizacional <company> <year>`), and `--skip-demographic "<column>"`
 (repeatable) to leave a demographic column out: no field is created for it and no value is
-sent. A name that matches no column stops the run.
+sent. A name that matches no column stops the run. `--start YYYY-MM-DD --end YYYY-MM-DD` set the
+survey's window in Costa Rica days (opens 08:00 on the first, closes 23:59 on the last, UTC-6);
+without them the draft opens a week after the run, for three weeks — a placeholder.
 
 **For TIMS, skip Edad and Tiempo** (`--skip-demographic Edad --skip-demographic "Tiempo de
 laborar en TIMS (años)"`, or their field keys). They are numbers, a number field is never split
@@ -66,8 +68,10 @@ invitation text in the dry run first.
 - **Roles.** The workbook has no role column. A Puesto naming a director, manager, president or
   head (`director/a`, `gerente`, `presidente/a`, `jefe/a`) is invited as `leader`; everyone
   else as `employee`. The import cannot create a `company_admin`: promote one in Usuarios.
-- **The survey is a draft.** Dates default to a week from now for three weeks. Review it, set
-  the dates, create its distribution, and launch it in the product.
+- **The survey is a draft.** Its window is `--start`/`--end` (or the placeholder above). Review
+  it, then **Programar** — not Activar: a scheduled survey opens itself at its start date and
+  closes at its end date, while an active one accepts answers at once, whatever its dates.
+  "Enviar invitaciones" works on a scheduled survey and holds the emails until the start date.
 - **Anonymous.** The workbook's description promises confidentiality, so the survey is created
   anonymous. An anonymous survey stays on a person's list after they answer (it does not know
   who answered — `SurveyQueries.AssignedTo`).
