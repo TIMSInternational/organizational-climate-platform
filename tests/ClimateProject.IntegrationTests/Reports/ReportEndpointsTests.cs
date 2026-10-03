@@ -511,7 +511,9 @@ public class ReportEndpointsTests : IAsyncLifetime
             Assert.DoesNotContain(word, _lastReportOutput, StringComparison.OrdinalIgnoreCase);
         }
 
-        Assert.Equal(5, question.SuppressedWordCount);
+        // Four, not five: "the" is a function word (WordStopList), dropped before counting
+        // rather than withheld -- visa, renewal, paperwork, stressful.
+        Assert.Equal(4, question.SuppressedWordCount);
 
         // The same cloud the results screen serves, so a reader cannot get more out of one
         // surface than the other.

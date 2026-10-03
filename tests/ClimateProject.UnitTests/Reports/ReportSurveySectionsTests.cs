@@ -395,8 +395,10 @@ public class ReportSurveySectionsTests
         Assert.DoesNotContain("the visa renewal paperwork is stressful", rendered, StringComparison.OrdinalIgnoreCase);
 
         // Withheld words are COUNTED, so a reader can tell an empty cloud from a
-        // censored one: the five words of the one-off sentence, and nothing else.
-        Assert.Equal(5, question.SuppressedWordCount);
+        // censored one: the content words of the one-off sentence, and nothing else.
+        // Four, not five: "the" is a function word (WordStopList), dropped before counting
+        // rather than withheld -- visa, renewal, paperwork, stressful.
+        Assert.Equal(4, question.SuppressedWordCount);
 
         // Every printed word is above the floor. The invariant, not five examples.
         Assert.All(question.Words, w => Assert.True(SurveyResultsPrivacy.MeetsWordFloor(w.ResponseCount)));
