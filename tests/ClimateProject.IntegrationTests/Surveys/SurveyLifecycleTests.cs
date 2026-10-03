@@ -105,7 +105,9 @@ public class SurveyLifecycleTests : IAsyncLifetime
         Assert.Equal(SurveyStatuses.Closed, closed.Status);
         Assert.True(closed.EndDate < survey.EndDate, $"EndDate stayed at the planned {closed.EndDate:O}");
         Assert.InRange(closed.EndDate, before.AddSeconds(-1), after.AddSeconds(1));
-        Assert.Equal(survey.StartDate, closed.StartDate);
+        // To the millisecond: Postgres keeps microseconds, while the create response echoes
+        // the request's 100 ns ticks (CI: .6936725 sent, .693672 stored).
+        Assert.Equal(survey.StartDate.ToUnixTimeMilliseconds(), closed.StartDate.ToUnixTimeMilliseconds());
     }
 
     [Fact]
