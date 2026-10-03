@@ -83,6 +83,31 @@ public class SurveyLifecycleTests : IAsyncLifetime
         Assert.Equal(from, unchanged!.Status);
     }
 
+    /// <summary>
+    /// The TIMS dry run closed a survey on 2 Oct whose window ran to 29 Oct, and every screen
+    /// went on saying "cerró el 29 de octubre": they date a closed survey by its EndDate.
+    /// Closing inside the window ends the window then.
+    ///
+    /// Mutation-proved: removing the EndDate assignment fails this with the planned day.
+    /// </summary>
+    [Fact]
+    public async Task Closing_early_ends_the_window_when_it_was_closed()
+    {
+        var client = await AdminAsync();
+        var survey = await CreateDraftAsync(client);
+        (await SurveyTestHarness.SetStatusAsync(client, survey.Id, SurveyStatuses.Active)).EnsureSuccessStatusCode();
+
+        var before = DateTimeOffset.UtcNow;
+        var response = await SurveyTestHarness.SetStatusAsync(client, survey.Id, SurveyStatuses.Closed);
+        var after = DateTimeOffset.UtcNow;
+
+        var closed = (await response.Content.ReadFromJsonAsync<SurveyDetail>())!;
+        Assert.Equal(SurveyStatuses.Closed, closed.Status);
+        Assert.True(closed.EndDate < survey.EndDate, $"EndDate stayed at the planned {closed.EndDate:O}");
+        Assert.InRange(closed.EndDate, before.AddSeconds(-1), after.AddSeconds(1));
+        Assert.Equal(survey.StartDate, closed.StartDate);
+    }
+
     [Fact]
     public async Task Draft_can_be_archived_directly_so_an_abandoned_draft_can_be_filed_away()
     {

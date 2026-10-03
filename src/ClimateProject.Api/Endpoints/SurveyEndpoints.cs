@@ -904,6 +904,17 @@ public static class SurveyEndpoints
         survey.Status = target;
         survey.UpdatedAt = changedAt;
 
+        // Closing early ends the response window then. Every screen dates a closed survey by
+        // its EndDate, so a survey closed on 2 Oct kept saying "cerró el 29 de octubre" (TIMS
+        // dry run). Only inside the window: a close after EndDate keeps the planned day it
+        // really ended on, and one before StartDate would leave an end before the start.
+        // 'closed' leads only to 'archived', so no reopen can need the old date back.
+        if (string.Equals(target, SurveyStatuses.Closed, StringComparison.Ordinal)
+            && survey.StartDate <= changedAt && changedAt < survey.EndDate)
+        {
+            survey.EndDate = changedAt;
+        }
+
         SurveyAuditTrail.Record(
             db, survey.Id, SurveyAuditActions.StatusChanged, SurveyAuditEntityTypes.Status, actor, changedAt,
             new SurveyAuditChangeSet(From: from, To: target));
