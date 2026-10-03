@@ -118,6 +118,32 @@ public class SurveyClimateTrendsTests
     /// not a column that does not exist -- intersecting the dimensions would delete exactly
     /// the change this screen is for.
     /// </summary>
+    /// <summary>
+    /// The TIMS dry run: a category of open-ended questions only ("Preguntas abiertas") has a
+    /// rollup row with no score. As a column it drew an empty chart on Clima en el tiempo,
+    /// and the Panel de Control, which counts closed waves as the shortest dimension series,
+    /// read zero waves and printed "—" for the climate beside nine scored dimensions. A
+    /// category that never carries a score is not a climate dimension.
+    ///
+    /// Mutation-proved: dropping the <c>AverageScore is not null</c> filter fails this with
+    /// the open category back among the columns.
+    /// </summary>
+    [Fact]
+    public void A_category_with_no_score_in_any_wave_is_not_a_dimension()
+    {
+        var result = SurveyClimateTrends.Build(Company, null,
+        [
+            Input(LateSurvey, Jun, Aggregate(
+            [
+                Question(QuestionA, "trust", 9, 3.2),
+                Question(QuestionB, "preguntas_abiertas", 9, null),
+            ], 9)),
+        ], Now);
+
+        Assert.Equal(["trust"], result.Dimensions.Select(d => d.Key));
+        Assert.Equal([3.2], result.Groups.Single().Points.Single().Scores);
+    }
+
     [Fact]
     public void A_dimension_only_one_survey_asked_is_a_column_with_a_gap_not_a_missing_column()
     {
@@ -328,9 +354,11 @@ public class SurveyClimateTrendsTests
 
     /// <summary>
     /// A question with no computable average contributes no weight, so a dimension whose
-    /// every question is unscored is null rather than zero. Zero is a reading; null is the
-    /// absence of one, and a chart that plots the first prints a catastrophe that did not
-    /// happen.
+    /// every question is unscored in a wave is null in that wave rather than zero. Zero is a
+    /// reading; null is the absence of one, and a chart that plots the first prints a
+    /// catastrophe that did not happen. (The dimension is a column at all because the later
+    /// wave scores it: one scored in NO wave is not a dimension --
+    /// A_category_with_no_score_in_any_wave_is_not_a_dimension.)
     /// </summary>
     [Fact]
     public void A_dimension_with_no_scored_question_is_null_not_zero()
@@ -340,9 +368,14 @@ public class SurveyClimateTrendsTests
             Input(EarlySurvey, Jan, Aggregate(
                 [Question(QuestionA, "trust", 20, null)], 20,
                 Departments(Segment("sales", "Sales", 20, (QuestionA, 20, null))))),
+            Input(LateSurvey, Jun, Aggregate(
+                [Question(QuestionA, "trust", 20, 4.0)], 20,
+                Departments(Segment("sales", "Sales", 20, (QuestionA, 20, 4.0))))),
         ], Now);
 
-        Assert.Null(result.Groups.Single().Points.Single().Scores[0]);
+        var points = result.Groups.Single().Points;
+        Assert.Null(points[0].Scores[0]);
+        Assert.Equal(4.0, points[1].Scores[0]);
     }
 
     // ==================================================================

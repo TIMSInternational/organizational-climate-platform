@@ -91,8 +91,15 @@ public static class SurveyClimateTrends
         // about, which is precisely the change a climate-over-time screen exists to show.
         // Ordinal ordering matches DimensionRollup's, so a dimension occupies the same
         // column position here as it does everywhere else.
+        //
+        // Only a dimension that carries a score is a climate dimension. A category made of
+        // open-ended questions only (TIMS's "Preguntas abiertas") has a rollup row with a
+        // null score in every wave: as a column it drew an empty chart on Clima en el
+        // tiempo, and the Panel de Control -- which counts closed waves as the shortest
+        // dimension series -- read zero waves and printed "—" for the climate beside nine
+        // scored dimensions. The results map already leaves such a category out.
         var dimensionKeys = ordered
-            .SelectMany(i => i.Aggregate.Dimensions.Select(d => d.Dimension))
+            .SelectMany(i => i.Aggregate.Dimensions.Where(d => d.AverageScore is not null).Select(d => d.Dimension))
             .Distinct(StringComparer.Ordinal)
             .OrderBy(d => d, StringComparer.Ordinal)
             .ToList();
