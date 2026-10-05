@@ -371,7 +371,7 @@ export function toImportRows(climate) {
   })
 }
 
-export function toSurveyRequest(climate, { companyId, title, departmentIds, startDate, endDate }) {
+export function toSurveyRequest(climate, { companyId, title, departmentIds, startDate, endDate, anonymous = true }) {
   const options = climate.scale.map((point) => ({ value: String(point.value), label: both(point.label) }))
   const min = climate.scale[0]?.value ?? 1
   const max = climate.scale.at(-1)?.value ?? 5
@@ -397,9 +397,27 @@ export function toSurveyRequest(climate, { companyId, title, departmentIds, star
     departmentIds,
     targetAudienceCount: climate.persons.length,
     settings: {
-      // The description promises it ("nadie verá tus respuestas individuales"); an anonymous
-      // survey is the only kind that keeps that promise in the product.
-      anonymous: true,
+      /**
+       * Anonymous STORAGE, which is not the same thing as what the client is shown — and the
+       * comment that used to sit here conflated them. It read "the description promises
+       * 'nadie verá tus respuestas individuales'; an anonymous survey is the only kind that
+       * keeps that promise", which is false: `SurveyAggregation` and `SurveyResultsPrivacy`
+       * never branch on this flag, so the floor of 5, segment suppression, the complement
+       * rule and the never-return-verbatim-text rule apply the same either way. No survey of
+       * any kind shows an individual answer.
+       *
+       * What the flag really decides is whether `responses.user_id` is written. Setting it
+       * costs exactly one thing, and it is the thing that keeps being reported as a defect:
+       * with no user id the server cannot tell that this person already answered, so
+       * `FindExistingResponseAsync` has nothing to match, `SurveyQueries.AssignedTo` cannot
+       * filter the survey out of "Para responder", and a respondent can start it again.
+       *
+       * So: `true` protects the respondent from whoever holds the DATABASE. `false` still
+       * protects them from the client's administrators -- who only ever see aggregates -- and
+       * buys one-response-per-person, enforced by the server. Choose per survey, and tell the
+       * respondents the truth either way: the respond screen's notice changes with it.
+       */
+      anonymous,
       allowPartialResponses: true,
       showProgress: true,
       ...(climate.invitation?.subject ? { invitationCustomSubject: both(climate.invitation.subject) } : {}),
@@ -445,6 +463,7 @@ async function main() {
       password: { type: 'string', default: 'Local1234!' },
       apply: { type: 'boolean', default: false },
       'skip-demographic': { type: 'string', multiple: true, default: [] },
+      anonymous: { type: 'string', default: 'true' },
       start: { type: 'string' },
       end: { type: 'string' },
     },
@@ -452,6 +471,11 @@ async function main() {
   if (!values.file) throw new Error('--file <workbook.xlsx> is required')
   if (!values['company-id'] && !(values['company-name'] && values.domain)) throw new Error('name the company: --company-id <guid>, or --company-name and --domain to find or create it')
   if (values['company-id'] && !GUID.test(values['company-id'])) throw new Error('--company-id is not a GUID')
+
+  if (values.anonymous !== 'true' && values.anonymous !== 'false') {
+    throw new Error(`--anonymous must be true or false (recibido: ${values.anonymous})`)
+  }
+  const anonymous = values.anonymous === 'true'
 
   const parsed = parseClimate(readWorkbook(values.file))
   const skipping = skipDemographics(parsed.climate, values['skip-demographic'])
@@ -462,6 +486,9 @@ async function main() {
   for (const line of summarise(climate)) log(`  ${line}`)
   if (skipping.skipped.length) log(`  sin importar (--skip-demographic): ${skipping.skipped.join(' · ')}`)
   if (!window.problems.length) log(`  ventana de la encuesta: ${window.startDate} → ${window.endDate}${values.start ? '' : ' (por defecto: sin --start/--end)'}`)
+  log(anonymous
+    ? '  anonimato: ANÓNIMA — no se guarda quién respondió, así que nada impide que alguien la responda otra vez'
+    : '  anonimato: IDENTIFICADA — se guarda quién respondió, así que el servidor permite UNA sola respuesta por persona (los resultados siguen siendo solo agregados)')
   if (problems.length) {
     log(`\n${problems.length} problem(s) in the workbook — nothing was sent:`)
     for (const problem of problems) log(`  - ${problem}`)
@@ -549,7 +576,7 @@ async function main() {
   if (already) { log(`survey exists: ${already.title} (${already.id}, ${already.status}) — left as it is`) } else {
     const afterImport = await call('GET', `/admin/departments?companyId=${companyId}`, null, token)
     const departmentIds = (afterImport.departments ?? afterImport).filter((d) => d.isActive !== false).map((d) => d.id)
-    const body = toSurveyRequest(climate, { companyId, title: surveyTitle, departmentIds, startDate: window.startDate, endDate: window.endDate })
+    const body = toSurveyRequest(climate, { companyId, title: surveyTitle, departmentIds, startDate: window.startDate, endDate: window.endDate, anonymous })
     const created = await call('POST', '/surveys', body, token)
     const id = created?.id ?? created?.survey?.id
     if (!id) throw new Error(`survey create: unexpected body ${JSON.stringify(created).slice(0, 200)}`)

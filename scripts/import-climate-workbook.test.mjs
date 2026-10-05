@@ -151,3 +151,24 @@ test('--start/--end: Costa Rica days, 08:00 to 23:59; together or not at all; en
   assert.equal(fallback.startDate, '2026-10-09T18:00:00.000Z')
   assert.equal(fallback.endDate, '2026-10-30T18:00:00.000Z')
 })
+
+/**
+ * The anonymity choice, and the behaviour that rides on it.
+ *
+ * `anonymous` decides whether `responses.user_id` is written, and that one column is what
+ * lets the server refuse a second response: `FindExistingResponseAsync` matches on the acting
+ * user, and `SurveyQueries.AssignedTo` filters an answered survey out of "Para responder".
+ * With it NULL neither can, which is the repeat-answer report. It does NOT decide what the
+ * client sees — `SurveyAggregation` and `SurveyResultsPrivacy` never branch on it.
+ */
+test('toSurveyRequest: anonymity defaults to anonymous and can be chosen', () => {
+  const climate = {
+    intro: 'i', invitation: null, bands: [], columns: [], persons: [],
+    scale: [{ label: 'Nunca', value: 1 }, { label: 'Siempre', value: 5 }],
+    dimensions: [{ name: 'D', open: false, questions: ['q'] }],
+  }
+  const args = { companyId: 'c', title: 't', departmentIds: [], startDate: 'a', endDate: 'b' }
+  assert.equal(toSurveyRequest(climate, args).settings.anonymous, true)
+  assert.equal(toSurveyRequest(climate, { ...args, anonymous: true }).settings.anonymous, true)
+  assert.equal(toSurveyRequest(climate, { ...args, anonymous: false }).settings.anonymous, false)
+})
