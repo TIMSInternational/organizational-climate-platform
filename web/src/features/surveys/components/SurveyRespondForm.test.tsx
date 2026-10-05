@@ -9,6 +9,7 @@ import { createTranslator } from '../../../i18n/translate'
 import type { SurveyRespondQuestion, SurveyRespondView } from '../api/surveyResponses'
 import { hasAnswered, markAnswered } from '../respondReceipt'
 import { readSessionId } from '../respondSession'
+import { STALE_MS, heldElsewhere } from '../respondLock'
 
 /**
  * The shipped wording, read from the catalogue the component reads.
@@ -1101,20 +1102,21 @@ describe('SurveyRespondForm answered-on-this-device flag', () => {
   })
 
   /**
-   * The escape is not optional. The flag belongs to a device and never to a person, so on
-   * a shared browser it outlives whoever answered; a respondent who is not that person has
-   * to be able to say so and carry on.
+   * There is no way past it, and that is the ruling. A "that was not me, answer again"
+   * control was offered here and removed: on a survey, somebody who has answered is done, and
+   * a visible way to answer twice is an invitation to. Asserted as the ABSENCE of any control
+   * on the screen, not as the absence of one label, so re-adding it under a different name
+   * still fails.
    */
-  it('gives the form back, and forgets the flag, when the reader says it was not them', async () => {
+  it('offers no way to answer again', async () => {
     markAnswered('s1')
     respondWith(view({ questions: [question()] }))
     renderForm()
     await screen.findByText(copy.es('surveyRespond.answeredOnThisDeviceTitle'))
 
-    await userEvent.click(screen.getByRole('button', { name: copy.es('surveyRespond.answerAgain') }))
-
-    expect(await screen.findByRole('radio', { name: 'Muy de acuerdo' })).toBeTruthy()
-    expect(hasAnswered('s1')).toBe(false)
+    expect(screen.queryAllByRole('button')).toEqual([])
+    expect(screen.queryAllByRole('link')).toEqual([])
+    expect(screen.queryByRole('radio', { name: 'Muy de acuerdo' })).toBeNull()
   })
 
   /**
@@ -1142,5 +1144,170 @@ describe('SurveyRespondForm answered-on-this-device flag', () => {
 
     expect(await screen.findByText(copy.es('surveyRespond.alreadyCompletedTitle'))).toBeTruthy()
     expect(screen.queryByText(copy.es('surveyRespond.answeredOnThisDeviceTitle'))).toBeNull()
+  })
+})
+
+/**
+ * One open assessment at a time.
+ *
+ * The lock's own arithmetic — who may claim, when a lock goes stale, who may release —
+ * is proved in `respondLock.test.ts` against two tab ids. What is proved here is the
+ * only thing that file cannot see: that this screen honours it, that a blocked tab
+ * asks the server for nothing, and that leaving the screen frees the survey.
+ *
+ * The other tab is written straight into storage rather than rendered: two React trees
+ * in one happy-dom share one `localStorage` and one `TAB_ID`, so a second `render` is
+ * not a second tab and would claim the lock it was supposed to be refused.
+ */
+describe('SurveyRespondForm — one open assessment at a time', () => {
+  const OTHER_TAB = 'another-tab'
+
+  function otherTabHolds(at: number) {
+    window.localStorage.setItem('surveyOpen:s1', JSON.stringify({ tab: OTHER_TAB, at }))
+  }
+
+  it('tells a second tab the survey is open elsewhere, and asks the server for nothing', async () => {
+    otherTabHolds(Date.now())
+    respondWith(view())
+    renderForm()
+
+    expect(
+      await screen.findByText(copy.es('surveyRespond.openInAnotherTabTitle')),
+    ).toBeTruthy()
+    // The respond GET returns the in-progress answers, free text included. A tab that
+    // must not write to the response has no business reading it back either.
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled()
+    // No question, no way to answer: the block is the whole screen, not a banner over
+    // a form that still works.
+    expect(screen.queryByText('¿Qué tan satisfecho estás?')).toBeNull()
+  })
+
+  it('lets the survey be answered when the other tab went quiet past the stale window', async () => {
+    otherTabHolds(Date.now() - STALE_MS - 1)
+    respondWith(view())
+    renderForm()
+
+    expect(await screen.findByText('¿Qué tan satisfecho estás?')).toBeTruthy()
+    expect(screen.queryByText(copy.es('surveyRespond.openInAnotherTabTitle'))).toBeNull()
+  })
+
+  /**
+   * The steal path, which is the one the heartbeat creates and the only way a tab can
+   * lose a lock it was using: this tab goes quiet past the stale window (backgrounded,
+   * where timers are throttled to about one a minute), another tab takes the survey
+   * and answers it, and this one comes back.
+   *
+   * What must NOT happen is this tab picking up where it left off. Its answer map is a
+   * snapshot from before the other tab wrote, and the next autosave would put it
+   * straight over that work — the overwrite the lock exists to prevent, arriving by the
+   * one door the lock itself opens.
+   *
+   * Asserted on the ANSWER the respondent sees, not on a second GET going out. The
+   * second GET happens either way, because the effect re-runs whenever the lock
+   * changes; it is whether that read is allowed to REPLACE the map that is in
+   * question, and a call count cannot tell the two apart.
+   */
+  it('shows the other tab\u2019s answer, not its own, after losing and regaining the lock', async () => {
+    respondWith(view())
+    renderForm()
+    await screen.findByText('\u00bfQu\u00e9 tan satisfecho est\u00e1s?')
+
+    await userEvent.click(screen.getByRole('radio', { name: 'Muy de acuerdo' }))
+    expect((screen.getByRole('radio', { name: 'Muy de acuerdo' }) as HTMLInputElement).checked).toBe(true)
+
+    // Another tab takes it while this one is quiet, and the screen gives way.
+    otherTabHolds(Date.now())
+    fireEvent(document, new Event('visibilitychange'))
+    await screen.findByText(copy.es('surveyRespond.openInAnotherTabTitle'))
+
+    // That tab answers differently and closes, handing the survey back.
+    respondWith(
+      view({
+        inProgress: {
+          responseId: 'r1',
+          sessionId: 'session-1',
+          isComplete: false,
+          language: 'es',
+          startTime: '2026-10-06T08:05:00Z',
+          completionTime: null,
+          answers: [
+            { questionId: 'q1', value: 'disagree', values: null, text: null, timeSpentSeconds: 9 },
+          ],
+        },
+      }),
+    )
+    window.localStorage.removeItem('surveyOpen:s1')
+    fireEvent(document, new Event('visibilitychange'))
+
+    await screen.findByText('\u00bfQu\u00e9 tan satisfecho est\u00e1s?')
+    // The server's copy won, which is the whole point: this tab's map predates the
+    // other tab's work and must not survive the hand-back.
+    expect((await screen.findByRole('radio', { name: 'En desacuerdo' })) as HTMLInputElement).toBeTruthy()
+    expect((screen.getByRole('radio', { name: 'En desacuerdo' }) as HTMLInputElement).checked).toBe(true)
+    expect((screen.getByRole('radio', { name: 'Muy de acuerdo' }) as HTMLInputElement).checked).toBe(false)
+  })
+
+  it('frees the survey when the screen goes away, so the next tab is not shut out', async () => {
+    respondWith(view())
+    const { unmount } = renderForm()
+    await screen.findByText('¿Qué tan satisfecho estás?')
+
+    // Held while it is on screen...
+    expect(heldElsewhere('s1', OTHER_TAB)).toBe(true)
+
+    unmount()
+
+    // ...and handed straight back, rather than left for the stale window to clear.
+    expect(heldElsewhere('s1', OTHER_TAB)).toBe(false)
+  })
+})
+
+/**
+ * The promise is collapsed from the second question, never shortened.
+ *
+ * Measured on the TIMS instrument at 390×844 — 40 likert statements, Spanish — the open
+ * block is ~148px of the fold and the page comes to 938px, which puts "Siguiente" below
+ * it on every question. The fix spends the vertical room and nothing else: the same
+ * `anonymousBody` characters stay in the document on every page, one tap away.
+ *
+ * The two assertions that matter are therefore the shape AND the words. A collapse that
+ * also trimmed the copy would be the second, shorter claim `AnonymityNotice`'s own rule
+ * forbids, and a test that only asserted "it is a details element" would pass for it.
+ */
+describe('SurveyRespondForm — the anonymity promise under one question at a time', () => {
+  function notice(): HTMLElement {
+    const node = document.querySelector<HTMLElement>('[data-slot="anonymity-notice"]')
+    expect(node, 'the promise is on every page').toBeTruthy()
+    return node!
+  }
+
+  it('states it in full and open on the first question', async () => {
+    respondWith(view({ questions: [question(), question({ id: 'q2' })] }))
+    renderForm()
+    await screen.findByText('¿Qué tan satisfecho estás?')
+
+    expect(notice().tagName).toBe('SECTION')
+    expect(screen.getByText(copy.es('surveyRespond.anonymousBody'))).toBeTruthy()
+  })
+
+  it('collapses it from the second question, with the words character for character', async () => {
+    respondWith(view({ questions: [question(), question({ id: 'q2' })] }))
+    renderForm()
+    await screen.findByText('¿Qué tan satisfecho estás?')
+    const openWords = screen.getByText(copy.es('surveyRespond.anonymousBody')).textContent
+
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+
+    const collapsed = notice()
+    expect(collapsed.tagName).toBe('DETAILS')
+    expect(collapsed.hasAttribute('open')).toBe(false)
+    // Still in the document — find-in-page, a screen reader walking it, and one tap
+    // for everybody else — and still the same sentence it was on page one.
+    expect(screen.getByText(copy.es('surveyRespond.anonymousBody')).textContent).toBe(openWords)
+    // And the state word is still readable while it is shut, because that is the part
+    // that has to survive the collapse.
+    expect(collapsed.querySelector('[data-slot="anonymity-label"]')?.textContent).toBe(
+      copy.es('surveyRespond.anonymousChip'),
+    )
   })
 })

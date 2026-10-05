@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowDown, ArrowUp } from 'lucide-react'
+import { ArrowDown, ArrowUp, Frown, Smile } from 'lucide-react'
 import { useTranslation } from '../../../i18n'
 import { Textarea } from '../../../components/ui'
 // Not re-exported from `components/ui`, so it is imported by path — the same shape
@@ -333,54 +333,81 @@ function ChoiceAnswer({ question, answer, disabled, invalid, errorId, onChange }
     return label ?? value
   }
 
+  // A scale, as opposed to a list of unrelated options: its ends mean "least" and "most", so
+  // they are the two that carry a face. `multiple_choice` is a set of alternatives with no
+  // order, and `yes_no` has no middle, so neither gets one.
+  const isScale = question.type !== 'multiple_choice' && question.type !== 'yes_no' && choices.length >= 3
+  // The end captions repeat the first and last choice verbatim whenever the author labelled
+  // the scale in words — "Nunca … Siempre" under a row that already reads Nunca … Siempre.
+  // Printed only when they say something the choices do not.
+  const endsRepeatChoices =
+    (question.scaleLabelMin ?? '') === (choices[0]?.label ?? '') &&
+    (question.scaleLabelMax ?? '') === (choices.at(-1)?.label ?? '')
+
   return (
-    // `w-fit` so the scale-end captions below span exactly the width of the scale
-    // they annotate. Left to fill the card, "Never" and "Always" sat at the far
-    // edges of a 1100px column with the five radios bunched at the left — measured
-    // in Chromium at 1440px, they read as two unrelated labels rather than as the
-    // ends of the row above them. `max-w-full` keeps the wrapping behaviour on a
-    // phone, where fit-content is the full column anyway.
-    <div className="w-fit max-w-full">
+    <div className="w-full">
+      {/*
+        One row of equal cells on a wide viewport, one full-width cell per line on a phone.
+        `flex-1` is what aligns them: the previous `flex flex-wrap` sized every option to its
+        own text, so five Spanish labels of different lengths wrapped into a ragged two rows
+        that read as a list rather than as a scale — measured at 390px. Equal cells also give
+        each option a tap target the width of the column, well past the 24px WCAG 2.2 minimum.
+      */}
       <div
         className={
-          question.type === 'multiple_choice' ? 'grid gap-1' : 'flex flex-wrap gap-x-section gap-y-1'
+          question.type === 'multiple_choice'
+            ? 'grid gap-2'
+            : 'flex flex-col gap-2 sm:flex-row sm:items-stretch'
         }
       >
         {choices.map((choice, index) => {
           const inputId = `${questionFieldId(question.id)}-choice-${index}`
+          const checked = answer?.value === choice.value
+          const face = !isScale
+            ? null
+            : index === 0
+              ? <Frown aria-hidden="true" className="size-icon shrink-0 text-fg-secondary" />
+              : index === choices.length - 1
+                ? <Smile aria-hidden="true" className="size-icon shrink-0 text-fg-secondary" />
+                : null
           return (
-            // `<label>` wraps nothing here: `htmlFor` keeps the hit target on the
-            // text without nesting the input, which is what lets the flex row lay
-            // the scale points out horizontally on a wide viewport and wrap on a
-            // phone.
-            <span key={choice.value} className="flex items-center gap-inline">
+            // `<label>` still wraps nothing: `htmlFor` keeps the whole cell as the hit target
+            // without nesting the input.
+            <span
+              key={choice.value}
+              data-slot="respond-choice"
+              data-checked={checked || undefined}
+              className={[
+                'flex flex-1 items-center gap-inline rounded-lg border px-3.5 py-3 transition-colors',
+                checked
+                  ? 'border-accent-blue bg-surface-icon-box'
+                  : 'border-line-default bg-surface-card hover:border-line-hover',
+              ].join(' ')}
+            >
               <input
                 type="radio"
                 id={inputId}
                 name={question.id}
                 value={choice.value}
-                checked={answer?.value === choice.value}
+                checked={checked}
                 disabled={disabled}
                 aria-invalid={invalid || undefined}
                 aria-describedby={invalid ? errorId : undefined}
                 onChange={() => onChange({ ...answer, value: choice.value })}
               />
-              {/* Mobile-first: a native radio is ~13px, which is far under the 24px
-                  WCAG 2.2 target minimum on a phone. The label is the real hit
-                  target — clicking it checks the radio — so it is given a full
-                  control-height strip rather than being left as bare text. */}
               <label
                 htmlFor={inputId}
-                className="mb-0 flex min-h-control-lg items-center text-base font-normal text-fg-primary"
+                className="mb-0 flex min-h-control-lg flex-1 items-center gap-inline text-base font-normal text-fg-primary"
               >
-                {labelFor(choice.value, choice.label)}
+                {face}
+                <span className="min-w-0">{labelFor(choice.value, choice.label)}</span>
               </label>
             </span>
           )
         })}
       </div>
 
-      {scaleEnds && (
+      {scaleEnds && !endsRepeatChoices && (
         <p className="mt-inline flex justify-between gap-inline text-sm text-fg-secondary">
           <span>{question.scaleLabelMin}</span>
           <span>{question.scaleLabelMax}</span>

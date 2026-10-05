@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, cleanup, waitFor, within } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import MySurveysNextPage from './MySurveysNextPage'
 import { TranslationProvider } from '../../../../i18n'
@@ -495,10 +494,11 @@ describe('MySurveysNextPage answered on this device', () => {
   })
 
   /**
-   * The escape, and the reason it exists: the flag belongs to a device and never to a
-   * person, so on a shared browser it outlives whoever answered.
+   * A row here is finished: no action at all. The group used to carry "¿No fue usted?
+   * Devolverla a la lista"; it was removed with the rest of the escape. Asserted as the
+   * absence of any control in the section rather than of one label.
    */
-  it('puts the row back under “Para responder” when the reader says it was not them', async () => {
+  it('offers no way to put an answered survey back', async () => {
     markAnswered(ANSWERED)
     twoSurveys()
     renderPage()
@@ -506,19 +506,9 @@ describe('MySurveysNextPage answered on this device', () => {
     const answered = (
       await screen.findByRole('heading', { name: new RegExp(es('employee.next.answeredHereHeading')) })
     ).closest('section') as HTMLElement
-    await userEvent.click(
-      within(answered).getByRole('button', { name: es('employee.next.answeredHereUndo') }),
-    )
-
-    const toAnswer = screen
-      .getByRole('heading', { name: new RegExp(es('employee.next.toAnswerHeading')) })
-      .closest('section') as HTMLElement
-    expect(within(toAnswer).getByText('Encuesta ya respondida')).toBeTruthy()
-    expect(hasAnswered(ANSWERED)).toBe(false)
-    // The group is gone with its only row, rather than left as an empty heading.
-    expect(
-      screen.queryByRole('heading', { name: new RegExp(es('employee.next.answeredHereHeading')) }),
-    ).toBeNull()
+    expect(within(answered).queryAllByRole('button')).toEqual([])
+    expect(within(answered).queryAllByRole('link')).toEqual([])
+    expect(hasAnswered(ANSWERED)).toBe(true)
   })
 
   /**

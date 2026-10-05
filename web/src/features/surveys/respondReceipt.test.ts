@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { forgetAnswered, hasAnswered, markAnswered } from './respondReceipt'
+import { describe, it, expect, beforeEach, afterEach, onTestFinished, vi } from 'vitest'
+import * as receipt from './respondReceipt'
+import { hasAnswered, markAnswered } from './respondReceipt'
 import { clearSessionId, ensureSessionId, readSessionId } from './respondSession'
 
 describe('respondReceipt', () => {
@@ -16,12 +17,22 @@ describe('respondReceipt', () => {
     expect(hasAnswered('survey-1')).toBe(false)
   })
 
-  it('remembers an answered survey, and forgets it on request', () => {
+  it('remembers an answered survey', () => {
     markAnswered('survey-1')
     expect(hasAnswered('survey-1')).toBe(true)
+  })
 
-    forgetAnswered('survey-1')
-    expect(hasAnswered('survey-1')).toBe(false)
+  /**
+   * The flag is final, and the module offers nothing that clears it. An earlier version
+   * exported `forgetAnswered` and every surface drew a "that was not me, answer again"
+   * control; it was ruled against, because a visible way to answer twice is an invitation to.
+   * Asserted on the module's own surface so the control cannot come back by the side door.
+   */
+  it('offers no way to clear the flag', () => {
+    markAnswered('survey-1')
+    const api = Object.keys(receipt).sort()
+    expect(api).toEqual(['hasAnswered', 'markAnswered'])
+    expect(hasAnswered('survey-1')).toBe(true)
   })
 
   /**
@@ -93,17 +104,25 @@ describe('respondReceipt', () => {
     const blocked = () => {
       throw new Error('blocked')
     }
-    vi.spyOn(window.localStorage, 'getItem').mockImplementation(blocked)
-    vi.spyOn(window.localStorage, 'setItem').mockImplementation(blocked)
-    vi.spyOn(window.localStorage, 'removeItem').mockImplementation(blocked)
+    // Restored here, one by one, rather than left to the `afterEach`: measured on
+    // vitest 4.1.10, `vi.restoreAllMocks()` does NOT restore a spy taken against this
+    // instance, while `spy.mockRestore()` does. This test being last in the file is
+    // the only reason that has never bitten — a test added below it would have found
+    // `getItem` still throwing, the module swallowing it, and an empty store reported
+    // as fact. See `respondLock.test.ts`, which carries the same note.
+    const spies = [
+      vi.spyOn(window.localStorage, 'getItem').mockImplementation(blocked),
+      vi.spyOn(window.localStorage, 'setItem').mockImplementation(blocked),
+    ]
+    onTestFinished(() => {
+      for (const spy of spies) spy.mockRestore()
+    })
 
     // The instrument, before anything that depends on it.
     expect(() => window.localStorage.getItem('x')).toThrow('blocked')
     expect(() => window.localStorage.setItem('x', '1')).toThrow('blocked')
-    expect(() => window.localStorage.removeItem('x')).toThrow('blocked')
 
     expect(() => markAnswered('survey-1')).not.toThrow()
     expect(hasAnswered('survey-1')).toBe(false)
-    expect(() => forgetAnswered('survey-1')).not.toThrow()
   })
 })

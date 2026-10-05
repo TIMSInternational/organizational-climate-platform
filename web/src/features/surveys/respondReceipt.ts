@@ -52,10 +52,14 @@
  * that is the whole of its job. Enforcing one-per-person would mean a per-person completion
  * record, which is the privacy trade the three decisions above declined to make.
  *
- * Scoped per survey rather than global, so answering one survey never silences another, and
- * `forget` is offered everywhere the flag is acted on: on a shared browser the flag outlives
- * the person, and a respondent who is *not* the one who answered must always be able to say
- * so and carry on.
+ * Scoped per survey rather than global, so answering one survey never silences another.
+ *
+ * **There is deliberately no way to clear it.** An earlier version offered "that was not me,
+ * answer again" everywhere the flag was read, reasoning that the flag belongs to a device and
+ * not to a person. Ruled against: a visible control for answering twice is an invitation to,
+ * and on a survey the point is that somebody who has answered is done. The cost is stated
+ * rather than hidden — on a genuinely shared browser the next person is told they have already
+ * answered, and their way through is a different browser or a private window.
  */
 
 const KEY_PREFIX = 'surveyAnswered:'
@@ -91,20 +95,5 @@ export function markAnswered(surveyId: string): void {
     window.localStorage.setItem(keyFor(surveyId), '1')
   } catch {
     // Storage is blocked. The survey stays listed, which is the honest degradation.
-  }
-}
-
-/**
- * Forget the flag, so the survey is offered again.
- *
- * The shared-browser escape, and the reason every surface that acts on the flag also
- * offers this: the flag belongs to a device, never to a person, so the product must take
- * "that was not me" for an answer.
- */
-export function forgetAnswered(surveyId: string): void {
-  try {
-    window.localStorage.removeItem(keyFor(surveyId))
-  } catch {
-    // Nothing to forget if storage was never writable.
   }
 }

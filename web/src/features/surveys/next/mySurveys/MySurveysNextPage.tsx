@@ -1,4 +1,4 @@
-import { useCallback, useState, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import { ArrowRight, Check, ClipboardList, EyeOff, Inbox, LayoutGrid, Lock } from 'lucide-react'
 import { PageTopBar } from '../../../../components/layout'
@@ -13,7 +13,7 @@ import {
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { calendarDay } from '../../../../lib/calendarDay'
 import { useCompanyScope } from '../../../../company-context'
-import { forgetAnswered, hasAnswered } from '../../respondReceipt'
+import { hasAnswered } from '../../respondReceipt'
 import { useMySurveysModel } from './useMySurveysModel'
 import {
   belongsToNoCompany,
@@ -77,8 +77,7 @@ import {
  *
  * The limit is stated on the page rather than hidden, in the card at the foot and again
  * beside the heading: this is one browser's memory, and another browser offers the survey
- * again. Every row carries "¿No fue usted? Devolverla a la lista", because the flag belongs
- * to a device and never to a person.
+ * again.
  *
  * ## "Cerradas" survives the redesign
  *
@@ -106,20 +105,6 @@ export default function MySurveysNextPage() {
 function SurveyList({ eyebrowRoleKey }: { eyebrowRoleKey: string | null }) {
   const { t } = useTranslation()
   const { status, surveys, error, departmentName, reload } = useMySurveysModel()
-
-  /**
-   * A re-render, and nothing else. `hasAnswered` reads `localStorage`, which React cannot
-   * subscribe to, so putting a row back has to re-run the grouping explicitly. The value is
-   * deliberately not destructured: calling the setter is the whole mechanism, and a counter
-   * nothing reads would only invite somebody to read it. Nothing is fetched again — the
-   * payload already holds the row, which is why the rows are grouped rather than filtered.
-   */
-  const [, regroup] = useState(0)
-
-  const putBack = useCallback((surveyId: string) => {
-    forgetAnswered(surveyId)
-    regroup((value) => value + 1)
-  }, [])
 
   // One clock reading for the whole render, so every row agrees about which day today is.
   const { open, answeredHere, closed } = groupMySurveys(surveys, Date.now(), hasAnswered)
@@ -192,7 +177,7 @@ function SurveyList({ eyebrowRoleKey }: { eyebrowRoleKey: string | null }) {
                   </div>
                   <ul className="m-0 flex list-none flex-col gap-3 p-0">
                     {answeredHere.map((row) => (
-                      <AnsweredHereRow key={row.id} row={row} onPutBack={() => putBack(row.id)} />
+                      <AnsweredHereRow key={row.id} row={row} />
                     ))}
                   </ul>
                 </section>
@@ -353,14 +338,13 @@ function ClosedSurveyRow({ row }: { row: MySurveyRow }) {
  * A survey this browser remembers answering: the open row's quieter twin.
  *
  * Deliberately shaped like `ClosedSurveyRow` and not like `OpenSurveyRow` — no accent, no
- * countdown chip, no "Responder ahora". The one action is the correction, because the only
- * reader who needs an action here is the one for whom the flag is wrong.
+ * countdown chip, no "Responder ahora", and no action at all. A row here is finished.
  *
  * The chip says "on this device" rather than "answered", because that is the part this page
  * can actually vouch for. `SurveyResponse.UserId` is NULL on an anonymous response, so the
  * platform does not know this reader answered and the page must not imply that it does.
  */
-function AnsweredHereRow({ row, onPutBack }: { row: MySurveyRow; onPutBack: () => void }) {
+function AnsweredHereRow({ row }: { row: MySurveyRow }) {
   const { t, locale } = useTranslation()
 
   return (
@@ -395,9 +379,6 @@ function AnsweredHereRow({ row, onPutBack }: { row: MySurveyRow; onPutBack: () =
         </div>
       </div>
       <Chip tone="neutral" icon={<Check aria-hidden="true" />} label={t('employee.next.answeredHereChip')} />
-      <Button type="button" variant="outline" size="canvas" onClick={onPutBack}>
-        {t('employee.next.answeredHereUndo')}
-      </Button>
     </li>
   )
 }
