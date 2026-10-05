@@ -14,6 +14,7 @@
  * Signup is rate-limited with login (20/min per IP), hence the 3.1s gap.
  */
 import { parseArgs } from 'node:util'
+import { pathToFileURL } from 'node:url'
 
 const { values } = parseArgs({
   options: {
@@ -21,7 +22,9 @@ const { values } = parseArgs({
     superEmail: { type: 'string', default: 'fede.super@acme.test' },
     superPassword: { type: 'string', default: 'Local1234!' },
     password: { type: 'string', default: 'Demo1234!' },
-    domain: { type: 'string', default: 'meridiano.test' },
+    profile: { type: 'string', default: 'meridiano' },
+    domain: { type: 'string' },
+    'company-name': { type: 'string' },
     phase: { type: 'string', default: 'company' },
     loginGap: { type: 'string', default: '3.1' },
   },
@@ -45,43 +48,144 @@ const put = (url, body, token) => json(url, { method: 'PUT', body: JSON.stringif
 const login = async (email, password) => (await post(`${API}/auth/login`, { email, password })).token
 const day = (offset) => { const d = new Date(); d.setDate(d.getDate() + offset); return d.toISOString() }
 
-const COMPANY = { name: 'Grupo Meridiano S.A.', emailDomain: values.domain, industry: 'Servicios', size: 'medium', country: 'Costa Rica' }
+/**
+ * The tenants this script can build. **Meridiano is unchanged, value for value** — it is the
+ * one every screenshot, runbook and demo script in the repo already names, so a new profile
+ * must not move it.
+ *
+ * A profile's `headcount` is the whole reason a demo reads as a product rather than as a wall
+ * of "protegido": **every department must hold at least 5 people**, because the floor is
+ * applied at write time against the department's population
+ * (`SurveyResponsePrivacy.DepartmentFor`), so a department of 4 records no department at all
+ * and can never disclose, however many people answer. `seed-demo-company.test.mjs` asserts it.
+ */
+export const PROFILES = {
+  meridiano: {
+    domain: 'meridiano.test',
+    company: { name: 'Grupo Meridiano S.A.', industry: 'Servicios', size: 'medium', country: 'Costa Rica' },
+    departments: [
+      ['Ingeniería', 'Desarrollo de producto y plataforma'],
+      ['Finanzas', 'Finanzas y contabilidad'],
+      ['Operaciones', 'Operaciones y logística'],
+      ['Personas', 'Talento humano y cultura'],
+      ['Ventas', 'Equipos comerciales regionales'],
+    ],
+    headcount: { Ingeniería: 10, Finanzas: 5, Operaciones: 6, Personas: 6, Ventas: 6 },
+    admin: ['Ana Rojas', 'ana.rojas'],
+    leaders: [
+      ['Luis Mora', 'luis.mora', 'leader', 'Ingeniería'],
+      ['Carla Jiménez', 'carla.jimenez', 'leader', 'Finanzas'],
+      ['Marco Castro', 'marco.castro', 'leader', 'Operaciones'],
+      ['Elena Quesada', 'elena.quesada', 'leader', 'Personas'],
+      ['Pablo Solís', 'pablo.solis', 'leader', 'Ventas'],
+      ['Sofía Vargas', 'sofia.vargas', 'supervisor', 'Ingeniería'],
+    ],
+    demoEmployee: ['Diego Solano', 'diego.solano', 'employee', 'Ingeniería'],
+    plans: [
+      ['Programa de reconocimiento entre pares', 'Peer recognition programme', 'Personas', 20, 'high'],
+      ['Reducir la carga de trabajo en Operaciones', 'Reduce the workload in Operations', 'Operaciones', 35, 'high'],
+      ['Plan de desarrollo de carrera en Ingeniería', 'Career development plan in Engineering', 'Ingeniería', 60, 'medium'],
+      ['Reuniones abiertas con la dirección', 'Open meetings with leadership', null, 45, 'medium'],
+    ],
+  },
 
-const DEPARTMENTS = [
-  ['Ingeniería', 'Desarrollo de producto y plataforma'],
-  ['Finanzas', 'Finanzas y contabilidad'],
-  ['Operaciones', 'Operaciones y logística'],
-  ['Personas', 'Talento humano y cultura'],
-  ['Ventas', 'Equipos comerciales regionales'],
-]
+  /**
+   * A demonstration tenant for PROCOMER, the Costa Rican trade-promotion agency.
+   *
+   * **The name says "Demostración" and the domain is `.test` on purpose.** A tenant in
+   * production that is indistinguishable from the real client is a tenant whose fabricated
+   * results get read as real ones later; and `.test` is reserved by RFC 2606, so no mail this
+   * tenant could ever emit can reach a real inbox. Override both with `--company-name` and
+   * `--domain` if the demo needs it, understanding what each one buys.
+   *
+   * The units are plausible for a trade-promotion agency rather than taken from Procomer's own
+   * chart, which we do not have — Diego owes the preliminary organisational structure. They are
+   * what Procomer's documents call **nodos**; the product calls them departments.
+   */
+  procomer: {
+    domain: 'procomer.test',
+    company: { name: 'PROCOMER — Demostración', industry: 'Servicios', size: 'medium', country: 'Costa Rica' },
+    departments: [
+      ['Promoción Comercial', 'Promoción de exportaciones y desarrollo de mercados'],
+      ['Ventanilla Única de Comercio Exterior', 'Trámites y servicios al exportador'],
+      ['Inversión y Encadenamientos', 'Atracción de inversión y encadenamientos productivos'],
+      ['Servicios Corporativos', 'Administración, finanzas y gestión de personas'],
+      ['Tecnologías de Información', 'Plataformas y servicios digitales'],
+    ],
+    headcount: {
+      'Promoción Comercial': 10,
+      'Ventanilla Única de Comercio Exterior': 8,
+      'Inversión y Encadenamientos': 7,
+      'Servicios Corporativos': 6,
+      'Tecnologías de Información': 5,
+    },
+    admin: ['Marcela Induni', 'marcela.induni'],
+    leaders: [
+      ['Rodrigo Esquivel', 'rodrigo.esquivel', 'leader', 'Promoción Comercial'],
+      ['Alejandra Bonilla', 'alejandra.bonilla', 'leader', 'Ventanilla Única de Comercio Exterior'],
+      ['Fernando Lizano', 'fernando.lizano', 'leader', 'Inversión y Encadenamientos'],
+      ['Gabriela Vega', 'gabriela.vega', 'leader', 'Servicios Corporativos'],
+      ['Mauricio Rojas', 'mauricio.rojas', 'leader', 'Tecnologías de Información'],
+      ['Tatiana Núñez', 'tatiana.nunez', 'supervisor', 'Promoción Comercial'],
+    ],
+    demoEmployee: ['Andrea Picado', 'andrea.picado', 'employee', 'Promoción Comercial'],
+    plans: [
+      ['Fortalecer el reconocimiento al desempeño', 'Strengthen performance recognition', 'Servicios Corporativos', 20, 'high'],
+      ['Equilibrar la carga en Ventanilla Única', 'Balance the workload in the single window', 'Ventanilla Única de Comercio Exterior', 35, 'high'],
+      ['Ruta de desarrollo para Promoción Comercial', 'Development path for trade promotion', 'Promoción Comercial', 60, 'medium'],
+      ['Espacios abiertos con la dirección', 'Open spaces with leadership', null, 45, 'medium'],
+    ],
+  },
+}
 
-/** [name, email local part, role, department]. Employees fill the seed profile: 10/5/6/6/6. */
+export function profileFor(name) {
+  const profile = PROFILES[name]
+  if (!profile) throw new Error(`unknown --profile ${name} (have: ${Object.keys(PROFILES).join(', ')})`)
+  return profile
+}
+
+const PROFILE = profileFor(values.profile)
+const DOMAIN = values.domain ?? PROFILE.domain
+const COMPANY = { ...PROFILE.company, name: values['company-name'] ?? PROFILE.company.name, emailDomain: DOMAIN }
+const DEPARTMENTS = PROFILE.departments
+const ADMIN_LOCAL = PROFILE.admin[1]
+
 const PEOPLE = [
-  ['Ana Rojas', 'ana.rojas', 'company_admin', null],
-  ['Luis Mora', 'luis.mora', 'leader', 'Ingeniería'],
-  ['Carla Jiménez', 'carla.jimenez', 'leader', 'Finanzas'],
-  ['Marco Castro', 'marco.castro', 'leader', 'Operaciones'],
-  ['Elena Quesada', 'elena.quesada', 'leader', 'Personas'],
-  ['Pablo Solís', 'pablo.solis', 'leader', 'Ventas'],
-  ['Sofía Vargas', 'sofia.vargas', 'supervisor', 'Ingeniería'],
+  [PROFILE.admin[0], PROFILE.admin[1], 'company_admin', null],
+  ...PROFILE.leaders,
 ]
 const FIRST = ['María', 'José', 'Laura', 'Andrés', 'Valeria', 'Daniel', 'Camila', 'Esteban', 'Paula', 'Gabriel', 'Natalia', 'Sebastián', 'Fernanda', 'Alejandro', 'Mariana', 'Ricardo', 'Isabel', 'Javier', 'Adriana', 'Rodrigo', 'Carolina', 'Felipe', 'Daniela', 'Óscar', 'Lucía', 'Mauricio', 'Verónica', 'Ignacio', 'Patricia', 'Jorge', 'Silvia', 'Roberto', 'Melissa']
 const LAST = ['Chaves', 'Alvarado', 'Salas', 'Brenes', 'Campos', 'Zúñiga', 'Ramírez', 'Arias', 'Herrera', 'Montero', 'Céspedes', 'Villalobos', 'Umaña', 'Guzmán', 'Barrantes', 'Sandoval', 'Méndez', 'Cordero', 'Fallas', 'Ulate', 'Araya', 'Segura', 'Bolaños', 'Madrigal', 'Espinoza', 'Retana', 'Coto', 'Marín', 'Porras', 'Vindas', 'Aguilar', 'Pacheco', 'Leiva']
-const HEADCOUNT = { Ingeniería: 10, Finanzas: 5, Operaciones: 6, Personas: 6, Ventas: 6 }
+const HEADCOUNT = PROFILE.headcount
+/**
+ * The nth generated employee's display name and email local part.
+ *
+ * `+ floor(n / LAST.length)` shifts the surname by one on each wrap of the first-name list.
+ * Without it the (first, last) PAIR repeats with period 33 — both lists are 33 long and 7 is
+ * coprime to 33 — so the 34th employee regenerates the 1st one's name and `POST /auth/signup`
+ * answers **409 User with this email already exists**, half-way through seeding. Meridiano has
+ * exactly 33 employees and never hit it; the first profile with more did, immediately. The
+ * term is 0 for every n < 33, so Meridiano's addresses are unchanged.
+ */
+export function personAt(n) {
+  const first = FIRST[n % FIRST.length]
+  const last = LAST[(n * 7 + Math.floor(n / LAST.length)) % LAST.length]
+  return { name: `${first} ${last}`, local: `${first}.${last}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() }
+}
+
 let n = 0
 for (const [department, count] of Object.entries(HEADCOUNT)) {
   for (let i = 0; i < count; i++, n++) {
-    const first = FIRST[n % FIRST.length]; const last = LAST[(n * 7) % LAST.length]
-    const local = `${first}.${last}`.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
-    PEOPLE.push([`${first} ${last}`, local, 'employee', department])
+    const { name, local } = personAt(n)
+    PEOPLE.push([name, local, 'employee', department])
   }
 }
 /** Created in the `content` phase so `seed-surveys.mjs` never resets this password. */
-const DEMO_EMPLOYEE = ['Diego Solano', 'diego.solano', 'employee', 'Ingeniería']
+const DEMO_EMPLOYEE = PROFILE.demoEmployee
 
 async function signupOrFind(person, users, superToken, companyId) {
   const [name, local, role, department] = person
-  const email = `${local}@${values.domain}`
+  const email = `${local}@${DOMAIN}`
   let user = users.find((u) => u.email === email)
   if (!user) {
     await post(`${API}/auth/signup`, { name, email, password: values.password })
@@ -97,7 +201,7 @@ async function signupOrFind(person, users, superToken, companyId) {
 async function phaseCompany() {
   const superToken = await login(values.superEmail, values.superPassword)
   const companies = await json(`${API}/admin/companies`, {}, superToken)
-  let company = (companies.companies ?? companies).find((c) => c.emailDomain === values.domain)
+  let company = (companies.companies ?? companies).find((c) => c.emailDomain === DOMAIN)
   if (!company) { company = await post(`${API}/admin/companies`, COMPANY, superToken); log(`company created: ${company.name} (${company.id})`) }
   else log(`company exists: ${company.name} (${company.id})`)
   const companyId = company.id
@@ -117,23 +221,18 @@ async function phaseCompany() {
     if (user.role !== role) await put(`${API}/admin/users/${user.id}/role`, { role }, superToken)
     if ((user.departmentId ?? null) !== departmentId) await put(`${API}/admin/users/${user.id}`, { departmentId }, superToken)
   }
-  log(`people in place: ${PEOPLE.length}. Next: node scripts/seed-surveys.mjs --email ana.rojas@${values.domain} --password ${values.password}`)
+  log(`people in place: ${PEOPLE.length}. Next: node scripts/seed-surveys.mjs --email ${ADMIN_LOCAL}@${DOMAIN} --password ${values.password}`)
 }
 
 async function phaseContent() {
-  const admin = await login(`ana.rojas@${values.domain}`, values.password)
+  const admin = await login(`${ADMIN_LOCAL}@${DOMAIN}`, values.password)
   const profile = await json(`${API}/profile`, {}, admin)
   const companyId = profile.companyId
   const { departments } = await json(`${API}/admin/departments?companyId=${companyId}`, {}, admin)
   const dept = (name) => departments.find((d) => d.name === name)?.id ?? null
 
   const { actionPlans } = await json(`${API}/action-plans?companyId=${companyId}`, {}, admin)
-  const PLANS = [
-    ['Programa de reconocimiento entre pares', 'Peer recognition programme', 'Personas', 20, 'high'],
-    ['Reducir la carga de trabajo en Operaciones', 'Reduce the workload in Operations', 'Operaciones', 35, 'high'],
-    ['Plan de desarrollo de carrera en Ingeniería', 'Career development plan in Engineering', 'Ingeniería', 60, 'medium'],
-    ['Reuniones abiertas con la dirección', 'Open meetings with leadership', null, 45, 'medium'],
-  ]
+  const PLANS = PROFILE.plans
   for (const [es, en, department, due, priority] of PLANS) {
     if (actionPlans.some((p) => p.title === es || p.title === en)) continue
     await post(`${API}/action-plans`, { title: { en, es }, description: { en: `Follows the Q3 finding for ${department ?? 'the whole company'}.`, es: `Atiende el hallazgo del T3 en ${department ?? 'toda la empresa'}.` }, companyId, departmentId: dept(department), dueDate: day(due), priority, tags: ['clima', 'demo'] }, admin)
@@ -179,9 +278,13 @@ async function phaseContent() {
   const { user, role, department } = await signupOrFind(DEMO_EMPLOYEE, users, superToken, companyId)
   if (user.role !== role) await put(`${API}/admin/users/${user.id}/role`, { role }, superToken)
   if (user.departmentId !== dept(department)) await put(`${API}/admin/users/${user.id}`, { departmentId: dept(department) }, superToken)
-  log(`demo employee ready: diego.solano@${values.domain} / ${values.password}`)
+  log(`demo employee ready: ${DEMO_EMPLOYEE[1]}@${DOMAIN} / ${values.password}`)
 }
 
-if (values.phase === 'company') await phaseCompany()
-else if (values.phase === 'content') await phaseContent()
-else throw new Error(`unknown --phase ${values.phase}`)
+// Guarded like `import-climate-workbook.mjs`, so `seed-demo-company.test.mjs` can import the
+// profiles without seeding anything.
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+  if (values.phase === 'company') await phaseCompany()
+  else if (values.phase === 'content') await phaseContent()
+  else throw new Error(`unknown --phase ${values.phase}`)
+}
