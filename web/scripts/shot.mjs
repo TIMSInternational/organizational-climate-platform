@@ -52,6 +52,7 @@ import {
   classifyRequest,
   compileFixtures,
   matchFixture,
+  parseStoragePairs,
   waitForServer,
   nextViewportHeight,
   SCROLL_TOLERANCE,
@@ -97,6 +98,14 @@ const { values, positionals } = parseArgs({
     // A button to press before the capture, by its accessible name; repeatable. For a state
     // only a user's press reaches (a recovered draft, an open menu) -- never to fill a form.
     click: { type: 'string', multiple: true },
+    // One more `localStorage` entry, `key=value`, repeatable. For a screen whose state
+    // lives in the browser rather than in a payload or a token -- the first being the
+    // answered-on-this-device flag (`surveys/respondReceipt.ts`), which decides whether
+    // `/surveys/my` draws its "answered here" group and whether the respond form offers
+    // the survey at all. Without this such a screen could only be photographed in one of
+    // its two states, which is how a collapsed section ships: happy-dom computes no
+    // layout, so the suite cannot see it either.
+    storage: { type: 'string', multiple: true },
     viewport: { type: 'boolean', default: false },
     // Write no token at all, for the surfaces whose whole subject is not having one:
     // `/s/:token`, `/survey-invitations/:token`, `/shared/reports/:token`, `/login`.
@@ -138,6 +147,9 @@ Options:
                      a free port claimed from the OS, so two worktrees
                      screenshotting at once cannot photograph each other
   --settle <ms>      extra wait after network idle (default 400)
+  --storage k=v      one more localStorage entry, repeatable. For a screen whose
+                     state lives in the browser, e.g.
+                     --storage surveyAnswered:<survey-id>=1
   --viewport         clip to the viewport instead of capturing the full page
   --signed-out       write no token, for the token-addressed public pages and
                      /login. Anything behind RequireAuth redirects to /login
@@ -166,6 +178,10 @@ if (theme !== 'light' && theme !== 'dark') fail(`--theme must be light or dark, 
 if (!Number.isFinite(width) || !Number.isFinite(height)) fail('--width and --height must be numbers')
 if (!Number.isFinite(scale) || scale <= 0) fail('--scale must be a positive number')
 if (!Number.isFinite(settleMs)) fail('--settle must be a number')
+
+const storagePairs = parseStoragePairs(values.storage)
+if (storagePairs.error) fail(storagePairs.error)
+const extraStorage = storagePairs.entries
 
 const fixturesPath = values.fixtures
   ? resolve(process.cwd(), values.fixtures)
@@ -276,7 +292,7 @@ async function main() {
     })
 
     await context.addInitScript(
-      ([keys, token, themeValue, locale, companyId]) => {
+      ([keys, token, themeValue, locale, companyId, extraStorage]) => {
         try {
           // `null` is `--signed-out`: no token is written, and `getToken()` answers
           // null exactly as it does for the respondent this product mails a link to.
@@ -285,6 +301,8 @@ async function main() {
           localStorage.setItem(keys.theme, themeValue)
           localStorage.setItem(keys.locale, locale)
           localStorage.setItem(keys.company, companyId)
+          // Last, so `--storage` can override one of the above when that is the subject.
+          for (const [key, value] of extraStorage) localStorage.setItem(key, value)
         } catch {
           // about:blank has an opaque origin and no usable storage; the real
           // navigation that follows runs this again with a real one.
@@ -303,6 +321,7 @@ async function main() {
         theme,
         values.lang,
         values.company,
+        extraStorage,
       ],
     )
 

@@ -88,6 +88,7 @@ server — producing a perfectly plausible PNG of a different codebase. If you p
 | `--server <url>` | — | Reuse a dev server instead of starting one. It must have been started with `VITE_API_BASE_URL=http://api.shot.invalid`. |
 | `--port <n>` | `auto` | Port for the dev server `shot` starts. `auto` claims a free one from the OS; a port you name is proved free before vite is spawned, and the run fails rather than screenshotting whatever already held it. |
 | `--settle <ms>` | `400` | Extra wait after network idle and web fonts. |
+| `--storage k=v` | — | One more `localStorage` entry, repeatable, written after the token/theme/locale so it can override them. For a screen whose state lives in the browser rather than in a payload: `--storage surveyAnswered:<survey-id>=1` is what draws `/surveys/my`'s "answered on this device" group and what makes the respond form offer its already-answered state. |
 | `--viewport` | off | Clip to the viewport instead of capturing the full page. |
 
 ### `/login` pins its own theme, so shoot it dark

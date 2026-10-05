@@ -255,6 +255,18 @@ export interface SupervisorInput {
    * dashboard endpoint, its own, and `/surveys/my` is not one.
    */
   mySurveys: readonly MySurveyListItem[] | null
+  /**
+   * Whether **this browser** remembers answering a survey (`surveys/respondReceipt.ts`).
+   *
+   * Injected rather than read here, because this module is pure. A supervisor is also a
+   * respondent, and "Tus tareas" is the fourth surface that offers an anonymous survey the
+   * server cannot tell has been answered — it stores no user id, so `/surveys/my` keeps
+   * listing it. Leaving this one unfiltered would have a leader's own dashboard disagree
+   * with the two lists she can reach from it.
+   *
+   * Defaults to "remembers nothing", which is what a browser with storage blocked reports.
+   */
+  answeredHere?: (surveyId: string) => boolean
   /** `GET /api/mis-tareas`, or why it was not read. */
   misTareas: TrackingRead<PlanAccion[]>
   trackingOn: boolean
@@ -287,8 +299,10 @@ export function composeSupervisorDashboard(input: SupervisorInput): SupervisorDa
     plans = { source: 'off' }
   }
 
+  const answeredHere = input.answeredHere ?? (() => false)
+
   const tasks: SupervisorTask[] = [
-    ...(mySurveys ?? []).map(
+    ...(mySurveys ?? []).filter((survey) => !answeredHere(survey.id)).map(
       (survey): SupervisorTask => ({ kind: 'answer-survey', id: survey.id, name: survey.title, dueOn: survey.endDate }),
     ),
     ...(plans.source === 'tracking' ? plans.plans : []).map(

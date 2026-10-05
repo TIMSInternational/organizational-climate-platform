@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, cleanup, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import MySurveysNextPage from './MySurveysNextPage'
 import { TranslationProvider } from '../../../../i18n'
@@ -11,6 +12,7 @@ import { setToken, clearToken } from '../../../../auth/token'
 import { tokenFor } from '../../../../test/jwtFixture'
 import type { MySurveyListItem } from '../../api/surveys'
 import type { EmployeeDashboard } from '../../../dashboard/api/dashboard'
+import { hasAnswered, markAnswered } from '../../respondReceipt'
 
 /**
  * `/surveys/my`, against the payload shapes the local API returned for Grupo Meridiano
@@ -394,5 +396,145 @@ describe('MySurveysNextPage — an account that belongs to no company', () => {
     renderPage({ role: 'super_admin', companyId: '' })
 
     expect(screen.getByText(es('employee.next.noCompanyTitle'))).toBeTruthy()
+  })
+})
+
+/**
+ * The answered-on-this-device group.
+ *
+ * The page's own doc comment rules out the artboard's "Ya respondidas" receipt, because no
+ * endpoint carries either fact and inventing a survey-history read "would put a per-person
+ * answer log on the one surface in the product that must not accumulate one". That ruling
+ * is why this group is browser-local: nothing here reaches the server, so the platform
+ * still does not know who answered. What it buys is the page no longer offering a survey
+ * this reader has already answered — which, on an anonymous survey, `SurveyQueries`
+ * deliberately cannot do, since it stores no user id to filter on.
+ */
+describe('MySurveysNextPage answered on this device', () => {
+  const ANSWERED = 'answered-here-id'
+  const OWED = 'still-owed-id'
+
+  function twoSurveys() {
+    return serves({
+      surveys: [
+        item({ id: ANSWERED, title: 'Encuesta ya respondida' }),
+        item({ id: OWED, title: 'Encuesta pendiente' }),
+      ],
+    })
+  }
+
+  it('leaves an unanswered survey under “Para responder”', async () => {
+    twoSurveys()
+    renderPage()
+
+    const heading = await screen.findByRole('heading', { name: new RegExp(es('employee.next.toAnswerHeading')) })
+    const section = heading.closest('section') as HTMLElement
+    expect(within(section).getByText('Encuesta pendiente')).toBeTruthy()
+    expect(within(section).getByText('Encuesta ya respondida')).toBeTruthy()
+  })
+
+  it('moves a survey this browser answered out of “Para responder” into its own group', async () => {
+    markAnswered(ANSWERED)
+    twoSurveys()
+    renderPage()
+
+    const toAnswer = (
+      await screen.findByRole('heading', { name: new RegExp(es('employee.next.toAnswerHeading')) })
+    ).closest('section') as HTMLElement
+    expect(within(toAnswer).getByText('Encuesta pendiente')).toBeTruthy()
+    expect(within(toAnswer).queryByText('Encuesta ya respondida')).toBeNull()
+
+    const answered = screen
+      .getByRole('heading', { name: new RegExp(es('employee.next.answeredHereHeading')) })
+      .closest('section') as HTMLElement
+    expect(within(answered).getByText('Encuesta ya respondida')).toBeTruthy()
+  })
+
+  /**
+   * The tally beside "Para responder" is `open.length`, so it has to fall with the row.
+   * A heading that still counted the answered survey would be the page printing a number
+   * its own list disagrees with.
+   */
+  it('counts only what is left to answer beside the heading', async () => {
+    markAnswered(ANSWERED)
+    twoSurveys()
+    renderPage()
+
+    const heading = await screen.findByRole('heading', { name: new RegExp(es('employee.next.toAnswerHeading')) })
+    expect(heading.querySelector('.font-mono')?.textContent).toBe('1')
+  })
+
+  /**
+   * The chip says "on this device", not "answered". `SurveyResponse.UserId` is NULL on an
+   * anonymous response, so the platform does not know this reader answered and the page
+   * must not imply that it does.
+   */
+  it('qualifies the group as this browser’s memory, not the platform’s record', async () => {
+    markAnswered(ANSWERED)
+    twoSurveys()
+    renderPage()
+
+    const answered = (
+      await screen.findByRole('heading', { name: new RegExp(es('employee.next.answeredHereHeading')) })
+    ).closest('section') as HTMLElement
+    expect(within(answered).getByText(es('employee.next.answeredHereNote'))).toBeTruthy()
+    expect(within(answered).getByText(es('employee.next.answeredHereChip'))).toBeTruthy()
+  })
+
+  /** Still open, so it says when it closes — never `closedMeta`'s "Cerró el …". */
+  it('says when the answered survey closes, not that it has closed', async () => {
+    markAnswered(ANSWERED)
+    twoSurveys()
+    renderPage()
+
+    const answered = (
+      await screen.findByRole('heading', { name: new RegExp(es('employee.next.answeredHereHeading')) })
+    ).closest('section') as HTMLElement
+    expect(within(answered).getByText(/^Cierra el /)).toBeTruthy()
+    expect(answered.textContent).not.toMatch(/Cerró el/)
+  })
+
+  /**
+   * The escape, and the reason it exists: the flag belongs to a device and never to a
+   * person, so on a shared browser it outlives whoever answered.
+   */
+  it('puts the row back under “Para responder” when the reader says it was not them', async () => {
+    markAnswered(ANSWERED)
+    twoSurveys()
+    renderPage()
+
+    const answered = (
+      await screen.findByRole('heading', { name: new RegExp(es('employee.next.answeredHereHeading')) })
+    ).closest('section') as HTMLElement
+    await userEvent.click(
+      within(answered).getByRole('button', { name: es('employee.next.answeredHereUndo') }),
+    )
+
+    const toAnswer = screen
+      .getByRole('heading', { name: new RegExp(es('employee.next.toAnswerHeading')) })
+      .closest('section') as HTMLElement
+    expect(within(toAnswer).getByText('Encuesta ya respondida')).toBeTruthy()
+    expect(hasAnswered(ANSWERED)).toBe(false)
+    // The group is gone with its only row, rather than left as an empty heading.
+    expect(
+      screen.queryByRole('heading', { name: new RegExp(es('employee.next.answeredHereHeading')) }),
+    ).toBeNull()
+  })
+
+  /**
+   * The honesty of the closing card. Its claim was "the platform does not know whether you
+   * answered them, so they stay under 'To answer' until they close" — the second half of
+   * which this change makes false. The first half is still true and is the important half,
+   * so the copy now carries both it and the limit: another browser offers the survey again.
+   */
+  it('still tells the reader the platform keeps no record, and that the memory is local', async () => {
+    twoSurveys()
+    renderPage()
+    await screen.findByText('Encuesta pendiente')
+
+    const card = document.querySelector('[data-slot="my-surveys-not-kept"]') as HTMLElement
+    expect(within(card).getByText(es('employee.next.notKeptAnonymousBody'))).toBeTruthy()
+    expect(es('employee.next.notKeptAnonymousBody')).toMatch(/no sabe si usted las respondió/)
+    expect(es('employee.next.notKeptAnonymousBody')).toMatch(/no sale de su dispositivo/)
   })
 })

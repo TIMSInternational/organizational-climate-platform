@@ -7,6 +7,8 @@ import { TranslationProvider } from '../../../i18n'
 import { CATALOGUES, LOCALE_STORAGE_KEY } from '../../../i18n/locale'
 import { createTranslator } from '../../../i18n/translate'
 import type { SurveyRespondQuestion, SurveyRespondView } from '../api/surveyResponses'
+import { hasAnswered, markAnswered } from '../respondReceipt'
+import { readSessionId } from '../respondSession'
 
 /**
  * The shipped wording, read from the catalogue the component reads.
@@ -1027,5 +1029,118 @@ describe('SurveyRespondForm confirmation', () => {
     })
     expect(screen.getByText(/deliberadamente: Edad, Tiempo de laborar en TIMS \(años\)/)).toBeTruthy()
     expect(screen.queryByText(/tiempo_de_laborar_en_tims_anos/)).toBeNull()
+  })
+})
+
+/**
+ * The browser-local answered flag (`respondReceipt.ts`), and why the form is where it is
+ * written and first acted on.
+ *
+ * An anonymous survey can be answered repeatedly by construction — the ladder stops at
+ * `opened`, the server's idempotency key is the session id, and this form **deletes** that
+ * session id on completion so a shared browser cannot read the answers back. The flag is
+ * what is left to stop the accident, and the emailed link lands here rather than on either
+ * list, so this is the surface that has to act on it.
+ */
+describe('SurveyRespondForm answered-on-this-device flag', () => {
+  async function completeOne() {
+    respondWith(view({ questions: [question()] }), { answeredQuestionCount: 1 })
+    renderForm()
+    await userEvent.click(await screen.findByRole('radio', { name: 'Muy de acuerdo' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Enviar mis respuestas' }))
+    await screen.findByText('Qué pasa ahora')
+  }
+
+  /**
+   * Both halves of completion, asserted together because the product depends on their
+   * difference: the resume credential dies so the next person at a shared browser cannot
+   * read these answers back, and the flag survives so the survey stops being offered.
+   */
+  it('records the flag on completion and still drops the resume credential', async () => {
+    expect(hasAnswered('s1')).toBe(false)
+
+    await completeOne()
+
+    expect(hasAnswered('s1')).toBe(true)
+    expect(readSessionId('s1')).toBeNull()
+  })
+
+  /** The respondent's own confirmation wins over the flag their submission just wrote. */
+  it('shows the confirmation, not the flag, to the respondent who just answered', async () => {
+    await completeOne()
+
+    expect(screen.getByText(copy.es('surveyRespond.thankYouTitle'))).toBeTruthy()
+    expect(screen.queryByText(copy.es('surveyRespond.answeredOnThisDeviceTitle'))).toBeNull()
+  })
+
+  it('offers the flag instead of the form when this browser already answered', async () => {
+    markAnswered('s1')
+    respondWith(view({ questions: [question()] }))
+    renderForm()
+
+    expect(await screen.findByText(copy.es('surveyRespond.answeredOnThisDeviceTitle'))).toBeTruthy()
+    // The form itself is not rendered: the question is not on the page to be answered.
+    expect(screen.queryByRole('radio', { name: 'Muy de acuerdo' })).toBeNull()
+  })
+
+  /**
+   * The wording is its own, not `alreadyCompleted`'s. That one says "answering again would
+   * not replace them", which is true when the SERVER matched a complete response — it
+   * returns the same response id and writes nothing. Said here it would be false
+   * reassurance twice over: the platform cannot confirm the answers arrived, and answering
+   * again stores a second response.
+   */
+  it('does not claim the answers were received, or that answering again is harmless', async () => {
+    markAnswered('s1')
+    respondWith(view({ questions: [question()] }))
+    renderForm()
+    await screen.findByText(copy.es('surveyRespond.answeredOnThisDeviceTitle'))
+
+    expect(screen.queryByText(copy.es('surveyRespond.alreadyCompletedBody'))).toBeNull()
+    expect(screen.getByText(copy.es('surveyRespond.answeredOnThisDeviceBody'))).toBeTruthy()
+  })
+
+  /**
+   * The escape is not optional. The flag belongs to a device and never to a person, so on
+   * a shared browser it outlives whoever answered; a respondent who is not that person has
+   * to be able to say so and carry on.
+   */
+  it('gives the form back, and forgets the flag, when the reader says it was not them', async () => {
+    markAnswered('s1')
+    respondWith(view({ questions: [question()] }))
+    renderForm()
+    await screen.findByText(copy.es('surveyRespond.answeredOnThisDeviceTitle'))
+
+    await userEvent.click(screen.getByRole('button', { name: copy.es('surveyRespond.answerAgain') }))
+
+    expect(await screen.findByRole('radio', { name: 'Muy de acuerdo' })).toBeTruthy()
+    expect(hasAnswered('s1')).toBe(false)
+  })
+
+  /**
+   * The server's own verdict outranks the flag, and says a different thing: `inProgress`
+   * being complete is the platform stating it holds the response, which it can only do on
+   * a survey that records who answered.
+   */
+  it('prefers the server’s already-answered verdict over the flag', async () => {
+    markAnswered('s1')
+    respondWith(
+      view({
+        questions: [question()],
+        inProgress: {
+          responseId: 'r1',
+          sessionId: 'session-1',
+          isComplete: true,
+          language: 'es',
+          startTime: '2026-09-11T03:00:00Z',
+          completionTime: '2026-09-11T03:20:00Z',
+          answers: [],
+        },
+      }),
+    )
+    renderForm()
+
+    expect(await screen.findByText(copy.es('surveyRespond.alreadyCompletedTitle'))).toBeTruthy()
+    expect(screen.queryByText(copy.es('surveyRespond.answeredOnThisDeviceTitle'))).toBeNull()
   })
 })

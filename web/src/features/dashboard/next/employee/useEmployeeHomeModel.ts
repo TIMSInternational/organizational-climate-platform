@@ -3,6 +3,7 @@ import { useTranslation } from '../../../../i18n'
 import { getEmployeeDashboard, getEmployeeLastOutcome } from '../../api/dashboard'
 import { useDashboardData } from '../../useDashboardData'
 import { getSurveyRespondView } from '../../../surveys/api/surveyResponses'
+import { hasAnswered } from '../../../surveys/respondReceipt'
 import { composeEmployeeHome } from './compose'
 import type { EmployeeHomeModel } from './model'
 
@@ -53,7 +54,13 @@ export function useEmployeeHomeModel(): EmployeeHomeState {
   const loadOutcome = useCallback(() => getEmployeeLastOutcome(baseUrl, locale), [baseUrl, locale])
   const outcome = useDashboardData(loadOutcome)
 
-  const leadId = home.data?.pendingSurveys[0]?.id ?? null
+  // The survey the page will actually lead with, which is the first the server listed
+  // that THIS BROWSER does not remember answering. Taken from the same predicate
+  // `composeEmployeeHome` filters by, because this id is what the supplementary
+  // `allowPartialResponses` read is issued for: deriving it from the unfiltered payload
+  // would fetch the setting for a survey the page then does not show, and the composed
+  // lead would silently lose its "save for later" affordance.
+  const leadId = home.data?.pendingSurveys.find((survey) => !hasAnswered(survey.id))?.id ?? null
   const [savable, setSavable] = useState<{ id: string; allows: boolean } | null>(null)
   useEffect(() => {
     if (leadId === null) return
@@ -80,6 +87,7 @@ export function useEmployeeHomeModel(): EmployeeHomeState {
       lastOutcome: outcome.failed ? null : outcome.data,
       leadAllowsSaveForLater: savable !== null && savable.id === leadId ? savable.allows : null,
       asOf,
+      answeredHere: hasAnswered,
     })
   }, [asOf, home.data, leadId, outcome.data, outcome.failed, savable])
 

@@ -4,6 +4,7 @@ import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { getDepartmentAdminDashboard, type DepartmentAdminDashboardResult } from '../../api/dashboard'
 import { useDashboardData, type DashboardData } from '../../useDashboardData'
 import { listMySurveys } from '../../../surveys/api/surveys'
+import { hasAnswered } from '../../../surveys/respondReceipt'
 import { getMisTareas, getTablero } from '../../../tracking/api/trackingApi'
 import { isTrackingEnabled } from '../../../tracking/api/config'
 import { readViewer } from '../../../tracking/next/viewer'
@@ -176,6 +177,7 @@ export function useSupervisorDashboardModel(): TeamDashboardState<SupervisorDash
     return composeSupervisorDashboard({
       department: data.dashboard,
       mySurveys: pending.failed ? null : pending.data,
+      answeredHere: hasAnswered,
       misTareas,
       trackingOn,
       mayRecord: canRecordProgress,

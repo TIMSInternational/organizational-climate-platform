@@ -9,6 +9,7 @@ import { CompanyContextProvider } from '../../../../company-context'
 import { setToken } from '../../../../auth/token'
 import { tokenFor } from '../../../../test/jwtFixture'
 import type { DashboardPendingSurvey, EmployeeDashboard, EmployeeLastOutcome } from '../../api/dashboard'
+import { markAnswered } from '../../../surveys/respondReceipt'
 
 /**
  * The redesigned employee Home, rendered against the payload shapes the local API returned
@@ -568,5 +569,90 @@ describe('EmployeeHomeView', () => {
     const key =
       hour < 12 ? 'employee.greetingMorning' : hour < 18 ? 'employee.greetingAfternoon' : 'employee.greetingEvening'
     expect(await screen.findByRole('heading', { level: 1, name: es(key, { name: 'Carlos Mata' }) })).toBeTruthy()
+  })
+})
+
+/**
+ * Home and the answered-on-this-device flag (`surveys/respondReceipt.ts`).
+ *
+ * Home is where an employee lands and it carries "Responder ahora", so leaving it
+ * unfiltered would leave the repeat the flag guards against fully open — the two lists
+ * would disagree about the same survey. Mounted through the real hook rather than against
+ * a composed model, because the guarantee below is the hook's: which survey the
+ * supplementary `allowPartialResponses` read is issued for.
+ */
+describe('EmployeeHomeView answered on this device', () => {
+  const ANSWERED = '4c9c8c8c-03e1-4033-8224-8c80b242c558'
+  const OWED = '801a81a4-3551-4f08-96f4-d465e05b1605'
+
+  const originalTz = process.env.TZ
+  beforeEach(() => {
+    process.env.TZ = 'America/Costa_Rica'
+    window.localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
+    vi.stubGlobal('fetch', vi.fn())
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date('2026-09-11T03:50:00.000Z'))
+  })
+
+  afterEach(() => {
+    cleanup()
+    window.localStorage.clear()
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
+    process.env.TZ = originalTz
+  })
+
+  function twoPending() {
+    return serves({
+      dashboard: home({
+        pendingSurveyCount: 2,
+        pendingSurveys: [
+          survey({ id: ANSWERED, title: 'Encuesta ya respondida' }),
+          survey({ id: OWED, title: 'Encuesta pendiente' }),
+        ],
+      }),
+    })
+  }
+
+  it('stops offering a survey this browser remembers answering', async () => {
+    markAnswered(ANSWERED)
+    twoPending()
+    renderHome()
+
+    expect(await screen.findByText('Encuesta pendiente')).toBeTruthy()
+    expect(screen.queryByText('Encuesta ya respondida')).toBeNull()
+    expect(respondHrefs()).toEqual([`/surveys/${OWED}/respond`])
+  })
+
+  /**
+   * The hook's own guarantee. `leadId` is what the supplementary respond-view read is
+   * issued for, so deriving it from the unfiltered payload would fetch
+   * `allowPartialResponses` for a survey the page does not show — and the lead it does
+   * show would silently lose its "save for later" affordance, because `composeEmployeeHome`
+   * only trusts the setting when the id it came back for is the lead's.
+   */
+  it('reads the save-for-later setting for the survey it actually leads with', async () => {
+    markAnswered(ANSWERED)
+    twoPending()
+    renderHome()
+    await screen.findByText('Encuesta pendiente')
+
+    await vi.waitFor(() => {
+      expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/respond'))).toBe(true)
+    })
+    const respondUrls = vi
+      .mocked(fetch)
+      .mock.calls.map(([url]) => String(url))
+      .filter((url) => url.includes('/respond'))
+    expect(respondUrls.every((url) => url.includes(OWED))).toBe(true)
+    expect(respondUrls.some((url) => url.includes(ANSWERED))).toBe(false)
+  })
+
+  it('offers both when this browser remembers nothing', async () => {
+    twoPending()
+    renderHome()
+
+    expect(await screen.findByText('Encuesta ya respondida')).toBeTruthy()
+    expect(respondHrefs()).toEqual([`/surveys/${ANSWERED}/respond`, `/surveys/${OWED}/respond`])
   })
 })

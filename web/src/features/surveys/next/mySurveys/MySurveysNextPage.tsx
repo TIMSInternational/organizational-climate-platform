@@ -1,6 +1,6 @@
-import type { ReactNode } from 'react'
+import { useCallback, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
-import { ArrowRight, ClipboardList, EyeOff, Inbox, LayoutGrid, Lock } from 'lucide-react'
+import { ArrowRight, Check, ClipboardList, EyeOff, Inbox, LayoutGrid, Lock } from 'lucide-react'
 import { PageTopBar } from '../../../../components/layout'
 import {
   Button,
@@ -13,6 +13,7 @@ import {
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { calendarDay } from '../../../../lib/calendarDay'
 import { useCompanyScope } from '../../../../company-context'
+import { forgetAnswered, hasAnswered } from '../../respondReceipt'
 import { useMySurveysModel } from './useMySurveysModel'
 import {
   belongsToNoCompany,
@@ -59,6 +60,26 @@ import {
  * worse: it would put a per-person answer log on the one surface in the product that must
  * not accumulate one.
  *
+ * ## "Respondidas en este dispositivo" is not that table, and does not breach that ruling
+ *
+ * The heading above still holds for the artboard's receipt, which is a SERVER fact — every
+ * survey this *reader* answered, and the day they did. That is still unbuildable and still
+ * must not be built. What was added is narrower and lives entirely in one browser: a flag
+ * per survey in `localStorage` (`surveys/respondReceipt.ts`), written when a submission
+ * completes, carrying one bit and no date.
+ *
+ * Nothing reaches the server, so the platform still does not know who answered and no
+ * per-person answer log accumulates anywhere — the ruling's actual concern. What it buys is
+ * that the page stops offering a survey this reader has already answered, which on an
+ * anonymous survey `SurveyQueries.AssignedTo` deliberately cannot do: it filters on
+ * `r.UserId == userId`, and an anonymous response stores no user id, so the row stays
+ * listed for its whole window and the respondent can answer again and again.
+ *
+ * The limit is stated on the page rather than hidden, in the card at the foot and again
+ * beside the heading: this is one browser's memory, and another browser offers the survey
+ * again. Every row carries "¿No fue usted? Devolverla a la lista", because the flag belongs
+ * to a device and never to a person.
+ *
  * ## "Cerradas" survives the redesign
  *
  * The artboard has no closed group, because in its story the answered survey moved to the
@@ -86,8 +107,22 @@ function SurveyList({ eyebrowRoleKey }: { eyebrowRoleKey: string | null }) {
   const { t } = useTranslation()
   const { status, surveys, error, departmentName, reload } = useMySurveysModel()
 
+  /**
+   * A re-render, and nothing else. `hasAnswered` reads `localStorage`, which React cannot
+   * subscribe to, so putting a row back has to re-run the grouping explicitly. The value is
+   * deliberately not destructured: calling the setter is the whole mechanism, and a counter
+   * nothing reads would only invite somebody to read it. Nothing is fetched again — the
+   * payload already holds the row, which is why the rows are grouped rather than filtered.
+   */
+  const [, regroup] = useState(0)
+
+  const putBack = useCallback((surveyId: string) => {
+    forgetAnswered(surveyId)
+    regroup((value) => value + 1)
+  }, [])
+
   // One clock reading for the whole render, so every row agrees about which day today is.
-  const { open, closed } = groupMySurveys(surveys, Date.now())
+  const { open, answeredHere, closed } = groupMySurveys(surveys, Date.now(), hasAnswered)
 
   return (
     <div>
@@ -140,6 +175,28 @@ function SurveyList({ eyebrowRoleKey }: { eyebrowRoleKey: string | null }) {
                     while Home's `DashboardQueries.PendingSurveys` takes `SurveyRowLimit` = 5. */}
                 <p className="mb-0 max-w-measure text-sm text-fg-secondary">{t('employee.next.wholeListNote')}</p>
               </section>
+
+              {answeredHere.length > 0 ? (
+                <section aria-labelledby="my-surveys-answered-here" className="mt-section flex flex-col gap-3">
+                  <div className="flex flex-wrap items-baseline justify-between gap-3">
+                    <h2 id="my-surveys-answered-here" className="m-0 flex items-baseline gap-2">
+                      {t('employee.next.answeredHereHeading')}
+                      <span className="font-mono text-sm font-normal tabular-nums text-fg-secondary">
+                        {answeredHere.length}
+                      </span>
+                    </h2>
+                    {/* The qualifier belongs beside the heading, not buried in the card at
+                        the foot: this group is the one claim on the page that is about a
+                        device rather than about the reader. */}
+                    <span className="text-sm text-fg-secondary">{t('employee.next.answeredHereNote')}</span>
+                  </div>
+                  <ul className="m-0 flex list-none flex-col gap-3 p-0">
+                    {answeredHere.map((row) => (
+                      <AnsweredHereRow key={row.id} row={row} onPutBack={() => putBack(row.id)} />
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
 
               {closed.length > 0 ? (
                 <section aria-labelledby="my-surveys-closed" className="mt-section flex flex-col gap-3">
@@ -287,6 +344,59 @@ function ClosedSurveyRow({ row }: { row: MySurveyRow }) {
       <Chip tone="neutral" icon={<Lock aria-hidden="true" />} label={t('employee.notRecordedChip')} />
       <Button asChild size="canvas">
         <Link to="/dashboard">{t('employee.seeWhatCameOfIt')}</Link>
+      </Button>
+    </li>
+  )
+}
+
+/**
+ * A survey this browser remembers answering: the open row's quieter twin.
+ *
+ * Deliberately shaped like `ClosedSurveyRow` and not like `OpenSurveyRow` — no accent, no
+ * countdown chip, no "Responder ahora". The one action is the correction, because the only
+ * reader who needs an action here is the one for whom the flag is wrong.
+ *
+ * The chip says "on this device" rather than "answered", because that is the part this page
+ * can actually vouch for. `SurveyResponse.UserId` is NULL on an anonymous response, so the
+ * platform does not know this reader answered and the page must not imply that it does.
+ */
+function AnsweredHereRow({ row, onPutBack }: { row: MySurveyRow; onPutBack: () => void }) {
+  const { t, locale } = useTranslation()
+
+  return (
+    <li
+      data-slot="my-surveys-answered-here-row"
+      data-open="false"
+      className="flex flex-wrap items-center gap-4 rounded-xl border border-line-default bg-surface-card px-4 py-3.5 shadow-sm"
+    >
+      {/* `grow basis-72` around the glyph and the text, exactly as `ClosedSurveyRow` has
+          it, and not four flex siblings on one line. With the chip as a sibling of the
+          text the chip takes its share of a 390px row and the title collapses to a single
+          character — measured on a phone-width screenshot, and invisible to the suite,
+          which runs on happy-dom and computes no layout. `break-words` for the same
+          reason: a long survey name has to wrap rather than widen the row. */}
+      <div className="flex min-w-0 grow basis-72 items-center gap-3">
+        <span
+          aria-hidden="true"
+          className="grid size-8 shrink-0 place-items-center rounded-lg bg-surface-icon-box text-fg-secondary"
+        >
+          <ClipboardList className="size-icon" />
+        </span>
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span className="break-words text-base font-semibold text-fg-primary">
+            {row.name ?? t('surveys.untitled')}
+          </span>
+          {/* "Cierra el 1 de noviembre", not `closedMeta`'s "Cerró el …": this survey is
+              still open and still accepting answers, which is exactly why the row needs
+              the correction beside it. */}
+          <span className="break-words text-sm text-fg-secondary">
+            {t('employee.next.answeredHereMeta', { date: calendarDay(Date.parse(row.closesAt), locale) })}
+          </span>
+        </div>
+      </div>
+      <Chip tone="neutral" icon={<Check aria-hidden="true" />} label={t('employee.next.answeredHereChip')} />
+      <Button type="button" variant="outline" size="canvas" onClick={onPutBack}>
+        {t('employee.next.answeredHereUndo')}
       </Button>
     </li>
   )

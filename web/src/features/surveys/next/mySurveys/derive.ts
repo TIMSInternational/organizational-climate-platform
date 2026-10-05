@@ -32,6 +32,16 @@ export interface MySurveyRow {
 export interface MySurveyGroups {
   /** Still answerable, soonest to close first — the server's own order, kept. */
   open: MySurveyRow[]
+  /**
+   * Still open, but **this browser** remembers answering it (`respondReceipt.ts`).
+   *
+   * Not a server fact and never described as one: an anonymous survey stores no user id,
+   * so `SurveyQueries.AssignedTo` cannot filter these out and the payload keeps listing
+   * them for their whole window. The flag is what lets the page stop offering a survey the
+   * reader has already answered, and the card at the foot of the page states its limit —
+   * another browser will offer the same survey again.
+   */
+  answeredHere: MySurveyRow[]
   /** The answering window has already ended. Empty for every payload the API can serve today. */
   closed: MySurveyRow[]
 }
@@ -73,7 +83,7 @@ function toRow(survey: MySurveyListItem, now: number): MySurveyRow {
 }
 
 /**
- * The two groups, from one clock reading.
+ * The three groups, from one clock reading.
  *
  * `now` is taken once for the whole render so every row agrees about which day today is —
  * two `Date.now()` calls either side of a midnight tick would put one row in the open group
@@ -81,11 +91,27 @@ function toRow(survey: MySurveyListItem, now: number): MySurveyRow {
  *
  * An unparseable date is treated as open: a survey the reader might still owe an answer to
  * is the safer side of that guess.
+ *
+ * `answeredHere` is **injected, not read here**, for the reason this module exists: it is
+ * pure, so the grouping is tested without a DOM, and `localStorage` is neither pure nor
+ * present in every environment the tests run in. It defaults to "remembers nothing", which
+ * is also what a browser with storage blocked reports — so the default is the real
+ * degraded behaviour rather than a convenience for tests.
+ *
+ * Closed wins over answered. A survey whose window has ended belongs under "Cerradas"
+ * whatever this browser remembers, because the row's own chip there is a statement about
+ * the product ("no queda registrada como suya") that stays true either way.
  */
-export function groupMySurveys(surveys: readonly MySurveyListItem[], now: number): MySurveyGroups {
+export function groupMySurveys(
+  surveys: readonly MySurveyListItem[],
+  now: number,
+  answeredHere: (surveyId: string) => boolean = () => false,
+): MySurveyGroups {
   const rows = surveys.map((survey) => toRow(survey, now))
+  const stillOpen = rows.filter((row) => row.daysLeft === null || row.daysLeft >= 0)
   return {
-    open: rows.filter((row) => row.daysLeft === null || row.daysLeft >= 0),
+    open: stillOpen.filter((row) => !answeredHere(row.id)),
+    answeredHere: stillOpen.filter((row) => answeredHere(row.id)),
     closed: rows.filter((row) => row.daysLeft !== null && row.daysLeft < 0),
   }
 }
