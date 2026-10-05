@@ -149,7 +149,7 @@ export default function RespondQuestionField({
         </span>
         <span
           data-slot="question-text"
-          className="mt-3.5 block text-question font-normal text-fg-primary"
+          className="mt-3.5 block text-question font-normal text-fg-primary md:text-respond-question"
         >
           {question.text ?? t('untitledQuestion')}
           {question.required ? <span className="sr-only"> {t('requiredMarker')}</span> : null}
@@ -347,19 +347,21 @@ function ChoiceAnswer({ question, answer, disabled, invalid, errorId, onChange }
   return (
     <div className="w-full">
       {/*
-        One row of equal cells on a wide viewport, one full-width cell per line on a phone.
-        `flex-1` is what aligns them: the previous `flex flex-wrap` sized every option to its
-        own text, so five Spanish labels of different lengths wrapped into a ragged two rows
-        that read as a list rather than as a scale — measured at 390px. Equal cells also give
-        each option a tap target the width of the column, well past the 24px WCAG 2.2 minimum.
+        One full-width cell per line, at every width.
+        `flex-wrap` came first and sized every option to its own text, so five Spanish labels
+        wrapped into a ragged two rows that read as a list rather than as a scale. The fix for
+        that was equal cells in a row from `sm` up — but `sm` is a VIEWPORT breakpoint and the
+        column this lives in is capped, so the row never got the width it assumed. Measured on
+        the TIMS instrument at 1440x900: five cells sharing 480px, and `Casi nunca`,
+        `Algunas veces` and `Casi siempre` each wrapping to two lines while `Nunca` and
+        `Siempre` did not. Widening the column to 44rem leaves ~120px a cell, which is still
+        under what those labels need, and a scale that fits only until somebody writes a
+        longer word is not fixed.
+        So the scale reads top to bottom. Its direction is carried by the order and by the two
+        faces, which is what carried it before; what it gains is that no label ever wraps, in
+        any language, and every option has a tap target the full width of the column.
       */}
-      <div
-        className={
-          question.type === 'multiple_choice'
-            ? 'grid gap-2'
-            : 'flex flex-col gap-2 sm:flex-row sm:items-stretch'
-        }
-      >
+      <div className={question.type === 'multiple_choice' ? 'grid gap-2' : 'flex flex-col gap-2'}>
         {choices.map((choice, index) => {
           const inputId = `${questionFieldId(question.id)}-choice-${index}`
           const checked = answer?.value === choice.value
@@ -378,7 +380,7 @@ function ChoiceAnswer({ question, answer, disabled, invalid, errorId, onChange }
               data-slot="respond-choice"
               data-checked={checked || undefined}
               className={[
-                'flex flex-1 items-center gap-inline rounded-lg border px-3.5 py-3 transition-colors',
+                'flex min-w-0 flex-1 items-center gap-inline rounded-lg border px-3.5 py-3 transition-colors',
                 checked
                   ? 'border-accent-blue bg-surface-icon-box'
                   : 'border-line-default bg-surface-card hover:border-line-hover',
@@ -388,6 +390,11 @@ function ChoiceAnswer({ question, answer, disabled, invalid, errorId, onChange }
                 type="radio"
                 id={inputId}
                 name={question.id}
+                // `index.css` leaves radios at `width: auto`, which is the browser's ~13px
+                // against a 16px label and the 16px face beside it in the same cell. Sized
+                // to `size-icon` so the three line up; the hit target is unchanged either
+                // way, because `htmlFor` already makes the whole cell one.
+                className="size-icon shrink-0"
                 value={choice.value}
                 checked={checked}
                 disabled={disabled}
@@ -397,7 +404,7 @@ function ChoiceAnswer({ question, answer, disabled, invalid, errorId, onChange }
               />
               <label
                 htmlFor={inputId}
-                className="mb-0 flex min-h-control-lg flex-1 items-center gap-inline text-base font-normal text-fg-primary"
+                className="mb-0 flex min-h-control-lg flex-1 items-center gap-inline text-respond font-normal text-fg-primary md:text-respond-lg"
               >
                 {face}
                 <span className="min-w-0">{labelFor(choice.value, choice.label)}</span>
@@ -408,7 +415,7 @@ function ChoiceAnswer({ question, answer, disabled, invalid, errorId, onChange }
       </div>
 
       {scaleEnds && !endsRepeatChoices && (
-        <p className="mt-inline flex justify-between gap-inline text-sm text-fg-secondary">
+        <p className="mt-inline flex justify-between gap-inline text-respond text-fg-secondary">
           <span>{question.scaleLabelMin}</span>
           <span>{question.scaleLabelMax}</span>
         </p>

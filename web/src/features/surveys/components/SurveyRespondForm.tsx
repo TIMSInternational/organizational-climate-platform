@@ -944,7 +944,7 @@ export default function SurveyRespondForm({
       {/* The author's description, on the first page only: it introduces the survey,
           and repeated over every question it would push the question down the phone. */}
       {index === 0 && view.description ? (
-        <p className="m-0 max-w-prose text-base text-fg-secondary">{view.description}</p>
+        <p className="m-0 max-w-prose text-respond text-fg-secondary">{view.description}</p>
       ) : null}
 
       {remainingMs !== null && remainingMs > 0 ? (

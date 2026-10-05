@@ -83,7 +83,7 @@ export function AnonymityNotice({
   )
   const heading = <h2 className="sr-only">{anonymous ? t('anonymousTitle') : t('identifiedTitle')}</h2>
   const body = (
-    <p className="m-0 text-sm text-fg-secondary">
+    <p className="m-0 text-respond text-fg-secondary">
       {anonymous ? t('anonymousBody') : t('identifiedBody')}
     </p>
   )

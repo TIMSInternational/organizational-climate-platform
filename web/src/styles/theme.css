@@ -212,6 +212,9 @@
      control; this is the same ceiling for the primitive, whose label and
      control are siblings and so never matched that rule. */
   --container-field: var(--admin-size-field-max);
+  /* `--container-*` gives `max-w-respond`: the respond column's own ceiling, which is
+     NOT the field ceiling above. See `--admin-size-respond-max` for the measurement. */
+  --container-respond: var(--admin-size-respond-max);
   /* `--container-*` gives `max-w-measure`: the redesign's 70ch prose cap.
      A NEW NAME RATHER THAN AN OVERRIDE OF `prose`, and that was measured, not
      assumed: Tailwind v4 emits `max-w-prose` as a STATIC utility with a literal
@@ -259,6 +262,11 @@
   /* The respond card's question: the canvas sets it at 17px with line-height 1.4. */
   --text-question: var(--admin-text-question);
   --text-question--line-height: 1.4;
+  /* The respond page's own steps, for the audience that reads it. */
+  --text-respond: var(--admin-text-respond);
+  --text-respond-lg: var(--admin-text-respond-lg);
+  --text-respond-question: var(--admin-text-respond-question);
+  --text-respond-question--line-height: 1.35;
 
   --leading-tight: var(--admin-leading-tight);
   --leading-snug: var(--admin-leading-snug);

@@ -90,7 +90,7 @@ export function RespondShell({ skipLabel, contentId = 'respond', children }: Res
           pickers drawn as 22px chips on the right. Capped at the same width as the
           column under it, so on a wide screen the lockup sits over the questions rather
           than stranded at the window's edge. */}
-      <header className="mx-auto flex w-full max-w-field flex-wrap items-center justify-between gap-inline px-4 py-3.5">
+      <header className="mx-auto flex w-full max-w-field flex-wrap items-center justify-between gap-inline px-4 py-3.5 md:max-w-respond">
         <span className="flex flex-wrap items-center gap-inline">
           <BrandLockup size="compact" />
         </span>
@@ -121,12 +121,16 @@ export function RespondShell({ skipLabel, contentId = 'respond', children }: Res
         // stub stranded at the top of a large empty field, which reads as content
         // that failed to load rather than as a page with little on it.
         //
-        // `max-w-field` (32rem), not `max-w-content`: the canvas draws this surface as a
-        // phone — one column of cards 358px across at 390 — and on a wide screen the
-        // same column centred, with the lockup over it. A question card stretched to
-        // 1280px put the five scale boxes 250px apart. 16px in and 24px of floor, the
-        // artboard's own padding.
-        className="mx-auto flex w-full max-w-field flex-1 flex-col px-4 pb-6 pt-2"
+        // `max-w-field` (32rem) at the canvas's own width, `max-w-respond` (44rem) from
+        // `md`: the canvas draws this surface as a phone — one column of cards 358px
+        // across at 390 — and on a wide screen the same column centred, with the lockup
+        // over it. Stretching the card to `max-w-content` (1280px) is still wrong and
+        // still put the five scale boxes 250px apart; what was ALSO wrong was holding a
+        // 512px strip on every monitor, because the field ceiling is a ceiling for one
+        // control and this is a page. Measured on the TIMS instrument at 1440x900: two
+        // thirds of the window empty and three of the five Spanish labels wrapping.
+        // 16px in and 24px of floor, the artboard's own padding.
+        className="mx-auto flex w-full max-w-field flex-1 flex-col px-4 pb-6 pt-2 md:max-w-respond"
       >
         {children}
       </main>
