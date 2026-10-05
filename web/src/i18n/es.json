@@ -5309,6 +5309,8 @@
     "alreadyCompletedBody": "Sus respuestas fueron recibidas. No hay nada más que hacer, y responder de nuevo no las reemplazaría.",
     "answeredOnThisDeviceTitle": "Ya respondió esta encuesta en este dispositivo",
     "answeredOnThisDeviceBody": "Este navegador registra que usted ya la respondió, así que no volverá a pedírsela. La plataforma no guarda quién respondió, porque esta encuesta es anónima.",
+    "openInAnotherTabTitle": "Esta encuesta ya est\u00e1 abierta en otra pesta\u00f1a",
+    "openInAnotherTabBody": "Para que sus respuestas no se sobrescriban, solo se puede responder en una pesta\u00f1a a la vez. Cierre la otra pesta\u00f1a y esta p\u00e1gina continuar\u00e1 sola.",
     "linkInvalidTitle": "Este enlace no abre ninguna encuesta",
     "linkInvalidBody": "Puede que esté mal escrito, que se haya desactivado o que la encuesta a la que apuntaba no esté abierta. Revise el enlace que le dieron o pida uno nuevo a quien se lo compartió.",
     "invitationNotFoundTitle": "No se encontró esta invitación",

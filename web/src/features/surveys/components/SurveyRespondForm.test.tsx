@@ -9,6 +9,7 @@ import { createTranslator } from '../../../i18n/translate'
 import type { SurveyRespondQuestion, SurveyRespondView } from '../api/surveyResponses'
 import { hasAnswered, markAnswered } from '../respondReceipt'
 import { readSessionId } from '../respondSession'
+import { STALE_MS, heldElsewhere } from '../respondLock'
 
 /**
  * The shipped wording, read from the catalogue the component reads.
@@ -1143,5 +1144,120 @@ describe('SurveyRespondForm answered-on-this-device flag', () => {
 
     expect(await screen.findByText(copy.es('surveyRespond.alreadyCompletedTitle'))).toBeTruthy()
     expect(screen.queryByText(copy.es('surveyRespond.answeredOnThisDeviceTitle'))).toBeNull()
+  })
+})
+
+/**
+ * One open assessment at a time.
+ *
+ * The lock's own arithmetic — who may claim, when a lock goes stale, who may release —
+ * is proved in `respondLock.test.ts` against two tab ids. What is proved here is the
+ * only thing that file cannot see: that this screen honours it, that a blocked tab
+ * asks the server for nothing, and that leaving the screen frees the survey.
+ *
+ * The other tab is written straight into storage rather than rendered: two React trees
+ * in one happy-dom share one `localStorage` and one `TAB_ID`, so a second `render` is
+ * not a second tab and would claim the lock it was supposed to be refused.
+ */
+describe('SurveyRespondForm — one open assessment at a time', () => {
+  const OTHER_TAB = 'another-tab'
+
+  function otherTabHolds(at: number) {
+    window.localStorage.setItem('surveyOpen:s1', JSON.stringify({ tab: OTHER_TAB, at }))
+  }
+
+  it('tells a second tab the survey is open elsewhere, and asks the server for nothing', async () => {
+    otherTabHolds(Date.now())
+    respondWith(view())
+    renderForm()
+
+    expect(
+      await screen.findByText(copy.es('surveyRespond.openInAnotherTabTitle')),
+    ).toBeTruthy()
+    // The respond GET returns the in-progress answers, free text included. A tab that
+    // must not write to the response has no business reading it back either.
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled()
+    // No question, no way to answer: the block is the whole screen, not a banner over
+    // a form that still works.
+    expect(screen.queryByText('¿Qué tan satisfecho estás?')).toBeNull()
+  })
+
+  it('lets the survey be answered when the other tab went quiet past the stale window', async () => {
+    otherTabHolds(Date.now() - STALE_MS - 1)
+    respondWith(view())
+    renderForm()
+
+    expect(await screen.findByText('¿Qué tan satisfecho estás?')).toBeTruthy()
+    expect(screen.queryByText(copy.es('surveyRespond.openInAnotherTabTitle'))).toBeNull()
+  })
+
+  /**
+   * The steal path, which is the one the heartbeat creates and the only way a tab can
+   * lose a lock it was using: this tab goes quiet past the stale window (backgrounded,
+   * where timers are throttled to about one a minute), another tab takes the survey
+   * and answers it, and this one comes back.
+   *
+   * What must NOT happen is this tab picking up where it left off. Its answer map is a
+   * snapshot from before the other tab wrote, and the next autosave would put it
+   * straight over that work — the overwrite the lock exists to prevent, arriving by the
+   * one door the lock itself opens.
+   *
+   * Asserted on the ANSWER the respondent sees, not on a second GET going out. The
+   * second GET happens either way, because the effect re-runs whenever the lock
+   * changes; it is whether that read is allowed to REPLACE the map that is in
+   * question, and a call count cannot tell the two apart.
+   */
+  it('shows the other tab\u2019s answer, not its own, after losing and regaining the lock', async () => {
+    respondWith(view())
+    renderForm()
+    await screen.findByText('\u00bfQu\u00e9 tan satisfecho est\u00e1s?')
+
+    await userEvent.click(screen.getByRole('radio', { name: 'Muy de acuerdo' }))
+    expect((screen.getByRole('radio', { name: 'Muy de acuerdo' }) as HTMLInputElement).checked).toBe(true)
+
+    // Another tab takes it while this one is quiet, and the screen gives way.
+    otherTabHolds(Date.now())
+    fireEvent(document, new Event('visibilitychange'))
+    await screen.findByText(copy.es('surveyRespond.openInAnotherTabTitle'))
+
+    // That tab answers differently and closes, handing the survey back.
+    respondWith(
+      view({
+        inProgress: {
+          responseId: 'r1',
+          sessionId: 'session-1',
+          isComplete: false,
+          language: 'es',
+          startTime: '2026-10-06T08:05:00Z',
+          completionTime: null,
+          answers: [
+            { questionId: 'q1', value: 'disagree', values: null, text: null, timeSpentSeconds: 9 },
+          ],
+        },
+      }),
+    )
+    window.localStorage.removeItem('surveyOpen:s1')
+    fireEvent(document, new Event('visibilitychange'))
+
+    await screen.findByText('\u00bfQu\u00e9 tan satisfecho est\u00e1s?')
+    // The server's copy won, which is the whole point: this tab's map predates the
+    // other tab's work and must not survive the hand-back.
+    expect((await screen.findByRole('radio', { name: 'En desacuerdo' })) as HTMLInputElement).toBeTruthy()
+    expect((screen.getByRole('radio', { name: 'En desacuerdo' }) as HTMLInputElement).checked).toBe(true)
+    expect((screen.getByRole('radio', { name: 'Muy de acuerdo' }) as HTMLInputElement).checked).toBe(false)
+  })
+
+  it('frees the survey when the screen goes away, so the next tab is not shut out', async () => {
+    respondWith(view())
+    const { unmount } = renderForm()
+    await screen.findByText('¿Qué tan satisfecho estás?')
+
+    // Held while it is on screen...
+    expect(heldElsewhere('s1', OTHER_TAB)).toBe(true)
+
+    unmount()
+
+    // ...and handed straight back, rather than left for the stale window to clear.
+    expect(heldElsewhere('s1', OTHER_TAB)).toBe(false)
   })
 })

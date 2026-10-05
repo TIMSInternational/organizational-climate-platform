@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import { Link } from 'react-router'
 import {
   AlertCircle,
+  AppWindow,
   ArrowLeft,
   ArrowRight,
   Check,
@@ -51,6 +52,7 @@ import { respondDimensions } from '../respondDimensions'
 import { dimensionLabel } from '../dimensionLabel'
 import { hasAnswered, markAnswered } from '../respondReceipt'
 import { clearSessionId, ensureSessionId } from '../respondSession'
+import { useRespondLock } from '../useRespondLock'
 import {
   SurveyRespondError,
   getSurveyRespondView,
@@ -257,6 +259,13 @@ export default function SurveyRespondForm({
   // finished. Held in state so "that was not me" can clear it without a reload.
   const [answeredHere] = useState(() => hasAnswered(surveyId))
 
+  // One open assessment at a time. Two tabs share one session id — `respondSession`
+  // stores it per survey in `localStorage` — so both would hydrate and autosave into
+  // the same in-progress response and the last writer would win, silently. The lock
+  // is browser-local and is not a one-response-per-person guarantee; `respondLock`
+  // records precisely what it does and does not promise.
+  const lock = useRespondLock(surveyId)
+
   // Answers are hydrated from the server exactly once. The read is re-issued when the
   // respondent switches language — the question TEXT has to come back translated —
   // and re-hydrating there would throw away everything they had typed since.
@@ -268,6 +277,20 @@ export default function SurveyRespondForm({
   const resuming = useRef(false)
 
   useEffect(() => {
+    // A blocked tab asks the server for nothing. The GET returns the in-progress
+    // answers — free text included — and a second tab that must not write to the
+    // response has no business reading it back either.
+    if (lock === 'blocked') {
+      // And whatever this tab is holding is now suspect. Losing the lock means
+      // another tab has been answering the same response, so these answers are a
+      // snapshot from before that happened. Clearing the hydration latch makes the
+      // re-read that follows re-hydrate from the server rather than resuming from
+      // memory — otherwise a tab that went quiet, lost the lock and later got it
+      // back would autosave its stale map straight over the other tab's work, which
+      // is the exact overwrite this whole module exists to prevent.
+      hydrated.current = false
+      return
+    }
     let cancelled = false
     setState({ status: 'loading' })
 
@@ -303,7 +326,7 @@ export default function SurveyRespondForm({
     return () => {
       cancelled = true
     }
-  }, [baseUrl, surveyId, locale, sessionId])
+  }, [baseUrl, surveyId, locale, sessionId, lock])
 
   const view = state.status === 'ready' ? state.view : null
   const timeLimitMinutes = view?.timeLimitMinutes ?? null
@@ -790,6 +813,18 @@ export default function SurveyRespondForm({
     }
 
     void send(true)
+  }
+
+  // Before `loading`, because a blocked tab never issued the read and would otherwise
+  // sit on "loading…" for ever. `result` wins over it deliberately: a tab that has
+  // just submitted holds the only copy of the confirmation the respondent will ever
+  // see, and must not have it replaced by a notice about some other tab.
+  if (result === null && lock === 'blocked') {
+    return (
+      <RespondSurface>
+        <OpenInAnotherTab />
+      </RespondSurface>
+    )
   }
 
   if (state.status === 'loading') {
@@ -1291,6 +1326,32 @@ function AnsweredOnThisDevice() {
       <ShieldCheck aria-hidden="true" />
       <AlertTitle>{t('answeredOnThisDeviceTitle')}</AlertTitle>
       <AlertDescription>{t('answeredOnThisDeviceBody')}</AlertDescription>
+    </Alert>
+  )
+}
+
+/**
+ * The survey is already open in another tab of this browser.
+ *
+ * `info` rather than `warning`: the respondent has done nothing wrong and nothing is
+ * at risk — they opened a link twice, which is the ordinary way of re-finding a
+ * survey. The body says what to do about it and, because the screen resolves itself
+ * without any action, that waiting is also an answer.
+ *
+ * There is no "continue here anyway" control, for the reason the receipt's own comment
+ * gives about "that was not me": a visible control for the thing the screen exists to
+ * prevent is an invitation to it. Nobody is stranded by that — closing the other tab
+ * hands this one the lock within the same second over `BroadcastChannel`, and a tab
+ * that was killed rather than closed frees the survey when its heartbeat goes stale.
+ */
+function OpenInAnotherTab() {
+  const { t } = useTranslation('surveyRespond')
+
+  return (
+    <Alert variant="info" role="status">
+      <AppWindow aria-hidden="true" />
+      <AlertTitle>{t('openInAnotherTabTitle')}</AlertTitle>
+      <AlertDescription>{t('openInAnotherTabBody')}</AlertDescription>
     </Alert>
   )
 }

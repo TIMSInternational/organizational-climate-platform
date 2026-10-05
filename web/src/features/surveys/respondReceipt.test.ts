@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, onTestFinished, vi } from 'vitest'
 import * as receipt from './respondReceipt'
 import { hasAnswered, markAnswered } from './respondReceipt'
 import { clearSessionId, ensureSessionId, readSessionId } from './respondSession'
@@ -104,8 +104,19 @@ describe('respondReceipt', () => {
     const blocked = () => {
       throw new Error('blocked')
     }
-    vi.spyOn(window.localStorage, 'getItem').mockImplementation(blocked)
-    vi.spyOn(window.localStorage, 'setItem').mockImplementation(blocked)
+    // Restored here, one by one, rather than left to the `afterEach`: measured on
+    // vitest 4.1.10, `vi.restoreAllMocks()` does NOT restore a spy taken against this
+    // instance, while `spy.mockRestore()` does. This test being last in the file is
+    // the only reason that has never bitten — a test added below it would have found
+    // `getItem` still throwing, the module swallowing it, and an empty store reported
+    // as fact. See `respondLock.test.ts`, which carries the same note.
+    const spies = [
+      vi.spyOn(window.localStorage, 'getItem').mockImplementation(blocked),
+      vi.spyOn(window.localStorage, 'setItem').mockImplementation(blocked),
+    ]
+    onTestFinished(() => {
+      for (const spy of spies) spy.mockRestore()
+    })
 
     // The instrument, before anything that depends on it.
     expect(() => window.localStorage.getItem('x')).toThrow('blocked')
