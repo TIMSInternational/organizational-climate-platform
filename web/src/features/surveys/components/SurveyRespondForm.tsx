@@ -49,7 +49,7 @@ import {
 } from '../respondAutosave'
 import { respondDimensions } from '../respondDimensions'
 import { dimensionLabel } from '../dimensionLabel'
-import { forgetAnswered, hasAnswered, markAnswered } from '../respondReceipt'
+import { hasAnswered, markAnswered } from '../respondReceipt'
 import { clearSessionId, ensureSessionId } from '../respondSession'
 import {
   SurveyRespondError,
@@ -255,7 +255,7 @@ export default function SurveyRespondForm({
   // on every render. The submission itself writes the flag, and re-reading it would swap
   // the respondent's own confirmation for "you already answered" the instant they
   // finished. Held in state so "that was not me" can clear it without a reload.
-  const [answeredHere, setAnsweredHere] = useState(() => hasAnswered(surveyId))
+  const [answeredHere] = useState(() => hasAnswered(surveyId))
 
   // Answers are hydrated from the server exactly once. The read is re-issued when the
   // respondent switches language — the question TEXT has to come back translated —
@@ -837,12 +837,7 @@ export default function SurveyRespondForm({
   if (view && answeredHere) {
     return (
       <RespondSurface>
-        <AnsweredOnThisDevice
-          onAnswerAgain={() => {
-            forgetAnswered(surveyId)
-            setAnsweredHere(false)
-          }}
-        />
+        <AnsweredOnThisDevice />
       </RespondSurface>
     )
   }
@@ -1288,22 +1283,15 @@ function AlreadyCompleted() {
  * be able to say so and carry on. It is `outline` rather than the accent so it reads as
  * the correction it is, not as the thing to do next.
  */
-function AnsweredOnThisDevice({ onAnswerAgain }: { onAnswerAgain: () => void }) {
+function AnsweredOnThisDevice() {
   const { t } = useTranslation('surveyRespond')
 
   return (
-    <div className="flex flex-col gap-4">
-      <Alert variant="success" role="status">
-        <ShieldCheck aria-hidden="true" />
-        <AlertTitle>{t('answeredOnThisDeviceTitle')}</AlertTitle>
-        <AlertDescription>{t('answeredOnThisDeviceBody')}</AlertDescription>
-      </Alert>
-      <div>
-        <Button type="button" variant="outline" onClick={onAnswerAgain}>
-          {t('answerAgain')}
-        </Button>
-      </div>
-    </div>
+    <Alert variant="success" role="status">
+      <ShieldCheck aria-hidden="true" />
+      <AlertTitle>{t('answeredOnThisDeviceTitle')}</AlertTitle>
+      <AlertDescription>{t('answeredOnThisDeviceBody')}</AlertDescription>
+    </Alert>
   )
 }
 

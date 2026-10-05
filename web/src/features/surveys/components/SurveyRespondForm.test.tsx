@@ -1101,20 +1101,21 @@ describe('SurveyRespondForm answered-on-this-device flag', () => {
   })
 
   /**
-   * The escape is not optional. The flag belongs to a device and never to a person, so on
-   * a shared browser it outlives whoever answered; a respondent who is not that person has
-   * to be able to say so and carry on.
+   * There is no way past it, and that is the ruling. A "that was not me, answer again"
+   * control was offered here and removed: on a survey, somebody who has answered is done, and
+   * a visible way to answer twice is an invitation to. Asserted as the ABSENCE of any control
+   * on the screen, not as the absence of one label, so re-adding it under a different name
+   * still fails.
    */
-  it('gives the form back, and forgets the flag, when the reader says it was not them', async () => {
+  it('offers no way to answer again', async () => {
     markAnswered('s1')
     respondWith(view({ questions: [question()] }))
     renderForm()
     await screen.findByText(copy.es('surveyRespond.answeredOnThisDeviceTitle'))
 
-    await userEvent.click(screen.getByRole('button', { name: copy.es('surveyRespond.answerAgain') }))
-
-    expect(await screen.findByRole('radio', { name: 'Muy de acuerdo' })).toBeTruthy()
-    expect(hasAnswered('s1')).toBe(false)
+    expect(screen.queryAllByRole('button')).toEqual([])
+    expect(screen.queryAllByRole('link')).toEqual([])
+    expect(screen.queryByRole('radio', { name: 'Muy de acuerdo' })).toBeNull()
   })
 
   /**
