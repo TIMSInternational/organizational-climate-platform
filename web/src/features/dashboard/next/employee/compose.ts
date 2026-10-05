@@ -92,20 +92,48 @@ export function composeEmployeeHome(input: {
   /** The lead survey's `allowPartialResponses`, or `null` when it could not be read. */
   leadAllowsSaveForLater: boolean | null
   asOf: string
+  /**
+   * Whether **this browser** remembers answering a survey (`respondReceipt.ts`).
+   *
+   * Injected rather than read here, because this module is pure and `localStorage` is
+   * neither pure nor present everywhere the tests run. Defaults to "remembers nothing",
+   * which is also what a browser with storage blocked reports — so the default is the real
+   * degraded behaviour and not a convenience.
+   *
+   * Home needs this for the same reason `/surveys/my` does: an anonymous survey stores no
+   * user id, so the server cannot filter an answered one out and keeps offering it. Leaving
+   * Home unfiltered would leave the accident this guards against fully open, since Home is
+   * where an employee lands and it carries the "Responder ahora" call to action.
+   */
+  answeredHere?: (surveyId: string) => boolean
 }): EmployeeHomeModel {
-  const { dashboard, asOf } = input
-  const surveys = dashboard.pendingSurveys.map((survey) => toSurvey(survey, asOf))
+  const { dashboard, asOf, answeredHere = () => false } = input
+  const listed = dashboard.pendingSurveys.filter((survey) => !answeredHere(survey.id))
+  const surveys = listed.map((survey) => toSurvey(survey, asOf))
   const [lead = null, ...others] = surveys
+
+  /**
+   * The server's total, less only the rows **this page was given and dropped**.
+   *
+   * It cannot be less than that. `pendingSurveyCount` is the true total and
+   * `pendingSurveys` is a page of at most `SurveyRowLimit` = 5, so a survey this browser
+   * answered that sits beyond the page is still counted. That makes the number able to
+   * overstate what is outstanding and never to understate it, which is the safe direction:
+   * an inflated count sends somebody to a list that shows them nothing is left, while a
+   * deflated one would tell them they are done when they are not.
+   */
+  const dropped = dashboard.pendingSurveys.length - listed.length
+  const pendingCount = Math.max(0, dashboard.pendingSurveyCount - dropped)
 
   return {
     asOf,
     personName: dashboard.name,
     departmentName: dashboard.departmentName,
-    pendingCount: dashboard.pendingSurveyCount,
+    pendingCount,
     lead,
     others,
     // The count is the truth and the list is a page of it (`SurveyRowLimit` = 5).
-    beyondList: dashboard.pendingSurveyCount > surveys.length,
+    beyondList: pendingCount > surveys.length,
     // `> 0`, never the number: see `model.ts`. A payload missing the field entirely — an
     // older server, a cached body — is `NaN > 0`, which is `false`, i.e. silence.
     hasAnsweredIdentified: dashboard.completedSurveyCount > 0,

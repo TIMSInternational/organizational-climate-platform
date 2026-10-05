@@ -8,6 +8,7 @@ import { setToken } from '../../../../auth/token'
 import { tokenFor } from '../../../../test/jwtFixture'
 import { NO_DEPARTMENT_MESSAGE, NO_USER_RECORD_MESSAGE, type DepartmentAdminDashboard } from '../../api/dashboard'
 import en from '../../../../i18n/en.json'
+import { markAnswered } from '../../../surveys/respondReceipt'
 
 /**
  * The page `/dashboard` hands a `leader` and a `supervisor`: which requests each role makes,
@@ -189,5 +190,81 @@ describe('TeamDashboardPage', () => {
     await waitFor(() =>
       expect(requested().filter((url) => url.includes('/dashboard/department-admin')).length).toBeGreaterThan(before),
     )
+  })
+})
+
+/**
+ * The supervisor's "Tus tareas" and the answered-on-this-device flag
+ * (`surveys/respondReceipt.ts`).
+ *
+ * Mounted through the real hook rather than against a composed model, because the
+ * guarantee here is the wiring: `composeSupervisorDashboard` filters, and this proves the
+ * hook actually hands it the predicate. A supervisor is also a respondent, and this is the
+ * fourth surface that offers an anonymous survey the server cannot tell has been answered.
+ */
+describe('TeamDashboardPage supervisor tasks and the answered flag', () => {
+  const copy = en.dashboard.next.supervisor
+
+  function mySurvey() {
+    return {
+      surveys: [
+        {
+          id: 'q4',
+          title: 'Encuesta de Clima Q4 (abierta)',
+          description: null,
+          type: 'periodic',
+          startDate: '2026-09-03T02:03:39Z',
+          endDate: '2026-10-10T02:03:39Z',
+          questionCount: 6,
+          anonymous: true,
+          timeLimitMinutes: null,
+        },
+      ],
+    }
+  }
+
+  function serveSupervisor() {
+    serve({
+      '/dashboard/department-admin': { body: department() },
+      '/surveys/my': { body: mySurvey() },
+      '/api/mis-tareas': { body: [] },
+    })
+  }
+
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn())
+    vi.stubEnv('VITE_TRACKING_API_BASE_URL', TRACKING)
+  })
+
+  afterEach(() => {
+    cleanup()
+    window.localStorage.clear()
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+  })
+
+  function answerTasks(): HTMLElement[] {
+    return [...document.querySelectorAll<HTMLElement>('[data-slot="supervisor-task"]')].filter(
+      (row) => row.dataset.kind === 'answer-survey',
+    )
+  }
+
+  it('offers the survey she owes when this browser remembers nothing', async () => {
+    serveSupervisor()
+    renderPage('supervisor')
+
+    await screen.findByRole('heading', { level: 2, name: copy.tasksHeading })
+    await waitFor(() => expect(answerTasks()).toHaveLength(1))
+  })
+
+  it('stops offering it once this browser remembers she answered', async () => {
+    markAnswered('q4')
+    serveSupervisor()
+    renderPage('supervisor')
+
+    await screen.findByRole('heading', { level: 2, name: copy.tasksHeading })
+    // The read still happens — the flag changes what is offered, not what is asked for.
+    await waitFor(() => expect(requested().some((url) => url.includes('/surveys/my'))).toBe(true))
+    expect(answerTasks()).toHaveLength(0)
   })
 })

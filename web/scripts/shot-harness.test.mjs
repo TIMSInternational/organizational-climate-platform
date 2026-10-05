@@ -10,6 +10,7 @@ import {
   classifyRequest,
   compileFixtures,
   matchFixture,
+  parseStoragePairs,
   waitForServer,
   nextViewportHeight,
   SCROLL_TOLERANCE,
@@ -57,6 +58,58 @@ describe('shot harness: storage keys track the app', () => {
   it('writes the token under the key auth/token.ts writes', () => {
     setToken('a.b.c')
     expect(localStorage.getItem(STORAGE_KEYS.token)).toBe('a.b.c')
+  })
+})
+
+describe('shot harness: --storage pairs', () => {
+  it('reads nothing from no flag at all', () => {
+    expect(parseStoragePairs(undefined)).toEqual({ entries: [], error: null })
+    expect(parseStoragePairs([])).toEqual({ entries: [], error: null })
+  })
+
+  it('reads repeated pairs in the order they were given', () => {
+    expect(parseStoragePairs(['a=1', 'b=2'])).toEqual({
+      entries: [
+        ['a', '1'],
+        ['b', '2'],
+      ],
+      error: null,
+    })
+  })
+
+  /**
+   * Split on the FIRST `=` only. A stored value is frequently a URL or a JSON blob, and
+   * splitting on every `=` would silently truncate it at the first one — a screenshot of
+   * a state the flag did not actually set.
+   */
+  it('keeps an = inside the value', () => {
+    expect(parseStoragePairs(['k=a=b=c']).entries).toEqual([['k', 'a=b=c']])
+  })
+
+  it('takes an empty value, which is a real stored state', () => {
+    expect(parseStoragePairs(['k=']).entries).toEqual([['k', '']])
+  })
+
+  /**
+   * Refused rather than written. `localStorage.setItem('', v)` is legal and stores
+   * something nothing will ever read, so a typo would present as the flag not working
+   * rather than as a bad argument.
+   */
+  it('refuses a pair with no key, and one with no =', () => {
+    expect(parseStoragePairs(['=x']).error).toMatch(/non-empty key/)
+    expect(parseStoragePairs(['novalue']).error).toMatch(/non-empty key/)
+    // Nothing is written from a batch that contains a bad pair.
+    expect(parseStoragePairs(['good=1', '=bad']).entries).toEqual([])
+  })
+
+  /**
+   * The flag this was built for: `respondReceipt.ts` keys on the survey id, and a GUID
+   * carries no `=`, so the pair splits where it should.
+   */
+  it('reads the answered-on-this-device flag a survey screenshot needs', () => {
+    expect(parseStoragePairs(['surveyAnswered:4c9c8c8c-03e1-4033-8224-8c80b242c558=1']).entries).toEqual([
+      ['surveyAnswered:4c9c8c8c-03e1-4033-8224-8c80b242c558', '1'],
+    ])
   })
 })
 

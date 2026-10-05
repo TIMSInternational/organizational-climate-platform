@@ -120,6 +120,55 @@ describe('groupMySurveys', () => {
     ).open
     expect(rows.map((entry) => entry.id)).toEqual(['a', 'b', 'c'])
   })
+
+  /**
+   * The default is "this browser remembers nothing", which is also what a browser with
+   * storage blocked reports. Pinned because the default decides the behaviour of every
+   * caller that has not opted in, and of every environment where `localStorage` throws:
+   * the survey stays offered, which is the honest degradation.
+   */
+  it('offers everything when no receipt predicate is given', () => {
+    const { open, answeredHere } = groupMySurveys([item({ id: 'a' }), item({ id: 'b' })], NOW)
+    expect(open.map((entry) => entry.id)).toEqual(['a', 'b'])
+    expect(answeredHere).toEqual([])
+  })
+
+  it('moves a survey this browser remembers answering out of the list to answer', () => {
+    const { open, answeredHere } = groupMySurveys(
+      [item({ id: 'unanswered' }), item({ id: 'answered' })],
+      NOW,
+      (id) => id === 'answered',
+    )
+    expect(open.map((entry) => entry.id)).toEqual(['unanswered'])
+    expect(answeredHere.map((entry) => entry.id)).toEqual(['answered'])
+  })
+
+  /**
+   * Closed beats answered. A survey whose window has ended belongs under "Cerradas"
+   * whatever this browser remembers: the chip that row wears there states that the product
+   * does not record whether this reader answered, which stays true either way, and putting
+   * it under "answered on this device" instead would offer a "put it back" action that
+   * could not put it anywhere.
+   */
+  it('keeps a closed survey closed even when this browser remembers answering it', () => {
+    const { open, answeredHere, closed } = groupMySurveys(
+      [item({ id: 'past', endDate: new Date(NOW - 8 * DAY).toISOString() })],
+      NOW,
+      () => true,
+    )
+    expect(open).toEqual([])
+    expect(answeredHere).toEqual([])
+    expect(closed.map((entry) => entry.id)).toEqual(['past'])
+  })
+
+  it('keeps the server’s order within the answered group too', () => {
+    const { answeredHere } = groupMySurveys(
+      [item({ id: 'a' }), item({ id: 'b' }), item({ id: 'c' })],
+      NOW,
+      () => true,
+    )
+    expect(answeredHere.map((entry) => entry.id)).toEqual(['a', 'b', 'c'])
+  })
 })
 
 describe('isClosingSoon', () => {

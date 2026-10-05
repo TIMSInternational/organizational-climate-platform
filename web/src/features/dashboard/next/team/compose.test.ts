@@ -124,11 +124,13 @@ function supervisor(
     mySurveys?: MySurveyListItem[] | null
     misTareas?: TrackingRead<PlanAccion[]>
     mayRecord?: (plan: { nodoExternalId: string }) => boolean
+    answeredHere?: (surveyId: string) => boolean
   } = {},
 ) {
   return composeSupervisorDashboard({
     department: overrides.department ?? department(),
     mySurveys: overrides.mySurveys === undefined ? [mine] : overrides.mySurveys,
+    ...(overrides.answeredHere && { answeredHere: overrides.answeredHere }),
     misTareas: overrides.misTareas ?? { status: 'ok', value: [plan()] },
     trackingOn: true,
     mayRecord: overrides.mayRecord ?? (() => false),
@@ -381,5 +383,22 @@ describe("the supervisor's model", () => {
   it('has no plans to read without a tracking service, and says a failed read failed', () => {
     expect(supervisor({ misTareas: { status: 'off' } }).plans).toEqual({ source: 'off' })
     expect(supervisor({ misTareas: { status: 'failed', error: null } }).plans).toEqual({ source: 'failed', error: null })
+  })
+
+  /**
+   * A supervisor is also a respondent, and "Tus tareas" is the fourth surface that offers
+   * an anonymous survey the server cannot tell has been answered. Leaving it unfiltered
+   * would have her own dashboard disagree with Home and `/surveys/my`, both reachable from
+   * it, about the same survey.
+   */
+  it('drops a survey this browser remembers answering, and keeps her plans', () => {
+    const model = supervisor({ answeredHere: (id) => id === 'q4' })
+    expect(model.tasks.map((task) => task.kind)).toEqual(['follow-plan'])
+    // Not the same thing as the read having failed, which is what `surveysUnread` reports.
+    expect(model.surveysUnread).toBe(false)
+  })
+
+  it('keeps the survey when this browser remembers nothing', () => {
+    expect(supervisor().tasks.some((task) => task.kind === 'answer-survey')).toBe(true)
   })
 })

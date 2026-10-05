@@ -28,6 +28,35 @@ export const STORAGE_KEYS = {
 }
 
 /**
+ * `--storage key=value` pairs, for a screen whose state lives in the browser rather than
+ * in a payload or a token -- the first being the answered-on-this-device flag
+ * (`src/features/surveys/respondReceipt.ts`), which decides whether `/surveys/my` draws
+ * its "answered here" group and whether the respond form offers the survey at all.
+ * Without it such a screen could only ever be photographed in one of its two states,
+ * which is how a collapsed section ships: the suite runs on happy-dom and computes no
+ * layout, so it cannot see the other state either.
+ *
+ * Split on the FIRST `=` only, so a value may contain one -- a stored JSON blob or a URL
+ * both do. An empty key is rejected rather than written, because
+ * `localStorage.setItem('', v)` is perfectly legal and stores something nothing will ever
+ * read, which presents as the flag simply not working.
+ *
+ * @param {readonly string[] | undefined} pairs
+ * @returns {{ entries: [string, string][], error: string | null }}
+ */
+export function parseStoragePairs(pairs) {
+  const entries = []
+  for (const pair of pairs ?? []) {
+    const at = pair.indexOf('=')
+    if (at <= 0) {
+      return { entries: [], error: `--storage must be key=value with a non-empty key, got ${pair}` }
+    }
+    entries.push([pair.slice(0, at), pair.slice(at + 1)])
+  }
+  return { entries, error: null }
+}
+
+/**
  * The origin every API call is pointed at, injected as `VITE_API_BASE_URL` when the
  * harness starts the dev server. `.invalid` is reserved by RFC 2606 and can never
  * resolve, so an endpoint the fixtures forgot fails locally and loudly instead of

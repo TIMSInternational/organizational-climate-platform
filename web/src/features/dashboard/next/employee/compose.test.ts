@@ -136,6 +136,72 @@ describe('composeEmployeeHome', () => {
     expect(composeEmployeeHome(capped).beyondList).toBe(true)
   })
 
+  /**
+   * Home carries "Responder ahora", so leaving it unfiltered would leave the repeat it
+   * guards against fully open — an employee lands here, not on `/surveys/my`.
+   */
+  it('drops a survey this browser remembers answering, and re-leads with the next', () => {
+    const model = composeEmployeeHome({
+      dashboard: dashboard({
+        pendingSurveyCount: 2,
+        pendingSurveys: [survey({ id: 'answered' }), survey({ id: 'still-owed' })],
+      }),
+      lastOutcome: null,
+      leadAllowsSaveForLater: null,
+      asOf: CANVAS_EVENING,
+      answeredHere: (id) => id === 'answered',
+    })
+    expect(model.lead?.id).toBe('still-owed')
+    expect(model.others).toEqual([])
+    expect(model.pendingCount).toBe(1)
+  })
+
+  /**
+   * The count arithmetic, and the direction its error has to fall in.
+   *
+   * `pendingSurveyCount` is the server's true total while `pendingSurveys` is a page of at
+   * most `SurveyRowLimit` = 5, so only the rows this page was GIVEN can be subtracted. Here
+   * the server says 9 are outstanding, hands over 2, and this browser remembers answering
+   * one of them: the count must read 8 and not 1. Overstating sends somebody to a list that
+   * shows them nothing is left; understating would tell them they are done when they are
+   * not, and that is the error this asserts against.
+   */
+  it('subtracts only the rows it was handed, so the count can overstate but never understate', () => {
+    const model = composeEmployeeHome({
+      dashboard: dashboard({
+        pendingSurveyCount: 9,
+        pendingSurveys: [survey({ id: 'answered' }), survey({ id: 'still-owed' })],
+      }),
+      lastOutcome: null,
+      leadAllowsSaveForLater: null,
+      asOf: CANVAS_EVENING,
+      answeredHere: (id) => id === 'answered',
+    })
+    expect(model.pendingCount).toBe(8)
+    expect(model.beyondList).toBe(true)
+  })
+
+  /**
+   * Every listed row answered on this device: no lead, no rows, and a count that cannot go
+   * negative however many the page was handed.
+   */
+  it('floors the count at zero when every row it was handed was answered here', () => {
+    const model = composeEmployeeHome({
+      dashboard: dashboard({
+        pendingSurveyCount: 1,
+        pendingSurveys: [survey({ id: 'a' }), survey({ id: 'b' })],
+      }),
+      lastOutcome: null,
+      leadAllowsSaveForLater: null,
+      asOf: CANVAS_EVENING,
+      answeredHere: () => true,
+    })
+    expect(model.lead).toBeNull()
+    expect(model.others).toEqual([])
+    expect(model.pendingCount).toBe(0)
+    expect(model.beyondList).toBe(false)
+  })
+
   it('reads anonymity as a promise only from a literal true', () => {
     const cases: [unknown, boolean][] = [
       [true, true],

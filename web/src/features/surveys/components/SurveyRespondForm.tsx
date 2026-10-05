@@ -49,6 +49,7 @@ import {
 } from '../respondAutosave'
 import { respondDimensions } from '../respondDimensions'
 import { dimensionLabel } from '../dimensionLabel'
+import { forgetAnswered, hasAnswered, markAnswered } from '../respondReceipt'
 import { clearSessionId, ensureSessionId } from '../respondSession'
 import {
   SurveyRespondError,
@@ -249,6 +250,12 @@ export default function SurveyRespondForm({
   // key on the way in and the idempotency key on the way out. Deriving it later
   // would mean the GET could not find a response the POST would then duplicate.
   const sessionId = useMemo(() => ensureSessionId(surveyId), [surveyId])
+
+  // Whether this browser remembers answering this survey, read ONCE on mount rather than
+  // on every render. The submission itself writes the flag, and re-reading it would swap
+  // the respondent's own confirmation for "you already answered" the instant they
+  // finished. Held in state so "that was not me" can clear it without a reload.
+  const [answeredHere, setAnsweredHere] = useState(() => hasAnswered(surveyId))
 
   // Answers are hydrated from the server exactly once. The read is re-issued when the
   // respondent switches language — the question TEXT has to come back translated —
@@ -534,6 +541,14 @@ export default function SurveyRespondForm({
         // Nothing left to resume, and on a shared browser the id must not outlive
         // the response it belongs to.
         clearSessionId(view.id)
+        // The resume credential goes; a flag saying "answered" stays. Dropping the id is
+        // what stops the next person at a shared browser reading these answers back (the
+        // respond GET returns them, free text included), and it is also what makes the
+        // server's idempotency key unmatchable on a second visit — so without this flag
+        // nothing anywhere would stop the same person answering again. See
+        // `respondReceipt.ts` for why the flag is browser-local and why it is not, and
+        // must not be described as, a one-response-per-person guarantee.
+        markAnswered(view.id)
         setSubmittedAt(Date.now())
         setResult(submission)
         // After the state updates, never before: whatever the caller does with this
@@ -811,6 +826,23 @@ export default function SurveyRespondForm({
     return (
       <RespondSurface>
         <AlreadyCompleted />
+      </RespondSurface>
+    )
+  }
+
+  // After the server's own verdict, never before it: `inProgress.isComplete` is the
+  // platform saying it holds a complete response, which is a stronger and differently
+  // worded claim than this browser remembering one. This branch is the anonymous case,
+  // where the server deliberately knows nothing and the flag is all there is.
+  if (view && answeredHere) {
+    return (
+      <RespondSurface>
+        <AnsweredOnThisDevice
+          onAnswerAgain={() => {
+            forgetAnswered(surveyId)
+            setAnsweredHere(false)
+          }}
+        />
       </RespondSurface>
     )
   }
@@ -1236,6 +1268,42 @@ function AlreadyCompleted() {
       <AlertTitle>{t('alreadyCompletedTitle')}</AlertTitle>
       <AlertDescription>{t('alreadyCompletedBody')}</AlertDescription>
     </Alert>
+  )
+}
+
+/**
+ * The anonymous counterpart of {@link AlreadyCompleted}: this browser remembers answering,
+ * and the platform deliberately does not know.
+ *
+ * Its own component and its own three strings rather than a flag on the one above, because
+ * the claims differ and the difference is the honest part. `alreadyCompletedBody` says
+ * "your answers were received … answering again would not replace them", which is true
+ * when the server matched a complete response — it returns the same response id and writes
+ * nothing. Said here it would be a false reassurance twice over: the platform cannot
+ * confirm the answers arrived, and answering again stores a **second** response rather
+ * than replacing anything.
+ *
+ * The escape is not optional. The flag belongs to a device and never to a person, so on a
+ * shared browser it outlives whoever answered; a respondent who is not that person has to
+ * be able to say so and carry on. It is `outline` rather than the accent so it reads as
+ * the correction it is, not as the thing to do next.
+ */
+function AnsweredOnThisDevice({ onAnswerAgain }: { onAnswerAgain: () => void }) {
+  const { t } = useTranslation('surveyRespond')
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Alert variant="success" role="status">
+        <ShieldCheck aria-hidden="true" />
+        <AlertTitle>{t('answeredOnThisDeviceTitle')}</AlertTitle>
+        <AlertDescription>{t('answeredOnThisDeviceBody')}</AlertDescription>
+      </Alert>
+      <div>
+        <Button type="button" variant="outline" onClick={onAnswerAgain}>
+          {t('answerAgain')}
+        </Button>
+      </div>
+    </div>
   )
 }
 
