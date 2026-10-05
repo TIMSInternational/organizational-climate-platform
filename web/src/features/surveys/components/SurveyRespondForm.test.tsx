@@ -1261,3 +1261,53 @@ describe('SurveyRespondForm — one open assessment at a time', () => {
     expect(heldElsewhere('s1', OTHER_TAB)).toBe(false)
   })
 })
+
+/**
+ * The promise is collapsed from the second question, never shortened.
+ *
+ * Measured on the TIMS instrument at 390×844 — 40 likert statements, Spanish — the open
+ * block is ~148px of the fold and the page comes to 938px, which puts "Siguiente" below
+ * it on every question. The fix spends the vertical room and nothing else: the same
+ * `anonymousBody` characters stay in the document on every page, one tap away.
+ *
+ * The two assertions that matter are therefore the shape AND the words. A collapse that
+ * also trimmed the copy would be the second, shorter claim `AnonymityNotice`'s own rule
+ * forbids, and a test that only asserted "it is a details element" would pass for it.
+ */
+describe('SurveyRespondForm — the anonymity promise under one question at a time', () => {
+  function notice(): HTMLElement {
+    const node = document.querySelector<HTMLElement>('[data-slot="anonymity-notice"]')
+    expect(node, 'the promise is on every page').toBeTruthy()
+    return node!
+  }
+
+  it('states it in full and open on the first question', async () => {
+    respondWith(view({ questions: [question(), question({ id: 'q2' })] }))
+    renderForm()
+    await screen.findByText('¿Qué tan satisfecho estás?')
+
+    expect(notice().tagName).toBe('SECTION')
+    expect(screen.getByText(copy.es('surveyRespond.anonymousBody'))).toBeTruthy()
+  })
+
+  it('collapses it from the second question, with the words character for character', async () => {
+    respondWith(view({ questions: [question(), question({ id: 'q2' })] }))
+    renderForm()
+    await screen.findByText('¿Qué tan satisfecho estás?')
+    const openWords = screen.getByText(copy.es('surveyRespond.anonymousBody')).textContent
+
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+
+    const collapsed = notice()
+    expect(collapsed.tagName).toBe('DETAILS')
+    expect(collapsed.hasAttribute('open')).toBe(false)
+    // Still in the document — find-in-page, a screen reader walking it, and one tap
+    // for everybody else — and still the same sentence it was on page one.
+    expect(screen.getByText(copy.es('surveyRespond.anonymousBody')).textContent).toBe(openWords)
+    // And the state word is still readable while it is shut, because that is the part
+    // that has to survive the collapse.
+    expect(collapsed.querySelector('[data-slot="anonymity-label"]')?.textContent).toBe(
+      copy.es('surveyRespond.anonymousChip'),
+    )
+  })
+})

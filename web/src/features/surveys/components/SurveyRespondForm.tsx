@@ -901,8 +901,12 @@ export default function SurveyRespondForm({
       {/* The promise, first and full width, once. The canvas opens the page on it
           (RespondSurveyPhone, 10 Sep), and one question at a time is exactly why it has
           to be here rather than beside a question: it is read before the first answer
-          and stays at the head of every page after it. */}
-      <AnonymityNotice anonymous={view.anonymous} />
+          and stays at the head of every page after it.
+
+          From the second question on it stays at that head collapsed, not shortened —
+          the same characters, one tap away, costing ~40px instead of ~148px of an
+          844px fold. `AnonymityNotice` carries the measurement and the reasoning. */}
+      <AnonymityNotice anonymous={view.anonymous} collapsible={index > 0} />
 
       <ContentLanguageNotice
         requested={locale}

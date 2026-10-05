@@ -1,4 +1,4 @@
-import { EyeOff, ShieldCheck } from 'lucide-react'
+import { ChevronDown, EyeOff, ShieldCheck } from 'lucide-react'
 import { useTranslation } from '../../../i18n'
 
 /**
@@ -45,39 +45,101 @@ import { useTranslation } from '../../../i18n'
  * that both claim to describe how a response is stored and disagree by a clause is
  * worse than one of them not existing.
  */
-export function AnonymityNotice({ anonymous }: { anonymous: boolean }) {
+export function AnonymityNotice({
+  anonymous,
+  collapsible = false,
+}: {
+  anonymous: boolean
+  /**
+   * Draw the promise collapsed behind a disclosure, open on demand.
+   *
+   * Only the respond form passes this, and only from the second question on — see the
+   * note on the `<details>` branch below for why that is not a weakening of the block
+   * and why the three other callers must never set it.
+   */
+  collapsible?: boolean
+}) {
   const { t } = useTranslation('surveyRespond')
 
-  return (
-    <section
-      data-slot="anonymity-notice"
-      data-anonymous={anonymous}
+  const box = anonymous
+    ? 'rounded-xl border border-accent-green-ring bg-accent-green-soft px-3.5 py-3'
+    : 'rounded-xl border border-accent-blue-ring bg-accent-blue-soft px-3.5 py-3'
+  const glyph = anonymous ? (
+    <EyeOff aria-hidden="true" className="mt-px size-icon shrink-0 text-accent-green-ink" />
+  ) : (
+    <ShieldCheck aria-hidden="true" className="mt-px size-icon shrink-0 text-accent-blue" />
+  )
+  const label = (
+    <span
+      data-slot="anonymity-label"
       className={
         anonymous
-          ? 'flex gap-2.5 rounded-xl border border-accent-green-ring bg-accent-green-soft px-3.5 py-3'
-          : 'flex gap-2.5 rounded-xl border border-accent-blue-ring bg-accent-blue-soft px-3.5 py-3'
+          ? 'text-2xs font-bold uppercase tracking-label text-chip-good-ink'
+          : 'text-2xs font-bold uppercase tracking-label text-fg-secondary'
       }
     >
-      {anonymous ? (
-        <EyeOff aria-hidden="true" className="mt-px size-icon shrink-0 text-accent-green-ink" />
-      ) : (
-        <ShieldCheck aria-hidden="true" className="mt-px size-icon shrink-0 text-accent-blue" />
-      )}
+      {anonymous ? t('anonymousChip') : t('identifiedChip')}
+    </span>
+  )
+  const heading = <h2 className="sr-only">{anonymous ? t('anonymousTitle') : t('identifiedTitle')}</h2>
+  const body = (
+    <p className="m-0 text-sm text-fg-secondary">
+      {anonymous ? t('anonymousBody') : t('identifiedBody')}
+    </p>
+  )
+
+  /*
+   * One question at a time costs the promise its room. Measured on the TIMS
+   * instrument — 40 likert statements, Spanish, 390×844 — the open block is ~148px of
+   * an 844px fold and the page comes to 938px, which puts Siguiente below the fold on
+   * every question. Collapsed it is ~40px, and the screen fits.
+   *
+   * **The copy is not shortened, and that is the point.** This component's own rule is
+   * that the promise is the same characters everywhere it is made, because two blocks
+   * that both describe how a response is stored and disagree by a clause are worse
+   * than one of them not existing. A one-line paraphrase would have been exactly that
+   * second, shorter claim. A `<details>` keeps `anonymousBody` intact, in the DOM, on
+   * every page — reachable by find-in-page and by a screen reader walking the
+   * document, and one tap from the respondent's eye — and spends only the vertical
+   * room, which is all that was ever the problem.
+   *
+   * Question 1 stays open: the promise is read **before the first answer**, which is
+   * where the consent actually happens, and the three other callers draw it open for
+   * the same reason — the invitation card and Home are each the first time a given
+   * respondent sees it.
+   *
+   * A `<details>` and not a toggle button, for `ChartTable`'s reasons: no state, free
+   * keyboard operation, and the content stays in the document. The summary's accessible
+   * name is the state word itself, which is what a disclosure here should announce.
+   */
+  if (collapsible) {
+    return (
+      <details data-slot="anonymity-notice" data-anonymous={anonymous} className={`group ${box}`}>
+        <summary className="flex cursor-pointer list-none items-center gap-2.5 [&::-webkit-details-marker]:hidden">
+          {glyph}
+          {label}
+          <ChevronDown
+            aria-hidden="true"
+            className="ml-auto size-icon shrink-0 text-fg-secondary transition-transform group-open:rotate-180"
+          />
+        </summary>
+        {/* Indented past the glyph so the sentence lands under the state word, exactly
+            where it sits in the open block above. `gap-2.5` is the summary's own gap. */}
+        <div className="mt-2 flex min-w-0 flex-col gap-0.5 pl-[calc(var(--admin-size-icon)+calc(var(--spacing)*2.5))]">
+          {heading}
+          {body}
+        </div>
+      </details>
+    )
+  }
+
+  return (
+    <section data-slot="anonymity-notice" data-anonymous={anonymous} className={`flex gap-2.5 ${box}`}>
+      {glyph}
       <div className="flex min-w-0 flex-col gap-0.5">
-        <h2 className="sr-only">{anonymous ? t('anonymousTitle') : t('identifiedTitle')}</h2>
-        <span
-          data-slot="anonymity-label"
-          className={
-            anonymous
-              ? 'text-2xs font-bold uppercase tracking-label text-chip-good-ink'
-              : 'text-2xs font-bold uppercase tracking-label text-fg-secondary'
-          }
-        >
-          {anonymous ? t('anonymousChip') : t('identifiedChip')}
-        </span>
-        <p className="m-0 text-sm text-fg-secondary">
-          {anonymous ? t('anonymousBody') : t('identifiedBody')}
-        </p>
+        {heading}
+        {label}
+        {body}
       </div>
     </section>
   )
