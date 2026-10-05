@@ -88,9 +88,15 @@ public class MicroclimateLiveResultsTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, liveResponse.StatusCode);
         var live = await liveResponse.Content.ReadFromJsonAsync<LiveResultsDetail>();
         Assert.Equal(2, live!.ResponseCount);
-        // response1 = "good good great" -> good:2, great:1. response2 = "good stressed" -> good:1, stressed:1.
-        // Word counts accumulate cumulatively across responses, so the final count for "good" is 2+1=3.
-        Assert.Contains(live.WordCloud, w => w.Text == "good" && w.Value == 3);
+        // A word counts ONCE PER RESPONSE, not once per occurrence, because the stored tally is
+        // read as a number of respondents by the word floor. response1 = "good good great"
+        // contributes good:1 (not 2) and great:1; response2 = "good stressed" contributes good:1
+        // and stressed:1. Counts still accumulate across responses, which is what this asserts.
+        Assert.Contains(live.WordCloud, w => w.Text == "good" && w.Value == 2);
+        // And the words only one respondent used are withheld: a word cloud leaks by
+        // distinctiveness, so the floor is SurveyResultsPrivacy.MinimumWordRespondents.
+        Assert.DoesNotContain(live.WordCloud, w => w.Text == "great");
+        Assert.DoesNotContain(live.WordCloud, w => w.Text == "stressed");
     }
 
     [Fact]
@@ -129,15 +135,23 @@ public class MicroclimateLiveResultsTests : IAsyncLifetime
         var ratingQuestionId = created.Questions.Single(q => q.Type == "rating").Id;
         var yesNoQuestionId = created.Questions.Single(q => q.Type == "yes_no").Id;
 
+        // TWO respondents, saying the same things. One would leave every word on a count of 1,
+        // where the word floor withholds it -- and an EMPTY cloud satisfies the two
+        // DoesNotContain assertions below without proving anything, which is the shape this
+        // test exists to catch. With two, "5" and "yes" would be on 2 and visible if they ever
+        // leaked, so the negatives have teeth again.
         var anonymousClient = _factory.CreateClient();
-        var response = await anonymousClient.PostAsJsonAsync($"/microclimates/{created.Id}/responses", new SubmitResponseRequest(
-            new Dictionary<Guid, string>
-            {
-                [openEndedQuestionId] = "great amazing",
-                [ratingQuestionId] = "5",
-                [yesNoQuestionId] = "yes",
-            }));
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        foreach (var _ in new[] { 1, 2 })
+        {
+            var response = await anonymousClient.PostAsJsonAsync($"/microclimates/{created.Id}/responses", new SubmitResponseRequest(
+                new Dictionary<Guid, string>
+                {
+                    [openEndedQuestionId] = "great amazing",
+                    [ratingQuestionId] = "5",
+                    [yesNoQuestionId] = "yes",
+                }));
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        }
 
         anonymousClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
         var liveResponse = await anonymousClient.GetAsync($"/microclimates/{created.Id}/live-results");
@@ -147,8 +161,8 @@ public class MicroclimateLiveResultsTests : IAsyncLifetime
         // only the open_ended answer's words should be counted.
         Assert.DoesNotContain(live!.WordCloud, w => w.Text == "5");
         Assert.DoesNotContain(live.WordCloud, w => w.Text == "yes");
-        Assert.Contains(live.WordCloud, w => w.Text == "great" && w.Value == 1);
-        Assert.Contains(live.WordCloud, w => w.Text == "amazing" && w.Value == 1);
+        Assert.Contains(live.WordCloud, w => w.Text == "great" && w.Value == 2);
+        Assert.Contains(live.WordCloud, w => w.Text == "amazing" && w.Value == 2);
     }
 
     [Fact]
@@ -251,6 +265,166 @@ public class MicroclimateLiveResultsTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Created, valid.StatusCode);
     }
 
+    /// <summary>
+    /// The defect #518 fixed for the survey cloud, which this surface kept: the TIMS dry run's
+    /// cloud led with "el" 8, "la" 7, "y" 5 — the grammar of the answers, not what they were
+    /// about. Spanish and English function words are dropped before counting, in the
+    /// respondent's language, and are not counted as withheld.
+    /// </summary>
+    [Fact]
+    public async Task Function_words_never_reach_the_word_cloud()
+    {
+        var client = _factory.CreateClient();
+        var adminToken = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin);
+        var (microclimateId, questionId) = await CreateActiveMicroclimateAsync(client, adminToken, anonymous: true);
+
+        var anonymousClient = _factory.CreateClient();
+        foreach (var _ in new[] { 1, 2 })
+        {
+            // "es" explicitly: the stop list is per language, so the language the respondent
+            // answered in is what decides which words are grammar. A Spanish answer filed under
+            // "en" would keep every Spanish article, which is the bug this pins.
+            var submitted = await anonymousClient.PostAsJsonAsync($"/microclimates/{microclimateId}/responses", new SubmitResponseRequest(
+                new Dictionary<Guid, string> { [questionId] = "la comunicacion entre las areas y el equipo" },
+                "es"));
+            Assert.Equal(HttpStatusCode.Created, submitted.StatusCode);
+        }
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+        var live = await (await client.GetAsync($"/microclimates/{microclimateId}/live-results"))
+            .Content.ReadFromJsonAsync<LiveResultsDetail>();
+
+        // Both respondents said every one of these, so the floor is not what removes them.
+        foreach (var functionWord in new[] { "la", "las", "y", "el", "entre" })
+        {
+            Assert.DoesNotContain(live!.WordCloud, w => w.Text == functionWord);
+        }
+
+        // ...and the words they actually chose survive.
+        Assert.Contains(live!.WordCloud, w => w.Text == "comunicacion" && w.Value == 2);
+        Assert.Contains(live.WordCloud, w => w.Text == "equipo" && w.Value == 2);
+    }
+
+    /// <summary>
+    /// A legacy cloud does not just read clean, it is PURGED from storage by the next response.
+    ///
+    /// <para>The tally is kept as the top 20 words per language. A cloud written before the stop
+    /// list can hold "el" 50 and "la" 40, which would spend those slots on grammar and push out
+    /// the content words a new response contributes — and those are discarded at write, so
+    /// hiding the stopwords at read time would leave a cloud that is empty rather than clean.
+    /// Reading the row back is the only way to tell the two apart.</para>
+    /// </summary>
+    [Fact]
+    public async Task A_new_response_purges_the_function_words_a_legacy_cloud_stored()
+    {
+        var client = _factory.CreateClient();
+        var adminToken = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin);
+        var (microclimateId, questionId) = await CreateActiveMicroclimateAsync(client, adminToken, anonymous: true);
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            var microclimate = await db.Microclimates.FirstAsync(m => m.Id == microclimateId);
+            microclimate.LiveResults.WordCloudData = System.Text.Json.JsonSerializer.Serialize(new[]
+            {
+                new WordCloudEntry("el", 50, "es"),
+                new WordCloudEntry("la", 40, "es"),
+                new WordCloudEntry("equipo", 2, "es"),
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var anonymousClient = _factory.CreateClient();
+        var submitted = await anonymousClient.PostAsJsonAsync($"/microclimates/{microclimateId}/responses", new SubmitResponseRequest(
+            new Dictionary<Guid, string> { [questionId] = "el equipo" }, "es"));
+        Assert.Equal(HttpStatusCode.Created, submitted.StatusCode);
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            var microclimate = await db.Microclimates.AsNoTracking().FirstAsync(m => m.Id == microclimateId);
+            var stored = System.Text.Json.JsonSerializer.Deserialize<List<WordCloudEntry>>(microclimate.LiveResults.WordCloudData!)!;
+
+            // Gone from the ROW, not merely filtered on the way out.
+            Assert.DoesNotContain(stored, w => w.Text == "el");
+            Assert.DoesNotContain(stored, w => w.Text == "la");
+            // The content word kept its history and took this response's contribution.
+            Assert.Contains(stored, w => w.Text == "equipo" && w.Value == 3);
+        }
+    }
+
+    /// <summary>
+    /// A cloud stored before the stop list existed is cleaned on the way out.
+    ///
+    /// <para>The write-side filter only sees new responses, so without this a microclimate
+    /// answered before the fix keeps leading with "el" and "la" until enough new responses
+    /// arrive to overwrite its tally. Measured on the local stack: a pulse answered minutes
+    /// before the write fix still returned "más" 2 afterwards.</para>
+    ///
+    /// <para>The legacy shape is written straight to the row on purpose. It is the one shape
+    /// the API can no longer produce, which is exactly why it has to be constructed here.</para>
+    /// </summary>
+    [Fact]
+    public async Task A_cloud_stored_before_the_stop_list_is_cleaned_when_it_is_read()
+    {
+        var client = _factory.CreateClient();
+        var adminToken = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin);
+        var (microclimateId, _) = await CreateActiveMicroclimateAsync(client, adminToken, anonymous: true);
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            var microclimate = await db.Microclimates.FirstAsync(m => m.Id == microclimateId);
+            microclimate.LiveResults.WordCloudData = System.Text.Json.JsonSerializer.Serialize(new[]
+            {
+                new WordCloudEntry("la", 4, "es"),
+                new WordCloudEntry("y", 3, "es"),
+                new WordCloudEntry("equipo", 3, "es"),
+                new WordCloudEntry("the", 2, "en"),
+                new WordCloudEntry("workload", 2, "en"),
+            });
+            await db.SaveChangesAsync();
+        }
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+        var live = await (await client.GetAsync($"/microclimates/{microclimateId}/live-results"))
+            .Content.ReadFromJsonAsync<LiveResultsDetail>();
+
+        // Every one of these cleared the floor on count; they go because of what they are.
+        Assert.DoesNotContain(live!.WordCloud, w => w.Text == "la");
+        Assert.DoesNotContain(live.WordCloud, w => w.Text == "y");
+        Assert.DoesNotContain(live.WordCloud, w => w.Text == "the");
+        // ...and the words the respondents actually chose survive, in both languages.
+        Assert.Contains(live.WordCloud, w => w.Text == "equipo" && w.Value == 3);
+        Assert.Contains(live.WordCloud, w => w.Text == "workload" && w.Value == 2);
+    }
+
+    /// <summary>
+    /// The privacy property the floor exists for, and the reason a word is counted once per
+    /// response rather than once per occurrence: otherwise one respondent repeating a word
+    /// lifts it over a floor that is meant to mean "more than one person said this".
+    /// </summary>
+    [Fact]
+    public async Task One_respondent_repeating_a_word_cannot_lift_it_over_the_floor()
+    {
+        var client = _factory.CreateClient();
+        var adminToken = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin);
+        var (microclimateId, questionId) = await CreateActiveMicroclimateAsync(client, adminToken, anonymous: true);
+
+        var anonymousClient = _factory.CreateClient();
+        var alone = await anonymousClient.PostAsJsonAsync($"/microclimates/{microclimateId}/responses", new SubmitResponseRequest(
+            new Dictionary<Guid, string> { [questionId] = "foco foco foco foco foco" }));
+        Assert.Equal(HttpStatusCode.Created, alone.StatusCode);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+        var live = await (await client.GetAsync($"/microclimates/{microclimateId}/live-results"))
+            .Content.ReadFromJsonAsync<LiveResultsDetail>();
+
+        // Five occurrences, one respondent. The response was still recorded.
+        Assert.Equal(1, live!.ResponseCount);
+        Assert.DoesNotContain(live.WordCloud, w => w.Text == "foco");
+    }
+
     [Fact]
     public async Task Concurrent_response_submissions_do_not_lose_updates()
     {
@@ -262,8 +436,12 @@ public class MicroclimateLiveResultsTests : IAsyncLifetime
         var tasks = Enumerable.Range(0, concurrentSubmissions).Select(async i =>
         {
             var anonymousClient = _factory.CreateClient();
+            // "shared" is in EVERY submission on purpose: a word only one respondent used is
+            // withheld by the word floor, so eight distinct words would leave an empty cloud
+            // and nothing to count. The shared word's tally is exactly the number of
+            // submissions that were not lost.
             return await anonymousClient.PostAsJsonAsync($"/microclimates/{microclimateId}/responses", new SubmitResponseRequest(
-                new Dictionary<Guid, string> { [questionId] = $"word{i}" }));
+                new Dictionary<Guid, string> { [questionId] = $"shared word{i}" }));
         });
 
         var responses = await Task.WhenAll(tasks);
@@ -277,6 +455,6 @@ public class MicroclimateLiveResultsTests : IAsyncLifetime
         // WordCloudData would silently drop some increments (lost updates). Every submission
         // must be reflected.
         Assert.Equal(concurrentSubmissions, live!.ResponseCount);
-        Assert.Equal(concurrentSubmissions, live.WordCloud.Sum(w => w.Value));
+        Assert.Contains(live.WordCloud, w => w.Text == "shared" && w.Value == concurrentSubmissions);
     }
 }
