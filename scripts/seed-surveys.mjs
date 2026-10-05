@@ -75,6 +75,7 @@
  * already had the waves used to return before reaching the open survey at all.
  */
 import { parseArgs } from 'node:util'
+import { pathToFileURL } from 'node:url'
 
 const { values } = parseArgs({
   options: {
@@ -82,6 +83,7 @@ const { values } = parseArgs({
     email: { type: 'string', default: 'fede.admin@acme.test' },
     password: { type: 'string', default: 'Local1234!' },
     /** Seconds between logins. 3.1s keeps 24 sign-ins under the 20/min auth ceiling. */
+    profile: { type: 'string', default: 'meridiano' },
     loginGap: { type: 'string', default: '3.1' },
     /** Seconds between response submissions, under the 60/min respond ceiling. */
     submitGap: { type: 'string', default: '1.1' },
@@ -191,7 +193,16 @@ const WAVES = [
  * the floor of 5, in every wave — that is the protected row, and it is the reason this
  * seed is worth more than a fixture.
  */
-const DEPARTMENTS = [
+/**
+ * Keyed by `--profile`, because the roster builder **throws** on a spec whose department this
+ * tenant does not have. One shared array would therefore make each tenant fail on the other's
+ * departments; appending is not an option, selecting is.
+ *
+ * `meridiano` is unchanged, value for value — it is the profile every screenshot and runbook
+ * in the repo already tells the story of.
+ */
+export const DEPARTMENT_SPECS = {
+  meridiano: [
   // `names` lists every name a tenant may give the department: the Acme seed uses the
   // English ones, `seed-demo-company.mjs` the Spanish ones. The profile is the same either
   // way, so both tenants tell the same story.
@@ -200,7 +211,35 @@ const DEPARTMENTS = [
   { name: 'Operations', names: ['Operations', 'Operaciones'], respondents: 5, base: [2.6, 2.4, 2.9, 2.8, 3.0, 3.2] },
   { name: 'People', names: ['People', 'Personas'], respondents: 5, base: [4.4, 3.9, 4.0, 3.6, 4.2, 4.4] },
   { name: 'Sales', names: ['Sales', 'Ventas'], respondents: 5, base: [3.9, 3.3, 3.7, 3.5, 3.8, 4.0] },
-]
+  ],
+
+  /**
+   * PROCOMER's demonstration tenant. **Every department answers at or above the floor of 5**,
+   * unlike Meridiano's deliberately-protected Finance: this tenant exists to show a completed
+   * cycle whose results are all readable, so a reader meets the product rather than a wall of
+   * "protegido". Because every department discloses, the complement is 0 by construction and
+   * `SurveyAggregation.WithholdComplement` withholds nothing.
+   *
+   * Ventanilla Única carries the weak profile — it is the finding the seeded action plan
+   * "Equilibrar la carga en Ventanilla Única" then answers, so the demo's improvement loop
+   * reads as one story rather than as unrelated screens.
+   *
+   * `respondents` is under each department's headcount on purpose (31 of 36 people, 86%): a
+   * demo where literally everyone answered reads as fabricated.
+   */
+  procomer: [
+    { name: 'Promoción Comercial', names: ['Promoción Comercial'], respondents: 8, base: [4.1, 3.7, 4.0, 3.5, 4.0, 4.2] },
+    { name: 'Ventanilla Única', names: ['Ventanilla Única de Comercio Exterior'], respondents: 7, base: [2.7, 2.5, 3.0, 2.6, 3.1, 3.2] },
+    { name: 'Inversión y Encadenamientos', names: ['Inversión y Encadenamientos'], respondents: 6, base: [3.8, 3.4, 3.7, 3.4, 3.8, 3.9] },
+    { name: 'Servicios Corporativos', names: ['Servicios Corporativos'], respondents: 5, base: [3.5, 3.1, 3.4, 3.0, 3.5, 3.6] },
+    { name: 'Tecnologías de Información', names: ['Tecnologías de Información'], respondents: 5, base: [4.0, 3.5, 3.8, 3.3, 3.9, 4.1] },
+  ],
+}
+
+const DEPARTMENTS = DEPARTMENT_SPECS[values.profile]
+if (!DEPARTMENTS) {
+  throw new Error(`unknown --profile ${values.profile} (have: ${Object.keys(DEPARTMENT_SPECS).join(', ')})`)
+}
 
 /**
  * A 1-5 answer for one respondent, deterministic in every input.
@@ -368,20 +407,42 @@ async function seedWave(adminToken, companyId, wave, roster, tokens) {
 
   const questionIds = survey.questions.map((q) => q.id)
   let submitted = 0
+  /**
+   * Re-open and retry once when the wave closes underneath us.
+   *
+   * Every wave here is BACKDATED, so its `endDate` is already in the past the moment it goes
+   * active — and `SurveyLifecycleJob` sweeps active surveys and closes the ones whose window
+   * has ended. Filling a wave takes `respondents x SUBMIT_GAP` seconds (about 35s for 31
+   * people), which is long enough for that sweep to land in the middle of it: measured, Q1 and
+   * Q2 filled, then Q3 closed after 18 of 31 and every later submission answered
+   * `400 This survey is not currently accepting responses`.
+   *
+   * A partly-filled wave is worse than a failed one, because it still looks like a wave: its
+   * last departments simply have no respondents, drop under the floor of 5, and the
+   * breakdown a demo exists to show comes back protected.
+   */
+  const submit = async (member, body) => {
+    try {
+      await json(`${API}/surveys/${survey.id}/responses`, { method: 'POST', body }, tokens.get(member.id))
+    } catch (error) {
+      if (!/not currently accepting responses/i.test(error.message)) throw error
+      log(`seed-surveys: ${wave.title} was closed mid-fill by the lifecycle sweep; re-opening`)
+      await json(`${API}/surveys/${survey.id}/status`, { method: 'PUT', body: JSON.stringify({ status: 'active' }) }, adminToken)
+      await json(`${API}/surveys/${survey.id}/responses`, { method: 'POST', body }, tokens.get(member.id))
+    }
+  }
+
   for (const { spec, members } of roster) {
     for (const [index, member] of members.entries()) {
-      await json(`${API}/surveys/${survey.id}/responses`, {
-        method: 'POST',
-        body: JSON.stringify({
-          isComplete: true,
-          language: 'en',
-          answers: questionIds.map((questionId, q) => ({
-            questionId,
-            value: answerFor(spec.base[q], wave.drift, index, q),
-            timeSpentSeconds: 20 + ((index + q) % 25),
-          })),
-        }),
-      }, tokens.get(member.id))
+      await submit(member, JSON.stringify({
+        isComplete: true,
+        language: 'en',
+        answers: questionIds.map((questionId, q) => ({
+          questionId,
+          value: answerFor(spec.base[q], wave.drift, index, q),
+          timeSpentSeconds: 20 + ((index + q) % 25),
+        })),
+      }))
       submitted += 1
       await sleep(SUBMIT_GAP)
     }
@@ -565,4 +626,9 @@ async function seedTemplate(adminToken, companyId) {
   return true
 }
 
-await main()
+// Only when invoked directly. Without this, importing the module to read DEPARTMENT_SPECS --
+// which `seed-surveys.test.mjs` does, and which CI runs with no API listening -- seeds against
+// whatever `--api` defaults to.
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+  await main()
+}
