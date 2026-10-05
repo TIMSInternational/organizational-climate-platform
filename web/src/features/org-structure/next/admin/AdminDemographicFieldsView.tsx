@@ -5,7 +5,16 @@ import { useTranslation } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
 import { ANONYMITY_FLOOR, KpiTile, isSuppressed } from '../../../../components/charts'
 import { PROTECTED_HATCH } from '../../../../components/charts/suppression'
-import { Button, EmptyState, LoadingRegion, NetworkError, SkeletonText, Table } from '../../../../components/ui'
+import {
+  Button,
+  Dialog,
+  DialogContent,
+  EmptyState,
+  LoadingRegion,
+  NetworkError,
+  SkeletonText,
+  Table,
+} from '../../../../components/ui'
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { cn } from '../../../../lib/cn'
 import { countWord } from '../../../../lib/countWord'
@@ -128,21 +137,44 @@ export default function AdminDemographicFieldsView() {
     <div className="flex flex-col gap-section">
       {header}
 
-      {editing && companyId && state.status === 'ready' && (
-        <FieldForm
-          key={editing.kind === 'field' ? editing.field.id : `new-${String(editing.seed)}`}
-          companyId={companyId}
-          field={editing.kind === 'field' ? editing.field : null}
-          people={state.people}
-          nextOrder={state.fields.length + 1}
-          seedExample={editing.kind === 'new' && editing.seed}
-          onDone={() => {
-            setEditing(null)
-            state.reload()
-          }}
-          onCancel={() => setEditing(null)}
-        />
-      )}
+      {/* A dialog, not a block in the page: this form used to render under the header and push
+          the catalogue down, which is the shape AdminUsersView's two flows also had.
+
+          `FieldForm` brings its own `Panel` with the heading and meta, so the dialog surface is
+          transparent and the Panel IS the card — nesting one inside the other would draw a
+          second border and a second heading. The dialog takes its accessible name from that
+          heading (`aria-labelledby="demographics-form"`) rather than adding a DialogTitle of
+          its own: a second <h2> with the same words is a duplicate for a screen reader, and it
+          broke `AdminDemographicFieldsView.test.tsx`'s heading lookup, which is how it was
+          caught. */}
+      <Dialog
+        open={Boolean(editing && companyId && state.status === 'ready')}
+        onOpenChange={(next) => {
+          if (!next) setEditing(null)
+        }}
+      >
+        <DialogContent
+          className="max-w-3xl max-h-[85vh] overflow-y-auto border-0 bg-transparent p-0 shadow-none"
+          closeLabel={t('common.close')}
+          aria-labelledby="demographics-form"
+        >
+          {editing && companyId && state.status === 'ready' && (
+            <FieldForm
+              key={editing.kind === 'field' ? editing.field.id : `new-${String(editing.seed)}`}
+              companyId={companyId}
+              field={editing.kind === 'field' ? editing.field : null}
+              people={state.people}
+              nextOrder={state.fields.length + 1}
+              seedExample={editing.kind === 'new' && editing.seed}
+              onDone={() => {
+                setEditing(null)
+                state.reload()
+              }}
+              onCancel={() => setEditing(null)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
 
       {state.status === 'error' ? (
         <NetworkError
