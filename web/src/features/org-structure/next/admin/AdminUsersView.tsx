@@ -8,6 +8,11 @@ import {
   Alert,
   AlertDescription,
   Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
   EmptyState,
   Input,
   LoadingRegion,
@@ -165,46 +170,34 @@ export default function AdminUsersView() {
     <div className="flex flex-col gap-section">
       {header}
 
-      {open === 'invite' && companyId && (
-        <Panel
-          accent
-          labelledBy="users-invite"
-          heading={
-            <h2 id="users-invite" className="m-0 text-2xl">
-              {t('users.next.invite')}
-            </h2>
-          }
-          meta={t('users.next.panel.inviteMeta')}
-        >
-          <InvitationForm allowCompanyAdminSetup={capabilities.canAssignRoles} onSubmit={handleCreateInvitation} />
-          <ShareableLinkPanel onCreate={handleCreateShareableLink} />
-          <div>
-            <Button type="button" variant="ghost" onClick={() => setOpen('none')}>
-              {t('users.next.panel.close')}
-            </Button>
-          </div>
-        </Panel>
-      )}
+      {/* A dialog, not a block in the page. Both of these used to render inline under the
+          header, which pushed the roster down the screen and left the reader to work out that
+          something had opened. A modal states what it is, holds focus for the length of the
+          task, and returns the roster untouched when it closes. */}
+      <Dialog open={open === 'invite'} onOpenChange={(next) => setOpen(next ? 'invite' : 'none')}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto" closeLabel={t('users.next.panel.close')}>
+          <DialogHeader>
+            <DialogTitle>{t('users.next.invite')}</DialogTitle>
+            <DialogDescription>{t('users.next.panel.inviteMeta')}</DialogDescription>
+          </DialogHeader>
+          {companyId && (
+            <>
+              <InvitationForm allowCompanyAdminSetup={capabilities.canAssignRoles} onSubmit={handleCreateInvitation} />
+              <ShareableLinkPanel onCreate={handleCreateShareableLink} />
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
-      {open === 'import' && companyId && (
-        <Panel
-          accent
-          labelledBy="users-import"
-          heading={
-            <h2 id="users-import" className="m-0 text-2xl">
-              {t('users.next.bulkImport')}
-            </h2>
-          }
-          meta={t('users.next.panel.importMeta')}
-        >
-          <IntakeWizard baseUrl={baseUrl} companyId={companyId} onImported={state.reload} />
-          <div>
-            <Button type="button" variant="ghost" onClick={() => setOpen('none')}>
-              {t('users.next.panel.close')}
-            </Button>
-          </div>
-        </Panel>
-      )}
+      <Dialog open={open === 'import'} onOpenChange={(next) => setOpen(next ? 'import' : 'none')}>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto" closeLabel={t('users.next.panel.close')}>
+          <DialogHeader>
+            <DialogTitle>{t('users.next.bulkImport')}</DialogTitle>
+            <DialogDescription>{t('users.next.panel.importMeta')}</DialogDescription>
+          </DialogHeader>
+          {companyId && <IntakeWizard baseUrl={baseUrl} companyId={companyId} onImported={state.reload} />}
+        </DialogContent>
+      </Dialog>
 
       {state.status === 'error' ? (
         <NetworkError

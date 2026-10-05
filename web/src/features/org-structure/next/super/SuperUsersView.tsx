@@ -8,6 +8,11 @@ import {
   Alert,
   AlertDescription,
   Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
   EmptyState,
   Input,
   LoadingRegion,
@@ -159,46 +164,31 @@ export default function SuperUsersView() {
         />
       </div>
 
-      {open === 'invite' && companyId && (
-        <Panel
-          accent
-          labelledBy="users-invite"
-          heading={
-            <h2 id="users-invite" className="m-0 text-2xl">
-              {t('superadmin.next.users.invite')}
-            </h2>
-          }
-        >
-          <p className="m-0 max-w-measure text-xs text-fg-secondary">{t('superadmin.next.users.invitations.text')}</p>
-          <InvitationForm allowCompanyAdminSetup onSubmit={handleCreateInvitation} />
-          <ShareableLinkPanel onCreate={handleCreateShareableLink} />
-          <div>
-            <Button type="button" variant="ghost" onClick={() => setOpen('none')}>
-              {t('superadmin.next.users.invitations.close')}
-            </Button>
-          </div>
-        </Panel>
-      )}
+      {/* Dialogs rather than blocks in the page, for the reason AdminUsersView gives. */}
+      <Dialog open={open === 'invite'} onOpenChange={(next) => setOpen(next ? 'invite' : 'none')}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto" closeLabel={t('superadmin.next.users.invitations.close')}>
+          <DialogHeader>
+            <DialogTitle>{t('superadmin.next.users.invite')}</DialogTitle>
+            <DialogDescription>{t('superadmin.next.users.invitations.text')}</DialogDescription>
+          </DialogHeader>
+          {companyId && (
+            <>
+              <InvitationForm allowCompanyAdminSetup onSubmit={handleCreateInvitation} />
+              <ShareableLinkPanel onCreate={handleCreateShareableLink} />
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
-      {open === 'import' && companyId && (
-        <Panel
-          accent
-          labelledBy="users-import"
-          heading={
-            <h2 id="users-import" className="m-0 text-2xl">
-              {t('superadmin.next.users.import.heading')}
-            </h2>
-          }
-          meta={t('superadmin.next.users.import.meta')}
-        >
-          <IntakeWizard baseUrl={baseUrl} companyId={companyId} onImported={state.reload} />
-          <div>
-            <Button type="button" variant="ghost" onClick={() => setOpen('none')}>
-              {t('superadmin.next.users.invitations.close')}
-            </Button>
-          </div>
-        </Panel>
-      )}
+      <Dialog open={open === 'import'} onOpenChange={(next) => setOpen(next ? 'import' : 'none')}>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto" closeLabel={t('superadmin.next.users.invitations.close')}>
+          <DialogHeader>
+            <DialogTitle>{t('superadmin.next.users.import.heading')}</DialogTitle>
+            <DialogDescription>{t('superadmin.next.users.import.meta')}</DialogDescription>
+          </DialogHeader>
+          {companyId && <IntakeWizard baseUrl={baseUrl} companyId={companyId} onImported={state.reload} />}
+        </DialogContent>
+      </Dialog>
 
       <div className="flex flex-wrap items-center gap-2.5">
         <div role="group" aria-label={t('superadmin.next.users.filterLabel')} className="flex w-full flex-wrap gap-1.5 xl:w-auto">

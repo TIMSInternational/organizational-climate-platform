@@ -157,7 +157,10 @@ describe('AdminUsersView (company administrator)', () => {
     const user = userEvent.setup()
     renderAt(ROUTE)
     await user.click(await screen.findByRole('button', { name: T.invite }))
-    const panel = screen.getByRole('region', { name: T.invite })
+    // A dialog now, not a region in the page: the invite and import flows open over the
+    // roster instead of pushing it down. The point of this test is unchanged — whatever
+    // container it lives in must never offer the company-administrator option.
+    const panel = await screen.findByRole('dialog', { name: T.invite })
     expect(within(panel).queryByRole('option', { name: es.users.companyAdmin })).toBeNull()
   })
 

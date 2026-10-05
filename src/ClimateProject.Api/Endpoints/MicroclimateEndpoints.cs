@@ -6,6 +6,7 @@ using ClimateProject.Application.Auth;
 using ClimateProject.Application.Localization;
 using ClimateProject.Application.Microclimates;
 using ClimateProject.Application.Questions;
+using ClimateProject.Application.Surveys;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
 using Microsoft.AspNetCore.RateLimiting;
@@ -1263,9 +1264,7 @@ public static class MicroclimateEndpoints
         var fallbackFields = new List<string>();
         var questions = await LoadQuestionDtosAsync(microclimate, db, locale, fallbackFields, cancellationToken);
 
-        var words = string.IsNullOrWhiteSpace(microclimate.LiveResults.WordCloudData)
-            ? []
-            : System.Text.Json.JsonSerializer.Deserialize<List<WordCloudEntry>>(microclimate.LiveResults.WordCloudData) ?? [];
+        var words = ReadWordCloud(microclimate.LiveResults.WordCloudData);
 
         return (MicroclimateExportProjection.Project(
             microclimate.Id,
@@ -1383,24 +1382,75 @@ public static class MicroclimateEndpoints
     /// </summary>
     internal const string NoInsightGeneratorReason = "no_insight_generator_configured";
 
-    // Keyed by (language, word), not by word. Counting "trabajo" and "work" as
-    // unrelated entries in one map was the whole defect: the frequencies were correct
-    // per string and meaningless as a picture of what people said.
+    /// <summary>
+    /// The words ONE response contributes to the cloud, each counted once.
+    ///
+    /// <para>Keyed by (language, word), not by word. Counting "trabajo" and "work" as unrelated
+    /// entries in one map was the original defect here: the frequencies were correct per string
+    /// and meaningless as a picture of what people said.</para>
+    ///
+    /// <para>Two rules, both borrowed from the survey word cloud rather than restated, because
+    /// two clouds over the same workforce with different rules is how a suppression rule gets
+    /// defeated without anyone breaking it (<see cref="SurveyResultsPrivacy"/>).</para>
+    ///
+    /// <para><b>Function words are dropped before counting</b> (<see cref="WordStopList"/>).
+    /// The TIMS dry run's survey cloud led with "el" 8, "la" 7, "y" 5 — the grammar of the
+    /// answers, not what they were about. #518 fixed that for surveys and this surface kept
+    /// counting them.</para>
+    ///
+    /// <para><b>Once per response, not once per occurrence.</b> The stored tally is read as a
+    /// number of RESPONDENTS by the floor below, so a respondent who writes "foco" three times
+    /// must not be able to push their own word past it on their own. A HashSet per call gives
+    /// that: this method is called with one response's open answers.</para>
+    /// </summary>
     private static Dictionary<(string Language, string Word), int> CountWordFrequencies(IEnumerable<string> texts, string language)
     {
-        var counts = new Dictionary<(string, string), int>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var text in texts)
         {
             var words = text.ToLowerInvariant()
-                .Split([' ', '\t', '\n', '.', ',', '!', '?'], StringSplitOptions.RemoveEmptyEntries);
+                .Split([' ', '\t', '\n', '.', ',', '!', '?', ';', ':', '(', ')', '"', '\'', '¿', '¡'], StringSplitOptions.RemoveEmptyEntries);
             foreach (var word in words)
             {
-                counts[(language, word)] = counts.GetValueOrDefault((language, word)) + 1;
+                if (WordStopList.Contains(language, word))
+                {
+                    continue;
+                }
+
+                seen.Add(word);
             }
         }
 
-        return counts;
+        return seen.ToDictionary(word => (language, word), _ => 1);
     }
+
+    /// <summary>
+    /// The stored cloud as a reader may see it: every word carried by fewer than
+    /// <see cref="SurveyResultsPrivacy.MinimumWordRespondents"/> responses is withheld.
+    ///
+    /// <para>A word cloud does not leak by group size, it leaks by distinctiveness — one
+    /// respondent writing "mi trámite de visa" names themselves to a reader who knows the team,
+    /// however many people answered. The survey cloud has held this floor since #122; this
+    /// surface published count-1 words, measured on a five-person pulse whose cloud returned
+    /// "planificar", "reuniones" and "foco", each said by exactly one person.</para>
+    ///
+    /// <para>Applied at READ time rather than at write because the stored tally is an aggregate
+    /// that later responses still add to: a word on 1 today is on 2 tomorrow, and discarding it
+    /// at write would lose it permanently.</para>
+    ///
+    /// <para>The stop list is applied HERE AS WELL as before counting, which is not belt and
+    /// braces. The write-side filter only ever sees new responses, so every cloud stored before
+    /// it existed keeps its function words until enough new responses arrive to overwrite the
+    /// tally -- measured on the local stack after the write fix, where a pulse answered minutes
+    /// earlier still led with "más" 2. A reader should not have to wait for that.</para>
+    /// </summary>
+    private static List<WordCloudEntry> ReadWordCloud(string? stored)
+        => string.IsNullOrWhiteSpace(stored)
+            ? []
+            : (System.Text.Json.JsonSerializer.Deserialize<List<WordCloudEntry>>(stored) ?? [])
+                .Where(w => w.Value >= SurveyResultsPrivacy.MinimumWordRespondents)
+                .Where(w => !WordStopList.Contains(w.Language, w.Text))
+                .ToList();
 
     private static string ComputeEngagementLevel(int responseCount, int targetParticipantCount)
     {
@@ -1436,9 +1486,7 @@ public static class MicroclimateEndpoints
             return Results.Forbid();
         }
 
-        var wordCloud = string.IsNullOrWhiteSpace(microclimate.LiveResults.WordCloudData)
-            ? []
-            : System.Text.Json.JsonSerializer.Deserialize<List<WordCloudEntry>>(microclimate.LiveResults.WordCloudData) ?? [];
+        var wordCloud = ReadWordCloud(microclimate.LiveResults.WordCloudData);
 
         return Results.Ok(new LiveResultsDetail(
             microclimate.LiveResults.SentimentScore,
@@ -1662,9 +1710,17 @@ public static class MicroclimateEndpoints
         {
             for (var attempt = 1; ; attempt++)
             {
+                // Function words are dropped from the STORED tally as it is reloaded, not only
+                // on the way out. A cloud written before the stop list existed can hold "el" 50
+                // and "la" 40, and the top-20-per-language cut below would spend its slots on
+                // them -- pushing the content words this very response contributed out of
+                // storage, where they are then gone for good while the stopwords are merely
+                // hidden at read time. Purging here means the row heals itself on the first
+                // response after the deploy, and no migration is needed.
                 var existingCloud = string.IsNullOrWhiteSpace(microclimate.LiveResults.WordCloudData)
                     ? new Dictionary<(string Language, string Word), int>()
                     : System.Text.Json.JsonSerializer.Deserialize<List<WordCloudEntry>>(microclimate.LiveResults.WordCloudData)!
+                        .Where(w => !WordStopList.Contains(w.Language, w.Text))
                         .ToDictionary(w => (Language: w.Language, Word: w.Text), w => w.Value);
 
                 foreach (var (key, count) in CountWordFrequencies(openTextAnswers, respondentLanguage))
