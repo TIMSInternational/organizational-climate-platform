@@ -83,6 +83,7 @@
      the consent notice `--admin-text-sm` (12px), which is not a size to ask a workforce
      to read a privacy promise at. These three are the respond page's own steps. */
   --admin-text-respond: 0.9375rem; /* 15px — answer labels and the respond page's body copy */
+  --admin-text-respond-sm: 0.8125rem; /* 13px — the respond page's readings and meta: the position, the n/total chip, the foot */
   --admin-text-respond-lg: 1rem; /* 16px — the same, from `md` up */
   --admin-text-respond-question: 1.25rem; /* 20px — the question itself, from `md` up */
 

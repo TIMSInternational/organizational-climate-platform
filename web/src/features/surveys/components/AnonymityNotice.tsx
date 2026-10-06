@@ -74,8 +74,8 @@ export function AnonymityNotice({
       data-slot="anonymity-label"
       className={
         anonymous
-          ? 'text-2xs font-bold uppercase tracking-label text-chip-good-ink'
-          : 'text-2xs font-bold uppercase tracking-label text-fg-secondary'
+          ? 'text-sm font-bold uppercase tracking-label text-chip-good-ink'
+          : 'text-sm font-bold uppercase tracking-label text-fg-secondary'
       }
     >
       {anonymous ? t('anonymousChip') : t('identifiedChip')}

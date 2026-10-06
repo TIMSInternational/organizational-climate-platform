@@ -121,7 +121,7 @@ export default function RespondQuestionField({
           <span
             aria-hidden="true"
             data-slot="question-index"
-            className="inline-flex h-5.5 items-center rounded-lg border border-line-default bg-surface-icon-box px-2 font-mono text-xs font-medium tabular-nums text-fg-secondary"
+            className="inline-flex h-6 items-center rounded-lg border border-line-default bg-surface-icon-box px-2 font-mono text-respond-sm font-medium tabular-nums text-fg-secondary"
           >
             {`${position}/${total}`}
           </span>
@@ -129,7 +129,7 @@ export default function RespondQuestionField({
           {dimension ? (
             <span
               data-slot="question-dimension"
-              className="min-w-0 truncate text-2xs font-bold uppercase tracking-label text-fg-secondary"
+              className="min-w-0 truncate text-sm font-bold uppercase tracking-label text-fg-secondary"
               title={dimension}
             >
               {dimension}
@@ -142,7 +142,7 @@ export default function RespondQuestionField({
               word it does not draw. That is the "mark the optional ones" pattern, and
               it is why `requiredMarker` survives here as a visually hidden clause. */}
           {question.required ? null : (
-            <span data-slot="question-optional" className="text-xs font-normal text-fg-secondary">
+            <span data-slot="question-optional" className="text-respond-sm font-normal text-fg-secondary">
               {t('next.optional')}
             </span>
           )}

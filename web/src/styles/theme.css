@@ -264,6 +264,7 @@
   --text-question--line-height: 1.4;
   /* The respond page's own steps, for the audience that reads it. */
   --text-respond: var(--admin-text-respond);
+  --text-respond-sm: var(--admin-text-respond-sm);
   --text-respond-lg: var(--admin-text-respond-lg);
   --text-respond-question: var(--admin-text-respond-question);
   --text-respond-question--line-height: 1.35;
