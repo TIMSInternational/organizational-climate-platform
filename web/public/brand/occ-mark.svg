@@ -1,10 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="2 9 1200 1200" role="img" aria-label="OCC">
   <title>OCC</title>
-  <!-- The OCC mark, traced from the artwork supplied 2026-10-05. Brand red #FB1724.
-       One colour on transparency, so it reads on a light or a dark browser chrome
-       alike: #FB1724 measures 3.70:1 on the light paper and 4.68:1 on the navy shell.
-       Note the honest limit -- six figures in a ring cannot resolve at 16px; at favicon
-       size this reads as a red ring, which is the artwork's nature, not the trace's. -->
+  <desc>The OCC mark: six figures turning as one circle. Traced from the artwork supplied 2026-10-05; brand red #FB1724.</desc>
   <g transform="translate(0.000000,1220.000000) scale(0.100000,-0.100000)" fill="#FB1724"><path d="M6000 12098 c-47 -4 -103 -12 -126 -17 -38 -10 -185 -99 -199 -121
 -3 -6 -33 -28 -66 -51 -33 -22 -70 -57 -83 -77 -13 -20 -51 -67 -84 -104 -51
 -56 -62 -75 -67 -115 -4 -26 -21 -79 -38 -118 -37 -86 -45 -156 -23 -209 9

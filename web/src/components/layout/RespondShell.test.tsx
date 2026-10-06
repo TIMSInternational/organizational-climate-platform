@@ -15,33 +15,11 @@ function renderShell(children: React.ReactNode = <p>body</p>) {
 }
 
 /**
- * The drawn geometry of an element's first `<svg>` — the mark itself, whatever it is made of.
- *
- * It read `<path d>` alone until 2026-09-23, which was right while the mark was a lucide
- * glyph and silently returned `''` the moment `ClimateMark` drew it as nine `<rect>`s. The
- * assertion below has a vacuity guard, so that surfaced as a failure rather than as a test
- * comparing two empty strings — but the lesson is that the helper has to describe the SHAPE,
- * not one way of expressing it.
- *
- * `data-tone` is deliberately not part of this: the rail asks for the shell ramp and the
- * respond header follows the reader's theme, so the two differ in colour by design. What
- * must not differ is the mark.
+ * The `glyph()` helper that used to live here compared the drawn geometry of two inline
+ * `<svg>` marks, so that the rail and the respond header could be proved to draw the SAME
+ * artwork rather than two lookalikes. The OCC lockup is one static asset referenced by
+ * `src`, so the same guarantee is now one string comparison and the helper has no reader.
  */
-function glyph(root: Element | null | undefined): string {
-  const svg = root?.querySelector('svg')
-  if (!svg) return ''
-  const shapes = [...svg.querySelectorAll('path, rect, circle')]
-  return shapes
-    .map((el) =>
-      [
-        el.tagName,
-        ...['d', 'x', 'y', 'width', 'height', 'rx', 'cx', 'cy', 'r', 'fill'].map(
-          (name) => el.getAttribute(name) ?? '',
-        ),
-      ].join(','),
-    )
-    .join('|')
-}
 
 afterEach(() => {
   cleanup()
@@ -147,7 +125,7 @@ describe('RespondShell', () => {
 
     const lockup = container.querySelector('[data-slot="brand-lockup"]')
     expect(lockup).toBeTruthy()
-    expect(lockup?.textContent).toBe('CLIMATE')
+    expect(lockup?.querySelector('[data-slot="occ-logo"]')?.getAttribute('alt')).toBe('OCC')
     expect(screen.queryByText('Organizational Climate Platform')).toBeNull()
   })
 
@@ -157,36 +135,38 @@ describe('RespondShell', () => {
    * that re-draws it here compiles, renders and looks deliberate. This fails.
    */
   /**
-   * The ramp the rail asks for, and why it is not the reader's.
+   * The size floor, which replaced the old ramp guarantee.
    *
-   * `--admin-bg-shell` is navy in the LIGHT theme too (#0c1c3a). Measured against it, the
-   * light ramp's two deepest cells are 1.13:1 and 1.25:1 — three of the nine do not dim,
-   * they disappear, and the mark loses a third of itself with every test still green. So
-   * the rail pins `tone="shell"`, and this is what stops a later "why does the rail not
-   * follow the theme?" from quietly removing it.
-   *
-   * The respond header is the control: it sits on the page surface, so it SHOULD follow.
+   * `ClimateMark` needed a light ramp and a dark one because its deepest cells measured
+   * 1.13:1 on the navy rail and vanished. The OCC mark is a single ink that was measured
+   * on every surface first — 3.70:1 on the light paper, 4.68:1 on the navy shell — so
+   * there is no tone to pin. What it has instead is a FLOOR: six figures in a ring were
+   * rendered and read at 16/24/32/48/64, and below 32px they stop resolving. Nothing in
+   * either shell may draw it smaller, and this is what stops a later "the rail feels
+   * cramped" from quietly taking it back to 24.
    */
-  it('pins the shell ramp in the rail and lets the respond header follow the theme', () => {
-    const rail = render(
+  it('never draws the mark below the size its figures need', () => {
+    const collapsed = render(
       <TranslationProvider>
-        <SidebarBrand collapsed={false} onToggleCollapsed={() => {}} />
+        <SidebarBrand collapsed onToggleCollapsed={() => {}} />
       </TranslationProvider>,
     )
-    expect(
-      rail.container.querySelector('[data-slot="climate-mark"]')?.getAttribute('data-tone'),
-    ).toBe('shell')
+    const mark = collapsed.container.querySelector('[data-slot="occ-mark"]')
+    expect(mark).toBeTruthy()
+    expect(Number(mark?.getAttribute('height'))).toBeGreaterThanOrEqual(32)
     cleanup()
 
-    const respond = render(<BrandLockup />)
-    expect(
-      respond.container.querySelector('[data-slot="climate-mark"]')?.getAttribute('data-tone'),
-    ).toBe('auto')
+    // The lockup carries the mark at its own height, so the floor rides on that.
+    const respond = render(<BrandLockup size="compact" />)
+    const logo = respond.container.querySelector('[data-slot="occ-logo"]')
+    expect(Number(logo?.getAttribute('height'))).toBeGreaterThanOrEqual(32)
   })
 
-  it('draws the same mark the signed-in rail draws, not a second one', () => {
+  it('draws the same artwork the signed-in rail draws, not a second one', () => {
     const respond = render(<BrandLockup />)
-    const respondMark = glyph(respond.container.querySelector('[data-slot="brand-lockup"]'))
+    const respondSrc = respond.container
+      .querySelector('[data-slot="occ-logo"]')
+      ?.getAttribute('src')
     cleanup()
 
     const rail = render(
@@ -194,11 +174,11 @@ describe('RespondShell', () => {
         <SidebarBrand collapsed={false} onToggleCollapsed={() => {}} />
       </TranslationProvider>,
     )
-    const railMark = glyph(rail.container.querySelector('[data-slot="sidebar-brand"]'))
+    const railSrc = rail.container.querySelector('[data-slot="occ-logo"]')?.getAttribute('src')
 
-    // Guard the guard: two empty strings would compare equal.
-    expect(respondMark.length).toBeGreaterThan(0)
-    expect(respondMark).toBe(railMark)
+    // Guard the guard: two undefineds would compare equal.
+    expect(respondSrc).toBeTruthy()
+    expect(respondSrc).toBe(railSrc)
   })
 
   /**

@@ -72,12 +72,12 @@ function isCopyProp(name: string): boolean {
 const ALLOWED = new Set([
   'Organizational Climate Platform', // the product name, not translated
   'acme.com', // example domain, mirrors dashboard.domainPlaceholder
-  // The two halves of the sidebar wordmark (`SidebarBrand.tsx`). One word split
-  // for the two-tone treatment, i.e. a logotype rather than copy — the seam is a
-  // property of the drawn mark, not of the language. Same reason as the product
-  // name above.
-  'CLIMA',
-  'TE',
+  // The brand's own name, carried as the accessible name of the logo artwork
+  // (`components/layout/OccLogo.tsx`). A logotype rather than copy: it is spelled
+  // the same in both catalogues because it is a name, and translating it would
+  // rename the product. Same reason as the product name above. It replaced the
+  // two halves of the old two-tone CLIMA|TE wordmark, which was drawn as text.
+  'OCC',
   // Two **server** strings, matched on and never rendered
   // (`features/dashboard/api/dashboard.ts`). `GET /dashboard/department-admin` answers a
   // leader with no team and an orphaned account with the same 400 status and different
