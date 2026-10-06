@@ -74,8 +74,8 @@ export function AnonymityNotice({
       data-slot="anonymity-label"
       className={
         anonymous
-          ? 'text-2xs font-bold uppercase tracking-label text-chip-good-ink'
-          : 'text-2xs font-bold uppercase tracking-label text-fg-secondary'
+          ? 'text-sm font-bold uppercase tracking-label text-chip-good-ink'
+          : 'text-sm font-bold uppercase tracking-label text-fg-secondary'
       }
     >
       {anonymous ? t('anonymousChip') : t('identifiedChip')}
@@ -83,7 +83,7 @@ export function AnonymityNotice({
   )
   const heading = <h2 className="sr-only">{anonymous ? t('anonymousTitle') : t('identifiedTitle')}</h2>
   const body = (
-    <p className="m-0 text-sm text-fg-secondary">
+    <p className="m-0 text-respond text-fg-secondary">
       {anonymous ? t('anonymousBody') : t('identifiedBody')}
     </p>
   )

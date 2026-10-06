@@ -921,13 +921,13 @@ export default function SurveyRespondForm({
           the card says the position either way. */}
       <header data-slot="respond-progress" className="flex flex-col gap-1.5">
         <div className="flex items-baseline justify-between gap-2">
-          <h1 className="m-0 min-w-0 font-sans text-2xs font-bold uppercase leading-snug tracking-eyebrow text-fg-secondary">
+          <h1 className="m-0 min-w-0 font-sans text-sm font-bold uppercase leading-snug tracking-eyebrow text-fg-secondary">
             {view.title ?? t('untitledSurvey')}
           </h1>
           {view.showProgress && total > 0 ? (
             <span
               data-slot="respond-position"
-              className="shrink-0 font-mono text-xs tabular-nums text-fg-secondary"
+              className="shrink-0 font-mono text-respond-sm tabular-nums text-fg-secondary"
             >
               {t('next.position', { position, total })}
             </span>
@@ -944,7 +944,7 @@ export default function SurveyRespondForm({
       {/* The author's description, on the first page only: it introduces the survey,
           and repeated over every question it would push the question down the phone. */}
       {index === 0 && view.description ? (
-        <p className="m-0 max-w-prose text-base text-fg-secondary">{view.description}</p>
+        <p className="m-0 max-w-prose text-respond text-fg-secondary">{view.description}</p>
       ) : null}
 
       {remainingMs !== null && remainingMs > 0 ? (
@@ -1034,7 +1034,7 @@ export default function SurveyRespondForm({
           <Button
             type="button"
             variant="outline"
-            className="h-11 flex-1"
+            className="h-11 flex-1 text-respond"
             disabled={index === 0 || busy !== 'idle'}
             onClick={() => turnTo(index - 1)}
           >
@@ -1042,7 +1042,7 @@ export default function SurveyRespondForm({
             {t('next.previous')}
           </Button>
           {isLast ? (
-            <Button key="submit" type="submit" variant="primary" className="h-11 flex-2" disabled={busy !== 'idle'}>
+            <Button key="submit" type="submit" variant="primary" className="h-11 flex-2 text-respond" disabled={busy !== 'idle'}>
               {busy === 'submitting' ? tRoot('common.submitting') : t('submitResponse')}
             </Button>
           ) : (
@@ -1050,7 +1050,7 @@ export default function SurveyRespondForm({
               key="next"
               type="button"
               variant="primary"
-              className="h-11 flex-2"
+              className="h-11 flex-2 text-respond"
               disabled={busy !== 'idle'}
               onClick={() => goNext(index)}
             >
@@ -1071,7 +1071,7 @@ export default function SurveyRespondForm({
               variant="link"
               disabled={busy !== 'idle'}
               onClick={() => void send(false)}
-              className="p-2 text-base font-normal text-fg-secondary underline"
+              className="p-2 text-respond font-normal text-fg-secondary underline"
             >
               {busy === 'saving' ? t('savingProgress') : t('saveAndFinishLater')}
             </Button>
@@ -1085,7 +1085,7 @@ export default function SurveyRespondForm({
           bottom of the column on a short page, under the form on a long one. */}
       <footer
         data-slot="respond-footer"
-        className="mt-auto flex flex-wrap justify-between gap-2 text-xs text-fg-secondary"
+        className="mt-auto flex flex-wrap justify-between gap-2 text-respond-sm text-fg-secondary"
       >
         <span>{t('next.closesOn', { date: formatDayMonth(view.endDate, locale) })}</span>
         {remainingMs !== null && remainingMs > 0 ? (

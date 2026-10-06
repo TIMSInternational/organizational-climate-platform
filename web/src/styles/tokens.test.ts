@@ -86,8 +86,10 @@ describe('type scale', () => {
     const sizes = [...tokensCss.matchAll(/^\s*--admin-text-[\w-]+:\s*([^;]+);/gm)].map((m) =>
       m[1].trim(),
     )
-    // The legacy eight, and the canvas's five named steps (10 Sep): 9, 17, 22, 26 and 28px.
-    expect(sizes.length).toBe(13)
+    // The legacy eight, the canvas's five named steps (10 Sep) -- 9, 17, 22, 26 and 28px --
+    // and the respond page's own four. The count is the tripwire: a new type token has to
+    // be declared HERE, with what it is for, rather than appearing in the scale unremarked.
+    expect(sizes.length).toBe(17)
     for (const size of sizes) expect(size).toMatch(/rem$/)
     expect([token('--admin-text-3xs'), token('--admin-text-reading'), token('--admin-text-kpi-lg'), token('--admin-text-kpi-hero')]).toEqual(
       ['0.5625rem', '1.375rem', '1.625rem', '1.75rem'],
@@ -97,6 +99,19 @@ describe('type scale', () => {
     expect(token('--admin-text-question')).toBe('1.0625rem')
     expect(themeCss).toMatch(/--text-question:\s*var\(--admin-text-question\)\s*;/)
     expect(themeCss).toMatch(/--text-question--line-height:\s*1\.4\s*;/)
+    // The respond page's own four steps: 13px readings and meta, 15px body and answer
+    // labels, 16px from `md`, and the question at 20px from `md`. They exist because the respond surface is read by
+    // employees on their own devices and must not take the admin console's 13px base --
+    // measured on the TIMS instrument, where the answer labels were 13px and the consent
+    // notice 12px.
+    expect([
+      token('--admin-text-respond-sm'),
+      token('--admin-text-respond'),
+      token('--admin-text-respond-lg'),
+      token('--admin-text-respond-question'),
+    ]).toEqual(['0.8125rem', '0.9375rem', '1rem', '1.25rem'])
+    expect(themeCss).toMatch(/--text-respond:\s*var\(--admin-text-respond\)\s*;/)
+    expect(themeCss).toMatch(/--text-respond-question--line-height:\s*1\.35\s*;/)
   })
 
   it('does not pin the root font size', () => {

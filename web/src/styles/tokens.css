@@ -77,6 +77,15 @@
   --admin-text-kpi-lg: 1.625rem; /* 26px — the KPI reading on Clima en el tiempo and SurveyResults */
   --admin-text-kpi-hero: 1.75rem; /* 28px — the KPI reading on the Panel de Control */
   --admin-text-question: 1.0625rem; /* 17px — the question and its scale points on a respond card (RespondSurveyPhone, RespondMicroclimatePhone) */
+  /* The respond surface is read by employees on their own phones and monitors, not by
+     an operator in a dense console, so it does not take the admin scale. Measured on the
+     TIMS instrument at 1440x900: the answer labels were `--admin-text-base` (13px) and
+     the consent notice `--admin-text-sm` (12px), which is not a size to ask a workforce
+     to read a privacy promise at. These three are the respond page's own steps. */
+  --admin-text-respond: 0.9375rem; /* 15px — answer labels and the respond page's body copy */
+  --admin-text-respond-sm: 0.8125rem; /* 13px — the respond page's readings and meta: the position, the n/total chip, the foot */
+  --admin-text-respond-lg: 1rem; /* 16px — the same, from `md` up */
+  --admin-text-respond-question: 1.25rem; /* 20px — the question itself, from `md` up */
 
   --admin-leading-tight: 1.2; /* headings — globals.css h1..h6 */
   --admin-leading-snug: 1.35; /* dense table/data rows */
@@ -184,6 +193,14 @@
      panel stopped being capped. Not a breakpoint: the control still shrinks with
      its container, this only stops it growing past the point of being readable. */
   --admin-size-field-max: 32rem;
+  /* How wide the RESPOND COLUMN is allowed to get. `--admin-size-field-max` above is a
+     ceiling for one FORM FIELD and was never meant as a page ceiling, but `RespondShell`
+     took it as one: pinned at 32rem, a 1440px monitor showed the whole survey as a 512px
+     strip with two thirds of the window empty, and five Spanish scale labels wrapping to
+     two lines inside it because the row's `sm:` breakpoint keys off the VIEWPORT while
+     the column it lives in never grew. 44rem keeps the question inside a comfortable
+     measure and gives the answers the room the breakpoint always assumed they had. */
+  --admin-size-respond-max: 44rem;
   /* The measure: how long a line of prose is allowed to get. In `ch`, because
      the constraint is a character count and not a distance. Tailwind's own
      `prose` container is 65ch; the redesign's page header caps its description
