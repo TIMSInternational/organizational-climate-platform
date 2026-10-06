@@ -14,7 +14,7 @@ function App() {
 
   return (
     <div className="App">
-      <h1>Organizational Climate Platform</h1>
+      <h1>OCC — Organizational Climate Check</h1>
       <p>API status: {status}</p>
     </div>
   )

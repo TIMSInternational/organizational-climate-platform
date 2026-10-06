@@ -70,7 +70,7 @@ function isCopyProp(name: string): boolean {
  * it is the escape hatch, and a long one means the guard is not working.
  */
 const ALLOWED = new Set([
-  'Organizational Climate Platform', // the product name, not translated
+  'OCC — Organizational Climate Check', // the product name, not translated
   'acme.com', // example domain, mirrors dashboard.domainPlaceholder
   // The brand's own name, carried as the accessible name of the logo artwork
   // (`components/layout/OccLogo.tsx`). A logotype rather than copy: it is spelled
