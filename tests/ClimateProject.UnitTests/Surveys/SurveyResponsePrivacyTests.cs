@@ -154,4 +154,29 @@ public class SurveyResponsePrivacyTests
         Assert.Equal("location", Assert.Single(capture.Kept).Field);
         Assert.Equal(["department", "role"], capture.SuppressedFields);
     }
+
+    /// <summary>
+    /// The self-declared sentinel has to fail CLOSED.
+    /// </summary>
+    /// <remarks>
+    /// A self-declared demographic is written without passing <see cref="SurveyResponsePrivacy.Filter"/>
+    /// at all -- there is no population to measure a cohort over -- and is floored at read
+    /// time instead. This asserts the consequence of getting that wiring wrong: if a
+    /// self-declared candidate is ever routed through the write-time filter by mistake, it
+    /// must be DROPPED rather than published. Zero would have been a plausible count of an
+    /// empty group; a negative cannot be mistaken for a measurement.
+    /// </remarks>
+    [Fact]
+    public void An_unmeasurable_cohort_is_refused_rather_than_read_as_empty()
+    {
+        Assert.True(SurveyResponsePrivacy.UnknownCohortSize < 0);
+        Assert.False(SurveyResponsePrivacy.CohortIsLargeEnough(SurveyResponsePrivacy.UnknownCohortSize));
+
+        var capture = SurveyResponsePrivacy.Filter(
+            isAnonymous: true,
+            [new DemographicCandidate("area", "operaciones", SurveyResponsePrivacy.UnknownCohortSize)]);
+
+        Assert.Empty(capture.Kept);
+        Assert.Equal(["area"], capture.SuppressedFields);
+    }
 }

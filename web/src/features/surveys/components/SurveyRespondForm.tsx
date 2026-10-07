@@ -38,6 +38,7 @@ import {
 } from '../respondAnswers'
 import { estimatedMinutes, formatDayMonth, isUnderAMinute } from '../respondEstimate'
 import { AnonymityNotice } from './AnonymityNotice'
+import RespondDemographicField from './RespondDemographicField'
 import {
   RESPOND_AUTOSAVE_DELAY_MS,
   RESPOND_SAVE_IDLE,
@@ -203,6 +204,24 @@ export default function SurveyRespondForm({
   const [state, setState] = useState<LoadState>({ status: 'loading' })
   const [answers, setAnswers] = useState<AnswerMap>({})
   const [invalidIds, setInvalidIds] = useState<readonly string[]>([])
+
+  /**
+   * What the respondent has said about themselves, keyed by field, for the demographic
+   * prelude below. `DECLINED` (an empty string) is a real entry and not an absence: it
+   * is how an optional field records that the respondent chose not to say, which the
+   * server treats as clearing the answer so no row is written.
+   *
+   * Held here rather than merged into `answers` because these are not answers: they
+   * have no question id, they are validated against the company's configuration rather
+   * than against a question's options, and — the load-bearing difference — they must
+   * never ride on an autosave. The autosave payload's own comment is the guarantee:
+   * "Nothing here is a new field, a new identifier or a demographic". They go on the one
+   * completing POST, which is also the only call that writes them server-side.
+   */
+  const [declared, setDeclared] = useState<Record<string, string>>({})
+  /** Which prelude screen the respondent is on; `>= demographics.length` means past it. */
+  const [demographicStep, setDemographicStep] = useState(0)
+  const [demographicInvalid, setDemographicInvalid] = useState(false)
   const [busy, setBusy] = useState<'idle' | 'saving' | 'submitting'>('idle')
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [result, setResult] = useState<SurveySubmissionResult | null>(null)
@@ -256,8 +275,10 @@ export default function SurveyRespondForm({
   // Whether this browser remembers answering this survey, read ONCE on mount rather than
   // on every render. The submission itself writes the flag, and re-reading it would swap
   // the respondent's own confirmation for "you already answered" the instant they
-  // finished. Held in state so "that was not me" can clear it without a reload.
-  const [answeredHere] = useState(() => hasAnswered(surveyId))
+  // finished. Held in state so the shared-device escape below can clear it for THIS
+  // render without touching storage -- see the `publicEntry` branch for why that escape
+  // exists on the public path and nowhere else.
+  const [answeredHere, setAnsweredHere] = useState(() => hasAnswered(surveyId))
 
   // One open assessment at a time. Two tabs share one session id — `respondSession`
   // stores it per survey in `localStorage` — so both would hydrate and autosave into
@@ -549,6 +570,24 @@ export default function SurveyRespondForm({
           ...(isComplete
             ? { totalTimeSeconds: Math.max(0, Math.round((Date.now() - startedAt.current) / 1000)) }
             : {}),
+          // Self-declared demographics ride the COMPLETING post and no other.
+          //
+          // Two reasons, and either alone would be enough. The server writes them only
+          // at completion, so a partial carrying them is a payload nothing reads. And
+          // every partial save on this page is guaranteed to be free of them — the
+          // autosave's own comment is that guarantee, "Nothing here is a new field, a
+          // new identifier or a demographic" — so a respondent who abandons halfway
+          // leaves no demographic trail anywhere. Sending them on the manual partial
+          // save would have quietly broken that for the one respondent who pressed
+          // "Guardar y terminar después" and never came back.
+          //
+          // Sent whenever the survey asked, including as an empty object: the server
+          // enforces required fields on the completing call even when the map is
+          // absent, and relying on absence to mean "nothing to declare" is the shape a
+          // client bug takes.
+          // `?.` and not `.`: see the `demographics` read below for the deploy window
+          // this survives.
+          ...(isComplete && (view.demographics?.length ?? 0) > 0 ? { demographics: declared } : {}),
         }),
       )
 
@@ -872,12 +911,164 @@ export default function SurveyRespondForm({
   if (view && answeredHere) {
     return (
       <RespondSurface>
-        <AnsweredOnThisDevice />
+        {/*
+          On the PUBLIC path the flag is offered as something the next person can step
+          past, and only there.
+
+          `respondReceipt.ts` rules against a visible "that was not me" control, and for
+          the invitation path that ruling stands: the flag belongs to a device, the
+          survey went to one named person, and a button for answering twice is an
+          invitation to. A public link inverts every term. It is handed out precisely so
+          that people with no account and no mailbox can answer -- Igoal's operarios --
+          and in a plant that means one kiosk, or one supervisor's phone passed down a
+          line. The flag is per survey and per browser, so the FIRST person to answer
+          locks out everyone behind them, silently, with no way back short of clearing
+          site data. Losing every respondent after the first is a far worse failure than
+          one duplicate response, on a survey that already has no server-side
+          one-per-person guarantee and never claimed one.
+
+          Cleared in state only, deliberately: storage keeps the flag, so the person who
+          actually answered still will not be re-asked the next time they open the link
+          on their own device.
+        */}
+        <AnsweredOnThisDevice onShared={publicEntry ? () => setAnsweredHere(false) : undefined} />
       </RespondSurface>
     )
   }
 
   if (!view) return null
+
+  /*
+   * The demographic prelude: a respondent with NO account answering the company's own
+   * demographic questions before question 1.
+   *
+   * Rendered as a STAGE in front of the question pagination rather than merged into it,
+   * and that is the whole design. `page` indexes `questions`, and every consumer of that
+   * index assumes it — the progress count and bar, `dimensions.sections`, the autosave's
+   * delta, `goNext`'s per-question required check, the `isLast` that decides whether the
+   * way-on button is the submit. Shifting it by the number of demographic screens would
+   * have put an off-by-N into each of those, on the one page in this product where a
+   * mistake cannot be re-collected. A stage in front changes none of them: the question
+   * flow begins exactly as it did, on page 0, once this returns.
+   *
+   * `demographics` is empty for every respondent who is not the one case this serves —
+   * the server sends it only for an unauthenticated visitor to an anonymous survey whose
+   * author turned the setting on — so for everybody else this block is not reached and
+   * the page is byte-identical to before.
+   */
+  // `?? []`, although the type says this is always an array.
+  //
+  // The TYPE describes the API in this repository; the RUNTIME gets whatever production
+  // is serving. The web auto-deploys on merge and the API needs a manual `deploy-prod`
+  // dispatch, so the two are routinely out of step — measured 2026-10-07, the prod API
+  // was on `af20a73e` while main was on `c8d5cbcc`. For the whole of that window this
+  // form runs against a respond payload with no `demographics` key at all, and a bare
+  // `.length` on it is a TypeError: a WHITE SCREEN on the one page in this product whose
+  // failure cannot be re-collected, for every respondent, until somebody dispatches the
+  // API deploy. Asserted by "survives a respond payload from an API that predates
+  // demographics".
+  const demographics = view.demographics ?? []
+  if (demographicStep < demographics.length) {
+    const field = demographics[demographicStep]
+    const chosen = declared[field.field]
+    const isLastField = demographicStep === demographics.length - 1
+
+    const advance = () => {
+      // Required means required here too, checked on the way on rather than at submit:
+      // the respondent is one screen from this field, so naming it now is the correction
+      // they can act on. The server enforces the same rule on the completing POST and
+      // does not trust this.
+      if (field.required && chosen === undefined) {
+        setDemographicInvalid(true)
+        announce(t('demographics.missing'))
+        // Focus the field, not the button they just pressed, so the objection is read
+        // where it applies — the same move `goNext` makes for an unanswered question.
+        document.getElementById(`demographic-${field.field}`)?.focus()
+        return
+      }
+      setDemographicInvalid(false)
+      setDemographicStep((step) => step + 1)
+    }
+
+    return (
+      <RespondSurface>
+        {/* OPEN, never collapsed, and this is the one screen where that is not a
+            preference. The respondent is about to disclose their area, their tenure and
+            their sex; the promise about what happens to those is the consent, and it has
+            to be legible at the moment it is given rather than one tap behind a
+            disclosure. The question screens collapse it from question 2 on for vertical
+            room, which is a different situation: by then the promise has been read. */}
+        <AnonymityNotice anonymous={view.anonymous} />
+
+        <ContentLanguageNotice
+          requested={locale}
+          resolvedLocale={view.resolvedLocale}
+          fallbackCount={view.fallbackFields.length}
+        />
+
+        <header data-slot="respond-progress" className="flex flex-col gap-1.5">
+          <div className="flex items-baseline justify-between gap-2">
+            <h1 className="m-0 min-w-0 font-sans text-sm font-bold uppercase leading-snug tracking-eyebrow text-fg-secondary">
+              {t('demographics.eyebrow')}
+            </h1>
+          </div>
+        </header>
+
+        {/* Why they are being asked, on the first screen only — repeated over every
+            field it would push the field itself down the phone, which is the same
+            reasoning the author's description follows on the question pages. */}
+        {demographicStep === 0 ? (
+          <p className="m-0 max-w-prose text-respond text-fg-secondary">{t('demographics.intro')}</p>
+        ) : null}
+
+        <div className="flex flex-col gap-4">
+          <RespondDemographicField
+            key={field.field}
+            field={field}
+            position={demographicStep + 1}
+            total={demographics.length}
+            value={chosen}
+            invalid={demographicInvalid}
+            disabled={busy !== 'idle'}
+            onChange={(next) => {
+              setDeclared((current) => ({ ...current, [field.field]: next }))
+              setDemographicInvalid(false)
+            }}
+          />
+
+          <div data-slot="respond-nav" className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 flex-1 text-respond"
+              disabled={demographicStep === 0 || busy !== 'idle'}
+              onClick={() => {
+                setDemographicInvalid(false)
+                setDemographicStep((step) => step - 1)
+              }}
+            >
+              <ArrowLeft aria-hidden="true" />
+              {t('next.previous')}
+            </Button>
+            {/* `type="button"` on both, and there is no `<form>` around them: the
+                prelude writes nothing to the server, so there is no submission to
+                guard against here. The two `key`s the question nav needs exist because
+                that pair's `type` flips to "submit"; these never do. */}
+            <Button
+              type="button"
+              variant="primary"
+              className="h-11 flex-2 text-respond"
+              disabled={busy !== 'idle'}
+              onClick={advance}
+            >
+              {isLastField ? t('demographics.start') : t('next.next')}
+              <ArrowRight aria-hidden="true" />
+            </Button>
+          </div>
+        </div>
+      </RespondSurface>
+    )
+  }
 
   const total = questions.length
   const index = Math.min(page, Math.max(total - 1, 0))
@@ -1322,14 +1513,35 @@ function AlreadyCompleted() {
  * be able to say so and carry on. It is `outline` rather than the accent so it reads as
  * the correction it is, not as the thing to do next.
  */
-function AnsweredOnThisDevice() {
+/**
+ * @param onShared
+ * Offered only on the public path: lets the next person at a shared device answer. See
+ * the call site for the ruling, and `respondReceipt.ts` for why the invitation path
+ * deliberately has no such control.
+ */
+function AnsweredOnThisDevice({ onShared }: { onShared?: () => void }) {
   const { t } = useTranslation('surveyRespond')
 
   return (
     <Alert variant="success" role="status">
       <ShieldCheck aria-hidden="true" />
       <AlertTitle>{t('answeredOnThisDeviceTitle')}</AlertTitle>
-      <AlertDescription>{t('answeredOnThisDeviceBody')}</AlertDescription>
+      <AlertDescription>
+        {t('answeredOnThisDeviceBody')}
+        {onShared ? (
+          <>
+            {' '}
+            {t('sharedDeviceHint')}
+          </>
+        ) : null}
+      </AlertDescription>
+      {onShared ? (
+        <div className="mt-3">
+          <Button type="button" variant="secondary" onClick={onShared}>
+            {t('sharedDeviceAnswer')}
+          </Button>
+        </div>
+      ) : null}
     </Alert>
   )
 }

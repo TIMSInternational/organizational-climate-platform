@@ -64,6 +64,32 @@ public class SurveySettings
     public bool AutoSave { get; set; } = true;
     public int? TimeLimitMinutes { get; set; }
     public int? ResponseLimit { get; set; }
+
+    /// <summary>
+    /// Ask a respondent who has no account to declare their own demographics before the
+    /// first question.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Opt-in, and default <c>false</c> on purpose. The alternative considered was deriving
+    /// it -- public access type, plus anonymous, plus the company has active demographic
+    /// fields -- which would have needed no column at all. Rejected because all three are
+    /// already true of surveys collecting responses right now, so deriving would have
+    /// started asking live respondents questions nobody turned on.
+    /// </para>
+    /// <para>
+    /// This is the only switch that lets a demographic reach a response WITHOUT passing
+    /// <c>SurveyResponsePrivacy.Filter</c>'s write-time cohort floor, and it has to be,
+    /// because a self-declared respondent has no population to be counted against -- the
+    /// company may hold no roster at all. The floor for these values is applied at READ
+    /// time instead, by the same <c>SurveyResultsPrivacy.MinimumSegmentRespondents</c>
+    /// every results surface already uses. <c>AnonymityNotice</c>'s copy was rewritten in
+    /// the same change: it promised that a detail leaving too small a group is not
+    /// RECORDED, which this setting makes false.
+    /// </para>
+    /// </remarks>
+    public bool SelfDeclaredDemographics { get; set; }
+
     public bool NotificationSendInvitations { get; set; } = true;
     public bool NotificationSendReminders { get; set; } = true;
     public int NotificationReminderFrequencyDays { get; set; } = 3;

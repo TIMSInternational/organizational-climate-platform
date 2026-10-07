@@ -81,6 +81,30 @@ public static class SurveyResponsePrivacy
     public static bool CohortIsLargeEnough(int cohortSize) => cohortSize >= MinimumCohortSize;
 
     /// <summary>
+    /// The cohort size of a SELF-DECLARED demographic: deliberately unmeasurable.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Everything above measures a cohort over the company's own user rows. A respondent
+    /// who arrived through a public link has no user row, and the company may hold no
+    /// roster at all -- that absence is the entire reason self-declaration exists. So
+    /// there is no population to count, and the write-time floor this class applies
+    /// cannot be computed for these values. They are floored at READ time instead, by
+    /// <c>SurveyResultsPrivacy.MinimumSegmentRespondents</c>, over the responses actually
+    /// collected; see <c>SurveySettings.SelfDeclaredDemographics</c> for the ruling and
+    /// what it cost in the respondent's copy.
+    /// </para>
+    /// <para>
+    /// Negative rather than zero so that routing a self-declared candidate through
+    /// <see cref="Filter"/> by mistake cannot read as a real measurement of an empty
+    /// group. It fails CLOSED either way -- the value is dropped, not published -- which
+    /// is the direction a privacy guard should fail in, and the reason this is a named
+    /// constant instead of a literal somebody can mistake for a count.
+    /// </para>
+    /// </remarks>
+    public const int UnknownCohortSize = -1;
+
+    /// <summary>
     /// The department that may be recorded on a response.
     ///
     /// An identified response records it unconditionally: <c>user_id</c> is already

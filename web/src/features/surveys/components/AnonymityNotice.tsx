@@ -8,10 +8,24 @@ import { useTranslation } from '../../../i18n'
  * the inverse matters just as much. A survey that records who answered must say so;
  * saying nothing lets a respondent assume the more private of the two.
  *
- * The wording tracks what the server actually does. An anonymous response is written
- * with no user id, no IP address and no user agent, and a demographic whose cohort is
- * too small is not recorded either, so "not linked to you" is a description of the
- * row rather than a promise about who looks at it.
+ * The wording tracks what the server actually does, and it was rewritten when
+ * self-declared demographics shipped. An anonymous response is still written with no
+ * user id, no IP address and no user agent -- that first sentence is a description of
+ * the row and remains exact.
+ *
+ * Two clauses went, and both for the same reason. The copy used to promise that a
+ * demographic whose cohort is too small "tampoco se registra" -- is not RECORDED --
+ * which was true while every demographic came from a profile and passed
+ * `SurveyResponsePrivacy.Filter`'s write-time cohort floor. A respondent who declares
+ * their own area has no population to be counted against, so that floor cannot be
+ * computed for them and the value IS recorded; the protection moves to read time, where
+ * `SurveyResultsPrivacy.MinimumSegmentRespondents` withholds the segment. The sentence
+ * now promises what is actually enforced: the GROUP is not reported.
+ *
+ * It also used to say nobody, not even an administrator, could trace a response back to
+ * you. That was a claim about capability rather than about the row, and area plus tenure
+ * plus sex on one row makes it thinner than it sounds. Ruled out rather than reworded:
+ * the two sentences that remain are each checkable against a column or a threshold.
  *
  * ## The canvas's block (RespondSurveyPhone, EmployeeDashboard, 10 Sep)
  *

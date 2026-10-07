@@ -71,6 +71,7 @@ function respondView(): SurveyRespondView {
         category: null,
       },
     ],
+    demographics: [],
     inProgress: null,
   }
 }

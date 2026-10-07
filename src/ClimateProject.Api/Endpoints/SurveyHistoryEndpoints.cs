@@ -238,6 +238,7 @@ public static class SurveyHistoryEndpoints
             content.Settings.AutoSave,
             content.Settings.TimeLimitMinutes,
             content.Settings.ResponseLimit,
+            content.Settings.SelfDeclaredDemographics,
             content.Settings.NotificationSendInvitations,
             content.Settings.NotificationSendReminders,
             content.Settings.NotificationReminderFrequencyDays,

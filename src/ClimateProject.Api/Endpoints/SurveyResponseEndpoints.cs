@@ -4,6 +4,7 @@ using System.Threading.RateLimiting;
 using ClimateProject.Api.Infrastructure;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Localization;
+using ClimateProject.Application.OrgStructure;
 using ClimateProject.Application.Surveys;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
@@ -287,6 +288,13 @@ public static class SurveyResponseEndpoints
             survey.Settings.ShowProgress,
             survey.Settings.TimeLimitMinutes,
             questions,
+            AsksSelfDeclaredDemographics(survey, respondent)
+                ? ToDemographicDtos(
+                    await LoadSelfDeclaredFieldsAsync(survey.CompanyId, db, cancellationToken),
+                    locale,
+                    survey.Language,
+                    fallbackFields)
+                : [],
             inProgress));
     }
 
@@ -389,6 +397,44 @@ public static class SurveyResponseEndpoints
             return Results.Json(new { message = validation.Error }, statusCode: 400);
         }
 
+        // Self-declared demographics, validated here rather than at the completion step so
+        // a respondent learns on the call that carries them. They are WRITTEN only at
+        // completion -- see CaptureDemographicsAsync -- so an abandoned partial response
+        // still leaves no demographic trail, which is the property that comment protects.
+        List<ResolvedDemographicValue> selfDeclared = [];
+        if (AsksSelfDeclaredDemographics(survey, respondent))
+        {
+            var offered = await LoadSelfDeclaredFieldsAsync(survey.CompanyId, db, cancellationToken);
+
+            // Run unconditionally, NOT only when the request carries a map. A completing
+            // request that simply omits `demographics` is exactly how a required field
+            // would otherwise go unenforced, and it is the shape a client bug produces.
+            // `enforceRequired` is the completion flag: a partial save is allowed to be
+            // missing answers the respondent has not reached yet.
+            var demographicValidation = DemographicValueValidation.Validate(
+                request.Demographics, ToDefinitions(offered), enforceRequired: request.IsComplete);
+            if (!demographicValidation.IsValid)
+            {
+                return Results.Json(
+                    new { message = string.Join("; ", demographicValidation.Errors) },
+                    statusCode: 400);
+            }
+
+            selfDeclared = demographicValidation.Values.ToList();
+        }
+        else if (request.Demographics is { Count: > 0 })
+        {
+            // Refused rather than ignored, and the distinction matters in both directions.
+            // An IDENTIFIED or signed-in respondent sending a cohort is an attempt to
+            // choose their own -- see AsksSelfDeclaredDemographics for why that is refused.
+            // A survey with the setting off is a client asking for behaviour its author did
+            // not turn on. Dropping either silently is how a form ships looking like it
+            // works while recording nothing.
+            return Results.Json(
+                new { message = "This survey does not collect self-declared demographics" },
+                statusCode: 400);
+        }
+
         // Checked before a response row exists rather than at completion: a respondent who
         // has already started is finishing, and turning them away at the last question
         // discards work they cannot redo.
@@ -459,7 +505,7 @@ public static class SurveyResponseEndpoints
                 return NoLicenseSeats();
             }
 
-            var capture = await CaptureDemographicsAsync(survey, respondent, db, cancellationToken);
+            var capture = await CaptureDemographicsAsync(survey, respondent, selfDeclared, db, cancellationToken);
             suppressed = capture.SuppressedFields;
 
             response.DepartmentId = capture.DepartmentId;
@@ -646,13 +692,44 @@ public static class SurveyResponseEndpoints
     private static async Task<DemographicOutcome> CaptureDemographicsAsync(
         Survey survey,
         Respondent respondent,
+        IReadOnlyList<ResolvedDemographicValue> selfDeclared,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
     {
+        // What the respondent said about themselves, taken as given.
+        //
+        // These do NOT pass through SurveyResponsePrivacy.Filter, and that is the single
+        // most consequential line in this build. Filter needs a cohort size measured over
+        // the company's user rows; a respondent who arrived through a public link has no
+        // user row and the company may hold no roster at all, so there is nothing to
+        // measure -- see SurveyResponsePrivacy.UnknownCohortSize. The floor for these
+        // values is applied at READ time instead, over the responses actually collected,
+        // by the same SurveyResultsPrivacy.MinimumSegmentRespondents every results surface
+        // uses. AnonymityNotice's copy was rewritten in the same change, because it
+        // promised that a detail leaving too small a group is not RECORDED.
+        //
+        // No DepartmentId, deliberately: a self-declared "area" is stored as a demographic
+        // ANSWER and never as responses.department_id. The department FK flows through the
+        // write-time floor above, which cannot be computed here, and it is what the leader
+        // and department dashboards key off -- a survey with no accounts has no leaders, so
+        // nothing is lost by withholding it and the write-time guarantee stays intact for
+        // every response that does carry one.
+        if (selfDeclared.Count > 0)
+        {
+            return new DemographicOutcome(
+                null,
+                selfDeclared
+                    .Select(v => new DemographicCandidate(
+                        v.Field, v.Value, SurveyResponsePrivacy.UnknownCohortSize))
+                    .OrderBy(c => c.Field, StringComparer.Ordinal)
+                    .ToList(),
+                []);
+        }
+
         if (respondent.ActingUserId is null && respondent.DepartmentId is null)
         {
-            // An unauthenticated visitor: nothing is known about them, which is the most
-            // private outcome available and needs no suppression to reach.
+            // An unauthenticated visitor who declared nothing: nothing is known about them,
+            // which is the most private outcome available and needs no suppression to reach.
             return DemographicOutcome.Nothing;
         }
 
@@ -723,6 +800,159 @@ public static class SurveyResponseEndpoints
 
         var capture = SurveyResponsePrivacy.Filter(respondent.IsAnonymous, candidates);
         return new DemographicOutcome(department, capture.Kept, capture.SuppressedFields);
+    }
+
+    // ------------------------------------------------------------------
+    // Self-declared demographics (no account)
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// Whether THIS request is one that may both be offered and accept self-declared
+    /// demographics.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// One predicate, read by the respond GET and by the submit POST, because the two
+    /// disagreeing is the whole failure: a form that asks three questions the submit
+    /// endpoint then refuses, or -- far worse -- a submit endpoint that accepts a cohort
+    /// the form never offered.
+    /// </para>
+    /// <para>
+    /// All three arms are load-bearing.
+    /// <list type="bullet">
+    /// <item>The survey must have the setting ON. It is opt-in; see
+    /// <c>SurveySettings.SelfDeclaredDemographics</c> for why deriving it was rejected.</item>
+    /// <item>The survey must be ANONYMOUS. On an identified survey the public respond GET
+    /// 401s the visitor to a login screen anyway, so there is no unauthenticated
+    /// respondent to ask.</item>
+    /// <item>The respondent must be UNAUTHENTICATED. A signed-in respondent's demographics
+    /// are snapshotted from their own profile by <see cref="CaptureDemographicsAsync"/>,
+    /// through the write-time cohort floor. Letting them self-declare instead would let
+    /// anybody with an account type their own cohort -- claim a large department and the
+    /// floor waves them through, claim somebody else's and they pollute that segment. The
+    /// profile is the only trustworthy source for a respondent who has one.</item>
+    /// </list>
+    /// </para>
+    /// </remarks>
+    private static bool AsksSelfDeclaredDemographics(Survey survey, Respondent respondent)
+        => survey.Settings.SelfDeclaredDemographics
+            && respondent.IsAnonymous
+            && respondent.ActingUserId is null;
+
+    /// <summary>One of the company's demographic fields, with its options, as configured.</summary>
+    private sealed record SelfDeclaredField(
+        string Field,
+        string? LabelEn,
+        string? LabelEs,
+        bool Required,
+        int Order,
+        IReadOnlyList<DemographicFieldOption> Options);
+
+    /// <summary>
+    /// The company's demographic fields a respondent with no account can actually answer.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Filtered to <c>select</c> fields that have at least one option, and that is a
+    /// deliberate narrowing of what an admin may have configured. A <c>number</c>,
+    /// <c>date</c> or <c>text</c> answer produces NO segment in a breakdown -- every
+    /// respondent writes a slightly different string, so every cohort is one person and
+    /// the read-time floor suppresses all of them. The TIMS import learned this on
+    /// <c>edad</c> and <c>tiempo</c>. Asking a respondent to type an answer that can
+    /// never be reported is worse than not asking.
+    /// </para>
+    /// <para>
+    /// The same list is what <c>DemographicValueValidation</c> validates against, via
+    /// <see cref="ToDefinitions"/>, so a field that is not offered is also not accepted,
+    /// and a <c>Required</c> field that is not offered cannot make a submission
+    /// unsatisfiable.
+    /// </para>
+    /// </remarks>
+    private static async Task<List<SelfDeclaredField>> LoadSelfDeclaredFieldsAsync(
+        Guid companyId,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var fields = await db.DemographicFields
+            .AsNoTracking()
+            .Where(f => f.CompanyId == companyId && f.IsActive && f.Type == "select")
+            .OrderBy(f => f.Order)
+            .Select(f => new { f.Id, f.Field, f.LabelEn, f.LabelEs, f.Required, f.Order })
+            .ToListAsync(cancellationToken);
+
+        if (fields.Count == 0)
+        {
+            return [];
+        }
+
+        var fieldIds = fields.Select(f => f.Id).ToList();
+        var options = await db.DemographicFieldOptions
+            .AsNoTracking()
+            .Where(o => fieldIds.Contains(o.DemographicFieldId))
+            .OrderBy(o => o.Order)
+            .ToListAsync(cancellationToken);
+
+        var byField = options
+            .GroupBy(o => o.DemographicFieldId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<DemographicFieldOption>)g.ToList());
+
+        return fields
+            .Select(f => new SelfDeclaredField(
+                f.Field, f.LabelEn, f.LabelEs, f.Required, f.Order,
+                byField.GetValueOrDefault(f.Id, [])))
+            .Where(f => f.Options.Count > 0)
+            .ToList();
+    }
+
+    /// <summary>
+    /// The offered fields as the validator wants them.
+    /// </summary>
+    /// <remarks>
+    /// <c>Guid.Empty</c> for the field id, and nothing reads it: the self-declared write
+    /// path stores <c>(ResponseId, Field, Value)</c> rows, which carry the field KEY and
+    /// never its id -- unlike the user and invitation tables, whose rows are keyed on
+    /// <c>DemographicFieldId</c>. Carrying the real id here would be an identifier that
+    /// exists only to be discarded, and <see cref="SurveyRespondDemographicField"/>
+    /// records the matching reason for not handing it to the client.
+    /// </remarks>
+    private static List<DemographicFieldDefinition> ToDefinitions(IReadOnlyList<SelfDeclaredField> fields)
+        => fields
+            .Select(f => new DemographicFieldDefinition(
+                Guid.Empty,
+                f.Field,
+                "select",
+                f.Options.Select(o => o.Value).ToList(),
+                f.Required,
+                IsActive: true))
+            .ToList();
+
+    private static List<SurveyRespondDemographicField> ToDemographicDtos(
+        IReadOnlyList<SelfDeclaredField> fields,
+        string locale,
+        string contentLanguage,
+        List<string> fallbackFields)
+    {
+        var dtos = new List<SurveyRespondDemographicField>(fields.Count);
+        foreach (var field in fields)
+        {
+            var path = $"demographics[{field.Order}]";
+            var label = SurveyContent.Resolve(
+                field.LabelEn, field.LabelEs, locale, contentLanguage, $"{path}.label", fallbackFields);
+
+            var options = new List<SurveyRespondDemographicOption>(field.Options.Count);
+            foreach (var option in field.Options)
+            {
+                var optionLabel = SurveyContent.Resolve(
+                    option.LabelEn, option.LabelEs, locale, contentLanguage,
+                    $"{path}.options[{option.Order}].label", fallbackFields);
+                options.Add(new SurveyRespondDemographicOption(option.Value, optionLabel));
+            }
+
+            dtos.Add(new SurveyRespondDemographicField(
+                field.Field, label, options, field.Required, field.Order));
+        }
+
+        return dtos;
     }
 
     // ------------------------------------------------------------------

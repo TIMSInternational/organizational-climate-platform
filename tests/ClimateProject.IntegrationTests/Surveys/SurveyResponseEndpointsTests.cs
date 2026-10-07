@@ -1205,6 +1205,287 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
     }
 
     // ------------------------------------------------------------------
+    // Self-declared demographics: a respondent with NO account (Igoal)
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// The capture path that did not exist: a visitor holding a public link had
+    /// <c>DemographicOutcome.Nothing</c> and no way to say anything about themselves, so a
+    /// no-accounts survey produced `breakdowns: []` by construction. Measured 2026-10-06.
+    /// </summary>
+    [Fact]
+    public async Task The_respond_view_offers_the_companys_fields_to_a_visitor_with_no_account()
+    {
+        var survey = await SelfDeclaringSurveyAsync();
+        await SeedSelectFieldAsync("area", ["operaciones", "ventas"], required: true, order: 0, labelEs: "Area");
+        await SeedSelectFieldAsync("antiguedad", ["menos_1", "mas_3"], required: false, order: 1);
+
+        var view = await RespondViewAsync(_factory.CreateClient(), survey.Id);
+
+        Assert.Equal(["area", "antiguedad"], view.Demographics.Select(d => d.Field));
+        var area = view.Demographics[0];
+        Assert.True(area.Required);
+        Assert.Equal(["operaciones", "ventas"], area.Options.Select(o => o.Value));
+        // The admin's own Required flag, not a policy invented here: a field the admin left
+        // optional is one the respondent may decline.
+        Assert.False(view.Demographics[1].Required);
+    }
+
+    [Fact]
+    public async Task The_respond_view_offers_nothing_when_the_survey_did_not_ask()
+    {
+        // Opt-in. The setting defaults false precisely so that surveys already collecting
+        // responses do not start asking three questions nobody turned on.
+        var survey = await ActiveSurveyAsync(settings: new SurveySettingsInput(Anonymous: true));
+        await SeedSelectFieldAsync("area", ["operaciones"], required: true, order: 0);
+
+        var view = await RespondViewAsync(_factory.CreateClient(), survey.Id);
+
+        Assert.Empty(view.Demographics);
+    }
+
+    /// <summary>
+    /// A respondent who HAS an account is never asked, because their answer would be a
+    /// claim rather than a fact: their demographics are snapshotted from their own profile
+    /// through the write-time cohort floor. Self-declaring would let anyone with an account
+    /// pick a large cohort to hide in, or pollute somebody else's.
+    /// </summary>
+    [Fact]
+    public async Task The_respond_view_offers_nothing_to_a_signed_in_respondent()
+    {
+        var survey = await SelfDeclaringSurveyAsync();
+        await SeedSelectFieldAsync("area", ["operaciones"], required: true, order: 0);
+
+        var view = await RespondViewAsync(await EmployeeAsync(_departmentId), survey.Id);
+
+        Assert.Empty(view.Demographics);
+    }
+
+    /// <summary>
+    /// A field a respondent could answer but whose answer could never be REPORTED is not
+    /// offered. Every free-typed value is its own cohort of one, so the read-time floor
+    /// suppresses all of them -- the lesson the TIMS import learned on `edad` and `tiempo`.
+    /// </summary>
+    [Theory]
+    [InlineData("number")]
+    [InlineData("date")]
+    [InlineData("text")]
+    public async Task A_field_that_could_never_produce_a_segment_is_never_offered(string type)
+    {
+        var survey = await SelfDeclaringSurveyAsync();
+        await SeedSelectFieldAsync("area", ["operaciones"], required: true, order: 0);
+        await SeedFieldOfTypeAsync("edad", type, order: 1);
+
+        var view = await RespondViewAsync(_factory.CreateClient(), survey.Id);
+
+        Assert.Equal(["area"], view.Demographics.Select(d => d.Field));
+    }
+
+    [Fact]
+    public async Task A_select_field_with_no_options_is_never_offered()
+    {
+        // An unanswerable question. Rendering it would be a dead screen the respondent
+        // cannot get past when the field is also Required.
+        var survey = await SelfDeclaringSurveyAsync();
+        await SeedSelectFieldAsync("area", ["operaciones"], required: true, order: 0);
+        await SeedSelectFieldAsync("turno", [], required: false, order: 1);
+
+        var view = await RespondViewAsync(_factory.CreateClient(), survey.Id);
+
+        Assert.Equal(["area"], view.Demographics.Select(d => d.Field));
+    }
+
+    [Fact]
+    public async Task An_inactive_field_is_never_offered()
+    {
+        var survey = await SelfDeclaringSurveyAsync();
+        await SeedSelectFieldAsync("area", ["operaciones"], required: true, order: 0);
+        await SeedSelectFieldAsync("turno", ["dia"], required: false, order: 1, isActive: false);
+
+        var view = await RespondViewAsync(_factory.CreateClient(), survey.Id);
+
+        Assert.Equal(["area"], view.Demographics.Select(d => d.Field));
+    }
+
+    /// <summary>
+    /// THE test for this build, and the one that records the privacy ruling.
+    ///
+    /// A self-declared value is stored for a respondent whose cohort CANNOT be measured --
+    /// there is one of them, and the company may hold no roster at all. The write-time
+    /// floor the authenticated path applies is therefore skipped on purpose, and the floor
+    /// moves to read time. Mutate <c>CaptureDemographicsAsync</c>'s self-declared branch to
+    /// route through <c>SurveyResponsePrivacy.Filter</c> and this fails: nothing is kept.
+    /// </summary>
+    [Fact]
+    public async Task A_lone_visitor_declares_a_cohort_that_cannot_be_measured_and_it_is_stored()
+    {
+        var survey = await SelfDeclaringSurveyAsync();
+        await SeedSelectFieldAsync("area", ["operaciones", "ventas"], required: true, order: 0);
+
+        var result = await SelfDeclareAsync(survey, new Dictionary<string, string?> { ["area"] = "operaciones" });
+
+        // Not reported as suppressed either: a respondent must not be told their answer was
+        // withheld when it was recorded.
+        Assert.Empty(result.SuppressedDemographics);
+
+        var stored = Assert.Single(await _harness.WithDbAsync(db => db.ResponseDemographics
+            .AsNoTracking()
+            .Where(rd => rd.ResponseId == result.ResponseId)
+            .ToListAsync()));
+        Assert.Equal("area", stored.Field);
+        // response_demographics.value is jsonb. A bare operaciones is 22P02.
+        Assert.Equal("\"operaciones\"", stored.Value);
+    }
+
+    /// <summary>
+    /// Ruling 1: a self-declared "area" is a demographic ANSWER and never
+    /// <c>responses.department_id</c>.
+    /// </summary>
+    /// <remarks>
+    /// The department FK flows through the write-time floor, which measures against
+    /// <c>DepartmentHeadcount.Population</c> -- a population this respondent is not in. It
+    /// is also what the leader and department dashboards key off, and a survey with no
+    /// accounts has no leaders, so withholding it costs nothing and keeps the write-time
+    /// guarantee intact for every response that does carry one.
+    /// </remarks>
+    [Fact]
+    public async Task A_self_declared_area_never_becomes_the_responses_department()
+    {
+        var survey = await SelfDeclaringSurveyAsync();
+        await SeedSelectFieldAsync("area", ["operaciones"], required: true, order: 0);
+
+        var result = await SelfDeclareAsync(survey, new Dictionary<string, string?> { ["area"] = "operaciones" });
+
+        var row = await ResponseRowAsync(result.ResponseId);
+        Assert.Null(row.DepartmentId);
+        // And the rest of the anonymity contract is untouched by this build.
+        Assert.Null(row.UserId);
+        Assert.Null(row.IpAddress);
+        Assert.Null(row.UserAgent);
+        Assert.True(row.IsAnonymous);
+    }
+
+    [Fact]
+    public async Task A_value_outside_the_fields_options_is_refused()
+    {
+        var survey = await SelfDeclaringSurveyAsync();
+        await SeedSelectFieldAsync("area", ["operaciones"], required: true, order: 0, labelEs: "Area");
+
+        // The LABEL rather than the stable value (#195): accepting it would store the same
+        // answer as two different strings depending on the respondent's language.
+        var http = await SubmitSelfDeclaredAsync(survey, new Dictionary<string, string?> { ["area"] = "Area" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, http.StatusCode);
+    }
+
+    [Fact]
+    public async Task An_unknown_field_key_is_refused()
+    {
+        var survey = await SelfDeclaringSurveyAsync();
+        await SeedSelectFieldAsync("area", ["operaciones"], required: true, order: 0);
+
+        var http = await SubmitSelfDeclaredAsync(survey, new Dictionary<string, string?>
+        {
+            ["area"] = "operaciones",
+            ["salario"] = "mucho",
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, http.StatusCode);
+    }
+
+    /// <summary>
+    /// Enforced even when the request carries NO map at all, which is the shape a client
+    /// bug produces and the one way a Required field would otherwise go unasked.
+    /// </summary>
+    [Fact]
+    public async Task A_required_field_must_be_answered_to_complete()
+    {
+        var survey = await SelfDeclaringSurveyAsync();
+        await SeedSelectFieldAsync("area", ["operaciones"], required: true, order: 0);
+
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            (await SubmitSelfDeclaredAsync(survey, new Dictionary<string, string?>())).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            (await SubmitSelfDeclaredAsync(survey, demographics: null)).StatusCode);
+    }
+
+    [Fact]
+    public async Task An_optional_field_may_be_declined()
+    {
+        var survey = await SelfDeclaringSurveyAsync();
+        await SeedSelectFieldAsync("area", ["operaciones"], required: true, order: 0);
+        await SeedSelectFieldAsync("sexo", ["hombre", "mujer"], required: false, order: 1);
+
+        // A blank clears the answer rather than storing an empty string, so "prefiero no
+        // decir" is a real choice the respondent makes and not a skipped screen.
+        var result = await SelfDeclareAsync(survey, new Dictionary<string, string?>
+        {
+            ["area"] = "operaciones",
+            ["sexo"] = "",
+        });
+
+        var stored = await _harness.WithDbAsync(db => db.ResponseDemographics
+            .AsNoTracking()
+            .Where(rd => rd.ResponseId == result.ResponseId)
+            .ToListAsync());
+        Assert.Equal(["area"], stored.Select(s => s.Field));
+    }
+
+    [Fact]
+    public async Task A_partial_save_may_omit_a_required_field_and_writes_no_demographic_trail()
+    {
+        var survey = await SelfDeclaringSurveyAsync();
+        await SeedSelectFieldAsync("area", ["operaciones"], required: true, order: 0);
+        await SeedSelectFieldAsync("antiguedad", ["menos_1"], required: true, order: 1);
+
+        var visitor = _factory.CreateClient();
+        var http = await SubmitAsync(visitor, survey.Id, new SubmitSurveyResponseRequest(
+            Answers: [new SurveyAnswerInput(survey.Questions[0].Id, "remote")],
+            SessionId: Guid.NewGuid().ToString("N"),
+            IsComplete: false,
+            Demographics: new Dictionary<string, string?> { ["area"] = "operaciones" }));
+        http.EnsureSuccessStatusCode();
+        var result = (await http.Content.ReadFromJsonAsync<SurveySubmissionResult>())!;
+
+        // Captured at COMPLETION, so an abandoned partial carries no demographic trail --
+        // the property CaptureDemographicsAsync's own comment exists to protect.
+        Assert.Empty(await _harness.WithDbAsync(db => db.ResponseDemographics
+            .Where(rd => rd.ResponseId == result.ResponseId)
+            .ToListAsync()));
+    }
+
+    /// <summary>
+    /// The spoofing guard. A signed-in respondent sending a cohort is refused rather than
+    /// ignored: dropping it silently is how a client ships looking like it works.
+    /// </summary>
+    [Fact]
+    public async Task A_signed_in_respondent_cannot_declare_their_own_cohort()
+    {
+        var survey = await SelfDeclaringSurveyAsync();
+        await SeedSelectFieldAsync("area", ["operaciones"], required: true, order: 0);
+
+        var http = await SubmitAsync(await EmployeeAsync(_departmentId), survey.Id, new SubmitSurveyResponseRequest(
+            Answers: [new SurveyAnswerInput(survey.Questions[0].Id, "remote")],
+            SessionId: Guid.NewGuid().ToString("N"),
+            Demographics: new Dictionary<string, string?> { ["area"] = "operaciones" }));
+
+        Assert.Equal(HttpStatusCode.BadRequest, http.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_survey_that_did_not_ask_refuses_submitted_demographics()
+    {
+        var survey = await ActiveSurveyAsync(settings: new SurveySettingsInput(Anonymous: true));
+        await SeedSelectFieldAsync("area", ["operaciones"], required: false, order: 0);
+
+        var http = await SubmitSelfDeclaredAsync(survey, new Dictionary<string, string?> { ["area"] = "operaciones" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, http.StatusCode);
+    }
+
+    // ------------------------------------------------------------------
     // Seeding helpers
     // ------------------------------------------------------------------
 
@@ -1242,6 +1523,88 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
                 UpdatedAt = DateTimeOffset.UtcNow,
             });
 
+            await db.SaveChangesAsync();
+        });
+
+    /// <summary>An active, anonymous survey that ASKS for self-declared demographics.</summary>
+    private Task<SurveyDetail> SelfDeclaringSurveyAsync()
+        => ActiveSurveyAsync(settings: new SurveySettingsInput(
+            Anonymous: true, SelfDeclaredDemographics: true));
+
+    private async Task<SurveyRespondView> RespondViewAsync(HttpClient client, Guid surveyId)
+    {
+        var http = await client.GetAsync($"/surveys/{surveyId}/respond");
+        http.EnsureSuccessStatusCode();
+        return (await http.Content.ReadFromJsonAsync<SurveyRespondView>())!;
+    }
+
+    /// <summary>
+    /// A visitor with no account completing the survey with the demographics they declared.
+    /// A fresh client per call, because an unauthenticated respondent is a stranger.
+    /// </summary>
+    private Task<HttpResponseMessage> SubmitSelfDeclaredAsync(
+        SurveyDetail survey,
+        IReadOnlyDictionary<string, string?>? demographics)
+        => SubmitAsync(_factory.CreateClient(), survey.Id, new SubmitSurveyResponseRequest(
+            Answers: [new SurveyAnswerInput(survey.Questions[0].Id, "remote")],
+            SessionId: Guid.NewGuid().ToString("N"),
+            Demographics: demographics));
+
+    private async Task<SurveySubmissionResult> SelfDeclareAsync(
+        SurveyDetail survey,
+        IReadOnlyDictionary<string, string?> demographics)
+    {
+        var http = await SubmitSelfDeclaredAsync(survey, demographics);
+        http.EnsureSuccessStatusCode();
+        return (await http.Content.ReadFromJsonAsync<SurveySubmissionResult>())!;
+    }
+
+    /// <summary>A company-level select field with its options, as an admin would configure it.</summary>
+    private Task SeedSelectFieldAsync(
+        string field,
+        IReadOnlyList<string> optionValues,
+        bool required,
+        int order,
+        string? labelEs = null,
+        bool isActive = true)
+        => _harness.WithDbAsync(async db =>
+        {
+            var id = Guid.NewGuid();
+            db.DemographicFields.Add(new DemographicField
+            {
+                Id = id,
+                CompanyId = _companyId,
+                Field = field,
+                LabelEn = field,
+                LabelEs = labelEs,
+                Type = "select",
+                Required = required,
+                Order = order,
+                IsActive = isActive,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow,
+            });
+            DemographicOptionSeed.Add(db, id, optionValues);
+            await db.SaveChangesAsync();
+        });
+
+    /// <summary>A field of a type whose answers can never form a reportable segment.</summary>
+    private Task SeedFieldOfTypeAsync(string field, string type, int order)
+        => _harness.WithDbAsync(async db =>
+        {
+            db.DemographicFields.Add(new DemographicField
+            {
+                Id = Guid.NewGuid(),
+                CompanyId = _companyId,
+                Field = field,
+                LabelEn = field,
+                Type = type,
+                Required = false,
+                Order = order,
+                IsActive = true,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow,
+            });
             await db.SaveChangesAsync();
         });
 
