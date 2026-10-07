@@ -98,11 +98,30 @@ export interface ShareLinkAction {
  * is remembered by value, so a replaced link comes back masked instead of on screen unasked.
  * `actions` adds the page's own writes (replace, delete, the QR code) to the same menu.
  */
-export function ShareLinkField({ link, actions = [] }: { link: string; actions?: ShareLinkAction[] }) {
+export function ShareLinkField({
+  link,
+  actions = [],
+  startRevealed = false,
+}: {
+  link: string
+  actions?: ShareLinkAction[]
+  /**
+   * Show the address instead of the dotted mask, and put "Ocultar" on the row rather than
+   * inside the overflow menu.
+   *
+   * The mask protects a link that happens to be on screen during a screen share. It is the
+   * wrong default where reading or copying the link IS the errand — the share panel —
+   * because there the first thing every administrator does is open a menu to undo it.
+   *
+   * The visible toggle lives on `SharePanel`, not here: hiding the address while leaving the
+   * QR on screen hides nothing, because the code IS the address. One control covers both.
+   */
+  startRevealed?: boolean
+}) {
   const { t } = useTranslation()
   const copy = (key: string) => t(`surveys.next.shareLink.${key}`)
   const origin = typeof window === 'undefined' ? '' : window.location.origin
-  const [revealedLink, setRevealedLink] = useState<string | null>(null)
+  const [revealedLink, setRevealedLink] = useState<string | null>(startRevealed ? link : null)
   const [copied, setCopied] = useState(false)
   const revealed = revealedLink === link
   return (

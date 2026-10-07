@@ -38,9 +38,9 @@ import { useTranslation } from '../../../../i18n'
 import { cn } from '../../../../lib/cn'
 import { canDistribute } from '../../api/surveyInvitationCopy'
 import { isKnownInvitationStatus } from '../../api/surveyDistribution'
-import ShareLinkQr from '../../components/ShareLinkQr'
 import { IconBox, TH_CLASS } from '../../../shared-next/parts'
-import { Card, Meter, ReadingTile, ShareLinkField, WithReading, type ShareLinkAction } from './parts'
+import { Card, Meter, ReadingTile, WithReading, type ShareLinkAction } from './parts'
+import SharePanel from './SharePanel'
 import {
   INVITATION_COLUMNS,
   MAX_REMINDERS,
@@ -144,7 +144,6 @@ export function DistributionView({
   const [audienceOpen, setAudienceOpen] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [linkConfirm, setLinkConfirm] = useState<'regenerate' | 'revoke' | null>(null)
-  const [qrOpen, setQrOpen] = useState(false)
   const [copyOpen, setCopyOpen] = useState(false)
   const [showAll, setShowAll] = useState(false)
 
@@ -180,10 +179,9 @@ export function DistributionView({
     frequencyDays: survey.settings.notificationReminderFrequencyDays,
     now,
   })
+  // No QR entry: the code is rendered on the panel, and a menu item that opened a dialog of
+  // the same code would be a second door to a room the reader is already standing in.
   const linkActions: ShareLinkAction[] = []
-  if (distribution?.publicLink && distribution.accessType === 'public') {
-    linkActions.push({ label: t('surveys.next.shareLink.qr'), onSelect: () => setQrOpen(true) })
-  }
   if (actionable) {
     linkActions.push(
       { label: t('surveys.distribution.shareLinkRegenerate'), onSelect: () => setLinkConfirm('regenerate'), disabled: busy },
@@ -266,6 +264,23 @@ export function DistributionView({
         </ReadingTile>
       </section>
 
+      {/* Above the checklist on purpose. The link and its QR are what an administrator came
+          for; being step 2 of 4 is what made them unfindable. The checklist still tracks the
+          step -- it just no longer owns the controls. */}
+      <section aria-label={t('surveys.next.share.title')} className="mt-6">
+        <Card className="px-4 py-4">
+          <SharePanel
+            publicLink={distribution?.publicLink ?? null}
+            accessType={distribution?.accessType}
+            surveyId={survey.id}
+            requireLogin={distribution?.accessRules?.requireLogin ?? false}
+            onCreate={actionable ? actions.createLink : undefined}
+            creating={busy}
+            actions={linkActions}
+          />
+        </Card>
+      </section>
+
       <section aria-labelledby="launch-checklist" className="mt-6 flex flex-col gap-3">
         <div className="flex flex-wrap items-baseline justify-between gap-3">
           <h2 id="launch-checklist" className="m-0 text-2xl">
@@ -320,16 +335,12 @@ export function DistributionView({
             )
           }
         >
-          {distribution?.publicLink ? (
-            <>
-              <ShareLinkField link={distribution.publicLink} actions={linkActions} />
-              <p className="m-0 text-sm text-fg-secondary">
-                {distribution.accessRules.requireLogin ? copy('linkHelpLogin') : copy('linkHelpOpen')}
-              </p>
-            </>
-          ) : (
-            <p className="m-0 text-sm text-fg-secondary">{copy('noLink')}</p>
-          )}
+          {/* A status line, not a second set of controls: "Compartir la encuesta" above owns
+              the link, the code and the menu. Two copies of the same control on one page is
+              how a reader ends up unsure which one is live. */}
+          <p className="m-0 text-sm text-fg-secondary">
+            {distribution?.publicLink ? copy('linkHelpOpen') : copy('noLink')}
+          </p>
         </Step>
 
         <Step
@@ -587,17 +598,6 @@ export function DistributionView({
           )}
         </DialogContent>
       </Dialog>
-
-      {distribution?.publicLink && (
-        <Dialog open={qrOpen} onOpenChange={setQrOpen}>
-          <DialogContent closeLabel={t('common.close')}>
-            <DialogHeader>
-              <DialogTitle>{t('surveys.next.shareLink.qr')}</DialogTitle>
-            </DialogHeader>
-            <ShareLinkQr publicLink={distribution.publicLink} accessType={distribution.accessType} surveyId={survey.id} />
-          </DialogContent>
-        </Dialog>
-      )}
 
       <ConfirmationDialog
         open={linkConfirm !== null}

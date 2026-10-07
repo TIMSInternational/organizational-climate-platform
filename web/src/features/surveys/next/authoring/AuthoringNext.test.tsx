@@ -203,12 +203,22 @@ describe('Detalle de encuesta (SurveyDetail artboard)', () => {
     expect(screen.getByTestId('tile-responses').textContent).toContain('de 41 · 7 %')
   })
 
-  it('never puts a character of the share-link token on screen until the reader asks for the link', async () => {
+  /**
+   * The masking policy changed deliberately (2026-10-06): the link and its code are the
+   * errand on this card, and hiding them by default cost seven clicks and, once, a client.
+   * The guarantee that replaces "nothing until you ask" is that ONE control still takes both
+   * off screen -- hiding the address while the QR stayed would hide nothing, because the code
+   * IS the address.
+   */
+  it('shows the link and its QR without asking, and one control takes both off screen', async () => {
     detail(survey())
+    const card = screen.getByTestId('detail-link')
+    expect(card.textContent).toContain(`/s/${LINK_SEGMENT}`)
+    expect(within(card).getByRole('img', { name: /QR/i })).toBeTruthy()
+    await userEvent.click(within(card).getByRole('button', { name: 'Ocultar el enlace' }))
     expect(document.body.textContent).not.toContain(LINK_SEGMENT.slice(0, 6))
-    await userEvent.click(within(screen.getByTestId('detail-link')).getByRole('button', { name: 'Opciones del enlace' }))
-    expect((await screen.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual(['Mostrar el enlace'])
-    await userEvent.click(screen.getByRole('menuitem', { name: 'Mostrar el enlace' }))
+    expect(within(card).queryByRole('img', { name: /QR/i })).toBeNull()
+    await userEvent.click(within(card).getByRole('button', { name: 'Mostrar el enlace' }))
     expect(screen.getByTestId('detail-link').textContent).toContain(`/s/${LINK_SEGMENT}`)
   })
 
@@ -322,7 +332,9 @@ describe('Distribución (Distribution artboard)', () => {
       expect(screen.queryByRole('button', { name })).toBeNull()
     }
     await userEvent.click(screen.getByRole('button', { name: 'Opciones del enlace' }))
-    expect((await screen.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual(['Mostrar el enlace', 'Código QR del enlace'])
+    // Only the reveal toggle: replacing and revoking belong to an administrator of THIS
+    // company, and the QR is on the panel rather than behind a menu.
+    expect((await screen.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual(['Ocultar el enlace'])
   })
 
   it('offers a leader no action at all', () => {
@@ -331,16 +343,17 @@ describe('Distribución (Distribution artboard)', () => {
     expect(screen.queryByRole('button', { name: 'Crear enlace' })).toBeNull()
   })
 
-  it('never puts a character of the share-link token on screen until the reader asks, and hides it again', async () => {
+  it('puts the link and the code on the share panel, and hides both together', async () => {
     distribution(invitationList())
-    expect(screen.getByTestId('step-link').textContent).toContain('/s/')
+    const panel = screen.getByTestId('share-panel')
+    expect(panel.textContent).toContain(`/s/${LINK_SEGMENT}`)
+    expect(within(panel).getByRole('img', { name: /QR/i })).toBeTruthy()
+    // The checklist step states the status; it no longer carries a second copy of the
+    // controls, so there is exactly one "Opciones del enlace" on the page.
+    expect(screen.getAllByRole('button', { name: 'Opciones del enlace' })).toHaveLength(1)
+    await userEvent.click(within(panel).getByRole('button', { name: 'Ocultar el enlace' }))
     expect(document.body.textContent).not.toContain(LINK_SEGMENT.slice(0, 6))
-    await userEvent.click(screen.getByRole('button', { name: 'Opciones del enlace' }))
-    await userEvent.click(await screen.findByRole('menuitem', { name: 'Mostrar el enlace' }))
-    expect(screen.getByTestId('step-link').textContent).toContain(`/s/${LINK_SEGMENT}`)
-    await userEvent.click(screen.getByRole('button', { name: 'Opciones del enlace' }))
-    await userEvent.click(await screen.findByRole('menuitem', { name: 'Ocultar el enlace' }))
-    expect(document.body.textContent).not.toContain(LINK_SEGMENT.slice(0, 6))
+    expect(within(panel).queryByRole('img', { name: /QR/i })).toBeNull()
   })
 
   it('replaces the link only after the confirmation says the old one stops working', async () => {

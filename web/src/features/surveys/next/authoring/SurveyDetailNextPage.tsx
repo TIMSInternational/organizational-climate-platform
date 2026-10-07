@@ -5,14 +5,16 @@ import { Alert, AlertDescription, Button, Chip, ErrorState, LoadingRegion, Skele
 import { ANONYMITY_FLOOR } from '../../../../components/charts'
 import { estimateAudience } from '../../../../components/distribution'
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
+import { useCompanyScope } from '../../../../company-context/useCompanyScope'
 import { useTranslation } from '../../../../i18n'
 import ContentFallbackNotice from '../../components/ContentFallbackNotice'
 import { canDistribute } from '../../api/surveyInvitationCopy'
+import SharePanel from './SharePanel'
 import type { SurveyDetail } from '../../api/surveys'
 import { languageLabel, statusLabel, typeLabel } from '../../surveyVocabulary'
 import { Note, PanelHeading } from '../../../shared-next/parts'
 import { PreviewQuestion, PreviewSection } from './QuestionPreview'
-import { Card, CardHeading, Meter, ReadingTile, ShareLinkField } from './parts'
+import { Card, CardHeading, Meter, ReadingTile } from './parts'
 import {
   dayMonth,
   daysFrom,
@@ -110,6 +112,14 @@ export function SurveyDetailView({
   const reminders = remindersSent(invitations?.invitations ?? null)
   const sections = dimensionSections(survey.questions)
   const canAuthor = caps.canAuthorSurveys
+  // A super administrator carries no tenant until they pick one, so `canAuthorSurveys` is
+  // false and every authoring control vanishes -- Duplicar, Distribución, the transitions --
+  // while Resultados stays, because `canOpenResults` admits SUPER_ADMIN unconditionally. The
+  // page then looks complete and merely lacks the thing the reader came for. That silence
+  // cost a real client conversation: the team concluded the product could not share a link.
+  // Eight other pages already branch on this state; this one did not.
+  const scope = useCompanyScope()
+  const needsCompany = !canAuthor && scope.status === 'needs-selection'
   const editable = survey.isContentEditable && survey.responseCount === 0
 
   return (
@@ -147,6 +157,17 @@ export function SurveyDetailView({
           </>
         }
       />
+
+      {needsCompany && (
+        <p
+          role="status"
+          data-testid="detail-needs-company"
+          className="m-0 rounded-lg border border-line-light bg-surface-panel px-4 py-3 text-sm text-fg-secondary"
+        >
+          <b className="font-semibold text-fg-primary">{t('companyContext.chooseACompany')}</b>{' '}
+          {t('companyContext.chooseACompanyDescription')}
+        </p>
+      )}
 
       <ContentFallbackNotice
         language={survey.language}
@@ -246,7 +267,14 @@ export function SurveyDetailView({
         </Card>
 
         <div className="flex min-w-0 flex-col gap-4">
-          {distribution !== undefined && <LinkCard link={distribution?.publicLink ?? null} />}
+          {distribution !== undefined && (
+            <LinkCard
+              link={distribution?.publicLink ?? null}
+              accessType={distribution?.accessType}
+              requireLogin={distribution?.accessRules?.requireLogin ?? false}
+              surveyId={survey.id}
+            />
+          )}
           <Card className="flex flex-col gap-2.5 px-5 pb-4.5 pt-4" data-testid="detail-sheet">
             <CardHeading title={copy('sheet')} />
             <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
@@ -352,7 +380,26 @@ function StatusTile({
   )
 }
 
-function LinkCard({ link }: { link: string | null }) {
+/**
+ * The share surface on the detail page, which used to be a read-only line of text.
+ *
+ * This is where an administrator actually lands, so it is where they look for the link. It
+ * now carries the same panel as Distribución -- link, QR, copy, download -- in `stacked`
+ * form, because this card lives in a ~20rem rail where the side-by-side layout would overflow.
+ * `noLink` keeps its sentence and offers no "Crear enlace": minting one is a distribution
+ * decision and belongs on the page that owns the launch checklist.
+ */
+function LinkCard({
+  link,
+  accessType,
+  requireLogin = false,
+  surveyId,
+}: {
+  link: string | null
+  accessType?: string
+  requireLogin?: boolean
+  surveyId?: string
+}) {
   const { t } = useTranslation()
   const copy = (key: string) => t(`surveys.next.detail.${key}`)
   return (
@@ -361,10 +408,13 @@ function LinkCard({ link }: { link: string | null }) {
       {link === null ? (
         <p className="m-0 text-sm text-fg-secondary">{copy('noLink')}</p>
       ) : (
-        <>
-          <ShareLinkField link={link} />
-          <span className="text-sm text-fg-secondary">{copy('linkHelp')}</span>
-        </>
+        <SharePanel
+          publicLink={link}
+          accessType={accessType}
+          surveyId={surveyId}
+          requireLogin={requireLogin}
+          stacked
+        />
       )}
     </Card>
   )

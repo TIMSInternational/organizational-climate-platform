@@ -159,6 +159,19 @@ export interface ShareLinkQrProps {
    * the name has a safe fallback and a QR nobody can file is worse than a generic filename.
    */
   surveyId?: string
+  /**
+   * Render the code already on screen instead of behind "Mostrar código QR".
+   *
+   * The hidden default exists because a camera can read a QR off a shared screen, and that
+   * reasoning is sound for a code sitting inside a dialog somebody opened by accident. It is
+   * the wrong default for the panel an administrator opens *in order to* distribute the
+   * survey: there the code is the errand, and three clicks to reach it is what sent a real
+   * client away believing the product had no shareable link at all. The guard does not
+   * disappear — "Ocultar" is beside the code and the panel says when to use it.
+   */
+  defaultShown?: boolean
+  /** Override the panel's own width/chrome where a caller owns the layout. */
+  className?: string
 }
 
 /** The QR grid for `text`, as rows of dark/light modules. */
@@ -321,10 +334,10 @@ export async function qrPngBlob(
   })
 }
 
-export default function ShareLinkQr({ publicLink, accessType, origin, surveyId }: ShareLinkQrProps) {
+export default function ShareLinkQr({ publicLink, accessType, origin, surveyId, defaultShown = false, className }: ShareLinkQrProps) {
   const { t } = useTranslation()
   const svgRef = useRef<SVGSVGElement | null>(null)
-  const [shown, setShown] = useState(false)
+  const [shown, setShown] = useState(defaultShown)
   const [downloading, setDownloading] = useState(false)
   const [failed, setFailed] = useState(false)
 
@@ -395,9 +408,18 @@ export default function ShareLinkQr({ publicLink, accessType, origin, surveyId }
   }
 
   return (
-    <div className="flex flex-col gap-panel-gap rounded-lg border border-line-light bg-surface-panel p-panel md:w-[20rem] md:shrink-0">
+    <div
+      className={
+        className ??
+        'flex flex-col gap-panel-gap rounded-lg border border-line-light bg-surface-panel p-panel md:w-[20rem] md:shrink-0'
+      }
+    >
       <H3>{t('surveys.distribution.qrTitle')}</H3>
-      <p className="text-sm text-fg-secondary">{t('surveys.distribution.qrHint')}</p>
+      {/* `qrHint` explains why the code is HIDDEN ("permanece oculto hasta que lo pidas").
+          With `defaultShown` it is on screen, so that sentence is simply false and the
+          advice it carried belongs to whoever chose to show it by default. Printing it here
+          was the first thing the rendered screen caught. */}
+      {!defaultShown && <p className="text-sm text-fg-secondary">{t('surveys.distribution.qrHint')}</p>}
 
       {modules !== null ? (
         <>

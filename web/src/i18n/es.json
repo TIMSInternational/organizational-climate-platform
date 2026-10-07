@@ -4402,6 +4402,10 @@
         "questionsNotSaved": "La encuesta se creó con las preguntas de la plantilla, pero sus cambios a las preguntas no se guardaron ({message}). Repítalos en Editar preguntas.",
         "openQuestionEditor": "Abrir Editar preguntas"
       },
+      "share": {
+        "title": "Compartir la encuesta",
+        "screenShare": "Si está compartiendo pantalla, use «Ocultar»: una cámara puede leer el código desde la pantalla."
+      },
       "shareLink": {
         "copy": "Copiar el enlace",
         "copied": "Enlace copiado",
