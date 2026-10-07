@@ -172,6 +172,11 @@ export function DistributionView({
   // It is the reach, the response rate's denominator and the audience line's count at once.
   const audience = surveyAudience({ invited: summary.total, resolved, stated: survey.targetAudienceCount })
   const rate = responseRate(survey.responseCount, audience?.count ?? null)
+  // A survey handed out by link has no roster, so its reach is UNKNOWN rather than zero.
+  // Printing a literal 0 beside "37 respuestas" reads as a contradiction, and it is the
+  // directory's emptiness being reported as the survey's reach.
+  const reach =
+    audience !== null && audience.count === 0 && (distribution?.publicLink ?? null) !== null ? null : audience
   const outlook = nextReminder({
     invitations: invitations.invitations,
     status: survey.status,
@@ -229,8 +234,8 @@ export function DistributionView({
         <ReadingTile
           testId="tile-reach"
           label={copy('reach')}
-          value={audience?.count ?? null}
-          unit={audience === null ? undefined : copy(REACH_UNIT[audience.source])}
+          value={reach?.count ?? null}
+          unit={reach === null ? undefined : copy(REACH_UNIT[reach.source])}
         />
         <ReadingTile
           testId="tile-responses"
@@ -324,7 +329,12 @@ export function DistributionView({
               ? copy('audienceTitle')
               : stateOf('audience') === 'unknown'
                 ? copy('audienceUnknownTitle')
-                : copy('audienceMissingTitle')
+                : // `idle` is an empty directory with a working door: nothing is wrong and
+                  // nothing is needed. Falling through to the `missing` title here was how
+                  // a link-distributed survey came to announce "Audiencia sin personas".
+                  stateOf('audience') === 'idle'
+                  ? copy('audienceByLinkTitle')
+                  : copy('audienceMissingTitle')
           }
           action={
             actionable && (
@@ -335,7 +345,9 @@ export function DistributionView({
           }
         >
           <p className="m-0 text-sm text-fg-secondary">
-            {resolved === null
+            {stateOf('audience') === 'idle'
+              ? copy('audienceByLink')
+              : resolved === null
               ? summary.total > 0
                 ? copy('audienceInvited', { people: summary.total })
                 : t('surveys.distribution.outOfScope')

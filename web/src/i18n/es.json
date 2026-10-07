@@ -4271,6 +4271,8 @@
         "checklistAside": "{count} pasos · se repasan cada vez que la audiencia cambia",
         "audienceTitle": "Audiencia confirmada",
         "audienceMissingTitle": "Audiencia sin personas",
+        "audienceByLinkTitle": "Se reparte por enlace",
+        "audienceByLink": "No hace falta una lista de personas: quien tenga el enlace o el código QR puede responder.",
         "changeAudience": "Cambiar audiencia",
         "audienceCompany": "Toda la empresa · {people} personas.",
         "audienceOne": "1 departamento · {people} personas. {names}.",

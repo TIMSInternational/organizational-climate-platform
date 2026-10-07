@@ -180,13 +180,37 @@ export interface LaunchStep {
 /**
  * The four steps of the launch checklist and whether each is met.
  *
+ * ## A survey needs ONE open door, not every door
+ *
+ * The share link and the invitations are two ways into the same survey, and this list used
+ * to demand both: `invitations` was `missing` whenever none had been sent, so a survey
+ * distributed by its link alone said "Falta que las invitaciones salgan" **forever**. For a
+ * client whose respondents have no email — the case the public link and its QR exist for —
+ * that is not a nudge, it is a permanent and false "not ready".
+ *
+ * So a door that works makes the other doors non-blocking. `doorOpen` is deliberately
+ * `invitationsDone` and not merely "invitations exist": an invitation still `pending` has
+ * not gone anywhere, so it is not yet a way in and the nudge to send it survives.
+ *
+ * This was chosen over detecting a "link-only survey" from the data, which cannot be done
+ * honestly: a survey with a link and no invitations is indistinguishable from one whose
+ * administrator simply has not invited anyone **yet**, and the obvious tiebreak — an empty
+ * audience — fails for the very client it is for, because `estimateAudience` counts every
+ * active user including administrators when a survey targets no department.
+ *
  * - **audience** — somebody would receive the survey: the resolved audience is not empty. A
  *   directory this viewer cannot read is `unknown` — unless invitations already went out, which
- *   is an audience with people in it however it was chosen.
- * - **link** — the survey has a share link (`publicLink`).
- * - **invitations** — invitations exist and none is still pending.
+ *   is an audience with people in it however it was chosen. Empty is only `missing` when no
+ *   door is open: with a working link, a survey needs no roster at all.
+ * - **link** — the survey has a share link (`publicLink`), or `idle` when invitations are the
+ *   door being used.
+ * - **invitations** — invitations exist and none is still pending, or `idle` when the link is
+ *   the door being used.
  * - **reminders** — never blocking: `idle` until one is sent. They are raised automatically on
  *   a schedule (`nextReminder`) and a survey is ready to launch before the first is due.
+ *
+ * With neither door open both are `missing`, which is the one state that genuinely blocks:
+ * the survey has no way to be answered.
  */
 export function launchChecklist(input: {
   /** The audience resolved from the directory, or null when this viewer cannot read it. */
@@ -197,6 +221,8 @@ export function launchChecklist(input: {
 }): LaunchStep[] {
   const invitationsDone =
     input.summary !== null && input.summary.total > 0 && input.summary.pending === 0
+  /** A way in that actually works today. A pending invitation is not one yet. */
+  const doorOpen = input.publicLink !== null || invitationsDone
   const audience: LaunchStepState =
     input.audience === null
       ? input.summary !== null && input.summary.total > 0
@@ -204,11 +230,13 @@ export function launchChecklist(input: {
         : 'unknown'
       : input.audience > 0
         ? 'done'
-        : 'missing'
+        : doorOpen
+          ? 'idle'
+          : 'missing'
   return [
     { id: 'audience', state: audience },
-    { id: 'link', state: input.publicLink !== null ? 'done' : 'missing' },
-    { id: 'invitations', state: invitationsDone ? 'done' : 'missing' },
+    { id: 'link', state: input.publicLink !== null ? 'done' : doorOpen ? 'idle' : 'missing' },
+    { id: 'invitations', state: invitationsDone ? 'done' : doorOpen ? 'idle' : 'missing' },
     { id: 'reminders', state: input.reminders !== null && input.reminders > 0 ? 'done' : 'idle' },
   ]
 }
