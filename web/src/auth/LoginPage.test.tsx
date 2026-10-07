@@ -85,7 +85,10 @@ describe('LoginPage', () => {
 
     const lockup = container.querySelector('[data-slot="brand-lockup"]')
     expect(lockup).toBeTruthy()
-    expect(lockup?.textContent).toBe('CLIMATE')
+    // The lockup is the OCC artwork now, not a two-tone word set in type, so the
+    // product's name on this card is the image's accessible name.
+    const logo = lockup?.querySelector('[data-slot="occ-logo"]')
+    expect(logo?.getAttribute('alt')).toBe('OCC')
   })
 
   /**

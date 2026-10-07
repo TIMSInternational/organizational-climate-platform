@@ -4402,6 +4402,10 @@
         "questionsNotSaved": "The survey was created with the template's questions, but your changes to them were not saved ({message}). Make them again in Edit questions.",
         "openQuestionEditor": "Open Edit questions"
       },
+      "share": {
+        "title": "Share the survey",
+        "screenShare": "If you are sharing your screen, use \u201cHide\u201d: a camera can read the code off the screen."
+      },
       "shareLink": {
         "copy": "Copy the link",
         "copied": "Link copied",

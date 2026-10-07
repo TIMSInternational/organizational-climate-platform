@@ -345,11 +345,16 @@ describe('the canvas shell', () => {
     expect(token('--admin-chart-div-mid').toLowerCase()).toBe('#cbced6')
   })
 
-  it('sets the wordmark in the canvas two tones, the tail in the muted navy', () => {
-    expect(token('--admin-brand-lead').toLowerCase()).toBe('#dbdfec')
-    expect(token('--admin-brand-tail').toLowerCase()).toBe('#93a1c6')
-    expect(sidebarBrandSource).toContain("color: 'var(--admin-brand-lead)'")
-    expect(sidebarBrandSource).toContain("color: 'var(--admin-brand-tail)'")
+  /**
+   * The wordmark is no longer set in type at all — it is part of the OCC artwork, so
+   * `--admin-brand-lead` / `--admin-brand-tail` and the two-tone CLIMA|TE treatment they
+   * coloured went with it. What replaces the guarantee is `OccLogo`'s own: one brand ink,
+   * measured against every surface it lands on.
+   */
+  it('no longer declares the retired two-tone wordmark tokens', () => {
+    expect(tokensCss).not.toMatch(/--admin-brand-lead\b/)
+    expect(tokensCss).not.toMatch(/--admin-brand-tail\b/)
+    expect(sidebarBrandSource).not.toContain('--admin-brand-lead')
   })
 })
 

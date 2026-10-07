@@ -1,6 +1,6 @@
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { useTranslation } from '../../i18n'
-import { ClimateMark } from './ClimateMark'
+import { OccLogo, OccMark } from './OccLogo'
 
 /**
  * The head of the sidebar: the mark, the wordmark, and the collapse control.
@@ -45,9 +45,6 @@ import { ClimateMark } from './ClimateMark'
  * it. The bar's only *copy* — the toggle's label and tooltip — goes through `t()`
  * as everything else does.
  */
-const BRAND_LEAD = 'CLIMA'
-const BRAND_TAIL = 'TE'
-
 export interface SidebarBrandProps {
   collapsed: boolean
   onToggleCollapsed: () => void
@@ -86,7 +83,7 @@ export function SidebarBrand({ collapsed, onToggleCollapsed }: SidebarBrandProps
           padding: '14px 6px 10px',
         }}
       >
-        <Mark size={24} />
+        <Mark size={32} />
         {toggle}
       </div>
     )
@@ -103,20 +100,8 @@ export function SidebarBrand({ collapsed, onToggleCollapsed }: SidebarBrandProps
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--admin-space-8)', minWidth: 0 }}>
-        <Mark size={28} />
-        {/* One `<span>`, two coloured halves — not two words with a space, which is
-            what a screen reader would otherwise announce. */}
-        <span
-          style={{
-            fontSize: 15,
-            fontWeight: 'var(--admin-weight-bold)',
-            letterSpacing: '-0.01em',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          <span style={{ color: 'var(--admin-brand-lead)' }}>{BRAND_LEAD}</span>
-          <span style={{ color: 'var(--admin-brand-tail)' }}>{BRAND_TAIL}</span>
-        </span>
+        {/* One piece of artwork, mark and wordmark together: see `OccLogo`. */}
+        <OccLogo height={30} />
       </div>
       {toggle}
     </div>
@@ -129,5 +114,5 @@ export function SidebarBrand({ collapsed, onToggleCollapsed }: SidebarBrandProps
  * `aria-label` does.
  */
 function Mark({ size }: { size: number }) {
-  return <ClimateMark tone="shell" style={{ width: size, height: size, flexShrink: 0 }} />
+  return <OccMark size={size} />
 }

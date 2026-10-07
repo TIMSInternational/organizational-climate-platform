@@ -169,16 +169,12 @@
                                   ForMaps' EXPANDED_W was 220px gutters included,
                                   which cut "Configuración" and "Cerrar sesión". */
   --admin-size-sidebar-collapsed: 52px;
-  /* The wordmark on the rail, as every artboard draws it: `CLIMA` in the lead tone, `TE`
-     in the muted tail (`<span style="color: var(--admin-brand-tail);">TE</span>`). The rail
-     is the same dark ground in both themes, so one pair serves both.
-
-     The artboards of 10 Sep drew this pair as #e1ddee / #a69bc9, a lavender. The
-     de-purpling of 2026-09-22 re-solved both at hue 220 holding relative luminance
-     constant, so the two tones keep exactly the separation they had against the rail --
-     what changed is the hue, not the contrast. */
-  --admin-brand-lead: #dbdfec;
-  --admin-brand-tail: #93a1c6;
+  /* The rail's wordmark used to be set in type here -- `CLIMA` in a lead tone and `TE` in a
+     muted tail, a pair the artboards of 10 Sep drew as a lavender and the de-purpling of
+     2026-09-22 re-solved at hue 220 holding relative luminance constant. Both tones were
+     retired on 2026-10-05 when TIMS supplied the OCC logo: the wordmark is part of that
+     artwork now, so there is no type on the rail left to colour. See `OccLogo`, which
+     carries the one brand ink and the measurements that let it serve both themes. */
   --admin-size-content-max: 1280px;
   /* The block a page-level empty state reserves for itself, so its message centres
      in the screen rather than clinging to the heading with the rest of the card

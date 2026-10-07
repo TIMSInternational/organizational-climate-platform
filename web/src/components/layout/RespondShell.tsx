@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { LanguageSwitcher } from '../../i18n'
-import { ClimateMark } from './ClimateMark'
+import { OccLogo } from './OccLogo'
 import { SkipLink } from '../ui'
 import { ThemeSwitcher } from './ShellControls'
 
@@ -10,8 +10,6 @@ import { ThemeSwitcher } from './ShellControls'
  * name for the reason written out there: `CLIMA|TE` is one logotype, and where the
  * seam falls is a property of the drawn mark rather than of the language.
  */
-const BRAND_LEAD = 'CLIMA'
-const BRAND_TAIL = 'TE'
 
 /**
  * The frame the three respond flows share: `/survey/:id`, `/surveys/:id/respond`
@@ -173,22 +171,15 @@ export function RespondShell({ skipLabel, contentId = 'respond', children }: Res
  *
  * ## Contrast
  *
- * `text-accent-blue` is 3.74:1 on the panel, under AA for text this size. That is
- * correct here and nowhere else on these pages: WCAG 1.4.3 exempts text that is
- * part of a logotype, and this half-word is the drawn mark rather than copy —
- * which is also why `features/surveys/respondContrast.test.ts` measures the chip
- * word and the prose but not this. Nothing else in either shell inks with it.
+ * The lockup is one image now, so there is no wordmark ink to measure: WCAG 1.4.3
+ * exempts a logotype, and `features/surveys/respondContrast.test.ts` measures the
+ * chip word and the prose but not this. The brand red was still checked against
+ * every surface it lands on — 3.70:1 light paper, 4.68:1 navy shell — because an
+ * invisible logo is a defect whatever the exemption says. See `OccLogo`.
  */
 export function BrandLockup({
   size = 'default',
-  tone = 'auto',
 }: {
-  /**
-   * Handed to `ClimateMark`. `shell` for the navy surfaces that do not follow the reader's
-   * theme — the auth stage and the strip over `AuthBackdrop`'s photograph. The respond and
-   * shared-report headers sit on the page surface and keep `auto`.
-   */
-  tone?: 'auto' | 'shell'
   /**
    * `compact` is the respond strip's lockup as the canvas draws it (RespondSurveyPhone
    * and its siblings, 10 Sep): a 24px tile on the recessed surface with the mark in the
@@ -200,19 +191,10 @@ export function BrandLockup({
   const compact = size === 'compact'
   return (
     <span data-slot="brand-lockup" data-size={size} className="flex items-center gap-inline">
-      <ClimateMark tone={tone} className={compact ? 'size-6 shrink-0' : 'size-icon-box shrink-0'} />
-      {/* One `<span>`, two coloured halves — not two words with a space, which is
-          what a screen reader would otherwise announce. */}
-      <span
-        className={
-          compact
-            ? 'whitespace-nowrap text-base font-bold'
-            : 'whitespace-nowrap text-xl font-bold tracking-tight'
-        }
-      >
-        <span className="text-fg-primary">{BRAND_LEAD}</span>
-        <span className="text-accent-blue">{BRAND_TAIL}</span>
-      </span>
+      {/* The mark and the wordmark are one piece of artwork, so the figures cannot
+          fall under their 32px floor while the wordmark stays legible — see
+          `OccLogo`. `compact` is the strip over a form, `default` the sign-in card. */}
+      <OccLogo height={compact ? 32 : 36} />
     </span>
   )
 }
