@@ -4271,6 +4271,8 @@
         "checklistAside": "{count} steps · reviewed every time the audience changes",
         "audienceTitle": "Audience confirmed",
         "audienceMissingTitle": "Audience with no people",
+        "audienceByLinkTitle": "Handed out by link",
+        "audienceByLink": "No list of people is needed: anyone with the link or the QR code can answer.",
         "changeAudience": "Change audience",
         "audienceCompany": "The whole company · {people} people.",
         "audienceOne": "1 department · {people} people. {names}.",

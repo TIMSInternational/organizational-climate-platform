@@ -307,11 +307,17 @@ describe('Distribución (Distribution artboard)', () => {
     expect(screen.getByText('Frase del servidor sobre lo que se registra.').getAttribute('class')).toContain('text-[1.125rem]')
   })
 
-  it('reads 3 of 4 steps and names the invitations as what is missing', () => {
+  it('reads 4 of 4 with a working link and nobody invited yet, and keeps naming the audience', () => {
+    // Was 3 of 4 with `invitations: missing`. The share link is a door, so the survey is
+    // launchable and the checklist no longer says otherwise -- the change that stopped a
+    // link-distributed survey reading "Falta que las invitaciones salgan" forever.
+    // The audience line is unchanged: this company HAS a directory, 6 people in two
+    // departments, so nothing about it became inapplicable.
     distribution(invitationList())
-    expect(reading('tile-ready')).toBe('3')
-    expect(screen.getByTestId('tile-ready').textContent).toContain('Falta que las invitaciones salgan')
-    expect(screen.getByTestId('step-invitations').getAttribute('data-state')).toBe('missing')
+    expect(reading('tile-ready')).toBe('4')
+    expect(screen.getByTestId('tile-ready').textContent).toContain('Todo listo para lanzar')
+    expect(screen.getByTestId('tile-ready').textContent).not.toContain('Falta que las invitaciones salgan')
+    expect(screen.getByTestId('step-invitations').getAttribute('data-state')).toBe('idle')
     expect(screen.getByTestId('step-audience').textContent).toContain('2 departamentos · 6 personas. Finanzas y Ingeniería.')
   })
 
@@ -495,6 +501,61 @@ describe('Distribución (Distribution artboard)', () => {
     const sentence = screen.getByText('Frase del servidor sobre lo que se registra.')
     expect(sentence.className.split(' ')).toEqual(expect.arrayContaining(['font-store-serif', 'leading-tight']))
     expect(sentence.className.split(' ')).not.toContain('font-serif')
+  })
+})
+
+/**
+ * The shape a client with no accounts actually uses: a QR code and a link, no directory,
+ * nobody invited. The checklist used to tell them, permanently, that the survey was not
+ * ready because invitations had not gone out -- for respondents who have no email to send
+ * one to.
+ */
+describe('Distribución — a survey handed out by link alone', () => {
+  const linkOnly = () => {
+    vi.mocked(surveysApi.getSurvey).mockResolvedValue(
+      survey({
+        settings: { anonymous: true } as SurveyDetail['settings'],
+        departmentIds: [],
+        targetAudienceCount: null,
+        responseCount: 37,
+      }),
+    )
+    vi.mocked(distributionApi.getSurveyDistribution).mockResolvedValue({ publicLink: `/s/${LINK_SEGMENT}`, accessType: 'public', accessRules: {} } as never)
+    // Nobody invited, and no directory to invite from.
+    vi.mocked(distributionApi.listSurveyInvitations).mockResolvedValue(invitationList())
+    vi.mocked(usersApi.listUsers).mockResolvedValue([] as never[])
+    return renderAs('company_admin', <SurveyDistributionNextPage />, 'c1', '/surveys/s1/distribution', '/surveys/:surveyId/distribution')
+  }
+
+  it('reads as ready to launch instead of demanding invitations that will never be sent', async () => {
+    linkOnly()
+    expect(await screen.findByText('Todo listo para lanzar')).toBeTruthy()
+    expect(screen.queryByText(/Falta que las invitaciones salgan/)).toBeNull()
+  })
+
+  it('says no list of people is needed, rather than calling the audience empty', async () => {
+    linkOnly()
+    const step = await screen.findByTestId('step-audience')
+    expect(within(step).getByText('Se reparte por enlace')).toBeTruthy()
+    expect(screen.queryByText('Audiencia sin personas')).toBeNull()
+  })
+
+  it('leaves the reach unknown rather than printing a 0 next to 37 responses', async () => {
+    // The directory being empty is a fact about the directory, not about how many people
+    // this survey reaches -- and "0" beside "37 respuestas" reads as a contradiction.
+    linkOnly()
+    const tile = await screen.findByTestId('tile-reach')
+    expect(within(tile).queryByText('0')).toBeNull()
+  })
+
+  it('still blocks a survey with neither a link nor invitations, which nobody can answer', async () => {
+    vi.mocked(surveysApi.getSurvey).mockResolvedValue(survey({ settings: { anonymous: true } as SurveyDetail['settings'], departmentIds: [] }))
+    vi.mocked(distributionApi.getSurveyDistribution).mockResolvedValue({ publicLink: null, accessType: 'private', accessRules: {} } as never)
+    vi.mocked(distributionApi.listSurveyInvitations).mockResolvedValue(invitationList())
+    vi.mocked(usersApi.listUsers).mockResolvedValue([] as never[])
+    renderAs('company_admin', <SurveyDistributionNextPage />, 'c1', '/surveys/s1/distribution', '/surveys/:surveyId/distribution')
+    await screen.findByTestId('step-link')
+    expect(screen.queryByText('Todo listo para lanzar')).toBeNull()
   })
 })
 

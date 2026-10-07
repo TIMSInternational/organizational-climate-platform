@@ -68,15 +68,52 @@ describe('invitationBuckets', () => {
 })
 
 describe('launchChecklist', () => {
-  it('reads the Meridiano Q4 state as 3 of 4: audience and link met, invitations missing, reminders idle', () => {
+  it('reads the Meridiano Q4 state as 4 of 4: a working link is a door, so uninvited is not unready', () => {
+    // Was 3 of 4 with `invitations: missing`. A survey reachable by its link IS launchable,
+    // and demanding invitations as well told a link-distributed survey it was never ready.
     const steps = launchChecklist({ audience: 41, publicLink: '/s/abc', summary: summary(), reminders: 0 })
     expect(steps.map((step) => [step.id, step.state])).toEqual([
       ['audience', 'done'],
       ['link', 'done'],
-      ['invitations', 'missing'],
+      ['invitations', 'idle'],
       ['reminders', 'idle'],
     ])
-    expect(readySteps(steps)).toBe(3)
+    expect(readySteps(steps)).toBe(4)
+  })
+
+  it('calls a link-distributed survey with no roster at all ready — the whole point', () => {
+    // Igoal: operarios with no email, so there is no directory to resolve and nobody to
+    // invite. Every step but the link is inapplicable, and none of them blocks.
+    const steps = launchChecklist({ audience: 0, publicLink: '/s/abc', summary: summary(), reminders: null })
+    expect(steps.map((step) => [step.id, step.state])).toEqual([
+      ['audience', 'idle'],
+      ['link', 'done'],
+      ['invitations', 'idle'],
+      ['reminders', 'idle'],
+    ])
+    expect(readySteps(steps)).toBe(4)
+    expect(steps.some((step) => step.state === 'missing')).toBe(false)
+  })
+
+  it('still blocks when NEITHER door is open, because then nobody can answer', () => {
+    const steps = launchChecklist({ audience: 0, publicLink: null, summary: summary(), reminders: null })
+    expect(steps.find((step) => step.id === 'link')?.state).toBe('missing')
+    expect(steps.find((step) => step.id === 'invitations')?.state).toBe('missing')
+    expect(steps.find((step) => step.id === 'audience')?.state).toBe('missing')
+  })
+
+  it('keeps the nudge for invitations created but not yet sent, which are not a door yet', () => {
+    // `doorOpen` is invitationsDONE, not "invitations exist". A pending invitation has gone
+    // nowhere, so with no link the survey really is unreachable and must still say so.
+    const steps = launchChecklist({ audience: 10, publicLink: null, summary: summary({ total: 4, sent: 3, pending: 1 }), reminders: null })
+    expect(steps.find((step) => step.id === 'invitations')?.state).toBe('missing')
+    expect(steps.find((step) => step.id === 'link')?.state).toBe('missing')
+  })
+
+  it('stops demanding a link once invitations have actually gone out', () => {
+    const steps = launchChecklist({ audience: 41, publicLink: null, summary: summary({ total: 41, sent: 41 }), reminders: 0 })
+    expect(steps.find((step) => step.id === 'link')?.state).toBe('idle')
+    expect(readySteps(steps)).toBe(4)
   })
 
   it('meets the invitations step only when invitations exist and none is pending', () => {
