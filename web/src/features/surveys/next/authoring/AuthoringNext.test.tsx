@@ -588,13 +588,16 @@ describe('Distribución — the self-declared demographics switch', () => {
     vi.mocked(surveysApi.getSurvey).mockResolvedValue(survey(anonymous({ selfDeclaredDemographics: true })))
     await userEvent.click(toggle())
 
-    await waitFor(() =>
-      expect(vi.mocked(surveysApi.setSurveySelfDeclaredDemographics)).toHaveBeenCalledWith(
-        expect.anything(),
-        's1',
-        true,
-      ),
-    )
+    // Asserted on the survey id and the value, NOT on the baseUrl, and this is the whole
+    // reason CI failed while this passed locally. `baseUrl` is
+    // `import.meta.env.VITE_API_BASE_URL`, which comes from `web/.env.local` -- a
+    // gitignored file, so on CI it is `undefined`. `expect.anything()` matches any value
+    // EXCEPT null and undefined, so the matcher rejected a call that had actually
+    // happened. A test must not assert the shape of one developer's machine.
+    await waitFor(() => {
+      const calls = vi.mocked(surveysApi.setSurveySelfDeclaredDemographics).mock.calls
+      expect(calls.some(([, id, enabled]) => id === 's1' && enabled === true)).toBe(true)
+    })
     await waitFor(() => expect(vi.mocked(surveysApi.getSurvey).mock.calls.length).toBeGreaterThan(readsBefore))
     await waitFor(() => expect(screen.getByRole('switch', { name: LABEL }).getAttribute('aria-checked')).toBe('true'))
   })
