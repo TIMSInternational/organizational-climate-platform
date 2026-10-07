@@ -585,7 +585,9 @@ export default function SurveyRespondForm({
           // enforces required fields on the completing call even when the map is
           // absent, and relying on absence to mean "nothing to declare" is the shape a
           // client bug takes.
-          ...(isComplete && view.demographics.length > 0 ? { demographics: declared } : {}),
+          // `?.` and not `.`: see the `demographics` read below for the deploy window
+          // this survives.
+          ...(isComplete && (view.demographics?.length ?? 0) > 0 ? { demographics: declared } : {}),
         }),
       )
 
@@ -954,7 +956,18 @@ export default function SurveyRespondForm({
    * author turned the setting on — so for everybody else this block is not reached and
    * the page is byte-identical to before.
    */
-  const demographics = view.demographics
+  // `?? []`, although the type says this is always an array.
+  //
+  // The TYPE describes the API in this repository; the RUNTIME gets whatever production
+  // is serving. The web auto-deploys on merge and the API needs a manual `deploy-prod`
+  // dispatch, so the two are routinely out of step — measured 2026-10-07, the prod API
+  // was on `af20a73e` while main was on `c8d5cbcc`. For the whole of that window this
+  // form runs against a respond payload with no `demographics` key at all, and a bare
+  // `.length` on it is a TypeError: a WHITE SCREEN on the one page in this product whose
+  // failure cannot be re-collected, for every respondent, until somebody dispatches the
+  // API deploy. Asserted by "survives a respond payload from an API that predates
+  // demographics".
+  const demographics = view.demographics ?? []
   if (demographicStep < demographics.length) {
     const field = demographics[demographicStep]
     const chosen = declared[field.field]

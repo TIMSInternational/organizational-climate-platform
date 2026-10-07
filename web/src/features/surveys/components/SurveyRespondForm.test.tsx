@@ -1487,6 +1487,28 @@ describe('SurveyRespondForm — the demographic prelude', () => {
     expect(document.querySelector('select')).toBeTruthy()
   })
 
+  /**
+   * The deploy window. The web auto-deploys on merge; the API needs a MANUAL
+   * `deploy-prod` dispatch, and is routinely behind — measured 2026-10-07, prod API on
+   * `af20a73e` while main was on `c8d5cbcc`. So between those two deploys the NEW form
+   * runs against an API whose respond payload has no `demographics` key at all.
+   */
+  it('survives a respond payload from an API that predates demographics', async () => {
+    const old = view()
+    delete (old as Partial<SurveyRespondView>).demographics
+    respondWith(old)
+    renderForm({ publicEntry: true })
+
+    // The survey must still be answerable. A crash here is a white screen on the one
+    // page in this product whose failure cannot be re-collected.
+    await screen.findByText('¿Qué tan satisfecho estás?')
+    await userEvent.click(screen.getByLabelText('Muy de acuerdo'))
+    await userEvent.click(screen.getByRole('button', { name: copy.es('surveyRespond.submitResponse') }))
+
+    await screen.findByText(copy.es('surveyRespond.thankYouTitle'))
+    expect(lastSubmission().demographics).toBeUndefined()
+  })
+
   it('does not ask a respondent the server sent no demographics for', async () => {
     // The authenticated case, and every survey whose author left the setting off: their
     // demographics come from their profile through the write-time cohort floor.
