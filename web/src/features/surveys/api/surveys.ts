@@ -77,6 +77,16 @@ export interface SurveySettings {
   autoSave: boolean
   timeLimitMinutes: number | null
   responseLimit: number | null
+  /**
+   * Opt-in: the public link asks a respondent with no account about themselves -- their
+   * area, their seniority -- before the first question. Defaults false, and deliberately
+   * not derived from "public + anonymous + the company has fields", because all three are
+   * already true of surveys collecting right now (`docs/decisions/self-declared-demographics.md`).
+   *
+   * It has NO EFFECT unless the survey is anonymous: `IsAnonymous` is taken from the
+   * survey, never the request, so a named survey ignores the flag entirely.
+   */
+  selfDeclaredDemographics: boolean
   notificationSendInvitations: boolean
   notificationSendReminders: boolean
   notificationReminderFrequencyDays: number
@@ -301,6 +311,40 @@ export async function duplicateSurvey(baseUrl: string, id: string, lang?: string
     body: JSON.stringify({}),
   })
   return response.json() as Promise<SurveyDetail>
+}
+
+/**
+ * Turns the public link's self-declared demographic questions on or off.
+ *
+ * `PUT /surveys/{id}` carrying ONLY this one setting, for `saveSurveyInvitationCopy`'s
+ * reason: every field of the payload is nullable and an omitted one means "leave this
+ * column alone", so a narrow body cannot blank a setting nobody touched.
+ *
+ * Why this is safe on a LIVE survey, measured rather than assumed
+ * (`SurveyEndpoints.cs:524-535`):
+ *
+ * - It is NOT content. `touchesContent` lists title, description, type, language,
+ *   questions, departmentIds and `settings.anonymous` -- and nothing else. So this does
+ *   not hit the 409 that `anonymous` would, nor the stricter "already has responses"
+ *   refusal behind it.
+ * - It IS a schedule/settings edit, because `touchesSchedule` is true for ANY
+ *   `settings` object at all. That gate is `AllowsScheduleEdit` == draft | scheduled |
+ *   active, which is exactly `SETTINGS_EDITABLE_STATUSES` and therefore exactly
+ *   `canDistribute` -- the predicate the page already disables its controls with. A
+ *   closed survey refuses this with a 409, which is why the control is not offered there.
+ *
+ * The change lands in the survey's audit trail as `settings.selfDeclaredDemographics`
+ * (`SurveyVersioning.Diff`), so turning it on mid-collection is attributable.
+ */
+export async function setSurveySelfDeclaredDemographics(
+  baseUrl: string,
+  id: string,
+  enabled: boolean,
+): Promise<void> {
+  await authFetch(`${baseUrl}/surveys/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ settings: { selfDeclaredDemographics: enabled } }),
+  })
 }
 
 /** `DELETE /surveys/{id}` answers 204, so there is no body to parse. */

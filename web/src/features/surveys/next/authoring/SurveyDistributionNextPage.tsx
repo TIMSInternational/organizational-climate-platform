@@ -19,6 +19,7 @@ import {
   ErrorState,
   LoadingRegion,
   SkeletonText,
+  SwitchField,
   Table,
   TableBody,
   TableCell,
@@ -278,6 +279,32 @@ export function DistributionView({
             creating={busy}
             actions={linkActions}
           />
+
+          {/* In the share card and nowhere else: this setting changes what the PUBLIC LINK
+              asks, so it belongs beside the link rather than in a settings screen the
+              person who shares the link may never open.
+
+              Offered only while `actionable` -- `scoped && canDistribute(status)`, which
+              mirrors the server's `AllowsScheduleEdit` -- so a closed survey shows the
+              state without a control that would earn a 409.
+
+              Disabled on a NAMED survey because the flag genuinely does nothing there:
+              `IsAnonymous` is read from the survey, never the request, so the respond
+              endpoint ignores it. A switch that writes a value with no effect is worse
+              than no switch. */}
+          <div className="mt-4 border-t border-line-default pt-4">
+            <SwitchField
+              label={t('surveys.next.share.demographicsLabel')}
+              description={
+                survey.settings.anonymous
+                  ? t('surveys.next.share.demographicsHelp', { floor: ANONYMITY_FLOOR })
+                  : t('surveys.next.share.demographicsNeedsAnonymous')
+              }
+              checked={survey.settings.selfDeclaredDemographics}
+              disabled={!actionable || busy || !survey.settings.anonymous}
+              onChange={actions.setSelfDeclaredDemographics}
+            />
+          </div>
         </Card>
       </section>
 

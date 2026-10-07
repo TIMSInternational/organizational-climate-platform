@@ -4404,7 +4404,12 @@
       },
       "share": {
         "title": "Share the survey",
-        "screenShare": "If you are sharing your screen, use \u201cHide\u201d: a camera can read the code off the screen."
+        "screenShare": "If you are sharing your screen, use \u201cHide\u201d: a camera can read the code off the screen.",
+        "demographicsLabel": "Ask for demographics on the public link",
+        "demographicsHelp": "Anyone answering through the link or the QR code chooses their area and seniority before the first question, from the company's active fields. Only list fields are offered. A group with fewer than {floor} responses is not reported.",
+        "demographicsNeedsAnonymous": "Only applies to anonymous surveys. This survey records who answers, so demographics already come from each person's profile.",
+        "demographicsOn": "The public link now asks for demographics.",
+        "demographicsOff": "The public link no longer asks for demographics."
       },
       "shareLink": {
         "copy": "Copy the link",

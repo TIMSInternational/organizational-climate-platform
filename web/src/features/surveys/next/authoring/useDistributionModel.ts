@@ -4,7 +4,7 @@ import { useCompanyScope } from '../../../../company-context'
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { listDepartments, type Department } from '../../../org-structure/api/departments'
 import { listUsers, type User } from '../../../org-structure/api/users'
-import { getSurvey, type SurveyDetail } from '../../api/surveys'
+import { getSurvey, setSurveySelfDeclaredDemographics, type SurveyDetail } from '../../api/surveys'
 import {
   createSurveyInvitations,
   getSurveyDistribution,
@@ -60,6 +60,8 @@ export interface DistributionActions {
   revokeLink: () => void
   resendInvitation: (invitationId: string) => void
   revokeInvitation: (invitationId: string) => void
+  /** Turns the public link's self-declared demographic questions on or off. */
+  setSelfDeclaredDemographics: (next: boolean) => void
   openCopy: () => void
   editCopy: (locale: Locale, field: InvitationCopyField, text: string) => void
   /** Resolves true once saved, so the dialog closes on success and stays open on a failure. */
@@ -116,19 +118,30 @@ export function useDistributionModel(surveyId: string) {
     void load()
   }, [load])
 
+  /**
+   * `refreshSurvey` exists because the refresh below re-reads the distribution and the
+   * invitations but NOT the survey, which is correct for every action that only touches
+   * those two. An action that writes `survey.settings` has to ask for it: without this the
+   * toggle would flip, the write would succeed, and the control would snap back to the
+   * stale value it was rendered from.
+   */
   const run = useCallback(
-    async (action: () => Promise<string | null>): Promise<boolean> => {
+    async (action: () => Promise<string | null>, options?: { refreshSurvey?: boolean }): Promise<boolean> => {
       setBusy(true)
       setActionError(null)
       setNotice(null)
       try {
         setNotice(await action())
         if (state.status === 'ready') {
-          const [distribution, invitations] = await Promise.all([
+          const [distribution, invitations, survey] = await Promise.all([
             getSurveyDistribution(baseUrl, surveyId),
             listSurveyInvitations(baseUrl, surveyId, {}, locale),
+            options?.refreshSurvey ? getSurvey(baseUrl, surveyId, locale) : Promise.resolve(null),
           ])
-          setState({ status: 'ready', model: { ...state.model, distribution, invitations } })
+          setState({
+            status: 'ready',
+            model: { ...state.model, distribution, invitations, ...(survey ? { survey } : {}) },
+          })
         }
         return true
       } catch (error) {
@@ -185,6 +198,20 @@ export function useDistributionModel(surveyId: string) {
       }),
     resendInvitation: (invitationId) => perInvitation(invitationId, (id) => resendSurveyInvitation(baseUrl, surveyId, id)),
     revokeInvitation: (invitationId) => perInvitation(invitationId, (id) => revokeSurveyInvitation(baseUrl, surveyId, id)),
+    /**
+     * `PUT /surveys/{id}` with only `settings.selfDeclaredDemographics`. Legal while the
+     * survey is draft, scheduled or active -- the same set `canDistribute` gates the
+     * page's other controls on -- so a live survey can start asking without being
+     * reopened.
+     */
+    setSelfDeclaredDemographics: (next) =>
+      void run(
+        async () => {
+          await setSurveySelfDeclaredDemographics(baseUrl, surveyId, next)
+          return t(next ? 'surveys.next.share.demographicsOn' : 'surveys.next.share.demographicsOff')
+        },
+        { refreshSurvey: true },
+      ),
     openCopy: () => {
       setCopy({ status: 'loading' })
       getSurveyInvitationCopy(baseUrl, surveyId, locale as Locale)
