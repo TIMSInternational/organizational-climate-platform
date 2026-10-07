@@ -45,6 +45,7 @@ function view(overrides: Partial<SurveyRespondView> = {}): SurveyRespondView {
         category: null,
       },
     ],
+    demographics: [],
     inProgress: null,
     ...overrides,
   }

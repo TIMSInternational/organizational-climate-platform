@@ -67,7 +67,8 @@ public sealed record SubmitSurveyResponseRequest(
     bool IsComplete = true,
     string? Language = null,
     int? TotalTimeSeconds = null,
-    IReadOnlyList<Guid>? ClearedQuestionIds = null);
+    IReadOnlyList<Guid>? ClearedQuestionIds = null,
+    IReadOnlyDictionary<string, string?>? Demographics = null);
 
 /// <param name="Value">Set for a single-valued answer.</param>
 /// <param name="Values">Set for a ranking answer.</param>
@@ -115,6 +116,42 @@ public sealed record SurveyResponseState(
 /// survey that forbids partial responses is refused by the submit endpoint itself, so
 /// background saving is impossible there whatever this says.
 /// </param>
+/// <summary>
+/// One demographic question a respondent with NO ACCOUNT is asked about themselves,
+/// before the first survey question.
+/// </summary>
+/// <remarks>
+/// Carries no field id. The id is an internal key of the company's configuration and the
+/// respondent has no use for it, whereas <see cref="Field"/> is what the submission is
+/// keyed on and what <c>DemographicValueValidation</c> resolves. Handing out one
+/// identifier instead of two also means a client cannot submit an id that disagrees with
+/// the key.
+/// </remarks>
+/// <param name="Options">
+/// Always non-empty: a select field with no options is an unanswerable question, so the
+/// loader drops it rather than render a dead screen. See
+/// <c>SurveyResponseEndpoints.LoadSelfDeclaredFieldsAsync</c>.
+/// </param>
+/// <param name="Required">
+/// The admin's own <c>DemographicField.Required</c>, unchanged. A field the admin left
+/// optional is one the respondent may decline, which is the only reason the client can
+/// offer a "prefer not to say" choice without inventing policy.
+/// </param>
+public sealed record SurveyRespondDemographicField(
+    string Field,
+    string? Label,
+    IReadOnlyList<SurveyRespondDemographicOption> Options,
+    bool Required,
+    int Order);
+
+/// <param name="Value">
+/// The option's stable, locale-independent value -- what the submission must send and
+/// what gets stored (#195). Never the label: the same answer would otherwise store two
+/// different strings depending on the respondent's language, and every breakdown would
+/// split accordingly and silently.
+/// </param>
+public sealed record SurveyRespondDemographicOption(string Value, string? Label);
+
 public sealed record SurveyRespondView(
     Guid Id,
     string? Title,
@@ -132,6 +169,7 @@ public sealed record SurveyRespondView(
     bool ShowProgress,
     int? TimeLimitMinutes,
     IReadOnlyList<SurveyQuestionDto> Questions,
+    IReadOnlyList<SurveyRespondDemographicField> Demographics,
     SurveyResponseState? InProgress);
 
 /// <param name="AlreadySubmitted">

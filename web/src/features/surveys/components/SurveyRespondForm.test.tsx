@@ -6,7 +6,12 @@ import SurveyRespondForm from './SurveyRespondForm'
 import { TranslationProvider } from '../../../i18n'
 import { CATALOGUES, LOCALE_STORAGE_KEY } from '../../../i18n/locale'
 import { createTranslator } from '../../../i18n/translate'
-import type { SurveyRespondQuestion, SurveyRespondView } from '../api/surveyResponses'
+import type {
+  SurveyRespondDemographicField,
+  SurveyRespondQuestion,
+  SurveyRespondView,
+} from '../api/surveyResponses'
+import { RADIO_CEILING } from './RespondDemographicField'
 import { hasAnswered, markAnswered } from '../respondReceipt'
 import { readSessionId } from '../respondSession'
 import { STALE_MS, heldElsewhere } from '../respondLock'
@@ -98,6 +103,7 @@ function view(overrides: Partial<SurveyRespondView> = {}): SurveyRespondView {
     showProgress: false,
     timeLimitMinutes: null,
     questions: [question()],
+    demographics: [],
     inProgress: null,
     ...overrides,
   }
@@ -1309,5 +1315,219 @@ describe('SurveyRespondForm — the anonymity promise under one question at a ti
     expect(collapsed.querySelector('[data-slot="anonymity-label"]')?.textContent).toBe(
       copy.es('surveyRespond.anonymousChip'),
     )
+  })
+})
+
+/**
+ * Self-declared demographics: the prelude a respondent with NO account answers before
+ * question 1 (Igoal — operarios with no email, so no invitation can reach them).
+ *
+ * The fixture's `demographics` is what the server sends only for an unauthenticated
+ * visitor to an anonymous survey whose author turned the setting on. Every other
+ * respondent gets `[]`, which is why the rest of this file never sees this stage.
+ */
+describe('SurveyRespondForm — the demographic prelude', () => {
+  function area(overrides: Partial<SurveyRespondDemographicField> = {}): SurveyRespondDemographicField {
+    return {
+      field: 'area',
+      label: '¿En qué área trabaja?',
+      options: [
+        { value: 'operaciones', label: 'Operaciones' },
+        { value: 'ventas', label: 'Ventas' },
+      ],
+      required: true,
+      order: 0,
+      ...overrides,
+    }
+  }
+
+  const sexo = area({
+    field: 'sexo',
+    label: 'Sexo',
+    options: [
+      { value: 'hombre', label: 'Hombre' },
+      { value: 'mujer', label: 'Mujer' },
+    ],
+    required: false,
+    order: 1,
+  })
+
+  it('asks the demographics BEFORE the first question', async () => {
+    respondWith(view({ demographics: [area()] }))
+    renderForm({ publicEntry: true })
+
+    // The field, not the question: the prelude stands in front of the whole question
+    // flow, so page 0 of the survey has not been reached yet.
+    await screen.findByText('¿En qué área trabaja?')
+    expect(screen.queryByText('¿Qué tan satisfecho estás?')).toBeNull()
+  })
+
+  it('states the promise OPEN while it is asking, because this is the consent moment', async () => {
+    respondWith(view({ demographics: [area()] }))
+    renderForm({ publicEntry: true })
+    await screen.findByText('¿En qué área trabaja?')
+
+    // A SECTION, not a collapsed DETAILS. The respondent is about to disclose their
+    // area; the promise about what happens to it has to be legible as they do, not one
+    // tap behind a disclosure.
+    expect(document.querySelector('[data-slot="anonymity-notice"]')?.tagName).toBe('SECTION')
+    expect(screen.getByText(copy.es('surveyRespond.anonymousBody'))).toBeTruthy()
+  })
+
+  it('refuses to move on from a REQUIRED field nobody answered', async () => {
+    respondWith(view({ demographics: [area()] }))
+    renderForm({ publicEntry: true })
+    await screen.findByText('¿En qué área trabaja?')
+
+    await userEvent.click(screen.getByRole('button', { name: copy.es('surveyRespond.demographics.start') }))
+
+    expect(screen.getByText(copy.es('surveyRespond.demographics.missing'))).toBeTruthy()
+    // Still on the field, not dropped into the survey.
+    expect(screen.queryByText('¿Qué tan satisfecho estás?')).toBeNull()
+  })
+
+  it('offers "prefiero no decir" on an OPTIONAL field and not on a required one', async () => {
+    respondWith(view({ demographics: [area(), sexo] }))
+    renderForm({ publicEntry: true })
+    await screen.findByText('¿En qué área trabaja?')
+
+    // Whether a field may be declined is the admin's call, taken on the field.
+    expect(screen.queryByLabelText(copy.es('surveyRespond.demographics.preferNotToSay'))).toBeNull()
+
+    await userEvent.click(screen.getByLabelText('Operaciones'))
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+
+    await screen.findByText('Sexo')
+    expect(screen.getByLabelText(copy.es('surveyRespond.demographics.preferNotToSay'))).toBeTruthy()
+  })
+
+  it('sends what was declared on the COMPLETING post, keyed by field and valued by option', async () => {
+    respondWith(view({ demographics: [area(), sexo] }))
+    renderForm({ publicEntry: true })
+    await screen.findByText('¿En qué área trabaja?')
+
+    await userEvent.click(screen.getByLabelText('Operaciones'))
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+    await screen.findByText('Sexo')
+    await userEvent.click(screen.getByLabelText('Mujer'))
+    await userEvent.click(screen.getByRole('button', { name: copy.es('surveyRespond.demographics.start') }))
+
+    await screen.findByText('¿Qué tan satisfecho estás?')
+    await userEvent.click(screen.getByLabelText('Muy de acuerdo'))
+    await userEvent.click(screen.getByRole('button', { name: copy.es('surveyRespond.submitResponse') }))
+
+    await screen.findByText(copy.es('surveyRespond.thankYouTitle'))
+    // The stable option VALUES, never the labels the respondent read (#195): submitting
+    // "Operaciones" would make the same answer two unrelated groups across languages.
+    expect(lastSubmission().demographics).toEqual({ area: 'operaciones', sexo: 'mujer' })
+  })
+
+  it('records a DECLINED optional field as an empty value rather than omitting it', async () => {
+    respondWith(view({ demographics: [area(), sexo] }))
+    renderForm({ publicEntry: true })
+    await screen.findByText('¿En qué área trabaja?')
+
+    await userEvent.click(screen.getByLabelText('Operaciones'))
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+    await screen.findByText('Sexo')
+    await userEvent.click(screen.getByLabelText(copy.es('surveyRespond.demographics.preferNotToSay')))
+    await userEvent.click(screen.getByRole('button', { name: copy.es('surveyRespond.demographics.start') }))
+
+    await screen.findByText('¿Qué tan satisfecho estás?')
+    await userEvent.click(screen.getByLabelText('Muy de acuerdo'))
+    await userEvent.click(screen.getByRole('button', { name: copy.es('surveyRespond.submitResponse') }))
+
+    await screen.findByText(copy.es('surveyRespond.thankYouTitle'))
+    // An empty string is a deliberate declination, which the server treats as clearing
+    // the answer so no row is written. Omitting the key entirely would be the shape of
+    // a screen the respondent never reached.
+    expect(lastSubmission().demographics).toEqual({ area: 'operaciones', sexo: '' })
+  })
+
+  it('never puts a demographic on a PARTIAL save', async () => {
+    respondWith(view({ demographics: [area()], allowPartialResponses: true }))
+    renderForm({ publicEntry: true })
+    await screen.findByText('¿En qué área trabaja?')
+
+    await userEvent.click(screen.getByLabelText('Operaciones'))
+    await userEvent.click(screen.getByRole('button', { name: copy.es('surveyRespond.demographics.start') }))
+    await screen.findByText('¿Qué tan satisfecho estás?')
+    await userEvent.click(screen.getByLabelText('Muy de acuerdo'))
+    await userEvent.click(screen.getByRole('button', { name: copy.es('surveyRespond.saveAndFinishLater') }))
+
+    // The guarantee the autosave's own comment makes — "Nothing here is a new field, a
+    // new identifier or a demographic" — extended to the manual save. A respondent who
+    // abandons halfway leaves no demographic trail anywhere.
+    const partial = lastSubmission()
+    expect(partial.isComplete).toBe(false)
+    expect(partial.demographics).toBeUndefined()
+  })
+
+  it('renders radios up to the ceiling and a dropdown above it', async () => {
+    const option = (n: number) => ({ value: `a${n}`, label: `Area ${n}` })
+
+    respondWith(view({
+      demographics: [area({ options: Array.from({ length: RADIO_CEILING }, (_, i) => option(i)) })],
+    }))
+    renderForm({ publicEntry: true })
+    await screen.findByText('¿En qué área trabaja?')
+    expect(screen.getAllByRole('radio')).toHaveLength(RADIO_CEILING)
+    expect(document.querySelector('select')).toBeNull()
+
+    cleanup()
+
+    // One more than the ceiling: ten areas is the shape Federico asked about, and a
+    // radio list that long puts the way-on button under the fold on a phone.
+    respondWith(view({
+      demographics: [area({ options: Array.from({ length: RADIO_CEILING + 1 }, (_, i) => option(i)) })],
+    }))
+    renderForm({ publicEntry: true })
+    await screen.findByText('¿En qué área trabaja?')
+    expect(screen.queryAllByRole('radio')).toHaveLength(0)
+    expect(document.querySelector('select')).toBeTruthy()
+  })
+
+  it('does not ask a respondent the server sent no demographics for', async () => {
+    // The authenticated case, and every survey whose author left the setting off: their
+    // demographics come from their profile through the write-time cohort floor.
+    respondWith(view({ demographics: [] }))
+    renderForm()
+
+    await screen.findByText('¿Qué tan satisfecho estás?')
+    expect(screen.queryByText(copy.es('surveyRespond.demographics.eyebrow'))).toBeNull()
+  })
+})
+
+/**
+ * The shared device: a plant kiosk, or one supervisor's phone passed down a line.
+ *
+ * `respondReceipt`'s flag is per survey and per browser, so without this the FIRST
+ * person to answer through a public link locks out everyone behind them, silently and
+ * with no way back short of clearing site data.
+ */
+describe('SurveyRespondForm — the answered flag on a shared device', () => {
+  it('lets the next person step past it on the PUBLIC path', async () => {
+    markAnswered('s1')
+    respondWith(view())
+    renderForm({ publicEntry: true })
+
+    await screen.findByText(copy.es('surveyRespond.answeredOnThisDeviceTitle'))
+    await userEvent.click(screen.getByRole('button', { name: copy.es('surveyRespond.sharedDeviceAnswer') }))
+
+    // Through to the survey, and the flag is still in storage: the person who actually
+    // answered is not re-asked next time they open the link on their own device.
+    await screen.findByText('¿Qué tan satisfecho estás?')
+    expect(hasAnswered('s1')).toBe(true)
+  })
+
+  it('offers no such escape on the invitation path', async () => {
+    // `respondReceipt`'s ruling stands where the survey went to one named person: a
+    // visible control for answering twice is an invitation to.
+    markAnswered('s1')
+    respondWith(view())
+    renderForm()
+
+    await screen.findByText(copy.es('surveyRespond.answeredOnThisDeviceTitle'))
+    expect(screen.queryByRole('button', { name: copy.es('surveyRespond.sharedDeviceAnswer') })).toBeNull()
   })
 })

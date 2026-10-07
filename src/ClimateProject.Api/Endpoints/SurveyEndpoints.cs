@@ -1395,6 +1395,7 @@ public static class SurveyEndpoints
         if (input.AutoSave.HasValue) settings.AutoSave = input.AutoSave.Value;
         if (input.TimeLimitMinutes.HasValue) settings.TimeLimitMinutes = input.TimeLimitMinutes.Value;
         if (input.ResponseLimit.HasValue) settings.ResponseLimit = input.ResponseLimit.Value;
+        if (input.SelfDeclaredDemographics.HasValue) settings.SelfDeclaredDemographics = input.SelfDeclaredDemographics.Value;
         if (input.NotificationSendInvitations.HasValue) settings.NotificationSendInvitations = input.NotificationSendInvitations.Value;
         if (input.NotificationSendReminders.HasValue) settings.NotificationSendReminders = input.NotificationSendReminders.Value;
         if (input.NotificationReminderFrequencyDays.HasValue) settings.NotificationReminderFrequencyDays = input.NotificationReminderFrequencyDays.Value;
@@ -1477,6 +1478,7 @@ public static class SurveyEndpoints
             survey.Settings.AutoSave,
             survey.Settings.TimeLimitMinutes,
             survey.Settings.ResponseLimit,
+            survey.Settings.SelfDeclaredDemographics,
             survey.Settings.NotificationSendInvitations,
             survey.Settings.NotificationSendReminders,
             survey.Settings.NotificationReminderFrequencyDays,

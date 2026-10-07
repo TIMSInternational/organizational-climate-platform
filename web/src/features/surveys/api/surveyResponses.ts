@@ -106,7 +106,40 @@ export interface SurveyRespondView {
   showProgress: boolean
   timeLimitMinutes: number | null
   questions: SurveyRespondQuestion[]
+  /**
+   * The demographic questions a respondent with NO account answers about themselves,
+   * before the first survey question.
+   *
+   * Empty unless all three of the server's conditions hold — the survey has
+   * `selfDeclaredDemographics` on, it is anonymous, and the caller is unauthenticated.
+   * A signed-in respondent gets `[]` and keeps having their demographics snapshotted
+   * from their own profile, which is the only trustworthy source for somebody who has
+   * one. See `SurveyResponseEndpoints.AsksSelfDeclaredDemographics`, which is also what
+   * the submit endpoint checks, so this list and what a submission may carry cannot
+   * disagree.
+   */
+  demographics: SurveyRespondDemographicField[]
   inProgress: SurveyResponseState | null
+}
+
+/** @param options Always non-empty — the server drops a field nobody could answer. */
+export interface SurveyRespondDemographicField {
+  field: string
+  label: string | null
+  options: SurveyRespondDemographicOption[]
+  required: boolean
+  order: number
+}
+
+export interface SurveyRespondDemographicOption {
+  /**
+   * The stable, locale-independent option value — what a submission must send and what
+   * gets stored (#195). Never the label: the same answer would otherwise store two
+   * different strings depending on the respondent's language, and every breakdown would
+   * split accordingly and silently.
+   */
+  value: string
+  label: string | null
 }
 
 export interface SurveyAnswerInput {
@@ -133,6 +166,18 @@ export interface SubmitSurveyResponseRequest {
   isComplete?: boolean
   language?: string
   totalTimeSeconds?: number
+  /**
+   * What the respondent said about themselves, keyed by `SurveyRespondDemographicField.field`.
+   *
+   * Only ever sent by a respondent with no account, answering a survey that asked. A
+   * value outside the field's configured options is refused with 400, as is an unknown
+   * key and a signed-in caller sending this at all — the server will not let anybody
+   * with an account choose their own cohort.
+   *
+   * An empty string DECLINES an optional field: it clears the answer rather than storing
+   * a blank, so no row is written. A required field cannot be declined.
+   */
+  demographics?: Record<string, string>
 }
 
 export interface SurveySubmissionResult {
