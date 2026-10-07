@@ -45,6 +45,7 @@ function detail(overrides: Partial<SurveyDetail> = {}): SurveyDetail {
       autoSave: true,
       timeLimitMinutes: null,
       responseLimit: null,
+      selfDeclaredDemographics: false,
       notificationSendInvitations: true,
       notificationSendReminders: true,
       notificationReminderFrequencyDays: 3,

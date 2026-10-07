@@ -71,6 +71,7 @@ vi.mock('../../api/surveys', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../api/surveys')>()),
   listSurveyDimensions: vi.fn(async () => []),
   getSurvey: vi.fn(),
+  setSurveySelfDeclaredDemographics: vi.fn(async () => undefined),
 }))
 
 /** A share-link path segment. Low entropy on purpose: it stands for a credential, and is not one. */
@@ -266,6 +267,7 @@ const noop: DistributionActions = {
   revokeLink: () => undefined,
   resendInvitation: () => undefined,
   revokeInvitation: () => undefined,
+  setSelfDeclaredDemographics: () => undefined,
   openCopy: () => undefined,
   editCopy: () => undefined,
   saveCopy: async () => true,
@@ -520,6 +522,86 @@ describe('Distribución — the role half of the rule, through the page model', 
       expect(screen.queryByRole('button', { name })).toBeNull()
     }
     expect(usersApi.listUsers).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * The authoring half of self-declared demographics. The setting itself, its read-time
+ * floor and its respondent-facing form shipped in #525; nothing in the web app could turn
+ * it on, so a no-accounts client could not use the feature without an API call.
+ *
+ * These assert the three things that make the control honest rather than merely present:
+ * it writes only its own field, it re-reads the survey afterwards, and it refuses to
+ * pretend on a survey where the flag has no effect.
+ */
+describe('Distribución — the self-declared demographics switch', () => {
+  const LABEL = 'Preguntar datos demográficos en el enlace público'
+
+  const open = (over: Partial<SurveyDetail> = {}) => {
+    vi.mocked(surveysApi.getSurvey).mockResolvedValue(survey(over))
+    vi.mocked(distributionApi.getSurveyDistribution).mockResolvedValue({ publicLink: `/s/${LINK_SEGMENT}`, accessType: 'public', accessRules: { requireLogin: false } } as never)
+    vi.mocked(distributionApi.listSurveyInvitations).mockResolvedValue(invitationList())
+    vi.mocked(usersApi.listUsers).mockResolvedValue(users)
+    return renderAs('company_admin', <SurveyDistributionNextPage />, 'c1', '/surveys/s1/distribution', '/surveys/:surveyId/distribution')
+  }
+
+  const anonymous = (over: Partial<SurveyDetail['settings']> = {}) =>
+    ({ settings: { anonymous: true, selfDeclaredDemographics: false, notificationSendReminders: true, notificationReminderFrequencyDays: 3, ...over } } as Partial<SurveyDetail>)
+
+  it('reflects the stored value rather than a local default', async () => {
+    open(anonymous({ selfDeclaredDemographics: true }))
+    const toggle = await screen.findByRole('switch', { name: LABEL })
+    expect(toggle.getAttribute('aria-checked')).toBe('true')
+  })
+
+  it('writes only its own setting, and re-reads the survey so the control does not snap back', async () => {
+    // The model's refresh re-reads the distribution and the invitations, NOT the survey.
+    // This setting lives on `survey.settings`, so without an explicit re-read the switch
+    // would flip, the write would succeed, and the next render would restore the stale
+    // value -- a control that looks broken while working perfectly.
+    open(anonymous())
+    const toggle = await screen.findByRole('switch', { name: LABEL })
+    expect(toggle.getAttribute('aria-checked')).toBe('false')
+
+    const readsBefore = vi.mocked(surveysApi.getSurvey).mock.calls.length
+    vi.mocked(surveysApi.getSurvey).mockResolvedValue(survey(anonymous({ selfDeclaredDemographics: true })))
+    await userEvent.click(toggle)
+
+    await waitFor(() =>
+      expect(vi.mocked(surveysApi.setSurveySelfDeclaredDemographics)).toHaveBeenCalledWith(
+        expect.anything(),
+        's1',
+        true,
+      ),
+    )
+    await waitFor(() => expect(vi.mocked(surveysApi.getSurvey).mock.calls.length).toBeGreaterThan(readsBefore))
+    await waitFor(() => expect(screen.getByRole('switch', { name: LABEL }).getAttribute('aria-checked')).toBe('true'))
+  })
+
+  it('refuses to pretend on a NAMED survey, and says why instead', async () => {
+    // `IsAnonymous` is read from the survey and never from the request, so the respond
+    // endpoint ignores this flag entirely on a named survey. Writing a value with no
+    // effect is worse than offering no control.
+    open({ settings: { anonymous: false, selfDeclaredDemographics: false } as SurveyDetail['settings'] })
+    const toggle = await screen.findByRole('switch', { name: LABEL })
+    expect(toggle.hasAttribute('disabled')).toBe(true)
+    expect(screen.getByText(/Solo aplica a encuestas anónimas/)).toBeTruthy()
+  })
+
+  it('is disabled once the survey is closed, which is the status the server would 409', async () => {
+    // `touchesSchedule` is true for any settings object and `AllowsScheduleEdit` stops at
+    // closed, so a live control here would earn a 409 every time.
+    open({ ...anonymous(), status: 'closed', allowedStatusTransitions: [] })
+    expect((await screen.findByRole('switch', { name: LABEL })).hasAttribute('disabled')).toBe(true)
+  })
+
+  it('is not offered to a leader, who does not administer the survey', async () => {
+    vi.mocked(surveysApi.getSurvey).mockResolvedValue(survey(anonymous()))
+    vi.mocked(distributionApi.getSurveyDistribution).mockResolvedValue({ publicLink: `/s/${LINK_SEGMENT}`, accessType: 'public', accessRules: { requireLogin: false } } as never)
+    vi.mocked(distributionApi.listSurveyInvitations).mockResolvedValue(invitationList())
+    renderAs('leader', <SurveyDistributionNextPage />, 'c1', '/surveys/s1/distribution', '/surveys/:surveyId/distribution')
+    await screen.findByTestId('step-audience')
+    expect(screen.getByRole('switch', { name: LABEL }).hasAttribute('disabled')).toBe(true)
   })
 })
 

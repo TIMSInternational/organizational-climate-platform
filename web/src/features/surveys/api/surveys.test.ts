@@ -7,6 +7,7 @@ import {
   updateSurveyStatus,
   duplicateSurvey,
   deleteSurvey,
+  setSurveySelfDeclaredDemographics,
   type SurveyDetail,
   type SurveyListItem,
   type MySurveyListItem,
@@ -68,6 +69,7 @@ const detail: SurveyDetail = {
     autoSave: true,
     timeLimitMinutes: null,
     responseLimit: null,
+    selfDeclaredDemographics: false,
     notificationSendInvitations: true,
     notificationSendReminders: true,
     notificationReminderFrequencyDays: 3,
@@ -204,6 +206,42 @@ describe('surveys api client', () => {
     // paired columns exist to prevent.
     expect(JSON.parse(String(init!.body))).toEqual({})
     expect(result.id).toBe('s2')
+  })
+
+  it('sends ONLY selfDeclaredDemographics, because `anonymous` in the same body would 409', async () => {
+    // `SurveyEndpoints.cs` classes `settings.anonymous` as CONTENT, and a content edit is
+    // refused for any survey that is not a draft with no responses. A settings patch that
+    // helpfully echoed the survey's current `anonymous` back would therefore work on a
+    // draft and fail on every live survey -- which is the only kind this control is for.
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 204 }))
+    await setSurveySelfDeclaredDemographics(baseUrl, 's1', true)
+
+    const [url, init] = vi.mocked(fetch).mock.calls[0]
+    expect(new URL(String(url)).pathname).toBe('/surveys/s1')
+    expect(init!.method).toBe('PUT')
+    expect(JSON.parse(String(init!.body))).toEqual({ settings: { selfDeclaredDemographics: true } })
+  })
+
+  it('sends false to turn it off, rather than omitting the field', async () => {
+    // Omitting it means "leave this column alone" server-side (`ApplySettings` tests
+    // `HasValue`), so an off switch that sent `{}` would silently do nothing.
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 204 }))
+    await setSurveySelfDeclaredDemographics(baseUrl, 's1', false)
+    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]!.body))).toEqual({
+      settings: { selfDeclaredDemographics: false },
+    })
+  })
+
+  it('surfaces the 409 a closed survey answers with instead of resolving', async () => {
+    // `touchesSchedule` is true for ANY settings object, and `AllowsScheduleEdit` stops at
+    // closed. The page disables the control there; this proves the client still reports it
+    // if that guard is ever wrong.
+    vi.mocked(fetch).mockResolvedValueOnce(
+      jsonResponse({ message: "A survey in status 'closed' can no longer be rescheduled." }, 409),
+    )
+    await expect(setSurveySelfDeclaredDemographics(baseUrl, 's1', true)).rejects.toThrow(
+      'can no longer be rescheduled',
+    )
   })
 
   it('does not parse a body for delete, which answers 204', async () => {

@@ -4404,7 +4404,12 @@
       },
       "share": {
         "title": "Compartir la encuesta",
-        "screenShare": "Si está compartiendo pantalla, use «Ocultar»: una cámara puede leer el código desde la pantalla."
+        "screenShare": "Si está compartiendo pantalla, use «Ocultar»: una cámara puede leer el código desde la pantalla.",
+        "demographicsLabel": "Preguntar datos demográficos en el enlace público",
+        "demographicsHelp": "Quien responda por el enlace o el código QR elegirá su área y su antigüedad antes de la primera pregunta, entre los campos activos de la empresa. Solo se ofrecen campos de lista. Un grupo con menos de {floor} respuestas no se informa.",
+        "demographicsNeedsAnonymous": "Solo aplica a encuestas anónimas. Esta encuesta registra quién responde, así que los datos demográficos ya vienen del perfil de cada persona.",
+        "demographicsOn": "El enlace público ahora pregunta los datos demográficos.",
+        "demographicsOff": "El enlace público ya no pregunta datos demográficos."
       },
       "shareLink": {
         "copy": "Copiar el enlace",
