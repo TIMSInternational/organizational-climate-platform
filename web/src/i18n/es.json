@@ -5403,6 +5403,9 @@
   },
   "surveyResults": {
     "cross": {
+      "deltaBelow": "por debajo de toda la encuesta",
+      "deltaAbove": "por encima de toda la encuesta",
+      "barNote": "Las barras muestran la diferencia contra toda la encuesta, a escala de ±{scale}.",
       "groupHeader": "Grupo",
       "meanHeader": "Media",
       "tableCaption": "Resultado por categoría de cada grupo, comparado con toda la encuesta.",

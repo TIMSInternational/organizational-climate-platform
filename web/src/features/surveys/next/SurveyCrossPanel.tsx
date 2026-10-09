@@ -26,7 +26,6 @@ import { PROTECTED_HATCH } from '../../../components/charts/suppression'
 import { cn } from '../../../lib/cn'
 import { createActionPlan } from '../../action-plans/api/actionPlans'
 import { listDemographicFields } from '../../org-structure/api/demographicFields'
-import { deltaInkOf } from './tint'
 import { dimensionLabel } from '../dimensionLabel'
 import { getSurvey } from '../api/surveys'
 import { getSurveyAnalytics, type SurveyAnalyticsResponse } from '../api/surveyResults'
@@ -56,11 +55,41 @@ const MAX_COHORTS = 4
  * the same numbers in two visual languages is a harder page to read than either alone.
  */
 /**
- * One cell: the band's glyph and tint, the score, and the signed difference beneath it --
- * the same three parts in the same order as a `ResultsClimateGrid` cell.
+ * How far from the whole survey a bar's full half-width means: ±0,50 on the 1-5 scale.
  *
- * `painted` is false for the whole-survey row, which is the reference rather than a reading
- * to judge; the grid paints its group rows and leaves its company row plain for that reason.
+ * Stated rather than auto-scaled to the data. A bar normalised to whatever the biggest
+ * difference happens to be would draw a 0,2 gap at full width on a quiet survey and at a
+ * sliver on a noisy one, so the same picture would mean two different things, and the
+ * reader would have no way to tell which.
+ *
+ * 1,00 because of what the data does, measured rather than guessed. Across the seeded
+ * tenant's cohorts the difference from the company runs 0,0 to 0,8: Servicios Corporativos
+ * sits within 0,2, Ventanilla Única is 0,5 to 0,8 below. A scale of 0,50 was tried first and
+ * was worse than useless — every one of that second cohort's bars clipped to exactly 50%, so
+ * the bar discriminated nothing, which is the identical failure to the band tint it was added
+ * to fix. The scale has to cover the widest real difference or it encodes nothing at the top
+ * of its range.
+ *
+ * A bar is read against its neighbours, so it is also drawn tall enough that the small end of
+ * the range survives: at 1,00 a 0,1 difference is a tenth of the half-width, which reads only
+ * because the bar has height and a track behind it.
+ */
+const DELTA_SCALE = 1
+
+/**
+ * One cell: the score over the band's tint, the signed difference, and a bar for its size.
+ *
+ * ## Why the difference is not encoded by colour alone
+ *
+ * Measured on the seeded tenant: every cell of a real cohort row paints
+ * `rgb(253, 249, 240)` — identical — because every climate score lands in 3,00-3,99 and so
+ * in one band. The tint is worth keeping for the case that crosses a boundary, but on
+ * ordinary data it discriminates nothing, and the first build of this panel left the one
+ * number that DOES vary as the smallest grey text in the cell.
+ *
+ * So direction is carried by an arrow and by which side of centre the bar grows on, and
+ * size by the bar's length. That survives a colour-blind reader, a greyscale print, and the
+ * amber fill underneath — none of which a red/green digit would.
  */
 function CrossCell({
   value,
@@ -70,6 +99,8 @@ function CrossCell({
   decimals,
   locale,
   bandLabel,
+  widest = false,
+  directionLabel,
 }: {
   value: number | null
   delta: number | null
@@ -78,17 +109,21 @@ function CrossCell({
   decimals: 1 | 2
   locale: string
   bandLabel: (band: ReturnType<typeof bandOf>) => string
+  /** The row's largest shortfall, marked so "where is this group worst" needs no arithmetic. */
+  widest?: boolean
+  directionLabel: (delta: number) => string
 }) {
   if (value === null) {
     return <span className="font-mono text-sm text-fg-label">—</span>
   }
   const band = bandOf(value, bands)
   const text = formatMetric(value, { kind: 'number', decimals }, locale)
-  // Rounded to what is printed, so the sign and the ink agree with the figure on screen.
+  // Rounded to what is printed, so the arrow, the bar and the figure cannot disagree.
   const shown = delta === null ? null : Math.round(delta * 10) / 10 || 0
+  const reach = shown === null ? 0 : Math.min(Math.abs(shown) / DELTA_SCALE, 1) * 50
   return (
     <span
-      className={cn('flex flex-col items-center gap-px rounded py-1.5', painted && 'border')}
+      className={cn('flex flex-col items-center gap-px rounded px-1 py-1.5', painted && 'border')}
       style={painted ? bandCellStyle(band) : undefined}
     >
       <span className="inline-flex items-center gap-1 font-mono text-sm tabular-nums">
@@ -101,9 +136,23 @@ function CrossCell({
         <span className="sr-only">{` — ${bandLabel(band)}`}</span>
       </span>
       {shown !== null && (
-        <span className={cn('font-mono text-2xs tabular-nums', painted ? '' : deltaInkOf(shown, 1))}>
-          {`${shown > 0 ? '+' : ''}${formatMetric(shown, { kind: 'number', decimals: 1 }, locale)}`}
-        </span>
+        <>
+          <span className={cn('font-mono text-2xs tabular-nums', widest && 'font-bold')}>
+            <span aria-hidden="true">{shown < 0 ? '▼' : shown > 0 ? '▲' : '–'} </span>
+            {`${shown > 0 ? '+' : ''}${formatMetric(shown, { kind: 'number', decimals: 1 }, locale)}`}
+            <span className="sr-only">{` ${directionLabel(shown)}`}</span>
+          </span>
+          {/* Decorative: every value it encodes is already in the text above it. */}
+          <span aria-hidden="true" className="relative mt-0.5 block h-1.5 w-full rounded-sm bg-surface-icon-box">
+            <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-line-default" />
+            {reach > 0 && (
+              <span
+                className={cn('absolute inset-y-0 rounded-sm', shown < 0 ? 'bg-accent-red-ink' : 'bg-accent-green-ink')}
+                style={shown < 0 ? { right: '50%', width: `${reach}%` } : { left: '50%', width: `${reach}%` }}
+              />
+            )}
+          </span>
+        </>
       )}
     </span>
   )
@@ -236,6 +285,8 @@ export default function SurveyCrossPanel({
   // `formatMetric`, as the grid uses: one locale-aware formatter for every number on the page.
   const score = (value: number) => formatMetric(value, { kind: 'number', decimals: 2 }, locale)
   const bandLabel = (band: ReturnType<typeof bandOf>) => bandName(band, bands, t)
+  const directionLabel = (delta: number) =>
+    delta < 0 ? t('surveyResults.cross.deltaBelow') : delta > 0 ? t('surveyResults.cross.deltaAbove') : ''
 
   async function compare() {
     setBusy(true)
@@ -332,6 +383,28 @@ export default function SurveyCrossPanel({
 
   const baseline = results?.[BASELINE_KEY] ?? null
   const baselineMean = meanOf(baseline)
+
+  /**
+   * The category a cohort is furthest BELOW the whole survey on — the one a reader is looking
+   * for, and the one the follow-up plan names. Null when nothing is below, because a group
+   * that is at or above the company everywhere has no shortfall to mark.
+   */
+  const widestGapOf = (cohort: Cohort): ReadonlySet<string> => {
+    const deltas = new Map<string, number>()
+    for (const category of categories) {
+      const cell = cellFor(cohort, category)
+      const base = cellFor(null, category)
+      const value = cell !== null && cell !== 'protected' ? cell.averageScore : null
+      const baseScore = base !== null && base !== 'protected' ? base.averageScore : null
+      if (value === null || baseScore === null) continue
+      // Rounded to what is printed: two cells both showing -0,2 must both be marked, or the
+      // mark claims a difference between them that the screen does not show.
+      deltas.set(category, Math.round((value - baseScore) * 10) / 10)
+    }
+    const worst = Math.min(...[...deltas.values()])
+    if (!Number.isFinite(worst) || worst >= 0) return new Set()
+    return new Set([...deltas].filter(([, delta]) => delta === worst).map(([category]) => category))
+  }
   const columns: Cohort[] = results ? shown : []
   const categories = results
     ? categoriesOf([baseline, ...columns.map((c) => results[crossKeyOf(c)] ?? null)])
@@ -485,6 +558,7 @@ export default function SurveyCrossPanel({
                           decimals={1}
                           locale={locale}
                           bandLabel={bandLabel}
+                          directionLabel={directionLabel}
                         />
                       </td>
                     )
@@ -498,6 +572,7 @@ export default function SurveyCrossPanel({
                       decimals={2}
                       locale={locale}
                       bandLabel={bandLabel}
+                      directionLabel={directionLabel}
                     />
                   </td>
                 </tr>
@@ -546,6 +621,7 @@ export default function SurveyCrossPanel({
                   }
 
                   const cohortMean = meanOf(result)
+                  const widest = widestGapOf(cohort)
                   return (
                     <tr key={key} className={CROSS_ROW}>
                       {head}
@@ -567,6 +643,8 @@ export default function SurveyCrossPanel({
                               decimals={1}
                               locale={locale}
                               bandLabel={bandLabel}
+                              widest={widest.has(category)}
+                              directionLabel={directionLabel}
                             />
                           </td>
                         )
@@ -580,6 +658,7 @@ export default function SurveyCrossPanel({
                           decimals={2}
                           locale={locale}
                           bandLabel={bandLabel}
+                          directionLabel={directionLabel}
                         />
                       </td>
                     </tr>
@@ -588,7 +667,11 @@ export default function SurveyCrossPanel({
               </tbody>
             </Table>
 
-            <BandLegend bands={bands} className="mt-3" />
+            <BandLegend bands={bands} className="mt-3">
+              <span className="text-2xs text-fg-label">
+                {t('surveyResults.cross.barNote', { scale: formatMetric(DELTA_SCALE, { kind: 'number', decimals: 2 }, locale) })}
+              </span>
+            </BandLegend>
 
             <div className="mt-4 flex flex-wrap gap-3">
               {columns.map((cohort) => (

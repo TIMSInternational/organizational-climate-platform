@@ -5403,6 +5403,9 @@
   },
   "surveyResults": {
     "cross": {
+      "deltaBelow": "below the whole survey",
+      "deltaAbove": "above the whole survey",
+      "barNote": "Bars show the difference against the whole survey, on a ±{scale} scale.",
       "groupHeader": "Group",
       "meanHeader": "Mean",
       "tableCaption": "Each group's result by category, against the whole survey.",

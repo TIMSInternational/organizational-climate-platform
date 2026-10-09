@@ -448,3 +448,66 @@ describe('SurveyCrossPanel — labelling the fields', () => {
     expect(vi.mocked(surveysApi.getSurvey)).not.toHaveBeenCalled()
   })
 })
+
+/**
+ * How the DIFFERENCE is read, which is the panel's actual question.
+ *
+ * The band tint cannot answer it. Measured on the seeded tenant, every cell of an ordinary
+ * cohort paints the identical `rgb(253, 249, 240)` because every climate score lands in
+ * 3,00-3,99 and so in one band. The first build of this table left the one number that does
+ * vary — the difference — as the smallest grey text in the cell, and inside a painted cell it
+ * carried no sign colour at all, so -0,2 and +0,1 looked the same.
+ */
+describe('SurveyCrossPanel — reading the difference', () => {
+  async function compareFinance() {
+    vi.mocked(resultsApi.getSurveyAnalytics)
+      .mockResolvedValueOnce(
+        payload({ dimensions: [dim('Confianza', 3.6), dim('Reconocimiento', 3.2), dim('Desarrollo', 3.7)] }),
+      )
+      .mockResolvedValueOnce(
+        payload({
+          filter: [{ field: 'department', value: FINANCE }],
+          // -0,6 / -0,6 / -0,5: two tie at the worst, which is the case a "mark the widest"
+          // rule gets wrong by marking whichever it happened to see first.
+          dimensions: [dim('Confianza', 3.0), dim('Reconocimiento', 2.6), dim('Desarrollo', 3.2)],
+        }),
+      )
+    const { container } = renderPanel()
+    await choose(copy.department, 'Finanzas')
+    await userEvent.click(screen.getByRole('button', { name: copy.compare }))
+    await waitFor(() => expect(container.querySelectorAll('[data-slot="card"] table').length).toBeGreaterThan(0))
+    return container
+  }
+
+  it('states the direction in words, so the sign does not depend on colour', async () => {
+    const container = await compareFinance()
+    await waitFor(() => expect(container.textContent).toContain(copy.deltaBelow))
+    // The arrow carries it visually and is hidden from the reader who gets the words.
+    expect([...container.querySelectorAll('[aria-hidden="true"]')].some((n) => n.textContent?.includes('▼'))).toBe(true)
+  })
+
+  it('marks EVERY category tied at the widest shortfall, not just the first one found', async () => {
+    const container = await compareFinance()
+    // `.font-bold` alone also catches every column header, which uses the same weight.
+    const selector = '.font-bold.tabular-nums'
+    await waitFor(() => expect(container.querySelectorAll(selector).length).toBeGreaterThan(0))
+    const marked = [...container.querySelectorAll(selector)].map((n) => n.textContent?.replace(/\s+/g, ' ').trim())
+    // Confianza and Reconocimiento are both -0,6; Desarrollo at -0,5 is not marked.
+    expect(marked).toHaveLength(2)
+    for (const text of marked) expect(text).toContain('-0.6')
+  })
+
+  it('draws the bar in proportion to the difference, and never clips inside the scale', async () => {
+    const container = await compareFinance()
+    await waitFor(() => expect(container.querySelectorAll('[style*="width"]').length).toBeGreaterThan(0))
+    const widths = [...container.querySelectorAll('[style*="width"]')]
+      .map((n) => (n as HTMLElement).style.width)
+      .filter((w) => w.endsWith('%'))
+    // 0,6 and 0,5 of a ±1,00 scale are 30% and 25% of the full width -- distinct, and neither
+    // pinned at the 50% ceiling. A scale that clips encodes nothing at the top of its range,
+    // which is how the first attempt (±0,50) drew every one of a weak cohort's bars at 50%.
+    expect(widths).toContain('30%')
+    expect(widths).toContain('25%')
+    expect(widths.every((w) => Number.parseFloat(w) <= 50)).toBe(true)
+  })
+})
