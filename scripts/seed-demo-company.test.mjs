@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { PROFILES, profileFor, personAt } from './seed-demo-company.mjs'
 import { DEPARTMENT_SPECS } from './seed-surveys.mjs'
+import { cohortsOf, allCohortsDisclose, demographicsFor } from './demo-roster.mjs'
 
 /**
  * The demo profiles, and the two scripts' agreement with each other.
@@ -184,4 +185,118 @@ test('meridiano: the 33 generated addresses are unchanged', () => {
   for (let n = 0; n < 33; n++) assert.equal(personAt(n).local, before(n), `employee ${n} moved`)
   // And the 34th is exactly where they must differ, which is the whole point of the change.
   assert.notEqual(personAt(33).local, before(33))
+})
+
+/**
+ * The demographic half of the demo, which is the half that decides whether the results page's
+ * cross panel renders anything at all.
+ *
+ * `crossFieldsOf` offers only fields the unfiltered payload already lists, and a payload lists
+ * a demographic field only when responses carry values for it — which they do only when the
+ * RESPONDENTS carried them before answering. So these numbers are the difference between a
+ * working demonstration and a panel that returns `null` and looks like a missing feature.
+ *
+ * Every assertion below is `SurveyResultsFilter.MayDisclose` restated over counts. That method
+ * runs the breakdown's complement withholding per selector against the scope the OTHER
+ * selectors define, so `puesto:P + department:D` is disclosed only if BOTH of these hold, and
+ * checking one of them is the easy way to ship a cross that silently shows nothing.
+ */
+const respondentsByDepartmentOf = (key, profile) => {
+  const out = {}
+  for (const spec of DEPARTMENT_SPECS[key]) {
+    const name = spec.names.find((n) => names(profile).includes(n))
+    if (name) out[name] = spec.respondents
+  }
+  return out
+}
+
+for (const [key, profile] of Object.entries(PROFILES)) {
+  if (!profile.demographics) continue
+  const plan = profile.demographics
+  const respondents = respondentsByDepartmentOf(key, profile)
+  const { perDepartment, perPuesto } = cohortsOf(respondents, plan.gerencia)
+
+  test(`${key}: every demographic field is a select with options`, () => {
+    for (const field of plan.fields) {
+      // A `number` field never splits into cohorts, so it can be collected for ever and still
+      // offer no cross. TIMS's live survey is the worked example: `edad` and
+      // `tiempo_de_laborar` are numbers, and its cross panel is empty for that reason.
+      assert.equal(field.type, 'select', `${field.field} is ${field.type}, which never splits`)
+      assert.ok(field.options.length >= 2, `${field.field} offers no choice`)
+      for (const option of field.options) {
+        assert.ok(option.value, `${field.field} has an option with no stable value`)
+        // The company is authored in both languages, so a bare label string is refused
+        // outright by `LocalizedInput` rather than defaulted.
+        assert.ok(option.label.es && option.label.en, `${field.field}/${option.value} misses a language`)
+      }
+    }
+  })
+
+  test(`${key}: a required demographic field is never declared`, () => {
+    for (const field of plan.fields) {
+      assert.equal(field.required, false, `${field.field} is required, which leaks into invitation accept`)
+    }
+  })
+
+  test(`${key}: gerencia is sized against respondents, not headcount`, () => {
+    assert.deepEqual(Object.keys(plan.gerencia).sort(), names(profile).sort())
+    for (const [name, count] of Object.entries(plan.gerencia)) {
+      assert.ok(
+        count <= (respondents[name] ?? 0),
+        `${name} wants ${count} gerencia among ${respondents[name]} respondents`,
+      )
+    }
+  })
+
+  test(`${key}: inside every department, each puesto cohort is absent or at the floor`, () => {
+    for (const [name, counts] of Object.entries(perDepartment)) {
+      assert.ok(
+        allCohortsDisclose(counts),
+        `${name} splits ${JSON.stringify(counts)} — a cohort of 1..4 leaves a subtractable remainder`,
+      )
+    }
+  })
+
+  test(`${key}: inside every puesto, each department cohort is absent or at the floor`, () => {
+    for (const [puesto, counts] of Object.entries(perPuesto)) {
+      assert.ok(
+        allCohortsDisclose(counts),
+        `${puesto} splits ${JSON.stringify(counts)} across departments`,
+      )
+    }
+  })
+
+  /**
+   * Both outcomes, on purpose. A demo in which every cross answers teaches that the floor does
+   * not exist; one in which none answers looks broken. Tecnologías de Información carries no
+   * gerencia, so that single cell is the one that comes back "Protegido".
+   */
+  test(`${key}: at least one cross is live and at least one is protected`, () => {
+    const live = Object.entries(perDepartment).filter(([, c]) => c.gerencia >= 5)
+    const protectedCells = Object.entries(perDepartment).filter(([, c]) => c.gerencia === 0)
+    assert.ok(live.length > 0, 'no department discloses a gerencia cross')
+    assert.ok(protectedCells.length > 0, 'every gerencia cross discloses; the floor is invisible')
+  })
+}
+
+/** The ordering contract the two scripts share, stated as a property rather than a comment. */
+test('demographicsFor puts gerencia exactly on the first N of the roster order', () => {
+  const assigned = Array.from({ length: 10 }, (_, i) => demographicsFor(i, 5).puesto)
+  assert.deepEqual(assigned.slice(0, 5), Array(5).fill('gerencia'))
+  assert.deepEqual(assigned.slice(5), Array(5).fill('colaborador'))
+  // A department with no gerencia at all is the protected-cross case, not an error.
+  assert.equal(demographicsFor(0, 0).puesto, 'colaborador')
+})
+
+test('allCohortsDisclose is the complement rule, not just a minimum', () => {
+  assert.equal(allCohortsDisclose({ a: 5, b: 5 }), true)
+  assert.equal(allCohortsDisclose({ a: 5, b: 0 }), true)
+  // 5 and 3 is the case that looks fine and is not: the 3 is a remainder under the floor, so
+  // WithholdComplement withholds the 5 as well and the cross answers nothing.
+  assert.equal(allCohortsDisclose({ a: 5, b: 3 }), false)
+})
+
+/** Meridiano declares none, and the seeding step must be a no-op rather than a failure. */
+test('meridiano declares no demographics, so the step is skipped', () => {
+  assert.equal(PROFILES.meridiano.demographics, undefined)
 })

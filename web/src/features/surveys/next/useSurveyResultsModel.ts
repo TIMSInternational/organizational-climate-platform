@@ -71,11 +71,24 @@ export function useSurveyResultsModel(surveyId: string | undefined): SurveyResul
     try {
       // The UI locale is a request; the payload's `resolvedLocale` says what came back.
       const analytics = await getSurveyAnalytics(baseUrl, surveyId, locale)
+      // The SURVEY carries the tenant, and the two readings below are scoped by it.
+      //
+      // `scope.companyId` is the HEADER's company, which for a super_admin reading another
+      // tenant's survey is a different company entirely. Scoping the trends window by it
+      // compared this survey against a WAVE OF ANOTHER COMPANY: measured on the local stack,
+      // a cruces survey opened while scoped to Acme showed "Frente a Q3" — Acme's Q3 — with a
+      // whole-company delta computed across tenants, and "sin Q3" on every group, because the
+      // other company's department ids match none of this one's. A company_admin never saw it:
+      // their scope is their own company, so the two agreed.
+      //
+      // Settled on its own so a failing survey request still cannot take the map down, which
+      // is what the one batch below was for.
+      const [survey] = await Promise.allSettled([getSurvey(baseUrl, surveyId, locale)])
+      const tenant = survey.status === 'fulfilled' ? survey.value.companyId : companyId
       // The secondary readings, together: none of them may take the map down.
-      const [survey, loadedPlans, trends] = await Promise.allSettled([
-        getSurvey(baseUrl, surveyId, locale),
-        companyId ? listActionPlans(baseUrl, companyId, {}, locale) : Promise.resolve(null),
-        getClimateTrends(baseUrl, { companyId, lang: locale }),
+      const [loadedPlans, trends] = await Promise.allSettled([
+        tenant ? listActionPlans(baseUrl, tenant, {}, locale) : Promise.resolve(null),
+        getClimateTrends(baseUrl, { companyId: tenant, lang: locale }),
       ])
       const closed = survey.status === 'fulfilled' ? (survey.value.endDate ?? null) : null
       const earlier = await loadPrevious(baseUrl, trends, surveyId, closed, locale)

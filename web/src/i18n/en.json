@@ -5403,6 +5403,14 @@
   },
   "surveyResults": {
     "cross": {
+      "deltaBelow": "below the whole survey",
+      "deltaAbove": "above the whole survey",
+      "barNote": "Bars show the difference against the whole survey, on a ±{scale} scale.",
+      "groupHeader": "Group",
+      "meanHeader": "Mean",
+      "tableCaption": "Each group's result by category, against the whole survey.",
+      "protectedRow": "Protected — this group is under {floor} responses.",
+      "protectedHint": "Remove a filter to widen it.",
       "add": "Add to the comparison",
       "addHint": "Compare up to {max} groups at a time. Each is measured against the whole survey.",
       "cohorts": "Groups in the comparison",
@@ -5559,6 +5567,12 @@
     "themesIntro": "Words across every open-ended question, counted separately per language. No answer is ever quoted back.",
     "themesChartTitle": "Most frequent words in open-ended answers",
     "next": {
+      "cellPlanTitle": "Follow-up for {group} — {dimension}",
+      "cellPlanDescription": "Follow-up on {dimension} in {group}. Score {score}. Raised from the survey results.",
+      "cellPlanDescriptionNoScore": "Follow-up on {dimension} in {group}. Raised from the survey results.",
+      "waveUp": "above the previous wave",
+      "waveDown": "below the previous wave",
+      "waveFlat": "the same as the previous wave",
       "title": "Results of {name}",
       "eyebrowClosed": "{name} · last response on {date}",
       "eyebrowOpen": "{name} · still receiving responses",

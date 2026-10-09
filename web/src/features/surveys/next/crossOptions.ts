@@ -33,12 +33,29 @@ export interface CrossField {
 }
 
 /**
+ * A demographic field as its company authored it, resolved for the reader's locale by
+ * `GET /admin/demographic-fields`.
+ *
+ * Needed because the results payload carries neither: `SurveyBreakdown` has `Dimension` (the
+ * stored key) and no label at all, and a demographic segment's `Label` is null. Both are
+ * tenant-authored content, so neither can come from the i18n catalogue.
+ */
+export interface AuthoredField {
+  label: string
+  /** Stable option value to its authored label. */
+  options: Record<string, string>
+}
+
+/**
  * One entry per breakdown that offers a real choice.
  *
  * A field with a single value is left out: narrowing to it selects everyone who has that
  * value, which is a control that cannot change the answer and reads as though it could.
  */
-export function crossFieldsOf(payload: SurveyAnalyticsResponse | null): CrossField[] {
+export function crossFieldsOf(
+  payload: SurveyAnalyticsResponse | null,
+  authored: Readonly<Record<string, AuthoredField>> = {},
+): CrossField[] {
   if (!payload) return []
   return payload.breakdowns
     .map((breakdown) => ({
@@ -47,7 +64,12 @@ export function crossFieldsOf(payload: SurveyAnalyticsResponse | null): CrossFie
         .map((segment) => ({
           field: breakdown.dimension,
           value: segment.key,
-          label: segment.label ?? segment.key,
+          // The company's own wording wins. `SurveySegmentResult.Label` is resolved
+          // server-side for a DEPARTMENT, whose name is a column, but it comes back null for
+          // a demographic option -- the option's label lives on the field definition and the
+          // results aggregation never joins it. So without this overlay the picker lists
+          // `gerencia` where the company wrote "Jefaturas y gerencias".
+          label: authored[breakdown.dimension]?.options[segment.key] ?? segment.label ?? segment.key,
         }))
         .sort((a, b) => a.label.localeCompare(b.label)),
     }))

@@ -16,6 +16,7 @@ import { TranslationProvider } from '../../../i18n'
 import * as resultsApi from '../api/surveyResults'
 import * as surveysApi from '../api/surveys'
 import * as plansApi from '../../action-plans/api/actionPlans'
+import * as demographicsApi from '../../org-structure/api/demographicFields'
 import type { SurveyAnalyticsResponse, SurveyBreakdown, SurveySegmentResult } from '../api/surveyResults'
 import en from '../../../i18n/en.json'
 
@@ -31,8 +32,14 @@ vi.mock('../../action-plans/api/actionPlans', async (importOriginal) => ({
   ...(await importOriginal<typeof plansApi>()),
   createActionPlan: vi.fn(),
 }))
+vi.mock('../../org-structure/api/demographicFields', async (importOriginal) => ({
+  ...(await importOriginal<typeof demographicsApi>()),
+  listDemographicFields: vi.fn(),
+}))
 
 const copy = en.surveyResults.cross
+/** The product's own defaults: opportunity from 3,00, strength from 4,00. */
+const BANDS = { opportunityMin: 3, strengthMin: 4, names: { critical: null, opportunity: null, strength: null } }
 const FINANCE = 'd1'
 
 function segment(key: string, label: string | null, count: number, suppressed = false): SurveySegmentResult {
@@ -90,7 +97,7 @@ function payload(overrides: Partial<SurveyAnalyticsResponse> = {}): SurveyAnalyt
 function renderPanel(given: SurveyAnalyticsResponse | null = payload()) {
   return render(
     <TranslationProvider initialLocale="en">
-      <SurveyCrossPanel surveyId="s1" payload={given} baseUrl="http://api.test" />
+      <SurveyCrossPanel surveyId="s1" payload={given} baseUrl="http://api.test" bands={BANDS} />
     </TranslationProvider>,
   )
 }
@@ -105,6 +112,10 @@ beforeEach(() => {
   vi.mocked(resultsApi.getSurveyAnalytics).mockReset()
   vi.mocked(surveysApi.getSurvey).mockReset()
   vi.mocked(plansApi.createActionPlan).mockReset()
+  // Default: the company defines no demographic field, so every picker falls back to its key.
+  // A test that cares about labels overrides this.
+  vi.mocked(demographicsApi.listDemographicFields).mockReset()
+  vi.mocked(demographicsApi.listDemographicFields).mockResolvedValue([])
 })
 afterEach(cleanup)
 
@@ -189,11 +200,15 @@ describe('SurveyCrossPanel — comparing', () => {
     await choose(copy.department, 'Finanzas')
     await userEvent.click(screen.getByRole('button', { name: copy.compare }))
 
-    await waitFor(() => expect(screen.getByText('4.80')).toBeTruthy())
-    // The baseline column, the cohort column, and the contrast between them.
-    expect(screen.getByText('3.20')).toBeTruthy()
-    expect(screen.getByText('+1.60')).toBeTruthy()
-    expect(screen.getByText('-0.50')).toBeTruthy()
+    // One decimal in a category cell and two in the MEAN column -- the grid's own precisions,
+    // because this table is read in the same glance as the grid.
+    await waitFor(() => expect(screen.getByText('4.8')).toBeTruthy())
+    // The baseline row, the cohort row, and the contrast between them.
+    expect(screen.getByText('3.2')).toBeTruthy()
+    expect(screen.getByText('+1.6')).toBeTruthy()
+    expect(screen.getByText('-0.5')).toBeTruthy()
+    // The mean of the per-category means, at the two decimals it is printed at.
+    expect(screen.getByText('4.15')).toBeTruthy()
 
     const calls = vi.mocked(resultsApi.getSurveyAnalytics).mock.calls
     expect(calls[0]![3]).toBeUndefined()
@@ -212,8 +227,11 @@ describe('SurveyCrossPanel — comparing', () => {
     await choose(copy.department, 'Ventas')
     await userEvent.click(screen.getByRole('button', { name: copy.compare }))
 
-    await waitFor(() => expect(screen.getByText('+1.00')).toBeTruthy())
-    expect(screen.getByText('-1.00')).toBeTruthy()
+    // Twice each: once in the category cell and once in the MEAN column. With a single
+    // dimension the mean IS that dimension, so the two agree by construction -- which is the
+    // point of defining the mean the way the grid above defines it.
+    await waitFor(() => expect(screen.getAllByText('+1.0')).toHaveLength(2))
+    expect(screen.getAllByText('-1.0')).toHaveLength(2)
     expect(vi.mocked(resultsApi.getSurveyAnalytics).mock.calls).toHaveLength(3)
   })
 
@@ -234,7 +252,11 @@ describe('SurveyCrossPanel — comparing', () => {
     await choose('puesto', 'gerencia')
     await userEvent.click(screen.getByRole('button', { name: copy.compare }))
 
-    await waitFor(() => expect(screen.getByText(copy.protectedCell)).toBeTruthy())
+    // ONE row-level statement, not one "Protegido" per category: the cohort is withheld as a
+    // unit, and six cells saying so implied six separate decisions.
+    const refusal = copy.protectedRow.replace('{floor}', '5')
+    await waitFor(() => expect(screen.getByText(refusal, { exact: false })).toBeTruthy())
+    expect(screen.getAllByText(refusal, { exact: false })).toHaveLength(1)
     // For a cross the size IS the disclosure, so the cohort's own count never appears.
     expect(screen.queryByText('30')).toBeNull()
   })
@@ -259,7 +281,7 @@ describe('SurveyCrossPanel — the follow-up', () => {
     renderPanel()
     await choose(copy.department, 'Finanzas')
     await userEvent.click(screen.getByRole('button', { name: copy.compare }))
-    await waitFor(() => expect(screen.getByText('4.00')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('4.0')).toBeTruthy())
   }
 
   it('files the plan against the survey tenant, the department, and the cohort as tags', async () => {
@@ -329,7 +351,9 @@ describe('SurveyCrossPanel — the follow-up', () => {
     renderPanel()
     await choose('puesto', 'gerencia')
     await userEvent.click(screen.getByRole('button', { name: copy.compare }))
-    await waitFor(() => expect(screen.getByText(copy.protectedCell)).toBeTruthy())
+    await waitFor(() =>
+      expect(screen.getByText(copy.protectedRow.replace('{floor}', '5'), { exact: false })).toBeTruthy(),
+    )
 
     // A group that cannot be read is still a group that can be helped; the floor must not
     // become a reason not to act.
@@ -342,5 +366,148 @@ describe('SurveyCrossPanel — the follow-up', () => {
     const title = await screen.findByLabelText(copy.followUpName)
     await userEvent.clear(title)
     expect((screen.getByRole('button', { name: copy.create }) as HTMLButtonElement).disabled).toBe(true)
+  })
+})
+
+
+/**
+ * The picker's own labels, which come from the tenant and not from the catalogue.
+ *
+ * `SurveyBreakdown` carries the stored field KEY and no label, so without this lookup the
+ * control over a Spanish survey reads `puesto` — lowercase, unaccented, and in the one place
+ * the reader has to understand before anything else works.
+ */
+describe('SurveyCrossPanel — labelling the fields', () => {
+  const withPuesto = payload({
+    breakdowns: [
+      breakdown('department', [segment(FINANCE, 'Finanzas', 9), segment('d2', 'Operaciones', 7)]),
+      // `label: null` is what the server actually sends for a demographic segment.
+      breakdown('puesto', [segment('gerencia', null, 8), segment('colaborador', null, 9)]),
+    ],
+  })
+
+  it("lists an option under the company's own wording, not the stored value", async () => {
+    vi.mocked(surveysApi.getSurvey).mockResolvedValue({
+      id: 's1', companyId: 'company-7', title: 'Clima 2026',
+    } as unknown as Awaited<ReturnType<typeof surveysApi.getSurvey>>)
+    vi.mocked(demographicsApi.listDemographicFields).mockResolvedValue([
+      {
+        field: 'puesto',
+        label: 'Puesto',
+        options: [
+          { value: 'gerencia', label: 'Jefaturas y gerencias' },
+          { value: 'colaborador', label: 'Personal colaborador' },
+        ],
+      },
+    ] as unknown as Awaited<ReturnType<typeof demographicsApi.listDemographicFields>>)
+
+    renderPanel(withPuesto)
+
+    // Wait for the overlay to arrive before opening the list, then read what it offers. A
+    // demographic segment comes back with `label: null` -- the aggregation never joins the
+    // option's label -- so the raw stored value is what reaches the picker without it.
+    await userEvent.click(await screen.findByRole('combobox', { name: 'Puesto' }))
+    expect(await screen.findByRole('option', { name: 'Jefaturas y gerencias' })).toBeTruthy()
+    expect(screen.queryByRole('option', { name: 'gerencia' })).toBeNull()
+  })
+
+  it('names a demographic field as the company authored it', async () => {
+    vi.mocked(surveysApi.getSurvey).mockResolvedValue({
+      id: 's1', companyId: 'company-7', title: 'Clima 2026',
+    } as unknown as Awaited<ReturnType<typeof surveysApi.getSurvey>>)
+    vi.mocked(demographicsApi.listDemographicFields).mockResolvedValue([
+      { field: 'puesto', label: 'Puesto' },
+    ] as unknown as Awaited<ReturnType<typeof demographicsApi.listDemographicFields>>)
+
+    renderPanel(withPuesto)
+
+    expect(await screen.findByLabelText('Puesto')).toBeTruthy()
+    // Asked for the SURVEY's company, not the header's scope: a super_admin reading another
+    // tenant's survey would otherwise label its fields from their own company's catalogue.
+    const [, companyId] = vi.mocked(demographicsApi.listDemographicFields).mock.calls[0]!
+    expect(companyId).toBe('company-7')
+  })
+
+  it('falls back to the stored key when the lookup fails, rather than breaking the panel', async () => {
+    vi.mocked(surveysApi.getSurvey).mockResolvedValue({
+      id: 's1', companyId: 'company-7', title: 'Clima 2026',
+    } as unknown as Awaited<ReturnType<typeof surveysApi.getSurvey>>)
+    vi.mocked(demographicsApi.listDemographicFields).mockResolvedValue(
+      undefined as unknown as Awaited<ReturnType<typeof demographicsApi.listDemographicFields>>,
+    )
+
+    renderPanel(withPuesto)
+
+    expect(await screen.findByLabelText('puesto')).toBeTruthy()
+    expect(screen.getByRole('button', { name: copy.compare })).toBeTruthy()
+  })
+
+  it('asks for no labels at all when the survey offers nothing to cross', () => {
+    renderPanel(payload({ breakdowns: [] }))
+    expect(vi.mocked(demographicsApi.listDemographicFields)).not.toHaveBeenCalled()
+    expect(vi.mocked(surveysApi.getSurvey)).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * How the DIFFERENCE is read, which is the panel's actual question.
+ *
+ * The band tint cannot answer it. Measured on the seeded tenant, every cell of an ordinary
+ * cohort paints the identical `rgb(253, 249, 240)` because every climate score lands in
+ * 3,00-3,99 and so in one band. The first build of this table left the one number that does
+ * vary — the difference — as the smallest grey text in the cell, and inside a painted cell it
+ * carried no sign colour at all, so -0,2 and +0,1 looked the same.
+ */
+describe('SurveyCrossPanel — reading the difference', () => {
+  async function compareFinance() {
+    vi.mocked(resultsApi.getSurveyAnalytics)
+      .mockResolvedValueOnce(
+        payload({ dimensions: [dim('Confianza', 3.6), dim('Reconocimiento', 3.2), dim('Desarrollo', 3.7)] }),
+      )
+      .mockResolvedValueOnce(
+        payload({
+          filter: [{ field: 'department', value: FINANCE }],
+          // -0,6 / -0,6 / -0,5: two tie at the worst, which is the case a "mark the widest"
+          // rule gets wrong by marking whichever it happened to see first.
+          dimensions: [dim('Confianza', 3.0), dim('Reconocimiento', 2.6), dim('Desarrollo', 3.2)],
+        }),
+      )
+    const { container } = renderPanel()
+    await choose(copy.department, 'Finanzas')
+    await userEvent.click(screen.getByRole('button', { name: copy.compare }))
+    await waitFor(() => expect(container.querySelectorAll('[data-slot="card"] table').length).toBeGreaterThan(0))
+    return container
+  }
+
+  it('states the direction in words, so the sign does not depend on colour', async () => {
+    const container = await compareFinance()
+    await waitFor(() => expect(container.textContent).toContain(copy.deltaBelow))
+    // The arrow carries it visually and is hidden from the reader who gets the words.
+    expect([...container.querySelectorAll('[aria-hidden="true"]')].some((n) => n.textContent?.includes('▼'))).toBe(true)
+  })
+
+  it('marks EVERY category tied at the widest shortfall, not just the first one found', async () => {
+    const container = await compareFinance()
+    // `.font-bold` alone also catches every column header, which uses the same weight.
+    const selector = '.font-bold.tabular-nums'
+    await waitFor(() => expect(container.querySelectorAll(selector).length).toBeGreaterThan(0))
+    const marked = [...container.querySelectorAll(selector)].map((n) => n.textContent?.replace(/\s+/g, ' ').trim())
+    // Confianza and Reconocimiento are both -0,6; Desarrollo at -0,5 is not marked.
+    expect(marked).toHaveLength(2)
+    for (const text of marked) expect(text).toContain('-0.6')
+  })
+
+  it('draws the bar in proportion to the difference, and never clips inside the scale', async () => {
+    const container = await compareFinance()
+    await waitFor(() => expect(container.querySelectorAll('[style*="width"]').length).toBeGreaterThan(0))
+    const widths = [...container.querySelectorAll('[style*="width"]')]
+      .map((n) => (n as HTMLElement).style.width)
+      .filter((w) => w.endsWith('%'))
+    // 0,6 and 0,5 of a ±1,00 scale are 30% and 25% of the full width -- distinct, and neither
+    // pinned at the 50% ceiling. A scale that clips encodes nothing at the top of its range,
+    // which is how the first attempt (±0,50) drew every one of a weak cohort's bars at 50%.
+    expect(widths).toContain('30%')
+    expect(widths).toContain('25%')
+    expect(widths.every((w) => Number.parseFloat(w) <= 50)).toBe(true)
   })
 })

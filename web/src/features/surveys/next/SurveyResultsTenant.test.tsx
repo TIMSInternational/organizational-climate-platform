@@ -268,7 +268,14 @@ describe('the survey results on the tenant’s real payload', () => {
     expect(doing.textContent).toContain('Un plan ya atiende este grupo: Reducir la carga de trabajo en Operaciones')
     expect(doing.textContent).toContain('vence el 15 oct')
     expect(within(doing).getByRole('link', { name: 'Abrir el plan' }).getAttribute('href')).toBe(`/action-plans/${OPS_PLAN}`)
-    expect(within(doing).getByRole('link', { name: 'Comparar con Q2' }).getAttribute('href')).toBe('/surveys/climate-trends')
+    // The comparison is ANSWERED here, for this cell, rather than handed off. It used to be a
+    // link to `/surveys/climate-trends` — the whole company across every wave — from a panel
+    // opened to ask about one group on one dimension, so it dropped both halves of the
+    // question and landed on a page that could not answer it.
+    expect(within(doing).queryByRole('link', { name: /Comparar con/ })).toBeNull()
+    expect(doing.textContent).toContain('Comparar con Q2')
+    expect(doing.textContent).toMatch(/Q2\s*\d,\d/)
+    expect(doing.textContent).toMatch(/Q3\s*\d,\d/)
     expect(doing.textContent).toContain('El texto libre de Operaciones no se muestra')
   })
 
@@ -305,12 +312,21 @@ describe('the survey results on the tenant’s real payload', () => {
     expect(screen.queryByTestId('cell-panel')).toBeNull()
   })
 
-  it('offers "Crear un plan" on a group no plan covers, and sends it to a route that exists', async () => {
+  it('starts the plan for THIS cell, prefilled, instead of sending the reader to the list', async () => {
     await open()
     await userEvent.click(cell(/^Ventas, Carga de trabajo: 3,4/))
     const doing = within(screen.getByTestId('cell-panel')).getByTestId('cell-doing')
     expect(doing.textContent).toContain('Sin plan todavía para este grupo.')
-    expect(within(doing).getByRole('link', { name: 'Crear un plan' }).getAttribute('href')).toBe('/action-plans')
+    // Not a link to the LIST. The reader had already said which group and which dimension by
+    // opening this cell; `/action-plans` made them say both again from memory.
+    expect(within(doing).queryByRole('link', { name: 'Crear un plan' })).toBeNull()
+
+    await userEvent.click(within(doing).getByRole('button', { name: 'Crear un plan' }))
+    const title = within(doing).getByLabelText('Título') as HTMLInputElement
+    expect(title.value).toContain('Ventas')
+    expect(title.value).toContain('Carga de trabajo')
+    // A due date is already set, so the form can be submitted without further typing.
+    expect((within(doing).getByLabelText('Fecha límite') as HTMLInputElement).value).toMatch(/^\d{4}-\d{2}-\d{2}$/)
   })
 
   it('draws no spread for a group — no endpoint returns one — and says so, whichever cell is open', async () => {
@@ -350,6 +366,8 @@ describe('the survey results on the tenant’s real payload', () => {
     // The map is untouched: the lowest cell still opens, with no way to a wave it lacks.
     const doing = within(screen.getByTestId('cell-panel')).getByTestId('cell-doing')
     expect(within(doing).queryByRole('link', { name: /Comparar con/ })).toBeNull()
+    // And no comparison at all, not an empty one: there is no wave to compare against.
+    expect(doing.textContent).not.toContain('Comparar con')
     expect(requested().some((url) => url.includes(`/surveys/${Q2}/`))).toBe(false)
   })
 

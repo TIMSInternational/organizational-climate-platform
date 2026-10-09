@@ -65,7 +65,7 @@ export default function SurveyResultsNextPage() {
           <SurveyResultsNextView model={model} capabilities={capabilities} baseUrl={baseUrl} onError={setActionError} />
           {/* Below the page rather than inside the view: a cross is a question asked ABOUT
               the results, and the view above is the results. */}
-          <SurveyCrossPanel surveyId={id} payload={payload} baseUrl={baseUrl} />
+          <SurveyCrossPanel surveyId={id} payload={payload} baseUrl={baseUrl} bands={model.bands} />
         </>
       )}
     </LoadingRegion>

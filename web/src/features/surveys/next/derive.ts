@@ -455,6 +455,18 @@ export interface ResultsCellDetail {
   /** Every other row's score on this dimension — protected rows carry `null`. */
   others: ResultsCellOther[]
   plan: ResultsPlanRef | null | undefined
+  /**
+   * This same cell — this group, this dimension — in the PREVIOUS wave.
+   *
+   * `null`, never 0, when there is no previous wave, when that wave carried no breakdown by
+   * group, or when it withheld this group: `ResultsPreviousWave.groupScores` has no entry in
+   * any of those cases, and a 0 would read as "they answered and scored nothing".
+   *
+   * It lives here rather than in the panel because the panel does no arithmetic, and it is
+   * read off the SAME `groupScores` the grid's own wave column reads, so the two cannot
+   * disagree about what this group did last quarter.
+   */
+  previousScore: number | null
 }
 
 /**
@@ -519,6 +531,12 @@ export function cellDetail(model: SurveyResultsNextModel, selection: ClimateMapS
         }
       }),
     plan: model.plans === null ? undefined : planFor(model.plans, detail.rowId),
+    previousScore:
+      model.previous.status === 'loaded'
+        // `selection.dimensionKey`, already narrowed by the guard above; `detail`'s copy is
+        // typed nullable and would not narrow here.
+        ? (model.previous.wave.groupScores[detail.rowId]?.[selection.dimensionKey] ?? null)
+        : null,
   }
 }
 
