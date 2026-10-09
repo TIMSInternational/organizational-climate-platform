@@ -1,7 +1,8 @@
 # How PROCOMER's instrument reaches the question library
 
-**Status: ANSWERED for the mechanism, OPEN for the ownership ruling.**
-Owner of the open half: Federico. Raised by #423's third acceptance criterion, which asks
+**Status: ANSWERED. The mechanism was settled on 2026-09-02; the ownership ruling was made on
+2026-10-08 and is recorded at the bottom of this file.**
+Owner of the ownership half: Federico. Raised by #423's third acceptance criterion, which asks
 for "a stated answer to whether PROCOMER's instrument is loaded through this UI or by a
 one-off import".
 
@@ -68,7 +69,21 @@ importer first. It is a question about what TIMS is selling.
 ## Decision
 
 ```
-Ownership of PROCOMER's instrument:  ____  (global | company-owned)
-Decided by: ____
-Date: ____
+Ownership of PROCOMER's instrument:  COMPANY-OWNED  (companyId = PROCOMER's tenant)
+Decided by: Federico
+Date: 2026-10-08
 ```
+
+The instrument is PROCOMER's, not the platform's standard one: 36 of its 59 statements name the
+institution outright, and the wording is theirs to change after two rounds of their own COE's
+review.
+Company-owned keeps it invisible to every other tenant and lets their own `company_admin` fix a
+word without a TIMS super_admin; the doc's own reasoning above calls it the
+reversible-by-addition answer, and a company row can later be copied up to global while a
+global row cannot be un-shared.
+
+Carried out on 2026-10-08 against the local stack (`PROCOMER — Demostración`): 13 categories
+and 59 items created, second run `0 created`, verify clean. The file, the two rulings behind it
+and the production commands are in
+[`docs/runbooks/procomer-instrument-2026.md`](../runbooks/procomer-instrument-2026.md).
+**It has not been run against production.**

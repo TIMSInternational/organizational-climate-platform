@@ -1,0 +1,1102 @@
+{
+  "instrument": "PROCOMER — Clima Organizacional 2026 (57 ítems + 2 de validación)",
+  "source": {
+    "file": "procomer-2026-instrument.xlsx",
+    "sheet": "58 ITEMS FINAL",
+    "textColumn": "Q (Versión Final para TIMS)",
+    "sha256": "097be9f5972472a21d62b94f80b92a9ccdf21c0f3c89baa5ab0518125618a925",
+    "statements": 59
+  },
+  "categories": [
+    {
+      "key": "validacion",
+      "nameEn": "Validación",
+      "nameEs": "Validación",
+      "parent": null,
+      "order": 1
+    },
+    {
+      "key": "i_liderazgo_y_gestion",
+      "nameEn": "I. Liderazgo y Gestión",
+      "nameEs": "I. Liderazgo y Gestión",
+      "parent": null,
+      "order": 2
+    },
+    {
+      "key": "ii_cultura_valores_y_proposito",
+      "nameEn": "II. Cultura, Valores y Propósito",
+      "nameEs": "II. Cultura, Valores y Propósito",
+      "parent": null,
+      "order": 3
+    },
+    {
+      "key": "iii_comunicacion_y_estrategia",
+      "nameEn": "III. Comunicación y Estrategia",
+      "nameEs": "III. Comunicación y Estrategia",
+      "parent": null,
+      "order": 4
+    },
+    {
+      "key": "iv_ambiente_y_bienestar",
+      "nameEn": "IV. Ambiente y Bienestar",
+      "nameEs": "IV. Ambiente y Bienestar",
+      "parent": null,
+      "order": 5
+    },
+    {
+      "key": "v_trabajo_en_equipo",
+      "nameEn": "V. Trabajo en Equipo",
+      "nameEs": "V. Trabajo en Equipo",
+      "parent": null,
+      "order": 6
+    },
+    {
+      "key": "vi_desarrollo_continuo",
+      "nameEn": "VI. Desarrollo Continuo",
+      "nameEs": "VI. Desarrollo Continuo",
+      "parent": null,
+      "order": 7
+    },
+    {
+      "key": "vii_compensacion_y_beneficios",
+      "nameEn": "VII. Compensación y Beneficios",
+      "nameEs": "VII. Compensación y Beneficios",
+      "parent": null,
+      "order": 8
+    },
+    {
+      "key": "viii_procesos_y_claridad",
+      "nameEn": "VIII. Procesos y Claridad",
+      "nameEs": "VIII. Procesos y Claridad",
+      "parent": null,
+      "order": 9
+    },
+    {
+      "key": "ix_seguridad_psicologica",
+      "nameEn": "IX. Seguridad Psicológica",
+      "nameEs": "IX. Seguridad Psicológica",
+      "parent": null,
+      "order": 10
+    },
+    {
+      "key": "x_orientacion_al_cliente",
+      "nameEn": "X. Orientación al Cliente",
+      "nameEs": "X. Orientación al Cliente",
+      "parent": null,
+      "order": 11
+    },
+    {
+      "key": "xi_diversidad_equidad_e_inclusion",
+      "nameEn": "XI. Diversidad, Equidad e Inclusión",
+      "nameEs": "XI. Diversidad, Equidad e Inclusión",
+      "parent": null,
+      "order": 12
+    },
+    {
+      "key": "especiales",
+      "nameEn": "Especiales",
+      "nameEs": "Especiales",
+      "parent": null,
+      "order": 13
+    }
+  ],
+  "items": [
+    {
+      "category": "validacion",
+      "type": "likert",
+      "textEn": "Considero que las respuestas brindadas en esta encuesta serán tratadas de forma confidencial.",
+      "textEs": "Considero que las respuestas brindadas en esta encuesta serán tratadas de forma confidencial.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Confidencialidad",
+      "tags": [
+        "procomer-2026",
+        "item-VAL1"
+      ]
+    },
+    {
+      "category": "validacion",
+      "type": "likert",
+      "textEn": "Considero que esta encuesta representa una oportunidad genuina para que PROCOMER pueda comprender mi experiencia laboral.",
+      "textEs": "Considero que esta encuesta representa una oportunidad genuina para que PROCOMER pueda comprender mi experiencia laboral.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Oportunidad Genuina",
+      "tags": [
+        "procomer-2026",
+        "item-VAL2"
+      ]
+    },
+    {
+      "category": "i_liderazgo_y_gestion",
+      "type": "likert",
+      "textEn": "Mi jefatura me inspira a dar lo mejor de mí para alcanzar los objetivos de PROCOMER.",
+      "textEs": "Mi jefatura me inspira a dar lo mejor de mí para alcanzar los objetivos de PROCOMER.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Liderazgo Transformacional",
+      "tags": [
+        "procomer-2026",
+        "item-1"
+      ]
+    },
+    {
+      "category": "i_liderazgo_y_gestion",
+      "type": "likert",
+      "textEn": "Mi jefatura organiza el trabajo de manera que podamos cumplir nuestras metas y responsabilidades.",
+      "textEs": "Mi jefatura organiza el trabajo de manera que podamos cumplir nuestras metas y responsabilidades.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Gestión Efectiva",
+      "tags": [
+        "procomer-2026",
+        "item-2"
+      ]
+    },
+    {
+      "category": "i_liderazgo_y_gestion",
+      "type": "likert",
+      "textEn": "Mi jefatura me brinda espacio para proponer mejoras en mi área de trabajo.",
+      "textEs": "Mi jefatura me brinda espacio para proponer mejoras en mi área de trabajo.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Autonomía para la Iniciativa",
+      "tags": [
+        "procomer-2026",
+        "item-3"
+      ]
+    },
+    {
+      "category": "i_liderazgo_y_gestion",
+      "type": "likert",
+      "textEn": "Tengo claridad sobre cómo mi trabajo contribuye al cumplimiento de los objetivos de mi equipo.",
+      "textEs": "Tengo claridad sobre cómo mi trabajo contribuye al cumplimiento de los objetivos de mi equipo.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Alineamiento Individual-Estrategia",
+      "tags": [
+        "procomer-2026",
+        "item-4"
+      ]
+    },
+    {
+      "category": "i_liderazgo_y_gestion",
+      "type": "likert",
+      "textEn": "Recibo retroalimentación de mi jefatura que me ayuda a mejorar mi desempeño.",
+      "textEs": "Recibo retroalimentación de mi jefatura que me ayuda a mejorar mi desempeño.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Retroalimentación de Desempeño",
+      "tags": [
+        "procomer-2026",
+        "item-5"
+      ]
+    },
+    {
+      "category": "i_liderazgo_y_gestion",
+      "type": "likert",
+      "textEn": "Mi jefatura valora mi contribución a los logros de PROCOMER.",
+      "textEs": "Mi jefatura valora mi contribución a los logros de PROCOMER.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Reconocimiento y Valoración",
+      "tags": [
+        "procomer-2026",
+        "item-6"
+      ]
+    },
+    {
+      "category": "i_liderazgo_y_gestion",
+      "type": "likert",
+      "textEn": "Mi jefatura comunica de manera oportuna la informacion necesaria para mi desempeño efectivo.",
+      "textEs": "Mi jefatura comunica de manera oportuna la informacion necesaria para mi desempeño efectivo.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Comunicación Descendente",
+      "tags": [
+        "procomer-2026",
+        "item-7"
+      ]
+    },
+    {
+      "category": "ii_cultura_valores_y_proposito",
+      "type": "likert",
+      "textEn": "Tengo claridad sobre el impacto que genera PROCOMER en el desarrollo del país.",
+      "textEs": "Tengo claridad sobre el impacto que genera PROCOMER en el desarrollo del país.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Claridad de Propósito",
+      "tags": [
+        "procomer-2026",
+        "item-8"
+      ]
+    },
+    {
+      "category": "ii_cultura_valores_y_proposito",
+      "type": "likert",
+      "textEn": "En mi área los valores de PROCOMER guían nuestras decisiones y acciones cotidianas.",
+      "textEs": "En mi área los valores de PROCOMER guían nuestras decisiones y acciones cotidianas.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Práctica de Valores",
+      "tags": [
+        "procomer-2026",
+        "item-9"
+      ]
+    },
+    {
+      "category": "ii_cultura_valores_y_proposito",
+      "type": "likert",
+      "textEn": "Existe un sentido de apoyo mutuo entre las personas de mi equipo.",
+      "textEs": "Existe un sentido de apoyo mutuo entre las personas de mi equipo.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Conexión Emocional",
+      "tags": [
+        "procomer-2026",
+        "item-10"
+      ]
+    },
+    {
+      "category": "ii_cultura_valores_y_proposito",
+      "type": "likert",
+      "textEn": "Me veo trabajando en PROCOMER en los próximos años.",
+      "textEs": "Me veo trabajando en PROCOMER en los próximos años.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Permanencia e Intención",
+      "tags": [
+        "procomer-2026",
+        "item-11"
+      ]
+    },
+    {
+      "category": "ii_cultura_valores_y_proposito",
+      "type": "likert",
+      "textEn": "Confío en la dirección estratégica de la institución.",
+      "textEs": "Confío en la dirección estratégica de la institución.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Confianza Institucional",
+      "tags": [
+        "procomer-2026",
+        "item-12"
+      ]
+    },
+    {
+      "category": "ii_cultura_valores_y_proposito",
+      "type": "likert",
+      "textEn": "Considero que las iniciativas de voluntariado de PROCOMER fortalecen nuestro compromiso social y conexión con el propósito.",
+      "textEs": "Considero que las iniciativas de voluntariado de PROCOMER fortalecen nuestro compromiso social y conexión con el propósito.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Voluntariado",
+      "tags": [
+        "procomer-2026",
+        "item-13"
+      ]
+    },
+    {
+      "category": "iii_comunicacion_y_estrategia",
+      "type": "likert",
+      "textEn": "Comprendo cómo mi trabajo contribuye al cumplimiento de los objetivos de PROCOMER.",
+      "textEs": "Comprendo cómo mi trabajo contribuye al cumplimiento de los objetivos de PROCOMER.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Alineamiento Estratégico",
+      "tags": [
+        "procomer-2026",
+        "item-14"
+      ]
+    },
+    {
+      "category": "iii_comunicacion_y_estrategia",
+      "type": "likert",
+      "textEn": "Los canales de comunicación en PROCOMER me permiten acceder a la información que necesito para mi trabajo.",
+      "textEs": "Los canales de comunicación en PROCOMER me permiten acceder a la información que necesito para mi trabajo.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Canales de Información",
+      "tags": [
+        "procomer-2026",
+        "item-15"
+      ]
+    },
+    {
+      "category": "iii_comunicacion_y_estrategia",
+      "type": "likert",
+      "textEn": "Considero que existe un espacio genuino en PROCOMER para expresar ideas diferentes, sin temor a represalias.",
+      "textEs": "Considero que existe un espacio genuino en PROCOMER para expresar ideas diferentes, sin temor a represalias.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Confianza para Expresión",
+      "tags": [
+        "procomer-2026",
+        "item-16"
+      ]
+    },
+    {
+      "category": "iii_comunicacion_y_estrategia",
+      "type": "likert",
+      "textEn": "Percibo que PROCOMER toma en consideración los asuntos que son importantes para las personas funcionarias.",
+      "textEs": "Percibo que PROCOMER toma en consideración los asuntos que son importantes para las personas funcionarias.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Cultura de Escucha",
+      "tags": [
+        "procomer-2026",
+        "item-17"
+      ]
+    },
+    {
+      "category": "iii_comunicacion_y_estrategia",
+      "type": "likert",
+      "textEn": "Percibo que las opiniones de las personas funcionarias son consideradas en la toma de decisiones de la organización.",
+      "textEs": "Percibo que las opiniones de las personas funcionarias son consideradas en la toma de decisiones de la organización.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Cultura de Escucha",
+      "tags": [
+        "procomer-2026",
+        "item-18"
+      ]
+    },
+    {
+      "category": "iii_comunicacion_y_estrategia",
+      "type": "likert",
+      "textEn": "Tengo claridad sobre el rumbo, las prioridades y la visión de negocio comunicados por la Gerencia General.",
+      "textEs": "Tengo claridad sobre el rumbo, las prioridades y la visión de negocio comunicados por la Gerencia General.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Claridad Estratégica",
+      "tags": [
+        "procomer-2026",
+        "item-19"
+      ]
+    },
+    {
+      "category": "iv_ambiente_y_bienestar",
+      "type": "likert",
+      "textEn": "El ambiente laboral en PROCOMER facilita que desarrolle mi trabajo de forma productiva.",
+      "textEs": "El ambiente laboral en PROCOMER facilita que desarrolle mi trabajo de forma productiva.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Ambiente Físico Productivo",
+      "tags": [
+        "procomer-2026",
+        "item-20"
+      ]
+    },
+    {
+      "category": "iv_ambiente_y_bienestar",
+      "type": "likert",
+      "textEn": "En mi equipo inmediato existe un ambiente de respeto que favorece la colaboración.",
+      "textEs": "En mi equipo inmediato existe un ambiente de respeto que favorece la colaboración.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Respeto en el Equipo",
+      "tags": [
+        "procomer-2026",
+        "item-21"
+      ]
+    },
+    {
+      "category": "iv_ambiente_y_bienestar",
+      "type": "likert",
+      "textEn": "Cuando enfrento una carga elevada de trabajo, sé que puedo contar con el apoyo de mi equipo.",
+      "textEs": "Cuando enfrento una carga elevada de trabajo, sé que puedo contar con el apoyo de mi equipo.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Apoyo Mutuo",
+      "tags": [
+        "procomer-2026",
+        "item-22"
+      ]
+    },
+    {
+      "category": "iv_ambiente_y_bienestar",
+      "type": "likert",
+      "textEn": "PROCOMER promueve un equilibrio entre vida laboral y personal, que considero importante y sostenible.",
+      "textEs": "PROCOMER promueve un equilibrio entre vida laboral y personal, que considero importante y sostenible.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Equilibrio Vida-Trabajo",
+      "tags": [
+        "procomer-2026",
+        "item-23"
+      ]
+    },
+    {
+      "category": "iv_ambiente_y_bienestar",
+      "type": "likert",
+      "textEn": "Me siento seguro con el ambiente de trabajo.",
+      "textEs": "Me siento seguro con el ambiente de trabajo.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Seguridad",
+      "tags": [
+        "procomer-2026",
+        "item-24"
+      ]
+    },
+    {
+      "category": "v_trabajo_en_equipo",
+      "type": "likert",
+      "textEn": "En mi gerencia se promueve la colaboración para alcanzar los objetivos del equipo.",
+      "textEs": "En mi gerencia se promueve la colaboración para alcanzar los objetivos del equipo.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Colaboración Intra-área",
+      "tags": [
+        "procomer-2026",
+        "item-25"
+      ]
+    },
+    {
+      "category": "v_trabajo_en_equipo",
+      "type": "likert",
+      "textEn": "La forma en que colaboran las distintas áreas de PROCOMER contribuye al logro de los objetivos de mi equipo.",
+      "textEs": "La forma en que colaboran las distintas áreas de PROCOMER contribuye al logro de los objetivos de mi equipo.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Coordinación Inter-departamental",
+      "tags": [
+        "procomer-2026",
+        "item-26"
+      ]
+    },
+    {
+      "category": "v_trabajo_en_equipo",
+      "type": "likert",
+      "textEn": "Las personas funcionarias en PROCOMER muestran disposición para contribuir al logro de objetivos comunes.",
+      "textEs": "Las personas funcionarias en PROCOMER muestran disposición para contribuir al logro de objetivos comunes.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Disposición Colaborativa",
+      "tags": [
+        "procomer-2026",
+        "item-27"
+      ]
+    },
+    {
+      "category": "v_trabajo_en_equipo",
+      "type": "likert",
+      "textEn": "Confío en que mis pares en PROCOMER al cumplir sus compromisos contribuyen a nuestros objetivos colectivos.",
+      "textEs": "Confío en que mis pares en PROCOMER al cumplir sus compromisos contribuyen a nuestros objetivos colectivos.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Confianza en Compromisos",
+      "tags": [
+        "procomer-2026",
+        "item-28"
+      ]
+    },
+    {
+      "category": "v_trabajo_en_equipo",
+      "type": "likert",
+      "textEn": "Los desacuerdos entre áreas se gestionan de forma constructiva.",
+      "textEs": "Los desacuerdos entre áreas se gestionan de forma constructiva.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Resolución de Conflictos",
+      "tags": [
+        "procomer-2026",
+        "item-29"
+      ]
+    },
+    {
+      "category": "vi_desarrollo_continuo",
+      "type": "likert",
+      "textEn": "PROCOMER me proporciona herramientas para mi desarrollo profesional.",
+      "textEs": "PROCOMER me proporciona herramientas para mi desarrollo profesional.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Ecosistema de Aprendizaje",
+      "tags": [
+        "procomer-2026",
+        "item-30"
+      ]
+    },
+    {
+      "category": "vi_desarrollo_continuo",
+      "type": "likert",
+      "textEn": "PROCOMER me brinda recursos para mi desarrollo profesional.",
+      "textEs": "PROCOMER me brinda recursos para mi desarrollo profesional.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Ecosistema de Aprendizaje",
+      "tags": [
+        "procomer-2026",
+        "item-31"
+      ]
+    },
+    {
+      "category": "vi_desarrollo_continuo",
+      "type": "likert",
+      "textEn": "Las condiciones de trabajo en PROCOMER favorecen mi desarrollo profesional.",
+      "textEs": "Las condiciones de trabajo en PROCOMER favorecen mi desarrollo profesional.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Ecosistema de Aprendizaje",
+      "tags": [
+        "procomer-2026",
+        "item-32"
+      ]
+    },
+    {
+      "category": "vi_desarrollo_continuo",
+      "type": "likert",
+      "textEn": "Identifico que existen oportunidades reales de crecimiento que me permiten evolucionar en PROCOMER.",
+      "textEs": "Identifico que existen oportunidades reales de crecimiento que me permiten evolucionar en PROCOMER.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Oportunidades de Progresión",
+      "tags": [
+        "procomer-2026",
+        "item-33"
+      ]
+    },
+    {
+      "category": "vi_desarrollo_continuo",
+      "type": "likert",
+      "textEn": "Mi estabilidad laboral me permite enfocarme en mi desarrollo profesional.",
+      "textEs": "Mi estabilidad laboral me permite enfocarme en mi desarrollo profesional.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Seguridad Laboral",
+      "tags": [
+        "procomer-2026",
+        "item-34"
+      ]
+    },
+    {
+      "category": "vi_desarrollo_continuo",
+      "type": "likert",
+      "textEn": "En PROCOMER se fomenta la innovación y el aprendizaje de nuevas formas de trabajar alineadas con tendencias globales.",
+      "textEs": "En PROCOMER se fomenta la innovación y el aprendizaje de nuevas formas de trabajar alineadas con tendencias globales.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Innovación y Experimentación",
+      "tags": [
+        "procomer-2026",
+        "item-35"
+      ]
+    },
+    {
+      "category": "vii_compensacion_y_beneficios",
+      "type": "likert",
+      "textEn": "Considero que mi compensación refleja adecuadamente el valor de mi contribución a los objetivos de PROCOMER.",
+      "textEs": "Considero que mi compensación refleja adecuadamente el valor de mi contribución a los objetivos de PROCOMER.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Valor de Contribución",
+      "tags": [
+        "procomer-2026",
+        "item-36"
+      ]
+    },
+    {
+      "category": "vii_compensacion_y_beneficios",
+      "type": "likert",
+      "textEn": "La propuesta integral de PROCOMER (compensación, beneficios, ambiente, desarrollo) es atractiva para mi permanencia.",
+      "textEs": "La propuesta integral de PROCOMER (compensación, beneficios, ambiente, desarrollo) es atractiva para mi permanencia.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Propuesta Integral de Valor",
+      "tags": [
+        "procomer-2026",
+        "item-37"
+      ]
+    },
+    {
+      "category": "vii_compensacion_y_beneficios",
+      "type": "likert",
+      "textEn": "Considero que mi paquete de beneficios es competitivo en comparación con el mercado.",
+      "textEs": "Considero que mi paquete de beneficios es competitivo en comparación con el mercado.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Reconocimiento Económico",
+      "tags": [
+        "procomer-2026",
+        "item-38"
+      ]
+    },
+    {
+      "category": "viii_procesos_y_claridad",
+      "type": "likert",
+      "textEn": "Tengo claridad sobre las funciones relacionadas a mi puesto.",
+      "textEs": "Tengo claridad sobre las funciones relacionadas a mi puesto.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Claridad de Rol",
+      "tags": [
+        "procomer-2026",
+        "item-39"
+      ]
+    },
+    {
+      "category": "viii_procesos_y_claridad",
+      "type": "likert",
+      "textEn": "Los procesos en PROCOMER están diseñados para facilitar que realice mi trabajo de forma eficiente.",
+      "textEs": "Los procesos en PROCOMER están diseñados para facilitar que realice mi trabajo de forma eficiente.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Procesos Habilitantes",
+      "tags": [
+        "procomer-2026",
+        "item-40"
+      ]
+    },
+    {
+      "category": "viii_procesos_y_claridad",
+      "type": "likert",
+      "textEn": "Comprendo el objetivo de las normas y reglamentos de PROCOMER que aplican a mis funciones.",
+      "textEs": "Comprendo el objetivo de las normas y reglamentos de PROCOMER que aplican a mis funciones.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Conocimiento Normativo",
+      "tags": [
+        "procomer-2026",
+        "item-41"
+      ]
+    },
+    {
+      "category": "ix_seguridad_psicologica",
+      "type": "likert",
+      "textEn": "En mi equipo las ideas y opiniones diferentes son escuchadas con respeto.",
+      "textEs": "En mi equipo las ideas y opiniones diferentes son escuchadas con respeto.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Libertad de Expresión",
+      "tags": [
+        "procomer-2026",
+        "item-42"
+      ]
+    },
+    {
+      "category": "ix_seguridad_psicologica",
+      "type": "likert",
+      "textEn": "En PROCOMER, los errores son vistos como oportunidades de aprendizaje.",
+      "textEs": "En PROCOMER, los errores son vistos como oportunidades de aprendizaje.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Tolerancia al Error",
+      "tags": [
+        "procomer-2026",
+        "item-43"
+      ]
+    },
+    {
+      "category": "ix_seguridad_psicologica",
+      "type": "likert",
+      "textEn": "Percibo que en PROCOMER puedo ser auténtico sin necesidad de adoptar una personalidad diferente.",
+      "textEs": "Percibo que en PROCOMER puedo ser auténtico sin necesidad de adoptar una personalidad diferente.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Autenticidad Laboral",
+      "tags": [
+        "procomer-2026",
+        "item-44"
+      ]
+    },
+    {
+      "category": "ix_seguridad_psicologica",
+      "type": "likert",
+      "textEn": "Considero que existe transparencia y sinceridad en la comunicación organizacional de PROCOMER.",
+      "textEs": "Considero que existe transparencia y sinceridad en la comunicación organizacional de PROCOMER.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Transparencia Organizacional",
+      "tags": [
+        "procomer-2026",
+        "item-45"
+      ]
+    },
+    {
+      "category": "x_orientacion_al_cliente",
+      "type": "likert",
+      "textEn": "Considero que tengo claridad sobre las necesidades de nuestros clientes internos",
+      "textEs": "Considero que tengo claridad sobre las necesidades de nuestros clientes internos",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Comprensión del Valor",
+      "tags": [
+        "procomer-2026",
+        "item-46"
+      ]
+    },
+    {
+      "category": "x_orientacion_al_cliente",
+      "type": "likert",
+      "textEn": "Tengo claridad sobre las necesidades de las personas funcionarias de los servicios que brinda mi área",
+      "textEs": "Tengo claridad sobre las necesidades de las personas funcionarias de los servicios que brinda mi área",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Comprensión del Valor",
+      "tags": [
+        "procomer-2026",
+        "item-47"
+      ]
+    },
+    {
+      "category": "x_orientacion_al_cliente",
+      "type": "likert",
+      "textEn": "Mi equipo entrega soluciones que generan valor real para nuestros clientes internos",
+      "textEs": "Mi equipo entrega soluciones que generan valor real para nuestros clientes internos",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Calidad de Servicio",
+      "tags": [
+        "procomer-2026",
+        "item-48"
+      ]
+    },
+    {
+      "category": "x_orientacion_al_cliente",
+      "type": "likert",
+      "textEn": "Considero que en PROCOMER la excelencia en el servicio es un estándar que orienta la forma en que trabajamos.",
+      "textEs": "Considero que en PROCOMER la excelencia en el servicio es un estándar que orienta la forma en que trabajamos.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Énfasis en Excelencia",
+      "tags": [
+        "procomer-2026",
+        "item-49"
+      ]
+    },
+    {
+      "category": "x_orientacion_al_cliente",
+      "type": "likert",
+      "textEn": "Percibo que otros departamentos de PROCOMER actúan como socios estratégicos entregando calidad y alto valor en el servicio.",
+      "textEs": "Percibo que otros departamentos de PROCOMER actúan como socios estratégicos entregando calidad y alto valor en el servicio.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Servicio Inter-departamental",
+      "tags": [
+        "procomer-2026",
+        "item-50"
+      ]
+    },
+    {
+      "category": "xi_diversidad_equidad_e_inclusion",
+      "type": "likert",
+      "textEn": "En PROCOMER me siento valorado como persona.",
+      "textEs": "En PROCOMER me siento valorado como persona.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Valoración Personal",
+      "tags": [
+        "procomer-2026",
+        "item-51"
+      ]
+    },
+    {
+      "category": "xi_diversidad_equidad_e_inclusion",
+      "type": "likert",
+      "textEn": "En PROCOMER las opiniones y perspectivas diferentes son valoradas.",
+      "textEs": "En PROCOMER las opiniones y perspectivas diferentes son valoradas.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Valoración Personal",
+      "tags": [
+        "procomer-2026",
+        "item-52"
+      ]
+    },
+    {
+      "category": "xi_diversidad_equidad_e_inclusion",
+      "type": "likert",
+      "textEn": "Siento que en PROCOMER pertenezco y la institución valora genuinamente lo que aporto como persona.",
+      "textEs": "Siento que en PROCOMER pertenezco y la institución valora genuinamente lo que aporto como persona.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Pertenencia",
+      "tags": [
+        "procomer-2026",
+        "item-53"
+      ]
+    },
+    {
+      "category": "xi_diversidad_equidad_e_inclusion",
+      "type": "likert",
+      "textEn": "Considero que las oportunidades de desarrollo y crecimiento son genuinamente equitativas para todas las personas de la organizacion.",
+      "textEs": "Considero que las oportunidades de desarrollo y crecimiento son genuinamente equitativas para todas las personas de la organizacion.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Equidad de Oportunidades",
+      "tags": [
+        "procomer-2026",
+        "item-54"
+      ]
+    },
+    {
+      "category": "xi_diversidad_equidad_e_inclusion",
+      "type": "likert",
+      "textEn": "Percibo que la diversidad de perspectivas es un valor estratégico que impulsa la innovación en PROCOMER.",
+      "textEs": "Percibo que la diversidad de perspectivas es un valor estratégico que impulsa la innovación en PROCOMER.",
+      "scaleMin": 1,
+      "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree",
+      "scaleLabelMinEs": "Totalmente en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",
+      "scaleLabelMaxEs": "Totalmente de acuerdo",
+      "dimension": "Diversidad como Valor Estratégico",
+      "tags": [
+        "procomer-2026",
+        "item-55"
+      ]
+    },
+    {
+      "category": "especiales",
+      "type": "rating",
+      "textEn": "¿Qué tan probable es que recomiendes a PROCOMER como un lugar para trabajar?",
+      "textEs": "¿Qué tan probable es que recomiendes a PROCOMER como un lugar para trabajar?",
+      "scaleMin": 0,
+      "scaleMax": 10,
+      "scaleLabelMinEn": "Not at all likely",
+      "scaleLabelMinEs": "Nada probable",
+      "scaleLabelMaxEn": "Extremely likely",
+      "scaleLabelMaxEs": "Totalmente probable",
+      "dimension": "eNPS",
+      "tags": [
+        "procomer-2026",
+        "item-56"
+      ]
+    },
+    {
+      "category": "especiales",
+      "type": "open_ended",
+      "textEn": "¿Hay algun comentario, sugerencia o aspecto de tu experiencia laboral que consideres importante que PROCOMER conozca?",
+      "textEs": "¿Hay algun comentario, sugerencia o aspecto de tu experiencia laboral que consideres importante que PROCOMER conozca?",
+      "dimension": "Pregunta Abierta",
+      "tags": [
+        "procomer-2026",
+        "item-57"
+      ]
+    }
+  ]
+}
