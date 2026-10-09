@@ -279,6 +279,10 @@ describe('SurveyCrossPanel — the follow-up', () => {
     // The SURVEY's tenant, not the header's scope: a plan filed against the wrong company is
     // invisible to the people who have to do it.
     expect(input.companyId).toBe('company-7')
+    // The schema's own provenance column, not just a tag: `action_plans.source_survey_id`
+    // carries an FK, and the endpoint refuses a survey belonging to another company -- so the
+    // id and the tenant above have to come from the same survey, and they do.
+    expect(input.sourceSurveyId).toBe('s1')
     expect(input.departmentId).toBe(FINANCE)
     expect(input.tags).toEqual(['seguimiento', `department:${FINANCE}`])
     expect(input.priority).toBe('high')

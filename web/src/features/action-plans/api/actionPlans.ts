@@ -72,6 +72,20 @@ export interface CreateActionPlanInput {
   priority: string
   tags?: string[]
   templateId?: string
+  /**
+   * The survey this plan answers, when it was raised from one.
+   *
+   * `action_plans.source_survey_id` is a real FK since #168, and `CreateAsync` validates it
+   * BEFORE the insert -- a missing survey and another tenant's survey are both 400s, chosen
+   * over letting the FK turn an unknown id into an opaque 500
+   * (`ActionPlanEndpoints.cs:145-171`). So this is safe to send only when the id and
+   * `companyId` come from the same survey, which is how the results cross sends it.
+   *
+   * Nothing reads it back yet: `ActionPlanDetail` does not carry it. It is written anyway,
+   * because the alternative provenance is a tag string and a survey title spelled into the
+   * description, and neither survives the survey being renamed.
+   */
+  sourceSurveyId?: string
   kpis?: CreateKpiInput[]
   objectives?: CreateObjectiveInput[]
 }

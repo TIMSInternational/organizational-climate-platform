@@ -156,6 +156,10 @@ export default function SurveyCrossPanel({
         title: form.title.trim(),
         description,
         companyId: survey.companyId,
+        // The plan's provenance, in the column the schema has for it. The survey id and the
+        // company id come from the SAME survey here, which is the condition the endpoint
+        // checks before it will accept the pair.
+        sourceSurveyId: surveyId,
         ...(department ? { departmentId: department.value } : {}),
         dueDate: new Date(`${form.due}T12:00:00Z`).toISOString(),
         priority: form.priority,
