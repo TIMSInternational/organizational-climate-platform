@@ -38,6 +38,8 @@ vi.mock('../../org-structure/api/demographicFields', async (importOriginal) => (
 }))
 
 const copy = en.surveyResults.cross
+/** The product's own defaults: opportunity from 3,00, strength from 4,00. */
+const BANDS = { opportunityMin: 3, strengthMin: 4, names: { critical: null, opportunity: null, strength: null } }
 const FINANCE = 'd1'
 
 function segment(key: string, label: string | null, count: number, suppressed = false): SurveySegmentResult {
@@ -95,7 +97,7 @@ function payload(overrides: Partial<SurveyAnalyticsResponse> = {}): SurveyAnalyt
 function renderPanel(given: SurveyAnalyticsResponse | null = payload()) {
   return render(
     <TranslationProvider initialLocale="en">
-      <SurveyCrossPanel surveyId="s1" payload={given} baseUrl="http://api.test" />
+      <SurveyCrossPanel surveyId="s1" payload={given} baseUrl="http://api.test" bands={BANDS} />
     </TranslationProvider>,
   )
 }
@@ -198,11 +200,15 @@ describe('SurveyCrossPanel — comparing', () => {
     await choose(copy.department, 'Finanzas')
     await userEvent.click(screen.getByRole('button', { name: copy.compare }))
 
-    await waitFor(() => expect(screen.getByText('4.80')).toBeTruthy())
-    // The baseline column, the cohort column, and the contrast between them.
-    expect(screen.getByText('3.20')).toBeTruthy()
-    expect(screen.getByText('+1.60')).toBeTruthy()
-    expect(screen.getByText('-0.50')).toBeTruthy()
+    // One decimal in a category cell and two in the MEAN column -- the grid's own precisions,
+    // because this table is read in the same glance as the grid.
+    await waitFor(() => expect(screen.getByText('4.8')).toBeTruthy())
+    // The baseline row, the cohort row, and the contrast between them.
+    expect(screen.getByText('3.2')).toBeTruthy()
+    expect(screen.getByText('+1.6')).toBeTruthy()
+    expect(screen.getByText('-0.5')).toBeTruthy()
+    // The mean of the per-category means, at the two decimals it is printed at.
+    expect(screen.getByText('4.15')).toBeTruthy()
 
     const calls = vi.mocked(resultsApi.getSurveyAnalytics).mock.calls
     expect(calls[0]![3]).toBeUndefined()
@@ -221,8 +227,11 @@ describe('SurveyCrossPanel — comparing', () => {
     await choose(copy.department, 'Ventas')
     await userEvent.click(screen.getByRole('button', { name: copy.compare }))
 
-    await waitFor(() => expect(screen.getByText('+1.00')).toBeTruthy())
-    expect(screen.getByText('-1.00')).toBeTruthy()
+    // Twice each: once in the category cell and once in the MEAN column. With a single
+    // dimension the mean IS that dimension, so the two agree by construction -- which is the
+    // point of defining the mean the way the grid above defines it.
+    await waitFor(() => expect(screen.getAllByText('+1.0')).toHaveLength(2))
+    expect(screen.getAllByText('-1.0')).toHaveLength(2)
     expect(vi.mocked(resultsApi.getSurveyAnalytics).mock.calls).toHaveLength(3)
   })
 
@@ -243,7 +252,11 @@ describe('SurveyCrossPanel — comparing', () => {
     await choose('puesto', 'gerencia')
     await userEvent.click(screen.getByRole('button', { name: copy.compare }))
 
-    await waitFor(() => expect(screen.getByText(copy.protectedCell)).toBeTruthy())
+    // ONE row-level statement, not one "Protegido" per category: the cohort is withheld as a
+    // unit, and six cells saying so implied six separate decisions.
+    const refusal = copy.protectedRow.replace('{floor}', '5')
+    await waitFor(() => expect(screen.getByText(refusal, { exact: false })).toBeTruthy())
+    expect(screen.getAllByText(refusal, { exact: false })).toHaveLength(1)
     // For a cross the size IS the disclosure, so the cohort's own count never appears.
     expect(screen.queryByText('30')).toBeNull()
   })
@@ -268,7 +281,7 @@ describe('SurveyCrossPanel — the follow-up', () => {
     renderPanel()
     await choose(copy.department, 'Finanzas')
     await userEvent.click(screen.getByRole('button', { name: copy.compare }))
-    await waitFor(() => expect(screen.getByText('4.00')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('4.0')).toBeTruthy())
   }
 
   it('files the plan against the survey tenant, the department, and the cohort as tags', async () => {
@@ -338,7 +351,9 @@ describe('SurveyCrossPanel — the follow-up', () => {
     renderPanel()
     await choose('puesto', 'gerencia')
     await userEvent.click(screen.getByRole('button', { name: copy.compare }))
-    await waitFor(() => expect(screen.getByText(copy.protectedCell)).toBeTruthy())
+    await waitFor(() =>
+      expect(screen.getByText(copy.protectedRow.replace('{floor}', '5'), { exact: false })).toBeTruthy(),
+    )
 
     // A group that cannot be read is still a group that can be helped; the floor must not
     // become a reason not to act.

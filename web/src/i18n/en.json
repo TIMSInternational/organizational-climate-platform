@@ -5403,6 +5403,11 @@
   },
   "surveyResults": {
     "cross": {
+      "groupHeader": "Group",
+      "meanHeader": "Mean",
+      "tableCaption": "Each group's result by category, against the whole survey.",
+      "protectedRow": "Protected — this group is under {floor} responses.",
+      "protectedHint": "Remove a filter to widen it.",
       "add": "Add to the comparison",
       "addHint": "Compare up to {max} groups at a time. Each is measured against the whole survey.",
       "cohorts": "Groups in the comparison",

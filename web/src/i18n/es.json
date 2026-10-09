@@ -5403,6 +5403,11 @@
   },
   "surveyResults": {
     "cross": {
+      "groupHeader": "Grupo",
+      "meanHeader": "Media",
+      "tableCaption": "Resultado por categoría de cada grupo, comparado con toda la encuesta.",
+      "protectedRow": "Protegido — este grupo no llega a {floor} respuestas.",
+      "protectedHint": "Quite un filtro para ampliarlo.",
       "add": "Añadir a la comparación",
       "addHint": "Compare hasta {max} grupos a la vez. Cada uno se mide contra toda la encuesta.",
       "cohorts": "Grupos en la comparación",

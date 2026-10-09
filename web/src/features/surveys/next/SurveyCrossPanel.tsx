@@ -8,13 +8,25 @@ import {
   CardHeader,
   CardTitle,
   Chip,
-  DataText,
   SelectField,
   Table,
   TextField,
 } from '../../../components/ui'
+import {
+  BAND_PAINT,
+  BandGlyph,
+  BandLegend,
+  bandCellStyle,
+  bandName,
+  bandOf,
+  formatMetric,
+  type ResultBands,
+} from '../../../components/charts'
+import { PROTECTED_HATCH } from '../../../components/charts/suppression'
+import { cn } from '../../../lib/cn'
 import { createActionPlan } from '../../action-plans/api/actionPlans'
 import { listDemographicFields } from '../../org-structure/api/demographicFields'
+import { deltaInkOf } from './tint'
 import { dimensionLabel } from '../dimensionLabel'
 import { getSurvey } from '../api/surveys'
 import { getSurveyAnalytics, type SurveyAnalyticsResponse } from '../api/surveyResults'
@@ -24,6 +36,7 @@ import {
   cohortLabel,
   crossFieldsOf,
   crossKeyOf,
+  labelFor,
   selectorsOf,
   weakestCategory,
   withCohort,
@@ -34,6 +47,77 @@ import {
 
 /** Four cohorts beside the baseline is five columns, which still reads on a laptop. */
 const MAX_COHORTS = 4
+
+/**
+ * The grid's own cell geometry, borrowed rather than re-invented.
+ *
+ * This table sits directly under `ResultsClimateGrid` on the same page and answers the same
+ * shape of question -- group x dimension -- so it is read in the same glance. Two tables of
+ * the same numbers in two visual languages is a harder page to read than either alone.
+ */
+/**
+ * One cell: the band's glyph and tint, the score, and the signed difference beneath it --
+ * the same three parts in the same order as a `ResultsClimateGrid` cell.
+ *
+ * `painted` is false for the whole-survey row, which is the reference rather than a reading
+ * to judge; the grid paints its group rows and leaves its company row plain for that reason.
+ */
+function CrossCell({
+  value,
+  delta,
+  bands,
+  painted,
+  decimals,
+  locale,
+  bandLabel,
+}: {
+  value: number | null
+  delta: number | null
+  bands: ResultBands
+  painted: boolean
+  decimals: 1 | 2
+  locale: string
+  bandLabel: (band: ReturnType<typeof bandOf>) => string
+}) {
+  if (value === null) {
+    return <span className="font-mono text-sm text-fg-label">—</span>
+  }
+  const band = bandOf(value, bands)
+  const text = formatMetric(value, { kind: 'number', decimals }, locale)
+  // Rounded to what is printed, so the sign and the ink agree with the figure on screen.
+  const shown = delta === null ? null : Math.round(delta * 10) / 10 || 0
+  return (
+    <span
+      className={cn('flex flex-col items-center gap-px rounded py-1.5', painted && 'border')}
+      style={painted ? bandCellStyle(band) : undefined}
+    >
+      <span className="inline-flex items-center gap-1 font-mono text-sm tabular-nums">
+        {!painted && (
+          <span style={{ color: BAND_PAINT[band].ink }} className="inline-flex">
+            <BandGlyph band={band} />
+          </span>
+        )}
+        {text}
+        <span className="sr-only">{` — ${bandLabel(band)}`}</span>
+      </span>
+      {shown !== null && (
+        <span className={cn('font-mono text-2xs tabular-nums', painted ? '' : deltaInkOf(shown, 1))}>
+          {`${shown > 0 ? '+' : ''}${formatMetric(shown, { kind: 'number', decimals: 1 }, locale)}`}
+        </span>
+      )}
+    </span>
+  )
+}
+
+const CROSS_CELL = 'border-0 p-0'
+const CROSS_HEAD = cn(
+  CROSS_CELL,
+  'text-center align-bottom text-2xs font-bold uppercase leading-tight tracking-label text-fg-label [overflow-wrap:normal]',
+)
+/** The cohort names are long, so their column stays put while the scores scroll under it. */
+const CROSS_STICKY = 'sticky left-0 z-10 bg-surface-card'
+/** `index.css` tints every body row on hover; a row of painted cells must not flash. */
+const CROSS_ROW = 'hover:bg-transparent'
 
 const PRIORITIES = ['low', 'medium', 'high', 'critical'] as const
 
@@ -68,10 +152,15 @@ export default function SurveyCrossPanel({
   surveyId,
   payload,
   baseUrl,
+  bands,
 }: {
   surveyId: string
   payload: SurveyAnalyticsResponse | null
   baseUrl: string
+  /** The company's result bands. Every score here is painted and named by the one it falls in,
+   *  from the same source as the climate grid above — so the two cannot disagree about what
+   *  counts as an área crítica. */
+  bands: ResultBands
 }) {
   const { t, locale } = useTranslation()
   const [chosen, setChosen] = useState<Record<string, string>>({})
@@ -144,8 +233,9 @@ export default function SurveyCrossPanel({
   const name = (cohort: Cohort) => cohortLabel(fields, cohort, t('surveyResults.cross.wholeSurvey'))
   const fieldLabel = (field: string) =>
     field === 'department' ? t('surveyResults.cross.department') : (authored[field]?.label ?? field)
-  const score = (value: number) =>
-    value.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  // `formatMetric`, as the grid uses: one locale-aware formatter for every number on the page.
+  const score = (value: number) => formatMetric(value, { kind: 'number', decimals: 2 }, locale)
+  const bandLabel = (band: ReturnType<typeof bandOf>) => bandName(band, bands, t)
 
   async function compare() {
     setBusy(true)
@@ -225,7 +315,23 @@ export default function SurveyCrossPanel({
     }
   }
 
+  /**
+   * The mean of the per-category means — `derive.companyMean`'s definition, so this column and
+   * the grid's "media del grupo" above cannot print different numbers for the same cohort.
+   *
+   * NOT the mean of every answer: a category asked twice would then weigh twice as much as one
+   * asked once, and the grid's column does not work that way.
+   */
+  const meanOf = (result: SurveyAnalyticsResponse | null): number | null => {
+    const scored = (result?.dimensions ?? [])
+      .map((dimension) => dimension.averageScore)
+      .filter((value): value is number => value !== null)
+    if (scored.length === 0) return null
+    return Math.round((scored.reduce((total, value) => total + value, 0) / scored.length) * 100) / 100
+  }
+
   const baseline = results?.[BASELINE_KEY] ?? null
+  const baselineMean = meanOf(baseline)
   const columns: Cohort[] = results ? shown : []
   const categories = results
     ? categoriesOf([baseline, ...columns.map((c) => results[crossKeyOf(c)] ?? null)])
@@ -339,76 +445,150 @@ export default function SurveyCrossPanel({
 
         {results ? (
           <div className="mt-6 border-t border-line-default pt-4">
-            <Table className="text-sm">
+            <Table className="min-w-[52rem] table-fixed border-separate border-spacing-1 text-sm">
+              <caption className="sr-only">{t('surveyResults.cross.tableCaption')}</caption>
               <thead>
-                <tr className="text-left text-fg-secondary">
-                  <th scope="col" className="py-1 pr-4 font-medium">
-                    {t('surveyResults.cross.categoryHeader')}
+                <tr className={CROSS_ROW}>
+                  <th scope="col" className={cn(CROSS_HEAD, CROSS_STICKY, 'w-56 text-left')}>
+                    {t('surveyResults.cross.groupHeader')}
                   </th>
-                  <th scope="col" className="py-1 pr-4 font-medium">
-                    {t('surveyResults.cross.wholeSurvey')}
-                  </th>
-                  {columns.map((cohort) => (
-                    <th key={crossKeyOf(cohort)} scope="col" className="py-1 pr-4 font-medium">
-                      {name(cohort)}
+                  {categories.map((category) => (
+                    <th key={category} scope="col" className={CROSS_HEAD}>
+                      {dimensionLabel(category, t)}
                     </th>
                   ))}
+                  <th scope="col" className={CROSS_HEAD}>
+                    {t('surveyResults.cross.meanHeader')}
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {categories.map((category) => {
-                  const base = cellFor(null, category)
-                  const baseScore = base !== null && base !== 'protected' ? base.averageScore : null
-                  return (
-                    <tr key={category} className="border-t border-line-default">
-                      <th scope="row" className="py-1.5 pr-4 text-left font-normal">
-                        {dimensionLabel(category, t)}
-                      </th>
-                      <td className="py-1.5 pr-4">
-                        {baseScore === null ? (
-                          <span className="text-fg-secondary">{t('surveyResults.cross.noScore')}</span>
-                        ) : (
-                          <DataText>{score(baseScore)}</DataText>
-                        )}
+                {/* The reference row, left unpainted: it is what the others are judged
+                    against, not itself a reading to judge. The grid treats its company row
+                    the same way. */}
+                <tr className={CROSS_ROW}>
+                  <th
+                    scope="row"
+                    className={cn(CROSS_CELL, CROSS_STICKY, 'py-1 text-left text-sm font-semibold text-fg-primary')}
+                  >
+                    {t('surveyResults.cross.wholeSurvey')}
+                  </th>
+                  {categories.map((category) => {
+                    const cell = cellFor(null, category)
+                    return (
+                      <td key={category} className={cn(CROSS_CELL, 'text-center')}>
+                        <CrossCell
+                          value={cell !== null && cell !== 'protected' ? cell.averageScore : null}
+                          delta={null}
+                          bands={bands}
+                          painted={false}
+                          decimals={1}
+                          locale={locale}
+                          bandLabel={bandLabel}
+                        />
                       </td>
-                      {columns.map((cohort) => {
+                    )
+                  })}
+                  <td className={cn(CROSS_CELL, 'text-center')}>
+                    <CrossCell
+                      value={baselineMean}
+                      delta={null}
+                      bands={bands}
+                      painted={false}
+                      decimals={2}
+                      locale={locale}
+                      bandLabel={bandLabel}
+                    />
+                  </td>
+                </tr>
+
+                {columns.map((cohort) => {
+                  const key = crossKeyOf(cohort)
+                  const result = results[key] ?? null
+                  const head = (
+                    <th
+                      scope="row"
+                      className={cn(CROSS_CELL, CROSS_STICKY, 'py-1 pr-3 text-left align-middle font-normal')}
+                    >
+                      {/* Stacked, not joined with " + ": three selectors on one line is the
+                          string that made this table unreadable as a column header. */}
+                      <span className="flex flex-col leading-tight">
+                        {cohort.map((selector, index) => (
+                          <span
+                            key={`${selector.field}:${selector.value}`}
+                            className={index === 0 ? 'text-sm text-fg-primary' : 'text-xs text-fg-secondary'}
+                          >
+                            {index === 0 ? labelFor(fields, selector) : `+ ${labelFor(fields, selector)}`}
+                          </span>
+                        ))}
+                      </span>
+                    </th>
+                  )
+
+                  if (result === null || result.isSuppressed) {
+                    return (
+                      <tr key={key} className={CROSS_ROW}>
+                        {head}
+                        {/* ONE statement for the whole row. Six cells reading "Protegido"
+                            implied six separate decisions; the cohort is withheld as a unit,
+                            and saying so once is both clearer and truer. */}
+                        <td
+                          colSpan={categories.length + 1}
+                          className={cn(CROSS_CELL, PROTECTED_HATCH, 'rounded px-3 py-2 text-left')}
+                        >
+                          <span className="text-sm text-fg-secondary">
+                            {t('surveyResults.cross.protectedRow', { floor: payload?.minimumGroupSize ?? 5 })}
+                            {cohort.length > 1 ? ` ${t('surveyResults.cross.protectedHint')}` : ''}
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  }
+
+                  const cohortMean = meanOf(result)
+                  return (
+                    <tr key={key} className={CROSS_ROW}>
+                      {head}
+                      {categories.map((category) => {
                         const cell = cellFor(cohort, category)
-                        if (cell === 'protected') {
-                          return (
-                            <td key={crossKeyOf(cohort)} className="py-1.5 pr-4 text-fg-secondary">
-                              {t('surveyResults.cross.protectedCell')}
-                            </td>
-                          )
-                        }
-                        const value = cell?.averageScore ?? null
-                        if (value === null) {
-                          return (
-                            <td key={crossKeyOf(cohort)} className="py-1.5 pr-4 text-fg-secondary">
-                              {t('surveyResults.cross.noScore')}
-                            </td>
-                          )
-                        }
-                        // The contrast, signed. A null baseline means there is nothing to
-                        // contrast against, so the score stands alone rather than beside a
-                        // difference computed from a number that does not exist.
-                        const delta = baseScore === null ? null : value - baseScore
+                        const value = cell !== null && cell !== 'protected' ? cell.averageScore : null
+                        const base = cellFor(null, category)
+                        const baseScore = base !== null && base !== 'protected' ? base.averageScore : null
                         return (
-                          <td key={crossKeyOf(cohort)} className="py-1.5 pr-4">
-                            <DataText>{score(value)}</DataText>
-                            {delta === null ? null : (
-                              <span className="ml-2 text-xs text-fg-secondary">
-                                {delta > 0 ? '+' : ''}
-                                {score(delta)}
-                              </span>
-                            )}
+                          <td key={category} className={cn(CROSS_CELL, 'text-center')}>
+                            <CrossCell
+                              value={value}
+                              // A null baseline leaves nothing to contrast against, so the
+                              // score stands alone rather than beside a difference computed
+                              // from a number that does not exist.
+                              delta={value === null || baseScore === null ? null : value - baseScore}
+                              bands={bands}
+                              painted
+                              decimals={1}
+                              locale={locale}
+                              bandLabel={bandLabel}
+                            />
                           </td>
                         )
                       })}
+                      <td className={cn(CROSS_CELL, 'text-center')}>
+                        <CrossCell
+                          value={cohortMean}
+                          delta={cohortMean === null || baselineMean === null ? null : cohortMean - baselineMean}
+                          bands={bands}
+                          painted
+                          decimals={2}
+                          locale={locale}
+                          bandLabel={bandLabel}
+                        />
+                      </td>
                     </tr>
                   )
                 })}
               </tbody>
             </Table>
+
+            <BandLegend bands={bands} className="mt-3" />
 
             <div className="mt-4 flex flex-wrap gap-3">
               {columns.map((cohort) => (
