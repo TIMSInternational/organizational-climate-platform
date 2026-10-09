@@ -89,14 +89,37 @@ public static class SurveyResultsEndpoints
     // Routes
     // ------------------------------------------------------------------
 
+    /// <summary>
+    /// Reads the repeatable <c>?segment=field:value</c> selectors, refusing the whole request
+    /// when any of them is malformed rather than silently aggregating a wider cohort than the
+    /// caller asked for -- a filter that fails open is a filter that answers the wrong question.
+    /// </summary>
+    private static bool TryReadFilter(string[]? segment, out SurveyResultsFilter filter, out IResult? failure)
+    {
+        failure = null;
+        if (SurveyResultsFilter.TryParse(segment, out filter, out var error))
+        {
+            return true;
+        }
+
+        failure = Results.Json(new { message = error }, statusCode: 400);
+        return false;
+    }
+
     private static async Task<IResult> GetResultsAsync(
         Guid id,
         string? lang,
+        string[]? segment,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
     {
-        var loaded = await LoadAsync(id, lang, principal, db, cancellationToken);
+        if (!TryReadFilter(segment, out var filter, out var invalid))
+        {
+            return invalid!;
+        }
+
+        var loaded = await LoadAsync(id, lang, principal, db, cancellationToken, filter);
         if (loaded.Failure is not null)
         {
             return loaded.Failure;
@@ -112,20 +135,28 @@ public static class SurveyResultsEndpoints
             context.FallbackFields,
             context.Aggregate.Summary,
             context.Aggregate.Questions,
+            context.Aggregate.Dimensions,
             context.Aggregate.IsSuppressed,
             context.Aggregate.SuppressionReason,
             context.Aggregate.MinimumGroupSize,
+            context.Filter.Selectors,
             DateTimeOffset.UtcNow));
     }
 
     private static async Task<IResult> GetStatisticsAsync(
         Guid id,
         string? lang,
+        string[]? segment,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
     {
-        var loaded = await LoadAsync(id, lang, principal, db, cancellationToken);
+        if (!TryReadFilter(segment, out var filter, out var invalid))
+        {
+            return invalid!;
+        }
+
+        var loaded = await LoadAsync(id, lang, principal, db, cancellationToken, filter);
         if (loaded.Failure is not null)
         {
             return loaded.Failure;
@@ -144,17 +175,24 @@ public static class SurveyResultsEndpoints
             context.Aggregate.IsSuppressed,
             context.Aggregate.SuppressionReason,
             context.Aggregate.MinimumGroupSize,
+            context.Filter.Selectors,
             DateTimeOffset.UtcNow));
     }
 
     private static async Task<IResult> GetAnalyticsAsync(
         Guid id,
         string? lang,
+        string[]? segment,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
     {
-        var loaded = await LoadAsync(id, lang, principal, db, cancellationToken);
+        if (!TryReadFilter(segment, out var filter, out var invalid))
+        {
+            return invalid!;
+        }
+
+        var loaded = await LoadAsync(id, lang, principal, db, cancellationToken, filter);
         if (loaded.Failure is not null)
         {
             return loaded.Failure;
@@ -170,10 +208,12 @@ public static class SurveyResultsEndpoints
             context.FallbackFields,
             context.Aggregate.Summary,
             context.Aggregate.Questions,
+            context.Aggregate.Dimensions,
             context.Aggregate.Breakdowns,
             context.Aggregate.IsSuppressed,
             context.Aggregate.SuppressionReason,
             context.Aggregate.MinimumGroupSize,
+            context.Filter.Selectors,
             DateTimeOffset.UtcNow));
     }
 
@@ -310,7 +350,8 @@ public static class SurveyResultsEndpoints
         string? Title,
         string ResolvedLocale,
         IReadOnlyList<string> FallbackFields,
-        SurveyAggregate Aggregate);
+        SurveyAggregate Aggregate,
+        SurveyResultsFilter Filter);
 
     internal sealed record LoadOutcome(IResult? Failure, ResultsContext? Context);
 
@@ -333,7 +374,8 @@ public static class SurveyResultsEndpoints
         string? lang,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        SurveyResultsFilter? filter = null)
     {
         var currentUser = principal.GetCurrentUser();
 
@@ -354,7 +396,8 @@ public static class SurveyResultsEndpoints
         // The row-loading and projection live in SurveyAggregateLoader, shared with
         // report generation (#88) -- same queries, same aggregation, so the results
         // screens and a report cannot disagree about the same survey.
-        var aggregate = await SurveyAggregateLoader.ComputeAsync(db, survey, locale, fallbackFields, cancellationToken);
+        var aggregate = await SurveyAggregateLoader.ComputeAsync(
+            db, survey, locale, fallbackFields, cancellationToken, filter);
 
         // ResolvedLocale names the language the caller is actually READING, not the one
         // they asked for -- identical rule and identical reasoning to
@@ -367,7 +410,9 @@ public static class SurveyResultsEndpoints
         var title = SurveyContent.Resolve(
             survey.TitleEn, survey.TitleEs, locale, survey.Language, "title", fallbackFields);
 
-        return new LoadOutcome(null, new ResultsContext(survey, title, resolvedLocale, fallbackFields, aggregate));
+        return new LoadOutcome(
+            null,
+            new ResultsContext(survey, title, resolvedLocale, fallbackFields, aggregate, filter ?? SurveyResultsFilter.None));
     }
 
     internal static IResult SurveyNotFound()

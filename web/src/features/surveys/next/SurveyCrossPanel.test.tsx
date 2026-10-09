@@ -1,0 +1,346 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { render, screen, cleanup, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import SurveyCrossPanel from './SurveyCrossPanel'
+import {
+  categoriesOf,
+  cohortLabel,
+  crossFieldsOf,
+  crossKeyOf,
+  labelFor,
+  selectorsOf,
+  weakestCategory,
+  withCohort,
+} from './crossOptions'
+import { TranslationProvider } from '../../../i18n'
+import * as resultsApi from '../api/surveyResults'
+import * as surveysApi from '../api/surveys'
+import * as plansApi from '../../action-plans/api/actionPlans'
+import type { SurveyAnalyticsResponse, SurveyBreakdown, SurveySegmentResult } from '../api/surveyResults'
+import en from '../../../i18n/en.json'
+
+vi.mock('../api/surveyResults', async (importOriginal) => ({
+  ...(await importOriginal<typeof resultsApi>()),
+  getSurveyAnalytics: vi.fn(),
+}))
+vi.mock('../api/surveys', async (importOriginal) => ({
+  ...(await importOriginal<typeof surveysApi>()),
+  getSurvey: vi.fn(),
+}))
+vi.mock('../../action-plans/api/actionPlans', async (importOriginal) => ({
+  ...(await importOriginal<typeof plansApi>()),
+  createActionPlan: vi.fn(),
+}))
+
+const copy = en.surveyResults.cross
+const FINANCE = 'd1'
+
+function segment(key: string, label: string | null, count: number, suppressed = false): SurveySegmentResult {
+  return {
+    dimension: 'x',
+    key,
+    label,
+    respondentCount: suppressed ? 0 : count,
+    participationRate: null,
+    headcount: null,
+    isSuppressed: suppressed,
+    questions: [],
+  }
+}
+
+function breakdown(dimension: string, segments: SurveySegmentResult[]): SurveyBreakdown {
+  return { dimension, segments, suppressedSegmentCount: 0, suppressedRespondentCount: 0, unsegmentedRespondentCount: 0 }
+}
+
+const dim = (dimension: string, averageScore: number | null) => ({
+  dimension,
+  questionCount: 2,
+  answeredCount: 10,
+  averageScore,
+})
+
+function payload(overrides: Partial<SurveyAnalyticsResponse> = {}): SurveyAnalyticsResponse {
+  return {
+    surveyId: 's1',
+    title: 'Clima 2026',
+    status: 'closed',
+    language: 'es',
+    resolvedLocale: 'es',
+    fallbackFields: [],
+    summary: {
+      invitedCount: 40, responseCount: 30, completedCount: 30, partialCount: 0,
+      participationRate: 75, completionRate: 100, averageCompletionSeconds: 300,
+      firstResponseAt: null, lastResponseAt: null, byLanguage: [],
+    },
+    questions: [],
+    dimensions: [],
+    breakdowns: [
+      breakdown('department', [segment(FINANCE, 'Finanzas', 9), segment('d2', 'Ventas', 8)]),
+      breakdown('puesto', [segment('gerencia', null, 0, true), segment('operativo', 'Operativo', 17)]),
+    ],
+    isSuppressed: false,
+    suppressionReason: null,
+    minimumGroupSize: 5,
+    filter: [],
+    generatedAt: '2026-10-08T00:00:00Z',
+    ...overrides,
+  }
+}
+
+function renderPanel(given: SurveyAnalyticsResponse | null = payload()) {
+  return render(
+    <TranslationProvider initialLocale="en">
+      <SurveyCrossPanel surveyId="s1" payload={given} baseUrl="http://api.test" />
+    </TranslationProvider>,
+  )
+}
+
+/** Choose a value in one of the panel's selects. */
+async function choose(fieldLabel: string, optionLabel: string) {
+  await userEvent.click(screen.getByRole('combobox', { name: fieldLabel }))
+  await userEvent.click(await screen.findByRole('option', { name: optionLabel }))
+}
+
+beforeEach(() => {
+  vi.mocked(resultsApi.getSurveyAnalytics).mockReset()
+  vi.mocked(surveysApi.getSurvey).mockReset()
+  vi.mocked(plansApi.createActionPlan).mockReset()
+})
+afterEach(cleanup)
+
+describe('crossOptions', () => {
+  it('offers every value a breakdown already lists, suppressed ones included', () => {
+    const fields = crossFieldsOf(payload())
+    expect(fields.map((f) => f.field)).toEqual(['department', 'puesto'])
+    expect(fields[1]!.values.map((v) => v.label)).toEqual(['gerencia', 'Operativo'])
+  })
+
+  it('leaves out a field that offers no choice', () => {
+    expect(crossFieldsOf(payload({ breakdowns: [breakdown('pais', [segment('cr', 'Costa Rica', 30)])] }))).toEqual([])
+    expect(crossFieldsOf(null)).toEqual([])
+  })
+
+  it('turns the chosen values into selectors in the order the fields were offered', () => {
+    const fields = crossFieldsOf(payload())
+    const selectors = selectorsOf(fields, { puesto: 'operativo', department: FINANCE })
+    expect(selectors).toEqual([
+      { field: 'department', value: FINANCE },
+      { field: 'puesto', value: 'operativo' },
+    ])
+    expect(crossKeyOf(selectors)).toBe('department:d1|puesto:operativo')
+    expect(selectorsOf(fields, { department: '' })).toEqual([])
+    expect(labelFor(fields, { field: 'department', value: FINANCE })).toBe('Finanzas')
+    expect(labelFor(fields, { field: 'department', value: 'gone' })).toBe('gone')
+  })
+
+  it('names a cohort by the labels it was offered under, and the baseline by its own word', () => {
+    const fields = crossFieldsOf(payload())
+    expect(cohortLabel(fields, [], 'Whole survey')).toBe('Whole survey')
+    expect(
+      cohortLabel(fields, [{ field: 'department', value: FINANCE }, { field: 'puesto', value: 'operativo' }], 'x'),
+    ).toBe('Finanzas + Operativo')
+  })
+
+  it('refuses a duplicate cohort, an empty one, and one past the cap', () => {
+    const a = [{ field: 'department', value: FINANCE }]
+    const b = [{ field: 'department', value: 'd2' }]
+    expect(withCohort([], a, 4)).toEqual([a])
+    // The same cohort twice is one column: two identical columns invite the reader to look
+    // for a difference between them.
+    expect(withCohort([a], [{ field: 'department', value: FINANCE }], 4)).toEqual([a])
+    expect(withCohort([a], [], 4)).toEqual([a])
+    expect(withCohort([a, b], b, 2)).toEqual([a, b])
+    expect(withCohort([a], b, 2)).toEqual([a, b])
+  })
+
+  it('orders the rows by the baseline and appends anything only a cohort has', () => {
+    const base = payload({ dimensions: [dim('Confianza', 4), dim('Carga', 3)] })
+    const other = payload({ dimensions: [dim('Carga', 2), dim('Solo del grupo', 5)] })
+    expect(categoriesOf([base, other])).toEqual(['Confianza', 'Carga', 'Solo del grupo'])
+    expect(categoriesOf([null, null])).toEqual([])
+  })
+
+  it('finds the weakest scored category and ignores the unscored ones', () => {
+    expect(weakestCategory(payload({ dimensions: [dim('A', 4), dim('B', 2.5), dim('C', null)] }))).toEqual(
+      dim('B', 2.5),
+    )
+    expect(weakestCategory(payload({ dimensions: [dim('C', null)] }))).toBeNull()
+    expect(weakestCategory(null)).toBeNull()
+  })
+})
+
+describe('SurveyCrossPanel — comparing', () => {
+  it('does not render at all when the survey offers nothing to cross', () => {
+    renderPanel(null)
+    expect(screen.queryByText(copy.title)).toBeNull()
+  })
+
+  it('puts the whole survey beside the cohort and prints the signed difference', async () => {
+    vi.mocked(resultsApi.getSurveyAnalytics)
+      .mockResolvedValueOnce(payload({ dimensions: [dim('Comunicación', 3.2), dim('Confianza', 4.0)] }))
+      .mockResolvedValueOnce(
+        payload({
+          filter: [{ field: 'department', value: FINANCE }],
+          dimensions: [dim('Comunicación', 4.8), dim('Confianza', 3.5)],
+        }),
+      )
+
+    renderPanel()
+    await choose(copy.department, 'Finanzas')
+    await userEvent.click(screen.getByRole('button', { name: copy.compare }))
+
+    await waitFor(() => expect(screen.getByText('4.80')).toBeTruthy())
+    // The baseline column, the cohort column, and the contrast between them.
+    expect(screen.getByText('3.20')).toBeTruthy()
+    expect(screen.getByText('+1.60')).toBeTruthy()
+    expect(screen.getByText('-0.50')).toBeTruthy()
+
+    const calls = vi.mocked(resultsApi.getSurveyAnalytics).mock.calls
+    expect(calls[0]![3]).toBeUndefined()
+    expect(calls[1]![3]).toEqual([{ field: 'department', value: FINANCE }])
+  })
+
+  it('contrasts two cohorts against the same baseline in one table', async () => {
+    vi.mocked(resultsApi.getSurveyAnalytics)
+      .mockResolvedValueOnce(payload({ dimensions: [dim('Confianza', 3.0)] }))
+      .mockResolvedValueOnce(payload({ filter: [{ field: 'department', value: FINANCE }], dimensions: [dim('Confianza', 4.0)] }))
+      .mockResolvedValueOnce(payload({ filter: [{ field: 'department', value: 'd2' }], dimensions: [dim('Confianza', 2.0)] }))
+
+    renderPanel()
+    await choose(copy.department, 'Finanzas')
+    await userEvent.click(screen.getByRole('button', { name: copy.add }))
+    await choose(copy.department, 'Ventas')
+    await userEvent.click(screen.getByRole('button', { name: copy.compare }))
+
+    await waitFor(() => expect(screen.getByText('+1.00')).toBeTruthy())
+    expect(screen.getByText('-1.00')).toBeTruthy()
+    expect(vi.mocked(resultsApi.getSurveyAnalytics).mock.calls).toHaveLength(3)
+  })
+
+  it('prints no number at all for a cohort the server refused', async () => {
+    vi.mocked(resultsApi.getSurveyAnalytics)
+      .mockResolvedValueOnce(payload({ dimensions: [dim('Confianza', 3.0)] }))
+      .mockResolvedValueOnce(
+        payload({
+          isSuppressed: true,
+          suppressionReason: 'below_minimum_segment_respondents',
+          filter: [{ field: 'puesto', value: 'gerencia' }],
+          summary: { ...payload().summary, completedCount: 30 },
+          dimensions: [],
+        }),
+      )
+
+    renderPanel()
+    await choose('puesto', 'gerencia')
+    await userEvent.click(screen.getByRole('button', { name: copy.compare }))
+
+    await waitFor(() => expect(screen.getByText(copy.protectedCell)).toBeTruthy())
+    // For a cross the size IS the disclosure, so the cohort's own count never appears.
+    expect(screen.queryByText('30')).toBeNull()
+  })
+
+  it('cannot compare with nothing chosen', () => {
+    renderPanel()
+    expect((screen.getByRole('button', { name: copy.compare }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: copy.add }) as HTMLButtonElement).disabled).toBe(true)
+  })
+})
+
+describe('SurveyCrossPanel — the follow-up', () => {
+  async function compareFinance() {
+    vi.mocked(resultsApi.getSurveyAnalytics)
+      .mockResolvedValueOnce(payload({ dimensions: [dim('Confianza', 3.0)] }))
+      .mockResolvedValueOnce(
+        payload({
+          filter: [{ field: 'department', value: FINANCE }],
+          dimensions: [dim('Confianza', 4.0), dim('Reconocimiento', 2.1)],
+        }),
+      )
+    renderPanel()
+    await choose(copy.department, 'Finanzas')
+    await userEvent.click(screen.getByRole('button', { name: copy.compare }))
+    await waitFor(() => expect(screen.getByText('4.00')).toBeTruthy())
+  }
+
+  it('files the plan against the survey tenant, the department, and the cohort as tags', async () => {
+    vi.mocked(surveysApi.getSurvey).mockResolvedValue({
+      id: 's1', companyId: 'company-7', title: 'Clima 2026',
+    } as unknown as Awaited<ReturnType<typeof surveysApi.getSurvey>>)
+    vi.mocked(plansApi.createActionPlan).mockResolvedValue({
+      id: 'plan-9', title: 'Follow-up for Finanzas',
+    } as unknown as Awaited<ReturnType<typeof plansApi.createActionPlan>>)
+
+    await compareFinance()
+    await userEvent.click(screen.getByRole('button', { name: copy.followUpFor.replace('{name}', 'Finanzas') }))
+    await userEvent.click(await screen.findByRole('button', { name: copy.create }))
+
+    await waitFor(() => expect(vi.mocked(plansApi.createActionPlan)).toHaveBeenCalled())
+    const [, input] = vi.mocked(plansApi.createActionPlan).mock.calls[0]!
+    // The SURVEY's tenant, not the header's scope: a plan filed against the wrong company is
+    // invisible to the people who have to do it.
+    expect(input.companyId).toBe('company-7')
+    // The schema's own provenance column, not just a tag: `action_plans.source_survey_id`
+    // carries an FK, and the endpoint refuses a survey belonging to another company -- so the
+    // id and the tenant above have to come from the same survey, and they do.
+    expect(input.sourceSurveyId).toBe('s1')
+    expect(input.departmentId).toBe(FINANCE)
+    expect(input.tags).toEqual(['seguimiento', `department:${FINANCE}`])
+    expect(input.priority).toBe('high')
+    // The description names the cohort's WEAKEST category, which is the one to act on.
+    expect(input.description).toContain('Reconocimiento')
+    expect(input.description).toContain('2.10')
+    expect(new Date(input.dueDate).getTime()).toBeGreaterThan(Date.now())
+
+    expect(screen.getByText(copy.created.replace('{title}', 'Follow-up for Finanzas'))).toBeTruthy()
+    expect(screen.getByRole('link', { name: copy.viewPlan }).getAttribute('href')).toBe('/action-plans/plan-9')
+  })
+
+  it('carries a non-department cohort in the tags and leaves the department unset', async () => {
+    vi.mocked(resultsApi.getSurveyAnalytics)
+      .mockResolvedValueOnce(payload({ dimensions: [dim('Confianza', 3.0)] }))
+      .mockResolvedValueOnce(
+        payload({ filter: [{ field: 'puesto', value: 'operativo' }], dimensions: [dim('Confianza', 2.0)] }),
+      )
+    vi.mocked(surveysApi.getSurvey).mockResolvedValue({
+      id: 's1', companyId: 'company-7', title: 'Clima 2026',
+    } as unknown as Awaited<ReturnType<typeof surveysApi.getSurvey>>)
+    vi.mocked(plansApi.createActionPlan).mockResolvedValue({
+      id: 'plan-3', title: 'x',
+    } as unknown as Awaited<ReturnType<typeof plansApi.createActionPlan>>)
+
+    renderPanel()
+    await choose('puesto', 'Operativo')
+    await userEvent.click(screen.getByRole('button', { name: copy.compare }))
+    await waitFor(() => expect(screen.getByText('2.00')).toBeTruthy())
+    await userEvent.click(screen.getByRole('button', { name: copy.followUpFor.replace('{name}', 'Operativo') }))
+    await userEvent.click(await screen.findByRole('button', { name: copy.create }))
+
+    await waitFor(() => expect(vi.mocked(plansApi.createActionPlan)).toHaveBeenCalled())
+    const [, input] = vi.mocked(plansApi.createActionPlan).mock.calls[0]!
+    expect(input.departmentId).toBeUndefined()
+    expect(input.tags).toEqual(['seguimiento', 'puesto:operativo'])
+  })
+
+  it('offers the follow-up for a cohort it may not read', async () => {
+    vi.mocked(resultsApi.getSurveyAnalytics)
+      .mockResolvedValueOnce(payload({ dimensions: [dim('Confianza', 3.0)] }))
+      .mockResolvedValueOnce(payload({ isSuppressed: true, filter: [{ field: 'puesto', value: 'gerencia' }], dimensions: [] }))
+
+    renderPanel()
+    await choose('puesto', 'gerencia')
+    await userEvent.click(screen.getByRole('button', { name: copy.compare }))
+    await waitFor(() => expect(screen.getByText(copy.protectedCell)).toBeTruthy())
+
+    // A group that cannot be read is still a group that can be helped; the floor must not
+    // become a reason not to act.
+    expect(screen.getByRole('button', { name: copy.followUpFor.replace('{name}', 'gerencia') })).toBeTruthy()
+  })
+
+  it('will not create a plan with no title', async () => {
+    await compareFinance()
+    await userEvent.click(screen.getByRole('button', { name: copy.followUpFor.replace('{name}', 'Finanzas') }))
+    const title = await screen.findByLabelText(copy.followUpName)
+    await userEvent.clear(title)
+    expect((screen.getByRole('button', { name: copy.create }) as HTMLButtonElement).disabled).toBe(true)
+  })
+})

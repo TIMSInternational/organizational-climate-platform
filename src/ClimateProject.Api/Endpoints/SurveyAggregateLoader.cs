@@ -30,12 +30,17 @@ internal static class SurveyAggregateLoader
     /// </summary>
     /// <param name="locale">The locale question text and option labels are resolved for.</param>
     /// <param name="fallbackFields">Collects the fields that fell back to the other locale, exactly as the results routes report them.</param>
+    /// <param name="filter">
+    /// Narrows the aggregation to one demographic cross. Declared last, after the cancellation
+    /// token, so the four callers that aggregate a whole survey keep compiling unchanged.
+    /// </param>
     public static async Task<SurveyAggregate> ComputeAsync(
         ClimateProjectDbContext db,
         Survey survey,
         string locale,
         List<string> fallbackFields,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        SurveyResultsFilter? filter = null)
     {
         var questions = await db.Questions
             .AsNoTracking()
@@ -141,7 +146,8 @@ internal static class SurveyAggregateLoader
             aggregationResponses,
             aggregationAnswers,
             departments,
-            survey.TargetAudienceCount);
+            survey.TargetAudienceCount,
+            filter);
     }
 
     private static List<AggregationOption> ToAggregationOptions(

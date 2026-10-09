@@ -252,9 +252,11 @@ public sealed record SurveyResultsResponse(
     IReadOnlyList<string> FallbackFields,
     SurveyResultsSummary Summary,
     IReadOnlyList<SurveyQuestionResult> Questions,
+    IReadOnlyList<SurveyDimensionResult> Dimensions,
     bool IsSuppressed,
     string? SuppressionReason,
     int MinimumGroupSize,
+    IReadOnlyList<SurveySegmentSelector> Filter,
     DateTimeOffset GeneratedAt);
 
 /// <summary>
@@ -272,6 +274,7 @@ public sealed record SurveyStatisticsResponse(
     bool IsSuppressed,
     string? SuppressionReason,
     int MinimumGroupSize,
+    IReadOnlyList<SurveySegmentSelector> Filter,
     DateTimeOffset GeneratedAt);
 
 /// <summary>
@@ -289,10 +292,12 @@ public sealed record SurveyAnalyticsResponse(
     IReadOnlyList<string> FallbackFields,
     SurveyResultsSummary Summary,
     IReadOnlyList<SurveyQuestionResult> Questions,
+    IReadOnlyList<SurveyDimensionResult> Dimensions,
     IReadOnlyList<SurveyBreakdown> Breakdowns,
     bool IsSuppressed,
     string? SuppressionReason,
     int MinimumGroupSize,
+    IReadOnlyList<SurveySegmentSelector> Filter,
     DateTimeOffset GeneratedAt);
 
 /// <summary>One department's live participation.</summary>

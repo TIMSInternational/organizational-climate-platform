@@ -48,12 +48,24 @@ public static class SurveyAggregation
     /// <param name="answers">Every stored answer. Answers belonging to an incomplete response are ignored -- see the note in <see cref="CompleteResponseIds"/>.</param>
     /// <param name="departments">Departments of the owning company, for names and participation denominators.</param>
     /// <param name="targetAudienceCount">The survey's invited headcount, or null when it has none.</param>
+    /// <param name="filter">
+    /// Narrows the aggregation to the respondents matching every selector — the demographic
+    /// cross. Null or empty aggregates the whole survey, which is what every caller did before
+    /// this parameter existed.
+    ///
+    /// <para>Applied where it is below, immediately after demographics are decoded and before
+    /// anything groups on them, so the floors, the complement withholding and the free-text
+    /// rules all govern the narrowed cohort without knowing a filter exists. See
+    /// <see cref="SurveyResultsFilter"/> for why the cohort's own size is not a sufficient
+    /// disclosure test.</para>
+    /// </param>
     public static SurveyAggregate Compute(
         IReadOnlyList<AggregationQuestion> questions,
         IReadOnlyList<AggregationResponse> responses,
         IReadOnlyList<AggregationAnswer> answers,
         IReadOnlyList<AggregationDepartment> departments,
-        int? targetAudienceCount)
+        int? targetAudienceCount,
+        SurveyResultsFilter? filter = null)
     {
         ArgumentNullException.ThrowIfNull(questions);
         ArgumentNullException.ThrowIfNull(responses);
@@ -65,6 +77,37 @@ public static class SurveyAggregation
         // the decoder once per breakdown and give a bare-string row (written by an
         // earlier tool or the ETL) a different fate on each surface.
         responses = [.. responses.Select(r => r with { Demographics = DecodeDemographics(r.Demographics) })];
+
+        var narrowing = filter ?? SurveyResultsFilter.None;
+        if (!narrowing.IsEmpty)
+        {
+            // The disclosure test runs over the WHOLE survey's complete responses, because what
+            // it measures is what could be subtracted out of them.
+            if (!narrowing.MayDisclose(
+                    [.. responses.Where(r => r.IsComplete)],
+                    SurveyResultsPrivacy.MinimumSegmentRespondents))
+            {
+                // The survey's own participation, deliberately, NOT the cross's. For a cross the
+                // count is itself the disclosure -- "there is one gerente in finanzas" is the
+                // fact being protected -- so a refused cross says how many answered the SURVEY
+                // and nothing whatever about the cohort that was asked for.
+                return new SurveyAggregate(
+                    Summarise(responses, [.. responses.Where(r => r.IsComplete)], targetAudienceCount),
+                    [],
+                    [],
+                    [],
+                    IsSuppressed: true,
+                    SurveyResultsPrivacy.BelowMinimumSegmentRespondents,
+                    SurveyResultsPrivacy.MinimumSegmentRespondents);
+            }
+
+            responses = [.. responses.Where(narrowing.Matches)];
+
+            // The invited headcount belongs to the whole survey. Dividing the cohort's responses
+            // by it would print a participation rate for a denominator that was never this
+            // cohort's, which is the shape of wrong number nobody checks.
+            targetAudienceCount = null;
+        }
 
         var completed = responses.Where(r => r.IsComplete).ToList();
         var summary = Summarise(responses, completed, targetAudienceCount);

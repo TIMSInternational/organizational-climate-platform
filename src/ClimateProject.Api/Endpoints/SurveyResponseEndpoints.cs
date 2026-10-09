@@ -511,6 +511,7 @@ public static class SurveyResponseEndpoints
             response.DepartmentId = capture.DepartmentId;
             response.IsComplete = true;
             response.CompletionTime = now;
+            await AdvanceInvitationAsync(survey, respondent, now, db, cancellationToken);
             response.TotalTimeSeconds = request.TotalTimeSeconds
                 ?? (int)Math.Max(0, Math.Round((now - response.StartTime).TotalSeconds));
 
@@ -606,6 +607,58 @@ public static class SurveyResponseEndpoints
         return db.Responses.FirstOrDefaultAsync(
             r => r.SurveyId == survey.Id && r.SessionId == sessionId,
             cancellationToken);
+    }
+
+    /// <summary>
+    /// Marks the respondent's own invitation <c>completed</c> at the moment their response is.
+    ///
+    /// <para><b>Why this is here and not left to the client.</b> Until this existed, completion
+    /// was recorded only by the page behind the emailed invitation link, which posts to
+    /// <c>/survey-invitations/{token}/completed</c>. That page is one of two ways in: an
+    /// employee who is already signed in answers from their own list, which posts HERE and
+    /// nowhere else. Their invitation stayed at <c>sent</c> for good -- so the completion report
+    /// under-counted them, and the reminder sweep, whose "outstanding" set is everything short
+    /// of <c>completed</c>, chased people who had already answered. Recording it at the
+    /// transition to complete puts it where it cannot be lost, in the same transaction and the
+    /// same <c>SaveChanges</c> as the response itself.</para>
+    ///
+    /// <para><b>The anonymity ceiling still decides.</b> Gated on
+    /// <see cref="SurveyInvitationStatuses.IsRecordable"/>, exactly as the token route is. On an
+    /// anonymous survey <c>completed</c> is above the ceiling and nothing is written at all: a
+    /// per-person completion timestamp taken at the same instant as
+    /// <c>responses.completion_time</c> is precisely the join that un-anonymises the response.
+    /// So this is a deliberate no-op there, and an anonymous survey's response rate stays the
+    /// aggregate it has always been.</para>
+    ///
+    /// <para>A respondent who arrived by share link has no user id and so no invitation to
+    /// advance; a resubmission finds an invitation already at <c>completed</c>, which
+    /// <see cref="SurveyInvitationStatuses.Advances"/> refuses, so the first timestamp stands.</para>
+    /// </summary>
+    private static async Task AdvanceInvitationAsync(
+        Survey survey,
+        Respondent respondent,
+        DateTimeOffset now,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        if (!SurveyInvitationStatuses.IsRecordable(SurveyInvitationStatuses.Completed, survey.Settings.Anonymous)
+            || respondent.ActingUserId is not Guid userId)
+        {
+            return;
+        }
+
+        var invitation = await db.SurveyInvitations
+            .FirstOrDefaultAsync(i => i.SurveyId == survey.Id && i.UserId == userId, cancellationToken);
+
+        if (invitation is null
+            || !SurveyInvitationStatuses.Advances(invitation.Status, SurveyInvitationStatuses.Completed))
+        {
+            return;
+        }
+
+        invitation.CompletedAt ??= now;
+        invitation.Status = SurveyInvitationStatuses.Completed;
+        invitation.UpdatedAt = now;
     }
 
     private static async Task UpsertAnswersAsync(
