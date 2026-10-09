@@ -5567,6 +5567,12 @@
     "themesIntro": "Palabras de todas las preguntas abiertas, contadas por separado en cada idioma. Nunca se cita ninguna respuesta.",
     "themesChartTitle": "Palabras más frecuentes en las respuestas abiertas",
     "next": {
+      "cellPlanTitle": "Seguimiento para {group} — {dimension}",
+      "cellPlanDescription": "Seguimiento de {dimension} en {group}. Puntaje {score}. Creado desde los resultados de la encuesta.",
+      "cellPlanDescriptionNoScore": "Seguimiento de {dimension} en {group}. Creado desde los resultados de la encuesta.",
+      "waveUp": "por encima de la ola anterior",
+      "waveDown": "por debajo de la ola anterior",
+      "waveFlat": "igual que la ola anterior",
       "title": "Resultados de {name}",
       "eyebrowClosed": "{name} · última respuesta el {date}",
       "eyebrowOpen": "{name} · sigue recibiendo respuestas",

@@ -5567,6 +5567,12 @@
     "themesIntro": "Words across every open-ended question, counted separately per language. No answer is ever quoted back.",
     "themesChartTitle": "Most frequent words in open-ended answers",
     "next": {
+      "cellPlanTitle": "Follow-up for {group} — {dimension}",
+      "cellPlanDescription": "Follow-up on {dimension} in {group}. Score {score}. Raised from the survey results.",
+      "cellPlanDescriptionNoScore": "Follow-up on {dimension} in {group}. Raised from the survey results.",
+      "waveUp": "above the previous wave",
+      "waveDown": "below the previous wave",
+      "waveFlat": "the same as the previous wave",
       "title": "Results of {name}",
       "eyebrowClosed": "{name} · last response on {date}",
       "eyebrowOpen": "{name} · still receiving responses",

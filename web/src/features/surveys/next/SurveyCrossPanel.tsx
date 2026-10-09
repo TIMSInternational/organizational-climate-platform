@@ -10,7 +10,6 @@ import {
   Chip,
   SelectField,
   Table,
-  TextField,
 } from '../../../components/ui'
 import {
   BAND_PAINT,
@@ -24,10 +23,10 @@ import {
 } from '../../../components/charts'
 import { PROTECTED_HATCH } from '../../../components/charts/suppression'
 import { cn } from '../../../lib/cn'
-import { createActionPlan } from '../../action-plans/api/actionPlans'
 import { listDemographicFields } from '../../org-structure/api/demographicFields'
 import { dimensionLabel } from '../dimensionLabel'
 import { getSurvey } from '../api/surveys'
+import FollowUpPlanForm, { type FollowUpPlanRequest } from './FollowUpPlanForm'
 import { getSurveyAnalytics, type SurveyAnalyticsResponse } from '../api/surveyResults'
 import {
   BASELINE_KEY,
@@ -168,8 +167,6 @@ const CROSS_STICKY = 'sticky left-0 z-10 bg-surface-card'
 /** `index.css` tints every body row on hover; a row of painted cells must not flash. */
 const CROSS_ROW = 'hover:bg-transparent'
 
-const PRIORITIES = ['low', 'medium', 'high', 'critical'] as const
-
 /**
  * Compare and contrast any combination of demographics, and act on one.
  *
@@ -219,8 +216,6 @@ export default function SurveyCrossPanel({
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
   const [followUpKey, setFollowUpKey] = useState<string | null>(null)
-  const [form, setForm] = useState({ title: '', due: '', priority: 'high' })
-  const [creating, setCreating] = useState(false)
   const [created, setCreated] = useState<{ id: string; title: string } | null>(null)
   const [authored, setAuthored] = useState<Record<string, AuthoredField>>({})
 
@@ -316,59 +311,37 @@ export default function SurveyCrossPanel({
   }
 
   function openFollowUp(cohort: Cohort) {
-    const due = new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10)
     setFollowUpKey(crossKeyOf(cohort))
     setCreated(null)
-    setForm({ title: t('surveyResults.cross.followUpFor', { name: name(cohort) }), due, priority: 'high' })
   }
 
-  async function createFollowUp(cohort: Cohort) {
-    setCreating(true)
-    setFailure(null)
-    try {
-      // The SURVEY carries the tenant. The header's company scope may be another one entirely
-      // for a super_admin, and a plan filed against the wrong tenant is invisible to the
-      // people who have to do it.
-      const survey = await getSurvey(baseUrl, surveyId, locale)
-      const weakest = weakestCategory(results?.[crossKeyOf(cohort)] ?? null)
-      const surveyTitle = typeof survey.title === 'string' ? survey.title : (payload?.title ?? '')
-      const description = weakest
+  /**
+   * What a follow-up for this cohort says and belongs to. Pure: `FollowUpPlanForm` owns the
+   * form state and the write, so the two surfaces that raise a plan — this and the opened
+   * cell — cannot drift about the tenant, the provenance or the tags.
+   */
+  function requestFor(cohort: Cohort): FollowUpPlanRequest {
+    const weakest = weakestCategory(results?.[crossKeyOf(cohort)] ?? null)
+    const surveyTitle = payload?.title ?? ''
+    const department = cohort.find((selector) => selector.field === 'department')
+    return {
+      title: t('surveyResults.cross.followUpFor', { name: name(cohort) }),
+      description: weakest
         ? t('surveyResults.cross.followUpDescription', {
             name: name(cohort),
             survey: surveyTitle,
             category: dimensionLabel(weakest.dimension, t),
             score: score(weakest.averageScore),
           })
-        : t('surveyResults.cross.followUpDescriptionNoScore', {
-            name: name(cohort),
-            survey: surveyTitle,
-          })
-      const department = cohort.find((s) => s.field === 'department')
-      const plan = await createActionPlan(baseUrl, {
-        title: form.title.trim(),
-        description,
-        companyId: survey.companyId,
-        // The plan's provenance, in the column the schema has for it. The survey id and the
-        // company id come from the SAME survey here, which is the condition the endpoint
-        // checks before it will accept the pair.
-        sourceSurveyId: surveyId,
-        ...(department ? { departmentId: department.value } : {}),
-        dueDate: new Date(`${form.due}T12:00:00Z`).toISOString(),
-        priority: form.priority,
-        tags: ['seguimiento', ...cohort.map((s) => `${s.field}:${s.value}`)],
-      })
-      setCreated({ id: plan.id, title: plan.title })
-      setFollowUpKey(null)
-    } catch (error) {
-      setFailure(error instanceof Error ? error.message : t('surveyResults.cross.followUpFailed'))
-    } finally {
-      setCreating(false)
+        : t('surveyResults.cross.followUpDescriptionNoScore', { name: name(cohort), survey: surveyTitle }),
+      ...(department ? { departmentId: department.value } : {}),
+      tags: ['seguimiento', ...cohort.map((selector) => `${selector.field}:${selector.value}`)],
     }
   }
 
   /**
    * The mean of the per-category means — `derive.companyMean`'s definition, so this column and
-   * the grid's "media del grupo" above cannot print different numbers for the same cohort.
+   * the grid's "media del grupo" above it cannot print different numbers for the same cohort.
    *
    * NOT the mean of every answer: a category asked twice would then weigh twice as much as one
    * asked once, and the grid's column does not work that way.
@@ -680,7 +653,6 @@ export default function SurveyCrossPanel({
                   type="button"
                   variant="outline"
                   onClick={() => openFollowUp(cohort)}
-                  disabled={creating}
                 >
                   {t('surveyResults.cross.followUpFor', { name: name(cohort) })}
                 </Button>
@@ -691,48 +663,17 @@ export default function SurveyCrossPanel({
               ? columns
                   .filter((cohort) => crossKeyOf(cohort) === followUpKey)
                   .map((cohort) => (
-                    <div
+                    <FollowUpPlanForm
                       key={crossKeyOf(cohort)}
-                      className="mt-4 grid gap-4 border-t border-line-default pt-4 sm:grid-cols-3"
-                    >
-                      <TextField
-                        label={t('surveyResults.cross.followUpName')}
-                        value={form.title}
-                        onChange={(value) => setForm((f) => ({ ...f, title: value }))}
-                      />
-                      <TextField
-                        label={t('surveyResults.cross.followUpDue')}
-                        type="date"
-                        value={form.due}
-                        onChange={(value) => setForm((f) => ({ ...f, due: value }))}
-                      />
-                      <SelectField
-                        label={t('surveyResults.cross.followUpPriority')}
-                        value={form.priority}
-                        onChange={(value) => setForm((f) => ({ ...f, priority: value }))}
-                        options={PRIORITIES.map((p) => ({
-                          value: p,
-                          label: t(`surveyResults.cross.priority${p[0]!.toUpperCase()}${p.slice(1)}`),
-                        }))}
-                      />
-                      <div className="flex flex-wrap items-center gap-3 sm:col-span-3">
-                        <Button
-                          type="button"
-                          onClick={() => void createFollowUp(cohort)}
-                          disabled={creating || form.title.trim() === '' || form.due === ''}
-                        >
-                          {creating ? t('surveyResults.cross.creating') : t('surveyResults.cross.create')}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          onClick={() => setFollowUpKey(null)}
-                          disabled={creating}
-                        >
-                          {t('surveyResults.cross.cancel')}
-                        </Button>
-                      </div>
-                    </div>
+                      baseUrl={baseUrl}
+                      surveyId={surveyId}
+                      request={requestFor(cohort)}
+                      onCreated={(plan) => {
+                        setCreated(plan)
+                        setFollowUpKey(null)
+                      }}
+                      onCancel={() => setFollowUpKey(null)}
+                    />
                   ))
               : null}
           </div>

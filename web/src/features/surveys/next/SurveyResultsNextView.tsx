@@ -569,6 +569,8 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
             {detail && (
               <div ref={panelRef} className="scroll-mt-4">
                 <ResultsCellPanel
+                  baseUrl={baseUrl}
+                  surveyId={model.surveyId}
                   bands={bands}
                   id={PANEL_ID}
                   headingRef={headingRef}

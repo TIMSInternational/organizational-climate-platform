@@ -1,8 +1,9 @@
-import type { Ref } from 'react'
+import { useState, type Ref } from 'react'
 import { Link } from 'react-router'
 import { Plus, Shield, Target, TrendingUp, X } from 'lucide-react'
 import { useTranslation } from '../../../i18n'
 import {
+  BAND_PAINT,
   BandChip,
   BandGlyph,
   DistributionStrip,
@@ -13,11 +14,16 @@ import {
   bandRangeText,
   bandShortName,
   formatMetric,
+  segmentsOf as bandSegmentsOf,
+  SCALE_MAX,
+  SCALE_MIN,
   type ResultBands,
 } from '../../../components/charts'
 import { Button } from '../../../components/ui'
 import type { ViewerCapabilities } from '../../../auth/viewerCapabilities'
 import { calendarDay } from '../../../lib/calendarDay'
+import { deltaInkOf } from './tint'
+import FollowUpPlanForm from './FollowUpPlanForm'
 import { lowShare, type ResultsCellDetail, type ResultsDistributionPoint } from './derive'
 
 /** The artboard's `.label`: 10px, bold, uppercase, 0.06em, the tertiary ink. */
@@ -36,6 +42,9 @@ export interface ResultsCellPanelProps {
   /** The previous wave's code, for "Comparar con Q2" — `null` when there is none to compare with. */
   previousCode: string | null
   capabilities: ViewerCapabilities
+  /** For raising a follow-up plan without leaving the panel. */
+  baseUrl: string
+  surveyId: string
   /** The panel's id, for `aria-controls` on the cell that opened it. */
   id: string
   /** The heading, so the view can move focus to it when a finding opens the cell. */
@@ -65,11 +74,15 @@ export default function ResultsCellPanel({
   threshold,
   previousCode,
   capabilities,
+  baseUrl,
+  surveyId,
   id,
   headingRef,
   onClose,
 }: ResultsCellPanelProps) {
   const { t, locale } = useTranslation()
+  const [planning, setPlanning] = useState(false)
+  const [createdPlan, setCreatedPlan] = useState<{ id: string; title: string } | null>(null)
   const score = (value: number) => formatMetric(value, { kind: 'number', decimals: 1 }, locale)
   const dimension = dimensionName(detail.dimensionKey)
 
@@ -265,28 +278,94 @@ export default function ResultsCellPanel({
                 </Link>
               </Button>
             ) : (
-              // `/action-plans`, not `/action-plans/new`: there is no such route
-              // (`router.tsx` mounts the list and `:id`, and `new` would be read as
-              // a plan id). The list is where "new action plan" lives.
+              // Opens the form HERE, pre-scoped to this group and this dimension.
+              //
+              // It used to link to `/action-plans` — the LIST — so a reader who had clicked
+              // Reconocimiento × Ventanilla Única arrived having lost both, and had to retype
+              // the department and remember what they were acting on. The plan they wanted
+              // was always "this cell"; the screen made them say so again.
               capabilities.canCreateActionPlan &&
-              detail.plan === null && (
-                <Button variant="outline" asChild>
-                  <Link to="/action-plans">
-                    <Plus aria-hidden="true" />
-                    {t('surveyResults.next.createPlan')}
-                  </Link>
+              detail.plan === null &&
+              !planning && (
+                <Button variant="outline" onClick={() => { setPlanning(true); setCreatedPlan(null) }}>
+                  <Plus aria-hidden="true" />
+                  {t('surveyResults.next.createPlan')}
                 </Button>
               )
             )}
-            {previousCode && (
-              <Button variant="outline" asChild>
-                <Link to="/surveys/climate-trends">
-                  <TrendingUp aria-hidden="true" />
-                  {t('surveyResults.next.compareWave', { wave: previousCode })}
-                </Link>
-              </Button>
-            )}
           </div>
+          {planning && (
+            <FollowUpPlanForm
+              baseUrl={baseUrl}
+              surveyId={surveyId}
+              request={{
+                title: t('surveyResults.next.cellPlanTitle', {
+                  group: detail.rowName,
+                  dimension: dimensionName(detail.dimensionKey),
+                }),
+                description:
+                  detail.score === null
+                    ? t('surveyResults.next.cellPlanDescriptionNoScore', {
+                        group: detail.rowName,
+                        dimension: dimensionName(detail.dimensionKey),
+                      })
+                    : t('surveyResults.next.cellPlanDescription', {
+                        group: detail.rowName,
+                        dimension: dimensionName(detail.dimensionKey),
+                        score: score(detail.score),
+                      }),
+                departmentId: detail.rowId,
+                // The dimension travels too: a department can carry several plans, and
+                // "which finding was this one for" is otherwise only in the prose.
+                tags: ['seguimiento', `department:${detail.rowId}`, `dimension:${detail.dimensionKey}`],
+              }}
+              onCreated={(plan) => {
+                setPlanning(false)
+                setCreatedPlan(plan)
+              }}
+              onCancel={() => setPlanning(false)}
+            />
+          )}
+          {createdPlan && (
+            <p className="m-0 text-sm text-fg-primary">
+              {t('surveyResults.cross.created', { title: createdPlan.title })}{' '}
+              <Link className="underline" to={`/action-plans/${createdPlan.id}`}>
+                {t('surveyResults.cross.viewPlan')}
+              </Link>
+            </p>
+          )}
+          {/* The answer, not a way to go looking for it.
+              This used to be a button to `/surveys/climate-trends` — the whole company across
+              every wave — from a panel the reader opened to ask about ONE group on ONE
+              dimension. It dropped both halves of the question, and the page it landed on
+              could not answer it. `previousScore` is this same cell last wave, read off the
+              same `groupScores` the grid's own wave column reads. */}
+          {previousCode && (
+            <div className="flex flex-col gap-1">
+              <p className={LABEL}>
+                <TrendingUp aria-hidden="true" className="mr-1 inline size-3" />
+                {t('surveyResults.next.compareWave', { wave: previousCode })}
+              </p>
+              {detail.previousScore === null || detail.score === null ? (
+                // The previous wave withheld this group, or did not have it. Saying "sin Q3"
+                // is what the grid says in the same case; a 0 would be a claim about people
+                // who were never disclosed.
+                <p className="m-0 text-sm text-fg-secondary">
+                  {t('surveyResults.next.noPrevious', { wave: previousCode })}
+                </p>
+              ) : (
+                <WaveSlope
+                  from={detail.previousScore}
+                  to={detail.score}
+                  fromLabel={previousCode}
+                  toLabel={code}
+                  bands={bands}
+                  locale={locale}
+                  t={t}
+                />
+              )}
+            </div>
+          )}
           <p className="m-0 flex items-start gap-2.5 rounded-md bg-surface-icon-box px-3.5 py-3 text-sm text-fg-secondary">
             <Shield aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
             <span>{t('surveyResults.next.openTextNote', { group: detail.rowName, floor: threshold })}</span>
@@ -325,4 +404,133 @@ function axisOf(
     }
   }
   return ticks
+}
+
+
+/**
+ * One wave-over-wave change for a single cell.
+ *
+ * Direction by arrow as well as by colour, the same choice the cross panel makes: an
+ * amber or red cell behind a red digit is not a sign a colour-blind reader can read.
+ */
+function WaveDelta({
+  from,
+  to,
+  locale,
+  t,
+}: {
+  from: number
+  to: number
+  locale: string
+  t: Translate
+}) {
+  // Rounded to the decimal both figures are printed at, so the arrow cannot contradict them.
+  const shown = Math.round((to - from) * 10) / 10 || 0
+  const text = `${shown > 0 ? '+' : ''}${formatMetric(shown, { kind: 'number', decimals: 1 }, locale)}`
+  return (
+    <span className={`font-mono text-xs tabular-nums ${deltaInkOf(shown, 1)}`}>
+      <span aria-hidden="true">{shown < 0 ? '▼' : shown > 0 ? '▲' : '–'} </span>
+      {text}
+      <span className="sr-only">
+        {` ${shown < 0 ? t('surveyResults.next.waveDown') : shown > 0 ? t('surveyResults.next.waveUp') : t('surveyResults.next.waveFlat')}`}
+      </span>
+    </span>
+  )
+}
+
+
+/**
+ * The cell's two waves on the scale they were measured on.
+ *
+ * ## Why a graph and not two numbers
+ *
+ * "Q2 2,4 → Q3 2,6" tells a reader the direction and makes them do the rest: how far 2,6 is
+ * from the top, whether it crossed out of the critical area, how big 0,2 is against the range
+ * actually available. Drawn on the band scale, all three are read at a glance and none of them
+ * is arithmetic the reader has to perform.
+ *
+ * The zones are `segmentsOf(bands)` — the company's own result bands, the same three the grid
+ * and the legend use — so "it moved out of the red" is a statement about this company's
+ * thresholds and not about a number line.
+ *
+ * The line between the two dots carries the change; the dots carry where each wave landed.
+ * The previous wave is hollow and the current one filled, so which is now is not a colour
+ * question.
+ */
+function WaveSlope({
+  from,
+  to,
+  fromLabel,
+  toLabel,
+  bands,
+  locale,
+  t,
+}: {
+  from: number
+  to: number
+  fromLabel: string
+  toLabel: string
+  bands: ResultBands
+  locale: string
+  t: Translate
+}) {
+  const span = SCALE_MAX - SCALE_MIN
+  const at = (value: number) => ((Math.min(Math.max(value, SCALE_MIN), SCALE_MAX) - SCALE_MIN) / span) * 100
+  const fromAt = at(from)
+  const toAt = at(to)
+  const shown = Math.round((to - from) * 10) / 10 || 0
+  const left = Math.min(fromAt, toAt)
+  const width = Math.abs(toAt - fromAt)
+  const number = (value: number) => formatMetric(value, { kind: 'number', decimals: 1 }, locale)
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <p className="m-0 flex flex-wrap items-baseline gap-x-2 text-sm text-fg-primary">
+        <span className="font-mono tabular-nums">{`${fromLabel} ${number(from)}`}</span>
+        <span aria-hidden="true" className="text-fg-label">→</span>
+        <span className="font-mono tabular-nums font-semibold">{`${toLabel} ${number(to)}`}</span>
+        <WaveDelta from={from} to={to} locale={locale} t={t} />
+      </p>
+      {/* Decorative: every value it draws is printed above it, and the band each wave falls
+          in is already named in the panel's own summary line. */}
+      <div aria-hidden="true" className="flex flex-col gap-1">
+        <div className="relative h-5 w-full overflow-hidden rounded-md">
+          {bandSegmentsOf(bands).map((segment) => (
+            <span
+              key={segment.key}
+              className="absolute inset-y-0"
+              style={{
+                left: `${at(segment.from)}%`,
+                width: `${at(segment.to) - at(segment.from)}%`,
+                // `BandScaleSegment.key` also admits 'gap', which `segmentsOf` never emits;
+                // painting it neutral is cheaper than asserting it away.
+                backgroundColor: segment.key === 'gap' ? 'var(--admin-hatch-ground)' : BAND_PAINT[segment.key].fill,
+              }}
+            />
+          ))}
+          {/* The move itself, drawn between the two readings. */}
+          <span
+            className="absolute top-1/2 h-0.5 -translate-y-1/2 rounded-full"
+            style={{
+              left: `${left}%`,
+              width: `${width}%`,
+              backgroundColor: shown < 0 ? 'var(--admin-accent-red-ink)' : 'var(--admin-accent-green-ink)',
+            }}
+          />
+          <span
+            className="absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 bg-surface-card"
+            style={{ left: `${fromAt}%`, borderColor: 'var(--admin-font-secondary)' }}
+          />
+          <span
+            className="absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white"
+            style={{ left: `${toAt}%`, backgroundColor: BAND_PAINT[bandOf(to, bands)].ink }}
+          />
+        </div>
+        <div className="flex justify-between font-mono text-2xs tabular-nums text-fg-label">
+          <span>{number(SCALE_MIN)}</span>
+          <span>{number(SCALE_MAX)}</span>
+        </div>
+      </div>
+    </div>
+  )
 }
