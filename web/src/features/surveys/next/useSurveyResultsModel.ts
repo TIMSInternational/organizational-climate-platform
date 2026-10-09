@@ -11,6 +11,14 @@ import type { SurveyResultsNextModel } from './model'
 
 export interface SurveyResultsModelState {
   model: SurveyResultsNextModel | null
+  /**
+   * The unfiltered analytics payload, as received.
+   *
+   * Published beside the composed model so the cross panel can offer exactly the
+   * departments and demographic values this survey's breakdowns already list, without a
+   * second round trip and without being able to offer one the page does not already show.
+   */
+  payload: SurveyAnalyticsResponse | null
   loading: boolean
   error: string | null
   reload: () => void
@@ -99,9 +107,9 @@ export function useSurveyResultsModel(surveyId: string | undefined): SurveyResul
     await reload()
   }, [retryBands, reload])
   if (bands.status === 'error' && error === null) {
-    return { model: null, loading: false, error: t('resultBands.loadError'), reload: reloadAll }
+    return { model: null, payload, loading: false, error: t('resultBands.loadError'), reload: reloadAll }
   }
-  return { model, loading: loading || bands.status === 'loading', error, reload: reloadAll }
+  return { model, payload, loading: loading || bands.status === 'loading', error, reload: reloadAll }
 }
 
 /**

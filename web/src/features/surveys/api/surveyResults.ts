@@ -143,6 +143,31 @@ export interface SurveySegmentResult {
   questions: SurveySegmentQuestionResult[]
 }
 
+/**
+ * One category's score, rolled up from the questions carrying that category.
+ *
+ * This is the number a climate report leads with — "la categoría Comunicación: 4,8" — and
+ * until the rollup was added to these payloads the server computed it on every request and
+ * no route returned it, so no screen could show it.
+ *
+ * `averageScore` is a pooled mean weighted by how many people answered each question, not a
+ * mean of means, and it is `null` when the category holds no scale question that anybody
+ * answered. Null is "not measured"; it is never 0.
+ */
+export interface SurveyDimensionResult {
+  /** The category exactly as authored on the questions. */
+  dimension: string
+  questionCount: number
+  answeredCount: number
+  averageScore: number | null
+}
+
+/** One value a results query was narrowed to. `field` is `'department'` or a demographic key. */
+export interface SurveySegmentSelector {
+  field: string
+  value: string
+}
+
 export interface SurveyBreakdown {
   dimension: string
   segments: SurveySegmentResult[]
@@ -168,12 +193,21 @@ interface SurveyResultsEnvelope {
   /** A machine-readable reason code, e.g. `below_minimum_respondents`. Not display copy. */
   suppressionReason: string | null
   minimumGroupSize: number
+  /**
+   * The selectors the server actually applied, echoed back. Empty for the whole survey.
+   *
+   * Read this rather than the request you believe you made: a payload that arrives with an
+   * empty filter is the whole survey, and labelling it as a cross is how a page comes to
+   * present everyone's numbers as one department's.
+   */
+  filter: SurveySegmentSelector[]
   generatedAt: string
 }
 
 /** `GET /surveys/{id}/results` — the per-question half. */
 export interface SurveyResultsResponse extends SurveyResultsEnvelope {
   questions: SurveyQuestionResult[]
+  dimensions: SurveyDimensionResult[]
 }
 
 /** `GET /surveys/{id}/statistics` — the segment half. */
@@ -184,6 +218,7 @@ export interface SurveyStatisticsResponse extends SurveyResultsEnvelope {
 /** `GET /surveys/{id}/analytics` — both halves of one aggregation, in one round trip. */
 export interface SurveyAnalyticsResponse extends SurveyResultsEnvelope {
   questions: SurveyQuestionResult[]
+  dimensions: SurveyDimensionResult[]
   breakdowns: SurveyBreakdown[]
 }
 
@@ -222,9 +257,20 @@ export interface SurveyRealTimeStatsResponse {
  * `lang` is last and optional, per the house rule: a prior bug put an optional
  * `baseUrl` before the required arguments and broke five exports.
  */
-function resultsUrl(baseUrl: string, surveyId: string, suffix: string, lang?: string): string {
-  const query = lang ? `?lang=${encodeURIComponent(lang)}` : ''
-  return `${baseUrl}/surveys/${encodeURIComponent(surveyId)}/${suffix}${query}`
+function resultsUrl(
+  baseUrl: string,
+  surveyId: string,
+  suffix: string,
+  lang?: string,
+  segments?: SurveySegmentSelector[],
+): string {
+  const params = new URLSearchParams()
+  if (lang) params.set('lang', lang)
+  // Repeated rather than comma-joined: a demographic value may contain a comma, and the
+  // server splits each selector on its FIRST colon only for the same reason.
+  for (const selector of segments ?? []) params.append('segment', `${selector.field}:${selector.value}`)
+  const query = params.toString()
+  return `${baseUrl}/surveys/${encodeURIComponent(surveyId)}/${suffix}${query ? `?${query}` : ''}`
 }
 
 export async function getSurveyResults(
@@ -249,8 +295,9 @@ export async function getSurveyAnalytics(
   baseUrl: string,
   surveyId: string,
   lang?: string,
+  segments?: SurveySegmentSelector[],
 ): Promise<SurveyAnalyticsResponse> {
-  const response = await authFetch(resultsUrl(baseUrl, surveyId, 'analytics', lang))
+  const response = await authFetch(resultsUrl(baseUrl, surveyId, 'analytics', lang, segments))
   return response.json() as Promise<SurveyAnalyticsResponse>
 }
 

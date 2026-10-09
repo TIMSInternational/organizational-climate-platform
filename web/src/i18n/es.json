@@ -5402,6 +5402,24 @@
     }
   },
   "surveyResults": {
+    "cross": {
+      "title": "Cruces entre demográficos",
+      "description": "Elija un departamento o un valor demográfico y vea el resultado por categoría de ese grupo. Un cruce de menos de {floor} personas no se muestra.",
+      "department": "Departamento",
+      "anyValue": "Todos",
+      "run": "Ver cruce",
+      "running": "Calculando…",
+      "clear": "Limpiar",
+      "wholeSurvey": "Toda la encuesta",
+      "tooSmall": "Este cruce reúne a muy pocas personas para mostrarse sin identificarlas. El umbral es de {floor} respuestas.",
+      "cohort": "{count} respuestas completas en este cruce.",
+      "noCategories": "Las preguntas de este cruce no tienen categoría, así que no hay resultado por categoría.",
+      "categoryHeader": "Categoría",
+      "scoreHeader": "Resultado",
+      "answeredHeader": "Respuestas",
+      "noScore": "Sin dato",
+      "failed": "No se pudo calcular el cruce."
+    },
     "description": "Lo que encontró esta encuesta y a cuántas personas alcanzó.",
     "untitled": "Encuesta sin título",
     "loadFailed": "No se pudieron cargar los resultados.",

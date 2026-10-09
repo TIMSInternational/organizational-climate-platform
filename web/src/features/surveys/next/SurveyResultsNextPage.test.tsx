@@ -70,6 +70,8 @@ function payload(): SurveyAnalyticsResponse {
     language: 'en',
     resolvedLocale: 'en',
     fallbackFields: [],
+    dimensions: [],
+    filter: [],
     summary: {
       invitedCount: null,
       responseCount: 24,

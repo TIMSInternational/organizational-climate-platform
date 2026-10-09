@@ -126,6 +126,50 @@ What C would actually cost, if it is ever ruled in: a respondent-facing copy cha
 screen, a new audited read surface, a re-identification model written down rather than assumed,
 a retention policy, and a renegotiation with every client already running under A.
 
+## Built on 2026-10-08
+
+Three of the four were buildable without touching the ruling, and were.
+
+**1. Completion is now recorded server-side.** `SurveyResponseEndpoints.AdvanceInvitationAsync`
+advances the respondent's own invitation to `completed` in the same `SaveChanges` as the
+response, gated on `SurveyInvitationStatuses.IsRecordable` so an anonymous survey still records
+nothing. The old writer — the emailed invitation page — stays; it is no longer the only one. An
+employee who answers from inside the app is now counted, and the reminder sweep stops chasing
+them. Covered by `SurveyCompletionTrackingTests` (5 integration tests, including the anonymous
+no-op and a revoked invitation that must not be walked back onto the ladder).
+
+**3. The cross exists.** `GET /surveys/{id}/results|statistics|analytics` take a repeatable
+`?segment=field:value` (`department:<guid>` for the department), at most three, one value per
+field. `SurveyResultsFilter` parses them; `SurveyAggregation.Compute` applies them immediately
+after demographics are decoded, so the survey floor, the segment floor, complement withholding
+and the free-text rules all govern the narrowed cohort without knowing a filter exists.
+
+The disclosure rule is the part worth reading: a cohort's own size is **not** a sufficient test.
+With A=10, B=7, C=3 over twenty people, disclosing A and B leaves a remainder of three, which is
+C — means and all. So `SurveyResultsFilter.MayDisclose` runs the same withholding
+`WithholdComplement` does, per selector, against the scope the other selectors define, and a
+value is disclosable only once enough siblings are disclosed that the undisclosed remainder
+reaches the floor. A refused cross returns the SURVEY's participation counters and never the
+cohort's: for a cross the count is itself the disclosure. 17 unit tests, including the
+subtraction case and "gerencia within finanzas", which is refused because it is one person.
+
+**The category rollup is now returned.** `SurveyAggregate.Dimensions` was computed on every
+request and dropped by all three endpoints. It is what a cross reports ("la categoría
+Comunicación: 4,8"), so it had to be on the wire. Note what this did **not** fix: the results
+page was never missing categories, because `surveyResultsMap.ts` derives them client-side from
+`SurveyQuestionResult.category`. Two implementations of one number now exist; the client-side
+one should go when the page is next touched.
+
+**Web.** `SurveyCrossPanel` on the results page: pick a department and a demographic value, read
+that cohort's score per category, or read that the cross is too small. It asks the server rather
+than slicing the breakdown on screen — intersecting two one-dimensional breakdowns client-side
+would produce a cohort the server never measured and never agreed to disclose.
+
+**Still not built: 2, the numeric bands.** A field with options splits results; a number field
+never does. Años de servicio and edad therefore contribute nothing to any cut, on TIMS's own
+survey included. Letting a numeric field declare its bands and cutting them at read time is the
+next piece, and it is what the call actually describes.
+
 ## Decision
 
 ```

@@ -5402,6 +5402,24 @@
     }
   },
   "surveyResults": {
+    "cross": {
+      "title": "Demographic crosses",
+      "description": "Pick a department or a demographic value and read that group's score per category. A cross of fewer than {floor} people is not shown.",
+      "department": "Department",
+      "anyValue": "All",
+      "run": "Show cross",
+      "running": "Working…",
+      "clear": "Clear",
+      "wholeSurvey": "The whole survey",
+      "tooSmall": "This cross covers too few people to show without identifying them. The threshold is {floor} responses.",
+      "cohort": "{count} complete responses in this cross.",
+      "noCategories": "The questions in this cross carry no category, so there is no per-category score.",
+      "categoryHeader": "Category",
+      "scoreHeader": "Score",
+      "answeredHeader": "Responses",
+      "noScore": "No data",
+      "failed": "The cross could not be computed."
+    },
     "description": "What this survey found, and how many people it reached.",
     "untitled": "Untitled survey",
     "loadFailed": "The results could not be loaded.",

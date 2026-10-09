@@ -3,6 +3,7 @@ import { Navigate, useParams } from 'react-router'
 import { useTranslation } from '../../../i18n'
 import { useViewerCapabilities } from '../../../auth/viewerCapabilities'
 import { LoadingRegion, NetworkError, SkeletonText } from '../../../components/ui'
+import SurveyCrossPanel from './SurveyCrossPanel'
 import SurveyResultsNextView from './SurveyResultsNextView'
 import { useSurveyResultsModel } from './useSurveyResultsModel'
 
@@ -34,7 +35,7 @@ export default function SurveyResultsNextPage() {
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const allowed = capabilities.seesWholeCompany
   // Hooks before the early return: the model hook must be called on every render.
-  const { model, loading, error, reload } = useSurveyResultsModel(allowed ? id : undefined)
+  const { model, payload, loading, error, reload } = useSurveyResultsModel(allowed ? id : undefined)
   const [actionError, setActionError] = useState<string | null>(null)
 
   if (!allowed) return <Navigate to="/dashboard" replace />
@@ -60,7 +61,12 @@ export default function SurveyResultsNextPage() {
       {loading || !model ? (
         <SkeletonText lines={6} />
       ) : (
-        <SurveyResultsNextView model={model} capabilities={capabilities} baseUrl={baseUrl} onError={setActionError} />
+        <>
+          <SurveyResultsNextView model={model} capabilities={capabilities} baseUrl={baseUrl} onError={setActionError} />
+          {/* Below the page rather than inside the view: a cross is a question asked ABOUT
+              the results, and the view above is the results. */}
+          <SurveyCrossPanel surveyId={id} payload={payload} baseUrl={baseUrl} />
+        </>
       )}
     </LoadingRegion>
   )

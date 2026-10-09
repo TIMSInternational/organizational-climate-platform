@@ -25,6 +25,8 @@ function payload(overrides: Partial<SurveyAnalyticsResponse> = {}): SurveyAnalyt
     language: 'en',
     resolvedLocale: 'en',
     fallbackFields: [],
+    dimensions: [],
+    filter: [],
     summary: {
       invitedCount: 40,
       responseCount: 26,
