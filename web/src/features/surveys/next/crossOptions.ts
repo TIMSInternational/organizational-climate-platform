@@ -80,3 +80,63 @@ export function labelFor(
   const field = fields.find((entry) => entry.field === selector.field)
   return field?.values.find((v) => v.value === selector.value)?.label ?? selector.value
 }
+
+/**
+ * One cohort in a comparison: the selectors that define it. An EMPTY list is the whole
+ * survey, which is always the first column so every contrast has a reference.
+ */
+export type Cohort = SurveySegmentSelector[]
+
+/** The whole survey's key. Distinct from any real cohort's, which always carries a colon. */
+export const BASELINE_KEY = ''
+
+/**
+ * The cohort's name, built from the labels the picker offered rather than from the stored
+ * keys, so a department reads as "Finanzas" and not as a GUID.
+ */
+export function cohortLabel(
+  fields: readonly CrossField[],
+  cohort: Cohort,
+  wholeSurvey: string,
+): string {
+  return cohort.length === 0 ? wholeSurvey : cohort.map((s) => labelFor(fields, s)).join(' + ')
+}
+
+/**
+ * Adds a cohort unless an identical one is already there.
+ *
+ * Compared by key, not by reference: "Finanzas + gerencia" chosen twice is one column, and a
+ * table with the same cohort twice invites the reader to look for a difference between them.
+ */
+export function withCohort(cohorts: readonly Cohort[], candidate: Cohort, max: number): Cohort[] {
+  if (candidate.length === 0 || cohorts.length >= max) return [...cohorts]
+  const key = crossKeyOf(candidate)
+  return cohorts.some((c) => crossKeyOf(c) === key) ? [...cohorts] : [...cohorts, candidate]
+}
+
+/**
+ * The categories to show, in the baseline's order with any extras appended.
+ *
+ * Driven by the baseline rather than by the first cohort: the rows then stay put as cohorts are
+ * added and removed, so a reader comparing two columns is not also re-finding the row.
+ */
+export function categoriesOf(payloads: readonly (SurveyAnalyticsResponse | null)[]): string[] {
+  const seen: string[] = []
+  for (const payload of payloads) {
+    for (const dimension of payload?.dimensions ?? []) {
+      if (!seen.includes(dimension.dimension)) seen.push(dimension.dimension)
+    }
+  }
+  return seen
+}
+
+/** The category a cohort scored lowest on, for a follow-up's description. Null when none is scored. */
+export function weakestCategory(
+  payload: SurveyAnalyticsResponse | null,
+): { dimension: string; averageScore: number } | null {
+  const scored = (payload?.dimensions ?? []).filter(
+    (d): d is typeof d & { averageScore: number } => d.averageScore !== null,
+  )
+  if (scored.length === 0) return null
+  return scored.reduce((worst, d) => (d.averageScore < worst.averageScore ? d : worst))
+}

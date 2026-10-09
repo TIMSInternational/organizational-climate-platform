@@ -165,6 +165,20 @@ that cohort's score per category, or read that the cross is too small. It asks t
 than slicing the breakdown on screen — intersecting two one-dimensional breakdowns client-side
 would produce a cohort the server never measured and never agreed to disclose.
 
+**The comparison, which this file said to build first, now exists too.** `SurveyCrossPanel`
+takes up to four cohorts, each any combination of up to three selectors, and renders them beside
+the whole survey with a signed difference per category. Each column is its own
+`?segment=` request, so a cohort the server refuses prints "Protegido" in every cell and no
+number anywhere — the intersection is never computed in the browser, where no floor applies.
+
+**And a cohort can be acted on.** Any column, protected or not, creates an action plan: the
+department goes to `departmentId`, every selector to `tags` as `field:value`, and the
+description names the cohort's weakest category and its score. The tenant is read from the
+SURVEY, not from the header's company scope — verified in the browser with the scope on one
+company and the survey on another, which is the case that would otherwise file a plan where
+nobody responsible can see it. A group under the floor still gets the button: the floor stops
+you reading a group, and must not become a reason not to help it.
+
 **Still not built: 2, the numeric bands.** A field with options splits results; a number field
 never does. Años de servicio and edad therefore contribute nothing to any cut, on TIMS's own
 survey included. Letting a numeric field declare its bands and cutting them at read time is the
