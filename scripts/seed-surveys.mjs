@@ -76,6 +76,7 @@
  */
 import { parseArgs } from 'node:util'
 import { pathToFileURL } from 'node:url'
+import { orderedEmployeesOf } from './demo-roster.mjs'
 
 const { values } = parseArgs({
   options: {
@@ -224,14 +225,21 @@ export const DEPARTMENT_SPECS = {
    * "Equilibrar la carga en Ventanilla Única" then answers, so the demo's improvement loop
    * reads as one story rather than as unrelated screens.
    *
-   * `respondents` is under each department's headcount on purpose (31 of 36 people, 86%): a
+   * `respondents` is under each department's headcount on purpose (47 of 56 people, 84%): a
    * demo where literally everyone answered reads as fabricated.
+   *
+   * The counts are EVEN, and four of them are 10 or 12, because of the demographic cross:
+   * `puesto:gerencia + department:D` is disclosed only when D's respondents split into
+   * `puesto` cohorts that are each 0 or at least 5, which needs 10 before it needs anything
+   * else. `PROFILES.procomer.demographics` in `seed-demo-company.mjs` holds the other half of
+   * that arithmetic and explains it; `seed-demo-company.test.mjs` asserts the two together, so
+   * lowering a number here fails a test rather than emptying a screen.
    */
   procomer: [
-    { name: 'Promoción Comercial', names: ['Promoción Comercial'], respondents: 8, base: [4.1, 3.7, 4.0, 3.5, 4.0, 4.2] },
-    { name: 'Ventanilla Única', names: ['Ventanilla Única de Comercio Exterior'], respondents: 7, base: [2.7, 2.5, 3.0, 2.6, 3.1, 3.2] },
-    { name: 'Inversión y Encadenamientos', names: ['Inversión y Encadenamientos'], respondents: 6, base: [3.8, 3.4, 3.7, 3.4, 3.8, 3.9] },
-    { name: 'Servicios Corporativos', names: ['Servicios Corporativos'], respondents: 5, base: [3.5, 3.1, 3.4, 3.0, 3.5, 3.6] },
+    { name: 'Promoción Comercial', names: ['Promoción Comercial'], respondents: 12, base: [4.1, 3.7, 4.0, 3.5, 4.0, 4.2] },
+    { name: 'Ventanilla Única', names: ['Ventanilla Única de Comercio Exterior'], respondents: 10, base: [2.7, 2.5, 3.0, 2.6, 3.1, 3.2] },
+    { name: 'Inversión y Encadenamientos', names: ['Inversión y Encadenamientos'], respondents: 10, base: [3.8, 3.4, 3.7, 3.4, 3.8, 3.9] },
+    { name: 'Servicios Corporativos', names: ['Servicios Corporativos'], respondents: 10, base: [3.5, 3.1, 3.4, 3.0, 3.5, 3.6] },
     { name: 'Tecnologías de Información', names: ['Tecnologías de Información'], respondents: 5, base: [4.0, 3.5, 3.8, 3.3, 3.9, 4.1] },
   ],
 }
@@ -287,16 +295,10 @@ async function main() {
     // Restricting to `employee` also keeps the leader and supervisor surfaces honest:
     // their dashboards read their own team, and a leader who answered their own survey
     // would make that reading partly about themselves.
-    const members = users
-      .filter(
-        (u) =>
-          u.isActive &&
-          u.departmentId === department.id &&
-          u.role === 'employee' &&
-          !u.email.startsWith('fede.'),
-      )
-      .sort((a, b) => a.id.localeCompare(b.id))
-      .slice(0, spec.respondents)
+    // Imported, not repeated: `seed-demo-company.mjs` assigns `puesto: gerencia` to the first
+    // N of this same ordering, and "the first 5 of the 10 who answered" is only true while
+    // both scripts order identically. Two copies of a sort is two chances to drift.
+    const members = orderedEmployeesOf(users, department.id).slice(0, spec.respondents)
     if (members.length < spec.respondents) {
       throw new Error(`${spec.name} has ${members.length} active members, need ${spec.respondents}`)
     }

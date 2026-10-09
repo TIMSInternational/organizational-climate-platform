@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from '../../../i18n'
 import {
   Button,
@@ -14,6 +14,7 @@ import {
   TextField,
 } from '../../../components/ui'
 import { createActionPlan } from '../../action-plans/api/actionPlans'
+import { listDemographicFields } from '../../org-structure/api/demographicFields'
 import { dimensionLabel } from '../dimensionLabel'
 import { getSurvey } from '../api/surveys'
 import { getSurveyAnalytics, type SurveyAnalyticsResponse } from '../api/surveyResults'
@@ -26,6 +27,7 @@ import {
   selectorsOf,
   weakestCategory,
   withCohort,
+  type AuthoredField,
   type Cohort,
   type CrossField,
 } from './crossOptions'
@@ -72,7 +74,6 @@ export default function SurveyCrossPanel({
   baseUrl: string
 }) {
   const { t, locale } = useTranslation()
-  const fields = useMemo(() => crossFieldsOf(payload), [payload])
   const [chosen, setChosen] = useState<Record<string, string>>({})
   const [cohorts, setCohorts] = useState<Cohort[]>([])
   const [results, setResults] = useState<Record<string, SurveyAnalyticsResponse> | null>(null)
@@ -83,6 +84,56 @@ export default function SurveyCrossPanel({
   const [form, setForm] = useState({ title: '', due: '', priority: 'high' })
   const [creating, setCreating] = useState(false)
   const [created, setCreated] = useState<{ id: string; title: string } | null>(null)
+  const [authored, setAuthored] = useState<Record<string, AuthoredField>>({})
+
+  const fields = useMemo(() => crossFieldsOf(payload, authored), [payload, authored])
+  // Deliberately computed WITHOUT the overlay. If the effect below keyed off `fields`, every
+  // fetch would change `fields`, which would re-run the effect, which would fetch again.
+  const crossable = useMemo(() => crossFieldsOf(payload).length > 0, [payload])
+
+  /**
+   * The authored label for each demographic field, so the picker says "Puesto" rather than
+   * `puesto`.
+   *
+   * `SurveyBreakdown` carries only `Dimension` — the stored field KEY — and no label, so
+   * there is nothing on the results payload to print. Until a real tenant had demographic
+   * fields this was invisible: `department` has a catalogued label and every other field was
+   * a test fixture, so the raw-key fallback below never faced a reader.
+   *
+   * It cannot come from the i18n catalogue either. A demographic field is authored per
+   * company, so its label is content — `GET /admin/demographic-fields` is the only thing that
+   * knows it, and it resolves the pair for the reader's locale server-side.
+   *
+   * Failure is silent on purpose: the key is a usable fallback, and a label is not worth
+   * replacing a working table with an error. Reachable for an API that predates the endpoint,
+   * and for a super_admin reading a survey whose company they may not administer.
+   */
+  useEffect(() => {
+    // The panel returns null below when nothing is crossable, and that early return is after
+    // the hooks — so without this guard every results page with no demographic field (the live
+    // TIMS survey among them) would still fire two requests to label a picker it never draws.
+    if (!crossable) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const survey = await getSurvey(baseUrl, surveyId, locale)
+        const defined = await listDemographicFields(baseUrl, survey.companyId, locale)
+        if (cancelled) return
+        setAuthored(Object.fromEntries(defined.map((f) => [
+          f.field,
+          {
+            label: f.label ?? f.field,
+            options: Object.fromEntries((f.options ?? []).map((o) => [o.value, o.label ?? o.value])),
+          },
+        ])))
+      } catch {
+        // keep the keys
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [baseUrl, surveyId, locale, crossable])
 
   const pending = useMemo(() => selectorsOf(fields, chosen), [fields, chosen])
   // The builder's current selection counts as a cohort, so one group takes one click.
@@ -92,7 +143,7 @@ export default function SurveyCrossPanel({
 
   const name = (cohort: Cohort) => cohortLabel(fields, cohort, t('surveyResults.cross.wholeSurvey'))
   const fieldLabel = (field: string) =>
-    field === 'department' ? t('surveyResults.cross.department') : field
+    field === 'department' ? t('surveyResults.cross.department') : (authored[field]?.label ?? field)
   const score = (value: number) =>
     value.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 

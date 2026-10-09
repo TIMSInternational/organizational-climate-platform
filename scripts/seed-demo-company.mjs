@@ -15,6 +15,7 @@
  */
 import { parseArgs } from 'node:util'
 import { pathToFileURL } from 'node:url'
+import { orderedEmployeesOf, demographicsFor } from './demo-roster.mjs'
 
 const { values } = parseArgs({
   options: {
@@ -113,11 +114,95 @@ export const PROFILES = {
       ['Tecnologías de Información', 'Plataformas y servicios digitales'],
     ],
     headcount: {
-      'Promoción Comercial': 10,
-      'Ventanilla Única de Comercio Exterior': 8,
-      'Inversión y Encadenamientos': 7,
-      'Servicios Corporativos': 6,
-      'Tecnologías de Información': 5,
+      'Promoción Comercial': 14,
+      'Ventanilla Única de Comercio Exterior': 12,
+      'Inversión y Encadenamientos': 12,
+      'Servicios Corporativos': 12,
+      'Tecnologías de Información': 6,
+    },
+    /**
+     * The demographic fields this tenant answers, and how many of each department's
+     * respondents sit at `puesto: gerencia`.
+     *
+     * ## Without this block the demographic crosses render NOTHING
+     *
+     * A response's demographics are not invented when it is submitted: `CaptureDemographicsAsync`
+     * copies them from the respondent's stored `user_demographics`
+     * (`SurveyResponseEndpoints.cs:812`). So a tenant whose people carry no demographic values
+     * produces responses with none, every demographic breakdown comes back empty, and
+     * `crossFieldsOf` — which offers only fields the payload already lists — offers nothing.
+     * The panel then returns `null` and the feature is invisible. Departments still work,
+     * because a department is a column on the response rather than a demographic.
+     *
+     * ## Why these counts, exactly
+     *
+     * A cross is answered only when EVERY selector survives `SurveyResultsFilter.MayDisclose`,
+     * which runs the breakdown's own complement withholding per selector against the scope the
+     * other selectors define. For `puesto:gerencia + department:D` that is two conditions at
+     * once:
+     *
+     *  - inside D's respondents, every `puesto` cohort is 0 or >= 5, so no subtractable
+     *    remainder is left for the complement rule to withhold against; and
+     *  - across departments, every department cohort of `gerencia` is 0 or >= 5.
+     *
+     * Hence respondents of 12/10/10/10 split evenly down the middle, and Tecnologías de
+     * Información deliberately carrying NO gerencia at all — that one cross comes back
+     * protected, which is the honest half of the demonstration rather than a gap in it.
+     *
+     * `gerencia` is counted against RESPONDENTS, not headcount, and the values are assigned in
+     * `orderedEmployeesOf`'s order — the same order `seed-surveys.mjs` takes its respondents in.
+     * That is what makes "5 of the 10 who answered are gerencia" true rather than probable.
+     * `seed-demo-company.test.mjs` computes both conditions from these numbers against that
+     * script's respondent counts, so an edit that breaks a cross fails a test instead of a demo.
+     *
+     * ## `required: false`, deliberately
+     *
+     * The seeder sets every value explicitly, so enforcement buys nothing — and a REQUIRED
+     * field is enforced on paths the demo also uses: `PUT /admin/users/{id}` validates with
+     * `enforceRequired: true`, and `InvitationAcceptEndpoints` writes demographics when an
+     * invitation is accepted. Marking these required would make this tenant's shape leak into
+     * flows that have nothing to do with the crosses.
+     *
+     * Both are `select`. A `number` field never splits into cohorts, which is half of why the
+     * live TIMS survey shows no crosses: its `edad` and `tiempo_de_laborar` are numbers.
+     */
+    demographics: {
+      fields: [
+        {
+          field: 'puesto',
+          order: 1,
+          type: 'select',
+          required: false,
+          label: { es: 'Puesto', en: 'Role level' },
+          options: [
+            { value: 'gerencia', label: { es: 'Jefaturas y gerencias', en: 'Managers and leads' } },
+            { value: 'colaborador', label: { es: 'Personal colaborador', en: 'Individual contributors' } },
+          ],
+        },
+        {
+          field: 'antiguedad',
+          order: 2,
+          type: 'select',
+          required: false,
+          // The bands from the call of 8 Oct, as the client said them. Their one-dimensional
+          // breakdown discloses; crossed with a department they do not, because a department of
+          // 12 split three ways holds no cohort of 5. That is the floor working, and the demo
+          // is better for showing it than for hiding it.
+          label: { es: 'Años de servicio', en: 'Years of service' },
+          options: [
+            { value: '0-1', label: { es: 'Menos de 1 año', en: 'Under 1 year' } },
+            { value: '1-4', label: { es: 'De 1 a 4 años', en: '1 to 4 years' } },
+            { value: '5+', label: { es: '5 años o más', en: '5 years or more' } },
+          ],
+        },
+      ],
+      gerencia: {
+        'Promoción Comercial': 6,
+        'Ventanilla Única de Comercio Exterior': 5,
+        'Inversión y Encadenamientos': 5,
+        'Servicios Corporativos': 5,
+        'Tecnologías de Información': 0,
+      },
     },
     admin: ['Marcela Induni', 'marcela.induni'],
     leaders: [
@@ -198,6 +283,45 @@ async function signupOrFind(person, users, superToken, companyId) {
   return { user, role, department }
 }
 
+/**
+ * Define the company's demographic fields and answer them for every seeded employee.
+ *
+ * A no-op for a profile that declares none, which is how Meridiano stays unchanged.
+ *
+ * The `PUT` is unconditional rather than diffed first. `ReplaceForUserAsync` replaces a user's
+ * values wholesale, so writing the same values twice lands in the same state, and the
+ * alternative — a `GET /admin/users/{id}` per person to compare — is one request per employee
+ * to avoid a request per employee. The list endpoint cannot help: `UserListItem` carries no
+ * demographics.
+ */
+async function seedDemographics(companyId, byName, superToken) {
+  const plan = PROFILE.demographics
+  if (!plan) return
+
+  const { fields: existingFields } = await json(`${API}/admin/demographic-fields?companyId=${companyId}`, {}, superToken)
+  const haveField = new Set((existingFields ?? []).map((f) => f.field))
+  for (const field of plan.fields) {
+    if (haveField.has(field.field)) continue
+    await post(`${API}/admin/demographic-fields`, { companyId, ...field }, superToken)
+    log(`  + demographic field ${field.field} (${field.options.map((o) => o.value).join(', ')})`)
+  }
+
+  const { users } = await json(`${API}/admin/users?companyId=${companyId}`, {}, superToken)
+  const tally = {}
+  for (const [name] of DEPARTMENTS) {
+    const departmentId = byName.get(name).id
+    const members = orderedEmployeesOf(users, departmentId)
+    const gerencia = plan.gerencia[name] ?? 0
+    for (let i = 0; i < members.length; i++) {
+      const assigned = demographicsFor(i, gerencia)
+      await put(`${API}/admin/users/${members[i].id}`, { demographics: assigned }, superToken)
+      tally[assigned.puesto] = (tally[assigned.puesto] ?? 0) + 1
+    }
+    log(`  demographics: ${name} -> ${members.length} people, ${Math.min(gerencia, members.length)} gerencia`)
+  }
+  log(`demographics assigned: ${Object.entries(tally).map(([k, v]) => `${k}=${v}`).join(' ')}`)
+}
+
 async function phaseCompany() {
   const superToken = await login(values.superEmail, values.superPassword)
   const companies = await json(`${API}/admin/companies`, {}, superToken)
@@ -221,6 +345,11 @@ async function phaseCompany() {
     if (user.role !== role) await put(`${API}/admin/users/${user.id}/role`, { role }, superToken)
     if ((user.departmentId ?? null) !== departmentId) await put(`${API}/admin/users/${user.id}`, { departmentId }, superToken)
   }
+  // AFTER the department assignments above and BEFORE seed-surveys.mjs runs: a response
+  // copies the respondent's demographics at completion, so a value assigned later never
+  // reaches a response that already exists.
+  await seedDemographics(companyId, byName, superToken)
+
   log(`people in place: ${PEOPLE.length}. Next: node scripts/seed-surveys.mjs --email ${ADMIN_LOCAL}@${DOMAIN} --password ${values.password}`)
 }
 
