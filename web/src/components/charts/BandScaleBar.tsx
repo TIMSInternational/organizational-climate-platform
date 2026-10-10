@@ -52,7 +52,11 @@ export default function BandScaleBar({
     .join(' · ')
 
   return (
-    <div className="flex flex-col gap-1" data-testid="band-scale">
+    // `@container`, not a viewport breakpoint: this bar is drawn in a report card, in a
+    // settings card and anywhere else a caller puts it, so how much room a segment has
+    // depends on its column and not on the window. A `md:` rule here would be a guess
+    // about the page rather than a fact about the bar.
+    <div className="@container flex flex-col gap-1" data-testid="band-scale">
       <div role="img" aria-label={label} className="flex h-7.5 gap-0.5">
         {drawn.map((segment) =>
           segment.key === 'gap' ? (
@@ -76,7 +80,17 @@ export default function BandScaleBar({
               }}
             >
               <BandGlyph band={segment.key} />
-              <span className="truncate">{bandName(segment.key, bands, t)}</span>
+              {/* Hidden rather than truncated once the narrowest segment cannot hold a
+                  name. The opportunity and strength bands are a quarter of the scale
+                  each, so on a phone they had room for about half a word: measured on
+                  the shared report at 390px, "Área de oportunidad" and "Área de
+                  fortaleza" both cut off — on the one surface that leaves the company.
+                  Nothing is lost by dropping them. The glyph and the colour still tell
+                  the bands apart, the `aria-label` above carries the whole scale in
+                  words, and both callers name every band underneath: `BandLegend` in
+                  the report, the colour/name/from/to table in settings. A truncated
+                  word is worse than no word. */}
+              <span className="truncate @max-[38rem]:hidden">{bandName(segment.key, bands, t)}</span>
             </span>
           ),
         )}
