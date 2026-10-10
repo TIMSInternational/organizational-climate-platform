@@ -52,6 +52,15 @@ export interface ActionPlanDetail {
   status: string
   priority: string
   tags: string[]
+  /**
+   * The survey this plan was raised against. `ActionPlanEndpoints.cs:59` has projected it
+   * onto the detail response since #532 and this type simply did not declare it, so the
+   * detail screen could not read the plan's own wave and inferred one instead — see
+   * `planDetailDerive.ts` for the wrong number that produced.
+   *
+   * Optional for the same reason as on `ActionPlan`: a plan raised by hand has none.
+   */
+  sourceSurveyId?: string | null
   templateId: string | null
   kpis: Kpi[]
   objectives: Objective[]

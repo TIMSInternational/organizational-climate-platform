@@ -259,7 +259,12 @@
         "below": "below target",
         "on": "on target",
         "above": "above target",
-        "open": "Open in the {code} results"
+        "open": "Open in the {code} results",
+        "moveLabel": "Did it move?",
+        "moveReading": "{fromCode} {from} → {toCode} {to}",
+        "moveFlat": "no change",
+        "moveAwaiting": "No survey has closed since {code} yet: it will be compared against the next one.",
+        "moveProtected": "The surveys after {code} do not disclose this group: fewer than 5 responses."
       },
       "measures": {
         "title": "Indicators and objectives",
