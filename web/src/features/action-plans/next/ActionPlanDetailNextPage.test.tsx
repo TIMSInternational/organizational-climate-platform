@@ -107,6 +107,33 @@ function trendsWith(ops: { respondentCount: number; isSuppressed: boolean; score
   }
 }
 
+/** Two closed waves, so a plan raised in the first can be measured against the second. */
+function twoWaves({ q2, q3 }: { q2: (number | null)[]; q3: (number | null)[] | null }): ClimateTrendsResponse {
+  const base = trendsWith({ respondentCount: 8, isSuppressed: false, scores: q2 })
+  return {
+    ...base,
+    surveys: [
+      { surveyId: 'q2', title: 'Encuesta de Clima Q2', status: 'closed', endDate: '2026-05-13T00:00:00Z', completedCount: 22, isSuppressed: false },
+      { surveyId: 'q3', title: 'Encuesta de Clima Q3', status: 'closed', endDate: '2026-08-06T00:00:00Z', completedCount: 24, isSuppressed: false },
+    ],
+    groups: base.groups.map((group) => ({
+      ...group,
+      points:
+        group.key === OPS
+          ? [
+              { surveyId: 'q2', respondentCount: 8, isSuppressed: false, scores: q2 },
+              q3 === null
+                ? { surveyId: 'q3', respondentCount: 0, isSuppressed: true, scores: [null, null] }
+                : { surveyId: 'q3', respondentCount: 9, isSuppressed: false, scores: q3 },
+            ]
+          : [
+              { surveyId: 'q2', respondentCount: 8, isSuppressed: false, scores: [3.6, 3.1] },
+              { surveyId: 'q3', respondentCount: 8, isSuppressed: false, scores: [3.6, 3.1] },
+            ],
+    })),
+  }
+}
+
 function renderAs(claims: Record<string, unknown>) {
   setToken(tokenFor({ sub: 'u-ana', nodoId: '', name: 'Ana Rojas', ...claims }))
   return render(
@@ -210,6 +237,79 @@ describe('ActionPlanDetailNextPage', () => {
     expect(screen.getByRole('link', { name: /Abrir en los resultados de la Q3/ }).getAttribute('href')).toBe('/surveys/q3/results')
     // The department map is the one the grouped read returns, scoped to the plan's company.
     expect(vi.mocked(getClimateTrends).mock.calls[0]?.[1]).toMatchObject({ groupBy: 'department', companyId: COMPANY })
+  })
+
+  /**
+   * The chip's words are "the plan does not store its finding". Since #532 it does, and the
+   * tenant's plan here records neither, so the chip is right for THIS plan and wrong for one
+   * raised from a cell — which is the test below.
+   */
+  it('marks a hand-made plan’s finding as proposed, because the screen really did choose it', async () => {
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    expect(await screen.findByText('Carga de trabajo')).toBeTruthy()
+    expect(screen.getByText(copy.proposed)).toBeTruthy()
+  })
+
+  /**
+   * Measured on production, 2026-10-10: a plan titled "… — Carga de trabajo" showed
+   * "Reconocimiento 2,6" as its origin, because the row tied at 2,6 and the screen took the
+   * lowest rather than the cell the plan recorded. One card, two answers to "about what".
+   */
+  it('reads the cell the plan recorded rather than the lowest of its row, and drops the proposed chip', async () => {
+    vi.mocked(getActionPlan).mockResolvedValue({
+      ...plan,
+      sourceSurveyId: 'q3',
+      tags: ['seguimiento', `department:${OPS}`, 'dimension:trust'],
+    })
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    // trust is 3,2 and workload 2,4: the row's lowest is workload, the plan's cell is trust.
+    expect(await screen.findByText('Confianza')).toBeTruthy()
+    expect(screen.getByText('3,2')).toBeTruthy()
+    expect(screen.queryByText(copy.proposed)).toBeNull()
+  })
+
+  /**
+   * O3. The plan knows the cell it was raised from and the later waves know what it reads
+   * now; this is the line that joins them. Every number comes from the server's already
+   * floored payload, so the protected case below has none to print.
+   */
+  it('says whether a later wave moved the plan’s own cell', async () => {
+    vi.mocked(getActionPlan).mockResolvedValue({
+      ...plan,
+      sourceSurveyId: 'q2',
+      tags: ['seguimiento', `department:${OPS}`, 'dimension:trust'],
+    })
+    vi.mocked(getClimateTrends).mockResolvedValue(twoWaves({ q2: [2.6, 2.4], q3: [3.1, 2.4] }))
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    expect(await screen.findByText(copy.finding.moveLabel)).toBeTruthy()
+    expect(screen.getByText('Q2 2,6 → Q3 3,1')).toBeTruthy()
+    expect(screen.getByText(/\+0,5/)).toBeTruthy()
+  })
+
+  it('withholds the move, and any number with it, when the later wave does not disclose the group', async () => {
+    vi.mocked(getActionPlan).mockResolvedValue({
+      ...plan,
+      sourceSurveyId: 'q2',
+      tags: ['seguimiento', `department:${OPS}`, 'dimension:trust'],
+    })
+    vi.mocked(getClimateTrends).mockResolvedValue(twoWaves({ q2: [2.6, 2.4], q3: null }))
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    expect(await screen.findByText(copy.finding.moveProtected.replace('{code}', 'Q2'))).toBeTruthy()
+    expect(screen.queryByText(copy.finding.moveLabel)).toBeNull()
+    // The Q2 baseline still prints; what is withheld is the later reading, and only it.
+    expect(screen.getByText('2,6')).toBeTruthy()
+    expect(screen.queryByText('3,1')).toBeNull()
+  })
+
+  it('says nothing has closed since, for a plan raised in the latest wave', async () => {
+    vi.mocked(getActionPlan).mockResolvedValue({
+      ...plan,
+      sourceSurveyId: 'q3',
+      tags: ['seguimiento', `department:${OPS}`, 'dimension:trust'],
+    })
+    vi.mocked(getClimateTrends).mockResolvedValue(twoWaves({ q2: [2.6, 2.4], q3: [3.1, 2.4] }))
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    expect(await screen.findByText(copy.finding.moveAwaiting.replace('{code}', 'Q3'))).toBeTruthy()
   })
 
   it('prints no number for a department under the floor, even when the payload carries its scores', async () => {

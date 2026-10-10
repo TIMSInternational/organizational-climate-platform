@@ -1,5 +1,5 @@
 import type { ActionPlanDetail, ProgressUpdateDetail } from '../api/actionPlans'
-import type { PlanFinding } from './planDetailDerive'
+import type { PlanFinding, PlanMove } from './planDetailDerive'
 
 /**
  * A region read beside the plan, settled on its own: one failed enrichment costs one line
@@ -18,7 +18,7 @@ export type Settled<T> = { status: 'loading' } | { status: 'ready'; value: T } |
  * | author name     | `GET /admin/users/{createdBy}` (`getUser`)                            |
  * | created day     | `GET /action-plans` (`listActionPlans`) — the detail carries no date |
  * | template name   | `GET /action-plan-templates` (`listActionPlanTemplates`)              |
- * | finding         | `GET /surveys` + `GET /surveys/climate-trends` (`planFinding`)         |
+ * | finding         | `GET /surveys` + `GET /surveys/climate-trends` (`planFinding`, `planMove`) |
  *
  * ## What no endpoint returns, and the screen therefore does not claim
  *
@@ -41,6 +41,8 @@ export interface ActionPlanDetailModel {
   /** `null` when the plan has no template. */
   templateName: Settled<string | null>
   finding: Settled<PlanFinding>
+  /** Whether a wave that closed after the plan's own moved its cell (`planMove`). */
+  move: Settled<PlanMove>
   /** Progress recorded during this visit, oldest first. */
   recorded: readonly ProgressUpdateDetail[]
 }

@@ -249,14 +249,19 @@ export default function ClimateMap({
 
       {/* `Table` supplies `w-full` and the container that scrolls a wide grid
           inside itself rather than pushing the page sideways. */}
-      {/* `canvas`: the artboard's grid — a 120px label column, equal reading columns and
+      {/* `canvas`: the artboard's grid — a label column, equal reading columns and
           4px between every cell — drawn by `table-fixed` + `border-spacing-1`, so it stays
-          the real table the module note describes rather than becoming a CSS grid. */}
+          the real table the module note describes rather than becoming a CSS grid.
+
+          The label column was the artboard's 120px, which held "Operations" and not
+          "Ventanilla Única de Comercio Exterior": every one of the demo tenant's five group
+          names was cut there, measured on production. `w-44` holds the longest of them on
+          two wrapped lines, and the names below wrap rather than truncate — see the heads. */}
       <Table className={canvas ? 'table-fixed border-separate border-spacing-0 text-sm' : 'text-sm'}>
         <caption className="sr-only">{t('charts.tableCaption')}</caption>
         {canvas && (
           <colgroup>
-            <col className="w-30" />
+            <col className="w-44" />
             {dimensions.map((dimension) => (
               <col key={dimension.key} />
             ))}
@@ -274,8 +279,8 @@ export default function ClimateMap({
               <th
                 key={dimension.key}
                 scope="col"
-                // `canvas` prints the whole name and lets its column cut it; the tooltip
-                // carries the rest, as the artboard's "SEGU…" does.
+                // The tooltip stays even though nothing is cut any more: it is the one place
+                // a `fullLabel` longer than the printed `label` can still be read.
                 title={canvas ? (dimension.fullLabel ?? dimension.label) : undefined}
                 // `text-fg-secondary`, not `text-fg-tertiary`. These are `text-2xs`
                 // dimension names, so WCAG AA wants 4.5:1, and `--admin-font-tertiary`
@@ -285,9 +290,16 @@ export default function ClimateMap({
                 // everywhere (9.29 / 8.15 light, 8.55 / 6.85 dark). Same correction
                 // `KpiTile` already took for its label; `resultsContrast.test.ts`
                 // measures the pair and bans the utility by name in this file.
+                // `break-words`, not `truncate`. A dimension name is the only thing that says
+                // what a column of numbers means, so cutting it costs the reader the column —
+                // unlike `BandScaleBar`, where the glyph and the legend still name the band.
+                // Measured on production at 1518px: "SEGURIDAD P…", "CARGA DE TR…",
+                // "RECONOCIMI…". Wrapping needs no breakpoint and no threshold, because the
+                // number of lines is already a function of the column's own width; `break-words`
+                // is the floor under it, for a single word wider than one column.
                 className={cn(
                   canvas
-                    ? 'truncate border-0 p-0 pt-1 pb-0.25 pl-1 text-center align-bottom font-bold uppercase leading-tight tracking-label text-fg-label'
+                    ? 'border-0 p-0 pt-1 pb-0.25 pl-1 text-center align-bottom font-bold break-words hyphens-auto uppercase leading-tight tracking-label text-fg-label'
                     : 'px-1 pb-1.5 text-left font-semibold uppercase tracking-label text-fg-secondary',
                   density.header,
                 )}
@@ -323,7 +335,7 @@ export default function ClimateMap({
                   scope="row"
                   className={cn(
                     canvas
-                      ? 'truncate border-0 p-0 pt-1 pr-2 text-left font-normal text-fg-primary'
+                      ? 'border-0 p-0 pt-1 pr-2 text-left font-normal break-words text-fg-primary'
                       : 'w-px whitespace-nowrap pr-2 text-left font-medium text-fg-secondary',
                     density.label,
                   )}

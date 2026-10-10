@@ -259,7 +259,12 @@
         "below": "bajo la meta",
         "on": "en la meta",
         "above": "sobre la meta",
-        "open": "Abrir en los resultados de la {code}"
+        "open": "Abrir en los resultados de la {code}",
+        "moveLabel": "¿Se movió?",
+        "moveReading": "{fromCode} {from} → {toCode} {to}",
+        "moveFlat": "sin cambio",
+        "moveAwaiting": "Aún no cierra una encuesta posterior a {code}: se comparará con la siguiente.",
+        "moveProtected": "Las encuestas posteriores a {code} no revelan este grupo: menos de 5 respuestas."
       },
       "measures": {
         "title": "Indicadores y objetivos",

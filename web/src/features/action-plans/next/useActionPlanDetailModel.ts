@@ -16,7 +16,8 @@ import { getUser } from '../../org-structure/api/users'
 import { listSurveys } from '../../surveys/api/surveys'
 import { DEPARTMENT_GROUP, getClimateTrends } from '../../surveys/api/climateTrends'
 import { latestClosedSurvey } from '../../dashboard/next/compose'
-import { planFinding, type PlanFinding } from './planDetailDerive'
+import { findingFromTags } from './useActionPlansListModel'
+import { planFinding, planMove, type PlanFinding, type PlanMove } from './planDetailDerive'
 import type { ActionPlanDetailModel, Settled } from './planDetailModel'
 
 export interface ActionPlanDetailState {
@@ -63,6 +64,7 @@ export function useActionPlanDetailModel(id: string | undefined, enabled: boolea
   const [createdAt, setCreatedAt] = useState<Settled<string | null>>(LOADING)
   const [templateName, setTemplateName] = useState<Settled<string | null>>(LOADING)
   const [finding, setFinding] = useState<Settled<PlanFinding>>(LOADING)
+  const [move, setMove] = useState<Settled<PlanMove>>(LOADING)
   const [recorded, setRecorded] = useState<ProgressUpdateDetail[]>([])
   const [saving, setSaving] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -98,6 +100,10 @@ export function useActionPlanDetailModel(id: string | undefined, enabled: boolea
   const createdBy = plan?.createdBy
   const templateId = plan?.templateId ?? null
   const planId = plan?.id
+  // The plan's own record of where it came from, written by `ResultsCellPanel` when it was
+  // raised and returned by the read endpoints since #532.
+  const sourceSurveyId = plan?.sourceSurveyId ?? null
+  const dimensionKey = findingFromTags(plan?.tags)?.dimensionKey ?? null
 
   useEffect(() => {
     if (!companyId || !planId) return
@@ -129,6 +135,9 @@ export function useActionPlanDetailModel(id: string | undefined, enabled: boolea
         return templates.find((template) => template.id === templateId)?.name ?? null
       }).then(apply(setTemplateName))
 
+    // One read, two readings: the cell the plan was raised from and whether a later wave
+    // moved it. They must come from the SAME payload, or the baseline and the comparison
+    // could be computed against two different windows.
     void settle(async () => {
       const [surveys, trends] = await Promise.all([
         listSurveys(baseUrl, { companyId }, locale),
@@ -138,13 +147,17 @@ export function useActionPlanDetailModel(id: string | undefined, enabled: boolea
         ),
       ])
       const latest = latestClosedSurvey(surveys)
-      return planFinding(trends, latest?.id ?? null, departmentId)
-    }).then(apply(setFinding))
+      const found = planFinding(trends, latest?.id ?? null, departmentId, { sourceSurveyId, dimensionKey })
+      return { found, moved: planMove(trends, found, departmentId) }
+    }).then((settled) => {
+      apply(setFinding)(settled.status === 'ready' ? { status: 'ready', value: settled.value.found } : settled)
+      apply(setMove)(settled.status === 'ready' ? { status: 'ready', value: settled.value.moved } : settled)
+    })
 
     return () => {
       cancelled = true
     }
-  }, [baseUrl, companyId, createdBy, departmentId, locale, planId, templateId])
+  }, [baseUrl, companyId, createdBy, departmentId, dimensionKey, locale, planId, sourceSurveyId, templateId])
 
   const change = useCallback(
     async (patch: { status?: string; priority?: string }) => {
@@ -177,7 +190,7 @@ export function useActionPlanDetailModel(id: string | undefined, enabled: boolea
   )
 
   const model: ActionPlanDetailModel | null = plan
-    ? { plan, asOf: todayCalendarDay(), departmentName, authorName, createdAt, templateName, finding, recorded }
+    ? { plan, asOf: todayCalendarDay(), departmentName, authorName, createdAt, templateName, finding, move, recorded }
     : null
 
   return {

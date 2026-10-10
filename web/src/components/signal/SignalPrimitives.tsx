@@ -138,10 +138,19 @@ export function PopulationGrid({
 }) {
   const widest = Math.max(1, ...bands.filter((band) => !band.isProtected).map((band) => band.responses))
   return (
-    <div data-slot="signal-population" className={cn('flex flex-col gap-3', className)}>
+    // ONE grid for every row, not one grid per row. Each row used to carry its own
+    // `grid-cols-[minmax(6rem,9rem)…]`, so the name column could only line up by being the
+    // same width in every row — which it was, because `truncate` cut everything past 9rem.
+    // On the demo tenant that cut four of five names ("Ventanilla Única de Co…"). With
+    // `contents` the rows share the outer grid, so the column sizes to the longest name
+    // across all of them, up to 16rem, and still lines up. Past 16rem a name wraps.
+    <div
+      data-slot="signal-population"
+      className={cn('grid grid-cols-[minmax(6rem,16rem)_1fr_auto] items-center gap-3', className)}
+    >
       {bands.map((band) => (
-        <div key={band.name} className="grid grid-cols-[minmax(6rem,9rem)_1fr_auto] items-center gap-3">
-          <span className="truncate text-sm text-fg-secondary" title={band.name}>
+        <div key={band.name} className="contents">
+          <span className="text-sm break-words text-fg-secondary" title={band.name}>
             {band.name}
           </span>
           {band.isProtected ? (

@@ -780,14 +780,16 @@ function FindingCell({ row, t }: { row: PlanRow; t: TranslateFn }): ReactNode {
     origin === null ? (
       children
     ) : (
-      <Link to={origin} className="min-w-0 hover:underline" title={t('actionPlans.next.openOrigin')}>
+      // `block`, not the default inline: `min-w-0` does nothing on an inline box, so an
+      // inline link let its flex child keep its content width and overflow the cell.
+      <Link to={origin} className="block min-w-0 hover:underline" title={t('actionPlans.next.openOrigin')}>
         {children}
       </Link>
     )
 
   if (!row.departmentId) {
     return (
-      <span className="text-sm text-fg-label">
+      <span className="block min-w-0 text-sm break-words text-fg-label">
         {wrap(
           dimension
             ? t('actionPlans.next.findingCompanyWide', { dimension })
@@ -796,12 +798,23 @@ function FindingCell({ row, t }: { row: PlanRow; t: TranslateFn }): ReactNode {
       </span>
     )
   }
+  // The column is 222px wide in a `table-fixed` table, and the group's name sat in a chip
+  // that is `shrink-0 whitespace-nowrap` by construction — a status chip is built for one
+  // word. "Ventanilla Única de Comercio Exterior" is 240px, so the cell overflowed and
+  // painted ON TOP OF the owner beside it: two columns' text in the same pixels. It could
+  // only appear once a plan had provenance to show, which is why nothing caught it. The
+  // group and the dimension now stack, the chip's own name wraps inside it, and the
+  // dimension wraps rather than truncating — a group is not a word, so it does not get a
+  // word's typography.
   return (
-    <span className="inline-flex min-w-0 items-center gap-1.5 text-sm text-fg-secondary">
+    <span className="flex min-w-0 flex-col items-start gap-1 text-sm text-fg-secondary">
       {wrap(
-        <span className="inline-flex min-w-0 items-center gap-1.5">
-          <Chip label={row.departmentName ?? t('actionPlans.fromUnlistedDepartment')} />
-          {dimension && <span className="truncate">{dimension}</span>}
+        <span className="flex min-w-0 flex-col items-start gap-1">
+          <Chip
+            label={row.departmentName ?? t('actionPlans.fromUnlistedDepartment')}
+            className="h-auto max-w-full py-0.5 leading-snug whitespace-normal"
+          />
+          {dimension && <span className="break-words">{dimension}</span>}
         </span>,
       )}
     </span>

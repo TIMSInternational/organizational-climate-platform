@@ -268,10 +268,15 @@ export default function AdminDashboardNextView({
           </KpiRow>
         </section>
 
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+        {/* One column, not seven-and-five. The map was drawn in a 5-of-12 panel — 425px at
+            1440, 457px at the 1518 this was confirmed at on production — and six dimension
+            names and five group names have never fitted in it at any window width, 2560
+            included. Giving it the row makes the names a wrapping problem instead of a
+            truncation one. */}
+        <div className="flex flex-col gap-4">
           <section
             aria-labelledby="next-moved"
-            className="flex min-w-0 flex-col gap-3 rounded-lg border border-line-default bg-surface-card px-5 pt-4 pb-4.5 shadow-xs xl:col-span-7"
+            className="flex min-w-0 flex-col gap-3 rounded-lg border border-line-default bg-surface-card px-5 pt-4 pb-4.5 shadow-xs"
           >
             <SectionRule
               labelAs="plain"
@@ -308,7 +313,7 @@ export default function AdminDashboardNextView({
 
           <section
             aria-labelledby="next-by-group"
-            className="flex min-w-0 flex-col gap-3 rounded-lg border border-line-default bg-surface-card px-5 pt-4 pb-4.5 shadow-xs xl:col-span-5"
+            className="flex min-w-0 flex-col gap-3 rounded-lg border border-line-default bg-surface-card px-5 pt-4 pb-4.5 shadow-xs"
           >
             {/* `GET /surveys/{id}/results` is `CanAdminister` (`SurveyResultsEndpoints.cs:199`):
                 an admin with a company, for any survey of the scoped tenant. And: no wave,
@@ -512,7 +517,10 @@ function SparkCard({
       className="flex min-w-0 flex-col gap-1.5 rounded-md border border-line-light px-3.5 pt-3 pb-2.5"
     >
       <div className="flex min-w-0 items-center justify-between gap-2">
-        <span className="truncate text-sm text-fg-secondary">{dimension.name}</span>
+        {/* The dimension name is what the number is OF, so it wraps rather than truncates —
+            same reason as the map's column heads below. At 1024, where this grid drops to
+            two columns, "Seguridad psicológica" was cut in three of the six cards. */}
+        <span className="text-sm break-words text-fg-secondary">{dimension.name}</span>
         <BandChip band={band} bands={bands} short className="h-4.5 shrink-0 px-1.5 text-2xs" />
       </div>
       <div className="flex flex-wrap items-baseline gap-2">

@@ -37,7 +37,7 @@ import { BandChip, bandOf } from '../../../components/charts'
 import { useResultBands } from '../../result-bands/useResultBands'
 import ProgressUpdateForm from '../components/ProgressUpdateForm'
 import { ACTION_PLAN_PRIORITIES, ACTION_PLAN_STATUSES, kpiProgressPercent, priorityLabel, statusLabel } from '../actionPlanVocabulary'
-import { daysToDue, dueDay, elapsedShare, type PlanFinding } from './planDetailDerive'
+import { daysToDue, dueDay, elapsedShare, type PlanFinding, type PlanMove } from './planDetailDerive'
 import type { ActionPlanDetailModel, Settled } from './planDetailModel'
 import { useActionPlanDetailModel, type ActionPlanDetailState } from './useActionPlanDetailModel'
 
@@ -441,6 +441,7 @@ function Label({ children }: { children: ReactNode }) {
 function WhatCard({ model, scopeName }: { model: ActionPlanDetailModel; scopeName: string | null }) {
   const { t } = useTranslation()
   const { plan } = model
+  const proposed = model.finding.status === 'ready' && model.finding.value.status !== 'none' && model.finding.value.proposed
   return (
     <CanvasCard title={t('actionPlans.next.what.title')}>
       <div className="grid grid-cols-[136px_minmax(0,1fr)] gap-x-4 gap-y-3 text-base">
@@ -452,15 +453,27 @@ function WhatCard({ model, scopeName }: { model: ActionPlanDetailModel; scopeNam
         </p>
         <div className="flex flex-col items-start gap-1.5">
           <Label>{t('actionPlans.next.what.origin')}</Label>
-          <Chip label={t('actionPlans.next.proposed')} tone="warning" title={t('actionPlans.next.proposedHint')} />
+          {/* Only when the screen really did propose it. The chip says "the plan does not
+              store its finding", which stopped being true when the detail response started
+              carrying `sourceSurveyId` and the `dimension:` tag; a plan raised from a cell
+              now shows what it recorded, and says so by not wearing this. */}
+          {proposed && <Chip label={t('actionPlans.next.proposed')} tone="warning" title={t('actionPlans.next.proposedHint')} />}
         </div>
-        <FindingBlock finding={model.finding} scopeName={scopeName} />
+        <FindingBlock finding={model.finding} move={model.move} scopeName={scopeName} />
       </div>
     </CanvasCard>
   )
 }
 
-function FindingBlock({ finding, scopeName }: { finding: Settled<PlanFinding>; scopeName: string | null }) {
+function FindingBlock({
+  finding,
+  move,
+  scopeName,
+}: {
+  finding: Settled<PlanFinding>
+  move: Settled<PlanMove>
+  scopeName: string | null
+}) {
   const { t, locale } = useTranslation()
   // The finding's band is the company's scale; until it is read (or if it cannot be), the
   // reading prints without a band rather than under the product default.
@@ -516,8 +529,64 @@ function FindingBlock({ finding, scopeName }: { finding: Settled<PlanFinding>; s
           value.lowestOfMap ? t('actionPlans.next.finding.lowestOfMap') : t('actionPlans.next.finding.lowestOfRow', { scope }),
         ].join(' · ')}
       </span>
+      <MoveLine move={move} />
       {openLink}
     </div>
+  )
+}
+
+/**
+ * Did the plan move the number?
+ *
+ * The one line that turns a measuring instrument into evidence that acting on it works —
+ * the plan's own cell, as it read when the plan was raised and as it reads now. Every
+ * number comes out of `planMove`, which reads the server's already-floored payload, so a
+ * group too small to disclose has no score here to print.
+ *
+ * The three non-answers are deliberately three different sentences. "Nothing has closed
+ * since" is the state every plan starts in and is not a failure; "the later waves withhold
+ * this group" is a privacy outcome; and a plan with no recorded cell has nothing to say at
+ * all, so it says nothing rather than inventing a baseline.
+ */
+function MoveLine({ move }: { move: Settled<PlanMove> }) {
+  const { t, locale } = useTranslation()
+  if (move.status !== 'ready') return null
+  const value = move.value
+  if (value.status === 'none') return null
+  if (value.status === 'awaiting') {
+    return (
+      <span className="text-sm text-fg-tertiary">{t('actionPlans.next.finding.moveAwaiting', { code: value.code })}</span>
+    )
+  }
+  if (value.status === 'protected') {
+    return (
+      <span className="text-sm text-fg-tertiary">{t('actionPlans.next.finding.moveProtected', { code: value.code })}</span>
+    )
+  }
+  const delta = value.to - value.from
+  // The sign is always drawn, and the arrow never carries the direction alone: colour and
+  // glyph are both present, which is the same rule the dashboard's moves follow.
+  const rose = delta > 0
+  const flat = Math.abs(delta) < 0.05
+  return (
+    <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
+      <span className="text-fg-secondary">{t('actionPlans.next.finding.moveLabel')}</span>
+      <span className="font-mono tabular-nums text-fg-secondary">
+        {t('actionPlans.next.finding.moveReading', {
+          fromCode: value.fromCode,
+          from: reading(value.from, locale),
+          toCode: value.toCode,
+          to: reading(value.to, locale),
+        })}
+      </span>
+      {!flat && (
+        <span className={cn('font-mono tabular-nums', rose ? 'text-accent-green-ink' : 'text-accent-red-ink')}>
+          {rose ? '\u25b2' : '\u25bc'} {delta > 0 ? '+' : '\u2212'}
+          {reading(Math.abs(delta), locale)}
+        </span>
+      )}
+      {flat && <span className="text-fg-tertiary">{t('actionPlans.next.finding.moveFlat')}</span>}
+    </span>
   )
 }
 

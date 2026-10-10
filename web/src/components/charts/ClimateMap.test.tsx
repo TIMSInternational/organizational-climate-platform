@@ -480,19 +480,40 @@ describe('ClimateMap, drawn as the canvas', () => {
     ])
   })
 
-  it('lays the grid out as the artboard: a fixed 120px label column, equal reading columns, whole names cut by CSS', () => {
+  it('lays the grid out as the artboard: a label column, equal reading columns, and no rules', () => {
     const { container } = render(
       <ClimateMap variant="canvas" dimensions={DIMENSIONS} rows={rowsAt([3.0, 3.5])} target={3.7} tintStep={step} />,
     )
     expect((container.querySelector('table') as HTMLElement).className).toContain('table-fixed')
     const cols = [...container.querySelectorAll('colgroup col')]
     expect(cols).toHaveLength(3)
-    expect(cols[0].className).toBe('w-30')
+    // 176px, not the artboard's 120px: every one of the demo tenant's five group names
+    // was cut at 120 — "Ventanilla Única de Comercio Exterior" wanted 236px.
+    expect(cols[0].className).toBe('w-44')
     const heads = [...container.querySelectorAll('thead th')]
     expect(heads.map((head) => head.getAttribute('title'))).toEqual(['Psychological safety', 'Workload'])
-    expect(heads.every((head) => head.className.includes('truncate'))).toBe(true)
     // No rules: `index.css` draws one under every bare th and td, and the artboard's grid has none.
     expect([...container.querySelectorAll('th, td')].every((cell) => cell.className.includes('border-0'))).toBe(true)
+  })
+
+  it('wraps both axes rather than cutting them: nothing in the canvas grid truncates', () => {
+    const { container } = render(
+      <ClimateMap variant="canvas" dimensions={DIMENSIONS} rows={rowsAt([3.0, 3.5])} target={3.7} tintStep={step} />,
+    )
+    // A dimension name is the only thing that says what a column of numbers means, and a
+    // group name the only thing that says whose row it is. Measured on production at
+    // 1518px before this: "SEGURIDAD P…", "CARGA DE TR…", "RECONOCIMI…" across the top and
+    // all five group names down the side. `truncate` is `overflow-hidden text-ellipsis
+    // whitespace-nowrap`, so asserting the word also bans the three it expands to.
+    const heads = [...container.querySelectorAll('thead th')]
+    const rowHeads = [...container.querySelectorAll('tbody th[scope="row"]')]
+    expect(heads.length).toBe(2)
+    expect(rowHeads.length).toBe(1)
+    const labels = [...heads, ...rowHeads]
+    for (const label of labels) {
+      expect(label.className).not.toContain('truncate')
+      expect(label.className).toContain('break-words')
+    }
   })
 
   it('leaves the default map as it was: a far-below cell is still ringed there', () => {
