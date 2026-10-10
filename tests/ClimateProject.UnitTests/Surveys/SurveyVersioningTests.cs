@@ -119,7 +119,7 @@ public class SurveyVersioningTests
     {
         var content = Capture();
 
-        Assert.Equal("general_climate", content.Settings.Type);
+        Assert.Equal("periodic", content.Settings.Type);
         Assert.Equal([DepartmentId], content.Settings.DepartmentIds);
         Assert.Equal(40, content.Settings.TargetAudienceCount);
         Assert.True(content.Settings.Anonymous);

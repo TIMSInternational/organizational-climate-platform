@@ -268,7 +268,7 @@ public class SurveyDuplicationTests
         var copy = DuplicateSource();
 
         Assert.Equal(CompanyId, copy.Survey.CompanyId);
-        Assert.Equal("general_climate", copy.Survey.Type);
+        Assert.Equal("periodic", copy.Survey.Type);
         Assert.Equal(200, copy.Survey.TargetAudienceCount);
         Assert.True(copy.Survey.Settings.Anonymous);
         Assert.Equal(20, copy.Survey.Settings.TimeLimitMinutes);

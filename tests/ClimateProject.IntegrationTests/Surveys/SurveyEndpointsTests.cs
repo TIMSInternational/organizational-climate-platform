@@ -412,7 +412,10 @@ public class SurveyEndpointsTests : IAsyncLifetime
         Assert.Contains(actives!.Surveys, s => s.Id == published.Id);
         Assert.Equal(1, actives.Surveys.Single(s => s.Id == published.Id).QuestionCount);
 
-        var byType = await client.GetFromJsonAsync<SurveyListResponse>("/surveys?type=general_climate");
+        // `periodic`, because that is what the harness creates. It asked for
+        // `general_climate` while the harness wrote one too — a SERVICE name on the cadence
+        // axis — so this filter only ever passed because both halves were wrong together.
+        var byType = await client.GetFromJsonAsync<SurveyListResponse>($"/surveys?type={SurveyTypes.Periodic}");
         Assert.Contains(byType!.Surveys, s => s.Id == draft.Id);
 
         var otherType = await client.GetFromJsonAsync<SurveyListResponse>("/surveys?type=exit_interview");
