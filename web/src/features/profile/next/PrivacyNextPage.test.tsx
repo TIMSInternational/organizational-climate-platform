@@ -140,7 +140,10 @@ describe('PrivacyNextPage', () => {
   it('counts the kinds of record it does not name from the access export itself: «…y otros N tipos de registro»', async () => {
     // SubjectAccessExport.cs builds one ExportTreatment.Reference section per awaited call in its
     // Actor block (lines 156-206 on 11 Sep: seventeen ReferencesAsync, QuestionLibraryAuthorshipAsync,
-    // ReportsAsync, ReportSharesAsync — twenty). The row names three of them and counts the rest,
+    // ReportsAsync, ReportSharesAsync — twenty). ActionPlan became the SECOND table reached by two
+    // actor columns when `owner_id` was added, so its section is now `ActionPlanInvolvementAsync`
+    // rather than a `ReferencesAsync`; it is still ONE awaited section, so the count is unchanged
+    // and the sentence below still reads the same number. The row names three of them and counts the rest,
     // so a section added to or removed from that block must fail here instead of falsifying the
     // sentence. Only that block is counted: the Subject block above it awaits fourteen sections of
     // its own, which are not the reader's authorship.
@@ -154,7 +157,7 @@ describe('PrivacyNextPage', () => {
     expect(end).toBeGreaterThan(start)
     const actor = source.slice(start, end)
     const sections = actor.match(/await \w+Async\(/g) ?? []
-    for (const named of ['ReferencesAsync("Survey",', 'ReferencesAsync("ActionPlan",', 'await ReportsAsync(']) {
+    for (const named of ['ReferencesAsync("Survey",', 'await ActionPlanInvolvementAsync(', 'await ReportsAsync(']) {
       expect(actor).toContain(named)
     }
     routeFetch()
