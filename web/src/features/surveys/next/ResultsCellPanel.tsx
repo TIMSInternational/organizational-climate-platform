@@ -81,8 +81,25 @@ export default function ResultsCellPanel({
   onClose,
 }: ResultsCellPanelProps) {
   const { t, locale } = useTranslation()
-  const [planning, setPlanning] = useState(false)
-  const [createdPlan, setCreatedPlan] = useState<{ id: string; title: string } | null>(null)
+  // Both pieces of local state are keyed to the cell or the group they belong to, because
+  // this component is NOT remounted when the reader opens another cell — the parent swaps
+  // `detail` underneath the same instance. Unkeyed, a plan raised on Ventanilla Única ·
+  // Reconocimiento kept its "Plan creado: …" line and showed it under the NEXT cell opened,
+  // a confirmation about one finding sitting under a different one. Measured on production
+  // on 2026-10-10, on the first three plans the demo tenant ever had.
+  const cellKey = `${detail.rowId}:${detail.dimensionKey}`
+  const [planningFor, setPlanningFor] = useState<string | null>(null)
+  const planning = planningFor === cellKey
+  // Keyed by ROW, not by cell: `planFor` looks a plan up by `rowId` alone, so "what is being
+  // done" is a statement about the GROUP — which is what the copy says — and a plan just
+  // raised is equally that group's plan from whichever of its cells the reader opens next.
+  const [createdPlan, setCreatedPlan] = useState<{ rowId: string; id: string; title: string } | null>(null)
+  const createdHere = createdPlan !== null && createdPlan.rowId === detail.rowId ? createdPlan : null
+  // The parent's `detail.plan` cannot know about a plan raised a second ago: the results
+  // payload was fetched before it existed and is not refetched. Until it is, the plan the
+  // reader just created IS the answer to "what is being done", so the region stops offering
+  // to create a second one and offers to open the first.
+  const plan = detail.plan ?? (createdHere === null ? null : { id: createdHere.id })
   const score = (value: number) => formatMetric(value, { kind: 'number', decimals: 1 }, locale)
   const dimension = dimensionName(detail.dimensionKey)
 
@@ -257,7 +274,13 @@ export default function ResultsCellPanel({
           {detail.plan === undefined ? (
             <p className="m-0 text-sm text-fg-secondary">{t('surveyResults.next.plansUnavailable')}</p>
           ) : detail.plan === null ? (
-            <p className="m-0 text-sm text-fg-secondary">{t('surveyResults.next.doingNone')}</p>
+            // Silent once a plan has just been raised for this group: the confirmation line
+            // below already says what is being done, and "Sin plan todavía para este grupo"
+            // directly above "Plan creado: …" is the screen contradicting itself in two
+            // consecutive sentences. That is what it did on production.
+            createdHere === null ? (
+              <p className="m-0 text-sm text-fg-secondary">{t('surveyResults.next.doingNone')}</p>
+            ) : null
           ) : (
             <p className="m-0 text-sm text-fg-secondary">
               {t('surveyResults.next.doingPlanLead')}{' '}
@@ -268,11 +291,11 @@ export default function ResultsCellPanel({
             </p>
           )}
           <div className="flex flex-wrap gap-2">
-            {detail.plan ? (
+            {plan ? (
               // Reading a plan is `CanAccessCompany`, the whole-company viewer — the
               // one this page admits (`SurveyResultsNextPage.tsx`).
               <Button variant="outline" asChild>
-                <Link to={`/action-plans/${detail.plan.id}`}>
+                <Link to={`/action-plans/${plan.id}`}>
                   <Target aria-hidden="true" />
                   {t('surveyResults.next.openPlan')}
                 </Link>
@@ -285,9 +308,9 @@ export default function ResultsCellPanel({
               // the department and remember what they were acting on. The plan they wanted
               // was always "this cell"; the screen made them say so again.
               capabilities.canCreateActionPlan &&
-              detail.plan === null &&
+              plan === null &&
               !planning && (
-                <Button variant="outline" onClick={() => { setPlanning(true); setCreatedPlan(null) }}>
+                <Button variant="outline" onClick={() => { setPlanningFor(cellKey); setCreatedPlan(null) }}>
                   <Plus aria-hidden="true" />
                   {t('surveyResults.next.createPlan')}
                 </Button>
@@ -319,17 +342,17 @@ export default function ResultsCellPanel({
                 // "which finding was this one for" is otherwise only in the prose.
                 tags: ['seguimiento', `department:${detail.rowId}`, `dimension:${detail.dimensionKey}`],
               }}
-              onCreated={(plan) => {
-                setPlanning(false)
-                setCreatedPlan(plan)
+              onCreated={(created) => {
+                setPlanningFor(null)
+                setCreatedPlan({ rowId: detail.rowId, id: created.id, title: created.title })
               }}
-              onCancel={() => setPlanning(false)}
+              onCancel={() => setPlanningFor(null)}
             />
           )}
-          {createdPlan && (
+          {createdHere && (
             <p className="m-0 text-sm text-fg-primary">
-              {t('surveyResults.cross.created', { title: createdPlan.title })}{' '}
-              <Link className="underline" to={`/action-plans/${createdPlan.id}`}>
+              {t('surveyResults.cross.created', { title: createdHere.title })}{' '}
+              <Link className="underline" to={`/action-plans/${createdHere.id}`}>
                 {t('surveyResults.cross.viewPlan')}
               </Link>
             </p>
