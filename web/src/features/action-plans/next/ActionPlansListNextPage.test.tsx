@@ -20,16 +20,17 @@ const API = 'http://api.test'
 const TRACKING = 'http://tracking.test'
 const COMPANY = '16c97c29-07f8-4522-86fc-e6cc56298829'
 const FINANZAS = 'bff21fd0-422b-4f3b-8c89-d6bfbf5f19e9'
+const SURVEY = 'a0f2a6cf-9d1d-4a0e-9b63-1c0c9f4f6d21'
 
 const ACTION_PLANS = {
   actionPlans: [
-    { id: 'p1', title: 'Programa de reconocimiento entre pares', companyId: COMPANY, departmentId: 'd-personas', dueDate: '2026-09-30T02:05:50.251+00:00', status: 'not_started', priority: 'high', createdAt: '2026-09-10T02:05:50.263923+00:00' },
+    { id: 'p1', title: 'Programa de reconocimiento entre pares', companyId: COMPANY, departmentId: 'd-personas', dueDate: '2026-09-30T02:05:50.251+00:00', status: 'not_started', priority: 'high', createdAt: '2026-09-10T02:05:50.263923+00:00', sourceSurveyId: SURVEY, tags: ['seguimiento', 'department:d-personas', 'dimension:recognition'] },
     { id: 'c1', title: 'Buzón anónimo de sugerencias', companyId: COMPANY, departmentId: null, dueDate: '2026-10-10T00:00:00+00:00', status: 'cancelled', priority: 'medium', createdAt: '2026-09-10T02:12:06.466863+00:00' },
     { id: 'c2', title: 'Almuerzos mensuales por departamento', companyId: COMPANY, departmentId: null, dueDate: '2026-10-10T00:00:00+00:00', status: 'cancelled', priority: 'medium', createdAt: '2026-09-10T02:13:38.941573+00:00' },
     { id: 'c3', title: 'Piloto de horario flexible en Ventas', companyId: COMPANY, departmentId: null, dueDate: '2026-10-10T00:00:00+00:00', status: 'cancelled', priority: 'medium', createdAt: '2026-09-10T02:14:40.726189+00:00' },
-    { id: 'p2', title: 'Reducir la carga de trabajo en Operaciones', companyId: COMPANY, departmentId: 'd-ops', dueDate: '2026-10-15T02:05:50.278+00:00', status: 'not_started', priority: 'high', createdAt: '2026-09-10T02:05:50.280646+00:00' },
+    { id: 'p2', title: 'Reducir la carga de trabajo en Operaciones', companyId: COMPANY, departmentId: 'd-ops', dueDate: '2026-10-15T02:05:50.278+00:00', status: 'not_started', priority: 'high', createdAt: '2026-09-10T02:05:50.280646+00:00', sourceSurveyId: SURVEY, tags: ['seguimiento', 'department:d-ops', 'dimension:workload'] },
     { id: 'p3', title: 'Reuniones abiertas con la dirección', companyId: COMPANY, departmentId: null, dueDate: '2026-10-25T02:05:50.292+00:00', status: 'not_started', priority: 'medium', createdAt: '2026-09-10T02:05:50.294635+00:00' },
-    { id: 'p4', title: 'Plan de desarrollo de carrera en Ingeniería', companyId: COMPANY, departmentId: 'd-ing', dueDate: '2026-11-09T03:05:50.285+00:00', status: 'not_started', priority: 'medium', createdAt: '2026-09-10T02:05:50.287727+00:00' },
+    { id: 'p4', title: 'Plan de desarrollo de carrera en Ingeniería', companyId: COMPANY, departmentId: 'd-ing', dueDate: '2026-11-09T03:05:50.285+00:00', status: 'not_started', priority: 'medium', createdAt: '2026-09-10T02:05:50.287727+00:00', tags: ['seguimiento', 'department:d-ing', 'dimension:growth'] },
   ],
 }
 
@@ -118,6 +119,29 @@ describe('ActionPlansListNextPage — company_admin', () => {
     setToken(tokenFor({ sub: 'u-ana', role: 'company_admin', companyId: COMPANY, nodoId: `unassigned-${COMPANY}`, isActive: 'true' }))
   })
 
+  it('tells a company with no plans where plans come from, and blames no filter', async () => {
+    // Measured on the live screen 2026-10-09: a tenant with zero plans — every tenant on
+    // day one — was told "Ningún plan coincide con los filtros" with no filter set. The
+    // page chose its empty line by table GROUP and never by whether a filter was on.
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.startsWith(`${API}/action-plans?`)) return json({ actionPlans: [] })
+      if (url.startsWith(`${API}/admin/departments`)) return json(DEPARTMENTS)
+      if (url.includes('/action-plan-templates')) return json({ templates: [] })
+      if (url.startsWith(`${TRACKING}/api/planes-accion`)) return json([])
+      if (url.includes('/tracking/picker/nodos')) return json({ nodos: [] })
+      if (/\/profile(\?|$)/.test(url)) return json({ companyName: 'Grupo Meridiano S.A.' })
+      return json({}, 404)
+    })
+    renderPage()
+
+    const empty = await screen.findAllByText(next.firstPlanEmpty, { exact: false })
+    expect(empty.length).toBeGreaterThan(0)
+    // The sentence names where a plan comes from, and the link goes there.
+    expect(screen.getAllByRole('link', { name: next.firstPlanLink })[0]!.getAttribute('href')).toBe('/surveys')
+    expect(screen.queryByText(next.groupEmpty)).toBeNull()
+  })
+
   it('groups by state: En marcha empty with its sentence, the four No iniciados by due date', async () => {
     renderPage()
     await screen.findByRole('link', { name: 'Programa de reconocimiento entre pares' })
@@ -166,61 +190,46 @@ describe('ActionPlansListNextPage — company_admin', () => {
     expect(calls().some((call) => call.url.startsWith(TRACKING))).toBe(false)
   })
 
-  it('wears the sample chip only on the finding column and its tile — the owner is the real reading, unassigned', async () => {
+  it('reads a plan\'s origin from what the results screen wrote, and offers the way back', async () => {
+    // Both halves were already stored and neither was returned: `sourceSurveyId` since the
+    // results cross started sending it, the dimension as a `dimension:<key>` tag. The column
+    // was therefore filled from a lookup keyed by the plan's TITLE and the whole thing wore a
+    // "Datos de muestra" chip — over data that existed. Measured live on 2026-10-09.
     renderPage()
     await screen.findByRole('link', { name: 'Programa de reconocimiento entre pares' })
-    const chips = [...document.querySelectorAll('[data-slot="sample-chip"]')]
-    expect(chips.length).toBeGreaterThan(0)
-    for (const chip of chips) {
-      const tile = chip.closest('[data-slot="kpi-tile"]')
-      const header = chip.closest('th')
-      const where = tile?.querySelector('[data-slot="kpi-label"]')?.textContent ?? header?.textContent ?? ''
-      // Below 1360px the finding folds into the plan's cell, and its chip moves to the Plan
-      // heading with it, drawn there in that layout only.
-      const folded = where.startsWith(next.colPlan) && chip.className.includes('min-[1360px]:hidden')
-      expect(folded || [next.tileFinding, next.colFinding].some((name) => where.startsWith(name)), where).toBe(true)
-    }
-    expect(chips.filter((chip) => chip.closest('[data-slot="kpi-tile"]'))).toHaveLength(1)
+
+    // Nothing on this screen claims to be sample data any more.
+    expect(document.querySelectorAll('[data-slot="sample-chip"]')).toHaveLength(0)
+
+    // By href, not by accessible name: the link's NAME is its content — the department chip
+    // and the dimension — which is what a screen reader should read. `title` only adds the
+    // tooltip on top of it.
+    const origin = [...document.querySelectorAll(`a[href="/surveys/${SURVEY}/results"]`)]
+    // p1 and p2 carry a source survey; p4 carries a dimension tag but no survey, which is a
+    // plan raised from a cross rather than from a cell — it names its finding and no link.
+    // Two PLANS, not two links: below 1360px the finding folds into the Plan cell as well,
+    // so each row draws it twice and only one of the two is visible at any width.
+    expect(new Set(origin.map((link) => link.closest('tr')))).toHaveProperty('size', 2)
+    expect(origin.map((link) => link.textContent).join(' ')).toContain('Personas')
+    expect(origin[0]!.getAttribute('title')).toBe(next.openOrigin)
+
     // The entity has no owner (ActionPlan.cs), so "4 de 4 sin responsable" is a measurement.
     const ownerTile = screen.getByText(next.tileOwner).closest('[data-slot="kpi-tile"]') as HTMLElement
     expect(ownerTile.querySelector('[data-slot="sample-chip"]')).toBeNull()
     expect(ownerTile.textContent).toContain(next.ofTotal.replace('{total}', '4'))
-    const table = section(next.groupNotStarted).querySelector('table') as HTMLTableElement
-    expect(table.querySelector('th[data-col="owner"] [data-slot="sample-chip"]')).toBeNull()
   })
 
-  it('sets the columns on the artboard grid — the finding, the owner, Vence, Prioridad and the actions at 222, 162, 132, 92 and 144px — each cell padded on the left only', async () => {
+  it('names no finding for a plan raised by hand, rather than inventing one', async () => {
     renderPage()
-    await screen.findByRole('link', { name: 'Programa de reconocimiento entre pares' })
-    const table = section(next.groupNotStarted).querySelector('table') as HTMLTableElement
-    const width = (col: string) => (table.querySelector(`th[data-col="${col}"]`) as HTMLElement).className.match(/\bw-\[(\d+)px\]/)?.[1]
-    // The artboard's `210px 150px 120px 80px 120px` plus the 12px gap before each.
-    expect(['finding', 'owner', 'due', 'priority', 'actions'].map(width)).toEqual(['222', '162', '132', '92', '144'])
-    for (const cell of table.querySelectorAll('th, td')) {
-      expect(cell.className).toMatch(/(^|\s)pl-3(\s|$)/)
-      expect(cell.className).toMatch(/(^|\s)pr-0(\s|$)/)
-      expect(cell.className).toContain('last:pr-3')
-    }
+    await screen.findByRole('link', { name: 'Reuniones abiertas con la dirección' })
+    // p3 has no tags at all. The old lookup matched on title and would have missed it too,
+    // but for the wrong reason: it knew three Spanish titles, not what the plan records.
+    const row = screen.getByRole('link', { name: 'Reuniones abiertas con la dirección' }).closest('tr') as HTMLElement
+    // Twice, for the same reason as above: the finding column and the folded Plan cell.
+    expect(within(row).getAllByText(next.noFinding)).toHaveLength(2)
+    expect(row.querySelector('a[href^="/surveys/"]')).toBeNull()
   })
 
-  it('hangs the sample chip UNDER the finding heading, so the heading keeps the artboard line and its 222px column', async () => {
-    renderPage()
-    await screen.findByRole('link', { name: 'Programa de reconocimiento entre pares' })
-    const table = section(next.groupNotStarted).querySelector('table') as HTMLTableElement
-    for (const th of table.querySelectorAll('th')) {
-      // Every heading at the top of its cell: the chip under one of them adds a line below the
-      // headings instead of pushing the others down to its middle.
-      expect(th.className).toMatch(/(^|\s)align-top(\s|$)/)
-    }
-    const heading = table.querySelector('th[data-col="finding"]') as HTMLElement
-    expect(heading.className).toContain('whitespace-nowrap')
-    const chip = heading.querySelector('[data-slot="sample-chip"]') as HTMLElement
-    const stack = chip.parentElement as HTMLElement
-    // A column, the heading's words first and the chip on the line under them.
-    expect(stack.className).toMatch(/(^|\s)flex-col(\s|$)/)
-    expect(stack.firstChild?.textContent).toBe(next.colFinding)
-    expect(stack.lastElementChild).toBe(chip)
-  })
 
   it('folds the finding and owner into the plan cell below 1360px instead of scrolling a minimum width', async () => {
     renderPage()

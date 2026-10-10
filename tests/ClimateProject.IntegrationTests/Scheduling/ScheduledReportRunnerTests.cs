@@ -100,7 +100,7 @@ public class ScheduledReportRunnerTests(PostgresContainerFixture postgres)
             CreatedBy = creator.Id,
             TitleEn = "Q3 Climate",
             Language = "en",
-            Type = "general_climate",
+            Type = "periodic",
             Status = SurveyStatuses.Active,
             StartDate = Now.AddDays(-30),
             EndDate = Now.AddDays(30),

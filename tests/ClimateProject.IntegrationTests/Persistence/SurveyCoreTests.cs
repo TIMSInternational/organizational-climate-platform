@@ -45,7 +45,7 @@ public class SurveyCoreTests(PostgresContainerFixture postgres)
             CompanyId = company.Id,
             CreatedBy = user.Id,
             TitleEn = "Q3 Climate Survey",
-            Type = "general_climate",
+            Type = "periodic",
             StartDate = DateTimeOffset.UtcNow,
             EndDate = DateTimeOffset.UtcNow.AddDays(14),
             Settings = new SurveySettings { Anonymous = true, TimeLimitMinutes = 20 },

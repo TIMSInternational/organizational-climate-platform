@@ -22,7 +22,7 @@ public class SurveyVersioningTests
             DescriptionEn = "How it is going",
             DescriptionEs = "Cómo va todo",
             Language = language,
-            Type = "general_climate",
+            Type = "periodic",
             StartDate = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero),
             EndDate = new DateTimeOffset(2026, 2, 1, 0, 0, 0, TimeSpan.Zero),
             TargetAudienceCount = 40,

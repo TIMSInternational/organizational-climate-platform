@@ -141,7 +141,7 @@ public class SearchEndpointsTests : IAsyncLifetime
         TitleEn = titleEn,
         TitleEs = titleEs,
         Language = language,
-        Type = "general_climate",
+        Type = "periodic",
         Status = status,
         StartDate = DateTimeOffset.UtcNow.AddDays(-1),
         EndDate = DateTimeOffset.UtcNow.AddDays(30),

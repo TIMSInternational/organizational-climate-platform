@@ -104,10 +104,13 @@ describe('sortInsights / groupSizeOf / latestClosedSurvey', () => {
 })
 
 describe('AIInsightsNextPage', () => {
-  it('heads the page with the proposal eyebrow and the company', async () => {
+  it('heads the page with the company alone, and no proposal marker', async () => {
     vi.mocked(listAIInsights).mockResolvedValue([])
     renderAt('/analytics/ai-insights', <AIInsightsNextPage />, '/analytics/ai-insights')
-    expect(await screen.findByText(`${insightsCopy.proposal} · Grupo Meridiano S.A.`)).toBeTruthy()
+    expect(await screen.findByText('Grupo Meridiano S.A.')).toBeTruthy()
+    // The eyebrow used to read "PROPUESTA · <company>" on four screens a client admin
+    // owns. They read real data and are not proposals; the marker was a design-time note.
+    expect(screen.queryByText(/Proposal|Propuesta/)).toBeNull()
   })
 
   it('says why an empty list is empty, naming the company, and prints a count of 0', async () => {
@@ -170,8 +173,8 @@ describe('AnalyticsNextPage', () => {
   it('reads each reference against the latest wave, with the cohort size from its detail', async () => {
     arrange(detail([42, 40]))
     const row = await screen.findByTestId('benchmark-row')
-    // The board's eyebrow: "PROPUESTA · GRUPO MERIDIANO S.A." (uppercased by CSS).
-    expect(screen.getByText(`${insightsCopy.proposal} · Grupo Meridiano S.A.`)).toBeTruthy()
+    // The board's eyebrow: "GRUPO MERIDIANO S.A." (uppercased by CSS).
+    expect(screen.getByText('Grupo Meridiano S.A.')).toBeTruthy()
     expect(within(row).getByText('42')).toBeTruthy()
     expect(within(row).getByText(analyticsCopy.qualityPending)).toBeTruthy()
     expect(within(row).getByText(analyticsCopy.scopeGlobal)).toBeTruthy()

@@ -336,6 +336,17 @@ public static class SurveyEndpoints
             return Results.Json(new { message = "Type is required" }, statusCode: 400);
         }
 
+        // Checked against the vocabulary, not merely for being non-blank. The comment a few
+        // lines down has said since #496 that "Survey.Type's own lack of validation is exactly
+        // how the licence layer came to compare two vocabularies that never intersect" — and
+        // the hole stayed open, so three production surveys now hold `general_climate`, a
+        // SERVICE name, in their cadence column. A type outside this list also reaches the
+        // reader as a raw machine key, because an unknown enum prints as stored by design.
+        if (!SurveyTypes.IsKnown(type))
+        {
+            return InvalidSurveyType(type);
+        }
+
         // Optional, and unset is the norm: a survey only meters a licence seat once somebody says
         // which service it is an instrument of (#496). Anything outside the metered vocabulary is
         // refused rather than stored, because Survey.Type's own lack of validation is exactly how
@@ -626,6 +637,15 @@ public static class SurveyEndpoints
             if (string.IsNullOrWhiteSpace(type))
             {
                 return Results.Json(new { message = "Type is required" }, statusCode: 400);
+            }
+
+            // Grandfathered on purpose: a survey already holding an unknown type can still be
+            // saved with that same value, so the rows that predate this validation stay
+            // editable. What is refused is moving a survey TO an unknown type, which is the
+            // only way a new bad value could appear.
+            if (!SurveyTypes.IsKnown(type) && !string.Equals(type, survey.Type, StringComparison.Ordinal))
+            {
+                return InvalidSurveyType(type);
             }
 
             survey.Type = type;
@@ -1530,6 +1550,11 @@ public static class SurveyEndpoints
     }
 
     private static IResult NotFound() => Results.Json(new { message = "Survey not found" }, statusCode: 404);
+
+    private static IResult InvalidSurveyType(string? type) =>
+        Results.Json(
+            new { message = $"Invalid survey type: {type}. Expected one of: {string.Join(", ", SurveyTypes.All)}." },
+            statusCode: 400);
 
     private static IResult InvalidServiceType(string? serviceType)
         => Results.Json(

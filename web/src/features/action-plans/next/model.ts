@@ -45,8 +45,13 @@ export interface PlanRow {
   dueDate: string
   /** ISO instant. */
   createdAt: string
-  /** SAMPLE — see `sampleModel.ts`. `null` means the sample names no finding for the plan. */
+  /**
+   * The cell this plan was raised against, read from its `dimension:<key>` tag.
+   * `null` for a plan raised by hand, which names no finding and never did.
+   */
   finding: PlanFinding | null
+  /** The survey the finding was measured in, when the plan was raised from one. */
+  sourceSurveyId: string | null
   /**
    * Always `null` today, and that is the reading, not a gap: the action-plan entity has no
    * owner (`ActionPlan.cs`), so no plan has one and every row reads "Sin asignar" — the
@@ -74,7 +79,5 @@ export interface ActionPlansListModel {
   /** Today, `YYYY-MM-DD` in the reader's own calendar. Every "in N days" is counted from it. */
   asOf: string
   rows: readonly PlanRow[]
-  /** The findings column and its tile are sample-fed: no endpoint carries a plan's finding. */
-  findingsAreSample: boolean
   overdue: OverdueReading
 }

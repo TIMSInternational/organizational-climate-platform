@@ -13,7 +13,16 @@ public sealed record ActionPlanListItem(
     DateTimeOffset DueDate,
     string Status,
     string Priority,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    // Where the plan came from. Both were already stored and neither was ever returned:
+    // `CreateActionPlanRequest` takes SourceSurveyId, the create path validates it against
+    // the caller's company and writes it against a real foreign key, and the results screen
+    // tags every plan it raises with `department:<id>` and `dimension:<key>`. With the list
+    // carrying neither, the client could not know a plan's origin and the Planes de Accion
+    // screen labelled its whole "hallazgo de origen" column sample-fed — over a column whose
+    // data exists. Provenance that is written and never read is provenance nobody has.
+    Guid? SourceSurveyId,
+    string[] Tags);
 
 public sealed record ActionPlanListResponse(IReadOnlyList<ActionPlanListItem> ActionPlans);
 
@@ -28,6 +37,8 @@ public sealed record ActionPlanDetail(
     string Status,
     string Priority,
     string[] Tags,
+    /// <summary>The survey this plan was raised from, when it was raised from one.</summary>
+    Guid? SourceSurveyId,
     Guid? TemplateId,
     List<KpiDto> Kpis,
     List<ObjectiveDto> Objectives,

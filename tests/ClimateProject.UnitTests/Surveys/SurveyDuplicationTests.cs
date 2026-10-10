@@ -39,7 +39,7 @@ public class SurveyDuplicationTests
             DescriptionEn = "How the team is doing",
             DescriptionEs = "Como va el equipo",
             Language = "both",
-            Type = "general_climate",
+            Type = "periodic",
             StartDate = Now,
             EndDate = Now.AddDays(14),
             Status = "closed",

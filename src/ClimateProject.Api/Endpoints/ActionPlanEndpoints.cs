@@ -56,7 +56,8 @@ public static class ActionPlanEndpoints
             .ToList();
 
         return new ActionPlanDetail(plan.Id, title, description, plan.CompanyId, plan.DepartmentId, plan.CreatedBy,
-            plan.DueDate, plan.Status, plan.Priority, plan.Tags, plan.TemplateId, kpis, objectives, fallbackFields);
+            plan.DueDate, plan.Status, plan.Priority, plan.Tags, plan.SourceSurveyId, plan.TemplateId, kpis, objectives,
+            fallbackFields);
     }
 
     private static async Task<IResult> ListAsync(
@@ -81,12 +82,20 @@ public static class ActionPlanEndpoints
         var locale = ContentLanguages.NormaliseLocale(lang) ?? ContentLanguages.FallbackLocale;
         var plans = (await query
                 .OrderBy(p => p.DueDate)
-                .Select(p => new { p.Id, p.TitleEn, p.TitleEs, p.CompanyId, p.DepartmentId, p.DueDate, p.Status, p.Priority, p.CreatedAt })
+                .Select(p => new
+                {
+                    p.Id, p.TitleEn, p.TitleEs, p.CompanyId, p.DepartmentId, p.DueDate, p.Status, p.Priority,
+                    p.CreatedAt, p.SourceSurveyId, p.Tags,
+                })
                 .ToListAsync(cancellationToken))
             .Select(p => new ActionPlanListItem(
                 p.Id,
                 AuthoredContent.ResolveRequired(p.TitleEn, p.TitleEs, locale),
-                p.CompanyId, p.DepartmentId, p.DueDate, p.Status, p.Priority, p.CreatedAt))
+                p.CompanyId, p.DepartmentId, p.DueDate, p.Status, p.Priority, p.CreatedAt,
+                // The projection is explicit rather than `Select(p => p)` so a column is only
+                // read when a caller needs it; these two are what makes a plan's origin
+                // readable at all, and both were already on the row.
+                p.SourceSurveyId, p.Tags ?? []))
             .ToList();
 
         return Results.Ok(new ActionPlanListResponse(plans));

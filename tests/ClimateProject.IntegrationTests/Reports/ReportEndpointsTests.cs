@@ -260,7 +260,7 @@ public class ReportEndpointsTests : IAsyncLifetime
         var response = await client.PostAsJsonAsync("/surveys", new CreateSurveyRequest(
             Title: LocalizedInput.FromBare(title),
             CompanyId: _companyId,
-            Type: "general_climate",
+            Type: "periodic",
             StartDate: DateTimeOffset.UtcNow.AddDays(-1),
             EndDate: DateTimeOffset.UtcNow.AddDays(14),
             DepartmentIds: null,
@@ -383,7 +383,7 @@ public class ReportEndpointsTests : IAsyncLifetime
         var response = await client.PostAsJsonAsync("/surveys", new CreateSurveyRequest(
             Title: LocalizedInput.FromBare(title),
             CompanyId: _companyId,
-            Type: "general_climate",
+            Type: "periodic",
             StartDate: DateTimeOffset.UtcNow.AddDays(-1),
             EndDate: DateTimeOffset.UtcNow.AddDays(14),
             DepartmentIds: null,

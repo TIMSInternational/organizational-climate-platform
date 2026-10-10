@@ -240,7 +240,7 @@ function QuestionLibraryForCompany() {
   return (
     <div>
       <PageTopBar
-        eyebrow={[t('insights.next.proposal'), companyName].filter(Boolean).join(' · ')}
+        eyebrow={companyName}
         title={t('questionLibrary.next.title')}
         description={t('questionLibrary.next.description', { company })}
         actions={

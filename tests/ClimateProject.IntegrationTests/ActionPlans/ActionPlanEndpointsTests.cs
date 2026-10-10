@@ -97,6 +97,91 @@ public class ActionPlanEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task List_returns_where_a_plan_came_from_so_a_client_can_read_its_origin()
+    {
+        // Both halves of a plan's provenance were stored and neither was ever returned.
+        // `SourceSurveyId` has been written and tenancy-checked since #168; the results screen
+        // tags every plan it raises `seguimiento`, `department:<id>` and `dimension:<key>`.
+        // With the list item carrying neither, the client could not know where a plan came
+        // from, and the Planes de Acción screen marked its whole origin column "Datos de
+        // muestra" over data that already existed.
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        Guid surveyId;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            var author = await db.Users.FirstAsync(u => u.CompanyId == _companyAId);
+            var survey = new Survey
+            {
+                Id = Guid.NewGuid(),
+                CompanyId = _companyAId,
+                CreatedBy = author.Id,
+                TitleEn = "Q3 climate",
+                Language = "en",
+                Type = SurveyTypes.Periodic,
+                Status = "closed",
+                StartDate = DateTimeOffset.UtcNow.AddDays(-10),
+                EndDate = DateTimeOffset.UtcNow.AddDays(-1),
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow,
+            };
+            db.Surveys.Add(survey);
+            await db.SaveChangesAsync();
+            surveyId = survey.Id;
+        }
+
+        var createResponse = await client.PostAsJsonAsync("/action-plans", new CreateActionPlanRequest(
+            Title: "Seguimiento para Ventanilla — Reconocimiento",
+            Description: "Raised from the results map",
+            CompanyId: _companyAId,
+            DepartmentId: null,
+            DueDate: DateTimeOffset.UtcNow.AddDays(30),
+            Priority: "high",
+            Tags: new[] { "seguimiento", "dimension:recognition" },
+            TemplateId: null,
+            SourceSurveyId: surveyId,
+            SourceInsightId: null,
+            Kpis: null,
+            Objectives: null));
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        var created = await createResponse.Content.ReadFromJsonAsync<ActionPlanDetail>();
+
+        // The detail carries it too: the screen that opens one plan needs the same fact.
+        Assert.Equal(surveyId, created!.SourceSurveyId);
+
+        var listResponse = await client.GetAsync($"/action-plans?companyId={_companyAId}");
+        var list = await listResponse.Content.ReadFromJsonAsync<ActionPlanListResponse>();
+        var row = Assert.Single(list!.ActionPlans, p => p.Id == created.Id);
+        Assert.Equal(surveyId, row.SourceSurveyId);
+        Assert.Contains("dimension:recognition", row.Tags);
+
+        // A plan raised by hand names no origin, and says so with nulls rather than a guess.
+        var plainResponse = await client.PostAsJsonAsync("/action-plans", new CreateActionPlanRequest(
+            Title: "Raised by hand",
+            Description: "No survey behind this one",
+            CompanyId: _companyAId,
+            DepartmentId: null,
+            DueDate: DateTimeOffset.UtcNow.AddDays(30),
+            Priority: "medium",
+            Tags: null,
+            TemplateId: null,
+            SourceSurveyId: null,
+            SourceInsightId: null,
+            Kpis: null,
+            Objectives: null));
+        var plain = await plainResponse.Content.ReadFromJsonAsync<ActionPlanDetail>();
+        var plainRow = Assert.Single(
+            (await (await client.GetAsync($"/action-plans?companyId={_companyAId}"))
+                .Content.ReadFromJsonAsync<ActionPlanListResponse>())!.ActionPlans,
+            p => p.Id == plain!.Id);
+        Assert.Null(plainRow.SourceSurveyId);
+        Assert.Empty(plainRow.Tags);
+    }
+
+    [Fact]
     public async Task Create_rejects_invalid_priority()
     {
         var client = _factory.CreateClient();
@@ -374,7 +459,7 @@ public class ActionPlanEndpointsTests : IAsyncLifetime
                 CreatedBy = author.Id,
                 TitleEn = "Company B climate",
                 Language = "en",
-                Type = "general_climate",
+                Type = "periodic",
                 Status = "closed",
                 StartDate = DateTimeOffset.UtcNow.AddDays(-10),
                 EndDate = DateTimeOffset.UtcNow.AddDays(-1),

@@ -129,10 +129,24 @@ export function qualityReading(reference: Pick<BenchmarkReference, 'qualityScore
   return { kind: 'score', value: reference.qualityScore }
 }
 
-/** `BenchmarkTypes` (`ClimateProject.Domain`) is exactly `industry | internal`. */
+/**
+ * `BenchmarkTypes` (`ClimateProject.Domain`) declares exactly `industry | internal`, and
+ * this map carries four.
+ *
+ * The two extra are not speculation. `AnalyticsNextPage` has its own copy of this lookup
+ * that has always known `regional` and `company_size`, so the same stored value was named
+ * "Regional" on Analítica and printed raw as `regional` on Puntos de Referencia — one
+ * screen could read a reference the other could not. Measured on the live screen
+ * 2026-10-09, in the references table.
+ *
+ * A value outside the domain's two reaching the client at all is a separate question, and
+ * the answer is not to print a machine key at whichever screen happens to meet it.
+ */
 const TYPE_KEYS: Record<string, string> = {
   industry: 'benchmarks.next.typeIndustry',
   internal: 'benchmarks.next.typeInternal',
+  regional: 'benchmarks.next.typeRegional',
+  company_size: 'benchmarks.next.typeCompanySize',
 }
 
 /**

@@ -1,7 +1,17 @@
+import { useState } from 'react'
 import { BarChart3, Copy, Lock, Send, ShieldCheck } from 'lucide-react'
 import { Link, useParams } from 'react-router'
 import { PageTopBar } from '../../../../components/layout'
-import { Alert, AlertDescription, Button, Chip, ErrorState, LoadingRegion, SkeletonText } from '../../../../components/ui'
+import {
+  Alert,
+  AlertDescription,
+  Button,
+  Chip,
+  ConfirmationDialog,
+  ErrorState,
+  LoadingRegion,
+  SkeletonText,
+} from '../../../../components/ui'
 import { ANONYMITY_FLOOR } from '../../../../components/charts'
 import { estimateAudience } from '../../../../components/distribution'
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
@@ -347,6 +357,12 @@ function StatusTile({
   const { t } = useTranslation()
   const copy = (key: string) => t(`surveys.next.detail.${key}`)
   const tone = survey.status === 'active' ? 'good' : survey.status === 'draft' || survey.status === 'scheduled' ? 'accent' : 'neutral'
+  // Closing is the one transition on this tile that cannot be taken back: the server allows
+  // `closed → archived` and nothing else out of it, so a mis-click ends the measurement for
+  // good and loses whatever half-finished answers were in flight. It fired on a single press
+  // until now, while the microclimate detail — a smaller thing to lose — has always asked.
+  // The 2026-10-06 walkthrough closed two seeded surveys this way and could not undo it.
+  const [confirmClose, setConfirmClose] = useState(false)
   return (
     <div data-testid="tile-status" className="flex min-w-0 flex-col gap-2 rounded-lg border border-line-default bg-surface-card px-4 py-3.5 shadow-xs">
       <span className="text-2xs font-bold uppercase leading-normal tracking-wider text-fg-label">{copy('status')}</span>
@@ -367,7 +383,7 @@ function StatusTile({
                 size="sm"
                 variant="outline"
                 disabled={pending !== null}
-                onClick={() => onTransition(status)}
+                onClick={() => (status === 'closed' ? setConfirmClose(true) : onTransition(status))}
               >
                 {status === 'closed' && <Lock aria-hidden="true" className="size-3.5" />}
                 {KNOWN_STATUSES.includes(status) ? copy(`verb.${status}`) : statusLabel(t, status)}
@@ -376,6 +392,19 @@ function StatusTile({
           </span>
         </div>
       )}
+      <ConfirmationDialog
+        open={confirmClose}
+        onOpenChange={setConfirmClose}
+        title={copy('closeConfirmTitle')}
+        description={copy('closeConfirmBody')}
+        confirmText={copy('verb.closed')}
+        cancelText={t('common.cancel')}
+        variant="destructive"
+        onConfirm={() => {
+          onTransition('closed')
+          setConfirmClose(false)
+        }}
+      />
     </div>
   )
 }

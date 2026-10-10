@@ -211,7 +211,7 @@ public class EmployeeLastOutcomeEndpointTests : IAsyncLifetime
             TitleEn = title,
             TitleEs = $"{title} (ES)",
             Language = "both",
-            Type = "general_climate",
+            Type = "periodic",
             StartDate = endDate.AddDays(-14),
             EndDate = endDate,
             Status = status,
