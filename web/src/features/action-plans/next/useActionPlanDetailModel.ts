@@ -12,7 +12,7 @@ import {
 import { listActionPlanTemplates } from '../api/actionPlanTemplates'
 import type { ProgressUpdateFormValues } from '../components/ProgressUpdateForm'
 import { listDepartments } from '../../org-structure/api/departments'
-import { getUser } from '../../org-structure/api/users'
+import { getUser, listUsers } from '../../org-structure/api/users'
 import { listSurveys } from '../../surveys/api/surveys'
 import { DEPARTMENT_GROUP, getClimateTrends } from '../../surveys/api/climateTrends'
 import { latestClosedSurvey } from '../../dashboard/next/compose'
@@ -31,6 +31,8 @@ export interface ActionPlanDetailState {
   reload: () => void
   changeStatus: (status: string) => Promise<void>
   changePriority: (priority: string) => Promise<void>
+  /** Hand the plan to somebody, or `null` to take it back. */
+  changeOwner: (ownerId: string | null) => Promise<void>
   /** Rejects with the server's message; `ProgressUpdateForm` renders it beside its fields. */
   recordProgress: (values: ProgressUpdateFormValues) => Promise<void>
 }
@@ -65,6 +67,7 @@ export function useActionPlanDetailModel(id: string | undefined, enabled: boolea
   const [templateName, setTemplateName] = useState<Settled<string | null>>(LOADING)
   const [finding, setFinding] = useState<Settled<PlanFinding>>(LOADING)
   const [move, setMove] = useState<Settled<PlanMove>>(LOADING)
+  const [owners, setOwners] = useState<Settled<readonly { id: string; name: string }[]>>(LOADING)
   const [recorded, setRecorded] = useState<ProgressUpdateDetail[]>([])
   const [saving, setSaving] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -128,6 +131,14 @@ export function useActionPlanDetailModel(id: string | undefined, enabled: boolea
       return plans.find((candidate) => candidate.id === planId)?.createdAt ?? null
     }).then(apply(setCreatedAt))
 
+    // Who the plan can be handed to. The whole company's users, because the server's only
+    // rule is that an owner belongs to this tenant — there is no "assignable" role, and
+    // inventing one in the client would be a policy the API does not enforce.
+    void settle(async () => {
+      const users = await listUsers(baseUrl, companyId)
+      return users.map((user) => ({ id: user.id, name: user.name }))
+    }).then(apply(setOwners))
+
     if (templateId === null) setTemplateName({ status: 'ready', value: null })
     else
       void settle(async () => {
@@ -160,7 +171,7 @@ export function useActionPlanDetailModel(id: string | undefined, enabled: boolea
   }, [baseUrl, companyId, createdBy, departmentId, dimensionKey, locale, planId, sourceSurveyId, templateId])
 
   const change = useCallback(
-    async (patch: { status?: string; priority?: string }) => {
+    async (patch: { status?: string; priority?: string; ownerId?: string; clearOwner?: boolean }) => {
       if (!id) return
       setActionError(null)
       setSaving(true)
@@ -190,7 +201,7 @@ export function useActionPlanDetailModel(id: string | undefined, enabled: boolea
   )
 
   const model: ActionPlanDetailModel | null = plan
-    ? { plan, asOf: todayCalendarDay(), departmentName, authorName, createdAt, templateName, finding, move, recorded }
+    ? { plan, asOf: todayCalendarDay(), departmentName, authorName, createdAt, templateName, finding, move, owners, recorded }
     : null
 
   return {
@@ -202,6 +213,10 @@ export function useActionPlanDetailModel(id: string | undefined, enabled: boolea
     reload,
     changeStatus: (next) => change({ status: next }),
     changePriority: (next) => change({ priority: next }),
+    // `null` is "take it back", and it has to travel as its own flag: an omitted `ownerId`
+    // means "not in this request" to the server, so sending undefined would silently do
+    // nothing where the reader asked for an unassignment.
+    changeOwner: (next) => (next === null ? change({ clearOwner: true }) : change({ ownerId: next })),
     recordProgress,
   }
 }

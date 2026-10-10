@@ -24,7 +24,7 @@ const SURVEY = 'a0f2a6cf-9d1d-4a0e-9b63-1c0c9f4f6d21'
 
 const ACTION_PLANS = {
   actionPlans: [
-    { id: 'p1', title: 'Programa de reconocimiento entre pares', companyId: COMPANY, departmentId: 'd-personas', dueDate: '2026-09-30T02:05:50.251+00:00', status: 'not_started', priority: 'high', createdAt: '2026-09-10T02:05:50.263923+00:00', sourceSurveyId: SURVEY, tags: ['seguimiento', 'department:d-personas', 'dimension:recognition'] },
+    { id: 'p1', title: 'Programa de reconocimiento entre pares', companyId: COMPANY, departmentId: 'd-personas', dueDate: '2026-09-30T02:05:50.251+00:00', status: 'not_started', priority: 'high', createdAt: '2026-09-10T02:05:50.263923+00:00', sourceSurveyId: SURVEY, tags: ['seguimiento', 'department:d-personas', 'dimension:recognition'], ownerId: 'u-ana', ownerName: 'Ana Rojas' },
     { id: 'c1', title: 'Buzón anónimo de sugerencias', companyId: COMPANY, departmentId: null, dueDate: '2026-10-10T00:00:00+00:00', status: 'cancelled', priority: 'medium', createdAt: '2026-09-10T02:12:06.466863+00:00' },
     { id: 'c2', title: 'Almuerzos mensuales por departamento', companyId: COMPANY, departmentId: null, dueDate: '2026-10-10T00:00:00+00:00', status: 'cancelled', priority: 'medium', createdAt: '2026-09-10T02:13:38.941573+00:00' },
     { id: 'c3', title: 'Piloto de horario flexible en Ventas', companyId: COMPANY, departmentId: null, dueDate: '2026-10-10T00:00:00+00:00', status: 'cancelled', priority: 'medium', createdAt: '2026-09-10T02:14:40.726189+00:00' },
@@ -217,6 +217,8 @@ describe('ActionPlansListNextPage — company_admin', () => {
     const ownerTile = screen.getByText(next.tileOwner).closest('[data-slot="kpi-tile"]') as HTMLElement
     expect(ownerTile.querySelector('[data-slot="sample-chip"]')).toBeNull()
     expect(ownerTile.textContent).toContain(next.ofTotal.replace('{total}', '4'))
+    // Three of the four, now that one of them has an owner: the tile counts a real column.
+    expect(ownerTile.textContent).toContain('3')
   })
 
   /**
@@ -244,6 +246,22 @@ describe('ActionPlansListNextPage — company_admin', () => {
     const dimension = chip.nextElementSibling as HTMLElement
     expect(dimension.className).not.toContain('truncate')
     expect(dimension.className).toContain('break-words')
+  })
+
+  /**
+   * `ActionPlan` had no owner column at all, so `useActionPlansListModel` hardcoded
+   * `ownerName: null` and every row read "Sin asignar" — while the "SIN RESPONSABLE n de n"
+   * tile counted them and was right for the wrong reason. The column exists now.
+   */
+  it('prints the owner the server named, and counts only the plans that really have none', async () => {
+    renderPage()
+    await screen.findByRole('link', { name: 'Programa de reconocimiento entre pares' })
+    const row = screen.getByRole('link', { name: 'Programa de reconocimiento entre pares' }).closest('tr') as HTMLElement
+    expect(within(row).getAllByText(/Ana Rojas/).length).toBeGreaterThan(0)
+    expect(within(row).queryByText(next.unassigned)).toBeNull()
+
+    const ownerTile = screen.getByText(next.tileOwner).closest('[data-slot="kpi-tile"]') as HTMLElement
+    expect(ownerTile.textContent).toContain('3')
   })
 
   it('names no finding for a plan raised by hand, rather than inventing one', async () => {

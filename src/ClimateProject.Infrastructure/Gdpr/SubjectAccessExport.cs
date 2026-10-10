@@ -170,8 +170,7 @@ public static class SubjectAccessExport
                 db.Microclimates.Where(m => m.CreatedBy == id).Select(m => new Reference(m.Id, m.TitleEn)), cancellationToken),
             await ReferencesAsync("MicroclimateTemplate", "CreatedBy",
                 db.MicroclimateTemplates.Where(t => t.CreatedBy == id).Select(t => new Reference(t.Id, t.NameEn ?? t.NameEs)), cancellationToken),
-            await ReferencesAsync("ActionPlan", "CreatedBy",
-                db.ActionPlans.Where(p => p.CreatedBy == id).Select(p => new Reference(p.Id, p.TitleEn ?? p.TitleEs)), cancellationToken),
+            await ActionPlanInvolvementAsync(db, id, cancellationToken),
             await ReferencesAsync("ActionPlanTemplate", "CreatedBy",
                 db.ActionPlanTemplates.Where(t => t.CreatedBy == id).Select(t => new Reference(t.Id, t.NameEn ?? t.NameEs)), cancellationToken),
             await ReferencesAsync("ActionPlanProgressUpdate", "UpdatedBy",
@@ -370,6 +369,39 @@ public static class SubjectAccessExport
             "QuestionLibraryItem",
             ExportTreatment.Reference,
             [.. rows.Select(r => ReferenceRecord(new Reference(r.Id, r.TextEn), r.Authored ? "CreatedBy" : "LastModifiedBy"))]);
+    }
+
+    /// <summary>
+    /// The subject's involvement in action plans -- the second exported table reached by TWO actor
+    /// columns, and for the same reason as <see cref="QuestionLibraryAuthorshipAsync"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>created_by</c> is who filed the plan and <c>owner_id</c> is who is answerable for it now,
+    /// and they are routinely different people: an administrator raises a plan from a results cell
+    /// about a department they do not run. Exporting only the author would hand a department head
+    /// who owns a dozen plans an empty section, which is precisely the under-reporting Art. 15 is
+    /// about.
+    /// </para>
+    /// <para>
+    /// A row matched by both columns is labelled <c>CreatedBy</c> -- the stronger claim, and the one
+    /// that survives a user delete (<c>created_by</c> is RESTRICT, <c>owner_id</c> is SET NULL).
+    /// </para>
+    /// </remarks>
+    private static async Task<SubjectAccessSection> ActionPlanInvolvementAsync(
+        ClimateProjectDbContext db,
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        var rows = await db.ActionPlans
+            .Where(p => p.CreatedBy == id || p.OwnerId == id)
+            .Select(p => new { p.Id, Title = p.TitleEn ?? p.TitleEs, Authored = p.CreatedBy == id })
+            .ToListAsync(cancellationToken);
+
+        return Section(
+            "ActionPlan",
+            ExportTreatment.Reference,
+            [.. rows.Select(r => ReferenceRecord(new Reference(r.Id, r.Title), r.Authored ? "CreatedBy" : "OwnerId"))]);
     }
 
     private static IReadOnlyDictionary<string, object?> ReferenceRecord(Reference reference, string linkProperty)

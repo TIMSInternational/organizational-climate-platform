@@ -100,8 +100,10 @@ function toRow(plan: ActionPlan, departmentNames: ReadonlyMap<string, string>): 
     createdAt: plan.createdAt,
     finding: findingFromTags(plan.tags),
     sourceSurveyId: plan.sourceSurveyId ?? null,
-    // No plan has an owner: the entity has no such field (`ActionPlan.cs`). Real, not sample.
-    ownerName: null,
+    // `ActionPlan.OwnerId` exists now, and the list joins the name. Until it did, this was
+    // hardcoded null and the "SIN RESPONSABLE n de n" tile counted a column that was not
+    // there — a true number for a false reason.
+    ownerName: plan.ownerName ?? null,
   }
 }
 

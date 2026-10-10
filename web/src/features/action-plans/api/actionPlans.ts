@@ -39,6 +39,16 @@ export interface ActionPlan {
    */
   sourceSurveyId?: string | null
   tags?: string[]
+  /**
+   * Who is answerable for the plan, with the name beside the id.
+   *
+   * The id alone would mean one `GET /admin/users/{id}` per row, or pulling the company's
+   * whole user list to find three names; the server joins it once instead
+   * (`ActionPlanEndpoints.cs`). Optional because a plan is unassigned until somebody is
+   * handed it, which is the state every plan starts in.
+   */
+  ownerId?: string | null
+  ownerName?: string | null
 }
 
 export interface ActionPlanDetail {
@@ -61,6 +71,9 @@ export interface ActionPlanDetail {
    * Optional for the same reason as on `ActionPlan`: a plan raised by hand has none.
    */
   sourceSurveyId?: string | null
+  /** @see ActionPlan.ownerId */
+  ownerId?: string | null
+  ownerName?: string | null
   templateId: string | null
   kpis: Kpi[]
   objectives: Objective[]
@@ -119,6 +132,13 @@ export interface UpdateActionPlanInput {
   status?: string
   priority?: string
   tags?: string[]
+  /**
+   * Reassign the plan. Omitted leaves the owner alone, like every other field here, so
+   * UNASSIGNING needs its own flag — one value cannot mean both "do not touch" and "set to
+   * nothing", and the server refuses a request carrying both.
+   */
+  ownerId?: string
+  clearOwner?: boolean
 }
 
 export interface KpiUpdateInput {

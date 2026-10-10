@@ -211,6 +211,7 @@
       "recordProgress": "Record progress",
       "changeStatus": "Change status",
       "priorityMenu": "Priority",
+      "ownerMenu": "Owner",
       "progressDialogTitle": "Record progress",
       "progressDialogDescription": "A note on what moved and why. It is kept with its date.",
       "deadline": {
@@ -288,6 +289,7 @@
       "sheet": {
         "title": "Details",
         "department": "Department",
+        "owner": "Owner",
         "priority": "Priority",
         "status": "Status",
         "created": "Created",
