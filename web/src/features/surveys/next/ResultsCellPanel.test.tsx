@@ -6,6 +6,7 @@ import { TranslationProvider } from '../../../i18n'
 import { createActionPlan } from '../../action-plans/api/actionPlans'
 import ResultsCellPanel from './ResultsCellPanel'
 import type { ResultsCellDetail } from './derive'
+import type { ResultsPlanRef } from './model'
 import type { ResultBands } from '../../../components/charts'
 import es from '../../../i18n/es.json'
 
@@ -28,7 +29,12 @@ const BANDS: ResultBands = {
 }
 
 /** One cell of the map, with no plan on the group — what the payload says before one is raised. */
-function cellOf(rowId: string, rowName: string, dimensionKey: string): ResultsCellDetail {
+function cellOf(
+  rowId: string,
+  rowName: string,
+  dimensionKey: string,
+  overrides: Partial<ResultsCellDetail> = {},
+): ResultsCellDetail {
   return {
     rowId,
     rowName,
@@ -41,8 +47,15 @@ function cellOf(rowId: string, rowName: string, dimensionKey: string): ResultsCe
     questions: [],
     others: [],
     plan: null,
+    cellPlan: null,
     previousScore: null,
+    ...overrides,
   }
+}
+
+/** A plan the payload already carries, as `planFor`/`planForCell` return one. */
+function planRef(id: string, name: string): ResultsPlanRef {
+  return { id, name, dueAt: '2026-11-09', status: 'not_started' }
 }
 
 function renderPanel(detail: ResultsCellDetail) {
@@ -144,5 +157,91 @@ describe('ResultsCellPanel, after a plan is raised from the cell', () => {
     // Ventas has no plan, and the panel says so rather than inheriting Operaciones'.
     expect(doing.textContent).toContain(T.doingNone)
     expect(within(doing).getByRole('button', { name: T.createPlan })).toBeTruthy()
+  })
+})
+
+/**
+ * A department carries several plans — one per finding — and the panel's two statements
+ * have different scopes. "What is being done" is about the GROUP; the open-or-create
+ * control is about THIS CELL. While both read the group's plan, the second plan on a
+ * department was unreachable from the map: the control offered `Abrir el plan` pointing
+ * at another dimension's plan, as though this finding were handled.
+ *
+ * Measured on production on 2026-10-10 against the PROCOMER demo tenant: Q2's Ventanilla
+ * Única · Desarrollo (2,8, critical) offered no way to raise a plan because the same
+ * department already had one on Reconocimiento. All 7 of Q2's critical cells and all 3 of
+ * Q3's sit in a department that already had a plan, so none of them could raise one.
+ */
+describe('ResultsCellPanel, when the group has a plan for another dimension', () => {
+  beforeEach(() => {
+    window.localStorage.setItem('preferredLocale', 'es')
+    vi.mocked(createActionPlan).mockReset()
+  })
+  afterEach(() => {
+    cleanup()
+    window.localStorage.clear()
+  })
+
+  it('still offers to raise one for this cell, and names the group plan as context', () => {
+    renderPanel(
+      cellOf('d-ops', 'Operaciones', 'workload', {
+        plan: planRef('plan-rec', 'Seguimiento para Operaciones — Reconocimiento'),
+        cellPlan: null,
+      }),
+    )
+    const doing = screen.getByTestId('cell-doing')
+    // The group statement is unchanged: something IS being done about Operaciones.
+    expect(doing.textContent).toContain('Seguimiento para Operaciones — Reconocimiento')
+    expect(doing.textContent).not.toContain(T.doingNone)
+    // But Carga de trabajo is not that plan's finding, so this cell can still raise one.
+    expect(within(doing).getByRole('button', { name: T.createPlan })).toBeTruthy()
+    expect(within(doing).queryByRole('link', { name: new RegExp(T.openPlan) })).toBeNull()
+  })
+
+  it('opens this cell’s own plan, not the group’s', () => {
+    renderPanel(
+      cellOf('d-ops', 'Operaciones', 'workload', {
+        plan: planRef('plan-rec', 'Seguimiento para Operaciones — Reconocimiento'),
+        cellPlan: planRef('plan-workload', 'Seguimiento para Operaciones — Carga de trabajo'),
+      }),
+    )
+    const doing = screen.getByTestId('cell-doing')
+    expect(within(doing).getByRole('link', { name: new RegExp(T.openPlan) }).getAttribute('href')).toBe(
+      '/action-plans/plan-workload',
+    )
+    expect(within(doing).queryByRole('button', { name: T.createPlan })).toBeNull()
+  })
+
+  it('does not make a sibling dimension look handled by one just raised here', async () => {
+    const { rerender } = renderPanel(cellOf('d-ops', 'Operaciones', 'recognition'))
+    await raiseAPlan('Seguimiento para Operaciones — Reconocimiento')
+    expect(
+      within(screen.getByTestId('cell-doing')).queryByRole('button', { name: T.createPlan }),
+    ).toBeNull()
+
+    // The same GROUP, a different dimension — the next finding the reader acts on.
+    rerender(
+      <TranslationProvider>
+        <MemoryRouter>
+          <ResultsCellPanel
+            detail={cellOf('d-ops', 'Operaciones', 'workload')}
+            bands={BANDS}
+            dimensionName={(key) => (key === 'recognition' ? 'Reconocimiento' : 'Carga de trabajo')}
+            code="Q3"
+            threshold={5}
+            previousCode={null}
+            capabilities={{ canCreateActionPlan: true } as never}
+            baseUrl="http://api.test"
+            surveyId="s1"
+            id="panel"
+            onClose={() => {}}
+          />
+        </MemoryRouter>
+      </TranslationProvider>,
+    )
+
+    const doing = screen.getByTestId('cell-doing')
+    expect(within(doing).getByRole('button', { name: T.createPlan })).toBeTruthy()
+    expect(within(doing).queryByRole('link', { name: new RegExp(T.openPlan) })).toBeNull()
   })
 })

@@ -272,6 +272,52 @@ export function planFor(plans: readonly ActionPlan[], departmentId: string): Res
   return first ? { id: first.id, name: first.title, dueAt: first.dueDate, status: first.status } : null
 }
 
+/** The `tags` entry that records which dimension a plan was raised for. */
+const DIMENSION_TAG = 'dimension:'
+
+/**
+ * The plan that covers a CELL: this department AND this dimension.
+ *
+ * `planFor` above answers "what is being done about this group", which is what the
+ * panel's prose says. This answers a different question — "is THIS finding already
+ * being acted on" — and the two must not be the same lookup. While they were, one plan
+ * on a department made every other cell in it unable to raise one: on the demo tenant
+ * that was all 7 of Q2's critical cells and all 3 of Q3's, because every critical cell
+ * there belongs to a department that already had a plan. The panel offered `Abrir el
+ * plan` pointing at a different dimension's plan, as though the cell were handled.
+ *
+ * The dimension is read from the `dimension:` tag the cell path writes
+ * (`ResultsCellPanel`), not from the prose. A plan carrying NO dimension tag is an
+ * unknown rather than a miss — the tag is newer than action plans, and a plan raised
+ * from `/action-plans` never carries one — so such a plan still covers every cell of its
+ * group. Only a group whose plans all name some other dimension frees this cell.
+ */
+export function planForCell(
+  plans: readonly ActionPlan[],
+  departmentId: string,
+  dimensionKey: string,
+): ResultsPlanRef | null {
+  const onGroup = plans.filter((plan) => plan.departmentId === departmentId && plan.status !== 'cancelled')
+  const tag = `${DIMENSION_TAG}${dimensionKey}`
+  const tagged = onGroup.filter((plan) => (plan.tags ?? []).includes(tag))
+  if (tagged.length > 0) return earliestOf(tagged)
+  // A plan that records NO dimension at all may well be about this cell: the tag is newer
+  // than the feature, and a plan raised from `/action-plans` rather than from a cell never
+  // carries one. Showing it is the safe reading of an unknown — it keeps a reader from
+  // raising a duplicate for a finding that is already being acted on. Only a group whose
+  // plans all name some OTHER dimension leaves this cell free to raise its own.
+  const unscoped = onGroup.filter(
+    (plan) => !(plan.tags ?? []).some((entry) => entry.startsWith(DIMENSION_TAG)),
+  )
+  return unscoped.length > 0 ? earliestOf(unscoped) : null
+}
+
+/** The soonest-due of a set of plans, as a panel reference. */
+function earliestOf(plans: readonly ActionPlan[]): ResultsPlanRef {
+  const first = [...plans].sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0]!
+  return { id: first.id, name: first.title, dueAt: first.dueDate, status: first.status }
+}
+
 /** Why a cell is on the "where to look first" list — the one-line reason under its name. */
 export type FindingReason =
   | 'lowest'
@@ -454,7 +500,13 @@ export interface ResultsCellDetail {
   questions: ResultsCellQuestion[]
   /** Every other row's score on this dimension — protected rows carry `null`. */
   others: ResultsCellOther[]
+  /** What is being done about this GROUP — the prose. May be another dimension's plan. */
   plan: ResultsPlanRef | null | undefined
+  /**
+   * The plan raised for THIS cell — this group and this dimension — which is what the
+   * open-or-create control is about. Distinct from `plan` on purpose: see `planForCell`.
+   */
+  cellPlan: ResultsPlanRef | null | undefined
   /**
    * This same cell — this group, this dimension — in the PREVIOUS wave.
    *
@@ -531,6 +583,8 @@ export function cellDetail(model: SurveyResultsNextModel, selection: ClimateMapS
         }
       }),
     plan: model.plans === null ? undefined : planFor(model.plans, detail.rowId),
+    cellPlan:
+      model.plans === null ? undefined : planForCell(model.plans, detail.rowId, selection.dimensionKey),
     previousScore:
       model.previous.status === 'loaded'
         // `selection.dimensionKey`, already narrowed by the guard above; `detail`'s copy is
