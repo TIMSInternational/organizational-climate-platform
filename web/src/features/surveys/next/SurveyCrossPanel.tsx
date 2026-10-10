@@ -310,6 +310,50 @@ export default function SurveyCrossPanel({
     }
   }
 
+  /**
+   * Stage one more cohort AND put it on the table in the same click.
+   *
+   * Measured against production on 2026-10-09: this button used to write `cohorts` — the
+   * chips — and leave `shown` alone, and the table renders `shown`. So a chip appeared above
+   * a table that did not contain it, with nothing saying the table was a step behind; adding
+   * `Tecnologías de Información` read as "nothing happened" when the honest answer was
+   * "Protegido". Nothing printed was ever wrong, but the two lists have no business
+   * disagreeing, so every write to one is now a write to both.
+   *
+   * It fetches the ONE payload that is missing rather than calling `compare()`, which
+   * recomputes every cohort: four groups added one at a time would otherwise cost
+   * 2+3+4+5 requests instead of 2+1+1+1. `compare()` stays the explicit refresh.
+   */
+  async function add() {
+    const next = withCohort(cohorts, pending, MAX_COHORTS)
+    // Empty, duplicate, or past the cap: `withCohort` has already refused it. Clear the
+    // builder exactly as before rather than fetching a column that will not be added.
+    if (next.length === cohorts.length) {
+      setChosen({})
+      return
+    }
+    const cohort = next[next.length - 1]!
+    const baselineCache = results?.[BASELINE_KEY] ?? null
+    setBusy(true)
+    setFailure(null)
+    try {
+      const [base, added] = await Promise.all([
+        baselineCache ?? getSurveyAnalytics(baseUrl, surveyId, locale),
+        getSurveyAnalytics(baseUrl, surveyId, locale, cohort),
+      ])
+      setResults((previous) => ({ ...previous, [BASELINE_KEY]: base, [crossKeyOf(cohort)]: added }))
+      setShown(next)
+      setCohorts(next)
+      setChosen({})
+    } catch (error) {
+      // The cohort is not staged on a failure: a chip for a column that could not be read is
+      // the same disagreement this function exists to remove.
+      setFailure(error instanceof Error ? error.message : t('surveyResults.cross.failed'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   function openFollowUp(cohort: Cohort) {
     setFollowUpKey(crossKeyOf(cohort))
     setCreated(null)
@@ -417,10 +461,7 @@ export default function SurveyCrossPanel({
           <Button
             type="button"
             variant="outline"
-            onClick={() => {
-              setCohorts((previous) => withCohort(previous, pending, MAX_COHORTS))
-              setChosen({})
-            }}
+            onClick={() => void add()}
             disabled={pending.length === 0 || cohorts.length >= MAX_COHORTS || busy}
           >
             {t('surveyResults.cross.add')}
