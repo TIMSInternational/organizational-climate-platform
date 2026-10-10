@@ -250,6 +250,28 @@ describe('AdminDashboardNextView', () => {
     expect(dotRows.some((node) => node.children.length === disclosed.responses)).toBe(true)
   })
 
+  /**
+   * The map used to sit in a 5-of-12 panel beside "Qué se movió". Measured in a real
+   * browser with the demo tenant's own names, that panel was 425px at 1440 and 457px at
+   * the 1518 the defect was confirmed at on production, and the six dimension names and
+   * five group names did not fit in it at ANY window width — 17 nodes cut at 1440, 11
+   * still cut at 1920. A `md:`-style rule could not have helped: the panel is a fraction
+   * of the window, not the window.
+   *
+   * The suite has no layout engine, so this guards the decision rather than the pixels;
+   * the pixels were measured with `scripts/shot.mjs` and are in the PR.
+   */
+  it('gives the group map a row of its own rather than a column of a split row', () => {
+    renderView()
+    const byGroup = document.querySelector('section[aria-labelledby="next-by-group"]')!
+    const moved = document.querySelector('section[aria-labelledby="next-moved"]')!
+    expect(byGroup.className).not.toMatch(/col-span/)
+    expect(moved.className).not.toMatch(/col-span/)
+    // And they are siblings in one stack, so neither can be beside the other.
+    expect(byGroup.parentElement).toBe(moved.parentElement)
+    expect(byGroup.parentElement!.className).not.toMatch(/grid-cols/)
+  })
+
   it('names, in its own section, each region that fell back to the sample — and only those', () => {
     const live: RegionStatuses = {
       company: { status: 'live' },

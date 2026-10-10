@@ -219,6 +219,33 @@ describe('ActionPlansListNextPage — company_admin', () => {
     expect(ownerTile.textContent).toContain(next.ofTotal.replace('{total}', '4'))
   })
 
+  /**
+   * The finding column is 222px in a `table-fixed` table, and `Chip` is `shrink-0
+   * whitespace-nowrap` by construction, because a status chip holds one word. A group's
+   * name is not one word: "Ventanilla Única de Comercio Exterior" measures 240px, so the
+   * cell overflowed and painted on top of the owner beside it — two columns of text in the
+   * same pixels, on the page the plans land on.
+   *
+   * It could only appear once a plan had provenance to show, and no fixture had any until
+   * the demo tenant got its first three on 2026-10-10. The before/after PNGs are in the PR.
+   */
+  it('keeps a long group name inside the finding cell rather than over the owner beside it', async () => {
+    renderPage()
+    await screen.findByRole('link', { name: 'Programa de reconocimiento entre pares' })
+    const link = document.querySelector(`a[href="/surveys/${SURVEY}/results"]`) as HTMLElement
+    const chip = link.querySelector('[data-slot="chip"]') as HTMLElement
+    // The chip's own name wraps inside it instead of holding the cell open.
+    expect(chip.className).toContain('whitespace-normal')
+    expect(chip.className).toContain('max-w-full')
+    // And the parts stack, so the row grows downwards and never sideways.
+    expect(link.className).toContain('block')
+    expect((chip.parentElement as HTMLElement).className).toContain('flex-col')
+    // The dimension beside it wraps too — a dimension name is what the plan is ABOUT.
+    const dimension = chip.nextElementSibling as HTMLElement
+    expect(dimension.className).not.toContain('truncate')
+    expect(dimension.className).toContain('break-words')
+  })
+
   it('names no finding for a plan raised by hand, rather than inventing one', async () => {
     renderPage()
     await screen.findByRole('link', { name: 'Reuniones abiertas con la dirección' })
