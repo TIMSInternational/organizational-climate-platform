@@ -58,7 +58,7 @@ function AIInsightsForCompany() {
   return (
     <div>
       <PageTopBar
-        eyebrow={[t('insights.next.proposal'), companyName].filter(Boolean).join(' · ')}
+        eyebrow={companyName}
         title={t('insights.next.title')}
         description={t('insights.next.description')}
       />

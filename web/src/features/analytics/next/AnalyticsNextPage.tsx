@@ -44,7 +44,7 @@ function AnalyticsNextPageForAdmins() {
   return (
     <div>
       <PageTopBar
-        eyebrow={[t('insights.next.proposal'), companyName].filter(Boolean).join(' · ')}
+        eyebrow={companyName}
         title={t('analytics.next.title')}
         description={t('analytics.next.description')}
         breadcrumbs={undefined}

@@ -26,6 +26,19 @@ export interface ActionPlan {
   status: string
   priority: string
   createdAt: string
+  /**
+   * Where the plan came from, both halves, and neither was on this payload before.
+   *
+   * `sourceSurveyId` is the survey a plan was raised against — written since the results
+   * cross started sending it, validated against the caller's company on the way in, and
+   * until now never returned by any read. `tags` carries the rest of the provenance the
+   * results screen writes: `seguimiento`, `department:<id>` and `dimension:<key>`.
+   *
+   * Optional because a server that predates this still answers without them, and a plan
+   * raised by hand carries neither.
+   */
+  sourceSurveyId?: string | null
+  tags?: string[]
 }
 
 export interface ActionPlanDetail {
@@ -81,9 +94,9 @@ export interface CreateActionPlanInput {
    * (`ActionPlanEndpoints.cs:145-171`). So this is safe to send only when the id and
    * `companyId` come from the same survey, which is how the results cross sends it.
    *
-   * Nothing reads it back yet: `ActionPlanDetail` does not carry it. It is written anyway,
-   * because the alternative provenance is a tag string and a survey title spelled into the
-   * description, and neither survives the survey being renamed.
+   * Both the list and the detail return it since 2026-10-10. Before that nothing read it
+   * back, and the Planes de Acción screen therefore labelled its whole origin column
+   * sample-fed over data that was already stored.
    */
   sourceSurveyId?: string
   kpis?: CreateKpiInput[]

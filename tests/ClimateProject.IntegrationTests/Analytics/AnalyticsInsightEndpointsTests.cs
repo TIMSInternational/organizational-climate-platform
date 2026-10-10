@@ -91,7 +91,7 @@ public class AnalyticsInsightEndpointsTests : IAsyncLifetime
             CreatedBy = createdBy,
             TitleEn = "Annual climate survey",
             Language = "en",
-            Type = "general_climate",
+            Type = "periodic",
             StartDate = now,
             EndDate = now.AddDays(14),
             Status = "draft",

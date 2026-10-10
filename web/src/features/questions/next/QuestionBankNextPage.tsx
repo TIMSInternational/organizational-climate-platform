@@ -58,7 +58,7 @@ function QuestionBankForCompany() {
 
   return (
     <div>
-      <PageTopBar eyebrow={[t('insights.next.proposal'), companyName].filter(Boolean).join(' · ')} title={t('questionBank.next.title')} description={t('questionBank.next.description')} />
+      <PageTopBar eyebrow={companyName} title={t('questionBank.next.title')} description={t('questionBank.next.description')} />
 
       {/* The board's column: header, 24px, this card, 24px, the filters (QuestionBank.dc.html). */}
       <div data-testid="bank-split" className="mb-section flex flex-wrap items-center gap-3.5 rounded-lg border border-line-default bg-surface-card px-4 py-3">

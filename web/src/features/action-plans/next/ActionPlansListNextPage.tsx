@@ -150,17 +150,6 @@ export default function ActionPlansListNextPage() {
   return <ActionPlansListBody />
 }
 
-function SampleChip({ t, className }: { t: TranslateFn; className?: string }) {
-  return (
-    <Chip
-      tone="warning"
-      label={t('dashboard.next.sampleChip')}
-      data-slot="sample-chip"
-      className={cn('normal-case tracking-normal', className)}
-    />
-  )
-}
-
 function ActionPlansListBody() {
   const { t, locale } = useTranslation()
   const capabilities = useViewerCapabilities()
@@ -271,6 +260,10 @@ function ActionPlansListBody() {
                     model={model}
                     t={t}
                     locale={locale}
+                    filtering={filtering}
+                    // Not `rows.length`: the group is empty either way, and what decides
+                    // which sentence is true is whether the COMPANY has any plan at all.
+                    firstRun={model.rows.length === 0}
                     canManage={capabilities.canCreateActionPlan}
                     onCancel={(row) => {
                       setCancelError(null)
@@ -356,7 +349,6 @@ function Tiles({ model, t, locale }: { model: ActionPlansListModel; t: Translate
         value={finding.withFinding}
         locale={locale}
         unit={t('actionPlans.next.ofTotal', { total: finding.open })}
-        valueAside={model.findingsAreSample ? <SampleChip t={t} /> : undefined}
         sub={
           <span className="text-fg-label">
             {finding.dimensionKeys.length > 0
@@ -502,12 +494,47 @@ function Filters({
   )
 }
 
+/**
+ * Which sentence an empty group gets, and why there are four of them.
+ *
+ * The screen used to choose by GROUP alone — `inProgress` got its own line and everything
+ * else got "no plan matches the filters". So a company on its first day, with no plans and
+ * no filter set, was told its filters excluded everything. That is the first thing a new
+ * client reads on this page, and it blames them for a state they did not create.
+ *
+ * The three states are distinct and each is now said plainly: a filter really is on; the
+ * company has no plans at all, which is the one case worth explaining where plans come
+ * from; or this group happens to be empty while others are not.
+ */
+function emptyLineFor(
+  group: PlanGroup,
+  { filtering, firstRun }: { filtering: boolean; firstRun: boolean },
+  t: TranslateFn,
+): ReactNode {
+  if (filtering) return t('actionPlans.next.groupEmpty')
+  if (firstRun) {
+    return (
+      <span>
+        {t('actionPlans.next.firstPlanEmpty')}{' '}
+        <Link to="/surveys" className="underline underline-offset-2">
+          {t('actionPlans.next.firstPlanLink')}
+        </Link>
+      </span>
+    )
+  }
+  return group === 'inProgress'
+    ? t('actionPlans.next.inProgressEmpty')
+    : t('actionPlans.next.groupEmptyUnfiltered')
+}
+
 function GroupSection({
   group,
   rows,
   model,
   t,
   locale,
+  filtering,
+  firstRun,
   canManage,
   onCancel,
 }: {
@@ -516,6 +543,8 @@ function GroupSection({
   model: ActionPlansListModel
   t: TranslateFn
   locale: string
+  filtering: boolean
+  firstRun: boolean
   canManage: boolean
   onCancel: (row: PlanRow) => void
 }) {
@@ -538,7 +567,7 @@ function GroupSection({
         locale={locale}
         canManage={canManage}
         onCancel={onCancel}
-        empty={group === 'inProgress' ? t('actionPlans.next.inProgressEmpty') : t('actionPlans.next.groupEmpty')}
+        empty={emptyLineFor(group, { filtering, firstRun }, t)}
       />
     </section>
   )
@@ -560,7 +589,7 @@ function PlanTable({
   locale: string
   canManage: boolean
   onCancel?: (row: PlanRow) => void
-  empty: string
+  empty: ReactNode
   demoted?: boolean
 }) {
   return (
@@ -576,13 +605,11 @@ function PlanTable({
             <th className={HEAD}>
               <span className={HEAD_STACK}>
                 {t('actionPlans.next.colPlan')}
-                {model.findingsAreSample && <SampleChip t={t} className={FOLDED_ONLY} />}
               </span>
             </th>
             <th className={cn(HEAD, WIDE_ONLY, 'w-[222px]')} data-col="finding">
               <span className={HEAD_STACK}>
                 {t('actionPlans.next.colFinding')}
-                {model.findingsAreSample && <SampleChip t={t} />}
               </span>
             </th>
             <th className={cn(HEAD, WIDE_ONLY, 'w-[162px]')} data-col="owner">
@@ -737,20 +764,46 @@ function dueNote(t: TranslateFn, days: number, thisMonth: boolean): string {
   return thisMonth ? t('actionPlans.next.joined', { first: when, second: t('actionPlans.next.thisMonth') }) : when
 }
 
+/**
+ * Where a plan came from, and — since the list endpoint started returning it — a way back.
+ *
+ * The dimension is read from the plan's own `dimension:<key>` tag and the survey from
+ * `sourceSurveyId`, both written by the results screen when the plan was raised. A plan
+ * created by hand has neither and says so; it is not a gap to paper over.
+ */
 function FindingCell({ row, t }: { row: PlanRow; t: TranslateFn }): ReactNode {
+  const dimension = row.finding ? dimensionName(t, row.finding.dimensionKey) : null
+  // The cell the finding was measured in. `?from=` is read by nothing yet; the results
+  // screen opens on its own map and the reader picks the row up from there.
+  const origin = row.sourceSurveyId === null ? null : `/surveys/${row.sourceSurveyId}/results`
+  const wrap = (children: ReactNode) =>
+    origin === null ? (
+      children
+    ) : (
+      <Link to={origin} className="min-w-0 hover:underline" title={t('actionPlans.next.openOrigin')}>
+        {children}
+      </Link>
+    )
+
   if (!row.departmentId) {
     return (
       <span className="text-sm text-fg-label">
-        {row.finding
-          ? t('actionPlans.next.findingCompanyWide', { dimension: dimensionName(t, row.finding.dimensionKey) })
-          : t('actionPlans.next.noFinding')}
+        {wrap(
+          dimension
+            ? t('actionPlans.next.findingCompanyWide', { dimension })
+            : t('actionPlans.next.noFinding'),
+        )}
       </span>
     )
   }
   return (
     <span className="inline-flex min-w-0 items-center gap-1.5 text-sm text-fg-secondary">
-      <Chip label={row.departmentName ?? t('actionPlans.fromUnlistedDepartment')} />
-      {row.finding && <span className="truncate">{dimensionName(t, row.finding.dimensionKey)}</span>}
+      {wrap(
+        <span className="inline-flex min-w-0 items-center gap-1.5">
+          <Chip label={row.departmentName ?? t('actionPlans.fromUnlistedDepartment')} />
+          {dimension && <span className="truncate">{dimension}</span>}
+        </span>,
+      )}
     </span>
   )
 }

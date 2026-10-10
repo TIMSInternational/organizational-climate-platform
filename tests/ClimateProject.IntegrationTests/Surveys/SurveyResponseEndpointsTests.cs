@@ -117,7 +117,7 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
                 ? SurveyTestHarness.Both("Q3 Climate Survey", "Encuesta de Clima Q3")
                 : LocalizedInput.FromBare("Q3 Climate Survey"),
             CompanyId: _companyId,
-            Type: "general_climate",
+            Type: "periodic",
             StartDate: DateTimeOffset.UtcNow.AddDays(-1),
             EndDate: DateTimeOffset.UtcNow.AddDays(14),
             DepartmentIds: departmentIds,

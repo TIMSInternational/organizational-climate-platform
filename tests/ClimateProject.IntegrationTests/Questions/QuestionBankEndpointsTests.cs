@@ -143,7 +143,7 @@ public class QuestionBankEndpointsTests : IAsyncLifetime
         var survey = await SurveyTestHarness.CreateSurveyAsync(admin, new CreateSurveyRequest(
             Title: LocalizedInput.FromBare(title),
             CompanyId: companyId,
-            Type: "general_climate",
+            Type: "periodic",
             StartDate: DateTimeOffset.UtcNow.AddDays(-1),
             EndDate: DateTimeOffset.UtcNow.AddDays(14),
             Questions: questions,
@@ -1083,7 +1083,7 @@ public class QuestionBankEndpointsTests : IAsyncLifetime
         var response = await admin.PostAsJsonAsync("/surveys", new CreateSurveyRequest(
             Title: LocalizedInput.FromBare("Borrowed"),
             CompanyId: _companyId,
-            Type: "general_climate",
+            Type: "periodic",
             StartDate: DateTimeOffset.UtcNow.AddDays(-1),
             EndDate: DateTimeOffset.UtcNow.AddDays(14),
             Questions:
@@ -1103,7 +1103,7 @@ public class QuestionBankEndpointsTests : IAsyncLifetime
         var draft = await SurveyTestHarness.CreateSurveyAsync(admin, new CreateSurveyRequest(
             Title: LocalizedInput.FromBare("Legitimate draft"),
             CompanyId: _companyId,
-            Type: "general_climate",
+            Type: "periodic",
             StartDate: DateTimeOffset.UtcNow.AddDays(-1),
             EndDate: DateTimeOffset.UtcNow.AddDays(14),
             Questions:

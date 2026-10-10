@@ -177,6 +177,40 @@ describe('Detalle de encuesta (SurveyDetail artboard)', () => {
     expect(screen.getByTestId('tile-responses').textContent).toContain('de 24 · 13 %')
   })
 
+  it('asks before closing, and closes only once the reader says so', async () => {
+    // Closing is the only transition on this tile that cannot be taken back — the server
+    // allows `closed → archived` and nothing else out of it — and it fired on one press.
+    // The 2026-10-06 walkthrough lost two seeded surveys to exactly this, and the
+    // microclimate detail, which risks less, has always asked.
+    const onTransition = vi.fn()
+    renderAs(
+      'company_admin',
+      <SurveyDetailView
+        model={{ survey: survey(), departments, distribution: { publicLink: `/s/${LINK_SEGMENT}` } as never, invitations: invitationList(), users: null }}
+        pending={null}
+        actionError={null}
+        onTransition={onTransition}
+        onDuplicate={() => undefined}
+        now={new Date(2026, 8, 10)}
+      />,
+    )
+
+    await userEvent.click(within(screen.getByTestId('tile-status')).getByRole('button', { name: 'Cerrar' }))
+    expect(onTransition).not.toHaveBeenCalled()
+
+    const dialog = await screen.findByRole('alertdialog')
+    // The consequence is named, not implied: it cannot be reopened.
+    expect(dialog.textContent).toContain('no se puede reabrir')
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancelar' }))
+    expect(onTransition).not.toHaveBeenCalled()
+
+    await userEvent.click(within(screen.getByTestId('tile-status')).getByRole('button', { name: 'Cerrar' }))
+    const reopened = await screen.findByRole('alertdialog')
+    await userEvent.click(within(reopened).getByRole('button', { name: 'Cerrar' }))
+    expect(onTransition).toHaveBeenCalledExactlyOnceWith('closed')
+  })
+
   it('offers a leader nothing to press: no duplicate, no distribution, no transition, no results', () => {
     detail(survey(), 'leader')
     expect(screen.queryByRole('button', { name: 'Duplicar' })).toBeNull()

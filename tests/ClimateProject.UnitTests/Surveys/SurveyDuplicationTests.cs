@@ -39,7 +39,7 @@ public class SurveyDuplicationTests
             DescriptionEn = "How the team is doing",
             DescriptionEs = "Como va el equipo",
             Language = "both",
-            Type = "general_climate",
+            Type = "periodic",
             StartDate = Now,
             EndDate = Now.AddDays(14),
             Status = "closed",
@@ -268,7 +268,7 @@ public class SurveyDuplicationTests
         var copy = DuplicateSource();
 
         Assert.Equal(CompanyId, copy.Survey.CompanyId);
-        Assert.Equal("general_climate", copy.Survey.Type);
+        Assert.Equal("periodic", copy.Survey.Type);
         Assert.Equal(200, copy.Survey.TargetAudienceCount);
         Assert.True(copy.Survey.Settings.Anonymous);
         Assert.Equal(20, copy.Survey.Settings.TimeLimitMinutes);

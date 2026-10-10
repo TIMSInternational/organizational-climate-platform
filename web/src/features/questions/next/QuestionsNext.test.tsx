@@ -98,8 +98,8 @@ describe('QuestionBankNextPage', () => {
     vi.mocked(listQuestionLibraryItems).mockResolvedValue(items)
     renderAs(<QuestionBankNextPage />)
     expect(await screen.findByText(bank.emptyTitle)).toBeTruthy()
-    // The board's eyebrow: "PROPUESTA · GRUPO MERIDIANO S.A." (uppercased by CSS).
-    expect(screen.getByText(`${en.insights.next.proposal} · Grupo Meridiano S.A.`)).toBeTruthy()
+    // The board's eyebrow: "GRUPO MERIDIANO S.A." (uppercased by CSS).
+    expect(screen.getByText('Grupo Meridiano S.A.')).toBeTruthy()
     expect(screen.getByText(bank.emptyMeanwhile.replace('{company}', 'Grupo Meridiano S.A.'))).toBeTruthy()
     // 3 of the 4 items and all 3 categories are global.
     expect(screen.getByText(new RegExp(bank.splitCounts.replace('{questions}', '3').replace('{categories}', '3')))).toBeTruthy()
@@ -280,10 +280,11 @@ describe('QuestionLibraryNextPage — drawer link, multiple choice, vocabulary',
     expect(libraryTypeLabel((key) => key, 'likert')).toBe('surveys.questionTypeLikert')
   })
 
-  it('heads the page with the proposal eyebrow and the company, and sits the search on the row', async () => {
+  it('heads the page with the company alone, and sits the search on the row', async () => {
     arrange()
     renderAs(<QuestionLibraryNextPage />)
-    expect(await screen.findByText(`${en.insights.next.proposal} · Grupo Meridiano S.A.`)).toBeTruthy()
+    expect(await screen.findByText('Grupo Meridiano S.A.')).toBeTruthy()
+    expect(screen.queryByText(/Proposal|Propuesta/)).toBeNull()
     expect(screen.getByPlaceholderText(lib.search).className.split(' ')).toContain('mt-0')
     // …and runs the row to the type select: index.css caps every `label > input` at the field
     // max, and the board's search is `width: 100%` (library-light.png is the evidence).

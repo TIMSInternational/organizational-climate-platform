@@ -3,9 +3,11 @@ using System.Net.Http.Json;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Localization;
 using ClimateProject.Application.Surveys;
+using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
 using ClimateProject.IntegrationTests.Support;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ClimateProject.IntegrationTests.Surveys;
 
@@ -174,6 +176,56 @@ public class SurveyEndpointsTests : IAsyncLifetime
     // ------------------------------------------------------------------
     // Validation
     // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task A_survey_type_outside_the_vocabulary_is_rejected_including_a_service_name()
+    {
+        // `Survey.Type` was required and never checked: the endpoint asked only that it be
+        // non-blank, so any string was storable. The comment in SurveyEndpoints had named
+        // that gap since #496 — "Survey.Type's own lack of validation is exactly how the
+        // licence layer came to compare two vocabularies that never intersect" — and left it
+        // open. Three surveys in production hold `general_climate`, a SERVICE name, in their
+        // cadence column, and this test suite put it there on 25 more.
+        var client = await AdminAAsync();
+
+        var nonsense = await client.PostAsJsonAsync("/surveys", SurveyTestHarness.MinimalRequest(_companyAId) with { Type = "whatever" });
+        Assert.Equal(HttpStatusCode.BadRequest, nonsense.StatusCode);
+        Assert.Contains("Invalid survey type", await nonsense.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+
+        // The specific confusion this closes: a service is not a cadence.
+        var service = await client.PostAsJsonAsync("/surveys", SurveyTestHarness.MinimalRequest(_companyAId) with { Type = ClimateServiceTypes.GeneralClimate });
+        Assert.Equal(HttpStatusCode.BadRequest, service.StatusCode);
+
+        // Every type the wizard offers is still accepted.
+        foreach (var type in SurveyTypes.All)
+        {
+            var ok = await client.PostAsJsonAsync("/surveys", SurveyTestHarness.MinimalRequest(_companyAId) with { Type = type });
+            Assert.Equal(HttpStatusCode.Created, ok.StatusCode);
+        }
+    }
+
+    [Fact]
+    public async Task A_survey_already_holding_an_unknown_type_stays_editable_with_that_same_type()
+    {
+        // Grandfathering, measured rather than assumed: rows predating the validation above
+        // must not become unsaveable. What is refused is moving a survey TO an unknown type.
+        var client = await AdminAAsync();
+        var created = await SurveyTestHarness.CreateSurveyAsync(client, SurveyTestHarness.MinimalRequest(_companyAId));
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            var row = await db.Surveys.FirstAsync(x => x.Id == created.Id);
+            row.Type = "legacy_value";
+            await db.SaveChangesAsync();
+        }
+
+        var resend = await client.PutAsJsonAsync($"/surveys/{created.Id}", new UpdateSurveyRequest(Type: "legacy_value"));
+        Assert.NotEqual(HttpStatusCode.BadRequest, resend.StatusCode);
+
+        var move = await client.PutAsJsonAsync($"/surveys/{created.Id}", new UpdateSurveyRequest(Type: "another_unknown"));
+        Assert.Equal(HttpStatusCode.BadRequest, move.StatusCode);
+    }
 
     [Fact]
     public async Task A_question_type_outside_the_canonical_survey_vocabulary_is_rejected()
@@ -360,7 +412,10 @@ public class SurveyEndpointsTests : IAsyncLifetime
         Assert.Contains(actives!.Surveys, s => s.Id == published.Id);
         Assert.Equal(1, actives.Surveys.Single(s => s.Id == published.Id).QuestionCount);
 
-        var byType = await client.GetFromJsonAsync<SurveyListResponse>("/surveys?type=general_climate");
+        // `periodic`, because that is what the harness creates. It asked for
+        // `general_climate` while the harness wrote one too — a SERVICE name on the cadence
+        // axis — so this filter only ever passed because both halves were wrong together.
+        var byType = await client.GetFromJsonAsync<SurveyListResponse>($"/surveys?type={SurveyTypes.Periodic}");
         Assert.Contains(byType!.Surveys, s => s.Id == draft.Id);
 
         var otherType = await client.GetFromJsonAsync<SurveyListResponse>("/surveys?type=exit_interview");

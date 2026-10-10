@@ -23,6 +23,7 @@ function row(overrides: Partial<PlanRow> & Pick<PlanRow, 'id' | 'name' | 'status
     priority: 'medium',
     createdAt: '2026-09-10T02:05:50.263923+00:00',
     finding: null,
+    sourceSurveyId: null,
     ownerName: null,
     ...overrides,
   }

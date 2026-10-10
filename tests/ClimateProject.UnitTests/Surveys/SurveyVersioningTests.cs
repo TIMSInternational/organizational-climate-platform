@@ -22,7 +22,7 @@ public class SurveyVersioningTests
             DescriptionEn = "How it is going",
             DescriptionEs = "Cómo va todo",
             Language = language,
-            Type = "general_climate",
+            Type = "periodic",
             StartDate = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero),
             EndDate = new DateTimeOffset(2026, 2, 1, 0, 0, 0, TimeSpan.Zero),
             TargetAudienceCount = 40,
@@ -119,7 +119,7 @@ public class SurveyVersioningTests
     {
         var content = Capture();
 
-        Assert.Equal("general_climate", content.Settings.Type);
+        Assert.Equal("periodic", content.Settings.Type);
         Assert.Equal([DepartmentId], content.Settings.DepartmentIds);
         Assert.Equal(40, content.Settings.TargetAudienceCount);
         Assert.True(content.Settings.Anonymous);

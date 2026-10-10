@@ -87,7 +87,7 @@ public class ReportComparisonGenerationTests : IAsyncLifetime
             CompanyId = _companyId,
             CreatedBy = creator.Id,
             TitleEn = title,
-            Type = "climate",
+            Type = "periodic",
             Language = "en",
             Status = status,
             StartDate = endDate.AddDays(-30),

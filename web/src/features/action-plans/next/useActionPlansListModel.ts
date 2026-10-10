@@ -19,8 +19,7 @@ import { todayIso } from '../../tracking/planDates'
 import { sortPlans } from '../../tracking/planOrder'
 import { semaforoPresentation, toSemaforoEstado } from '../../tracking/semaforo'
 import { firstOverdue, groupOf } from './derive'
-import type { ActionPlansListModel, OverdueReading, PlanRow } from './model'
-import { SAMPLE_FINDING_BY_TITLE } from './sampleModel'
+import type { ActionPlansListModel, OverdueReading, PlanFinding, PlanRow } from './model'
 
 export interface ActionPlansListState {
   /** `idle` while there is no company to ask about — the page says why instead. */
@@ -68,6 +67,27 @@ async function readTrackingOverdue(companyId: string): Promise<OverdueReading | 
   }
 }
 
+/**
+ * The dimension a plan was raised against, read from the tags the results screen writes.
+ *
+ * `ResultsCellPanel` and `SurveyCrossPanel` both tag a plan `seguimiento`,
+ * `department:<id>` and `dimension:<key>` — machine-readable provenance, written on every
+ * plan raised from a cell. It is the only place the dimension is stored: the entity has no
+ * column for it, and spelling it into the description would not survive a rename.
+ *
+ * Until the list endpoint returned `tags` this could not be read at all, so the screen
+ * filled the column from `SAMPLE_FINDING_BY_TITLE` — a lookup keyed by the plan's TITLE,
+ * which matched three seeded Spanish titles and nothing a real client would ever type.
+ * A plan with no such tag has no finding, which is the truth for one raised by hand.
+ */
+export function findingFromTags(tags: readonly string[] | undefined): PlanFinding | null {
+  const tag = (tags ?? []).find((candidate) => candidate.startsWith('dimension:'))
+  if (tag === undefined) return null
+  // `slice`, not `split(':')[1]`: a dimension key is authored content and may hold a colon.
+  const dimensionKey = tag.slice('dimension:'.length).trim()
+  return dimensionKey === '' ? null : { dimensionKey }
+}
+
 function toRow(plan: ActionPlan, departmentNames: ReadonlyMap<string, string>): PlanRow {
   return {
     id: plan.id,
@@ -78,7 +98,8 @@ function toRow(plan: ActionPlan, departmentNames: ReadonlyMap<string, string>): 
     priority: plan.priority,
     dueDate: plan.dueDate,
     createdAt: plan.createdAt,
-    finding: SAMPLE_FINDING_BY_TITLE[plan.title] ?? null,
+    finding: findingFromTags(plan.tags),
+    sourceSurveyId: plan.sourceSurveyId ?? null,
     // No plan has an owner: the entity has no such field (`ActionPlan.cs`). Real, not sample.
     ownerName: null,
   }
@@ -187,7 +208,6 @@ export function useActionPlansListModel(): ActionPlansListState {
       companyName,
       asOf,
       rows,
-      findingsAreSample: true,
       overdue: tracking ?? overdueFromPlans(rows, asOf),
     }),
     [companyName, asOf, rows, tracking],

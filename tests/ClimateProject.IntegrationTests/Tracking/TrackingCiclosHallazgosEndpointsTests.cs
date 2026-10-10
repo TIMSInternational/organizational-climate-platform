@@ -151,7 +151,7 @@ public class TrackingCiclosHallazgosEndpointsTests : IAsyncLifetime
                 CreatedBy = createdBy,
                 TitleEn = "Filler",
                 Language = "en",
-                Type = "general_climate",
+                Type = "periodic",
                 StartDate = endDate.AddDays(-7),
                 EndDate = endDate,
                 Status = SurveyStatuses.Closed,

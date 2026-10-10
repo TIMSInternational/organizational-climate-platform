@@ -82,7 +82,7 @@ public class ReportFilterEndpointTests : IAsyncLifetime
             CompanyId = companyId ?? _companyId,
             CreatedBy = creator.Id,
             TitleEn = title,
-            Type = "climate",
+            Type = "periodic",
             Language = "en",
             Status = SurveyStatuses.Closed,
             StartDate = DateTimeOffset.UtcNow.AddDays(-40),

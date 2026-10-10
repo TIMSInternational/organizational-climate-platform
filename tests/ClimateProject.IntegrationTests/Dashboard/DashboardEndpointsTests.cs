@@ -216,7 +216,7 @@ public class DashboardEndpointsTests : IAsyncLifetime
             TitleEn = title,
             TitleEs = $"{title} (ES)",
             Language = "both",
-            Type = "general_climate",
+            Type = "periodic",
             StartDate = now.AddDays(-1),
             EndDate = endDate,
             Status = status,

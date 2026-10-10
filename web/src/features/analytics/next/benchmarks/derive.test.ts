@@ -143,6 +143,14 @@ describe('benchmarks derive — references', () => {
   it('names type and category as words, and an authored category as authored', () => {
     expect(benchmarkTypeLabel(es, 'industry')).toBe('Sector')
     expect(benchmarkTypeLabel(es, 'internal')).toBe('Interna')
+    // Both were printed raw here while Analítica named them, from its own copy of this
+    // lookup — the same reference read as "Regional" on one screen and `regional` on the
+    // other. Seen in the references table on 2026-10-09.
+    expect(benchmarkTypeLabel(es, 'regional')).toBe('Regional')
+    expect(benchmarkTypeLabel(es, 'company_size')).toBe('Tamaño de empresa')
+    // A value this product does not ship a word for still prints as stored, which is the
+    // house rule for every vocabulary here (actionPlanVocabulary.test.ts pins it too).
+    expect(benchmarkTypeLabel(es, 'cooperativa')).toBe('cooperativa')
     expect(benchmarkCategoryLabel(es, 'climate')).toBe('Clima')
     expect(benchmarkCategoryLabel(es, 'rotación')).toBe('rotación')
   })
