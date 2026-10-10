@@ -17,6 +17,7 @@ public class ActionPlanConfiguration : IEntityTypeConfiguration<ActionPlan>
         builder.Property(a => a.CompanyId).HasColumnName("company_id").IsRequired();
         builder.Property(a => a.DepartmentId).HasColumnName("department_id");
         builder.Property(a => a.CreatedBy).HasColumnName("created_by").IsRequired();
+        builder.Property(a => a.OwnerId).HasColumnName("owner_id");
         builder.Property(a => a.DueDate).HasColumnName("due_date").IsRequired();
         builder.Property(a => a.Status).HasColumnName("status").HasMaxLength(20).IsRequired().HasDefaultValue("not_started");
         builder.Property(a => a.Priority).HasColumnName("priority").HasMaxLength(20).IsRequired().HasDefaultValue("medium");
@@ -36,10 +37,23 @@ public class ActionPlanConfiguration : IEntityTypeConfiguration<ActionPlan>
 
         builder.HasIndex(a => new { a.CompanyId, a.Status });
         builder.HasIndex(a => a.DueDate);
+        // "What is assigned to me" is the query the overdue nudge will run, one owner at a
+        // time, and the one a leader's own list would run. Indexed now rather than when that
+        // query is written, because the migration is already being taken.
+        builder.HasIndex(a => a.OwnerId);
 
         builder.HasOne<Company>().WithMany().HasForeignKey(a => a.CompanyId);
         builder.HasOne<Department>().WithMany().HasForeignKey(a => a.DepartmentId).OnDelete(DeleteBehavior.SetNull);
         builder.HasOne<User>().WithMany().HasForeignKey(a => a.CreatedBy).OnDelete(DeleteBehavior.Restrict);
+
+        // SetNull, NOT the Restrict that `created_by` takes, and the difference is the point.
+        // `created_by` is history: who filed this, and history must not be erasable by deleting
+        // a user, so Restrict refuses the delete. `owner_id` is a current assignment, and a
+        // person who has left the company genuinely has no plans any more -- Restrict there
+        // would make offboarding fail on a 500 for anyone who had ever been handed one, and
+        // Cascade would delete the work along with the worker. The plan survives, unassigned,
+        // which is exactly the state the "sin responsable" tile is for.
+        builder.HasOne<User>().WithMany().HasForeignKey(a => a.OwnerId).OnDelete(DeleteBehavior.SetNull);
         builder.HasOne<ActionPlanTemplate>().WithMany().HasForeignKey(a => a.TemplateId).OnDelete(DeleteBehavior.SetNull);
 
         // SetNull, matching the identically-named and identically-meaning

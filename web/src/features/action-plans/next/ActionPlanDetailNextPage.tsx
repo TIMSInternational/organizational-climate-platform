@@ -112,6 +112,12 @@ function priorityTone(priority: string): ChipTone {
 /** A plan that is over: its due date no longer counts down. */
 const SETTLED = new Set(['completed', 'cancelled'])
 
+/**
+ * The radio value standing for "nobody". Radix reads '' as "no item selected", so an empty
+ * string would leave the menu unmarked for exactly the plans that need the row most.
+ */
+const UNASSIGNED = '__unassigned__'
+
 function initials(name: string): string {
   return name
     .split(/\s+/)
@@ -219,6 +225,20 @@ function ActionPlanDetailView({ state, model }: { state: ActionPlanDetailState; 
                       </DropdownMenuRadioItem>
                     ))}
                   </DropdownMenuRadioGroup>
+                  {/* The plan's owner. `UNASSIGNED` is a sentinel rather than an empty string
+                      because Radix treats '' as "no value" and would stop marking the row. */}
+                  <DropdownMenuLabel>{t('actionPlans.next.ownerMenu')}</DropdownMenuLabel>
+                  <DropdownMenuRadioGroup
+                    value={plan.ownerId ?? UNASSIGNED}
+                    onValueChange={(next) => void state.changeOwner(next === UNASSIGNED ? null : next)}
+                  >
+                    <DropdownMenuRadioItem value={UNASSIGNED}>{t('actionPlans.next.unassigned')}</DropdownMenuRadioItem>
+                    {(valueOf(model.owners) ?? []).map((owner) => (
+                      <DropdownMenuRadioItem key={owner.id} value={owner.id}>
+                        {owner.name}
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
             </>
@@ -265,6 +285,17 @@ function ActionPlanDetailView({ state, model }: { state: ActionPlanDetailState; 
                     ) : (
                       <span className="text-fg-tertiary">{t('actionPlans.next.sheet.unknown')}</span>
                     ),
+                },
+                {
+                  id: 'owner',
+                  term: t('actionPlans.next.sheet.owner'),
+                  value: plan.ownerName ? (
+                    <span className="font-medium text-fg-primary">{plan.ownerName}</span>
+                  ) : (
+                    // Amber, not grey: unassigned is a thing to fix before the first progress
+                    // note, which is what the list's "SIN RESPONSABLE" tile says too.
+                    <span className="text-accent-amber-ink">{t('actionPlans.next.unassigned')}</span>
+                  ),
                 },
                 {
                   id: 'priority',

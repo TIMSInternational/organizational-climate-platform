@@ -16,7 +16,7 @@ import {
 } from '../api/actionPlans'
 import { listActionPlanTemplates } from '../api/actionPlanTemplates'
 import { listDepartments } from '../../org-structure/api/departments'
-import { getUser } from '../../org-structure/api/users'
+import { getUser, listUsers } from '../../org-structure/api/users'
 import { listSurveys, type SurveyListItem } from '../../surveys/api/surveys'
 import { getClimateTrends, type ClimateTrendsResponse } from '../../surveys/api/climateTrends'
 import ActionPlanDetailNextPage from './ActionPlanDetailNextPage'
@@ -42,6 +42,7 @@ vi.mock('../../org-structure/api/departments', async (importOriginal) => ({
 vi.mock('../../org-structure/api/users', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../org-structure/api/users')>()),
   getUser: vi.fn(),
+  listUsers: vi.fn(),
 }))
 vi.mock('../../surveys/api/surveys', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../surveys/api/surveys')>()),
@@ -182,6 +183,12 @@ describe('ActionPlanDetailNextPage', () => {
     vi.mocked(getUser)
       .mockReset()
       .mockResolvedValue({ id: 'u-ana', name: 'Ana Rojas' } as never)
+    vi.mocked(listUsers)
+      .mockReset()
+      .mockResolvedValue([
+        { id: 'u-ana', name: 'Ana Rojas' },
+        { id: 'u-luis', name: 'Luis Mora' },
+      ] as never)
     vi.mocked(listSurveys).mockReset().mockResolvedValue([q3])
     vi.mocked(getClimateTrends)
       .mockReset()
@@ -329,6 +336,35 @@ describe('ActionPlanDetailNextPage', () => {
     // The base URL is the build's `VITE_API_BASE_URL`, unset under the suite: compare the rest.
     await waitFor(() => expect(vi.mocked(updateActionPlan).mock.calls[0]?.slice(1)).toEqual(['p1', { status: 'in_progress' }]))
     expect(await screen.findAllByText(copy.status.inProgress)).not.toHaveLength(0)
+  })
+
+  /**
+   * `ActionPlan` had no owner column until this change: every plan read "Sin asignar" and the
+   * list's "SIN RESPONSABLE n de n" tile counted a field that did not exist.
+   */
+  it('hands the plan to somebody through the same PUT, and says so in the Ficha', async () => {
+    vi.mocked(updateActionPlan).mockResolvedValue({ ...plan, ownerId: 'u-luis', ownerName: 'Luis Mora' })
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    await userEvent.click(await screen.findByRole('button', { name: new RegExp(copy.moreActions.replace('{title}', '')) }))
+    const menu = await screen.findByRole('menu')
+    await userEvent.click(within(menu).getByRole('menuitemradio', { name: 'Luis Mora' }))
+    await waitFor(() => expect(vi.mocked(updateActionPlan).mock.calls[0]?.slice(1)).toEqual(['p1', { ownerId: 'u-luis' }]))
+    expect(await screen.findByText('Luis Mora')).toBeTruthy()
+  })
+
+  /**
+   * Taking the plan back has to travel as its own flag. An omitted `ownerId` means "not in
+   * this request" to the server — the same thing `status: null` means — so sending undefined
+   * here would silently do nothing where the reader asked to unassign.
+   */
+  it('takes the plan back with an explicit flag rather than an absent owner', async () => {
+    vi.mocked(getActionPlan).mockResolvedValue({ ...plan, ownerId: 'u-ana', ownerName: 'Ana Rojas' })
+    vi.mocked(updateActionPlan).mockResolvedValue({ ...plan, ownerId: null, ownerName: null })
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    await userEvent.click(await screen.findByRole('button', { name: new RegExp(copy.moreActions.replace('{title}', '')) }))
+    const menu = await screen.findByRole('menu')
+    await userEvent.click(within(menu).getAllByRole('menuitemradio', { name: copy.unassigned })[0]!)
+    await waitFor(() => expect(vi.mocked(updateActionPlan).mock.calls[0]?.slice(1)).toEqual(['p1', { clearOwner: true }]))
   })
 
   it('records progress from the dialog and lists the update in the Bitácora', async () => {

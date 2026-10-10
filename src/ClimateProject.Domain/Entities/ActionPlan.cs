@@ -13,6 +13,18 @@ public class ActionPlan
     public Guid CompanyId { get; set; }
     public Guid? DepartmentId { get; set; }
     public Guid CreatedBy { get; set; }
+
+    /// <summary>
+    /// Who is answerable for the plan, as distinct from <see cref="CreatedBy"/>, who merely
+    /// filed it. The two are different people often enough that one column cannot be both:
+    /// an administrator raises a plan from a results cell about a department they do not run.
+    ///
+    /// Nullable because a plan is legitimately unassigned between being raised and being
+    /// handed to someone, which is the state every plan starts in and the state the Planes de
+    /// Accion screen has always had a "sin responsable" tile for -- a tile that, until this
+    /// column existed, measured nothing.
+    /// </summary>
+    public Guid? OwnerId { get; set; }
     public DateTimeOffset DueDate { get; set; }
     public string Status { get; set; } = "not_started";
     public string Priority { get; set; } = "medium";

@@ -185,10 +185,18 @@ public static class SubjectDataMap
     /// </summary>
     public static readonly IReadOnlyList<SubjectDataEntry> Entries =
     [
-        Actor("ActionPlan", "action_plans", "CreatedBy",
-            "The plan is a business record owned by the company. Attribution to its author is retained so that a "
-            + "plan's provenance survives an erasure; the plan's own contents are not returned to the author as "
-            + "personal data because they describe the department, not them."),
+        new("ActionPlan", "action_plans", SubjectLink.Actor, ["CreatedBy", "OwnerId"],
+            ExportTreatment.Reference, ErasureTreatment.Retained,
+            BasisLegitimateInterest,
+            "For as long as the record exists; attribution survives erasure.",
+            "TWO columns reach a person here and they mean different things. `created_by` is history -- who "
+            + "filed the plan -- and is retained so that a plan's provenance survives an erasure. `owner_id` is a "
+            + "current assignment: who is answerable for it now. Both are declared because an export that named "
+            + "only the author would under-report where the subject appears, which is the opposite of what Art. 15 "
+            + "asks for; a person who owns twelve plans and wrote none would see an empty section. Neither is "
+            + "cleared by an erasure, because an erasure pseudonymises the user row rather than deleting it, so "
+            + "both links survive pointing at a pseudonym. The plan's own contents are not returned to either "
+            + "person as personal data, because they describe the department, not them."),
         NotPersonal("ActionPlanKpi", "action_plan_kpis", "Measurement targets on a plan. No person referenced."),
         NotPersonal("ActionPlanKpiUpdate", "action_plan_kpi_updates",
             "A KPI reading. The person who recorded it is on action_plan_progress_updates, not here."),

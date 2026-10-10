@@ -602,4 +602,196 @@ public class ActionPlanEndpointsTests : IAsyncLifetime
         Assert.Equal("Improve onboarding v2", row.TitleEn);
         Assert.Equal("Mejorar la incorporación", row.TitleEs);
     }
+
+    /// <summary>
+    /// A user of the company, created the way the harness creates every other one, returned
+    /// with the name the list is expected to print.
+    /// </summary>
+    private async Task<(Guid Id, string Name)> AUserOfAsync(HttpClient client, Guid companyId, string emailDomain)
+    {
+        var email = $"{Guid.NewGuid():N}@{emailDomain}";
+        await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Owner Person", email, "A-good-passw0rd"));
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        var user = await db.Users.FirstAsync(u => u.Email == email);
+        user.CompanyId = companyId;
+        await db.SaveChangesAsync();
+        return (user.Id, user.Name);
+    }
+
+    [Fact]
+    public async Task A_plan_can_be_given_an_owner_and_the_list_prints_their_name()
+    {
+        // The entity had no owner at all: every plan read "Sin asignar" and the screen's
+        // "SIN RESPONSABLE 4 de 4" tile counted a column that did not exist. The name travels
+        // on the list item because the list is what prints one per row.
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var owner = await AUserOfAsync(client, _companyAId, _companyADomain);
+
+        var createResponse = await client.PostAsJsonAsync("/action-plans", new CreateActionPlanRequest(
+            Title: "Recognition standard",
+            Description: "Publish one",
+            CompanyId: _companyAId,
+            DepartmentId: null,
+            DueDate: DateTimeOffset.UtcNow.AddDays(30),
+            Priority: "high",
+            Tags: null,
+            TemplateId: null,
+            SourceSurveyId: null,
+            SourceInsightId: null,
+            Kpis: null,
+            Objectives: null,
+            OwnerId: owner.Id));
+
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        var created = await createResponse.Content.ReadFromJsonAsync<ActionPlanDetail>();
+        Assert.Equal(owner.Id, created!.OwnerId);
+        Assert.Equal(owner.Name, created.OwnerName);
+
+        var listResponse = await client.GetAsync($"/action-plans?companyId={_companyAId}");
+        var list = await listResponse.Content.ReadFromJsonAsync<ActionPlanListResponse>();
+        var row = Assert.Single(list!.ActionPlans, p => p.Id == created.Id);
+        Assert.Equal(owner.Id, row.OwnerId);
+        Assert.Equal(owner.Name, row.OwnerName);
+    }
+
+    [Fact]
+    public async Task A_plan_with_no_owner_says_so_rather_than_naming_anybody()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var createResponse = await client.PostAsJsonAsync("/action-plans", new CreateActionPlanRequest(
+            "Unowned", "For now", _companyAId, null, DateTimeOffset.UtcNow.AddDays(30), "high",
+            null, null, null, null, null, null));
+        var created = await createResponse.Content.ReadFromJsonAsync<ActionPlanDetail>();
+
+        Assert.Null(created!.OwnerId);
+        Assert.Null(created.OwnerName);
+    }
+
+    [Fact]
+    public async Task An_owner_from_another_company_is_refused_with_400_not_an_opaque_500()
+    {
+        // The FK proves the row exists, never whose it is. Without the tenancy half, a company
+        // admin could file a plan against another tenant's user and read that user's NAME back
+        // out of the list payload -- the leak `SourceSurveyId` is checked for, one column over.
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var stranger = await AUserOfAsync(client, _companyBId, _companyBDomain);
+
+        var response = await client.PostAsJsonAsync("/action-plans", new CreateActionPlanRequest(
+            "Cross-tenant", "No", _companyAId, null, DateTimeOffset.UtcNow.AddDays(30), "high",
+            null, null, null, null, null, null, OwnerId: stranger.Id));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("different company", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task An_owner_who_does_not_exist_is_refused_with_400_not_an_opaque_500()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.PostAsJsonAsync("/action-plans", new CreateActionPlanRequest(
+            "Ghost", "No", _companyAId, null, DateTimeOffset.UtcNow.AddDays(30), "high",
+            null, null, null, null, null, null, OwnerId: Guid.NewGuid()));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("does not reference an existing user", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task An_update_that_does_not_mention_the_owner_leaves_the_owner_alone()
+    {
+        // `OwnerId: null` means "not in this request", exactly as `Status: null` does on this
+        // record. Treating it as "unassign" would clear the owner on every status change --
+        // and a status change is the commonest write this screen makes.
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var owner = await AUserOfAsync(client, _companyAId, _companyADomain);
+
+        var created = await (await client.PostAsJsonAsync("/action-plans", new CreateActionPlanRequest(
+            "Owned", "Yes", _companyAId, null, DateTimeOffset.UtcNow.AddDays(30), "high",
+            null, null, null, null, null, null, OwnerId: owner.Id))).Content.ReadFromJsonAsync<ActionPlanDetail>();
+
+        var afterStatus = await client.PutAsJsonAsync($"/action-plans/{created!.Id}",
+            new UpdateActionPlanRequest(null, null, null, "in_progress", null, null));
+        Assert.Equal(HttpStatusCode.OK, afterStatus.StatusCode);
+        var read = await (await client.GetAsync($"/action-plans/{created.Id}")).Content.ReadFromJsonAsync<ActionPlanDetail>();
+        Assert.Equal(owner.Id, read!.OwnerId);
+        Assert.Equal("in_progress", read.Status);
+    }
+
+    [Fact]
+    public async Task An_owner_can_be_assigned_and_unassigned_but_never_both_in_one_request()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var owner = await AUserOfAsync(client, _companyAId, _companyADomain);
+
+        var created = await (await client.PostAsJsonAsync("/action-plans", new CreateActionPlanRequest(
+            "To assign", "Later", _companyAId, null, DateTimeOffset.UtcNow.AddDays(30), "high",
+            null, null, null, null, null, null))).Content.ReadFromJsonAsync<ActionPlanDetail>();
+        Assert.Null(created!.OwnerId);
+
+        var assigned = await client.PutAsJsonAsync($"/action-plans/{created.Id}",
+            new UpdateActionPlanRequest(null, null, null, null, null, null, OwnerId: owner.Id));
+        Assert.Equal(HttpStatusCode.OK, assigned.StatusCode);
+        Assert.Equal(owner.Id, (await assigned.Content.ReadFromJsonAsync<ActionPlanDetail>())!.OwnerId);
+
+        var both = await client.PutAsJsonAsync($"/action-plans/{created.Id}",
+            new UpdateActionPlanRequest(null, null, null, null, null, null, OwnerId: owner.Id, ClearOwner: true));
+        Assert.Equal(HttpStatusCode.BadRequest, both.StatusCode);
+        // And it changed nothing: the refusal path writes no owner, in either direction.
+        var unchanged = await (await client.GetAsync($"/action-plans/{created.Id}")).Content.ReadFromJsonAsync<ActionPlanDetail>();
+        Assert.Equal(owner.Id, unchanged!.OwnerId);
+
+        var cleared = await client.PutAsJsonAsync($"/action-plans/{created.Id}",
+            new UpdateActionPlanRequest(null, null, null, null, null, null, ClearOwner: true));
+        Assert.Equal(HttpStatusCode.OK, cleared.StatusCode);
+        var after = (await cleared.Content.ReadFromJsonAsync<ActionPlanDetail>())!;
+        Assert.Null(after.OwnerId);
+        Assert.Null(after.OwnerName);
+    }
+
+    [Fact]
+    public async Task Deleting_the_owner_unassigns_the_plan_rather_than_deleting_it_or_refusing()
+    {
+        // `owner_id` is SetNull where `created_by` is Restrict, and the difference is the
+        // point: history must not be erasable by deleting a user, but a current assignment
+        // genuinely ends when the person leaves. Restrict here would make offboarding fail
+        // for anyone who had ever been handed a plan; Cascade would delete the work with
+        // the worker.
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var owner = await AUserOfAsync(client, _companyAId, _companyADomain);
+
+        var created = await (await client.PostAsJsonAsync("/action-plans", new CreateActionPlanRequest(
+            "Owned then orphaned", "Yes", _companyAId, null, DateTimeOffset.UtcNow.AddDays(30), "high",
+            null, null, null, null, null, null, OwnerId: owner.Id))).Content.ReadFromJsonAsync<ActionPlanDetail>();
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            db.Users.Remove(await db.Users.SingleAsync(u => u.Id == owner.Id));
+            await db.SaveChangesAsync();
+        }
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            var row = await db.ActionPlans.AsNoTracking().SingleAsync(p => p.Id == created!.Id);
+            Assert.Null(row.OwnerId);
+        }
+    }
 }

@@ -211,6 +211,7 @@
       "recordProgress": "Registrar avance",
       "changeStatus": "Cambiar estado",
       "priorityMenu": "Prioridad",
+      "ownerMenu": "Responsable",
       "progressDialogTitle": "Registrar avance",
       "progressDialogDescription": "Una nota de qué avanzó y por qué. Queda con su fecha.",
       "deadline": {
@@ -288,6 +289,7 @@
       "sheet": {
         "title": "Ficha",
         "department": "Departamento",
+        "owner": "Responsable",
         "priority": "Prioridad",
         "status": "Estado",
         "created": "Creado",

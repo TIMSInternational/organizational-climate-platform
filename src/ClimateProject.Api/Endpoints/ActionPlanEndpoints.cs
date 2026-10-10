@@ -55,9 +55,14 @@ public static class ActionPlanEndpoints
                 o.CompletionPercentage))
             .ToList();
 
+        // One extra read, and only when the plan has an owner: the name the screen prints.
+        var ownerName = plan.OwnerId.HasValue
+            ? await db.Users.Where(u => u.Id == plan.OwnerId.Value).Select(u => u.Name).FirstOrDefaultAsync(cancellationToken)
+            : null;
+
         return new ActionPlanDetail(plan.Id, title, description, plan.CompanyId, plan.DepartmentId, plan.CreatedBy,
-            plan.DueDate, plan.Status, plan.Priority, plan.Tags, plan.SourceSurveyId, plan.TemplateId, kpis, objectives,
-            fallbackFields);
+            plan.DueDate, plan.Status, plan.Priority, plan.Tags, plan.SourceSurveyId, plan.OwnerId, ownerName,
+            plan.TemplateId, kpis, objectives, fallbackFields);
     }
 
     private static async Task<IResult> ListAsync(
@@ -85,7 +90,11 @@ public static class ActionPlanEndpoints
                 .Select(p => new
                 {
                     p.Id, p.TitleEn, p.TitleEs, p.CompanyId, p.DepartmentId, p.DueDate, p.Status, p.Priority,
-                    p.CreatedAt, p.SourceSurveyId, p.Tags,
+                    p.CreatedAt, p.SourceSurveyId, p.Tags, p.OwnerId,
+                    // The owner's name in the same query, by a left join EF writes from the
+                    // navigationless FK. A name per row is what the table prints, and fetching
+                    // it per row from the client is N round trips for a column.
+                    OwnerName = db.Users.Where(u => u.Id == p.OwnerId).Select(u => u.Name).FirstOrDefault(),
                 })
                 .ToListAsync(cancellationToken))
             .Select(p => new ActionPlanListItem(
@@ -95,10 +104,46 @@ public static class ActionPlanEndpoints
                 // The projection is explicit rather than `Select(p => p)` so a column is only
                 // read when a caller needs it; these two are what makes a plan's origin
                 // readable at all, and both were already on the row.
-                p.SourceSurveyId, p.Tags ?? []))
+                p.SourceSurveyId, p.Tags ?? [], p.OwnerId, p.OwnerName))
             .ToList();
 
         return Results.Ok(new ActionPlanListResponse(plans));
+    }
+
+    /// <summary>
+    /// Is this user a legitimate owner for a plan of this company?
+    /// </summary>
+    /// <remarks>
+    /// The same two questions <c>SourceSurveyId</c> is asked, for the same reason and in the
+    /// same order. The FK on <c>owner_id</c> answers only the first -- an unknown id would
+    /// reach Postgres and come back as an opaque 500 where a 400 naming the field is the
+    /// message. The second is the one an FK cannot ask: a row existing is not a row belonging
+    /// to this tenant, and without this check a company admin could hand their plan to a user
+    /// of another company and then read that user's NAME back out of the list payload. That is
+    /// the identical leak the source-survey check above closes, one column over.
+    /// </remarks>
+    private static async Task<IResult?> RefuseInvalidOwnerAsync(
+        Guid ownerId,
+        Guid companyId,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var ownerCompanyId = await db.Users
+            .Where(u => u.Id == ownerId)
+            .Select(u => (Guid?)u.CompanyId)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (ownerCompanyId is null)
+        {
+            return Results.Json(new { message = "OwnerId does not reference an existing user" }, statusCode: 400);
+        }
+
+        if (ownerCompanyId.Value != companyId)
+        {
+            return Results.Json(new { message = "OwnerId belongs to a different company" }, statusCode: 400);
+        }
+
+        return null;
     }
 
     private static async Task<IResult> CreateAsync(
@@ -179,6 +224,12 @@ public static class ActionPlanEndpoints
             }
         }
 
+        if (request.OwnerId.HasValue)
+        {
+            var refusal = await RefuseInvalidOwnerAsync(request.OwnerId.Value, request.CompanyId, db, cancellationToken);
+            if (refusal is not null) return refusal;
+        }
+
         // #210: every authored field on the plan lands in the company's language unless
         // the caller sends { "en": ..., "es": ... }. A bare string is never refused here.
         var attribution = await AuthoredWrites.AttributionLocaleAsync(db, currentUser, request.CompanyId, null, cancellationToken);
@@ -199,6 +250,7 @@ public static class ActionPlanEndpoints
             CompanyId = request.CompanyId,
             DepartmentId = request.DepartmentId,
             CreatedBy = actingUser?.Id ?? Guid.Empty,
+            OwnerId = request.OwnerId,
             DueDate = request.DueDate,
             Status = "not_started",
             Priority = request.Priority,
@@ -357,6 +409,26 @@ public static class ActionPlanEndpoints
         }
 
         if (request.Tags is not null) plan.Tags = request.Tags;
+
+        // Assign or unassign, never both. `OwnerId: null` on this record means "not in this
+        // request", exactly as `Status: null` does, so clearing needs its own flag -- and a
+        // request carrying both is a caller who does not know which they meant, which is a
+        // 400 rather than a silent choice made for them.
+        if (request.ClearOwner == true && request.OwnerId.HasValue)
+        {
+            return Results.Json(new { message = "Send either OwnerId or ClearOwner, not both" }, statusCode: 400);
+        }
+
+        if (request.OwnerId.HasValue)
+        {
+            var refusal = await RefuseInvalidOwnerAsync(request.OwnerId.Value, plan.CompanyId, db, cancellationToken);
+            if (refusal is not null) return refusal;
+            plan.OwnerId = request.OwnerId.Value;
+        }
+        else if (request.ClearOwner == true)
+        {
+            plan.OwnerId = null;
+        }
 
         plan.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(cancellationToken);

@@ -43,6 +43,8 @@ export interface ActionPlanDetailModel {
   finding: Settled<PlanFinding>
   /** Whether a wave that closed after the plan's own moved its cell (`planMove`). */
   move: Settled<PlanMove>
+  /** Who the plan can be handed to: every user of its company (`GET /admin/users`). */
+  owners: Settled<readonly { id: string; name: string }[]>
   /** Progress recorded during this visit, oldest first. */
   recorded: readonly ProgressUpdateDetail[]
 }

@@ -621,6 +621,80 @@ public class GdprEndpointsTests : IAsyncLifetime
         }
     }
 
+    /// <summary>
+    /// A department head who OWNS plans and wrote none must still see them in their own export.
+    /// </summary>
+    /// <remarks>
+    /// `action_plans` is reached by two actor columns and the export used to search only one of
+    /// them, because until `owner_id` existed there was only one. The subject-data map guard
+    /// catches the undeclared foreign key; it cannot catch an export that declares the link and
+    /// then never queries it, so that half is asserted here.
+    /// </remarks>
+    [Fact]
+    public async Task Access_export_lists_the_plans_a_subject_owns_and_not_only_the_ones_they_wrote()
+    {
+        var (_, subjectId, _) = await SignInAsync(Roles.Leader);
+        var (adminClient, adminId, _) = await SignInAsync(Roles.CompanyAdmin);
+
+        var ownedId = Guid.NewGuid();
+        var writtenId = Guid.NewGuid();
+        await using (var db = NewContext())
+        {
+            var now = DateTimeOffset.UtcNow;
+            db.ActionPlans.Add(new ActionPlan
+            {
+                Id = ownedId,
+                TitleEn = "Owned by the subject",
+                DescriptionEn = "Filed by the administrator, carried by the subject.",
+                CompanyId = _companyId,
+                CreatedBy = adminId,
+                OwnerId = subjectId,
+                DueDate = now.AddDays(30),
+                CreatedAt = now,
+                UpdatedAt = now,
+            });
+            db.ActionPlans.Add(new ActionPlan
+            {
+                Id = writtenId,
+                TitleEn = "Written by the subject",
+                DescriptionEn = "Filed by the subject, owned by nobody.",
+                CompanyId = _companyId,
+                CreatedBy = subjectId,
+                DueDate = now.AddDays(30),
+                CreatedAt = now,
+                UpdatedAt = now,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var export = await (await adminClient.GetAsync($"/gdpr/access?userId={subjectId}"))
+            .Content.ReadFromJsonAsync<JsonElement>();
+
+        // Labelled by the column that matched, so the reader can tell "I am answerable for this"
+        // from "I filed this" — they are different claims about the same person.
+        //
+        // NOT `AssertLinkedByAddress`: that helper reads `Id` off a FULL record, where the keys
+        // are the row's own PascalCase column names. A Reference section's keys are the three
+        // fixed ones below, so the helper silently matched nothing and the first version of this
+        // test failed against an export that was already correct.
+        AssertReferenced(export, "ActionPlan", ownedId, "OwnerId");
+        AssertReferenced(export, "ActionPlan", writtenId, "CreatedBy");
+    }
+
+    /// <summary>One row of a <see cref="ExportTreatment.Reference"/> section, by id and label.</summary>
+    private static void AssertReferenced(JsonElement export, string entity, Guid id, string linkProperty)
+    {
+        var record = Section(export, entity).GetProperty("records").EnumerateArray()
+            .SingleOrDefault(r =>
+                r.TryGetProperty(SubjectAccessExport.IdKey, out var value) && value.GetGuid() == id);
+
+        Assert.True(
+            record.ValueKind == JsonValueKind.Object,
+            $"{entity} row {id} reaches the subject and was not exported, so the '{linkProperty}' "
+            + "link the map declares for it is searched by nothing.");
+        Assert.Equal(linkProperty, record.GetProperty(SubjectAccessExport.LinkKey).GetString());
+    }
+
     [Fact]
     public async Task Access_export_never_reaches_a_row_in_a_tenant_the_caller_has_no_rights_in()
     {
