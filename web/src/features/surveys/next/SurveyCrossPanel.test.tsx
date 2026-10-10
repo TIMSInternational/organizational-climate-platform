@@ -17,7 +17,12 @@ import * as resultsApi from '../api/surveyResults'
 import * as surveysApi from '../api/surveys'
 import * as plansApi from '../../action-plans/api/actionPlans'
 import * as demographicsApi from '../../org-structure/api/demographicFields'
-import type { SurveyAnalyticsResponse, SurveyBreakdown, SurveySegmentResult } from '../api/surveyResults'
+import type {
+  SurveyAnalyticsResponse,
+  SurveyBreakdown,
+  SurveySegmentResult,
+  SurveySegmentSelector,
+} from '../api/surveyResults'
 import en from '../../../i18n/en.json'
 
 vi.mock('../api/surveyResults', async (importOriginal) => ({
@@ -99,6 +104,25 @@ function renderPanel(given: SurveyAnalyticsResponse | null = payload()) {
     <TranslationProvider initialLocale="en">
       <SurveyCrossPanel surveyId="s1" payload={given} baseUrl="http://api.test" bands={BANDS} />
     </TranslationProvider>,
+  )
+}
+
+/**
+ * Answer by WHAT was asked for rather than by call order.
+ *
+ * The panel no longer reads a fixed number of payloads in a fixed order — adding a cohort
+ * fetches only what is missing, and comparing recomputes the lot — so a chain of
+ * `mockResolvedValueOnce` encodes an implementation detail and breaks on a change that is
+ * not a defect. The key is `crossKeyOf`'s, and `''` is the unfiltered baseline.
+ */
+function servePerCohort(byKey: Record<string, SurveyAnalyticsResponse>) {
+  vi.mocked(resultsApi.getSurveyAnalytics).mockImplementation(
+    async (_baseUrl, _surveyId, _lang, segments?: readonly SurveySegmentSelector[]) => {
+      const key = crossKeyOf(segments ?? [])
+      const found = byKey[key]
+      if (!found) throw new Error(`no payload staged for "${key}"`)
+      return found
+    },
   )
 }
 
@@ -216,10 +240,17 @@ describe('SurveyCrossPanel — comparing', () => {
   })
 
   it('contrasts two cohorts against the same baseline in one table', async () => {
-    vi.mocked(resultsApi.getSurveyAnalytics)
-      .mockResolvedValueOnce(payload({ dimensions: [dim('Confianza', 3.0)] }))
-      .mockResolvedValueOnce(payload({ filter: [{ field: 'department', value: FINANCE }], dimensions: [dim('Confianza', 4.0)] }))
-      .mockResolvedValueOnce(payload({ filter: [{ field: 'department', value: 'd2' }], dimensions: [dim('Confianza', 2.0)] }))
+    servePerCohort({
+      '': payload({ dimensions: [dim('Confianza', 3.0)] }),
+      [`department:${FINANCE}`]: payload({
+        filter: [{ field: 'department', value: FINANCE }],
+        dimensions: [dim('Confianza', 4.0)],
+      }),
+      'department:d2': payload({
+        filter: [{ field: 'department', value: 'd2' }],
+        dimensions: [dim('Confianza', 2.0)],
+      }),
+    })
 
     renderPanel()
     await choose(copy.department, 'Finanzas')
@@ -232,7 +263,40 @@ describe('SurveyCrossPanel — comparing', () => {
     // point of defining the mean the way the grid above defines it.
     await waitFor(() => expect(screen.getAllByText('+1.0')).toHaveLength(2))
     expect(screen.getAllByText('-1.0')).toHaveLength(2)
-    expect(vi.mocked(resultsApi.getSurveyAnalytics).mock.calls).toHaveLength(3)
+  })
+
+  it('puts an added cohort on the table in the same click', async () => {
+    servePerCohort({
+      '': payload({ dimensions: [dim('Confianza', 3.0)] }),
+      [`department:${FINANCE}`]: payload({
+        filter: [{ field: 'department', value: FINANCE }],
+        dimensions: [dim('Confianza', 4.0)],
+      }),
+    })
+
+    renderPanel()
+    await choose(copy.department, 'Finanzas')
+    await userEvent.click(screen.getByRole('button', { name: copy.add }))
+
+    // Measured against production on 2026-10-09: the chip appeared and the table did not
+    // change, because the chips render `cohorts` and the table renders `shown`. The two
+    // lists name the same groups, so a reader must never be shown one without the other.
+    await waitFor(() => expect(screen.getAllByText('+1.0')).toHaveLength(2))
+    // The baseline and the one new cohort -- NOT a recomputation of everything already read.
+    expect(vi.mocked(resultsApi.getSurveyAnalytics).mock.calls).toHaveLength(2)
+  })
+
+  it('stages no chip for a cohort it could not read', async () => {
+    vi.mocked(resultsApi.getSurveyAnalytics).mockRejectedValue(new Error('no'))
+
+    renderPanel()
+    await choose(copy.department, 'Finanzas')
+    await userEvent.click(screen.getByRole('button', { name: copy.add }))
+
+    await waitFor(() => expect(screen.getByText('no')).toBeTruthy())
+    // A chip for a column that could not be read is the same disagreement between the two
+    // lists, arrived at from the other side.
+    expect(screen.queryByText(copy.cohorts)).toBeNull()
   })
 
   it('prints no number at all for a cohort the server refused', async () => {
