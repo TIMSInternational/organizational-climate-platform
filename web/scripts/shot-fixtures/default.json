@@ -1,5 +1,11 @@
 {
-  "GET /admin/companies/*/result-bands": {"opportunityMin": 3, "strengthMin": 4, "criticalName": null, "opportunityName": null, "strengthName": null},
+  "GET /admin/companies/*/result-bands": {
+    "opportunityMin": 3,
+    "strengthMin": 4,
+    "criticalName": null,
+    "opportunityName": null,
+    "strengthName": null
+  },
   "GET /admin/companies": {
     "companies": [
       {
@@ -47,13 +53,43 @@
   },
   "GET /admin/companies/*/licenses": {
     "services": [
-      { "serviceType": "general_climate", "seatsTotal": 500, "seatsUsed": 312, "status": "active", "licensed": true, "notes": "PO-2026-014", "updatedAt": "2026-09-10T00:00:00Z" },
-      { "serviceType": "organizational_culture", "seatsTotal": 0, "seatsUsed": 0, "status": "active", "licensed": false, "notes": null, "updatedAt": null },
-      { "serviceType": "microclimate", "seatsTotal": 120, "seatsUsed": 120, "status": "suspended", "licensed": true, "notes": null, "updatedAt": "2026-09-12T00:00:00Z" }
+      {
+        "serviceType": "general_climate",
+        "seatsTotal": 500,
+        "seatsUsed": 312,
+        "status": "active",
+        "licensed": true,
+        "notes": "PO-2026-014",
+        "updatedAt": "2026-09-10T00:00:00Z"
+      },
+      {
+        "serviceType": "organizational_culture",
+        "seatsTotal": 0,
+        "seatsUsed": 0,
+        "status": "active",
+        "licensed": false,
+        "notes": null,
+        "updatedAt": null
+      },
+      {
+        "serviceType": "microclimate",
+        "seatsTotal": 120,
+        "seatsUsed": 120,
+        "status": "suspended",
+        "licensed": true,
+        "notes": null,
+        "updatedAt": "2026-09-12T00:00:00Z"
+      }
     ]
   },
   "PUT /admin/companies/*/settings": {
-    "resultBands": {"opportunityMin": 3, "strengthMin": 4, "criticalName": null, "opportunityName": null, "strengthName": null},
+    "resultBands": {
+      "opportunityMin": 3,
+      "strengthMin": 4,
+      "criticalName": null,
+      "opportunityName": null,
+      "strengthName": null
+    },
     "companyId": "11111111-1111-1111-1111-111111111111",
     "settings": {
       "surveyFrequency": "quarterly",
@@ -141,7 +177,7 @@
     "ongoingSurveys": [
       {
         "id": "55555555-0000-0000-0000-000000000001",
-        "title": "Q2 climate survey",
+        "title": "Encuesta de Clima Q2",
         "status": "active",
         "startDate": "2026-04-01T00:00:00Z",
         "endDate": "2026-06-12T00:00:00Z",
@@ -150,7 +186,7 @@
       },
       {
         "id": "55555555-0000-0000-0000-000000000002",
-        "title": "Onboarding pulse",
+        "title": "Pulso de incorporación",
         "status": "active",
         "startDate": "2026-07-15T00:00:00Z",
         "endDate": "2026-09-30T00:00:00Z",
@@ -159,7 +195,7 @@
       },
       {
         "id": "55555555-0000-0000-0000-000000000003",
-        "title": "Q3 climate survey",
+        "title": "Encuesta de Clima Q3",
         "status": "active",
         "startDate": "2026-10-01T00:00:00Z",
         "endDate": "2026-10-31T00:00:00Z",
@@ -170,43 +206,43 @@
     "departments": [
       {
         "id": "d0000000-0000-0000-0000-000000000001",
-        "name": "Operations",
+        "name": "Operaciones y Logística",
         "memberCount": 48,
         "completedResponseCount": 61
       },
       {
         "id": "d0000000-0000-0000-0000-000000000002",
-        "name": "Support",
+        "name": "Atención y Servicio al Cliente",
         "memberCount": 23,
         "completedResponseCount": 14
       },
       {
         "id": "d0000000-0000-0000-0000-000000000003",
-        "name": "Sales",
+        "name": "Promoción Comercial",
         "memberCount": 31,
         "completedResponseCount": 40
       },
       {
         "id": "d0000000-0000-0000-0000-000000000004",
-        "name": "Engineering",
+        "name": "Tecnologías de Información",
         "memberCount": 57,
         "completedResponseCount": 79
       },
       {
         "id": "d0000000-0000-0000-0000-000000000005",
-        "name": "People",
+        "name": "Gestión de Personas y Cultura",
         "memberCount": 12,
         "completedResponseCount": 14
       },
       {
         "id": "d0000000-0000-0000-0000-000000000006",
-        "name": "Finance",
+        "name": "Inversión y Encadenamientos",
         "memberCount": 4,
         "completedResponseCount": 3
       },
       {
         "id": "d0000000-0000-0000-0000-000000000007",
-        "name": "Facilities",
+        "name": "Ventanilla Única de Comercio Exterior",
         "memberCount": 0,
         "completedResponseCount": 0
       }
@@ -250,7 +286,7 @@
   "GET /dashboard/department-admin": {
     "companyId": "11111111-1111-1111-1111-111111111111",
     "departmentId": "d0000000-0000-0000-0000-000000000001",
-    "departmentName": "Operations",
+    "departmentName": "Operaciones y Logística",
     "memberCount": 48,
     "activeMemberCount": 46,
     "activeSurveyCount": 1,
@@ -260,7 +296,7 @@
     "activeSurveys": [
       {
         "id": "55555555-0000-0000-0000-000000000003",
-        "title": "Q3 climate survey",
+        "title": "Encuesta de Clima Q3",
         "status": "active",
         "startDate": "2026-10-01T00:00:00Z",
         "endDate": "2026-10-31T00:00:00Z",
@@ -270,34 +306,34 @@
     ],
     "climate": {
       "surveyId": "11111111-1111-1111-1111-111111111111",
-      "surveyTitle": "Q1 Climate Survey",
+      "surveyTitle": "Encuesta de Clima Q1",
       "surveyEndDate": "2026-03-31T00:00:00+00:00",
       "respondentCount": 23,
       "isSuppressed": false,
       "minimumGroupSize": 5,
       "dimensions": [
         {
-          "dimension": "Collaboration",
+          "dimension": "Pertenencia",
           "averageScore": 3.9
         },
         {
-          "dimension": "Growth",
+          "dimension": "Desarrollo",
           "averageScore": 3.2
         },
         {
-          "dimension": "Leadership",
+          "dimension": "Confianza",
           "averageScore": 3.6
         },
         {
-          "dimension": "Psychological safety",
+          "dimension": "Seguridad psicológica",
           "averageScore": 4.1
         },
         {
-          "dimension": "Recognition",
+          "dimension": "Reconocimiento",
           "averageScore": 2.8
         },
         {
-          "dimension": "Workload",
+          "dimension": "Carga de trabajo",
           "averageScore": 3.1
         }
       ]
@@ -305,7 +341,7 @@
   },
   "GET /dashboard/employee/last-outcome": {
     "surveyId": "s0000000-0000-0000-0000-000000000004",
-    "surveyTitle": "Q1 climate survey",
+    "surveyTitle": "Encuesta de Clima Q1",
     "closedOn": "2026-03-14T00:00:00Z",
     "responseCount": 178,
     "departmentCount": 6,
@@ -330,7 +366,7 @@
   "GET /dashboard/employee": {
     "companyId": "11111111-1111-1111-1111-111111111111",
     "departmentId": "d0000000-0000-0000-0000-000000000001",
-    "departmentName": "Operations",
+    "departmentName": "Operaciones y Logística",
     "name": "María Herrera",
     "pendingSurveyCount": 1,
     "completedSurveyCount": 4,
@@ -339,7 +375,7 @@
     "pendingSurveys": [
       {
         "id": "s0000000-0000-0000-0000-000000000003",
-        "title": "Q3 climate survey",
+        "title": "Encuesta de Clima Q3",
         "status": "active",
         "startDate": "2026-10-01T00:00:00Z",
         "endDate": "2026-10-31T00:00:00Z",
@@ -371,7 +407,7 @@
       },
       {
         "id": "t2",
-        "name": "Onboarding pulse",
+        "name": "Pulso de incorporación",
         "description": "Asked at thirty days. Short enough that a new joiner finishes it.",
         "category": "onboarding",
         "industry": "manufacturing",
@@ -442,7 +478,7 @@
         "commentRequired": false,
         "commentPrompt": null,
         "order": 0,
-        "category": "Psychological safety"
+        "category": "Seguridad psicológica"
       },
       {
         "id": "tq2",
@@ -457,7 +493,7 @@
         "commentRequired": false,
         "commentPrompt": null,
         "order": 1,
-        "category": "Psychological safety"
+        "category": "Seguridad psicológica"
       },
       {
         "id": "tq3",
@@ -472,7 +508,7 @@
         "commentRequired": false,
         "commentPrompt": null,
         "order": 2,
-        "category": "Workload"
+        "category": "Carga de trabajo"
       },
       {
         "id": "tq4",
@@ -487,7 +523,7 @@
         "commentRequired": false,
         "commentPrompt": null,
         "order": 3,
-        "category": "Workload"
+        "category": "Carga de trabajo"
       },
       {
         "id": "tq5",
@@ -502,7 +538,7 @@
         "commentRequired": false,
         "commentPrompt": null,
         "order": 4,
-        "category": "Recognition"
+        "category": "Reconocimiento"
       },
       {
         "id": "tq6",
@@ -517,7 +553,7 @@
         "commentRequired": false,
         "commentPrompt": null,
         "order": 5,
-        "category": "Recognition"
+        "category": "Reconocimiento"
       },
       {
         "id": "tq7",
@@ -532,7 +568,7 @@
         "commentRequired": false,
         "commentPrompt": null,
         "order": 6,
-        "category": "Leadership"
+        "category": "Confianza"
       },
       {
         "id": "tq8",
@@ -547,7 +583,7 @@
         "commentRequired": false,
         "commentPrompt": null,
         "order": 7,
-        "category": "Leadership"
+        "category": "Confianza"
       },
       {
         "id": "tq9",
@@ -562,7 +598,7 @@
         "commentRequired": false,
         "commentPrompt": null,
         "order": 8,
-        "category": "Growth"
+        "category": "Desarrollo"
       },
       {
         "id": "tq10",
@@ -577,7 +613,7 @@
         "commentRequired": false,
         "commentPrompt": null,
         "order": 9,
-        "category": "Growth"
+        "category": "Desarrollo"
       },
       {
         "id": "tq11",
@@ -592,7 +628,7 @@
         "commentRequired": false,
         "commentPrompt": null,
         "order": 10,
-        "category": "Collaboration"
+        "category": "Pertenencia"
       },
       {
         "id": "tq12",
@@ -607,7 +643,7 @@
         "commentRequired": false,
         "commentPrompt": null,
         "order": 11,
-        "category": "Collaboration"
+        "category": "Pertenencia"
       }
     ],
     "sourceSurveyId": null,
@@ -720,7 +756,7 @@
   },
   "GET /surveys/*/analytics": {
     "surveyId": "11111111-1111-1111-1111-111111111111",
-    "title": "Q3 climate survey",
+    "title": "Encuesta de Clima Q3",
     "status": "closed",
     "language": "both",
     "resolvedLocale": "en",
@@ -756,7 +792,7 @@
         "order": 1,
         "type": "likert",
         "text": "I can raise a concern without fear",
-        "category": "Psychological safety",
+        "category": "Seguridad psicológica",
         "answeredCount": 94,
         "distribution": [
           {
@@ -809,7 +845,7 @@
         "order": 2,
         "type": "likert",
         "text": "Mistakes are treated as learning",
-        "category": "Psychological safety",
+        "category": "Seguridad psicológica",
         "answeredCount": 94,
         "distribution": [
           {
@@ -862,7 +898,7 @@
         "order": 3,
         "type": "likert",
         "text": "My workload is manageable",
-        "category": "Workload",
+        "category": "Carga de trabajo",
         "answeredCount": 94,
         "distribution": [
           {
@@ -915,7 +951,7 @@
         "order": 4,
         "type": "likert",
         "text": "I can disconnect outside working hours",
-        "category": "Workload",
+        "category": "Carga de trabajo",
         "answeredCount": 94,
         "distribution": [
           {
@@ -968,7 +1004,7 @@
         "order": 5,
         "type": "likert",
         "text": "Good work is recognised here",
-        "category": "Recognition",
+        "category": "Reconocimiento",
         "answeredCount": 94,
         "distribution": [
           {
@@ -1021,7 +1057,7 @@
         "order": 6,
         "type": "likert",
         "text": "Feedback is specific and useful",
-        "category": "Recognition",
+        "category": "Reconocimiento",
         "answeredCount": 94,
         "distribution": [
           {
@@ -1074,7 +1110,7 @@
         "order": 7,
         "type": "likert",
         "text": "My manager is clear about priorities",
-        "category": "Leadership",
+        "category": "Confianza",
         "answeredCount": 94,
         "distribution": [
           {
@@ -1127,7 +1163,7 @@
         "order": 8,
         "type": "likert",
         "text": "Decisions are explained",
-        "category": "Leadership",
+        "category": "Confianza",
         "answeredCount": 94,
         "distribution": [
           {
@@ -1180,7 +1216,7 @@
         "order": 9,
         "type": "likert",
         "text": "I can grow in this role",
-        "category": "Growth",
+        "category": "Desarrollo",
         "answeredCount": 94,
         "distribution": [
           {
@@ -1233,7 +1269,7 @@
         "order": 10,
         "type": "likert",
         "text": "Training is available when I need it",
-        "category": "Growth",
+        "category": "Desarrollo",
         "answeredCount": 94,
         "distribution": [
           {
@@ -1286,7 +1322,7 @@
         "order": 11,
         "type": "likert",
         "text": "Teams share what they know",
-        "category": "Collaboration",
+        "category": "Pertenencia",
         "answeredCount": 94,
         "distribution": [
           {
@@ -1339,7 +1375,7 @@
         "order": 12,
         "type": "likert",
         "text": "Handovers between teams work",
-        "category": "Collaboration",
+        "category": "Pertenencia",
         "answeredCount": 94,
         "distribution": [
           {
@@ -1395,7 +1431,7 @@
           {
             "dimension": "department",
             "key": "dep-eng",
-            "label": "Engineering",
+            "label": "Tecnologías de Información",
             "respondentCount": 34,
             "participationRate": 85,
             "headcount": 40,
@@ -1466,7 +1502,7 @@
           {
             "dimension": "department",
             "key": "dep-sales",
-            "label": "Sales",
+            "label": "Promoción Comercial",
             "respondentCount": 21,
             "participationRate": 80.8,
             "headcount": 26,
@@ -1537,7 +1573,7 @@
           {
             "dimension": "department",
             "key": "dep-ops",
-            "label": "Operations",
+            "label": "Operaciones y Logística",
             "respondentCount": 18,
             "participationRate": 81.8,
             "headcount": 22,
@@ -1608,7 +1644,7 @@
           {
             "dimension": "department",
             "key": "dep-fin",
-            "label": "Finance",
+            "label": "Inversión y Encadenamientos",
             "respondentCount": 12,
             "participationRate": 85.7,
             "headcount": 14,
@@ -1679,7 +1715,7 @@
           {
             "dimension": "department",
             "key": "dep-hr",
-            "label": "People",
+            "label": "Gestión de Personas y Cultura",
             "respondentCount": 9,
             "participationRate": 81.8,
             "headcount": 11,
@@ -1750,7 +1786,7 @@
           {
             "dimension": "department",
             "key": "dep-support",
-            "label": "Support",
+            "label": "Atención y Servicio al Cliente",
             "respondentCount": 0,
             "participationRate": null,
             "headcount": null,
@@ -2171,7 +2207,7 @@
     "surveys": [
       {
         "surveyId": "11111111-1111-1111-1111-111111111111",
-        "title": "Q1 Climate Survey",
+        "title": "Encuesta de Clima Q1",
         "status": "closed",
         "endDate": "2026-03-31T00:00:00+00:00",
         "completedCount": 42,
@@ -2179,7 +2215,7 @@
       },
       {
         "surveyId": "22222222-2222-2222-2222-222222222222",
-        "title": "Q2 Climate Survey",
+        "title": "Encuesta de Clima Q2",
         "status": "closed",
         "endDate": "2026-06-30T00:00:00+00:00",
         "completedCount": 47,
@@ -2187,7 +2223,7 @@
       },
       {
         "surveyId": "33333333-3333-3333-3333-333333333333",
-        "title": "Q3 Climate Survey",
+        "title": "Encuesta de Clima Q3",
         "status": "closed",
         "endDate": "2026-09-30T00:00:00+00:00",
         "completedCount": 51,
@@ -2196,27 +2232,27 @@
     ],
     "dimensions": [
       {
-        "key": "Collaboration",
+        "key": "Carga de trabajo",
         "surveyCount": 3
       },
       {
-        "key": "Growth",
+        "key": "Confianza",
         "surveyCount": 3
       },
       {
-        "key": "Leadership",
+        "key": "Desarrollo",
         "surveyCount": 3
       },
       {
-        "key": "Psychological safety",
+        "key": "Pertenencia",
         "surveyCount": 3
       },
       {
-        "key": "Recognition",
+        "key": "Reconocimiento",
         "surveyCount": 3
       },
       {
-        "key": "Workload",
+        "key": "Seguridad psicológica",
         "surveyCount": 3
       }
     ],
@@ -2230,10 +2266,10 @@
             "respondentCount": 42,
             "isSuppressed": false,
             "scores": [
-              3.6,
-              3.4,
-              3.5,
               3,
+              3.5,
+              3.4,
+              3.6,
               3.4,
               3
             ]
@@ -2243,10 +2279,10 @@
             "respondentCount": 47,
             "isSuppressed": false,
             "scores": [
-              3.8,
-              3.5,
-              3.6,
               3.1,
+              3.6,
+              3.5,
+              3.8,
               3.5,
               3.1
             ]
@@ -2256,12 +2292,12 @@
             "respondentCount": 51,
             "isSuppressed": false,
             "scores": [
+              3.21,
+              3.75,
+              3.67,
               3.92,
               3.67,
-              3.75,
-              3.25,
-              3.67,
-              3.21
+              3.25
             ]
           }
         ]
@@ -2276,12 +2312,12 @@
   },
   "GET /surveys/dimensions": {
     "dimensions": [
-      "Psychological safety",
-      "Workload",
-      "Recognition",
-      "Leadership",
-      "Growth",
-      "Collaboration"
+      "Seguridad psicológica",
+      "Carga de trabajo",
+      "Reconocimiento",
+      "Confianza",
+      "Desarrollo",
+      "Pertenencia"
     ]
   },
   "GET /surveys/my": {
@@ -2289,7 +2325,7 @@
       {
         "id": "s0000000-0000-0000-0000-000000000003",
         "companyId": "11111111-1111-1111-1111-111111111111",
-        "title": "Q3 climate survey",
+        "title": "Encuesta de Clima Q3",
         "type": "periodic",
         "status": "active",
         "language": "en",
@@ -2308,7 +2344,7 @@
     "surveys": [
       {
         "surveyId": "11111111-1111-1111-1111-111111111111",
-        "title": "Q1 Climate Survey",
+        "title": "Encuesta de Clima Q1",
         "status": "closed",
         "endDate": "2026-03-31T00:00:00+00:00",
         "completedCount": 42,
@@ -2316,7 +2352,7 @@
       },
       {
         "surveyId": "22222222-2222-2222-2222-222222222222",
-        "title": "Q2 Climate Survey",
+        "title": "Encuesta de Clima Q2",
         "status": "closed",
         "endDate": "2026-06-30T00:00:00+00:00",
         "completedCount": 47,
@@ -2324,7 +2360,7 @@
       },
       {
         "surveyId": "33333333-3333-3333-3333-333333333333",
-        "title": "Q3 Climate Survey",
+        "title": "Encuesta de Clima Q3",
         "status": "closed",
         "endDate": "2026-09-30T00:00:00+00:00",
         "completedCount": 51,
@@ -2333,46 +2369,271 @@
     ],
     "dimensions": [
       {
-        "key": "Collaboration",
+        "key": "Carga de trabajo",
         "surveyCount": 3
       },
       {
-        "key": "Growth",
+        "key": "Confianza",
         "surveyCount": 3
       },
       {
-        "key": "Leadership",
+        "key": "Desarrollo",
         "surveyCount": 3
       },
       {
-        "key": "Psychological safety",
+        "key": "Pertenencia",
         "surveyCount": 3
       },
       {
-        "key": "Recognition",
+        "key": "Reconocimiento",
         "surveyCount": 3
       },
       {
-        "key": "Workload",
+        "key": "Seguridad psicológica",
         "surveyCount": 3
       }
     ],
     "groups": [
       {
-        "key": "d-eng",
-        "label": "Engineering",
+        "key": "d0000000-0000-0000-0000-000000000002",
+        "label": "Atención y Servicio al Cliente",
+        "points": [
+          {
+            "surveyId": "11111111-1111-1111-1111-111111111111",
+            "respondentCount": 9,
+            "isSuppressed": false,
+            "scores": [
+              3.0,
+              3.2,
+              3.2,
+              3.4,
+              2.8,
+              3.2
+            ]
+          },
+          {
+            "surveyId": "22222222-2222-2222-2222-222222222222",
+            "respondentCount": 10,
+            "isSuppressed": false,
+            "scores": [
+              3.2,
+              3.4,
+              3.4,
+              3.6,
+              3.0,
+              3.4
+            ]
+          },
+          {
+            "surveyId": "33333333-3333-3333-3333-333333333333",
+            "respondentCount": 10,
+            "isSuppressed": false,
+            "scores": [
+              3.4,
+              3.6,
+              3.6,
+              3.8,
+              3.2,
+              3.6
+            ]
+          }
+        ]
+      },
+      {
+        "key": "d0000000-0000-0000-0000-000000000005",
+        "label": "Gestión de Personas y Cultura",
+        "points": [
+          {
+            "surveyId": "11111111-1111-1111-1111-111111111111",
+            "respondentCount": 8,
+            "isSuppressed": false,
+            "scores": [
+              3.2,
+              4.2,
+              4,
+              4.2,
+              3.8,
+              3.4
+            ]
+          },
+          {
+            "surveyId": "22222222-2222-2222-2222-222222222222",
+            "respondentCount": 9,
+            "isSuppressed": false,
+            "scores": [
+              3.3,
+              4.3,
+              4.1,
+              4.3,
+              3.9,
+              3.5
+            ]
+          },
+          {
+            "surveyId": "33333333-3333-3333-3333-333333333333",
+            "respondentCount": 9,
+            "isSuppressed": false,
+            "scores": [
+              3.4,
+              4.4,
+              4.2,
+              4.4,
+              4,
+              3.6
+            ]
+          }
+        ]
+      },
+      {
+        "key": "d0000000-0000-0000-0000-000000000006",
+        "label": "Inversión y Encadenamientos",
+        "points": [
+          {
+            "surveyId": "11111111-1111-1111-1111-111111111111",
+            "respondentCount": 0,
+            "isSuppressed": true,
+            "scores": [
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
+            ]
+          },
+          {
+            "surveyId": "22222222-2222-2222-2222-222222222222",
+            "respondentCount": 0,
+            "isSuppressed": true,
+            "scores": [
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
+            ]
+          },
+          {
+            "surveyId": "33333333-3333-3333-3333-333333333333",
+            "respondentCount": 0,
+            "isSuppressed": true,
+            "scores": [
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
+            ]
+          }
+        ]
+      },
+      {
+        "key": "d0000000-0000-0000-0000-000000000001",
+        "label": "Operaciones y Logística",
+        "points": [
+          {
+            "surveyId": "11111111-1111-1111-1111-111111111111",
+            "respondentCount": 11,
+            "isSuppressed": false,
+            "scores": [
+              2.6,
+              2.6,
+              3.4,
+              3,
+              3,
+              3
+            ]
+          },
+          {
+            "surveyId": "22222222-2222-2222-2222-222222222222",
+            "respondentCount": 12,
+            "isSuppressed": false,
+            "scores": [
+              2.4,
+              2.4,
+              3.3,
+              2.9,
+              2.9,
+              2.9
+            ]
+          },
+          {
+            "surveyId": "33333333-3333-3333-3333-333333333333",
+            "respondentCount": 12,
+            "isSuppressed": false,
+            "scores": [
+              2.2,
+              2.2,
+              3.2,
+              2.8,
+              2.8,
+              2.8
+            ]
+          }
+        ]
+      },
+      {
+        "key": "d0000000-0000-0000-0000-000000000003",
+        "label": "Promoción Comercial",
+        "points": [
+          {
+            "surveyId": "11111111-1111-1111-1111-111111111111",
+            "respondentCount": 7,
+            "isSuppressed": false,
+            "scores": [
+              3.4,
+              3.6,
+              3.8,
+              3.8,
+              3.2,
+              3.6
+            ]
+          },
+          {
+            "surveyId": "22222222-2222-2222-2222-222222222222",
+            "respondentCount": 7,
+            "isSuppressed": false,
+            "scores": [
+              3.6,
+              3.8,
+              3.9,
+              3.9,
+              3.4,
+              3.8
+            ]
+          },
+          {
+            "surveyId": "33333333-3333-3333-3333-333333333333",
+            "respondentCount": 8,
+            "isSuppressed": false,
+            "scores": [
+              3.8,
+              4.0,
+              4.1,
+              4.1,
+              3.6,
+              4.1
+            ]
+          }
+        ]
+      },
+      {
+        "key": "d0000000-0000-0000-0000-000000000004",
+        "label": "Tecnologías de Información",
         "points": [
           {
             "surveyId": "11111111-1111-1111-1111-111111111111",
             "respondentCount": 14,
             "isSuppressed": false,
             "scores": [
+              3.5,
               4,
               3.8,
               4,
-              3,
               3.8,
-              3.5
+              3
             ]
           },
           {
@@ -2380,12 +2641,12 @@
             "respondentCount": 15,
             "isSuppressed": false,
             "scores": [
+              3.6,
               4.1,
               3.9,
               4.1,
-              3.1,
               3.9,
-              3.6
+              3.1
             ]
           },
           {
@@ -2393,147 +2654,57 @@
             "respondentCount": 16,
             "isSuppressed": false,
             "scores": [
+              3.67,
               4.17,
               4,
               4.17,
-              3.17,
               4,
-              3.67
+              3.17
             ]
           }
         ]
       },
       {
-        "key": "d-fin",
-        "label": "Finance",
+        "key": "d0000000-0000-0000-0000-000000000007",
+        "label": "Ventanilla Única de Comercio Exterior",
         "points": [
           {
             "surveyId": "11111111-1111-1111-1111-111111111111",
-            "respondentCount": 0,
-            "isSuppressed": true,
-            "scores": [
-              null,
-              null,
-              null,
-              null,
-              null,
-              null
-            ]
-          },
-          {
-            "surveyId": "22222222-2222-2222-2222-222222222222",
-            "respondentCount": 0,
-            "isSuppressed": true,
-            "scores": [
-              null,
-              null,
-              null,
-              null,
-              null,
-              null
-            ]
-          },
-          {
-            "surveyId": "33333333-3333-3333-3333-333333333333",
-            "respondentCount": 0,
-            "isSuppressed": true,
-            "scores": [
-              null,
-              null,
-              null,
-              null,
-              null,
-              null
-            ]
-          }
-        ]
-      },
-      {
-        "key": "d-ops",
-        "label": "Operations",
-        "points": [
-          {
-            "surveyId": "11111111-1111-1111-1111-111111111111",
-            "respondentCount": 11,
+            "respondentCount": 13,
             "isSuppressed": false,
             "scores": [
-              3,
-              3.4,
-              2.6,
-              3,
-              3,
-              2.6
-            ]
-          },
-          {
-            "surveyId": "22222222-2222-2222-2222-222222222222",
-            "respondentCount": 12,
-            "isSuppressed": false,
-            "scores": [
-              2.9,
-              3.3,
+              2.0,
               2.4,
-              2.9,
-              2.9,
+              2.4,
+              2.6,
+              2.0,
+              2.0
+            ]
+          },
+          {
+            "surveyId": "22222222-2222-2222-2222-222222222222",
+            "respondentCount": 14,
+            "isSuppressed": false,
+            "scores": [
+              2.2,
+              2.8,
+              2.8,
+              3.0,
+              2.4,
               2.4
             ]
           },
           {
             "surveyId": "33333333-3333-3333-3333-333333333333",
-            "respondentCount": 12,
+            "respondentCount": 14,
             "isSuppressed": false,
             "scores": [
-              2.8,
+              2.6,
+              3.0,
               3.2,
-              2.2,
-              2.8,
-              2.8,
-              2.2
-            ]
-          }
-        ]
-      },
-      {
-        "key": "d-people",
-        "label": "People",
-        "points": [
-          {
-            "surveyId": "11111111-1111-1111-1111-111111111111",
-            "respondentCount": 8,
-            "isSuppressed": false,
-            "scores": [
-              4.2,
-              4,
-              4.2,
-              3.4,
-              3.8,
-              3.2
-            ]
-          },
-          {
-            "surveyId": "22222222-2222-2222-2222-222222222222",
-            "respondentCount": 9,
-            "isSuppressed": false,
-            "scores": [
-              4.3,
-              4.1,
-              4.3,
-              3.5,
-              3.9,
-              3.3
-            ]
-          },
-          {
-            "surveyId": "33333333-3333-3333-3333-333333333333",
-            "respondentCount": 9,
-            "isSuppressed": false,
-            "scores": [
-              4.4,
-              4.2,
-              4.4,
-              3.6,
-              4,
-              3.4
+              3.2,
+              2.6,
+              2.8
             ]
           }
         ]
@@ -2564,7 +2735,7 @@
       {
         "id": "d0000000-0000-0000-0000-000000000001",
         "companyId": "11111111-1111-1111-1111-111111111111",
-        "name": "Operations",
+        "name": "Operaciones y Logística",
         "description": "Fulfilment, routing and the depots.",
         "employeeCount": 48,
         "parentDepartmentId": null,
@@ -2573,7 +2744,7 @@
       {
         "id": "d0000000-0000-0000-0000-000000000002",
         "companyId": "11111111-1111-1111-1111-111111111111",
-        "name": "Support",
+        "name": "Atención y Servicio al Cliente",
         "description": "First line, and the escalation desk.",
         "employeeCount": 23,
         "parentDepartmentId": null,
@@ -2582,7 +2753,7 @@
       {
         "id": "d0000000-0000-0000-0000-000000000003",
         "companyId": "11111111-1111-1111-1111-111111111111",
-        "name": "Sales",
+        "name": "Promoción Comercial",
         "description": "Field sales and account management.",
         "employeeCount": 31,
         "parentDepartmentId": null,
@@ -2591,7 +2762,7 @@
       {
         "id": "d0000000-0000-0000-0000-000000000004",
         "companyId": "11111111-1111-1111-1111-111111111111",
-        "name": "Engineering",
+        "name": "Tecnologías de Información",
         "description": "Platform, data and internal tools.",
         "employeeCount": 57,
         "parentDepartmentId": null,
@@ -2600,7 +2771,7 @@
       {
         "id": "d0000000-0000-0000-0000-000000000005",
         "companyId": "11111111-1111-1111-1111-111111111111",
-        "name": "People",
+        "name": "Gestión de Personas y Cultura",
         "description": "Hiring, development and employee relations.",
         "employeeCount": 12,
         "parentDepartmentId": null,
@@ -2609,7 +2780,7 @@
       {
         "id": "d0000000-0000-0000-0000-000000000006",
         "companyId": "11111111-1111-1111-1111-111111111111",
-        "name": "Finance",
+        "name": "Inversión y Encadenamientos",
         "description": "Controlling, payroll and procurement.",
         "employeeCount": 4,
         "parentDepartmentId": null,
@@ -2618,7 +2789,7 @@
       {
         "id": "d0000000-0000-0000-0000-000000000007",
         "companyId": "11111111-1111-1111-1111-111111111111",
-        "name": "Facilities",
+        "name": "Ventanilla Única de Comercio Exterior",
         "description": "Sites, fleet and workplace services.",
         "employeeCount": 0,
         "parentDepartmentId": null,
@@ -2746,7 +2917,7 @@
       {
         "id": "s0000000-0000-0000-0000-000000000005",
         "companyId": "11111111-1111-1111-1111-111111111111",
-        "title": "Exit interview",
+        "title": "Entrevista de salida",
         "type": "exit",
         "status": "draft",
         "language": "en",
@@ -2760,7 +2931,7 @@
       {
         "id": "s0000000-0000-0000-0000-000000000001",
         "companyId": "11111111-1111-1111-1111-111111111111",
-        "title": "Q2 climate survey",
+        "title": "Encuesta de Clima Q2",
         "type": "periodic",
         "status": "active",
         "language": "en",
@@ -2774,7 +2945,7 @@
       {
         "id": "s0000000-0000-0000-0000-000000000002",
         "companyId": "11111111-1111-1111-1111-111111111111",
-        "title": "Onboarding pulse",
+        "title": "Pulso de incorporación",
         "type": "onboarding",
         "status": "active",
         "language": "en",
@@ -2788,7 +2959,7 @@
       {
         "id": "s0000000-0000-0000-0000-000000000003",
         "companyId": "11111111-1111-1111-1111-111111111111",
-        "title": "Q3 climate survey",
+        "title": "Encuesta de Clima Q3",
         "type": "periodic",
         "status": "active",
         "language": "en",
@@ -2802,7 +2973,7 @@
       {
         "id": "s0000000-0000-0000-0000-000000000004",
         "companyId": "11111111-1111-1111-1111-111111111111",
-        "title": "Q1 climate survey",
+        "title": "Encuesta de Clima Q1",
         "type": "periodic",
         "status": "closed",
         "language": "en",
@@ -2818,7 +2989,7 @@
   "GET /surveys/*": {
     "id": "s0000000-0000-0000-0000-000000000003",
     "companyId": "11111111-1111-1111-1111-111111111111",
-    "title": "Q3 climate survey",
+    "title": "Encuesta de Clima Q3",
     "description": "The quarterly climate measurement: six dimensions, twelve questions, every department.",
     "type": "periodic",
     "status": "active",
@@ -2835,7 +3006,7 @@
         "id": "q1",
         "text": "I can raise a concern without fear",
         "type": "likert",
-        "category": "Psychological safety",
+        "category": "Seguridad psicológica",
         "order": 0,
         "required": true,
         "options": null,
@@ -2850,7 +3021,7 @@
         "id": "q2",
         "text": "Mistakes are treated as learning",
         "type": "likert",
-        "category": "Psychological safety",
+        "category": "Seguridad psicológica",
         "order": 1,
         "required": true,
         "options": null,
@@ -2865,7 +3036,7 @@
         "id": "q3",
         "text": "My workload is manageable",
         "type": "likert",
-        "category": "Workload",
+        "category": "Carga de trabajo",
         "order": 2,
         "required": true,
         "options": null,
@@ -2880,7 +3051,7 @@
         "id": "q4",
         "text": "I can disconnect outside working hours",
         "type": "likert",
-        "category": "Workload",
+        "category": "Carga de trabajo",
         "order": 3,
         "required": true,
         "options": null,
@@ -2895,7 +3066,7 @@
         "id": "q5",
         "text": "Good work is recognised here",
         "type": "likert",
-        "category": "Recognition",
+        "category": "Reconocimiento",
         "order": 4,
         "required": true,
         "options": null,
@@ -2910,7 +3081,7 @@
         "id": "q6",
         "text": "Feedback is specific and useful",
         "type": "likert",
-        "category": "Recognition",
+        "category": "Reconocimiento",
         "order": 5,
         "required": true,
         "options": null,
@@ -2925,7 +3096,7 @@
         "id": "q7",
         "text": "My manager is clear about priorities",
         "type": "likert",
-        "category": "Leadership",
+        "category": "Confianza",
         "order": 6,
         "required": true,
         "options": null,
@@ -2940,7 +3111,7 @@
         "id": "q8",
         "text": "Decisions are explained",
         "type": "likert",
-        "category": "Leadership",
+        "category": "Confianza",
         "order": 7,
         "required": true,
         "options": null,
@@ -2955,7 +3126,7 @@
         "id": "q9",
         "text": "I can grow in this role",
         "type": "likert",
-        "category": "Growth",
+        "category": "Desarrollo",
         "order": 8,
         "required": true,
         "options": null,
@@ -2970,7 +3141,7 @@
         "id": "q10",
         "text": "Training is available when I need it",
         "type": "likert",
-        "category": "Growth",
+        "category": "Desarrollo",
         "order": 9,
         "required": true,
         "options": null,
@@ -2985,7 +3156,7 @@
         "id": "q11",
         "text": "Teams share what they know",
         "type": "likert",
-        "category": "Collaboration",
+        "category": "Pertenencia",
         "order": 10,
         "required": true,
         "options": null,
@@ -3000,7 +3171,7 @@
         "id": "q12",
         "text": "Handovers between teams work",
         "type": "likert",
-        "category": "Collaboration",
+        "category": "Pertenencia",
         "order": 11,
         "required": true,
         "options": null,
@@ -3042,67 +3213,110 @@
     "actionPlans": [
       {
         "id": "a0000000-0000-0000-0000-000000000001",
+        "title": "Seguimiento para Operaciones y Logística — Carga de trabajo",
         "companyId": "11111111-1111-1111-1111-111111111111",
-        "title": "Company-wide recognition standard",
+        "departmentId": "d0000000-0000-0000-0000-000000000001",
+        "dueDate": "2026-11-09T00:00:00Z",
         "status": "in_progress",
         "priority": "high",
-        "departmentId": null,
-        "dueDate": "2026-08-06T00:00:00Z",
-        "createdAt": "2026-07-05T09:00:00Z"
+        "createdAt": "2026-09-14T10:12:00Z",
+        "sourceSurveyId": "22222222-2222-2222-2222-222222222222",
+        "tags": [
+          "seguimiento",
+          "department:d0000000-0000-0000-0000-000000000001",
+          "dimension:Carga de trabajo"
+        ],
+        "ownerId": "99999999-0000-0000-0000-000000000002",
+        "ownerName": "Diego Ramírez"
       },
       {
         "id": "a0000000-0000-0000-0000-000000000002",
+        "title": "Seguimiento para Ventanilla Única de Comercio Exterior — Reconocimiento",
         "companyId": "11111111-1111-1111-1111-111111111111",
-        "title": "Publish the weekend rota two weeks ahead",
-        "status": "in_progress",
-        "priority": "medium",
-        "departmentId": "d0000000-0000-0000-0000-000000000001",
-        "dueDate": "2026-09-01T00:00:00Z",
-        "createdAt": "2026-07-06T09:00:00Z"
+        "departmentId": "d0000000-0000-0000-0000-000000000007",
+        "dueDate": "2026-10-24T00:00:00Z",
+        "status": "not_started",
+        "priority": "high",
+        "createdAt": "2026-09-28T16:40:00Z",
+        "sourceSurveyId": "22222222-2222-2222-2222-222222222222",
+        "tags": [
+          "seguimiento",
+          "department:d0000000-0000-0000-0000-000000000007",
+          "dimension:Reconocimiento"
+        ],
+        "ownerId": null,
+        "ownerName": null
       },
       {
         "id": "a0000000-0000-0000-0000-000000000003",
+        "title": "Seguimiento para Tecnologías de Información — Desarrollo",
         "companyId": "11111111-1111-1111-1111-111111111111",
-        "title": "Peer recognition programme",
+        "departmentId": "d0000000-0000-0000-0000-000000000004",
+        "dueDate": "2026-12-01T00:00:00Z",
         "status": "not_started",
         "priority": "medium",
-        "departmentId": "d0000000-0000-0000-0000-000000000005",
-        "dueDate": "2026-10-31T00:00:00Z",
-        "createdAt": "2026-07-07T09:00:00Z"
+        "createdAt": "2026-10-05T09:05:00Z",
+        "sourceSurveyId": "33333333-3333-3333-3333-333333333333",
+        "tags": [
+          "seguimiento",
+          "department:d0000000-0000-0000-0000-000000000004",
+          "dimension:Desarrollo"
+        ],
+        "ownerId": "99999999-0000-0000-0000-000000000003",
+        "ownerName": "Ana Solís"
       },
       {
         "id": "a0000000-0000-0000-0000-000000000004",
+        "title": "Seguimiento para Gestión de Personas y Cultura — Pertenencia",
         "companyId": "11111111-1111-1111-1111-111111111111",
-        "title": "Rebalance the escalation queue",
+        "departmentId": "d0000000-0000-0000-0000-000000000005",
+        "dueDate": "2026-09-28T00:00:00Z",
         "status": "in_progress",
-        "priority": "high",
-        "departmentId": "d0000000-0000-0000-0000-000000000002",
-        "dueDate": "2026-08-20T00:00:00Z",
-        "createdAt": "2026-07-08T09:00:00Z"
+        "priority": "medium",
+        "createdAt": "2026-08-19T11:30:00Z",
+        "sourceSurveyId": "22222222-2222-2222-2222-222222222222",
+        "tags": [
+          "seguimiento",
+          "department:d0000000-0000-0000-0000-000000000005",
+          "dimension:Pertenencia"
+        ],
+        "ownerId": "99999999-0000-0000-0000-000000000001",
+        "ownerName": "María Herrera"
       },
       {
         "id": "a0000000-0000-0000-0000-000000000005",
+        "title": "Estándar de reconocimiento para toda la empresa",
         "companyId": "11111111-1111-1111-1111-111111111111",
-        "title": "Career frameworks for field sales",
+        "departmentId": null,
+        "dueDate": "2026-09-30T00:00:00Z",
         "status": "completed",
         "priority": "low",
-        "departmentId": "d0000000-0000-0000-0000-000000000003",
-        "dueDate": "2026-06-30T00:00:00Z",
-        "createdAt": "2026-07-09T09:00:00Z"
+        "createdAt": "2026-07-02T08:00:00Z",
+        "sourceSurveyId": null,
+        "tags": [],
+        "ownerId": null,
+        "ownerName": null
       }
     ]
   },
   "GET /action-plans/*": {
     "id": "a0000000-0000-0000-0000-000000000001",
-    "title": "Company-wide recognition standard",
-    "description": "Recognition is the weakest dimension in four of six departments. One standard, published, with a named owner in each.",
+    "title": "Seguimiento para Operaciones y Logística — Carga de trabajo",
+    "description": "Carga de trabajo es la celda más baja de Operaciones y Logística en la Q2. Revisar el reparto de turnos y publicar la rotación con dos semanas de antelación.",
     "companyId": "11111111-1111-1111-1111-111111111111",
-    "departmentId": null,
+    "departmentId": "d0000000-0000-0000-0000-000000000001",
     "createdBy": "99999999-0000-0000-0000-000000000001",
-    "dueDate": "2026-08-06T00:00:00Z",
+    "dueDate": "2026-11-09T00:00:00Z",
     "status": "in_progress",
     "priority": "high",
-    "tags": [],
+    "tags": [
+      "seguimiento",
+      "department:d0000000-0000-0000-0000-000000000001",
+      "dimension:Carga de trabajo"
+    ],
+    "sourceSurveyId": "22222222-2222-2222-2222-222222222222",
+    "ownerId": "99999999-0000-0000-0000-000000000002",
+    "ownerName": "Diego Ramírez",
     "templateId": null,
     "kpis": [
       {
@@ -3321,7 +3535,7 @@
     "metrics": [
       {
         "id": "b4000000-0000-0000-0000-000000000001",
-        "metricName": "Psychological safety",
+        "metricName": "Seguridad psicológica",
         "value": 66,
         "unit": "pts",
         "percentile": null,
@@ -3329,7 +3543,7 @@
       },
       {
         "id": "b4000000-0000-0000-0000-000000000002",
-        "metricName": "Workload",
+        "metricName": "Carga de trabajo",
         "value": 55,
         "unit": "pts",
         "percentile": null,
@@ -3337,7 +3551,7 @@
       },
       {
         "id": "b4000000-0000-0000-0000-000000000003",
-        "metricName": "Recognition",
+        "metricName": "Reconocimiento",
         "value": 61,
         "unit": "pts",
         "percentile": null,
@@ -3345,7 +3559,7 @@
       },
       {
         "id": "b4000000-0000-0000-0000-000000000004",
-        "metricName": "Leadership",
+        "metricName": "Confianza",
         "value": 64,
         "unit": "pts",
         "percentile": null,
@@ -3353,7 +3567,7 @@
       },
       {
         "id": "b4000000-0000-0000-0000-000000000005",
-        "metricName": "Growth",
+        "metricName": "Desarrollo",
         "value": 58,
         "unit": "pts",
         "percentile": null,
@@ -3361,7 +3575,7 @@
       },
       {
         "id": "b4000000-0000-0000-0000-000000000006",
-        "metricName": "Collaboration",
+        "metricName": "Pertenencia",
         "value": 63,
         "unit": "pts",
         "percentile": null,
@@ -3794,7 +4008,7 @@
         "id": "cat-1",
         "companyId": null,
         "parentCategoryId": null,
-        "nameEn": "Psychological safety",
+        "nameEn": "Seguridad psicológica",
         "nameEs": "Seguridad psicológica",
         "descriptionEn": "Speaking up without fear of reprisal.",
         "descriptionEs": "Hablar sin temor a represalias.",
@@ -3808,7 +4022,7 @@
         "id": "cat-2",
         "companyId": null,
         "parentCategoryId": null,
-        "nameEn": "Leadership",
+        "nameEn": "Confianza",
         "nameEs": "Liderazgo",
         "descriptionEn": null,
         "descriptionEs": null,
