@@ -681,6 +681,71 @@ public class GdprEndpointsTests : IAsyncLifetime
         AssertReferenced(export, "ActionPlan", writtenId, "CreatedBy");
     }
 
+    /// <summary>
+    /// An erasure releases the plans the subject was answerable for, and keeps the ones they wrote.
+    /// </summary>
+    /// <remarks>
+    /// The two actor columns on `action_plans` mean different things, so an erasure has to treat
+    /// them differently. `created_by` is history and survives pointing at the pseudonymised
+    /// account. `owner_id` is a CURRENT assignment, and an untouched one would leave the plan
+    /// answerable to a name nobody can contact -- which the overdue-plan nudge would mail and
+    /// which `/action-plans` would count as owned. Ruled by Federico on 2026-10-10 and
+    /// deliberately left open when `owner_id` shipped in #534, so this is the assertion that
+    /// the ruling is in the code rather than only in the compliance map.
+    /// </remarks>
+    [Fact]
+    public async Task Erasure_releases_a_plan_the_subject_owned_and_keeps_the_one_they_wrote()
+    {
+        var (_, subjectId, _) = await SignInAsync(Roles.Leader);
+        var (adminClient, adminId, _) = await SignInAsync(Roles.CompanyAdmin);
+
+        var ownedId = Guid.NewGuid();
+        var writtenId = Guid.NewGuid();
+        await using (var db = NewContext())
+        {
+            var now = DateTimeOffset.UtcNow;
+            db.ActionPlans.Add(new ActionPlan
+            {
+                Id = ownedId,
+                TitleEn = "Owned by the subject",
+                DescriptionEn = "Filed by the administrator, carried by the subject.",
+                CompanyId = _companyId,
+                CreatedBy = adminId,
+                OwnerId = subjectId,
+                DueDate = now.AddDays(30),
+                CreatedAt = now,
+                UpdatedAt = now,
+            });
+            db.ActionPlans.Add(new ActionPlan
+            {
+                Id = writtenId,
+                TitleEn = "Written by the subject",
+                DescriptionEn = "Filed by the subject, owned by nobody.",
+                CompanyId = _companyId,
+                CreatedBy = subjectId,
+                DueDate = now.AddDays(30),
+                CreatedAt = now,
+                UpdatedAt = now,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await adminClient.PostAsJsonAsync("/gdpr/erasure", new ErasureRequest(subjectId, true))).StatusCode);
+
+        await using (var db = NewContext())
+        {
+            var owned = await db.ActionPlans.AsNoTracking().SingleAsync(p => p.Id == ownedId);
+            Assert.Null(owned.OwnerId);
+            // The row itself is untouched apart from the assignment: a redaction, not a delete.
+            Assert.Equal(adminId, owned.CreatedBy);
+
+            var written = await db.ActionPlans.AsNoTracking().SingleAsync(p => p.Id == writtenId);
+            Assert.Equal(subjectId, written.CreatedBy);
+        }
+    }
+
     /// <summary>One row of a <see cref="ExportTreatment.Reference"/> section, by id and label.</summary>
     private static void AssertReferenced(JsonElement export, string entity, Guid id, string linkProperty)
     {

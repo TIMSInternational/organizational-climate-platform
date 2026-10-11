@@ -194,7 +194,7 @@ public static class ReportRenderer
 
         WriteInsights(document, copy, stored.AiInsights);
         WriteBenchmarks(document, copy, stored.Benchmarks);
-        WriteComparison(document, copy, stored.Comparison);
+        WriteComparison(document, copy, stored.Comparison, context.ChromeLocale);
 
         return document;
     }
@@ -261,7 +261,7 @@ public static class ReportRenderer
                 ],
                 [.. section.Dimensions.Select(d => new string?[]
                 {
-                    d.Dimension,
+                    DimensionNames.Resolve(d.Dimension, section.ResolvedLocale),
                     copy.Count(d.QuestionCount),
                     copy.Count(d.AnsweredCount),
                     copy.Decimal(d.AverageScore),
@@ -297,7 +297,7 @@ public static class ReportRenderer
                     copy.Count(q.Order + 1),
                     q.Text,
                     q.Type,
-                    q.Category,
+                    DimensionNames.Resolve(q.Category, section.ResolvedLocale),
                     copy.Count(q.AnsweredCount),
                     copy.Decimal(q.Average),
                     copy.Decimal(q.Median),
@@ -452,7 +452,10 @@ public static class ReportRenderer
     private static void WriteComparison(
         PdfDocument document,
         ReportRenderCopy copy,
-        ReportComparisonSection? comparison)
+        ReportComparisonSection? comparison,
+        // The chrome locale, not a section's: the comparison table is document-level and
+        // names dimensions across two surveys that may each be authored in a different one.
+        string? locale)
     {
         document.Heading(copy.Comparison);
 
@@ -483,7 +486,7 @@ public static class ReportRenderer
             ],
             [.. comparison.Dimensions.Select(d => new string?[]
             {
-                d.Dimension,
+                DimensionNames.Resolve(d.Dimension, locale),
                 copy.Decimal(d.EarlierScore),
                 copy.Decimal(d.LaterScore),
                 copy.Decimal(d.Delta),
