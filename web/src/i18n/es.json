@@ -6417,6 +6417,7 @@
     "erasureAnonymisedUsers": "la fila de tu cuenta. Tu correo se sustituye por una dirección que nunca podrá recibir mensajes, se eliminan tu nombre y tu contraseña, se borran tu departamento y tu responsable, la cuenta se desactiva y todas sus sesiones contra esta plataforma dejan de funcionar. La fila sobrevive porque los registros de negocio y la traza de auditoría apuntan a ella.",
     "erasureRedactedTitle": "Se conserva, sobrescribiendo tus datos",
     "erasureRedactedNote": "La fila se queda porque algo la cuenta; las columnas que te nombran, no.",
+    "erasureRedactedActionPlans": "planes de acción a tu cargo: se libera la asignación y el plan queda sin responsable, así que nada te reclama un trabajo que ya no tienes. Qué planes creaste se conserva, apuntando a tu cuenta ya anonimizada, porque crearlos fue un acto y no un dato sobre ti.",
     "erasureRedactedMicroclimateInvitations": "invitaciones a un microclima: se sobrescriben tu dirección y su token de acceso.",
     "erasureDeletedSurveyAuditLogs": "el historial de cambios de encuestas. Tus filas se eliminan por completo, no se sobrescriben, de modo que el historial de cada encuesta ya no registra que esos cambios se hicieron. El registro de auditoría general, arriba, es el que se conserva.",
     "erasureRedactedSurveyInvitations": "invitaciones a una encuesta: se sobrescriben tu dirección y su token de acceso. La fila es el denominador de una tasa de respuesta que ya se ha reportado.",
