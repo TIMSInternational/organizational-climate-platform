@@ -90,16 +90,19 @@ export default function ResultsCellPanel({
   const cellKey = `${detail.rowId}:${detail.dimensionKey}`
   const [planningFor, setPlanningFor] = useState<string | null>(null)
   const planning = planningFor === cellKey
-  // Keyed by ROW, not by cell: `planFor` looks a plan up by `rowId` alone, so "what is being
-  // done" is a statement about the GROUP — which is what the copy says — and a plan just
-  // raised is equally that group's plan from whichever of its cells the reader opens next.
-  const [createdPlan, setCreatedPlan] = useState<{ rowId: string; id: string; title: string } | null>(null)
+  // Carries BOTH keys because the two questions it answers have different scopes: "what is
+  // being done about this group" is row-keyed — which is what the copy says — while "is this
+  // finding already being acted on" is cell-keyed, and a plan raised on Reconocimiento must
+  // not make Desarrollo look handled.
+  const [createdPlan, setCreatedPlan] = useState<
+    { rowId: string; cellKey: string; id: string; title: string } | null
+  >(null)
   const createdHere = createdPlan !== null && createdPlan.rowId === detail.rowId ? createdPlan : null
-  // The parent's `detail.plan` cannot know about a plan raised a second ago: the results
+  const createdForCell = createdPlan !== null && createdPlan.cellKey === cellKey ? createdPlan : null
+  // The parent's `detail.cellPlan` cannot know about a plan raised a second ago: the results
   // payload was fetched before it existed and is not refetched. Until it is, the plan the
-  // reader just created IS the answer to "what is being done", so the region stops offering
-  // to create a second one and offers to open the first.
-  const plan = detail.plan ?? (createdHere === null ? null : { id: createdHere.id })
+  // reader just created from THIS cell is the one the control should open.
+  const plan = detail.cellPlan ?? (createdForCell === null ? null : { id: createdForCell.id })
   const score = (value: number) => formatMetric(value, { kind: 'number', decimals: 1 }, locale)
   const dimension = dimensionName(detail.dimensionKey)
 
@@ -344,7 +347,7 @@ export default function ResultsCellPanel({
               }}
               onCreated={(created) => {
                 setPlanningFor(null)
-                setCreatedPlan({ rowId: detail.rowId, id: created.id, title: created.title })
+                setCreatedPlan({ rowId: detail.rowId, cellKey, id: created.id, title: created.title })
               }}
               onCancel={() => setPlanningFor(null)}
             />
