@@ -2,6 +2,7 @@ import { Link } from 'react-router'
 import type { SurveyTemplateListItem } from '../api/surveyTemplates'
 import { useTranslation } from '../../../i18n'
 import { Badge, Button } from '../../../components/ui'
+import { byCount } from '../../../i18n/plural'
 
 interface SurveyTemplateCardProps {
   template: SurveyTemplateListItem
@@ -54,7 +55,7 @@ export default function SurveyTemplateCard({ template }: SurveyTemplateCardProps
       <div className="mt-1 flex flex-wrap items-center gap-1 text-xs text-fg-secondary">
         <span>{template.category}</span>
         <span aria-hidden="true">·</span>
-        <span>{t('surveys.reviewQuestionCount', { count: template.questionCount })}</span>
+        <span>{t(byCount(template.questionCount, 'surveys.reviewQuestionCountOne', 'surveys.reviewQuestionCount'), { count: template.questionCount })}</span>
       </div>
 
       {template.description !== '' && (

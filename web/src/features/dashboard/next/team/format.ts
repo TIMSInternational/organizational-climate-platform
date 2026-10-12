@@ -1,4 +1,5 @@
 import type { TranslateFn } from '../../../../i18n'
+import { byCount } from '../../../../i18n/plural'
 
 /**
  * The small formatters both team dashboards share. A module of its own, not `parts.tsx`:
@@ -18,7 +19,7 @@ export function barPercent(value: number): number {
 
 /** "en 4 días", "vence hoy", "vencido hace 2 días" — the tablero's own words for a compromiso. */
 export function daysNote(days: number, t: TranslateFn): string {
-  if (days < 0) return t('tracking.next.overdueBy', { days: -days })
+  if (days < 0) return t(byCount(-days, 'tracking.next.overdueByOne', 'tracking.next.overdueBy'), { days: -days })
   if (days === 0) return t('tracking.next.dueToday')
   return days === 1 ? t('tracking.next.inOneDay') : t('tracking.next.inDays', { days })
 }

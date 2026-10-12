@@ -51,6 +51,7 @@ import {
 } from './derive'
 import type { ActionPlansListModel, PlanGroup, PlanRow } from './model'
 import { useActionPlansListModel } from './useActionPlansListModel'
+import { byCount } from '../../../i18n/plural'
 
 /**
  * The artboard's column header: 10px, bold, uppercase, the label ink, no tint — set at the TOP
@@ -430,7 +431,7 @@ function TimelineCard({ model, t, locale }: { model: ActionPlansListModel; t: Tr
         <span className="text-xs text-fg-label">
           {last
             ? timeline.firstAhead !== null
-              ? t('actionPlans.next.timelineRange', {
+              ? t(byCount(timeline.firstAhead, 'actionPlans.next.timelineRangeOne', 'actionPlans.next.timelineRange'), {
                   from: calendarDay(Date.parse(model.asOf), locale),
                   to: calendarDay(Date.parse(last.dueDate), locale),
                   days: timeline.firstAhead,
@@ -767,7 +768,7 @@ function PlanTableRow({
 }
 
 function dueNote(t: TranslateFn, days: number, thisMonth: boolean): string {
-  if (days < 0) return t('actionPlans.next.overdueBy', { days: -days })
+  if (days < 0) return t(byCount(-days, 'actionPlans.next.overdueByOne', 'actionPlans.next.overdueBy'), { days: -days })
   const when =
     days === 0 ? t('actionPlans.next.dueToday') : days === 1 ? t('actionPlans.next.dueTomorrow') : t('actionPlans.next.dueIn', { days })
   return thisMonth ? t('actionPlans.next.joined', { first: when, second: t('actionPlans.next.thisMonth') }) : when

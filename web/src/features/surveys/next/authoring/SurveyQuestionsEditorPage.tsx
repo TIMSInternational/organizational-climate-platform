@@ -25,6 +25,7 @@ import {
   scaleName,
   summarise,
 } from './model'
+import { byCount } from '../../../../i18n/plural'
 
 /**
  * Editar preguntas, redesigned — both states of one route (canvas boards
@@ -155,7 +156,7 @@ export default function SurveyQuestionsEditorPage() {
   const responsesLine =
     detail.targetAudienceCount !== null
       ? copy('responsesOf', { count: detail.responseCount, target: detail.targetAudienceCount })
-      : copy('responses', { count: detail.responseCount })
+      : copy(byCount(detail.responseCount, 'responsesOne', 'responses'), { count: detail.responseCount })
   const openQuestion = questions[openIndex ?? 0] ?? questions[0]
   const openPosition = openQuestion ? questions.indexOf(openQuestion) + 1 : 0
 
@@ -177,7 +178,7 @@ export default function SurveyQuestionsEditorPage() {
               {title} ·{' '}
               {locked
                 ? responsesLine
-                : `${copy('questionCount', { count: questions.length })} · ${locales.length === 2 ? copy('inBoth') : copy(`inOne.${locales[0]}`)}`}
+                : `${copy(byCount(questions.length, 'questionCountOne', 'questionCount'), { count: questions.length })} · ${locales.length === 2 ? copy('inBoth') : copy(`inOne.${locales[0]}`)}`}
             </span>
           </>
         }

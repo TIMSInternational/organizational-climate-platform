@@ -10,6 +10,7 @@ import CompanyContextBar from '../../../org-structure/next/super/CompanyContextB
 import { CanvasChip, EmptyNote, Panel } from '../../../org-structure/next/super/parts'
 import { cohortPhrase, companyProfile, globalBenchmarks, isUnscored, lastClosedSurvey } from './derive'
 import { useSuperAnalyticsModel } from './useSuperAnalyticsModel'
+import { byCount } from '../../../../i18n/plural'
 
 /** What `QualityScoreReading` prints for a reference the quality rule has never run on. */
 const EM_DASH = '—'
@@ -156,7 +157,7 @@ export default function SuperAnalyticsView() {
                   sub={
                     <span>
                       {closed
-                        ? t('superadmin.next.analytics.tiles.lastClosedSub', { count: closed.responses })
+                        ? t(byCount(closed.responses, 'superadmin.next.analytics.tiles.lastClosedSubOne', 'superadmin.next.analytics.tiles.lastClosedSub'), { count: closed.responses })
                         : state.surveys
                           ? t('superadmin.next.analytics.tiles.lastClosedNone')
                           : t('superadmin.next.unavailable')}

@@ -534,6 +534,19 @@ describe('EmployeeHomeView', () => {
     expect(within(card).getByText('10 sept')).toBeTruthy()
   })
 
+  it('makes each count agree with its noun: "1 respuesta en 0 departamentos", never "1 respuestas"', async () => {
+    serves({ lastOutcome: outcome({ responseCount: 1, departmentCount: 0 }) })
+    renderHome()
+
+    const card = await waitFor(() => {
+      const node = document.querySelector<HTMLElement>('[data-slot="home-outcome"]')
+      if (!node) throw new Error('no outcome card yet')
+      return node
+    })
+    expect(card.textContent).toContain('1 respuesta en 0 departamentos.')
+    expect(card.textContent).not.toContain('1 respuestas')
+  })
+
   it('draws no outcome card at all when nothing has closed', async () => {
     serves({ lastOutcome: null })
     renderHome()

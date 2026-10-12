@@ -16,6 +16,7 @@ import { fullDay, leadingEstado, nextCompromiso } from './derive'
 import type { TableroModel, TableroPlanCard } from './model'
 import { InfoBox, NodoTile, ProgressTrack } from './parts'
 import { useTableroModel, type TableroState } from './useTableroModel'
+import { byCount } from '../../../i18n/plural'
 
 /** "1 verde", "0 amarillo", "0 rojo" — the board's tile counts each state by its colour word. */
 const COUNT_KEY: Record<keyof SemaforoCounts, string> = {
@@ -297,7 +298,7 @@ function Board({
 }
 
 function daysNote(t: TranslateFn, days: number): string {
-  if (days < 0) return t('tracking.next.overdueBy', { days: -days })
+  if (days < 0) return t(byCount(-days, 'tracking.next.overdueByOne', 'tracking.next.overdueBy'), { days: -days })
   if (days === 0) return t('tracking.next.dueToday')
   return days === 1 ? t('tracking.next.inOneDay') : t('tracking.next.inDays', { days })
 }

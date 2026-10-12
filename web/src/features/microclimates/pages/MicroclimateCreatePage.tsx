@@ -48,6 +48,7 @@ import {
   type ContentLanguage,
   type MicroclimateWizardValues,
 } from '../wizardValues'
+import { byCount } from '../../../i18n/plural'
 
 /**
  * The catalogue paths for each step's heading, written out rather than assembled
@@ -551,7 +552,7 @@ export default function MicroclimateCreatePage() {
                 <tr>
                   <th scope="row">{t('surveys.questions')}</th>
                   <td>
-                    {t('microclimates.reviewQuestionCount', { count: values.questions.length })}
+                    {t(byCount(values.questions.length, 'microclimates.reviewQuestionCountOne', 'microclimates.reviewQuestionCount'), { count: values.questions.length })}
                   </td>
                 </tr>
               </tbody>

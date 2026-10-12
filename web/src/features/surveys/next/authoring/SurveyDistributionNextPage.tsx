@@ -64,6 +64,7 @@ import {
   type DistributionModel,
   type InvitationCopyState,
 } from './useDistributionModel'
+import { byCount } from '../../../../i18n/plural'
 
 /** How many invitation rows the checklist shows before "Ver las n". */
 export const INVITATION_PREVIEW_ROWS = 4
@@ -257,8 +258,8 @@ export function DistributionView({
                 : closesIn === 1
                   ? copy('closesTomorrow')
                   : closesIn > 1
-                    ? copy('closesIn', { days: closesIn })
-                    : copy('closedAgo', { days: Math.abs(closesIn) })
+                    ? copy(byCount(closesIn, 'closesInOne', 'closesIn'), { days: closesIn })
+                    : copy(byCount(Math.abs(closesIn), 'closedAgoOne', 'closedAgo'), { days: Math.abs(closesIn) })
           }
         />
         <ReadingTile testId="tile-ready" label={copy('ready')} value={ready} unit={copy('readyOf', { count: steps.length })}>

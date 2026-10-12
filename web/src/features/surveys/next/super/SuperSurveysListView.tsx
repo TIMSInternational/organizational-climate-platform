@@ -44,6 +44,7 @@ import {
   upcomingKind,
 } from './derive'
 import { useSuperSurveysListModel, type SuperSurveysListModelState } from './useSuperSurveysListModel'
+import { byCount } from '../../../../i18n/plural'
 
 const ACTION_KEY: Record<PrimaryActionKind, string> = {
   distribution: 'surveys.distribution.title',
@@ -401,7 +402,7 @@ function closeLine(
 ): string | null {
   if (section === 'open') {
     const days = daysLeft(row.endDate)
-    return days > 0 ? t('surveys.next.list.inDays', { count: days }) : null
+    return days > 0 ? t(byCount(days, 'surveys.next.list.inDaysOne', 'surveys.next.list.inDays'), { count: days }) : null
   }
   if (section === 'upcoming') return t('surveys.next.super.plannedClose')
   if (section !== 'closed') return null

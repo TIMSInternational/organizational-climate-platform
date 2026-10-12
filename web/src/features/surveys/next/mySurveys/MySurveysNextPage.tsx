@@ -22,6 +22,7 @@ import {
   roleLabelKey,
   type MySurveyRow,
 } from './derive'
+import { byCount } from '../../../../i18n/plural'
 
 /**
  * `/surveys/my` — the respondent's own list, drawn as the MySurveys artboard (10 Sep) and,
@@ -218,7 +219,7 @@ function readingLine(row: MySurveyRow, t: TranslateFn, locale: string): string {
   const date = calendarDay(Date.parse(row.closesAt), locale)
   return row.underAMinute
     ? t('employee.surveyMetaOneQuestion', { date })
-    : t('employee.surveyMeta', { questions: row.questionCount, minutes: row.minutes, date })
+    : t(byCount(row.questionCount, 'employee.surveyMetaOne', 'employee.surveyMeta'), { questions: row.questionCount, minutes: row.minutes, date })
 }
 
 /** The time-left chip's word. Separate keys rather than a plural rule the catalogue has no room for. */

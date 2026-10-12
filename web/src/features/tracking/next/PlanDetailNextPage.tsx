@@ -35,6 +35,7 @@ import { asSentence, dayDiff, fullDay, hasRecordedProgress, isOverdue } from './
 import type { PersonaRef, PlanDetailModel } from './model'
 import { InfoBox, PersonaAvatar, ProgressTrack, RowGlyph } from './parts'
 import { usePlanDetailModel, type PlanDetailState } from './usePlanDetailModel'
+import { byCount } from '../../../i18n/plural'
 
 /**
  * `/tracking/planes/:id` — the redesigned plan detail, the Main artboard of 10 Sep. It
@@ -214,7 +215,7 @@ function PlanGate({
 function dueSentence(t: TranslateFn, locale: string, fecha: string, days: number, cumplido: boolean): string {
   if (cumplido) return t('tracking.detail.cumplido')
   const date = calendarDayLong(Date.parse(fecha), locale)
-  if (days < 0) return t('tracking.next.vencio', { date, days: -days })
+  if (days < 0) return t(byCount(-days, 'tracking.next.vencioOne', 'tracking.next.vencio'), { date, days: -days })
   if (days === 0) return t('tracking.next.venceHoy')
   return days === 1 ? t('tracking.next.venceManana', { date }) : t('tracking.next.vence', { date, days })
 }
@@ -550,7 +551,7 @@ function AvanceCard({
         <InfoBox
           label={t('tracking.next.boxCreado')}
           value={fullDay(plan.fechaCreacion, locale)}
-          sub={createdDays <= 0 ? t('tracking.next.createdToday') : t('tracking.next.createdAgo', { days: createdDays })}
+          sub={createdDays <= 0 ? t('tracking.next.createdToday') : t(byCount(createdDays, 'tracking.next.createdAgoOne', 'tracking.next.createdAgo'), { days: createdDays })}
           mono
         />
         <InfoBox
@@ -560,7 +561,7 @@ function AvanceCard({
             plan.cumplido
               ? t('tracking.detail.cumplido')
               : days < 0
-                ? t('tracking.next.overdueBy', { days: -days })
+                ? t(byCount(-days, 'tracking.next.overdueByOne', 'tracking.next.overdueBy'), { days: -days })
                 : days === 0
                   ? t('tracking.next.dueToday')
                   : t('tracking.next.inDays', { days })
