@@ -1,0 +1,290 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Nightly logical backup of the production database (#512, decision B in
+  docs/decisions/database-backups.md). An S3 bucket the dumps land in, the role
+  .github/workflows/db-backup.yml assumes through GitHub OIDC to write them, and an alarm on
+  the critical topic that fires when a day passes without a verified dump.
+
+  A SEPARATE stack from the API and observability stacks: it owns data, not the service, and
+  its bucket is DeletionPolicy Retain so deleting this stack can never delete a backup.
+
+  Deployed by scripts/backup-setup/1-deploy-stack.sh into account 795965600143, us-east-2.
+  The database itself is Supabase (project uleeeziiceduvmiftgby, us-east-1); the dumps
+  therefore live in a different region AND a different vendor from the data they protect,
+  which is the point.
+
+Parameters:
+  ObservabilityStackName:
+    Type: String
+    Default: climate-project-observability-prod
+    Description: >-
+      The observability stack whose critical topic the stopped-backup alarm notifies. Read
+      through its export `<stack>-critical-topic` (climate-project-observability.yml Outputs).
+      Importing it pins that export: the observability stack cannot rename or drop
+      CriticalTopicArn while this stack imports it, which is the behaviour wanted -- an
+      alarm whose topic silently vanished is the failure this stack exists to prevent.
+
+  GitHubRepository:
+    Type: String
+    Default: TIMSInternational/organizational-climate-platform
+    AllowedPattern: ^[^/]+/[^/]+$
+    Description: GitHub owner/repository allowed to assume the backup role.
+
+  GitHubOwnerId:
+    Type: String
+    Default: "305569681"
+    AllowedPattern: ^[0-9]+$
+    Description: >-
+      Immutable numeric owner id. Same value and same reason as
+      climate-project-api-bootstrap.yml: this repository's OIDC sub_claim_prefix is the
+      ID-qualified form (`gh api /repos/{owner}/{repo}/actions/oidc/customization/sub`).
+
+  GitHubRepositoryId:
+    Type: String
+    Default: "1317724282"
+    AllowedPattern: ^[0-9]+$
+    Description: Immutable numeric repository id. See GitHubOwnerId.
+
+  GitHubEnvironment:
+    Type: String
+    Default: production
+    Description: >-
+      The GitHub environment the backup job runs in. It must be `production`, because that
+      is where MIGRATION_DATABASE_CONNECTION_STRING lives, and a job that names an
+      environment presents `sub = repo:...:environment:<name>` -- NOT `ref:refs/heads/main`.
+      The branch restriction therefore comes from the environment, whose deployment-branch
+      policy admits `main` only (measured 2026-10-12:
+      `gh api repos/{owner}/{repo}/environments/production` -> custom_branch_policies, one
+      policy, name "main").
+
+  BackupPrefix:
+    Type: String
+    Default: climate
+    AllowedPattern: ^[a-z0-9-]+$
+    Description: Key prefix the workflow writes under; the role may write nowhere else.
+
+  MetricNamespace:
+    Type: String
+    Default: ClimateProject/Backup
+    Description: >-
+      CloudWatch namespace for the success metric. The role may publish to this namespace
+      only, so it cannot forge or silence any other alarm in the account.
+
+  AlarmsEnabled:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: >-
+      Same switch as the observability stack. "true" is the default here, unlike there: this
+      alarm's threshold is not reasoned from traffic, it is "a day passed and nothing was
+      written", so there is no tuning period to protect.
+
+Conditions:
+  NotifyingEnabled: !Equals [!Ref AlarmsEnabled, "true"]
+
+Resources:
+
+  BackupBucket:
+    Type: AWS::S3::Bucket
+    # Retain on delete AND on replacement. A stack delete, or an edit that forces a new
+    # bucket name, must not take thirty-five days of backups with it.
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub climate-project-db-backups-${AWS::AccountId}-${AWS::Region}
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      # SSE-S3. Nothing in infra/aws uses a customer-managed KMS key (the ECR repositories
+      # use AES256 too), and a CMK would add a key policy the restore path then depends on.
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      # Versioning so an overwrite or a delete -- by a person or a compromised role -- leaves
+      # the previous object recoverable for NoncurrentVersionExpiration days.
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: expire-dumps-after-35-days
+            Status: Enabled
+            Prefix: !Sub ${BackupPrefix}/
+            ExpirationInDays: 35
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 7
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+          # Expiring a current version under versioning leaves a delete marker; once its
+          # noncurrent version is gone the marker is clutter. Separate rule because S3
+          # refuses ExpiredObjectDeleteMarker alongside ExpirationInDays.
+          - Id: remove-expired-delete-markers
+            Status: Enabled
+            Prefix: !Sub ${BackupPrefix}/
+            ExpiredObjectDeleteMarker: true
+      Tags:
+        - Key: Project
+          Value: climate-project-api
+        - Key: Environment
+          Value: production
+        - Key: DataClassification
+          Value: personal-data
+
+  BackupBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref BackupBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: s3:*
+            Resource:
+              - !GetAtt BackupBucket.Arn
+              - !Sub ${BackupBucket.Arn}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+
+  BackupRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: climate-project-github-db-backup-prod
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            # The provider already exists in this account (created for the deploy role); it is
+            # referenced, not created, so there is exactly one.
+            Principal:
+              Federated: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                # Environment subs ONLY -- no `ref:refs/heads/main` pair, unlike the deploy
+                # role. The backup job always names the production environment, so it never
+                # presents a ref sub; trusting one would only let some OTHER main-branch job
+                # with no environment assume this role. ID-qualified form first, because it
+                # is the one this repository's tokens actually carry; the name-based form is
+                # kept for the same reason the deploy role keeps it (see
+                # climate-project-api-bootstrap.yml).
+                #
+                # What this cannot express: "only the db-backup.yml workflow". IAM's GitHub
+                # condition keys are aud and sub; the workflow path is in `job_workflow_ref`,
+                # which IAM does not read. Any job in the production environment (on main)
+                # could assume this role -- and gain only PutObject under one prefix and one
+                # metric namespace, while such a job already holds the database credential.
+                token.actions.githubusercontent.com:sub:
+                  - !Sub
+                    - repo:${Owner}@${GitHubOwnerId}/${Repo}@${GitHubRepositoryId}:environment:${GitHubEnvironment}
+                    - Owner: !Select [0, !Split ["/", !Ref GitHubRepository]]
+                      Repo: !Select [1, !Split ["/", !Ref GitHubRepository]]
+                  - !Sub repo:${GitHubRepository}:environment:${GitHubEnvironment}
+      Policies:
+        - PolicyName: climate-project-db-backup-write
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # Write, and abort its own failed multipart upload (`aws s3 cp` goes multipart
+              # above 8 MB). No GetObject and no DeleteObject: this role can add a backup and
+              # can neither read nor destroy one.
+              - Sid: WriteDumps
+                Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:AbortMultipartUpload
+                Resource: !Sub ${BackupBucket.Arn}/${BackupPrefix}/*
+              # The workflow verifies the upload with list-objects-v2 on the exact key, which
+              # returns the size and nothing of the content. HeadObject would need
+              # s3:GetObject, i.e. the right to download every backup; listing does not.
+              - Sid: VerifyDumpsByListing
+                Effect: Allow
+                Action: s3:ListBucket
+                Resource: !GetAtt BackupBucket.Arn
+                Condition:
+                  StringLike:
+                    s3:prefix: !Sub ${BackupPrefix}/*
+              - Sid: PublishSuccessMetric
+                Effect: Allow
+                Action: cloudwatch:PutMetricData
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    cloudwatch:namespace: !Ref MetricNamespace
+      Tags:
+        - Key: Project
+          Value: climate-project-api
+        - Key: Environment
+          Value: production
+
+  # ---------------------------------------------------------------------------------------
+  # The alarm. The workflow publishes DumpSucceeded=1 ONLY after the dump was taken, was
+  # checked to contain table data, was uploaded, and was found in the bucket at a sane size.
+  # Every other outcome -- the job failing, the job not running (schedule disabled, which
+  # GitHub does by itself after 60 days without repository activity), the secret rotated,
+  # the role broken -- publishes nothing, and nothing is what this alarm fires on.
+  #
+  # Hourly periods, 26 of 26, rather than one 86400-second period. A one-day period is a
+  # UTC-midnight-aligned bucket that is empty from 00:00 until the 07:00 run, so it either
+  # reads as breaching for seven hours every night or depends on how CloudWatch treats the
+  # current partial period. Twenty-six consecutive hours with no success says the same thing
+  # ("the nightly run did not succeed") with no alignment question and two hours of slack for
+  # a late-starting scheduled run (GitHub delays cron jobs under load).
+  # ---------------------------------------------------------------------------------------
+  BackupStoppedAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: climate-project-db-backup-stopped
+      AlarmDescription: >-
+        No verified database dump in 26 hours. The nightly .github/workflows/db-backup.yml
+        run failed or did not run. Open its latest run; the restore procedure and the
+        meaning of this alarm are in docs/decisions/database-backups.md.
+      Namespace: !Ref MetricNamespace
+      MetricName: DumpSucceeded
+      Statistic: Sum
+      Period: 3600
+      EvaluationPeriods: 26
+      DatapointsToAlarm: 26
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions:
+        !If
+          - NotifyingEnabled
+          - [!ImportValue {"Fn::Sub": "${ObservabilityStackName}-critical-topic"}]
+          - !Ref AWS::NoValue
+      OKActions:
+        !If
+          - NotifyingEnabled
+          - [!ImportValue {"Fn::Sub": "${ObservabilityStackName}-critical-topic"}]
+          - !Ref AWS::NoValue
+
+Outputs:
+  BackupBucketName:
+    Description: Bucket the nightly dumps are written to. Set as the DB_BACKUP_BUCKET variable.
+    Value: !Ref BackupBucket
+
+  BackupRoleArn:
+    Description: Role db-backup.yml assumes through OIDC. Set as the DB_BACKUP_ROLE_ARN variable.
+    Value: !GetAtt BackupRole.Arn
+
+  BackupPrefix:
+    Description: Key prefix the dumps are written under.
+    Value: !Ref BackupPrefix
+
+  MetricNamespace:
+    Description: Namespace of the DumpSucceeded metric the alarm watches.
+    Value: !Ref MetricNamespace
+
+  BackupStoppedAlarmName:
+    Description: The alarm that fires when a day passes without a verified dump.
+    Value: !Ref BackupStoppedAlarm
