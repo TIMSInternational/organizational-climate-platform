@@ -85,6 +85,20 @@ const TYPE_KEYS: Record<string, string> = {
   prediction: 'insights.typePrediction',
 }
 
+/**
+ * The insight categories the product's own generators and seeds write (`engagement`, …)
+ * that are not survey dimensions. Like `type`, `category` is free text (`AIInsightValidation`
+ * caps only its length), so this is a lookup, not a vocabulary.
+ */
+const CATEGORY_KEYS: Record<string, string> = {
+  engagement: 'insights.categoryEngagement',
+  climate: 'insights.categoryClimate',
+  leadership: 'insights.categoryLeadership',
+  wellbeing: 'insights.categoryWellbeing',
+  safety: 'insights.categorySafety',
+  communication: 'insights.categoryCommunication',
+}
+
 const PRIORITY_KEYS: Record<string, string> = {
   low: 'actionPlans.low',
   medium: 'actionPlans.medium',
@@ -107,6 +121,21 @@ function label(t: TranslateFn, keys: Record<string, string>, value: string): str
 
 export function insightTypeLabel(t: TranslateFn, type: string): string {
   return label(t, TYPE_KEYS, type)
+}
+
+/**
+ * An insight's category in the reader's words, never its raw slug: a known insight category
+ * through {@link CATEGORY_KEYS}, a survey dimension (`workload`, `trust`, …) as the respond
+ * page heads it, and anything else as its own text with the underscores gone and a capital
+ * — `team_support` reads "Team support", not `team_support`.
+ */
+export function insightCategoryLabel(t: TranslateFn, category: string): string {
+  if (Object.hasOwn(CATEGORY_KEYS, category)) return label(t, CATEGORY_KEYS, category)
+  const dimensionPath = `surveyRespond.dimensions.${category}`
+  const dimension = t(dimensionPath)
+  if (dimension !== dimensionPath) return dimension
+  const authored = category.replace(/_+/g, ' ').replace(/\s+/g, ' ').trim()
+  return authored === '' ? category : authored.charAt(0).toLocaleUpperCase() + authored.slice(1)
 }
 
 export function insightPriorityLabel(t: TranslateFn, priority: string): string {

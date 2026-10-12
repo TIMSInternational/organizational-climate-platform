@@ -122,6 +122,21 @@ describe('AIInsightsNextPage', () => {
     expect(screen.getByText(insightsCopy.privacy)).toBeTruthy()
   })
 
+  it('names each category in words, never the raw slug', async () => {
+    vi.mocked(listAIInsights).mockResolvedValue([
+      insight({ id: 'a', title: 'One', category: 'engagement' }),
+      insight({ id: 'b', title: 'Two', category: 'workload' }),
+      insight({ id: 'c', title: 'Three', category: 'team_support' }),
+    ])
+    renderAt('/analytics/ai-insights', <AIInsightsNextPage />, '/analytics/ai-insights')
+    const rows = await screen.findAllByTestId('insight-row')
+    const categories = rows.map((row) => within(row).getAllByRole('cell')[3].textContent)
+    // The list sorts by priority and date, not by category, so compare the set.
+    expect([...categories].sort()).toEqual([en.insights.categoryEngagement, 'Team support', en.surveyRespond.dimensions.workload].sort())
+    expect(categories).not.toContain('engagement')
+    expect(categories).not.toContain('team_support')
+  })
+
   it('lists critical first and lets a company administrator mark one as reviewed', async () => {
     vi.mocked(listAIInsights).mockResolvedValue([
       insight({ id: 'a', title: 'Low one', priority: 'low' }),
