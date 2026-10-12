@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using ClimateProject.Application.Auth;
+using ClimateProject.Application.Dashboard;
 using ClimateProject.Application.Localization;
 using ClimateProject.Application.OrgStructure;
 using ClimateProject.Application.Surveys;
@@ -234,6 +235,30 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.BadRequest, http.StatusCode);
         Assert.False(await _harness.WithDbAsync(db => db.DemographicFields.AnyAsync(f => f.CompanyId == _companyId)));
+    }
+
+    /// <summary>
+    /// The company dashboard's per-department count includes the área a visitor declared.
+    /// It read 0 for every área of EAGLE's link-only survey (2026-10-12), because it counted
+    /// <c>responses.department_id</c> only, which a declared área never sets. The payload is
+    /// unfloored by contract; the dashboard export floors it (DashboardExport).
+    /// </summary>
+    [Fact]
+    public async Task The_company_dashboard_counts_the_area_a_visitor_declared()
+    {
+        var survey = await QrSurveyAsync(collectIdentity: false);
+        await AnswerAsAreaAsync(survey, _ventas, 6);
+        await AnswerAsAreaAsync(survey, _finanzas, 2);
+        // A partial save is not a completed response, declared área or not.
+        Assert.Equal(HttpStatusCode.Created, (await SubmitAsync(survey, Area(_ventas), isComplete: false)).StatusCode);
+
+        var admin = await AdminAsync();
+        var dashboard = (await admin.GetFromJsonAsync<CompanyAdminDashboard>("/dashboard/company-admin"))!;
+
+        var counts = dashboard.Departments.ToDictionary(d => d.Id, d => d.CompletedResponseCount);
+        Assert.Equal(6, counts[_ventas]);
+        Assert.Equal(2, counts[_finanzas]);
+        Assert.Equal(0, counts[_operaciones]);
     }
 
     // ------------------------------------------------------------------

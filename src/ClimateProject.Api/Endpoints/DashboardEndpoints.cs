@@ -424,6 +424,24 @@ public static class DashboardEndpoints
             .DepartmentSummaries(db.Departments, db.Users, db.Responses, scopedCompanyId, DepartmentRowLimit)
             .ToListAsync(cancellationToken);
 
+        // A respondent with no account declares their área as a demographic answer and leaves
+        // department_id null (ruled 2026-10-12). Counted here too, resolved by the same
+        // SelfDeclaredDepartment.Effective the results use, or a link-only company reads 0 for
+        // an área six people answered (EAGLE, 2026-10-12). Unfloored, like the stored count
+        // beside it: the consumers floor it (DashboardExport).
+        var declaredRows = await db.ResponseDemographics
+            .AsNoTracking()
+            .Where(rd => rd.Field == SelfDeclaredDepartment.FieldKey
+                && db.Responses.Any(r => r.Id == rd.ResponseId && r.CompanyId == scopedCompanyId && r.IsComplete && r.DepartmentId == null))
+            .Select(rd => rd.Value)
+            .ToListAsync(cancellationToken);
+        var listedIds = departments.Select(d => d.Id).ToHashSet();
+        var declared = declaredRows
+            .Select(value => SelfDeclaredDepartment.Effective(null, SurveyResponseValues.Read(value).Value, listedIds))
+            .OfType<Guid>()
+            .GroupBy(id => id)
+            .ToDictionary(g => g.Key, g => g.Count());
+
         return new CompanyAdminLoad(null, new CompanyAdminDashboard(
             company.Id,
             company.Name,
@@ -439,7 +457,7 @@ public static class DashboardEndpoints
             actionPlans.Overdue,
             ongoing.Select(s => ToSummary(s, lang)).ToList(),
             departments
-                .Select(d => new DashboardDepartmentSummary(d.Id, d.Name, d.MemberCount, d.CompletedResponseCount))
+                .Select(d => new DashboardDepartmentSummary(d.Id, d.Name, d.MemberCount, d.CompletedResponseCount + declared.GetValueOrDefault(d.Id)))
                 .ToList()));
     }
 
