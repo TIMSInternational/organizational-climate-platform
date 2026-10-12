@@ -40,6 +40,7 @@ import { ACTION_PLAN_PRIORITIES, ACTION_PLAN_STATUSES, kpiProgressPercent, prior
 import { daysToDue, dueDay, elapsedShare, type PlanFinding, type PlanMove } from './planDetailDerive'
 import type { ActionPlanDetailModel, Settled } from './planDetailModel'
 import { useActionPlanDetailModel, type ActionPlanDetailState } from './useActionPlanDetailModel'
+import { byCount } from '../../../i18n/plural'
 
 /**
  * `/action-plans/:id` — the redesigned Detalle de plan, drawn as the ActionPlanDetail board
@@ -166,14 +167,14 @@ function ActionPlanDetailView({ state, model }: { state: ActionPlanDetailState; 
   const dueSentence = settled
     ? t('actionPlans.next.due.settled', { date: dueLong })
     : days > 1
-      ? t('actionPlans.next.due.future', { date: dueLong, days })
+      ? t(byCount(days, 'actionPlans.next.due.futureOne', 'actionPlans.next.due.future'), { date: dueLong, days })
       : days === 1
         ? t('actionPlans.next.due.tomorrow', { date: dueLong })
         : days === 0
           ? t('actionPlans.next.due.today', { date: dueLong })
           : days === -1
             ? t('actionPlans.next.due.yesterday', { date: dueLong })
-            : t('actionPlans.next.due.past', { date: dueLong, days: -days })
+            : t(byCount(-days, 'actionPlans.next.due.pastOne', 'actionPlans.next.due.past'), { date: dueLong, days: -days })
 
   return (
     <div>

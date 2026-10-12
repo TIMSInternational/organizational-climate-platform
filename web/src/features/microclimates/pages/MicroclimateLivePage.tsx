@@ -127,7 +127,7 @@ const POLL_MS = 4000
  *
  * ## No sentiment
  *
- * `sentimentScore` is hardcoded to `0` on every submission. See
+ * `sentimentScore` is not measured: the server sends `null` (it used to send a stored `0`). See
  * `MicroclimateSentimentNotice` for why a labelled absence beats a badged zero.
  */
 export default function MicroclimateLivePage() {

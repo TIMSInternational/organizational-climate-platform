@@ -1,5 +1,11 @@
 {
-  "GET /admin/companies/*/result-bands": {"opportunityMin": 3, "strengthMin": 4, "criticalName": null, "opportunityName": null, "strengthName": null},
+  "GET /admin/companies/*/result-bands": {
+    "opportunityMin": 3,
+    "strengthMin": 4,
+    "criticalName": null,
+    "opportunityName": null,
+    "strengthName": null
+  },
   "GET /surveys/*/analytics": {
     "surveyId": "44444444-4444-4444-4444-444444444444",
     "title": "Q3 organisational climate survey",
@@ -508,7 +514,7 @@
               {
                 "questionId": "q2",
                 "answeredCount": 57,
-                "average": 4.0
+                "average": 4
               },
               {
                 "questionId": "q3",
@@ -523,7 +529,7 @@
               {
                 "questionId": "q5",
                 "answeredCount": 57,
-                "average": 4.0
+                "average": 4
               }
             ]
           },
@@ -539,7 +545,7 @@
               {
                 "questionId": "q1",
                 "answeredCount": 31,
-                "average": 4.0
+                "average": 4
               },
               {
                 "questionId": "q2",
@@ -621,7 +627,7 @@
               {
                 "questionId": "q3",
                 "answeredCount": 12,
-                "average": 3.0
+                "average": 3
               },
               {
                 "questionId": "q4",
@@ -634,16 +640,6 @@
                 "average": 3.8
               }
             ]
-          },
-          {
-            "dimension": "department",
-            "key": "dept-finance",
-            "label": "Finance",
-            "respondentCount": 0,
-            "participationRate": null,
-            "headcount": null,
-            "isSuppressed": true,
-            "questions": []
           }
         ],
         "suppressedSegmentCount": 1,
@@ -665,7 +661,7 @@
               {
                 "questionId": "q1",
                 "answeredCount": 41,
-                "average": 4.0
+                "average": 4
               },
               {
                 "questionId": "q2",
@@ -752,7 +748,7 @@
               {
                 "questionId": "q4",
                 "answeredCount": 52,
-                "average": 3.0
+                "average": 3
               },
               {
                 "questionId": "q5",
@@ -760,16 +756,6 @@
                 "average": 3.1
               }
             ]
-          },
-          {
-            "dimension": "tenure",
-            "key": "3_to_5_years",
-            "label": "3 to 5 years",
-            "respondentCount": 0,
-            "participationRate": null,
-            "headcount": null,
-            "isSuppressed": true,
-            "questions": []
           }
         ],
         "suppressedSegmentCount": 1,

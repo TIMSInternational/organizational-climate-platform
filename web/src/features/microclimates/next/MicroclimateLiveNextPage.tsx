@@ -57,7 +57,7 @@ const CARD = 'flex min-w-0 flex-col gap-3 rounded-xl border border-line-default 
  * and the session's fixed facts.
  *
  * Removed with the redesign, deliberately: the sentiment block (`sentimentScore` is
- * hardcoded to 0 on every submission, so it could only ever say nothing), the four KPI
+ * not measured — the server now sends `null` — so it could only ever say nothing), the four KPI
  * tiles that restated one count four ways, and the trend chart.
  *
  * ## What people wrote

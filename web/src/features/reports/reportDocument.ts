@@ -115,7 +115,12 @@ export interface ReportDemographicBreakdown {
   dimension: string
   segments: ReportSegmentParticipation[]
   suppressedSegmentCount: number
-  unsegmentedRespondentCount: number
+  /**
+   * `null` when the document does not carry it — and the public projection no longer does
+   * (2026-10-12): the completed total minus the published rows minus this count WAS the
+   * withheld headcount. Never read an absent count as 0.
+   */
+  unsegmentedRespondentCount: number | null
 }
 
 /**
@@ -155,14 +160,17 @@ export interface ReportSurveySection {
    */
   questions: SurveyQuestionResult[]
   dimensions: ReportDimensionScore[]
+  /** Disclosed departments only: a withheld one is counted and never named (2026-10-12). */
   departments: ReportDepartmentParticipation[]
-  suppressedDepartmentCount: number
+  /** `null` when no department breakdown was computed — never "0 withheld". */
+  suppressedDepartmentCount: number | null
   /**
    * `suppressedRespondentCount` is deliberately absent, here as on the breakdown: the
    * public projection withholds the withheld headcount. Only the count of withheld
    * *departments* survives, and it names nobody.
    */
-  unsegmentedRespondentCount: number
+  /** `null` when not carried; the public projection withholds it. See `ReportDemographicBreakdown`. */
+  unsegmentedRespondentCount: number | null
   /** Every non-department breakdown the aggregation produced. Empty when `isSuppressed`. */
   demographics: ReportDemographicBreakdown[]
   isSuppressed: boolean
@@ -511,7 +519,7 @@ function demographicOf(value: unknown): ReportDemographicBreakdown {
     // `suppressedRespondentCount` is not read. It is not sent either — the public
     // projection withholds it — and not reading it is what keeps that true if a document
     // written by something else ever arrives carrying one.
-    unsegmentedRespondentCount: num(raw.unsegmentedRespondentCount),
+    unsegmentedRespondentCount: nullableNum(raw.unsegmentedRespondentCount),
   }
 }
 
@@ -592,9 +600,9 @@ function sectionOf(value: unknown): ReportSurveySection {
     questions: isSuppressed ? [] : array(raw.questions).map(questionOf),
     dimensions: isSuppressed ? [] : array(raw.dimensions).map(dimensionOf),
     departments: array(raw.departments).map(departmentOf),
-    suppressedDepartmentCount: num(raw.suppressedDepartmentCount),
+    suppressedDepartmentCount: nullableNum(raw.suppressedDepartmentCount),
     // `suppressedRespondentCount` is not read, for the reason `demographicOf` gives.
-    unsegmentedRespondentCount: num(raw.unsegmentedRespondentCount),
+    unsegmentedRespondentCount: nullableNum(raw.unsegmentedRespondentCount),
     demographics: isSuppressed ? [] : array(raw.demographics).map(demographicOf),
     isSuppressed,
     suppressionReason: nullableStr(raw.suppressionReason),

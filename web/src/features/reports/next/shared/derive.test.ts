@@ -179,10 +179,41 @@ describe('shared report derive — the floor', () => {
     expect(counted).toEqual({
       readable: 2,
       total: 4,
+      withheld: 2,
       withheldNames: ['Dirección General', 'Más de diez años'],
     })
     // The hostile breakdown's withheld group claims 3 respondents. Nothing counted it.
     expect(JSON.stringify(counted)).not.toContain('3')
+  })
+
+  it('counts the withheld groups the server no longer names, so the page never reads "all readable"', () => {
+    // The wire shape since 2026-10-12: disclosed rows only, withheld groups as counters.
+    const counted = groupCountOf(
+      section({
+        departments: [
+          { departmentId: 'd1', name: 'Operaciones', respondentCount: 62, participationRate: 84.9, isSuppressed: false },
+        ],
+        suppressedDepartmentCount: 1,
+        unsegmentedRespondentCount: null,
+        demographics: [
+          {
+            dimension: 'antigüedad',
+            segments: [
+              { key: '2-5', label: 'Entre uno y cinco años', respondentCount: 88, isSuppressed: false, dimensions: [] },
+            ],
+            suppressedSegmentCount: 2,
+            unsegmentedRespondentCount: null,
+          },
+        ],
+      }),
+    )
+
+    expect(counted).toEqual({ readable: 2, total: 5, withheld: 3, withheldNames: [] })
+  })
+
+  it('reads a missing department counter as no breakdown, never as a number', () => {
+    const counted = groupCountOf(section({ suppressedDepartmentCount: null, departments: [] }))
+    expect(counted).toEqual({ readable: 0, total: 0, withheld: 0, withheldNames: [] })
   })
 
   it('reports no participation rate rather than a zero when there was no invitation list', () => {
@@ -273,10 +304,11 @@ describe('shared report derive — the floor', () => {
     )
 
     expect(suppressed.departments).toEqual([])
-    expect(suppressed.withheldDepartments).toBe(0)
+    // No breakdown was computed, so no count of withheld departments -- not a 0.
+    expect(suppressed.withheldDepartments).toBeNull()
     // And nothing counts them as readable groups either: a survey whose per-question
     // results are withheld in full has no readable group by definition.
-    expect(suppressed.groups).toEqual({ readable: 0, total: 0, withheldNames: [] })
+    expect(suppressed.groups).toEqual({ readable: 0, total: 0, withheld: 0, withheldNames: [] })
   })
 
   it('reads the platform floor when the document carries none', () => {

@@ -8,6 +8,7 @@ import { Button, EmptyState, Table } from '../../../components/ui'
 import { statusLabel, typeLabel } from '../surveyVocabulary'
 import { surveyResponseReading } from '../surveyListView'
 import { calendarDay } from '../../../lib/calendarDay'
+import { byCount } from '../../../i18n/plural'
 
 interface SurveyListProps {
   surveys: readonly SurveyListItem[]
@@ -145,7 +146,7 @@ export default function SurveyList({ surveys }: SurveyListProps) {
                   <span className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-fg-secondary">
                     <span>{typeLabel(t, survey.type)}</span>
                     <span aria-hidden="true">·</span>
-                    <span>{t('surveys.reviewQuestionCount', { count: survey.questionCount })}</span>
+                    <span>{t(byCount(survey.questionCount, 'surveys.reviewQuestionCountOne', 'surveys.reviewQuestionCount'), { count: survey.questionCount })}</span>
                   </span>
                 </td>
                 <td>

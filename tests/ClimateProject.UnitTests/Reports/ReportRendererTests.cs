@@ -123,14 +123,13 @@ public class ReportRendererTests
 
     /// <summary>
     /// Direction has three respondents, below
-    /// <see cref="SurveyResultsPrivacy.MinimumSegmentRespondents"/>, so the aggregation zeroed
-    /// its count and nulled its rate before the document was written. A renderer that printed
-    /// those two fields would draw <c>0</c> and <c>Not available</c> -- which reads as "nobody
-    /// in Direction answered", a claim about those people that nothing in this product
-    /// supports.
+    /// <see cref="SurveyResultsPrivacy.MinimumSegmentRespondents"/>. It used to be drawn as a
+    /// named row reading "Withheld" -- beside a paragraph printing the withheld headcount, 3,
+    /// which with one withheld department IS Direction's size. Since 2026-10-12 it is counted
+    /// and never named, the rule SurveyExport applies to every breakdown.
     /// </summary>
     [Fact]
-    public void TheSuppressedDepartmentCellsSayWithheldAndNeverZero()
+    public void A_withheld_department_is_counted_and_never_named_in_the_pdf()
     {
         var drawn = DrawnStrings(ReportRenderer.BuildPdf(Context()));
 
@@ -140,22 +139,41 @@ public class ReportRendererTests
         Assert.Equal("6", drawn[engineering + 1]);
         Assert.Equal("30 %", drawn[engineering + 2]);
 
-        // Direction IS named, unlike SurveyExport's withheld groups, and deliberately: a
-        // department is org-chart data the same administrator reads on /admin/departments, and
-        // the row is already in the stored document. See ReportRenderer's class comment.
-        var direction = IndexOfCell(drawn, "Dirección");
+        Assert.DoesNotContain(drawn, s => s.Contains("Dirección", StringComparison.Ordinal));
 
-        // Both of its cells, asserted as the cells rather than as a substring search over the
-        // file: the aggregation handed this row (0, null), and a renderer that printed them
-        // would draw "0" and "Not available" -- which reads as "nobody in Direction answered".
-        Assert.Equal("Withheld", drawn[direction + 1]);
-        Assert.Equal("Withheld", drawn[direction + 2]);
-
-        // And the floor that produced it, so a reader of the file can see why.
+        // Counted, with the floor that withheld it, so a reader can balance the table.
+        var prose = Prose(ReportRenderer.BuildPdf(Context()));
+        Assert.Contains("Withheld departments: 1", prose, StringComparison.Ordinal);
         Assert.Contains(
             $"fewer than {SurveyResultsPrivacy.MinimumSegmentRespondents} respondents",
-            Prose(ReportRenderer.BuildPdf(Context())),
+            prose,
             StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The same rule for a document stored before <c>ReportSurveySections</c> dropped the row:
+    /// a withheld department still sitting in <c>report_output</c> is filtered at render time.
+    /// </summary>
+    [Fact]
+    public void A_withheld_department_row_in_an_older_stored_document_is_not_drawn()
+    {
+        var document = Document();
+        var healthy = document.Surveys[0];
+        var older = document with
+        {
+            Surveys =
+            [
+                healthy with
+                {
+                    Departments = [.. healthy.Departments, new ReportDepartmentParticipation(Direction.ToString(), "Dirección", 0, null, true)],
+                },
+                .. document.Surveys.Skip(1),
+            ],
+        };
+        var context = Context() with { Document = older };
+
+        Assert.DoesNotContain(DrawnStrings(ReportRenderer.BuildPdf(context)), s => s.Contains("Dirección", StringComparison.Ordinal));
+        Assert.DoesNotContain("Dirección", CsvText(context), StringComparison.Ordinal);
     }
 
     /// <summary>The position of a drawn cell, so the two cells after it can be read.</summary>
@@ -175,22 +193,34 @@ public class ReportRendererTests
 
     /// <summary>The same rule in the format that is actually forwarded to a spreadsheet.</summary>
     [Fact]
-    public void TheSuppressedDepartmentCsvCellsAreEmptyNeverZero()
+    public void A_withheld_department_is_counted_and_never_named_in_the_csv()
+    {
+        var context = Context();
+        var rows = CsvRows(context);
+
+        Assert.Equal("6", Cell(rows, ReportRenderer.DepartmentSection, Engineering.ToString(), "respondent_count"));
+        Assert.Equal("false", Cell(rows, ReportRenderer.DepartmentSection, Engineering.ToString(), "is_suppressed"));
+
+        // No row at all -- not an empty cell under a name -- and the counter says it exists.
+        Assert.DoesNotContain(Direction.ToString(), CsvText(context), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(
+            "1",
+            Cell(rows, ReportRenderer.SurveySection, "suppressed_department_count", "value", HealthySurvey.ToString()));
+    }
+
+    /// <summary>
+    /// A survey below the whole-survey floor has no department breakdown at all. Its counters
+    /// are empty cells, never "0": zero withheld is a claim about a breakdown nobody computed.
+    /// </summary>
+    [Fact]
+    public void A_survey_with_no_department_breakdown_has_empty_withheld_counters_never_zero()
     {
         var rows = CsvRows(Context());
 
-        var disclosed = Cell(rows, ReportRenderer.DepartmentSection, Engineering.ToString(), "respondent_count");
-        var withheld = Cell(rows, ReportRenderer.DepartmentSection, Direction.ToString(), "respondent_count");
-
-        Assert.Equal("6", disclosed);
-        // Empty, not "0". A spreadsheet that summed this column would otherwise report a
-        // workforce that answered nothing.
-        Assert.Equal(string.Empty, withheld);
-        Assert.Equal(string.Empty, Cell(rows, ReportRenderer.DepartmentSection, Direction.ToString(), "participation_rate"));
-
-        // The flag is still there, so a reader can tell an empty cell from a missing row.
-        Assert.Equal("true", Cell(rows, ReportRenderer.DepartmentSection, Direction.ToString(), "is_suppressed"));
-        Assert.Equal("false", Cell(rows, ReportRenderer.DepartmentSection, Engineering.ToString(), "is_suppressed"));
+        foreach (var metric in new[] { "suppressed_department_count", "suppressed_respondent_count", "unsegmented_respondent_count" })
+        {
+            Assert.Equal(string.Empty, Cell(rows, ReportRenderer.SurveySection, metric, "value", ThinSurvey.ToString()));
+        }
     }
 
     /// <summary>
@@ -471,8 +501,8 @@ public class ReportRendererTests
 
         Assert.Contains("Participación", spanish, StringComparison.Ordinal);
         Assert.Contains("Participation", english, StringComparison.Ordinal);
-        Assert.Contains("Reservado", spanish, StringComparison.Ordinal);
-        Assert.Contains("Withheld", english, StringComparison.Ordinal);
+        Assert.Contains("Departamentos reservados", spanish, StringComparison.Ordinal);
+        Assert.Contains("Withheld departments", english, StringComparison.Ordinal);
 
         // And the decimal separator with it: 12 of 17 invited is 70.59, a rate with decimals,
         // which is what makes the separator observable at all -- 12 of 16 is exactly 75 and

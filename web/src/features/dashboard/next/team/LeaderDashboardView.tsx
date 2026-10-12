@@ -472,9 +472,12 @@ function PlansCard({
       )}
       {plans.source === 'failed' && (
         <p role="status" className="m-0 text-sm text-fg-label">
-          {plans.error
-            ? t('dashboard.next.leader.plansFailed', { error: plans.error })
-            : t('dashboard.next.leader.plansFailedNoReason')}
+          {t('dashboard.next.leader.plansFailedNoReason')}
+        </p>
+      )}
+      {plans.source === 'refused' && (
+        <p role="status" className="m-0 text-sm text-fg-label">
+          {t('dashboard.next.leader.plansRefused')}
         </p>
       )}
       {plans.source === 'counts' && <p className="m-0 text-sm text-fg-label">{t('dashboard.next.leader.plansCountsOnly')}</p>}

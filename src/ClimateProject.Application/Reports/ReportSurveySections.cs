@@ -74,10 +74,17 @@ public static class ReportSurveySections
             // suppressed-word counter that says a cloud is incomplete.
             aggregate.Questions,
             aggregate.Dimensions,
-            departments is null ? [] : departments.Segments.Select(ToDepartment).ToList(),
-            departments?.SuppressedSegmentCount ?? 0,
-            departments?.SuppressedRespondentCount ?? 0,
-            departments?.UnsegmentedRespondentCount ?? 0,
+            // Disclosed departments only. A withheld one is counted below and never named --
+            // the CSV export's rule (SurveyResultsPrivacy.WithoutWithheldSegments): a named
+            // withheld row beside the withheld headcount is that group's size whenever it is
+            // the only one withheld.
+            departments is null ? [] : departments.Segments.Where(s => !s.IsSuppressed).Select(ToDepartment).ToList(),
+            // Null, not 0, when there is no department breakdown at all (a survey below the
+            // whole-survey floor has none). Zero is a claim -- "nothing was withheld" -- about
+            // a breakdown that was never computed.
+            departments?.SuppressedSegmentCount,
+            departments?.SuppressedRespondentCount,
+            departments?.UnsegmentedRespondentCount,
             aggregate.Breakdowns
                 .Where(b => !string.Equals(b.Dimension, DepartmentDimension, StringComparison.Ordinal))
                 .Select(breakdown => ToDemographicBreakdown(aggregate, breakdown))
@@ -97,7 +104,9 @@ public static class ReportSurveySections
     private static ReportDemographicBreakdown ToDemographicBreakdown(SurveyAggregate aggregate, SurveyBreakdown breakdown)
         => new(
             breakdown.Dimension,
-            breakdown.Segments.Select(segment => ToSegment(aggregate, segment)).ToList(),
+            // Disclosed groups only; see the department rows above for why a withheld group
+            // is counted and never named.
+            breakdown.Segments.Where(segment => !segment.IsSuppressed).Select(segment => ToSegment(aggregate, segment)).ToList(),
             breakdown.SuppressedSegmentCount,
             breakdown.SuppressedRespondentCount,
             breakdown.UnsegmentedRespondentCount);

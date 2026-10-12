@@ -152,12 +152,30 @@ public sealed record UpdateMicroclimateRequest(
 /// </summary>
 public sealed record WordCloudEntry(string Text, int Value, string Language);
 
+/// <summary>
+/// <c>GET /microclimates/{id}/live-results</c>.
+/// </summary>
+/// <param name="SentimentScore">
+/// <b>Always null.</b> Nothing in this API measures sentiment -- no inference client exists, and
+/// the stored column is a constant 0 written on every submission. Null is the honest answer;
+/// 0 would read as "measured, and neutral".
+/// </param>
+/// <param name="WordCloud">
+/// Empty while <paramref name="IsSuppressed"/> -- the session floor the export applies
+/// (<see cref="ClimateProject.Application.Surveys.SurveyResultsPrivacy.MinimumRespondents"/>) -- and otherwise only words carried
+/// by at least <see cref="ClimateProject.Application.Surveys.SurveyResultsPrivacy.MinimumWordRespondents"/> responses.
+/// </param>
+/// <param name="IsSuppressed">True when the session has fewer responses than the floor.</param>
+/// <param name="SuppressionReason">Machine-readable, null when nothing is withheld.</param>
 public sealed record LiveResultsDetail(
-    double SentimentScore,
+    double? SentimentScore,
     string EngagementLevel,
     List<WordCloudEntry> WordCloud,
     int ResponseCount,
-    int TargetParticipantCount);
+    int TargetParticipantCount,
+    bool IsSuppressed,
+    string? SuppressionReason,
+    int MinimumGroupSize);
 
 /// <param name="Language">
 /// The locale the respondent was served. Recorded, never inferred from the answer
@@ -268,7 +286,7 @@ public sealed record MicroclimateExport(
     int TargetParticipantCount,
     double? ParticipationPercent,
     string EngagementLevel,
-    double SentimentScore,
+    double? SentimentScore,
     IReadOnlyList<QuestionDto> Questions,
     IReadOnlyList<MicroclimateExportWord> Words,
     bool IsSuppressed,

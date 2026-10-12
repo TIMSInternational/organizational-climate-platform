@@ -398,12 +398,19 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
               <span className="text-fg-label">
                 {groups.total === 0
                   ? t('surveyResults.next.groupsNoneReached', { floor: model.minimumGroupSize })
-                  : protectedGroups.length === 0
-                    ? t('surveyResults.next.groupsAllReadable', { floor: model.minimumGroupSize })
-                    : t('surveyResults.next.groupsProtected', {
+                  : protectedGroups.length > 0
+                    ? t('surveyResults.next.groupsProtected', {
                         groups: protectedGroups.join(', '),
                         floor: model.minimumGroupSize,
-                      })}
+                      })
+                    : groups.unnamed > 0
+                      ? t(
+                          groups.unnamed === 1
+                            ? 'surveyResults.next.groupsWithheldCountOne'
+                            : 'surveyResults.next.groupsWithheldCountMany',
+                          { count: groups.unnamed, floor: model.minimumGroupSize },
+                        )
+                      : t('surveyResults.next.groupsAllReadable', { floor: model.minimumGroupSize })}
               </span>
             }
           />

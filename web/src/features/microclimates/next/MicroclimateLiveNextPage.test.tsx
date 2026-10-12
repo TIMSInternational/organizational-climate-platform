@@ -47,7 +47,17 @@ function detail(overrides: Partial<MicroclimateDetail> = {}): MicroclimateDetail
 }
 
 function results(overrides: Partial<LiveResults> = {}): LiveResults {
-  return { sentimentScore: 0, engagementLevel: 'medium', wordCloud: [], responseCount: 13, targetParticipantCount: 40, ...overrides }
+  return {
+    sentimentScore: null,
+    engagementLevel: 'medium',
+    wordCloud: [],
+    responseCount: 13,
+    targetParticipantCount: 40,
+    isSuppressed: false,
+    suppressionReason: null,
+    minimumGroupSize: 5,
+    ...overrides,
+  }
 }
 
 function routeFetch(microclimate: MicroclimateDetail, live: LiveResults) {

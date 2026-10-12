@@ -96,4 +96,27 @@ public static class SurveyResultsPrivacy
     public static bool MeetsSegmentFloor(int respondentCount) => respondentCount >= MinimumSegmentRespondents;
 
     public static bool MeetsWordFloor(int respondentCount) => respondentCount >= MinimumWordRespondents;
+
+    /// <summary>
+    /// The breakdowns as a reader outside the aggregation may have them: every withheld
+    /// segment removed, its group counted and never named.
+    /// </summary>
+    /// <remarks>
+    /// <para>The rule <c>SurveyExport</c> has always applied to the CSV (<c>suppressed_*</c> rows,
+    /// no segment row for a withheld group), applied to every surface that serves a breakdown
+    /// over the wire or into a document. A named withheld segment beside
+    /// <see cref="SurveyBreakdown.SuppressedRespondentCount"/> is the size of that group whenever
+    /// it is the only one withheld -- and withholding the count instead would not help, because
+    /// the completed total minus the disclosed segments minus the unsegmented count recovers it
+    /// by subtraction. What the floor has to keep from a reader is WHICH group is small, so the
+    /// name is what goes.</para>
+    /// <para>The counters stay, so every breakdown still reconciles against the participation
+    /// counters: disclosed segments + <see cref="SurveyBreakdown.SuppressedRespondentCount"/> +
+    /// <see cref="SurveyBreakdown.UnsegmentedRespondentCount"/> = completed.</para>
+    /// </remarks>
+    public static IReadOnlyList<SurveyBreakdown> WithoutWithheldSegments(IReadOnlyList<SurveyBreakdown> breakdowns)
+        => [.. breakdowns.Select(breakdown => breakdown with
+        {
+            Segments = [.. breakdown.Segments.Where(segment => !segment.IsSuppressed)],
+        })];
 }

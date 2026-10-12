@@ -12,6 +12,7 @@ import { FLOOR, barPosition, belowFloor, countTicks } from '../derive'
 import { dayRange, shortDay } from '../format'
 import { sessionStatusLabel, sessionStatusTone } from '../vocabulary'
 import { useMicroclimateAnalyticsModel, type SessionRow } from './useMicroclimateAnalyticsModel'
+import { byCount } from '../../../../i18n/plural'
 
 /**
  * `/microclimates/analytics` — the redesigned Analítica de microclimas, drawn as the
@@ -299,7 +300,7 @@ function SessionsTable({ rows }: { rows: readonly SessionRow[] }) {
                     </Link>
                     {row.detail.status === 'ready' && (
                       <span className="text-xs text-fg-tertiary">
-                        {t('microclimates.next.analytics.rowMeta', {
+                        {t(byCount(row.detail.value.questions.length, 'microclimates.next.analytics.rowMetaOne', 'microclimates.next.analytics.rowMeta'), {
                           count: row.detail.value.questions.length,
                           mode: row.detail.value.anonymousResponses
                             ? t('microclimates.next.analytics.anonymous')

@@ -12,6 +12,7 @@ import { AnonymityNotice } from '../../../surveys/components/AnonymityNotice'
 import { formatDayMonth } from '../../../surveys/respondEstimate'
 import { useEmployeeHomeModel } from './useEmployeeHomeModel'
 import type { EmployeeHomeModel, HomeOutcome, HomeSurvey } from './model'
+import { byCount } from '../../../../i18n/plural'
 
 /**
  * The employee's Home — `/dashboard` for the `employee` role, and for any role
@@ -474,7 +475,7 @@ function AlsoOpenRow({ survey }: { survey: HomeSurvey }) {
           <span className="text-sm text-fg-secondary">
             {survey.questionCount === 1
               ? t('employee.surveyMetaOneQuestion', { date })
-              : t('employee.surveyMeta', { questions: survey.questionCount, minutes: survey.minutes, date })}
+              : t(byCount(survey.questionCount, 'employee.surveyMetaOne', 'employee.surveyMeta'), { questions: survey.questionCount, minutes: survey.minutes, date })}
           </span>
         </div>
       </div>
@@ -498,9 +499,15 @@ function OutcomeCard({ outcome }: { outcome: HomeOutcome }) {
   const survey = outcome.surveyName ?? t('surveys.untitled')
 
   const closedBody = [
-    t('employee.cameOfItClosedBody', {
-      responses: outcome.responseCount,
-      departments: outcome.departmentCount,
+    // Each count agrees with its own noun ("1 respuesta en 0 departamentos"), so the two
+    // are rendered apart and the sentence only joins them.
+    t('employee.cameOfItClosedBodyCounted', {
+      responses: t(byCount(outcome.responseCount, 'employee.cameOfItResponsesOne', 'employee.cameOfItResponsesMany'), {
+        count: outcome.responseCount,
+      }),
+      departments: t(byCount(outcome.departmentCount, 'employee.cameOfItDepartmentsOne', 'employee.cameOfItDepartmentsMany'), {
+        count: outcome.departmentCount,
+      }),
     }),
     // Appended to the same sentence rather than given a line of its own: a protected
     // department that looked like its own item would be a place a reader goes looking

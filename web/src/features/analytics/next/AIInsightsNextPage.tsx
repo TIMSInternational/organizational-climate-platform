@@ -5,7 +5,7 @@ import { readViewerClaims, useViewerCapabilities } from '../../../auth/viewerCap
 import { useCompanyScope } from '../../../company-context'
 import { useCompanyName } from '../../../company-context/useCompanyName'
 import { useTranslation } from '../../../i18n'
-import { insightPriorityLabel, insightTypeLabel } from '../insightVocabulary'
+import { insightCategoryLabel, insightPriorityLabel, insightTypeLabel } from '../insightVocabulary'
 import { EmptyRow, Note, PanelHeading, TABLE_CARD_CLASS, TH_CLASS } from '../../shared-next/parts'
 import { useAIInsightsModel } from './useAnalyticsModels'
 import { priorityTone } from './model'
@@ -125,7 +125,7 @@ function AIInsightsForCompany() {
                     </td>
                     <td className="px-3 py-2.5 align-top text-fg-primary">{insight.title}</td>
                     <td className="px-3 py-2.5 align-top text-fg-secondary">{insightTypeLabel(t, insight.type)}</td>
-                    <td className="px-3 py-2.5 align-top text-fg-secondary">{insight.category}</td>
+                    <td className="px-3 py-2.5 align-top text-fg-secondary">{insightCategoryLabel(t, insight.category)}</td>
                     <td className="px-3 py-2.5 text-right align-top">
                       {insight.isAcknowledged ? (
                         <Chip tone="good" label={t('insights.next.acknowledged')} />

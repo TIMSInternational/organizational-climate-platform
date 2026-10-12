@@ -165,11 +165,17 @@ export interface WordCloudEntry {
 }
 
 export interface LiveResults {
-  sentimentScore: number
+  /** Always `null`: nothing measures sentiment, and the server says so rather than sending a 0. */
+  sentimentScore: number | null
   engagementLevel: string
+  /** Empty while `isSuppressed` — the server applies the session floor itself now. */
   wordCloud: WordCloudEntry[]
   responseCount: number
   targetParticipantCount: number
+  /** True while the session has fewer than `minimumGroupSize` responses. */
+  isSuppressed: boolean
+  suppressionReason: string | null
+  minimumGroupSize: number
 }
 
 export async function listMicroclimates(
@@ -230,7 +236,9 @@ export async function getMicroclimatePublic(baseUrl: string, id: string, lang?: 
   const response = await fetch(`${baseUrl}/microclimates/${id}${lang ? `?lang=${lang}` : ''}`, { headers })
   if (!response.ok) {
     const body = await response.json().catch(() => null)
-    throw new Error((body && body.message) || `Request failed: ${response.status}`)
+    // The status travels with the error: this is read by a public page, which renders its
+    // own copy by status and never the server's English sentence.
+    throw new MicroclimateRespondError(response.status, (body && body.message) || `Request failed: ${response.status}`)
   }
   return response.json() as Promise<PublicMicroclimateDetail>
 }

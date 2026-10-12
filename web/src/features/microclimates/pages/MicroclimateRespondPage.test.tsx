@@ -487,7 +487,9 @@ describe('MicroclimateRespondPage as a respondent surface', () => {
 
     const alert = await screen.findByRole('alert')
     expect(alert.textContent).toContain('No se pudo cargar esta sesión')
-    expect(alert.textContent).toContain('Microclimate not found')
+    // The page's own sentence, never the server's English body.
+    expect(alert.textContent).toContain('Esta sesión no existe o ya no está disponible')
+    expect(alert.textContent).not.toContain('Microclimate not found')
   })
 })
 
@@ -728,5 +730,20 @@ describe('MicroclimateRespondPage emoji scale', () => {
     // And it has to say that nothing was recorded: somebody who has just pressed Send
     // will otherwise assume their answers landed.
     expect(within(alert).getByText(/no se registr\u00f3 nada/i)).toBeTruthy()
+  })
+
+  it('never prints a raw error on a failed submit: a closed session reads as the respondent’s sentence', async () => {
+    const serverEnglish = 'This microclimate is not accepting responses'
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(new Response(JSON.stringify(spanishMicroclimate()), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ message: serverEnglish }), { status: 400 }))
+    renderPage()
+
+    await userEvent.click(await screen.findByLabelText('Muy de acuerdo'))
+    await userEvent.click(screen.getByRole('button', { name: /enviar|submit/i }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('La sesión no aceptó sus respuestas')
+    expect(alert.textContent).not.toContain(serverEnglish)
   })
 })

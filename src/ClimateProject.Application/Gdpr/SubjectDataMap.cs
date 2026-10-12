@@ -166,6 +166,13 @@ public static class SubjectDataMap
     public const string RedactedMarker = "[redacted: credential]";
 
     /// <summary>
+    /// What a verbatim answer is replaced with when an access export is requested by somebody
+    /// other than the person who wrote it. Ruled 2026-10-12, see
+    /// <c>docs/decisions/who-may-see-an-individual-answer.md</c>.
+    /// </summary>
+    public const string WithheldAnswerMarker = "[withheld: verbatim answer, returned only to its author]";
+
+    /// <summary>
     /// String columns whose name contains "Email" but which hold no data subject's address,
     /// with the reason. Checked by <c>SubjectDataMapTests.Every_email_column_is_accounted_for</c>,
     /// which otherwise requires the owning table to be classified as holding subject data.

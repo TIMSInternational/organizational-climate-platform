@@ -51,6 +51,7 @@ import {
 } from './derive'
 import type { ActionPlansListModel, PlanGroup, PlanRow } from './model'
 import { useActionPlansListModel } from './useActionPlansListModel'
+import { byCount } from '../../../i18n/plural'
 
 /**
  * The artboard's column header: 10px, bold, uppercase, the label ink, no tint — set at the TOP
@@ -61,14 +62,13 @@ import { useActionPlansListModel } from './useActionPlansListModel'
  * so a column is its content plus the gap before it — 222, 162, 132, 92 and 120 + 24 put the
  * finding, the owner, Vence, Prioridad and the actions exactly where the artboard does.
  *
- * The finding's heading carries the "Datos de muestra" chip the artboard does not draw. Beside
- * the heading it would need 243px (127 of heading, 6 of gap, 110 of chip) of the column's 210,
- * and it ran over "Responsable" (r1); so it hangs UNDER the heading (`HEAD_STACK`). The headings
- * keep the artboard's line and its columns; the header row is one chip taller while the finding
- * is sample-fed, and loses that line the day the finding reaches the payload.
+ * The finding's heading used to carry a "Datos de muestra" chip, hung UNDER it (`HEAD_STACK`)
+ * because beside it the chip ran over "Responsable". The finding is now read from the plan's
+ * own `dimension:` tag (`findingFromTags`), `sampleModel.ts` is gone, and no chip is drawn
+ * (`ActionPlansListNextPage.test.tsx` asserts none); `HEAD_STACK` stays as the headings' box.
  */
 const HEAD = 'h-auto bg-transparent pl-3 pr-0 last:pr-3 pb-2 pt-0 align-top text-2xs font-bold uppercase tracking-label text-fg-label whitespace-nowrap'
-/** A heading with the sample chip under it rather than beside it. */
+/** A heading's box — it once stacked the sample chip under the heading; nothing does now. */
 const HEAD_STACK = 'flex flex-col items-start gap-1'
 const CELL = 'pl-3 pr-0 last:pr-3 py-3 align-middle'
 /** Shown from 1360px, where the finding and the owner have columns of their own. */
@@ -431,7 +431,7 @@ function TimelineCard({ model, t, locale }: { model: ActionPlansListModel; t: Tr
         <span className="text-xs text-fg-label">
           {last
             ? timeline.firstAhead !== null
-              ? t('actionPlans.next.timelineRange', {
+              ? t(byCount(timeline.firstAhead, 'actionPlans.next.timelineRangeOne', 'actionPlans.next.timelineRange'), {
                   from: calendarDay(Date.parse(model.asOf), locale),
                   to: calendarDay(Date.parse(last.dueDate), locale),
                   days: timeline.firstAhead,
@@ -607,8 +607,7 @@ function PlanTable({
     <div className="rounded-lg border border-line-default bg-surface-card pt-2 shadow-sm">
       {/* No minimum width: at 1024 the table fits its card instead of scrolling inside it.
           From 1360px the finding and the owner are columns, as the artboard draws them;
-          below that they fold into the plan's cell (`PlanTableRow`), and the sample chip
-          moves with them to the Plan heading. Widths sit on the header cells, because a
+          below that they fold into the plan's cell (`PlanTableRow`). Widths sit on the header cells, because a
           `<col>` would keep a hidden column's width in the fixed layout. */}
       <Table className="table-fixed">
         <thead>
@@ -769,7 +768,7 @@ function PlanTableRow({
 }
 
 function dueNote(t: TranslateFn, days: number, thisMonth: boolean): string {
-  if (days < 0) return t('actionPlans.next.overdueBy', { days: -days })
+  if (days < 0) return t(byCount(-days, 'actionPlans.next.overdueByOne', 'actionPlans.next.overdueBy'), { days: -days })
   const when =
     days === 0 ? t('actionPlans.next.dueToday') : days === 1 ? t('actionPlans.next.dueTomorrow') : t('actionPlans.next.dueIn', { days })
   return thisMonth ? t('actionPlans.next.joined', { first: when, second: t('actionPlans.next.thisMonth') }) : when

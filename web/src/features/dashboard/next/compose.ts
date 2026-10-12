@@ -274,7 +274,9 @@ function composeSurveys(surveys: readonly SurveyListItem[]): SurveysRegion | nul
           code: waveCode(first.title, first.id.slice(0, 8)),
           name: first.title?.trim() || waveCode(first.title, first.id.slice(0, 8)),
           responses: first.responseCount,
-          audience: first.targetAudienceCount ?? 0,
+          // Kept null when absent -- `?? 0` printed "1 de 0" beside a detail page reading
+          // "1 de 44" (UX walkthrough 2026-10-06, finding 5).
+          audience: first.targetAudienceCount,
           closesAt: first.endDate,
         }
       : null,
@@ -451,7 +453,9 @@ export function composeModel(parts: ModelParts, options: ComposeOptions): Compos
   }
   if (surveys) {
     const open = surveys.openSurvey
-    if (open && (open.audience <= 0 || open.responses / open.audience < 0.5)) {
+    // No audience on record means no denominator to judge participation against, so no
+    // "low participation" claim either.
+    if (open && open.audience !== null && (open.audience <= 0 || open.responses / open.audience < 0.5)) {
       attention.push({
         kind: 'low-participation',
         surveyId: open.id,

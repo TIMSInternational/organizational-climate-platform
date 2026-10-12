@@ -19,6 +19,7 @@ import { percentagePoints } from '../trackingUnits'
 import { joinNames, nodosIn } from './derive'
 import type { ConsolidadoModel, NodoBlock, PlanLine } from './model'
 import { useConsolidadoModel } from './useConsolidadoModel'
+import { byCount } from '../../../i18n/plural'
 
 const HEAD = 'h-auto bg-transparent px-3 pb-2 pt-0 text-2xs font-bold uppercase tracking-label text-fg-label whitespace-nowrap'
 /** Shown from 1360px, where Avance and Compromiso have columns of their own. */
@@ -380,7 +381,7 @@ function CompromisoReading({
         {plan.cumplido
           ? t('tracking.detail.cumplido')
           : overdue
-            ? t('tracking.next.overdueBy', { days: -plan.daysToCompromiso })
+            ? t(byCount(-plan.daysToCompromiso, 'tracking.next.overdueByOne', 'tracking.next.overdueBy'), { days: -plan.daysToCompromiso })
             : t('tracking.next.withinDate')}
       </span>
     </div>

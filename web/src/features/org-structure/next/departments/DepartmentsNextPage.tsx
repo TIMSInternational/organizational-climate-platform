@@ -31,6 +31,7 @@ import DepartmentForm, { type DepartmentFormValues } from '../../components/Depa
 import { CanvasChip } from '../super/parts'
 import { noteOf, type ClimateReading, type DepartmentRow, type PlansReading, type Wave } from './derive'
 import { useDepartmentsModel, type DepartmentsModel } from './useDepartmentsModel'
+import { byCount } from '../../../../i18n/plural'
 
 const K = 'departments.next'
 const DASH = '—'
@@ -38,11 +39,6 @@ const DASH = '—'
 // the 744px a 1024 viewport leaves the page, with no scroll and no cell wrapping to two lines.
 const HEAD = 'px-2 py-2 text-left text-2xs font-bold uppercase leading-normal tracking-label text-fg-label whitespace-nowrap xl:px-3'
 const CELL = 'px-2 py-2.5 xl:px-3'
-
-/** The key for `count`: its singular when the count is one, the plural otherwise. */
-function byCount(count: number, one: string, many: string): string {
-  return count === 1 ? one : many
-}
 
 function score(value: number, locale: string): string {
   return formatMetric(value, { kind: 'number', decimals: 1 }, locale)

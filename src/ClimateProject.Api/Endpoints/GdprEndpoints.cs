@@ -152,8 +152,12 @@ public static class GdprEndpoints
         }
 
         var now = DateTimeOffset.UtcNow;
+        // The words a person typed into a survey go back only to that person. An administrator
+        // exporting someone else gets the record with each verbatim answer replaced by a marker
+        // (ruled 2026-10-12, docs/decisions/who-may-see-an-individual-answer.md).
         var export = await SubjectAccessExport.BuildAsync(
-            db, subject, AuthorityScope(currentUser, caller), now, cancellationToken);
+            db, subject, AuthorityScope(currentUser, caller),
+            withholdVerbatimAnswers: subject.Id != caller.Id, now, cancellationToken);
 
         await AuditAsync(
             db, caller, AccessAction, subject.Id.ToString(), subject.CompanyId, now, loggerFactory,

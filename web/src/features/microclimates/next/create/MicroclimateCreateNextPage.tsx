@@ -50,6 +50,7 @@ import { clock, shortDay, weekdayDay, weekdayLong } from '../format'
 import { canvasTypeLabel } from '../vocabulary'
 import { DateTimeField } from './DateTimeField'
 import { useMicroclimateCreateModel, type MicroclimateCreateState, type StartFrom } from './useMicroclimateCreateModel'
+import { byCount } from '../../../../i18n/plural'
 
 /**
  * `/microclimates/new` — the redesigned Crear microclima, drawn as the MicroclimateCreate
@@ -441,7 +442,7 @@ function StartFromRow({ state }: { state: MicroclimateCreateState }) {
   const { t } = useTranslation()
   const labelId = useId()
   const copied = state.previous
-    ? t('microclimates.next.create.copiedFrom', {
+    ? t(byCount(state.previous.questions.length, 'microclimates.next.create.copiedFromOne', 'microclimates.next.create.copiedFrom'), {
         name: state.previous.title ?? t('microclimates.untitled'),
         count: state.previous.questions.length,
       })

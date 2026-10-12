@@ -100,10 +100,16 @@ public sealed record PublicReportDocument(
 /// caller can reach -- every survey route is authenticated and tenant-scoped -- and the section
 /// beside it already says everything the id could be used to look up.
 /// </param>
+/// <param name="Departments">
+/// Disclosed departments only. A withheld department is counted in
+/// <see cref="SuppressedDepartmentCount"/> and never named -- see
+/// <see cref="PublicReportProjection.ShapeRulings"/> for the differencing this closes.
+/// </param>
 /// <param name="SuppressedDepartmentCount">
-/// The count of withheld departments, which names nobody. Its sibling
-/// <c>ReportSurveySection.SuppressedRespondentCount</c> -- how many <em>people</em> are behind
-/// them -- is <b>withheld</b>: see <see cref="PublicReportProjection.ShapeRulings"/>.
+/// The count of withheld departments, which names nobody; null when no department breakdown was
+/// computed. Its siblings <c>ReportSurveySection.SuppressedRespondentCount</c> and
+/// <c>UnsegmentedRespondentCount</c> are <b>withheld</b>: see
+/// <see cref="PublicReportProjection.ShapeRulings"/>.
 /// </param>
 public sealed record PublicSurveySection(
     Guid SurveyId,
@@ -114,8 +120,7 @@ public sealed record PublicSurveySection(
     IReadOnlyList<PublicQuestionResult> Questions,
     IReadOnlyList<PublicDimensionResult> Dimensions,
     IReadOnlyList<PublicDepartmentParticipation> Departments,
-    int SuppressedDepartmentCount,
-    int UnsegmentedRespondentCount,
+    int? SuppressedDepartmentCount,
     IReadOnlyList<PublicDemographicBreakdown> Demographics,
     bool IsSuppressed,
     string? SuppressionReason,
@@ -220,16 +225,17 @@ public sealed record PublicDepartmentParticipation(
 /// <summary>
 /// One demographic dimension and its groups -- <see cref="ReportDemographicBreakdown"/>.
 /// </summary>
+/// <param name="Segments">Disclosed groups only; a withheld group is counted and never named.</param>
 /// <param name="SuppressedSegmentCount">
 /// How many groups were withheld, which names nobody. How many <em>people</em> are behind them
-/// -- <c>ReportDemographicBreakdown.SuppressedRespondentCount</c> -- is <b>withheld</b>: see
+/// -- <c>ReportDemographicBreakdown.SuppressedRespondentCount</c> -- and how many carry no value
+/// -- <c>UnsegmentedRespondentCount</c> -- are <b>withheld</b>: see
 /// <see cref="PublicReportProjection.ShapeRulings"/>.
 /// </param>
 public sealed record PublicDemographicBreakdown(
     string Dimension,
     IReadOnlyList<PublicSegmentParticipation> Segments,
-    int SuppressedSegmentCount,
-    int UnsegmentedRespondentCount);
+    int SuppressedSegmentCount);
 
 /// <summary>One demographic group -- <see cref="ReportSegmentParticipation"/>.</summary>
 public sealed record PublicSegmentParticipation(
@@ -484,6 +490,19 @@ public static class PublicReportProjection
     /// surface in the product. The counts of withheld <em>groups</em> stay: they name nobody.
     /// </description></item>
     /// <item><description>
+    /// <c>ReportSurveySection.UnsegmentedRespondentCount</c> and
+    /// <c>ReportDemographicBreakdown.UnsegmentedRespondentCount</c> -- withheld 2026-10-12,
+    /// together with every withheld department and group ROW. Withholding the headcount alone
+    /// did not withhold it: the completed total minus the disclosed rows minus the unsegmented
+    /// count IS the withheld headcount, and with one withheld group named on the page that was
+    /// its exact size. The document now publishes only the completed total and the disclosed
+    /// rows, so the one subtraction a reader can do yields <c>withheld + unsegmented</c> -- a
+    /// remainder <c>SurveyAggregation.WithholdComplement</c> already guarantees is 0 or at least
+    /// the floor -- attributed to no named group. A stored document whose remainder is under the
+    /// floor anyway (one written before complement withholding) publishes no rows for that
+    /// breakdown at all; see <see cref="Disclosable"/>.
+    /// </description></item>
+    /// <item><description>
     /// <c>BenchmarkPriorPeriodDto.Id</c> -- the linked benchmark's own row id, which the page
     /// never reads (it prints <c>name</c> and the metric changes). <see cref="BenchmarkDetail"/>
     /// already withholds this same pointer from an authenticated caller who may not read the
@@ -519,7 +538,9 @@ public static class PublicReportProjection
         new(
             typeof(ReportSurveySection),
             typeof(PublicSurveySection),
-            Withhold(nameof(ReportSurveySection.SuppressedRespondentCount)),
+            Withhold(
+                nameof(ReportSurveySection.SuppressedRespondentCount),
+                nameof(ReportSurveySection.UnsegmentedRespondentCount)),
             Nothing),
         new(typeof(SurveyResultsSummary), typeof(PublicSurveyParticipation), Nothing, Nothing),
         new(typeof(SurveyLanguageCount), typeof(PublicLanguageCount), Nothing, Nothing),
@@ -531,7 +552,9 @@ public static class PublicReportProjection
         new(
             typeof(ReportDemographicBreakdown),
             typeof(PublicDemographicBreakdown),
-            Withhold(nameof(ReportDemographicBreakdown.SuppressedRespondentCount)),
+            Withhold(
+                nameof(ReportDemographicBreakdown.SuppressedRespondentCount),
+                nameof(ReportDemographicBreakdown.UnsegmentedRespondentCount)),
             Nothing),
         new(typeof(ReportSegmentParticipation), typeof(PublicSegmentParticipation), Nothing, Nothing),
         new(typeof(ReportSegmentDimensionScore), typeof(PublicSegmentDimensionScore), Nothing, Nothing),
@@ -625,21 +648,53 @@ public static class PublicReportProjection
         => stored is null ? [] : stored.Select(project).ToList();
 
     /// <summary>One survey section, field by field, with the only respondent-written content removed.</summary>
-    private static PublicSurveySection ToPublicSection(ReportSurveySection section) => new(
-        section.SurveyId,
-        section.Title,
-        section.Status ?? string.Empty,
-        section.ResolvedLocale ?? string.Empty,
-        ToPublicParticipation(section.Participation),
-        Map(section.Questions, WithoutWords),
-        Map(section.Dimensions, d => new PublicDimensionResult(d.Dimension ?? string.Empty, d.QuestionCount, d.AnsweredCount, d.AverageScore)),
-        Map(section.Departments, d => new PublicDepartmentParticipation(d.DepartmentId ?? string.Empty, d.Name, d.RespondentCount, d.ParticipationRate, d.IsSuppressed)),
-        section.SuppressedDepartmentCount,
-        section.UnsegmentedRespondentCount,
-        Map(section.Demographics, ToPublicBreakdown),
-        section.IsSuppressed,
-        section.SuppressionReason,
-        section.MinimumGroupSize);
+    private static PublicSurveySection ToPublicSection(ReportSurveySection section)
+    {
+        var completed = section.Participation?.CompletedCount ?? 0;
+        var floor = section.MinimumGroupSize;
+
+        var stored = section.Departments ?? [];
+        var disclosed = stored.Where(d => !d.IsSuppressed).ToList();
+        var withheld = section.SuppressedDepartmentCount;
+        if (!Disclosable(completed, disclosed.Sum(d => d.RespondentCount), floor))
+        {
+            // Every row goes, and is counted as withheld: the remainder a reader can subtract
+            // is a group under the floor.
+            withheld = (withheld ?? 0) + disclosed.Count;
+            disclosed = [];
+        }
+
+        return new(
+            section.SurveyId,
+            section.Title,
+            section.Status ?? string.Empty,
+            section.ResolvedLocale ?? string.Empty,
+            ToPublicParticipation(section.Participation),
+            Map(section.Questions, WithoutWords),
+            Map(section.Dimensions, d => new PublicDimensionResult(d.Dimension ?? string.Empty, d.QuestionCount, d.AnsweredCount, d.AverageScore)),
+            [.. disclosed.Select(d => new PublicDepartmentParticipation(d.DepartmentId ?? string.Empty, d.Name, d.RespondentCount, d.ParticipationRate, d.IsSuppressed))],
+            withheld,
+            Map(section.Demographics, breakdown => ToPublicBreakdown(breakdown, completed, floor)),
+            section.IsSuppressed,
+            section.SuppressionReason,
+            section.MinimumGroupSize);
+    }
+
+    /// <summary>
+    /// Whether a breakdown's disclosed rows may be published beside the completed total.
+    /// </summary>
+    /// <remarks>
+    /// The one subtraction this document leaves a reader is <c>completed - sum(disclosed)</c>.
+    /// That remainder is the people in no published row, and it must itself be 0 or at least
+    /// the floor -- the same test <c>SurveyAggregation.WithholdComplement</c> applies when the
+    /// aggregate is computed. Restated here because a stored document is JSON some other
+    /// version of the generator wrote, and this is the most exposed surface in the product.
+    /// </remarks>
+    internal static bool Disclosable(int completed, int disclosedRespondents, int floor)
+    {
+        var remainder = completed - disclosedRespondents;
+        return remainder == 0 || remainder >= Math.Max(1, floor);
+    }
 
     private static PublicSurveyParticipation ToPublicParticipation(SurveyResultsSummary? participation)
         => participation is null
@@ -656,16 +711,26 @@ public static class PublicReportProjection
                 participation.LastResponseAt,
                 Map(participation.ByLanguage, l => new PublicLanguageCount(l.Language ?? string.Empty, l.Count)));
 
-    private static PublicDemographicBreakdown ToPublicBreakdown(ReportDemographicBreakdown breakdown) => new(
-        breakdown.Dimension ?? string.Empty,
-        Map(breakdown.Segments, segment => new PublicSegmentParticipation(
-            segment.Key ?? string.Empty,
-            segment.Label,
-            segment.RespondentCount,
-            segment.IsSuppressed,
-            Map(segment.Dimensions, score => new PublicSegmentDimensionScore(score.Dimension ?? string.Empty, score.AverageScore)))),
-        breakdown.SuppressedSegmentCount,
-        breakdown.UnsegmentedRespondentCount);
+    private static PublicDemographicBreakdown ToPublicBreakdown(ReportDemographicBreakdown breakdown, int completed, int floor)
+    {
+        var disclosed = (breakdown.Segments ?? []).Where(s => !s.IsSuppressed).ToList();
+        var withheld = breakdown.SuppressedSegmentCount;
+        if (!Disclosable(completed, disclosed.Sum(s => s.RespondentCount), floor))
+        {
+            withheld += disclosed.Count;
+            disclosed = [];
+        }
+
+        return new(
+            breakdown.Dimension ?? string.Empty,
+            [.. disclosed.Select(segment => new PublicSegmentParticipation(
+                segment.Key ?? string.Empty,
+                segment.Label,
+                segment.RespondentCount,
+                segment.IsSuppressed,
+                Map(segment.Dimensions, score => new PublicSegmentDimensionScore(score.Dimension ?? string.Empty, score.AverageScore))))],
+            withheld);
+    }
 
     private static PublicAiInsight ToPublicInsight(ReportAIInsightItem insight) => new(
         insight.Id,

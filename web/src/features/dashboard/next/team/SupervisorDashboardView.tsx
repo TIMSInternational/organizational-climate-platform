@@ -198,9 +198,12 @@ function PlansCard({
       {plans.source === 'off' && <p className="m-0 text-sm text-fg-label">{t('dashboard.next.supervisor.plansOff')}</p>}
       {plans.source === 'failed' && (
         <p role="status" className="m-0 text-sm text-fg-label">
-          {plans.error
-            ? t('dashboard.next.supervisor.plansFailed', { error: plans.error })
-            : t('dashboard.next.supervisor.plansFailedNoReason')}
+          {t('dashboard.next.supervisor.plansFailedNoReason')}
+        </p>
+      )}
+      {plans.source === 'refused' && (
+        <p role="status" className="m-0 text-sm text-fg-label">
+          {t('dashboard.next.supervisor.plansRefused')}
         </p>
       )}
       {plans.source === 'tracking' && plans.plans.length === 0 && (
@@ -331,7 +334,18 @@ function TasksCard({ model, t, locale }: { model: SupervisorDashboardModel; t: T
                     task off is not something any endpoint records. */}
                 <span aria-hidden="true" className="mt-0.5 inline-flex size-4 rounded border border-line-default" />
                 <div className="flex min-w-0 flex-col gap-0.5">
-                  <span className="text-base text-fg-primary">{copy.heading}</span>
+                  {task.kind === 'answer-survey' ? (
+                    // The survey she owes opens where the employee Home's "Empezar a
+                    // responder" goes (`EmployeeHomeView`): the task is the way in, not a note.
+                    <Link
+                      to={`/surveys/${task.id}/respond`}
+                      className="text-base font-medium text-fg-primary underline-offset-2 hover:underline"
+                    >
+                      {copy.heading}
+                    </Link>
+                  ) : (
+                    <span className="text-base text-fg-primary">{copy.heading}</span>
+                  )}
                   <span className="text-sm text-fg-label">{copy.sub}</span>
                 </div>
                 <span className="font-mono text-sm whitespace-nowrap text-fg-label tabular-nums">

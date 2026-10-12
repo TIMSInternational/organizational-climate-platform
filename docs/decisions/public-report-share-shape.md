@@ -67,3 +67,27 @@ Scope in public share links:       WITHHELD
 Decided by: Federico Tafur
 Date: 2026-09-05
 ```
+
+## 2026-10-12 — a withheld group is counted, never named, on every surface
+
+**Status: applied on branch `polish-and-privacy`, for review.** Measured before the change:
+`/surveys/{id}/statistics`, `/analytics`, the report PDF and CSV, and the public share link each
+named a withheld department or demographic group beside a count that recovers its size — directly
+(`SuppressedRespondentCount`, when it is the only group withheld) or by one subtraction
+(`completed − Σ disclosed − unsegmented`, on the public page, which withheld the headcount but
+published the other three). Only the survey CSV export (`SurveyExport`) refused, by not naming
+the group.
+
+The CSV's rule is now everyone's: `SurveyResultsPrivacy.WithoutWithheldSegments` on the two
+endpoints, `ReportSurveySections` for every report surface (with a render-time filter for
+documents stored before it), and `PublicReportProjection` additionally withholds
+`UnsegmentedRespondentCount`, so the one subtraction left to a link holder yields
+`withheld + unsegmented` — a remainder `SurveyAggregation.WithholdComplement` already keeps at 0
+or ≥ 5 — attributed to no named group. A stored document whose remainder is under the floor
+anyway publishes no rows for that breakdown (`PublicReportProjection.Disclosable`).
+
+Withholding the count instead of the name was considered and rejected: the count is recoverable
+by subtraction from numbers every surface must publish to reconcile. The cost is real and
+visible: the results page and the shared report no longer draw a hatched row per withheld group;
+they say how many were withheld. Report sections with no department breakdown (a survey under
+the floor) now carry `null` withheld counters instead of `0`.

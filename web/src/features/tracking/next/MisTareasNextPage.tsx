@@ -12,6 +12,7 @@ import { nextCompromiso } from './derive'
 import { tallyTareas, type TareaRow } from './misTareas'
 import { MiniBar } from '../../org-structure/next/super/parts'
 import { useMisTareasModel } from './useMisTareasModel'
+import { byCount } from '../../../i18n/plural'
 
 const TH = 'h-auto bg-transparent px-1.5 pb-2 pt-2 first:pl-3 last:pr-3 text-2xs font-bold uppercase tracking-label text-fg-label whitespace-nowrap'
 const TD = 'px-1.5 py-3 align-middle first:pl-3 last:pr-3'
@@ -84,7 +85,11 @@ export default function MisTareasNextPage() {
         description={t('tracking.next.misTareasDescription')}
       />
 
-      {state.status === 'error' ? (
+      {state.status === 'refused' ? (
+        // A REFUSAL, not an outage: the service answered 401/403 instantly. No retry — asking
+        // again gets the same answer — and the same sentence the legacy page gives.
+        <NetworkError title={t('tracking.noAccessTitle')} description={t('tracking.noAccessBody')} />
+      ) : state.status === 'error' ? (
         // `tracking.serviceUnavailable*`, never the browser's own words: a rejected `fetch`
         // is what a stopped container, a DNS failure and an unlisted CORS origin all look
         // like here, and "Failed to fetch" was once shown to an end user on this very route.
@@ -159,7 +164,7 @@ function notice(rows: readonly TareaRow[], t: TranslateFn): string {
 
 function dueLine(row: TareaRow, t: TranslateFn, locale: string): string {
   const date = calendarDay(Date.parse(`${row.fechaCompromiso}T00:00:00Z`), locale)
-  if (row.overdue) return t('tracking.next.misTareasNextOverdue', { date, days: -row.daysToCompromiso })
+  if (row.overdue) return t(byCount(-row.daysToCompromiso, 'tracking.next.misTareasNextOverdueOne', 'tracking.next.misTareasNextOverdue'), { date, days: -row.daysToCompromiso })
   if (row.daysToCompromiso === 0) return t('tracking.next.misTareasNextDueToday', { date })
   if (row.daysToCompromiso === 1) return t('tracking.next.misTareasNextDueOne', { date })
   return t('tracking.next.misTareasNextDue', { date, days: row.daysToCompromiso })
@@ -310,7 +315,7 @@ function TareaTableRow({ row, t, locale }: { row: TareaRow; t: TranslateFn; loca
           </span>
           <span className={cn('text-2xs', row.overdue ? 'text-accent-red' : 'text-fg-label')}>
             {row.overdue
-              ? t('tracking.next.overdueBy', { days: -row.daysToCompromiso })
+              ? t(byCount(-row.daysToCompromiso, 'tracking.next.overdueByOne', 'tracking.next.overdueBy'), { days: -row.daysToCompromiso })
               : row.daysToCompromiso === 0
                 ? t('tracking.next.planesDueToday')
                 : row.daysToCompromiso === 1

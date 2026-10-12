@@ -67,11 +67,12 @@ function tarea(overrides: Partial<PlanAccion> = {}): PlanAccion {
 
 let profile = { companyName: 'Grupo Meridiano S.A.', departmentId: null as string | null, departmentName: null as string | null }
 
-function answer(tareas: readonly PlanAccion[] | 'reject') {
+function answer(tareas: readonly PlanAccion[] | 'reject' | 'refuse') {
   vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
     const url = String(input)
     if (url.includes('/api/mis-tareas')) {
       if (tareas === 'reject') return Promise.reject(new TypeError('Failed to fetch'))
+      if (tareas === 'refuse') return Promise.resolve(new Response('', { status: 403 }))
       return Promise.resolve(new Response(JSON.stringify(tareas), { status: 200 }))
     }
     if (/\/profile(\?|$)/.test(url)) return Promise.resolve(new Response(JSON.stringify(profile), { status: 200 }))
@@ -302,5 +303,22 @@ describe('MisTareasNextPage when the tracking service is unreachable', () => {
     expect(screen.queryByText(next.misTareasNext)).toBeNull()
     expect(screen.queryByText(next.misTareasEmptyTitle)).toBeNull()
     expect(screen.queryByText(next.misTareasListTitle)).toBeNull()
+  })
+})
+
+/**
+ * A 403 is the service ANSWERING: this deployment's tracking belongs to another company. It
+ * is a rule, not an outage — so not the outage panel, and no Reintentar that could only be
+ * refused again.
+ */
+describe('MisTareasNextPage when the tracking service refuses the reader', () => {
+  it('says the module is not this account, offers no retry, and prints no status', async () => {
+    answer('refuse')
+    renderPage()
+    expect(await screen.findByText(es.tracking.noAccessTitle)).toBeTruthy()
+    expect(screen.getByText(es.tracking.noAccessBody)).toBeTruthy()
+    expect(screen.queryByText(es.tracking.serviceUnavailableTitle)).toBeNull()
+    expect(screen.queryByRole('button', { name: es.common.retry })).toBeNull()
+    expect(screen.queryByText(/403|Request failed/)).toBeNull()
   })
 })

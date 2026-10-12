@@ -361,13 +361,11 @@ public class ReportEndpointsTests : IAsyncLifetime
         Assert.False(engineering.IsSuppressed);
         Assert.Equal(5, engineering.RespondentCount);
 
-        // The anonymity floor, in the persisted document. Sales's row must say
-        // suppressed-and-zero, and the count 2 may survive ONLY as the breakdown's
-        // reconciliation counter -- never on the department's own row.
-        var sales = Assert.Single(section.Departments, d => d.DepartmentId == salesId.ToString());
-        Assert.True(sales.IsSuppressed);
-        Assert.Equal(0, sales.RespondentCount);
-        Assert.Null(sales.ParticipationRate);
+        // The anonymity floor, in the persisted document. Sales has no row at all, and the
+        // count 2 survives ONLY as the breakdown's reconciliation counter -- beside no name,
+        // because beside "Sales" it would be Sales's size (2026-10-12).
+        Assert.DoesNotContain(section.Departments, d => d.DepartmentId == salesId.ToString());
+        Assert.DoesNotContain(salesId.ToString(), created.ReportOutput!, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(1, section.SuppressedDepartmentCount);
         Assert.Equal(2, section.SuppressedRespondentCount);
         Assert.Equal(SurveyResultsPrivacy.MinimumSegmentRespondents, section.MinimumGroupSize);
@@ -568,28 +566,17 @@ public class ReportEndpointsTests : IAsyncLifetime
         Assert.Equal("leadership", leadership.Dimension);
         Assert.Equal(4d, leadership.AverageScore);
 
-        // The withheld group: its row says so, and carries nothing else. The count 2
-        // survives once, as the breakdown's reconciliation counter.
-        var newcomerGroup = Assert.Single(tenure.Segments, s => s.Key == "0-1");
-        Assert.True(newcomerGroup.IsSuppressed);
-        Assert.Equal(0, newcomerGroup.RespondentCount);
-        Assert.Empty(newcomerGroup.Dimensions);
+        // The withheld group has no row: it is counted, never named. The count 2 survives
+        // once, as the breakdown's reconciliation counter, beside no group.
+        Assert.DoesNotContain(tenure.Segments, s => s.Key == "0-1");
         Assert.Equal(1, tenure.SuppressedSegmentCount);
         Assert.Equal(2, tenure.SuppressedRespondentCount);
 
-        // Document-wide: no suppressed segment anywhere carries a count or a score, and
-        // the withheld group's own reading of 1.0 is not a score in the document at all.
-        var suppressed = document.Surveys
-            .SelectMany(s => s.Demographics)
-            .SelectMany(b => b.Segments)
-            .Where(s => s.IsSuppressed)
-            .ToList();
-        Assert.NotEmpty(suppressed);
-        Assert.All(suppressed, s =>
-        {
-            Assert.Equal(0, s.RespondentCount);
-            Assert.Empty(s.Dimensions);
-        });
+        // Document-wide: no suppressed segment anywhere, and the withheld group's own
+        // reading of 1.0 is not a score in the document at all.
+        Assert.DoesNotContain(
+            document.Surveys.SelectMany(s => s.Demographics).SelectMany(b => b.Segments),
+            s => s.IsSuppressed);
         Assert.DoesNotContain(
             1d,
             document.Surveys.SelectMany(s => s.Demographics).SelectMany(b => b.Segments)

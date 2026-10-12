@@ -135,6 +135,16 @@ describe('SurveysListNextPage', () => {
    * emptied the chips' counts, a fetch per keystroke, and an eyebrow that named the nav
    * section instead of the company.
    */
+  it('counts one question in the singular: "1 pregunta", never "1 preguntas"', async () => {
+    window.localStorage.setItem('preferredLocale', 'es')
+    vi.mocked(listSurveys).mockResolvedValue(payload.map((item) => (item.id === 'q1' ? { ...item, questionCount: 1 } : item)))
+    renderAs({ role: 'company_admin', companyId: 'c1' })
+    await waitFor(() => expect(rowIds()).toContain('q1'))
+    const text = rowOf('q1').textContent ?? ''
+    expect(text).toContain('1 pregunta')
+    expect(text).not.toContain('1 preguntas')
+  })
+
   it('sends no companyId and asks for the titles in the reader’s language', async () => {
     renderAs({ role: 'super_admin' })
     await screen.findByRole('heading', { name: new RegExp(copy.openHeading) })

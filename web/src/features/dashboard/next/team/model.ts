@@ -137,12 +137,15 @@ export interface TeamPlan {
  *   payload's own action-plan COUNTS, with no row to open (`/action-plans` is admin-only,
  *   `ActionPlanEndpoints.CanAccessCompany`).
  * - `failed` — the tracking read failed; the card says so rather than showing an empty board.
+ * - `refused` — the tracking service answered 401/403: the module is not enabled for this
+ *   reader's company. A rule, not an outage, so the card offers nothing to retry.
  * - `loading` — the board is still being read; the rest of the page does not wait for it.
  */
 export type LeaderPlans =
   | { source: 'tracking'; plans: readonly TeamPlan[]; open: number; overdue: number }
   | { source: 'counts'; open: number; overdue: number }
-  | { source: 'failed'; error: string | null }
+  | { source: 'failed' }
+  | { source: 'refused' }
   | { source: 'loading' }
 
 export interface LeaderDashboardModel {
@@ -192,7 +195,8 @@ export type SupervisorTask =
 export type SupervisorPlans =
   | { source: 'tracking'; plans: readonly TeamPlan[] }
   | { source: 'off' }
-  | { source: 'failed'; error: string | null }
+  | { source: 'failed' }
+  | { source: 'refused' }
 
 export interface SupervisorDashboardModel {
   asOf: string

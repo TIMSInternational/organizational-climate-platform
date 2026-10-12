@@ -256,7 +256,7 @@ function SurveySection({ section }: { section: ReportSurveySection }) {
         </Table>
       )}
 
-      {section.suppressedDepartmentCount > 0 && (
+      {section.suppressedDepartmentCount !== null && section.suppressedDepartmentCount > 0 && (
         <p className="max-w-prose text-sm text-fg-secondary">
           {t('sharedReport.departmentsWithheld', {
             count: section.suppressedDepartmentCount,
@@ -588,7 +588,7 @@ function DemographicBreakdown({
               and counted here so the groups reconcile against the participation
               counters rather than appearing to lose people. A different fact from a
               withheld group, and it must not be dressed as one. */}
-          {breakdown.unsegmentedRespondentCount > 0 && (
+          {breakdown.unsegmentedRespondentCount !== null && breakdown.unsegmentedRespondentCount > 0 && (
             <TableRow>
               <TableCell>{t('surveyResults.unsegmented')}</TableCell>
               <TableCell className="font-mono tabular-nums">

@@ -307,12 +307,13 @@ public class MicroclimateContentI18nTests : IAsyncLifetime
         await client.PutAsJsonAsync($"/microclimates/{created!.Id}", new UpdateMicroclimateRequest(null, null, "active", null));
         var questionId = created.Questions.Single().Id;
 
-        // TWO respondents per language, not one. A word carried by a single response is
-        // withheld (SurveyResultsPrivacy.MinimumWordRespondents), so one speaker each would
-        // leave an empty cloud and prove nothing about bucketing. The counts below are the
+        // THREE respondents per language, not one. A word carried by a single response is
+        // withheld (SurveyResultsPrivacy.MinimumWordRespondents), and a session under five
+        // responses withholds every word (SurveyResultsPrivacy.MinimumRespondents), so fewer
+        // would leave an empty cloud and prove nothing about bucketing. The counts below are the
         // second half of the point: each language accumulates on its own side.
         var anonymous = _factory.CreateClient();
-        foreach (var _ in new[] { 1, 2 })
+        foreach (var _ in new[] { 1, 2, 3 })
         {
             await anonymous.PostAsJsonAsync($"/microclimates/{created.Id}/responses",
                 new SubmitResponseRequest(new Dictionary<Guid, string> { [questionId] = "trabajo" }, "es"));
@@ -326,8 +327,8 @@ public class MicroclimateContentI18nTests : IAsyncLifetime
         var englishWord = Assert.Single(results.WordCloud, w => w.Text == "work");
         Assert.Equal("es", spanishWord.Language);
         Assert.Equal("en", englishWord.Language);
-        Assert.Equal(2, spanishWord.Value);
-        Assert.Equal(2, englishWord.Value);
+        Assert.Equal(3, spanishWord.Value);
+        Assert.Equal(3, englishWord.Value);
     }
 
     [Fact]

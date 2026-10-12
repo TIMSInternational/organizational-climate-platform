@@ -58,7 +58,16 @@ const WORDS = [
 ]
 
 function live(responseCount: number): LiveResults {
-  return { sentimentScore: 0, engagementLevel: 'medium', wordCloud: WORDS, responseCount, targetParticipantCount: 20 }
+  return {
+    sentimentScore: null,
+    engagementLevel: 'medium',
+    wordCloud: WORDS,
+    responseCount,
+    targetParticipantCount: 20,
+    isSuppressed: responseCount < 5,
+    suppressionReason: responseCount < 5 ? 'below_minimum_respondents' : null,
+    minimumGroupSize: 5,
+  }
 }
 
 function renderAs(claims: Record<string, unknown>) {

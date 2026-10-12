@@ -93,7 +93,7 @@ export default function AdminDashboardNextView({
       ? percent(model.participation.completed, model.participation.responses)
       : null
   const open = model.openSurvey
-  const openProgress = open ? percent(open.responses, open.audience) : null
+  const openProgress = open && open.audience !== null ? percent(open.responses, open.audience) : null
   const waveCodes = model.waves.filter((wave) => wave.status === 'closed').map((wave) => wave.code)
   const dimensionName = (key: string) =>
     model.dimensions.find((dimension) => dimension.key === key)?.name ?? key
@@ -217,14 +217,15 @@ export default function AdminDashboardNextView({
               unit={
                 open
                   ? t('dashboard.next.openSurveySub', {
-                      audience: open.audience,
+                      // The dash the product prints for "not read" -- never a 0.
+                      audience: open.audience === null ? '—' : open.audience.toLocaleString(locale),
                       date: calendarDay(Date.parse(open.closesAt), locale),
                     })
                   : undefined
               }
               locale={locale}
               sub={
-                open ? (
+                open && open.audience !== null ? (
                   <span
                     role="progressbar"
                     aria-label={t('dashboard.next.openSurveyProgress', {
@@ -772,7 +773,7 @@ function AttentionRow({
               ),
             },
             responses: { mono: survey.responses.toLocaleString(locale) },
-            audience: { mono: survey.audience.toLocaleString(locale) },
+            audience: { mono: survey.audience === null ? '—' : survey.audience.toLocaleString(locale) },
             days: { mono: daysBetween(model.asOf, survey.closesAt).toLocaleString(locale) },
           }}
         />

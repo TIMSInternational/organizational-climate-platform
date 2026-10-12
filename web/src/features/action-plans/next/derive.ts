@@ -265,7 +265,7 @@ const EDGE_ANCHOR = 60
  * artboard draws them: one line each, no stagger, so the drawing keeps the artboard's 64px.
  *
  * Each label is the plan's own title (the artboard's hand-shortened "Carga · Operaciones" is
- * half finding dimension, which no endpoint carries — `sampleModel.ts`). It prints whole where
+ * half finding dimension, which the artboard's sample data invented). It prints whole where
  * the axis leaves it room and stops after its last whole word where a neighbour's label begins,
  * so a wide screen shows more of each title and a narrow one less, never two labels over each
  * other and never a word cut in half.

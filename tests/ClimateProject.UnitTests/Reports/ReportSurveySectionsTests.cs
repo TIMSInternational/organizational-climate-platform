@@ -101,14 +101,14 @@ public class ReportSurveySectionsTests
     /// own reconciliation counters, never on the department's row.
     /// </summary>
     [Fact]
-    public void A_department_below_the_segment_floor_stays_suppressed_in_the_report_section()
+    public void A_department_below_the_segment_floor_is_counted_and_never_named_in_the_report_section()
     {
         var section = Section(Aggregate());
 
-        var sales = Assert.Single(section.Departments, d => d.DepartmentId == Sales.ToString());
-        Assert.True(sales.IsSuppressed);
-        Assert.Equal(0, sales.RespondentCount);
-        Assert.Null(sales.ParticipationRate);
+        // Withheld departments are not rows: a named row beside SuppressedRespondentCount is
+        // that department's size whenever it is the only one withheld (here: Sales, 2 people).
+        Assert.DoesNotContain(section.Departments, d => d.DepartmentId == Sales.ToString());
+        Assert.All(section.Departments, d => Assert.False(d.IsSuppressed));
 
         var engineering = Assert.Single(section.Departments, d => d.DepartmentId == Engineering.ToString());
         Assert.False(engineering.IsSuppressed);
@@ -265,10 +265,8 @@ public class ReportSurveySectionsTests
         var document = Reread(rendered);
 
         var tenure = Assert.Single(Assert.Single(document.Surveys).Demographics);
-        var newcomers = Assert.Single(tenure.Segments, s => s.Key == "0-1");
-        Assert.True(newcomers.IsSuppressed);
-        Assert.Equal(0, newcomers.RespondentCount);
-        Assert.Empty(newcomers.Dimensions);
+        // Counted, never named: the group's key IS the value its members gave.
+        Assert.DoesNotContain(tenure.Segments, s => s.Key == "0-1");
 
         // The withheld total survives exactly once, on the breakdown, where it
         // reconciles against the participation counters without naming a group.

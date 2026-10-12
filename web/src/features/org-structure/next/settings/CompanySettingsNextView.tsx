@@ -23,6 +23,7 @@ import ResultBandsCard from './ResultBandsCard'
 import { bandsChanged, bandsDraftOf, bandsOut, judgeBands, type BandsDraft } from './bandsDraft'
 import { fromWire, toWire } from '../../../result-bands/api'
 import { rememberResultBands } from '../../../result-bands/useResultBands'
+import { byCount } from '../../../../i18n/plural'
 
 const DASH = '—'
 const LANGUAGES = ['es', 'en']
@@ -45,11 +46,6 @@ function retentionLabel(t: TranslateFn, locale: string, days: number): string {
   if (days % 365 !== 0) return t(`${K}.retentionDays`, { days: new Intl.NumberFormat(locale).format(days) })
   const years = days / 365
   return years === 1 ? t(`${K}.retentionYear`) : t(`${K}.retentionYears`, { years })
-}
-
-/** The key for `count`: its singular when the count is one, the plural otherwise. */
-function byCount(count: number, one: string, many: string): string {
-  return count === 1 ? one : many
 }
 
 function frequencyHelpKey(frequency: string): string {

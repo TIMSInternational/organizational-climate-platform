@@ -68,7 +68,11 @@ export interface OpenSurvey {
   code: string
   name: string
   responses: number
-  audience: number
+  /**
+   * The survey's target audience, or `null` when it has none on record. Never coerced to
+   * 0: "1 de 0" is a reading that cannot be true, and the survey's own page says "de 44".
+   */
+  audience: number | null
   /** ISO date. */
   closesAt: string
 }

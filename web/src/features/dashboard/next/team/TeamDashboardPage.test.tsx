@@ -106,6 +106,33 @@ describe('TeamDashboardPage', () => {
     expect(screen.queryByRole('note')).toBeNull()
   })
 
+  it("reads a 403 from mis-tareas as tracking not enabled for the supervisor's company — the status, never its words", async () => {
+    serve({
+      '/dashboard/department-admin': { body: department() },
+      '/surveys/my': { body: { surveys: [] } },
+      '/api/mis-tareas': { status: 403, body: { message: 'Request failed: 403' } },
+    })
+
+    renderPage('supervisor')
+
+    expect(await screen.findByText(en.dashboard.next.supervisor.plansRefused)).toBeTruthy()
+    expect(screen.queryByText(/Request failed|403/)).toBeNull()
+    expect(screen.queryByText(en.dashboard.next.supervisor.plansFailedNoReason)).toBeNull()
+  })
+
+  it('says a 503 from mis-tareas failed, in its own words, never the server message', async () => {
+    serve({
+      '/dashboard/department-admin': { body: department() },
+      '/surveys/my': { body: { surveys: [] } },
+      '/api/mis-tareas': { status: 503, body: { message: 'upstream exploded' } },
+    })
+
+    renderPage('supervisor')
+
+    expect(await screen.findByText(en.dashboard.next.supervisor.plansFailedNoReason)).toBeTruthy()
+    expect(screen.queryByText(/upstream exploded|503/)).toBeNull()
+  })
+
   it('reads no board for a leader who leads no nodo', async () => {
     serve({ '/dashboard/department-admin': { body: department() } })
 

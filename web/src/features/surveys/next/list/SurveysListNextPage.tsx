@@ -39,6 +39,7 @@ import type { SurveyRow, SurveySection, WaveReading } from './model'
 import { useSurveysListModel } from './useSurveysListModel'
 import { readViewerClaims } from '../../../../auth/viewerCapabilities'
 import SuperSurveysListView from '../super/SuperSurveysListView'
+import { byCount } from '../../../../i18n/plural'
 
 const ACTION_KEY: Record<PrimaryActionKind, string> = {
   distribution: 'surveys.distribution.title',
@@ -391,12 +392,12 @@ function SurveyTableRow({
           : t('surveys.next.list.closedOn', { date: calendarDay(Date.parse(row.endDate), locale) })
   const meta = [
     sentenceCase(typeLabel(t, row.type), locale),
-    t('surveys.reviewQuestionCount', { count: row.questionCount }),
+    t(byCount(row.questionCount, 'surveys.reviewQuestionCountOne', 'surveys.reviewQuestionCount'), { count: row.questionCount }),
     datePhrase,
   ].join(' · ')
   const closeLine =
     section === 'open' && daysLeft !== null && daysLeft > 0
-      ? t('surveys.next.list.inDays', { count: daysLeft })
+      ? t(byCount(daysLeft, 'surveys.next.list.inDaysOne', 'surveys.next.list.inDays'), { count: daysLeft })
       : section === 'closed' && wave
         ? wave.first
           ? t('surveys.next.list.firstReading')

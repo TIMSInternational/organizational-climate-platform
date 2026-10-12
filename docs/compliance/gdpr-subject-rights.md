@@ -163,6 +163,13 @@ That is the only part of an audit record erasure can take without breaking what 
    payload can name a person inside prose. No automated rule finds that reliably, so those
    columns are retained as written. A request about a person mentioned only inside someone
    else's free text will not match, either for access or for erasure.
+
+   **Who receives the words (ruled 2026-10-12).** The subject's own self-service export returns
+   their open-ended answers verbatim. An export an administrator requests about somebody else
+   (`GET /gdpr/access?userId=…`) replaces `response_text`, and `response_value` on any question
+   not positively known to be a closed type, with `[withheld: verbatim answer, returned only to its
+   author]` — the column and the fact of an answer are disclosed, the words are not. See
+   `docs/decisions/who-may-see-an-individual-answer.md`.
 2. **Anonymous responses cannot be matched.** A response submitted anonymously carries no
    `user_id` by design, and so can be neither included in nor removed from a response to a
    request about that person.

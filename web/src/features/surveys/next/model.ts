@@ -12,16 +12,16 @@ import type { ClimateMapModel } from '../surveyResultsMap'
  * Human-readable payload content is `name`, not `title`/`label`, because
  * `noHardcodedStrings.test.ts` reads those two property names as UI copy.
  *
- * ## What is a measurement and what is a sample
+ * ## Everything is a measurement
  *
- * Everything but `sample` is measured. `GET /surveys/{id}/analytics`, `GET /surveys/{id}`
+ * Every field is measured. `GET /surveys/{id}/analytics`, `GET /surveys/{id}`
  * and `GET /action-plans` give the map, the protected rows, the per-question means, the
  * whole-survey 1–5 distributions, the closing date and the plans; `GET
  * /surveys/climate-trends` names the previous wave and the rises in a row, and that
  * wave's own `GET /surveys/{id}/analytics` gives what `previous` compares against.
- * `sample` carries the one reading no endpoint returns today — the opened group's 1–5
- * distribution (`sampleModel.ts`) — and the view marks that region, and only that one,
- * with the "sample data" chip.
+ * The one reading no endpoint returns today — the opened group's 1–5 distribution — was
+ * once filled from `sampleModel.ts` under a "sample data" chip; that file is gone and the
+ * region is not drawn, so the model has no `sample` field and the page no chip.
  */
 
 /** One column of the map: a dimension the survey measured. */

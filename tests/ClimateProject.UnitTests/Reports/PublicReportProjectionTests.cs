@@ -263,6 +263,7 @@ public class PublicReportProjectionTests
         var names = PropertyNames(parsed.RootElement).ToHashSet(StringComparer.Ordinal);
         Assert.DoesNotContain("affectedSegments", names);
         Assert.DoesNotContain("suppressedRespondentCount", names);
+        Assert.DoesNotContain("unsegmentedRespondentCount", names);
 
         // The fixture's affected segment is a department name, and it is the ONLY place that
         // string appears in the document -- the department rows below carry their own names, so
@@ -272,7 +273,7 @@ public class PublicReportProjectionTests
         // What stays: the counts of withheld groups, which name nobody, and the recommended
         // actions, which are the platform's own prose.
         var section = parsed.RootElement.GetProperty("surveys").EnumerateArray().Single();
-        Assert.Equal(1, section.GetProperty("suppressedDepartmentCount").GetInt32());
+        Assert.Equal(2, section.GetProperty("suppressedDepartmentCount").GetInt32());
         Assert.Equal(2, section.GetProperty("demographics").EnumerateArray().Single().GetProperty("suppressedSegmentCount").GetInt32());
         Assert.Equal(
             "Talk to them",
@@ -439,6 +440,106 @@ public class PublicReportProjectionTests
         Assert.Equal("Rotation is up", parsed.RootElement.GetProperty("aiInsights").EnumerateArray().Single().GetProperty("title").GetString());
     }
 
+    /// <summary>
+    /// The differencing attack itself, run against the published bytes: completed total, minus
+    /// every published department count, minus every other published count. Before 2026-10-12
+    /// this recovered a named withheld department's exact size -- 20 - (8 + 7) - 3 = 2, beside
+    /// the row "Finance, withheld".
+    /// </summary>
+    [Fact]
+    public void Subtracting_the_published_counts_from_the_total_names_no_group_and_no_size_under_the_floor()
+    {
+        // Stored as the generator wrote it before this change: the withheld row named, the
+        // unsegmented count beside it. 20 completed = 8 + 7 disclosed + 2 (Finance) + 3 unsegmented.
+        var stored = Serialize(new ReportOutputDocument(
+            "a note",
+            [
+                new ReportSurveySection(
+                    SurveyId, "Clima Q3", SurveyStatuses.Closed, "en",
+                    new SurveyResultsSummary(25, 20, 20, 0, 80, 100, 120, null, null, [new SurveyLanguageCount("es", 20)]),
+                    [], [],
+                    [
+                        new ReportDepartmentParticipation("d1", "Engineering", 8, 80, false),
+                        new ReportDepartmentParticipation("d2", "Operations", 7, 70, false),
+                        new ReportDepartmentParticipation("d3", "Finance", 0, null, true),
+                    ],
+                    SuppressedDepartmentCount: 1,
+                    SuppressedRespondentCount: 2,
+                    UnsegmentedRespondentCount: 3,
+                    [],
+                    IsSuppressed: false,
+                    SuppressionReason: null,
+                    MinimumGroupSize: SurveyResultsPrivacy.MinimumSegmentRespondents),
+            ],
+            [],
+            []));
+
+        var published = PublicReportProjection.ToPublicJson(stored)!;
+        using var parsed = JsonDocument.Parse(published);
+        var section = parsed.RootElement.GetProperty("surveys").EnumerateArray().Single();
+
+        // The attack: every number a reader can subtract.
+        var completed = section.GetProperty("participation").GetProperty("completedCount").GetInt32();
+        var disclosed = section.GetProperty("departments").EnumerateArray().Sum(d => d.GetProperty("respondentCount").GetInt32());
+        var subtractable = section.TryGetProperty("unsegmentedRespondentCount", out var unsegmented)
+            ? unsegmented.GetInt32()
+            : 0;
+        var remainder = completed - disclosed - subtractable;
+
+        // What it yields: a remainder of 0 or at least the floor, attributed to no named group.
+        Assert.True(
+            remainder == 0 || remainder >= SurveyResultsPrivacy.MinimumSegmentRespondents,
+            $"completed - published counts = {remainder}, a group under the floor");
+        Assert.NotEqual(2, remainder);
+        Assert.DoesNotContain("Finance", published, StringComparison.Ordinal);
+        Assert.Equal(1, section.GetProperty("suppressedDepartmentCount").GetInt32());
+    }
+
+    /// <summary>
+    /// A stored document whose disclosed rows leave a remainder under the floor -- one written
+    /// before complement withholding -- publishes no rows for that breakdown at all.
+    /// </summary>
+    [Fact]
+    public void A_stored_breakdown_whose_remainder_is_under_the_floor_publishes_no_rows()
+    {
+        // 10 completed, 7 disclosed in one group, 3 nobody can account for but by subtraction.
+        var stored = Serialize(new ReportOutputDocument(
+            "a note",
+            [
+                new ReportSurveySection(
+                    SurveyId, "Clima Q3", SurveyStatuses.Closed, "en",
+                    new SurveyResultsSummary(12, 10, 10, 0, 83, 100, 120, null, null, [new SurveyLanguageCount("es", 10)]),
+                    [], [],
+                    [new ReportDepartmentParticipation("d1", "Engineering", 7, 70, false)],
+                    SuppressedDepartmentCount: 1,
+                    SuppressedRespondentCount: 3,
+                    UnsegmentedRespondentCount: 0,
+                    [
+                        new ReportDemographicBreakdown(
+                            "tenure",
+                            [new ReportSegmentParticipation("5+", "Five years or more", 8, false, [])],
+                            SuppressedSegmentCount: 1,
+                            SuppressedRespondentCount: 2,
+                            UnsegmentedRespondentCount: 0),
+                    ],
+                    IsSuppressed: false,
+                    SuppressionReason: null,
+                    MinimumGroupSize: SurveyResultsPrivacy.MinimumSegmentRespondents),
+            ],
+            [],
+            []));
+
+        using var parsed = JsonDocument.Parse(PublicReportProjection.ToPublicJson(stored)!);
+        var section = parsed.RootElement.GetProperty("surveys").EnumerateArray().Single();
+
+        Assert.Empty(section.GetProperty("departments").EnumerateArray());
+        Assert.Equal(2, section.GetProperty("suppressedDepartmentCount").GetInt32());
+
+        var tenure = section.GetProperty("demographics").EnumerateArray().Single();
+        Assert.Empty(tenure.GetProperty("segments").EnumerateArray());
+        Assert.Equal(2, tenure.GetProperty("suppressedSegmentCount").GetInt32());
+    }
+
     // ------------------------------------------------------------------
     // Fixtures
     // ------------------------------------------------------------------
@@ -454,12 +555,16 @@ public class PublicReportProjectionTests
                 "Clima Q3",
                 SurveyStatuses.Closed,
                 "en",
-                new SurveyResultsSummary(10, 8, 8, 0, 80, 100, 120, null, null, [new SurveyLanguageCount("en", 8)]),
+                // A shape the aggregation can produce: 13 completed; 8 in the one disclosed
+                // department, 5 across two withheld ones; 6 in the disclosed tenure group, 4 in
+                // two withheld ones, 3 with no tenure. Both remainders are at least the floor,
+                // as SurveyAggregation.WithholdComplement guarantees.
+                new SurveyResultsSummary(15, 13, 13, 0, 86.7, 100, 120, null, null, [new SurveyLanguageCount("en", 13)]),
                 questions,
                 [new SurveyDimensionResult("leadership", 1, 8, 3.5)],
                 [new ReportDepartmentParticipation("d1", "Engineering", 8, 80, false)],
-                SuppressedDepartmentCount: 1,
-                SuppressedRespondentCount: 3,
+                SuppressedDepartmentCount: 2,
+                SuppressedRespondentCount: 5,
                 UnsegmentedRespondentCount: 0,
                 [
                     new ReportDemographicBreakdown(
@@ -467,7 +572,7 @@ public class PublicReportProjectionTests
                         [new ReportSegmentParticipation("0-1", "Under a year", 6, false, [new ReportSegmentDimensionScore("leadership", 3.2)])],
                         SuppressedSegmentCount: 2,
                         SuppressedRespondentCount: 4,
-                        UnsegmentedRespondentCount: 1),
+                        UnsegmentedRespondentCount: 3),
                 ],
                 IsSuppressed: false,
                 SuppressionReason: null,

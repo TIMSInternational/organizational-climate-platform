@@ -104,8 +104,11 @@ export interface SharedGroupMap {
   rows: readonly SharedGroupRow[]
   /** How many of `rows` are withheld. Never how many people are behind them. */
   withheldCount: number
-  /** Respondents carrying no value for this field. A different fact from a withheld group. */
-  unsegmented: number
+  /**
+   * Respondents carrying no value for this field. A different fact from a withheld group.
+   * `null` when the document does not carry it — the public one no longer does.
+   */
+  unsegmented: number | null
 }
 
 /**
@@ -123,7 +126,16 @@ export type SharedParticipation =
 export interface SharedGroupCount {
   readable: number
   total: number
-  /** The names of the withheld groups — the same names their hatched rows already carry. */
+  /**
+   * How many groups are withheld, from the server's own counters. Since 2026-10-12 a
+   * withheld group arrives as a count and never as a row, so the rows alone would read
+   * "every group is readable" over a document that withheld some.
+   */
+  withheld: number
+  /**
+   * The names of withheld groups that still arrive as rows — only from a document stored
+   * before the server stopped naming them. Normally empty.
+   */
   withheldNames: readonly string[]
 }
 
@@ -148,7 +160,8 @@ export interface SharedSection {
   dimensions: readonly SharedDimensionRow[]
   maps: readonly SharedGroupMap[]
   departments: readonly ReportDepartmentParticipation[]
-  withheldDepartments: number
+  /** `null` when no department breakdown was computed. */
+  withheldDepartments: number | null
   groups: SharedGroupCount
   /** Whether this section carries a word-frequency map at all. Never the words. */
   hasOpenText: boolean
@@ -294,10 +307,9 @@ export function groupCountOf(section: ReportSurveySection): SharedGroupCount {
   // unreachable from this server — and it is here because the branch that is NOT taken
   // would report "2 of 3 readable" for a survey whose per-question results are withheld
   // in full, which is the shape a hand-edited document or an older generator produces.
-  if (section.isSuppressed) return { readable: 0, total: 0, withheldNames: [] }
+  if (section.isSuppressed) return { readable: 0, total: 0, withheld: 0, withheldNames: [] }
 
   for (const department of section.departments) {
-    total += 1
     if (department.isSuppressed) {
       if (department.name !== null) withheldNames.push(department.name)
     } else {
@@ -307,13 +319,21 @@ export function groupCountOf(section: ReportSurveySection): SharedGroupCount {
 
   for (const breakdown of section.demographics) {
     for (const segment of breakdown.segments) {
-      total += 1
       if (segment.isSuppressed) withheldNames.push(nameOf(segment))
       else readable += 1
     }
   }
 
-  return { readable, total, withheldNames }
+  // The withheld groups, counted by the server. A null department counter means no
+  // department breakdown exists, which is no withheld group rather than an unknown one.
+  let withheld = section.suppressedDepartmentCount === null ? 0 : section.suppressedDepartmentCount
+  for (const breakdown of section.demographics) withheld += breakdown.suppressedSegmentCount
+  // An older stored document can carry named withheld rows AND count them: the counter is
+  // the server's, so it wins, but never below the rows actually on the page.
+  withheld = Math.max(withheld, withheldNames.length)
+  total = readable + withheld
+
+  return { readable, total, withheld, withheldNames }
 }
 
 /**
@@ -365,7 +385,7 @@ export function sectionOf(section: ReportSurveySection, bands: ResultBands | nul
     // it, which is under the segment floor as well. So the one figure this page may print
     // for a withheld survey is the whole survey's, and it prints it above.
     departments: section.isSuppressed ? [] : section.departments,
-    withheldDepartments: section.isSuppressed ? 0 : section.suppressedDepartmentCount,
+    withheldDepartments: section.isSuppressed ? null : section.suppressedDepartmentCount,
     groups: groupCountOf(section),
     hasOpenText: hasOpenTextOf(section),
     // Already empty for a suppressed section, both server-side and at the parser. Emptied

@@ -4,6 +4,7 @@ import type { Locale } from '../../i18n'
 import {
   INSIGHT_PRIORITIES,
   INSIGHT_TYPES,
+  insightCategoryLabel,
   insightPriorityLabel,
   insightTypeLabel,
 } from './insightVocabulary'
@@ -122,5 +123,24 @@ describe('insight vocabulary', () => {
   it('does not resolve inherited object properties as labels', () => {
     expect(insightTypeLabel(es, 'toString')).toBe('toString')
     expect(insightPriorityLabel(es, 'constructor')).toBe('constructor')
+  })
+})
+
+describe('insightCategoryLabel', () => {
+  it('translates the insight categories the product writes, in both languages', () => {
+    expect(insightCategoryLabel(es, 'engagement')).toBe('Compromiso')
+    expect(insightCategoryLabel(en, 'engagement')).toBe('Engagement')
+    expect(insightCategoryLabel(es, 'leadership')).toBe('Liderazgo')
+  })
+
+  it('reads a survey dimension the way the respond page heads it', () => {
+    expect(insightCategoryLabel(es, 'workload')).toBe('Carga de trabajo')
+    expect(insightCategoryLabel(es, 'psychological_safety')).toBe('Seguridad psicológica')
+  })
+
+  it('gives an unknown category its own words, never the slug, and never an inherited property', () => {
+    expect(insightCategoryLabel(es, 'team_support')).toBe('Team support')
+    expect(insightCategoryLabel(es, 'iv_ambiente_y_bienestar')).toBe('Iv ambiente y bienestar')
+    expect(insightCategoryLabel(es, 'toString')).toBe('ToString')
   })
 })

@@ -13,8 +13,8 @@
  * department breakdown only; the other dimensions reach the reader through the
  * breakdown CSV), the whole-survey dimension standings table, and the participation
  * strip's invited/outstanding tiles. Delete this file when `useSurveyResultsModel`
- * covers those too and the wave-over-wave and per-group distribution regions in
- * `next/sampleModel.ts` stop being a sample. Until then its behaviour is pinned by
+ * covers those too (`next/sampleModel.ts`, once named here, is deleted; the routed page
+ * draws no per-group distribution at all rather than a sample of one). Until then its behaviour is pinned by
  * `SurveyResultsPage.test.tsx`, which renders it directly.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
