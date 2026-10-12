@@ -294,20 +294,15 @@ export function DistributionView({
               mirrors the server's `AllowsScheduleEdit` -- so a closed survey shows the
               state without a control that would earn a 409.
 
-              Disabled on a NAMED survey because the flag genuinely does nothing there:
-              `IsAnonymous` is read from the survey, never the request, so the respond
-              endpoint ignores it. A switch that writes a value with no effect is worse
-              than no switch. */}
+              NOT gated on anonymity (ruled 2026-10-12): every survey has a link, a link
+              visitor to a named survey is served anonymously, and the server asks them
+              whenever the flag is on (`AsksSelfDeclaredDemographics`). */}
           <div className="mt-4 border-t border-line-default pt-4">
             <SwitchField
               label={t('surveys.next.share.demographicsLabel')}
-              description={
-                survey.settings.anonymous
-                  ? t('surveys.next.share.demographicsHelp', { floor: ANONYMITY_FLOOR })
-                  : t('surveys.next.share.demographicsNeedsAnonymous')
-              }
+              description={t('surveys.next.share.demographicsHelp', { floor: ANONYMITY_FLOOR })}
               checked={survey.settings.selfDeclaredDemographics}
-              disabled={!actionable || busy || !survey.settings.anonymous}
+              disabled={!actionable || busy}
               onChange={actions.setSelfDeclaredDemographics}
             />
           </div>
