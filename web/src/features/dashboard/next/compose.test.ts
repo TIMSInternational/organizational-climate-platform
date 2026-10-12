@@ -456,6 +456,21 @@ describe('composeModel', () => {
     expect(model.openSurvey?.responses).toBe(12)
     expect(model.attention.some((item) => item.kind === 'low-participation')).toBe(false)
   })
+
+  it('keeps an absent audience absent — never "1 de 0" — and claims no low participation against it', () => {
+    const parts = live()
+    parts.surveys = {
+      status: 'live',
+      value: surveys().map((survey) =>
+        survey.id === 'sv-q4' ? { ...survey, responseCount: 1, targetAudienceCount: null } : survey,
+      ),
+    }
+    const { model } = composeModel(parts, options())
+
+    expect(model.openSurvey?.responses).toBe(1)
+    expect(model.openSurvey?.audience).toBeNull()
+    expect(model.attention.some((item) => item.kind === 'low-participation')).toBe(false)
+  })
 })
 
 describe('the derivations', () => {
