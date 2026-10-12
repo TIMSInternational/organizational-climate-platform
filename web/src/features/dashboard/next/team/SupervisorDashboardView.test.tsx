@@ -192,6 +192,16 @@ describe('SupervisorDashboardView', () => {
     expect(rows[1]?.textContent).toContain(copy.taskAnswer.replace('{survey}', 'Encuesta de Clima Q4'))
   })
 
+  it('opens the survey she owes from its task row, where the employee Home starts a response', () => {
+    renderSupervisor()
+
+    const tasks = card(copy.tasksHeading)
+    const rows = [...tasks.querySelectorAll<HTMLElement>('[data-slot="supervisor-task"]')]
+    const survey = rows.find((row) => row.dataset.kind === 'answer-survey') ?? tasks
+    const link = within(survey).getByRole('link', { name: copy.taskAnswer.replace('{survey}', 'Encuesta de Clima Q4') })
+    expect(link.getAttribute('href')).toBe(`/surveys/${owed.id}/respond`)
+  })
+
   it('offers no export, no reminder and no plan to create, and wears no sample chip', () => {
     renderSupervisor()
 
