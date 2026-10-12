@@ -236,7 +236,9 @@ export async function getMicroclimatePublic(baseUrl: string, id: string, lang?: 
   const response = await fetch(`${baseUrl}/microclimates/${id}${lang ? `?lang=${lang}` : ''}`, { headers })
   if (!response.ok) {
     const body = await response.json().catch(() => null)
-    throw new Error((body && body.message) || `Request failed: ${response.status}`)
+    // The status travels with the error: this is read by a public page, which renders its
+    // own copy by status and never the server's English sentence.
+    throw new MicroclimateRespondError(response.status, (body && body.message) || `Request failed: ${response.status}`)
   }
   return response.json() as Promise<PublicMicroclimateDetail>
 }

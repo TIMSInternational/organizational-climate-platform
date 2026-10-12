@@ -346,6 +346,24 @@ function isNoSeats(error: PageError | null): boolean {
 }
 
 /**
+ * The respondent's sentence for a failure, chosen by status and never read off the error.
+ *
+ * `Error.message` is the server's English body, or "Request failed: 404": printing it put
+ * English on a Spanish page a person reached from an invitation (UX walkthrough 2026-10-06).
+ * `message` is still carried on `PageError`, for nobody's eyes; the screen reads `status`.
+ */
+function loadFailureKey(error: PageError): string {
+  return error.status === 404 ? 'microclimates.respondNotFoundBody' : 'microclimates.respondLoadFailedBody'
+}
+
+function submitFailureKey(error: PageError): string {
+  if (isNoSeats(error)) return 'microclimates.respondNoSeatsBody'
+  if (error.status === 400 || error.status === 409) return 'microclimates.respondSubmitRejectedBody'
+  if (error.status === 401 || error.status === 403) return 'microclimates.respondSubmitSignInBody'
+  return 'microclimates.respondSubmitFailedBody'
+}
+
+/**
  * Answering a live microclimate session, without an account — everything inside the
  * respond shell, and none of the shell itself.
  *
@@ -541,7 +559,7 @@ export default function MicroclimatePulseForm({
         <Alert variant="warning" role="alert">
           <Info aria-hidden="true" />
           <AlertTitle>{t('microclimates.respondLoadFailedTitle')}</AlertTitle>
-          <AlertDescription>{error.message ?? t('errors.generic')}</AlertDescription>
+          <AlertDescription>{t(loadFailureKey(error))}</AlertDescription>
         </Alert>
       ) : submitted ? (
         <Alert variant="success" role="status">
@@ -600,11 +618,7 @@ export default function MicroclimatePulseForm({
                 their employer has run out of licences — and it has to say that NOTHING
                 was recorded, because somebody who just pressed Send will otherwise
                 assume their answers landed. The seat is given back server-side. */}
-              <AlertDescription>
-                {isNoSeats(submitError)
-                  ? t('microclimates.respondNoSeatsBody')
-                  : (submitError.message ?? t('errors.generic'))}
-              </AlertDescription>
+              <AlertDescription>{t(submitFailureKey(submitError))}</AlertDescription>
             </Alert>
           ) : null}
 
