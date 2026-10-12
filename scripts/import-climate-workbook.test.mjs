@@ -10,7 +10,7 @@ import assert from 'node:assert/strict'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import {
-  readWorkbook, parseClimate, skipDemographics, surveyWindow, roleForTitle, slug, toImportRows, toSurveyRequest, toFieldRequest, decodeXml, parseStyles,
+  readWorkbook, parseClimate, skipDemographics, surveyWindow, roleForTitle, slug, toImportRows, toSurveyRequest, toFieldRequest, toBandsRequest, decodeXml, parseStyles,
 } from './import-climate-workbook.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -171,4 +171,63 @@ test('toSurveyRequest: anonymity defaults to anonymous and can be chosen', () =>
   assert.equal(toSurveyRequest(climate, args).settings.anonymous, true)
   assert.equal(toSurveyRequest(climate, { ...args, anonymous: true }).settings.anonymous, true)
   assert.equal(toSurveyRequest(climate, { ...args, anonymous: false }).settings.anonymous, false)
+})
+
+// ---------------------------------------------------------------------------------------
+// Link-only (OPCIONES, no people) — EAGLE's shape. Built from the sample with its people
+// removed, so everything else about the workbook is a shape the importer already reads.
+// ---------------------------------------------------------------------------------------
+
+const cell = (value) => ({ value, style: { bold: false, filled: false, rgb: null } })
+const column = (letter, header, options) => Object.fromEntries([
+  [`${letter}5`, cell(header)],
+  ...options.map((option, i) => [`${letter}${6 + i}`, cell(option)]),
+])
+const linkOnly = (options = { ...column('B', 'Sexo', ['Femenino', 'Masculino']), ...column('C', 'Antigüedad', ['De 6 meses a 1 año', 'Mas de 20 años', 'De 1 año a 3 años']), ...column('D', 'Área / Departamento', ['Producción-Inyección', 'Comercial']) }) => {
+  const sheets = sample()
+  sheets.DEMOGRAFICOS = Object.fromEntries(Object.entries(sheets.DEMOGRAFICOS).filter(([ref]) => Number(ref.replace(/^[A-Z]+/, '')) <= 5))
+  sheets.OPCIONES = options
+  return sheets
+}
+
+test('link-only: OPCIONES and no people is a valid climate — fields in the client\'s order, áreas as departments', () => {
+  const { problems, climate } = parseClimate(linkOnly())
+  assert.deepEqual(problems, [])
+  assert.equal(climate.linkOnly, true)
+  assert.deepEqual(climate.departments, ['Producción-Inyección', 'Comercial'])
+  assert.deepEqual(climate.columns.map((c) => [c.field, c.type]), [['sexo', 'select'], ['antiguedad', 'select']])
+  // NOT sorted: tenure bands are read in the order a respondent should see them.
+  assert.deepEqual(climate.columns[1].options, ['De 6 meses a 1 año', 'Mas de 20 años', 'De 1 año a 3 años'])
+  assert.deepEqual(toFieldRequest(climate.columns[1], COMPANY, 0).options.map((o) => o.value), ['de_6_meses_a_1_ano', 'mas_de_20_anos', 'de_1_ano_a_3_anos'])
+})
+
+test('link-only: the survey invites nobody, counts no audience, and asks the demographics', () => {
+  const { climate } = parseClimate(linkOnly())
+  const body = toSurveyRequest(climate, { companyId: COMPANY, title: 'Clima', departmentIds: [], startDate: 'a', endDate: 'b' })
+  assert.equal(body.targetAudienceCount, null)
+  assert.equal(body.settings.selfDeclaredDemographics, true)
+  assert.deepEqual(toImportRows(climate), [])
+})
+
+test('link-only is refused without an área column, and a sheet with neither people nor OPCIONES still is', () => {
+  const noArea = parseClimate(linkOnly(column('B', 'Sexo', ['Femenino', 'Masculino'])))
+  assert.ok(noArea.problems.some((p) => /Área \/ Departamento/.test(p)), noArea.problems.join(' | '))
+
+  const sheets = linkOnly()
+  delete sheets.OPCIONES
+  assert.ok(parseClimate(sheets).problems.some((p) => /no hay personas/.test(p)))
+})
+
+test('an OPCIONES column with a header and no options is a problem, not an empty question', () => {
+  const { problems } = parseClimate(linkOnly({ ...column('B', 'Sexo', []), ...column('C', 'Área / Departamento', ['Comercial']) }))
+  assert.ok(problems.some((p) => /"Sexo"\): no tiene opciones/.test(p)), problems.join(' | '))
+})
+
+test('bands: ordered by minimum into critical < opportunity < strength, names carried, whatever order the sheet lists them', () => {
+  const request = toBandsRequest([
+    { name: 'Áreas de oportunidad', min: 3.8, max: 4.29 },
+    { name: 'Áreas de fortaleza', min: 4.3, max: 5 },
+    { name: 'Áreas criticas', min: 1, max: 3.79 },
+  ])
+  assert.deepEqual(request, { opportunityMin: 3.8, strengthMin: 4.3, criticalName: 'Áreas criticas', opportunityName: 'Áreas de oportunidad', strengthName: 'Áreas de fortaleza' })
 })
