@@ -24,25 +24,22 @@ namespace ClimateProject.Application.Reports.Rendering;
 /// department reaches it as <c>(IsSuppressed: true, RespondentCount: 0, ParticipationRate:
 /// null)</c>, and a table cell that printed <c>0</c> and <c>Not available</c> would be a
 /// confident, wrong claim about those people -- "nobody in Direccion answered" reads as
-/// disengagement, not as confidentiality. Every suppressed cell therefore renders the withheld
-/// marker, and the notice under the table says which floor produced it.
+/// disengagement, not as confidentiality. Such a row is therefore never drawn at all (see the
+/// next section), and the paragraph under the table counts the withheld groups and says which
+/// floor produced them; a section with no department breakdown at all carries null counters,
+/// which print nothing rather than "0".
 ///
-/// ## Departments are named; demographic groups are not
+/// ## Withheld groups are counted and never named -- departments included (2026-10-12)
 ///
-/// A withheld <b>department</b> is named with its numbers withheld. A withheld
-/// <b>demographic group</b> is not printed at all, only counted -- which is the rule
-/// <c>SurveyExport</c> applies to every breakdown, and the divergence is deliberate:
-///
-/// - A department's name and roster are org-chart data the same administrator reads on
-///   <c>/admin/departments</c>, and <c>ReportSurveySections</c> already carries the row into the
-///   stored document. Withholding the name here would hide nothing and would lose the reader's
-///   ability to see that a department exists and was not measured.
-/// - A demographic group's key <b>is the value a respondent typed</b>. <c>SurveyExport</c>
-///   records the consequence: with one withheld segment in a breakdown, a named row makes that
-///   group's exact size a subtraction, and the row itself would print
-///   <c>nationality:Venezolana</c> for the one person who wrote it.
-///
-/// Both documents below apply both rules, off the same flags, in the same order.
+/// A withheld <b>department</b> and a withheld <b>demographic group</b> are both left out of the
+/// tables and counted in the paragraph under them -- the rule <c>SurveyExport</c> applies to
+/// every breakdown. Departments used to be named with their numbers withheld, on the argument
+/// that a department's name is org-chart data the reader already has. The name is; the fact
+/// that the department had between one and four respondents is not, and the paragraph prints
+/// the withheld headcount beside it -- so with one withheld department the row and the
+/// paragraph together printed that department's exact size. <c>ReportSurveySections</c> now
+/// drops the rows before they reach a stored document, and both documents below filter on the
+/// flag again for a document stored before it did.
 ///
 /// ## Why one class produces both formats
 ///
@@ -316,13 +313,20 @@ public static class ReportRenderer
         // Responses carrying no department: 7" over an absent table, which reads as though
         // departments exist and none of them answered. The unsegmented count in that case is
         // simply everyone, and the participation counters above already report it.
-        if (section.Departments.Count == 0)
+        //
+        // Withheld departments are not rows (ReportSurveySections counts them and never names
+        // them), so a survey whose every department is under the floor has no rows and still
+        // has something to say: how many were withheld. A section with no department
+        // breakdown at all carries null counters, which print nothing rather than "0".
+        if (section.SuppressedDepartmentCount is not { } withheldDepartments
+            || (section.Departments.Count(d => !d.IsSuppressed) == 0 && withheldDepartments == 0))
         {
             return;
         }
 
         document.Heading(copy.Departments);
 
+        if (section.Departments.Any(d => !d.IsSuppressed))
         {
             document.Table(
                 [
@@ -330,30 +334,25 @@ public static class ReportRenderer
                     new PdfTableColumn(copy.Respondents, 1.5, RightAligned: true),
                     new PdfTableColumn(copy.ParticipationRate, 1.8, RightAligned: true),
                 ],
-                [.. section.Departments.Select(d => new string?[]
+                // Withheld departments never reach this table -- ReportSurveySections drops
+                // them, and this filter restates it for a stored document written before it
+                // did. A row naming a withheld department beside the withheld headcount in the
+                // paragraph below is that department's size when it is the only one withheld.
+                [.. section.Departments.Where(d => !d.IsSuppressed).Select(d => new string?[]
                 {
                     string.IsNullOrWhiteSpace(d.Name) ? d.DepartmentId : d.Name,
-                    // THE branch this class exists for. `RespondentCount` is already 0 and
-                    // `ParticipationRate` already null for a withheld department -- printing
-                    // them would render "0" and "Not available", which reads as "nobody here
-                    // answered". That is a number this report does not have.
-                    d.IsSuppressed ? copy.Withheld : copy.Count(d.RespondentCount),
-                    d.IsSuppressed ? copy.Withheld : copy.Percent(d.ParticipationRate),
+                    copy.Count(d.RespondentCount),
+                    copy.Percent(d.ParticipationRate),
                 })]);
-
-            if (section.Departments.Any(d => d.IsSuppressed))
-            {
-                document.Paragraph(copy.DepartmentWithheldNotice(section.MinimumGroupSize));
-            }
         }
 
-        {
-            document.Paragraph(copy.DepartmentsWithheldCounts(
-                section.SuppressedDepartmentCount,
-                section.SuppressedRespondentCount,
-                section.UnsegmentedRespondentCount,
-                section.MinimumGroupSize));
-        }
+        // Non-null: the guard above returned when the breakdown was never computed, and the
+        // three counters are null or present together.
+        document.Paragraph(copy.DepartmentsWithheldCounts(
+            withheldDepartments,
+            section.SuppressedRespondentCount.GetValueOrDefault(),
+            section.UnsegmentedRespondentCount.GetValueOrDefault(),
+            section.MinimumGroupSize));
     }
 
     /// <summary>
@@ -726,9 +725,11 @@ public static class ReportRenderer
         Field("is_suppressed", Boolean(section.IsSuppressed));
         Field("suppression_reason", section.SuppressionReason);
         Field("minimum_group_size", Number(section.MinimumGroupSize));
-        Field("suppressed_department_count", Number(section.SuppressedDepartmentCount));
-        Field("suppressed_respondent_count", Number(section.SuppressedRespondentCount));
-        Field("unsegmented_respondent_count", Number(section.UnsegmentedRespondentCount));
+        // Empty cells, not zeros, when no department breakdown was computed: a spreadsheet
+        // reading "0 withheld" would be stating something about a breakdown that does not exist.
+        Field("suppressed_department_count", Optional(section.SuppressedDepartmentCount));
+        Field("suppressed_respondent_count", Optional(section.SuppressedRespondentCount));
+        Field("unsegmented_respondent_count", Optional(section.UnsegmentedRespondentCount));
 
         // Below the survey floor these collections are empty -- the aggregation emptied them,
         // not this loop. There is deliberately no `if (IsSuppressed)` guard here, for the reason
@@ -774,7 +775,8 @@ public static class ReportRenderer
             row(DimensionSection, survey, null, dimension.Dimension, null, "average_score", Optional(dimension.AverageScore));
         }
 
-        foreach (var department in section.Departments)
+        // Disclosed departments only, for the reason WriteDepartments gives.
+        foreach (var department in section.Departments.Where(d => !d.IsSuppressed))
         {
             row(DepartmentSection, survey, null, department.DepartmentId, locale, "name", department.Name);
             row(DepartmentSection, survey, null, department.DepartmentId, null, "is_suppressed", Boolean(department.IsSuppressed));

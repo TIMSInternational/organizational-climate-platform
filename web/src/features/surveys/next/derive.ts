@@ -251,10 +251,21 @@ export function companyCriticalCells(model: SurveyResultsNextModel): CriticalCel
   return cells.sort((a, b) => a.score - b.score)
 }
 
-/** How many groups the map discloses, and how many it has. */
-export function legibleGroups(model: SurveyResultsNextModel): { legible: number; total: number } {
+/**
+ * How many groups the map discloses, and how many it has.
+ *
+ * `unnamed` is the groups the server withheld WITHOUT a row: since 2026-10-12 `/analytics`
+ * counts a withheld group in `suppressedSegmentCount` and never names it, because beside
+ * `suppressedRespondentCount` a named withheld row was that group's size. They still count
+ * toward `total` -- the page must not read "every group is readable" over a breakdown that
+ * withheld some. An older payload that still carries the rows is not counted twice.
+ */
+export function legibleGroups(model: SurveyResultsNextModel): { legible: number; total: number; unnamed: number } {
   const rows = groupRows(model)
-  return { legible: rows.filter((row) => !row.isProtected).length, total: rows.length }
+  const breakdown = model.breakdown
+  const named = breakdown ? breakdown.segments.filter((segment) => segment.isSuppressed).length : 0
+  const unnamed = breakdown ? Math.max(0, breakdown.suppressedSegmentCount - named) : 0
+  return { legible: rows.filter((row) => !row.isProtected).length, total: rows.length + unnamed, unnamed }
 }
 
 /**

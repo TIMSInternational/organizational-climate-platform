@@ -417,10 +417,12 @@ public class SurveyResultsEndpointsTests : IAsyncLifetime
     /// <summary>
     /// A department below the segment floor is withheld, and its headcount is reported so
     /// the breakdown still reconciles against the completed count rather than appearing
-    /// to lose people.
+    /// to lose people -- and it is NOT named: beside the withheld headcount, a named row is
+    /// that department's size whenever it is the only one withheld (the CSV export's rule,
+    /// applied to /statistics and /analytics on 2026-10-12).
     /// </summary>
     [Fact]
-    public async Task A_department_below_the_segment_floor_is_withheld_and_counted()
+    public async Task A_department_below_the_segment_floor_is_withheld_counted_and_never_named()
     {
         var survey = await SeedBilingualSurveyAsync();
         var questionId = QuestionIdOf(survey);
@@ -444,14 +446,17 @@ public class SurveyResultsEndpointsTests : IAsyncLifetime
         }
 
         var client = await AdminAAsync();
-        var stats = await client.GetFromJsonAsync<SurveyStatisticsResponse>($"/surveys/{survey.Id}/statistics");
+        var raw = await client.GetStringAsync($"/surveys/{survey.Id}/statistics");
+        var stats = JsonSerializer.Deserialize<SurveyStatisticsResponse>(raw, JsonSerializerOptions.Web);
 
         var breakdown = stats!.Breakdowns.Single(b => b.Dimension == "department");
         Assert.False(breakdown.Segments.Single(s => s.Key == _salesId.ToString()).IsSuppressed);
-        var engineering = breakdown.Segments.Single(s => s.Key == _engineeringId.ToString());
-        Assert.True(engineering.IsSuppressed);
-        Assert.Equal(0, engineering.RespondentCount);
-        Assert.Empty(engineering.Questions);
+        Assert.DoesNotContain(breakdown.Segments, s => s.Key == _engineeringId.ToString());
+        Assert.DoesNotContain(_engineeringId.ToString(), raw, StringComparison.OrdinalIgnoreCase);
+
+        // /analytics carries the same breakdowns and the same rule.
+        var analyticsRaw = await client.GetStringAsync($"/surveys/{survey.Id}/analytics");
+        Assert.DoesNotContain(_engineeringId.ToString(), analyticsRaw, StringComparison.OrdinalIgnoreCase);
 
         Assert.Equal(1, breakdown.SuppressedSegmentCount);
         Assert.Equal(2, breakdown.SuppressedRespondentCount);
@@ -487,10 +492,9 @@ public class SurveyResultsEndpointsTests : IAsyncLifetime
         var stats = await client.GetFromJsonAsync<SurveyStatisticsResponse>($"/surveys/{survey.Id}/statistics");
 
         var breakdown = stats!.Breakdowns.Single(b => b.Dimension == "tenure");
-        var lone = breakdown.Segments.Single(s => s.Key == "10+");
-        Assert.True(lone.IsSuppressed);
-        Assert.Equal(0, lone.RespondentCount);
-        Assert.Empty(lone.Questions);
+        // Not even its name: the key IS the value the one person gave.
+        Assert.DoesNotContain(breakdown.Segments, s => s.Key == "10+");
+        Assert.True(breakdown.SuppressedSegmentCount >= 1);
 
         // Decoded from jsonb: the key is the stable value, not a quoted payload.
         Assert.DoesNotContain(breakdown.Segments, s => s.Key.Contains('"'));

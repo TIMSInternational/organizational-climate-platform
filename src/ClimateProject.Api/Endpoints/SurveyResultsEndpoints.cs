@@ -171,7 +171,8 @@ public static class SurveyResultsEndpoints
             context.ResolvedLocale,
             context.FallbackFields,
             context.Aggregate.Summary,
-            context.Aggregate.Breakdowns,
+            // Withheld groups counted, never named -- the CSV export's rule (SurveyExport).
+            SurveyResultsPrivacy.WithoutWithheldSegments(context.Aggregate.Breakdowns),
             context.Aggregate.IsSuppressed,
             context.Aggregate.SuppressionReason,
             context.Aggregate.MinimumGroupSize,
@@ -209,7 +210,8 @@ public static class SurveyResultsEndpoints
             context.Aggregate.Summary,
             context.Aggregate.Questions,
             context.Aggregate.Dimensions,
-            context.Aggregate.Breakdowns,
+            // Withheld groups counted, never named -- the CSV export's rule (SurveyExport).
+            SurveyResultsPrivacy.WithoutWithheldSegments(context.Aggregate.Breakdowns),
             context.Aggregate.IsSuppressed,
             context.Aggregate.SuppressionReason,
             context.Aggregate.MinimumGroupSize,

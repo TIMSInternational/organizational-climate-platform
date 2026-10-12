@@ -127,7 +127,10 @@ public sealed record ReportDemographicBreakdown(
 /// cannot be carried by this one. Empty when <paramref name="IsSuppressed"/> is true.
 /// </param>
 /// <param name="Dimensions">Empty when <paramref name="IsSuppressed"/> is true.</param>
-/// <param name="SuppressedDepartmentCount">Withheld departments, reported as a count so totals still reconcile without naming the group sizes.</param>
+/// <param name="Departments">Disclosed departments only. A withheld department is counted by <paramref name="SuppressedDepartmentCount"/> and never named.</param>
+/// <param name="SuppressedDepartmentCount">Withheld departments, reported as a count so totals still reconcile without naming the group sizes. <b>Null</b> -- never 0 -- when no department breakdown was computed (a survey below the whole-survey floor): an absent count is not "nothing withheld".</param>
+/// <param name="SuppressedRespondentCount">Null under the same condition as <paramref name="SuppressedDepartmentCount"/>.</param>
+/// <param name="UnsegmentedRespondentCount">Null under the same condition as <paramref name="SuppressedDepartmentCount"/>.</param>
 /// <param name="Demographics">Every non-department breakdown the aggregation produced. Empty when <paramref name="IsSuppressed"/> is true.</param>
 public sealed record ReportSurveySection(
     Guid SurveyId,
@@ -138,9 +141,9 @@ public sealed record ReportSurveySection(
     IReadOnlyList<SurveyQuestionResult> Questions,
     IReadOnlyList<SurveyDimensionResult> Dimensions,
     IReadOnlyList<ReportDepartmentParticipation> Departments,
-    int SuppressedDepartmentCount,
-    int SuppressedRespondentCount,
-    int UnsegmentedRespondentCount,
+    int? SuppressedDepartmentCount,
+    int? SuppressedRespondentCount,
+    int? UnsegmentedRespondentCount,
     IReadOnlyList<ReportDemographicBreakdown> Demographics,
     bool IsSuppressed,
     string? SuppressionReason,

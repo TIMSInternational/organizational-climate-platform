@@ -493,13 +493,18 @@ public class ReportShareRefutationTests : IAsyncLifetime
             .Single(d => d.GetProperty("dimension").GetString() == "leadership");
         Assert.Equal(8, leadership.GetProperty("answeredCount").GetInt32());
 
-        // The tiny department: named (org data), but no score, no rate, no headcount.
+        // The tiny department: counted, never named (2026-10-12). Named beside the completed
+        // total and the other published counts, its size was one subtraction away.
         var departments = section.GetProperty("departments").EnumerateArray().ToList();
-        var tinyTeam = departments.Single(d => d.GetProperty("name").GetString() == "Tiny Team");
-        Assert.True(tinyTeam.GetProperty("isSuppressed").GetBoolean());
-        Assert.Equal(0, tinyTeam.GetProperty("respondentCount").GetInt32());
-        Assert.Equal(JsonValueKind.Null, tinyTeam.GetProperty("participationRate").ValueKind);
+        Assert.DoesNotContain(departments, d => d.GetProperty("name").GetString() == "Tiny Team");
         Assert.Equal(1, section.GetProperty("suppressedDepartmentCount").GetInt32());
+        Assert.False(section.TryGetProperty("unsegmentedRespondentCount", out _));
+
+        // The differencing attack on the live public payload: what is left after subtracting
+        // every published department count is 0 or at least the floor.
+        var remainder = section.GetProperty("participation").GetProperty("completedCount").GetInt32()
+            - departments.Sum(d => d.GetProperty("respondentCount").GetInt32());
+        Assert.True(remainder == 0 || remainder >= SurveyResultsPrivacy.MinimumSegmentRespondents, $"remainder {remainder}");
 
         var largeTeam = departments.Single(d => d.GetProperty("name").GetString() == "Large Team");
         Assert.False(largeTeam.GetProperty("isSuppressed").GetBoolean());

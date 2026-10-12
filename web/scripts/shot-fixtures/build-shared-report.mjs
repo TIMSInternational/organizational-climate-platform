@@ -45,13 +45,14 @@ const document = {
         { departmentId: 'd1', name: 'Operaciones', respondentCount: 62, participationRate: 84.9, isSuppressed: false },
         { departmentId: 'd2', name: 'Promoción Comercial', respondentCount: 48, participationRate: 77.4, isSuppressed: false },
         { departmentId: 'd3', name: 'Tecnologías de Información', respondentCount: 41, participationRate: 68.3, isSuppressed: false },
-        { departmentId: 'd4', name: 'Dirección General', respondentCount: 0, participationRate: null, isSuppressed: true },
       ],
+      // The public document names no withheld group and publishes no unsegmented count
+      // (PublicReportProjection, 2026-10-12): a fourth, withheld department is COUNTED
+      // here and nowhere named, so completed minus the published rows (175 - 151 = 24) is
+      // a remainder attributed to no group.
       suppressedDepartmentCount: 1,
-      unsegmentedRespondentCount: 20,
       // Demographic breakdowns beyond department: one dimension, one withheld group in
-      // it, so the screenshot carries the ProtectedCell grammar in a table that also
-      // has real readings to sit beside.
+      // it -- counted, never named.
       demographics: [
         {
           dimension: 'antigüedad',
@@ -76,16 +77,8 @@ const document = {
                 { dimension: 'workload', averageScore: 3.05 },
               ],
             },
-            {
-              key: '10+',
-              label: 'Más de diez años',
-              respondentCount: 0,
-              isSuppressed: true,
-              dimensions: [],
-            },
           ],
           suppressedSegmentCount: 1,
-          unsegmentedRespondentCount: 20,
         },
       ],
       // Per-question distributions and word clouds. The open question's cloud is a
@@ -166,8 +159,8 @@ const document = {
       departments: [],
       demographics: [],
       questions: [],
-      suppressedDepartmentCount: 0,
-      unsegmentedRespondentCount: 0,
+      // Null: a survey under the whole-survey floor has no department breakdown at all.
+      suppressedDepartmentCount: null,
       isSuppressed: true,
       suppressionReason: 'below_minimum_respondents',
       minimumGroupSize: 5,

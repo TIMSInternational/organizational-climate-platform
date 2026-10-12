@@ -1,5 +1,11 @@
 {
-  "GET /admin/companies/*/result-bands": {"opportunityMin": 3, "strengthMin": 4, "criticalName": null, "opportunityName": null, "strengthName": null},
+  "GET /admin/companies/*/result-bands": {
+    "opportunityMin": 3,
+    "strengthMin": 4,
+    "criticalName": null,
+    "opportunityName": null,
+    "strengthName": null
+  },
   "GET /surveys/climate-trends": {
     "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
     "groupBy": null,
@@ -426,16 +432,6 @@
       {
         "dimension": "department",
         "segments": [
-          {
-            "dimension": "department",
-            "key": "bff21fd0-422b-4f3b-8c89-d6bfbf5f19e9",
-            "label": "Finanzas",
-            "respondentCount": 0,
-            "participationRate": null,
-            "headcount": null,
-            "isSuppressed": true,
-            "questions": []
-          },
           {
             "dimension": "department",
             "key": "5bfdb04e-8847-4baa-89c8-d4411654a129",
@@ -910,16 +906,6 @@
       {
         "dimension": "department",
         "segments": [
-          {
-            "dimension": "department",
-            "key": "bff21fd0-422b-4f3b-8c89-d6bfbf5f19e9",
-            "label": "Finanzas",
-            "respondentCount": 0,
-            "participationRate": null,
-            "headcount": null,
-            "isSuppressed": true,
-            "questions": []
-          },
           {
             "dimension": "department",
             "key": "5bfdb04e-8847-4baa-89c8-d4411654a129",

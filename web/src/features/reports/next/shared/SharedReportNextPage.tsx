@@ -423,7 +423,7 @@ function SurveyBlock({ section, named }: { section: SharedSection; named: boolea
                   })}
                 </p>
               )}
-              {map.unsegmented > 0 && (
+              {map.unsegmented !== null && map.unsegmented > 0 && (
                 <p className="m-0 max-w-prose text-xs text-fg-tertiary">
                   {t(`${K}.mapUnsegmented`, { count: map.unsegmented, field: map.field })}
                 </p>
@@ -579,7 +579,7 @@ function DepartmentsCard({ section, headingId }: { section: SharedSection; headi
           ))}
         </TableBody>
       </Table>
-      {section.withheldDepartments > 0 && (
+      {section.withheldDepartments !== null && section.withheldDepartments > 0 && (
         <p className="m-0 max-w-prose text-xs text-fg-tertiary">
           {t('sharedReport.departmentsWithheld', {
             count: section.withheldDepartments,
@@ -865,8 +865,16 @@ function groupsNote(
   // it. The notice under the readings says the same thing at length.
   if (section.suppressed) return t(`${K}.groupsSuppressed`, { floor: section.floor })
   if (section.groups.total === 0) return t(`${K}.groupsNone`)
-  if (section.groups.withheldNames.length === 0) {
+  if (section.groups.withheld === 0) {
     return t(`${K}.groupsAllReadable`, { floor: section.floor })
+  }
+  // Counted and never named: the server stopped sending a withheld group's name, because
+  // beside the counters it published that group's size.
+  if (section.groups.withheldNames.length === 0) {
+    return t(section.groups.withheld === 1 ? `${K}.groupsWithheldCountOne` : `${K}.groupsWithheldCountMany`, {
+      count: section.groups.withheld,
+      floor: section.floor,
+    })
   }
   return t(`${K}.groupsWithheldNames`, {
     names: new Intl.ListFormat(locale, { style: 'long', type: 'conjunction' }).format([

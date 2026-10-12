@@ -296,10 +296,9 @@ public class ScheduledReportRunnerTests(PostgresContainerFixture postgres)
         Assert.False(engineering.IsSuppressed);
         Assert.Equal(5, engineering.RespondentCount);
 
-        var sales = Assert.Single(section.Departments, d => d.DepartmentId == seeded.SalesId.ToString());
-        Assert.True(sales.IsSuppressed);
-        Assert.Equal(0, sales.RespondentCount);
-        Assert.Null(sales.ParticipationRate);
+        // Counted, never named (2026-10-12): a named withheld row beside the withheld headcount
+        // is that department's size when it is the only one withheld.
+        Assert.DoesNotContain(section.Departments, d => d.DepartmentId == seeded.SalesId.ToString());
         Assert.Equal(1, section.SuppressedDepartmentCount);
         Assert.Equal(2, section.SuppressedRespondentCount);
         Assert.Equal(SurveyResultsPrivacy.MinimumSegmentRespondents, section.MinimumGroupSize);

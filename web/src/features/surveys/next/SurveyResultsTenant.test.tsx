@@ -144,7 +144,10 @@ describe('the survey results on the tenant’s real payload', () => {
     expect(tiles).toContain('respuestas · 100 % completadas')
     expect(tiles).toContain('cerró el 6 de agosto · sin lista de invitados')
     expect(tiles).toContain('de 5 legibles')
-    expect(tiles).toContain('Finanzas bajo el umbral de 5: protegido')
+    // Finanzas is withheld: counted, and since 2026-10-12 never named -- beside the
+    // withheld headcount /analytics serves, its name was its size.
+    expect(tiles).toContain('1 grupo bajo el umbral de 5: protegido, sin nombre')
+    expect(tiles).not.toContain('Finanzas')
     // The fourth tile counts the map's cells in the critical area — all three Operaciones'.
     expect(tiles).toContain('Área crítica')
     expect(tiles).toContain('celdas, todas de Operaciones')
@@ -198,7 +201,7 @@ describe('the survey results on the tenant’s real payload', () => {
       'Frente a Q2',
     ])
     const order = [...grid.querySelectorAll('tbody tr[data-testid]')].map((row) => row.getAttribute('data-testid'))
-    expect(order).toEqual(['company-row', `group-row-${FIN}`, `group-row-${ENG}`, `group-row-${OPS}`, `group-row-${PER}`, `group-row-${VEN}`])
+    expect(order).toEqual(['company-row', `group-row-${ENG}`, `group-row-${OPS}`, `group-row-${PER}`, `group-row-${VEN}`])
     const company = screen.getByTestId('company-row').textContent ?? ''
     for (const reading of ['3,8', '3,3', '3,7', '3,4', '4,0', '3,65']) expect(company).toContain(reading)
     // Each change is the difference of the printed readings: Confianza is 3,7 now and
@@ -233,19 +236,11 @@ describe('the survey results on the tenant’s real payload', () => {
     expect(operaciones.textContent).toContain('Crítica')
   })
 
-  it('never prints a number for the protected group: every cell hatched, mean and delta included, none a button', async () => {
+  it('never names the withheld group, let alone prints a number for it: no row, no "other group", no name', async () => {
     await open()
-    const finanzas = screen.getByTestId(`group-row-${FIN}`)
-    expect(finanzas.textContent).not.toMatch(/\d/)
-    // Six dimensions, the mean and the delta: eight hatched readings.
-    expect(within(finanzas).getAllByRole('img')).toHaveLength(8)
-    expect(within(finanzas).queryAllByRole('button')).toHaveLength(0)
-    // The mean cell carries the word where the number would be.
-    expect(finanzas.textContent).toContain('Protegido')
-    // And in the opened cell's "other groups", Finanzas is hatched too.
-    const other = screen.getByTestId(`other-${FIN}`)
-    expect(other.textContent).not.toMatch(/\d/)
-    expect(within(other).getByRole('img')).toBeTruthy()
+    expect(screen.queryByTestId(`group-row-${FIN}`)).toBeNull()
+    expect(screen.queryByTestId(`other-${FIN}`)).toBeNull()
+    expect(document.body.textContent).not.toContain('Finanzas')
   })
 
   it('opens the lowest cell with its three columns: the question twice, the other groups, what is being done', async () => {
@@ -425,7 +420,13 @@ describe('the survey results on the tenant’s real payload', () => {
    */
   it('draws the whole company when the breakdown holds no group at all, rather than withholding everything', async () => {
     const noGroups = structuredClone(fixture['GET /surveys/*/analytics']) as SurveyAnalyticsResponse
-    noGroups.breakdowns = noGroups.breakdowns.map((breakdown) => ({ ...breakdown, segments: [] }))
+    // No group at all -- nothing disclosed and nothing withheld.
+    noGroups.breakdowns = noGroups.breakdowns.map((breakdown) => ({
+      ...breakdown,
+      segments: [],
+      suppressedSegmentCount: 0,
+      suppressedRespondentCount: 0,
+    }))
     vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) =>
       String(input).includes(`/surveys/${SURVEY}/analytics`) ? Promise.resolve(json(noGroups)) : tenant(input),
     )

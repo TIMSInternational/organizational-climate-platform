@@ -14,6 +14,7 @@ import {
   criticalCells,
   dimensionDeltas,
   groupRows,
+  legibleGroups,
   whereToLookFirst,
 } from './derive'
 
@@ -21,7 +22,9 @@ import {
  * The demo tenant's REAL payloads: `GET /surveys/{id}/analytics?lang=es`, `GET
  * /surveys/{id}` and `GET /action-plans?companyId=` for Grupo Meridiano's Q3, fetched
  * read-only from the local API on 10 Sep as the company administrator and written to
- * the shot fixture unmodified. #468's drill-in was tested only on a hand-made payload;
+ * the shot fixture unmodified -- except that on 2026-10-12 the withheld Finanzas segment was
+ * removed from both analytics payloads, because the API stopped sending a withheld group's row
+ * (counted in `suppressedSegmentCount`, never named). #468's drill-in was tested only on a hand-made payload;
  * these tests pin every derived figure against the payload the tenant actually serves.
  */
 const FIXTURE = join(process.cwd(), 'scripts', 'shot-fixtures', 'survey-results-meridiano.json')
@@ -62,32 +65,33 @@ describe('in the company’s result bands, on the tenant’s real payload', () =
     expect(real().bands).toBe(DEFAULT_RESULT_BANDS)
   })
 
-  it('reads every disclosed cell of the real map as the approved canvas does, and hatches Finanzas', () => {
+  it('reads every disclosed cell of the real map as the approved canvas does, and never names Finanzas', () => {
     const bands = Object.fromEntries(
       groupRows(real()).map((row) => [
         row.name,
         row.isProtected ? 'protected' : row.scores.map((s): ResultBandKey => bandOf(s as number, DEFAULT_RESULT_BANDS)),
       ]),
     )
+    // Finanzas is withheld and, since 2026-10-12, counted and never named: /analytics sends
+    // no row for it, so the map has none -- and the group counter still says it exists.
     expect(bands).toEqual({
-      Finanzas: 'protected',
       Ingeniería: ['strength', 'opportunity', 'strength', 'opportunity', 'strength', 'strength'],
       Operaciones: ['critical', 'critical', 'opportunity', 'critical', 'opportunity', 'opportunity'],
       Personas: ['strength', 'strength', 'strength', 'opportunity', 'strength', 'strength'],
       Ventas: ['strength', 'opportunity', 'opportunity', 'opportunity', 'opportunity', 'strength'],
     })
+    expect(legibleGroups(real())).toEqual({ legible: 4, total: 5, unnamed: 1 })
   })
 
-  it('gives every group its mean, and the protected one none — never 0', () => {
+  it('gives every disclosed group its mean, and the withheld one no row at all — never 0', () => {
     const rows = groupRows(real())
     expect(rows.map((row) => [row.name, row.mean])).toEqual([
-      ['Finanzas', null],
       ['Ingeniería', 3.9],
       ['Operaciones', 2.8],
       ['Personas', 4.1],
       ['Ventas', 3.8],
     ])
-    expect(rows[0].scores.every((score) => score === null)).toBe(true)
+    expect(rows.some((row) => row.id === FIN)).toBe(false)
   })
 
   it('reads the whole company per dimension and averages the unrounded means, as the dashboard does', () => {
@@ -170,7 +174,6 @@ describe('in the company’s result bands, on the tenant’s real payload', () =
     })
     expect(question.surveyDistribution.map((point) => point.percentage)).toEqual([0, 16.67, 37.5, 41.67, 4.17])
     expect(detail!.others).toEqual([
-      { id: FIN, name: 'Finanzas', isProtected: true, score: null, band: null },
       { id: ENG, name: 'Ingeniería', isProtected: false, score: 3.7, band: 'opportunity' },
       { id: 'aac7e1b9-5af4-4e04-872b-c11df8f1d4bd', name: 'Personas', isProtected: false, score: 4, band: 'strength' },
       { id: VEN, name: 'Ventas', isProtected: false, score: 3.4, band: 'opportunity' },
@@ -223,7 +226,6 @@ describe('against the previous wave, on the tenant’s real payloads', () => {
     // Per group, at the one decimal of "Media del grupo": Ventas is 3,77 (3,8) against
     // Q2's 3,43 (3,4), so +0,4 where the raw +0,33 would have printed +0,3.
     expect(Object.fromEntries(groupRows(model).map((row) => [row.name, row.vsPrevious]))).toEqual({
-      Finanzas: null,
       Ingeniería: 0.3,
       Operaciones: 0.2,
       Personas: 0.2,
@@ -251,16 +253,13 @@ describe('against the previous wave, on the tenant’s real payloads', () => {
   it('never compares a group this wave protects, even when the previous wave disclosed it', () => {
     const disclosed = q2()
     const segments = disclosed.breakdowns[0].segments
-    const fin = segments.find((segment) => segment.key === FIN)!
+    // Q2 withheld Finanzas too, so it has no row there either; give Q2 a disclosed one.
     const eng = segments.find((segment) => segment.key === ENG)!
-    Object.assign(fin, { isSuppressed: false, respondentCount: 6, questions: structuredClone(eng.questions) })
+    segments.push({ ...structuredClone(eng), key: FIN, label: 'Finanzas', respondentCount: 6 })
     const model = against(disclosed)
     expect(model.previous.status === 'loaded' && FIN in model.previous.wave.groupScores).toBe(true)
-    expect(groupRows(model).find((candidate) => candidate.id === FIN)).toMatchObject({
-      isProtected: true,
-      mean: null,
-      vsPrevious: null,
-    })
+    // This wave withheld Finanzas, so it has no row to carry a change on at all.
+    expect(groupRows(model).find((candidate) => candidate.id === FIN)).toBeUndefined()
   })
 
   it('compares like for like: a dimension only one wave asked cannot move the change', () => {

@@ -1782,16 +1782,6 @@
                 "average": 3.6
               }
             ]
-          },
-          {
-            "dimension": "department",
-            "key": "dep-support",
-            "label": "Atención y Servicio al Cliente",
-            "respondentCount": 0,
-            "participationRate": null,
-            "headcount": null,
-            "isSuppressed": true,
-            "questions": []
           }
         ],
         "suppressedSegmentCount": 1,
@@ -2403,7 +2393,7 @@
             "respondentCount": 9,
             "isSuppressed": false,
             "scores": [
-              3.0,
+              3,
               3.2,
               3.2,
               3.4,
@@ -2420,7 +2410,7 @@
               3.4,
               3.4,
               3.6,
-              3.0,
+              3,
               3.4
             ]
           },
@@ -2610,7 +2600,7 @@
             "isSuppressed": false,
             "scores": [
               3.8,
-              4.0,
+              4,
               4.1,
               4.1,
               3.6,
@@ -2673,12 +2663,12 @@
             "respondentCount": 13,
             "isSuppressed": false,
             "scores": [
-              2.0,
+              2,
               2.4,
               2.4,
               2.6,
-              2.0,
-              2.0
+              2,
+              2
             ]
           },
           {
@@ -2689,7 +2679,7 @@
               2.2,
               2.8,
               2.8,
-              3.0,
+              3,
               2.4,
               2.4
             ]
@@ -2700,7 +2690,7 @@
             "isSuppressed": false,
             "scores": [
               2.6,
-              3.0,
+              3,
               3.2,
               3.2,
               2.6,
@@ -3434,7 +3424,10 @@
   "GET /microclimates/*/live-results": {
     "responseCount": 18,
     "targetParticipantCount": 57,
-    "sentimentScore": 0.42,
+    "isSuppressed": false,
+    "suppressionReason": null,
+    "minimumGroupSize": 5,
+    "sentimentScore": null,
     "engagementLevel": "medium",
     "wordCloud": [
       {
