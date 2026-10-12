@@ -93,7 +93,8 @@ function toRow(plan: ActionPlan, departmentNames: ReadonlyMap<string, string>): 
     id: plan.id,
     name: plan.title,
     departmentId: plan.departmentId,
-    departmentName: plan.departmentId ? departmentNames.get(plan.departmentId) ?? null : null,
+    // The server's own join first: an owner cannot read `GET /admin/departments`.
+    departmentName: plan.departmentId ? plan.departmentName ?? departmentNames.get(plan.departmentId) ?? null : null,
     status: plan.status,
     priority: plan.priority,
     dueDate: plan.dueDate,
@@ -134,8 +135,13 @@ function overdueFromPlans(rows: readonly PlanRow[], asOf: string): OverdueReadin
  * Company scope is `useCompanyScope()`'s, never the claim read by hand: a SuperAdmin with
  * nothing selected has no `companyId`, this asks for nothing, and the page asks them to
  * choose.
+ *
+ * `administers` is false for a plan's owner who is not an administrator: `ListAsync` scopes
+ * them to the plans they own. The department directory, the template catalogue and the
+ * tracking seguimiento are all administrator reads, so for that viewer none is sent -- a
+ * request the screen knows will 403 is a failure it would then have to explain.
  */
-export function useActionPlansListModel(): ActionPlansListState {
+export function useActionPlansListModel(administers = true): ActionPlansListState {
   const { t, locale } = useTranslation()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const scope = useCompanyScope()
@@ -164,8 +170,8 @@ export function useActionPlansListModel(): ActionPlansListState {
     // department is about to be named.
     const [plansResult, namesResult, trackingResult] = await Promise.allSettled([
       listActionPlans(baseUrl, companyId, {}, locale),
-      listDepartments(baseUrl, companyId),
-      readTrackingOverdue(companyId),
+      administers ? listDepartments(baseUrl, companyId) : Promise.resolve([]),
+      administers ? readTrackingOverdue(companyId) : Promise.resolve(null),
     ])
     setDepartmentNames(
       namesResult.status === 'fulfilled'
@@ -182,14 +188,14 @@ export function useActionPlansListModel(): ActionPlansListState {
       setError(reason instanceof Error ? reason.message : t('errors.generic'))
       setStatus('error')
     }
-  }, [baseUrl, companyId, locale, t])
+  }, [administers, baseUrl, companyId, locale, t])
 
   useEffect(() => {
     void reload()
   }, [reload])
 
   useEffect(() => {
-    if (!companyId) return
+    if (!companyId || !administers) return
     let cancelled = false
     listActionPlanTemplates(baseUrl, companyId)
       .then((items) => {
@@ -201,7 +207,7 @@ export function useActionPlansListModel(): ActionPlansListState {
     return () => {
       cancelled = true
     }
-  }, [baseUrl, companyId])
+  }, [administers, baseUrl, companyId])
 
   const rows = useMemo(() => plans.map((plan) => toRow(plan, departmentNames)), [plans, departmentNames])
 

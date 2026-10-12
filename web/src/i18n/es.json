@@ -115,6 +115,9 @@
       "restrictedTitle": "Esta pantalla es de la administración",
       "restrictedBody": "Los planes de acción de la empresa los gestiona la administración. Lo que corresponde a su equipo está en su Panel de Control.",
       "backToDashboard": "Volver al Panel de Control",
+      "ownerDescription": "Los planes de acción a tu cargo. La administración registra su avance.",
+      "ownerEmptyTitle": "No tienes planes de acción a tu cargo",
+      "ownerEmptyBody": "Cuando la administración te asigne un plan, aparecerá aquí y te avisaremos cuando se acerque su fecha de vencimiento.",
       "tileOpen": "Abiertos",
       "unitPlan": "plan",
       "unitPlans": "planes",
@@ -265,7 +268,8 @@
         "moveReading": "{fromCode} {from} → {toCode} {to}",
         "moveFlat": "sin cambio",
         "moveAwaiting": "Aún no cierra una encuesta posterior a {code}: se comparará con la siguiente.",
-        "moveProtected": "Las encuestas posteriores a {code} no revelan este grupo: menos de 5 respuestas."
+        "moveProtected": "Las encuestas posteriores a {code} no revelan este grupo: menos de 5 respuestas.",
+        "adminOnly": "El hallazgo que originó este plan lo consulta la administración, en los resultados de la encuesta."
       },
       "measures": {
         "title": "Indicadores y objetivos",

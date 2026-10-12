@@ -18,7 +18,7 @@ public class ScheduledNotificationCopyTests
         var body = ScheduledNotificationCopy.ReminderBodyFor("es", "Clima Organizacional Q3", Closes);
 
         Assert.Equal("Recordatorio: tu respuesta sigue pendiente", title);
-        Assert.Contains("Aun no has completado", body);
+        Assert.Contains("Aún no has completado", body);
         Assert.Contains("Clima Organizacional Q3", body);
     }
 
@@ -72,7 +72,7 @@ public class ScheduledNotificationCopyTests
         var one = ScheduledNotificationCopy.DigestBodyFor("es", 1, Closes);
         var many = ScheduledNotificationCopy.DigestBodyFor("es", 4, Closes);
 
-        Assert.Contains("1 notificacion nueva", one);
+        Assert.Contains("1 notificación nueva", one);
         Assert.Contains("4 notificaciones nuevas", many);
     }
 
@@ -89,7 +89,7 @@ public class ScheduledNotificationCopyTests
         var spanish = ScheduledNotificationCopy.ReportReadyBodyFor("es", "Informe mensual de clima", Closes);
 
         Assert.Equal("Your scheduled report is ready", ScheduledNotificationCopy.ReportReadyTitleFor("en"));
-        Assert.Equal("Tu informe programado esta listo", ScheduledNotificationCopy.ReportReadyTitleFor("es"));
+        Assert.Equal("Tu informe programado está listo", ScheduledNotificationCopy.ReportReadyTitleFor("es"));
         Assert.Contains("Monthly climate report", english);
         Assert.Contains("2026-08-20", english);
         Assert.Contains("Informe mensual de clima", spanish);

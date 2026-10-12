@@ -55,12 +55,15 @@ export default function ActionPlanDetailNextPage() {
   const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const scope = useCompanyScope()
-  // `GET /action-plans/{id}` answers an administrator only (`CanAccessCompany`), so any
-  // other role meets the page's own refusal and the request is never sent.
-  const readable = scope.isSuperAdmin || scope.role === 'company_admin'
-  const state = useActionPlanDetailModel(id, readable)
+  // `GET /action-plans/{id}` answers an administrator of the plan's company and the plan's
+  // OWNER (`ActionPlanEndpoints.CanReadAsOwner`) -- the person the due-date nudge links here.
+  // Which of the two this reader is, only the server knows for certain, so anybody in a
+  // company asks, and a 403 is drawn as the refusal it is rather than as a failure.
+  const administers = scope.isSuperAdmin || scope.role === 'company_admin'
+  const readable = administers || scope.status === 'ready'
+  const state = useActionPlanDetailModel(id, readable, administers)
 
-  if (!readable) {
+  if (!readable || state.forbidden) {
     return <EmptyState title={t('actionPlans.accessRestricted')} description={t('actionPlans.noPermissionMessage')} />
   }
   if (state.status === 'error') {
@@ -255,7 +258,7 @@ function ActionPlanDetailView({ state, model }: { state: ActionPlanDetailState; 
       <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="flex min-w-0 flex-col gap-4">
           <DeadlineCard model={model} days={days} dueLong={dueLong} dueShort={dueShort} createdDay={createdDay} author={author} />
-          <WhatCard model={model} scopeName={scopeName} />
+          <WhatCard model={model} scopeName={scopeName} manages={manages} />
           <MeasuresCard model={model} />
           <LogCard
             model={model}
@@ -326,7 +329,12 @@ function ActionPlanDetailView({ state, model }: { state: ActionPlanDetailState; 
                   term: t('actionPlans.next.sheet.template'),
                   value: (
                     <span className={cn(valueOf(model.templateName) ? 'text-fg-primary' : 'text-fg-tertiary')}>
-                      {valueOf(model.templateName) ?? t('actionPlans.next.sheet.noTemplate')}
+                      {/* "Sin plantilla" only when the plan really has none; a read that did
+                          not answer is not evidence that there is no template. */}
+                      {valueOf(model.templateName) ??
+                        (model.templateName.status === 'failed'
+                          ? t('actionPlans.next.sheet.unknown')
+                          : t('actionPlans.next.sheet.noTemplate'))}
                     </span>
                   ),
                 },
@@ -469,7 +477,20 @@ function Label({ children }: { children: ReactNode }) {
   return <span className="pt-0.75 text-2xs font-bold uppercase tracking-label text-fg-label">{children}</span>
 }
 
-function WhatCard({ model, scopeName }: { model: ActionPlanDetailModel; scopeName: string | null }) {
+function WhatCard({
+  model,
+  scopeName,
+  manages,
+}: {
+  model: ActionPlanDetailModel
+  scopeName: string | null
+  /**
+   * False for the plan's owner when they are not an administrator. The finding is joined
+   * from `GET /surveys/climate-trends`, an administrator read, so the model never asks for
+   * it on their behalf and this says who does read it instead of "no se pudo leer".
+   */
+  manages: boolean
+}) {
   const { t } = useTranslation()
   const { plan } = model
   const proposed = model.finding.status === 'ready' && model.finding.value.status !== 'none' && model.finding.value.proposed
@@ -490,7 +511,11 @@ function WhatCard({ model, scopeName }: { model: ActionPlanDetailModel; scopeNam
               now shows what it recorded, and says so by not wearing this. */}
           {proposed && <Chip label={t('actionPlans.next.proposed')} tone="warning" title={t('actionPlans.next.proposedHint')} />}
         </div>
-        <FindingBlock finding={model.finding} move={model.move} scopeName={scopeName} />
+        {manages ? (
+          <FindingBlock finding={model.finding} move={model.move} scopeName={scopeName} />
+        ) : (
+          <p className="m-0 text-sm text-fg-tertiary">{t('actionPlans.next.finding.adminOnly')}</p>
+        )}
       </div>
     </CanvasCard>
   )

@@ -49,6 +49,12 @@ export interface ActionPlan {
    */
   ownerId?: string | null
   ownerName?: string | null
+  /**
+   * The department's name, joined by the server (`ActionPlanListItem.DepartmentName`).
+   * `GET /admin/departments` answers an administrator only, so this is the one way a
+   * plan's owner learns the name of the department their plan is for.
+   */
+  departmentName?: string | null
 }
 
 export interface ActionPlanDetail {
@@ -74,6 +80,8 @@ export interface ActionPlanDetail {
   /** @see ActionPlan.ownerId */
   ownerId?: string | null
   ownerName?: string | null
+  /** @see ActionPlan.departmentName */
+  departmentName?: string | null
   templateId: string | null
   kpis: Kpi[]
   objectives: Objective[]

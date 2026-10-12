@@ -59,6 +59,21 @@ describe('buildNavSections', () => {
    * in `company-context/companyContext.test.ts`: a SuperAdmin with no selection
    * resolves to `needs-selection`, never to a company.
    */
+  /**
+   * The leader is the one non-admin role the action plans list answers: `ListAsync` scopes
+   * them to the plans they own, and the due-date nudge sends them there. `inNav: true` was
+   * declared for it and no sidebar offered it -- the union-of-sidebars check in
+   * `roleCapabilities.test.ts` passed because an ADMIN's sidebar has the row.
+   */
+  it('gives a leader without a tracking service the per-user links plus their own action plans', () => {
+    expect(hrefs(buildNavSections('leader', 'company-1'))).toEqual([
+      '/dashboard',
+      '/surveys/my',
+      '/action-plans',
+      '/notifications',
+    ])
+  })
+
   it('gives a super_admin Action Plans, Microclimates and AI Insights, now that a company-context selector exists', () => {
     const links = hrefs(buildNavSections('super_admin', 'company-1'))
     expect(links).toContain('/action-plans')
@@ -156,7 +171,7 @@ describe('buildNavSections', () => {
     ])
   })
 
-  it.each(['employee', 'supervisor', 'leader', undefined])('gives %s only the per-user links (no admin page exists for this role yet)', (role) => {
+  it.each(['employee', 'supervisor', undefined])('gives %s only the per-user links (no admin page exists for this role yet)', (role) => {
     // Both endpoints behind these resolve the caller's OWN user row and read no role
     // claim, which is precisely what makes them loadable by a role with no admin
     // surface. Anything company- or role-scoped would 403 here. /dashboard joins

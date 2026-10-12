@@ -69,7 +69,7 @@ public class ActionPlanEndpointsTests : IAsyncLifetime
     }
 
     /// <summary>A plan owned by <paramref name="ownerId"/>, written straight to the database.</summary>
-    private async Task<Guid> SeedPlanAsync(Guid companyId, Guid createdBy, Guid? ownerId)
+    private async Task<Guid> SeedPlanAsync(Guid companyId, Guid createdBy, Guid? ownerId, Guid? departmentId = null)
     {
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
@@ -81,6 +81,7 @@ public class ActionPlanEndpointsTests : IAsyncLifetime
             CompanyId = companyId,
             CreatedBy = createdBy,
             OwnerId = ownerId,
+            DepartmentId = departmentId,
             DueDate = DateTimeOffset.UtcNow.AddDays(10),
             Status = "not_started",
             CreatedAt = DateTimeOffset.UtcNow,
@@ -122,6 +123,40 @@ public class ActionPlanEndpointsTests : IAsyncLifetime
         // Exactly their own: the list is scoped, not merely permitted.
         Assert.Contains(rows, r => r.Id == mine);
         Assert.DoesNotContain(rows, r => r.Id == someoneElses);
+    }
+
+    [Fact]
+    public async Task An_owner_reads_their_plans_department_by_name_without_the_admin_directory()
+    {
+        var client = _factory.CreateClient();
+        await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        var adminId = await UserIdForAsync(_companyADomain, Roles.CompanyAdmin);
+
+        var leaderClient = _factory.CreateClient();
+        var leaderToken = await SignUpAndGetTokenAsync(leaderClient, Roles.Leader, _companyADomain, _companyAId);
+        var leaderId = await UserIdForAsync(_companyADomain, Roles.Leader);
+        leaderClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", leaderToken);
+
+        var departmentId = Guid.NewGuid();
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            db.Departments.Add(new Department { Id = departmentId, CompanyId = _companyAId, Name = "Consultoría y Servicio al Cliente" });
+            await db.SaveChangesAsync();
+        }
+        var mine = await SeedPlanAsync(_companyAId, adminId, leaderId, departmentId);
+
+        // The name the screen prints, which `GET /admin/departments` refuses this reader.
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            (await leaderClient.GetAsync($"/admin/departments?companyId={_companyAId}")).StatusCode);
+
+        var detail = await (await leaderClient.GetAsync($"/action-plans/{mine}")).Content.ReadFromJsonAsync<ActionPlanDetail>();
+        Assert.Equal("Consultoría y Servicio al Cliente", detail!.DepartmentName);
+
+        var rows = (await (await leaderClient.GetAsync($"/action-plans?companyId={_companyAId}"))
+            .Content.ReadFromJsonAsync<ActionPlanListResponse>())!.ActionPlans;
+        Assert.Equal("Consultoría y Servicio al Cliente", Assert.Single(rows, r => r.Id == mine).DepartmentName);
     }
 
     [Fact]

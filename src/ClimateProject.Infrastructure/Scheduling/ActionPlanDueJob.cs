@@ -80,24 +80,38 @@ public static class ActionPlanDueJob
 
         var logger = loggerFactory.CreateLogger(LogCategory);
 
-        var from = nowUtc - lookback;
-        var until = nowUtc + window;
+        // A coarse pre-filter in instants, widened by a day each side; the decision itself is
+        // made below in calendar days, which an instant comparison cannot express. See
+        // `DueDayOf` and `TodayFor` for why the two must be days and not timestamps.
+        var from = nowUtc - lookback - TimeSpan.FromDays(1);
+        var until = nowUtc + window + TimeSpan.FromDays(1);
 
         // The owner is joined here rather than fetched per plan: the body is written in the
         // RECIPIENT's language, and one `GET /users/{id}` per plan is the N+1 this codebase
-        // already refused for the owner column on the list.
+        // already refused for the owner column on the list. The company is joined for its
+        // time zone, the fallback when the owner's own is unset.
+        //
+        // An inactive owner is excluded here, not at delivery. Delivery would cancel the mail
+        // (`NotificationDelivery` refuses a deactivated recipient), and retention never purges
+        // a `cancelled` row -- so raising it anyway left a permanent row naming the plan for a
+        // person who will never read it.
         var candidates = await db.ActionPlans
             .AsNoTracking()
             .Where(plan => plan.OwnerId != null)
             .Where(plan => !SettledStatuses.Contains(plan.Status))
             .Where(plan => plan.DueDate >= from && plan.DueDate <= until)
             .OrderBy(plan => plan.DueDate)
-            .Take(batchSize)
             .Join(
-                db.Users.AsNoTracking(),
+                db.Users.AsNoTracking().Where(user => user.IsActive),
                 plan => plan.OwnerId,
                 user => (Guid?)user.Id,
                 (plan, owner) => new { Plan = plan, Owner = owner })
+            .Join(
+                db.Companies.AsNoTracking(),
+                row => row.Plan.CompanyId,
+                company => company.Id,
+                (row, company) => new { row.Plan, row.Owner, CompanyTimezone = company.Settings.Timezone })
+            .Take(batchSize)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
@@ -106,21 +120,32 @@ public static class ActionPlanDueJob
             return new ActionPlanDueSweepResult(0, 0, 0);
         }
 
+        var windowDays = (int)Math.Ceiling(window.TotalDays);
+        var lookbackDays = (int)Math.Ceiling(lookback.TotalDays);
+
         var planned = candidates
             .Select(row =>
             {
-                var overdue = row.Plan.DueDate < nowUtc;
+                var zone = ZoneFor(row.Owner.Preferences.Timezone, row.CompanyTimezone);
+                var today = TodayFor(nowUtc, zone);
+                var dueDay = DueDayOf(row.Plan.DueDate);
+                var daysLeft = dueDay.DayNumber - today.DayNumber;
+                var overdue = daysLeft < 0;
                 var trigger = overdue ? OverdueTrigger : DueSoonTrigger;
                 return new
                 {
                     row.Plan,
                     row.Owner,
+                    Zone = zone,
+                    DueDay = dueDay,
+                    InWindow = daysLeft <= windowDays && daysLeft >= -lookbackDays,
                     Overdue = overdue,
                     Trigger = trigger,
                     NotificationId = DeterministicNotificationId.ForActionPlanDue(
                         row.Plan.Id, row.Owner.Id, trigger),
                 };
             })
+            .Where(nudge => nudge.InWindow)
             .ToList();
 
         var ids = planned.Select(p => p.NotificationId).ToList();
@@ -164,7 +189,13 @@ public static class ActionPlanDueJob
                 // The instant the nudge became OWED, computed from the plan's own date, never
                 // from the wall clock of the tick that noticed. Two instances racing compute
                 // the same value and a late sweep records when it was due, not when it ran.
-                ScheduledFor = nudge.Overdue ? nudge.Plan.DueDate : nudge.Plan.DueDate - window,
+                // The start of the day the nudge became owed in the recipient's zone: the day
+                // after the due day for an overdue one, `window` days before it otherwise.
+                ScheduledFor = SchedulingTimeZone.ToUtc(
+                    (nudge.Overdue ? nudge.DueDay.AddDays(1) : nudge.DueDay.AddDays(-windowDays))
+                        .ToDateTime(TimeOnly.MinValue),
+                    nudge.Zone),
+                Data = ActionPlanNotificationData.Serialize(nudge.Plan.Id),
                 RetryCount = 0,
                 MaxRetries = 3,
                 CreatedAt = nowUtc,
@@ -193,4 +224,35 @@ public static class ActionPlanDueJob
 
         return result;
     }
+
+    /// <summary>
+    /// The plan's due day as every screen reads it: the UTC calendar date of the stored
+    /// instant (<c>planDetailDerive.dueDay</c> is <c>toISOString().slice(0, 10)</c>).
+    ///
+    /// <para>Comparing the instant itself was the defect: the list page stores a due day as
+    /// <c>T00:00:00Z</c>, which is 18:00 the evening BEFORE in Costa Rica, so a plan due on
+    /// the 12th was mailed "está vencido" at 18:00 on the 11th while its own screen still said
+    /// it was due tomorrow. The results page stores <c>T12:00:00Z</c>, so the two creation
+    /// paths lapsed at different hours of the same day. A day is what the owner was promised;
+    /// a day is what is compared.</para>
+    /// </summary>
+    internal static DateOnly DueDayOf(DateTimeOffset dueDate)
+        => DateOnly.FromDateTime(dueDate.UtcDateTime);
+
+    /// <summary>Today in the recipient's zone -- whose day it is, as <see cref="SchedulingTimeZone"/> rules it.</summary>
+    internal static DateOnly TodayFor(DateTimeOffset nowUtc, TimeZoneInfo zone)
+        => DateOnly.FromDateTime(SchedulingTimeZone.ToLocal(nowUtc, zone));
+
+    /// <summary>
+    /// The owner's zone, else the company's, else UTC. <c>"UTC"</c> is both columns' default,
+    /// so an owner whose zone was never set reads as unset and the tenant's zone answers.
+    /// </summary>
+    internal static TimeZoneInfo ZoneFor(string? ownerTimezone, string? companyTimezone)
+        => IsUnset(ownerTimezone)
+            ? SchedulingTimeZone.Resolve(companyTimezone)
+            : SchedulingTimeZone.Resolve(ownerTimezone);
+
+    private static bool IsUnset(string? timezone)
+        => string.IsNullOrWhiteSpace(timezone)
+           || string.Equals(timezone.Trim(), "UTC", StringComparison.OrdinalIgnoreCase);
 }

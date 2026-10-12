@@ -148,10 +148,13 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
         };
 
     private static Task<ActionPlanDueJob.ActionPlanDueSweepResult> SweepAsync(ClimateProjectDbContext db)
+        => SweepAtAsync(db, Now);
+
+    private static Task<ActionPlanDueJob.ActionPlanDueSweepResult> SweepAtAsync(ClimateProjectDbContext db, DateTimeOffset nowUtc)
         => ActionPlanDueJob.RunAsync(
             db,
             NullLoggerFactory.Instance,
-            Now,
+            nowUtc,
             ActionPlanDueJob.DefaultBatchSize,
             ActionPlanDueJob.DefaultWindow,
             ActionPlanDueJob.DefaultLookback,
@@ -191,6 +194,124 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
     }
 
     [Fact]
+    public async Task The_nudge_names_its_plan_so_the_inbox_and_the_mail_can_link_to_it()
+    {
+        await using var db = await FreshAsync();
+
+        var company = NewCompany();
+        var owner = NewUser(company.Id);
+        db.Companies.Add(company);
+        db.Users.Add(owner);
+        await db.SaveChangesAsync();
+
+        var plan = NewPlan(company.Id, owner.Id, owner.Id, dueInDays: 3);
+        db.ActionPlans.Add(plan);
+        await db.SaveChangesAsync();
+
+        await SweepAsync(db);
+
+        await using var read = CreateContext();
+        var raised = await read.Notifications.SingleAsync(n => n.UserId == owner.Id);
+
+        // The inbox reads `actionPlanId` (`notifications/next/derive.ts`) and the sender builds
+        // the mail's button from it. Nothing wrote it before, so neither ever had a link.
+        Assert.Equal(plan.Id, ActionPlanNotificationData.PlanIdOrNull(raised.Data));
+    }
+
+    [Fact]
+    public async Task A_plan_whose_owner_has_been_deactivated_raises_nothing()
+    {
+        await using var db = await FreshAsync();
+
+        var company = NewCompany();
+        var owner = NewUser(company.Id);
+        owner.IsActive = false;
+        db.Companies.Add(company);
+        db.Users.Add(owner);
+        await db.SaveChangesAsync();
+
+        db.ActionPlans.Add(NewPlan(company.Id, owner.Id, owner.Id, dueInDays: -2));
+        await db.SaveChangesAsync();
+
+        // Delivery would cancel it, and retention keeps a cancelled row for good -- a permanent
+        // record naming the plan, addressed to someone who will never read it.
+        Assert.Equal(0, (await SweepAsync(db)).Examined);
+        Assert.Empty(await db.Notifications.ToListAsync());
+    }
+
+    [Theory]
+    // The owner's own zone answers...
+    [InlineData("America/Costa_Rica", "UTC")]
+    // ...and when theirs was never set, the company's does.
+    [InlineData("UTC", "America/Costa_Rica")]
+    public async Task A_plan_due_tomorrow_is_not_called_overdue_on_the_evening_before(
+        string ownerTimezone, string companyTimezone)
+    {
+        await using var db = await FreshAsync();
+
+        var company = NewCompany(companyTimezone);
+        var owner = NewUser(company.Id, timezone: ownerTimezone);
+        db.Companies.Add(company);
+        db.Users.Add(owner);
+        await db.SaveChangesAsync();
+
+        // Exactly what the list page stores for a plan due on 7 August: `2026-08-07T00:00Z`,
+        // which in Costa Rica (UTC-6) is 18:00 on the 6th.
+        var plan = NewPlan(company.Id, owner.Id, owner.Id, dueInDays: 0);
+        plan.DueDate = new DateTimeOffset(2026, 8, 7, 0, 0, 0, TimeSpan.Zero);
+        db.ActionPlans.Add(plan);
+        await db.SaveChangesAsync();
+
+        // 18:30 on the 6th in Costa Rica. The screen says "vence mañana"; comparing the stored
+        // instant with this one said "está vencido".
+        await SweepAtAsync(db, new DateTimeOffset(2026, 8, 7, 0, 30, 0, TimeSpan.Zero));
+
+        await using var read = CreateContext();
+        var raised = await read.Notifications.SingleAsync(n => n.UserId == owner.Id);
+
+        Assert.Equal(
+            DeterministicNotificationId.ForActionPlanDue(plan.Id, owner.Id, ActionPlanDueJob.DueSoonTrigger),
+            raised.Id);
+        Assert.Equal(NotificationPriorities.Medium, raised.Priority);
+    }
+
+    [Fact]
+    public async Task A_plan_lapses_at_midnight_of_its_due_day_in_the_owners_zone()
+    {
+        await using var db = await FreshAsync();
+
+        var company = NewCompany();
+        var owner = NewUser(company.Id, timezone: "America/Costa_Rica");
+        db.Companies.Add(company);
+        db.Users.Add(owner);
+        await db.SaveChangesAsync();
+
+        // What the results page stores for a plan due on 6 August: noon UTC.
+        var plan = NewPlan(company.Id, owner.Id, owner.Id, dueInDays: 0);
+        plan.DueDate = new DateTimeOffset(2026, 8, 6, 12, 0, 0, TimeSpan.Zero);
+        db.ActionPlans.Add(plan);
+        await db.SaveChangesAsync();
+
+        var overdueId = DeterministicNotificationId.ForActionPlanDue(plan.Id, owner.Id, ActionPlanDueJob.OverdueTrigger);
+
+        // 23:30 on the 6th in Costa Rica: still its due day, so not yet overdue -- although
+        // the stored instant passed eleven hours ago.
+        await SweepAtAsync(db, new DateTimeOffset(2026, 8, 7, 5, 30, 0, TimeSpan.Zero));
+        Assert.False(await db.Notifications.AnyAsync(n => n.Id == overdueId));
+
+        // 00:30 on the 7th: now it is.
+        await using var later = await MigratedAsync(CreateContext());
+        await SweepAtAsync(later, new DateTimeOffset(2026, 8, 7, 6, 30, 0, TimeSpan.Zero));
+
+        await using var read = CreateContext();
+        var overdue = await read.Notifications.SingleAsync(n => n.Id == overdueId);
+
+        // Owed from the first minute of the day after the due day, in the owner's zone --
+        // 7 August 00:00 in Costa Rica -- never from the wall clock of the tick that noticed.
+        Assert.Equal(new DateTimeOffset(2026, 8, 7, 6, 0, 0, TimeSpan.Zero), overdue.ScheduledFor);
+    }
+
+    [Fact]
     public async Task An_overdue_plan_is_nudged_with_a_different_identity_and_a_higher_priority()
     {
         await using var db = await FreshAsync();
@@ -221,9 +342,9 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
             DeterministicNotificationId.ForActionPlanDue(plan.Id, owner.Id, ActionPlanDueJob.DueSoonTrigger),
             raised.Id);
 
-        // Owed when the plan lapsed, not when the tick noticed -- so a late sweep records the
-        // deadline rather than its own wall clock.
-        Assert.Equal(plan.DueDate, raised.ScheduledFor, TimeSpan.FromSeconds(1));
+        // Owed from the start of the day after the due day, not when the tick noticed -- so a
+        // late sweep records the deadline rather than its own wall clock. Due 1 August, UTC.
+        Assert.Equal(new DateTimeOffset(2026, 8, 2, 0, 0, 0, TimeSpan.Zero), raised.ScheduledFor);
     }
 
     [Fact]
@@ -332,7 +453,7 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
         await using var read = CreateContext();
         var raised = await read.Notifications.SingleAsync(n => n.UserId == owner.Id);
 
-        Assert.Equal("Un plan de accion a tu cargo vence pronto", raised.Title);
+        Assert.Equal("Un plan de acción a tu cargo vence pronto", raised.Title);
         // The plan's OWN Spanish title, resolved for the recipient, not the English column.
         Assert.Contains("Reducir la carga de trabajo en Operaciones", raised.Message, StringComparison.Ordinal);
     }

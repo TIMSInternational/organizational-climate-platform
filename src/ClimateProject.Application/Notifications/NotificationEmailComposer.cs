@@ -53,13 +53,15 @@ public static class NotificationEmailComposer
             WhyReceiving: "You are receiving this because you have an account on {0}.",
             ManagePreferences: "Manage your notification preferences",
             SubjectFallback: "A notification from {0}",
-            OpenSurvey: "Open the survey"),
+            OpenSurvey: "Open the survey",
+            OpenActionPlan: "Open the plan"),
         [ContentLanguages.Spanish] = new EmailChrome(
             Greeting: "Hola {0}:",
             WhyReceiving: "Recibes este mensaje porque tienes una cuenta en {0}.",
             ManagePreferences: "Gestiona tus preferencias de notificación",
             SubjectFallback: "Una notificación de {0}",
-            OpenSurvey: "Abrir la encuesta"),
+            OpenSurvey: "Abrir la encuesta",
+            OpenActionPlan: "Abrir el plan"),
     };
 
     /// <summary>
@@ -143,6 +145,13 @@ public static class NotificationEmailComposer
         // cannot disagree about whether this mail has a destination.
         var hasSurveyLink = !string.IsNullOrWhiteSpace(surveyUrl);
 
+        // The link's label names its destination. Every link was a survey until an action
+        // plan's due-date nudge carried one; "Abrir la encuesta" on a button that opens a plan
+        // is the mail contradicting itself.
+        var linkLabel = notification.Type == NotificationTypes.ActionPlanAlert
+            ? chrome.OpenActionPlan
+            : chrome.OpenSurvey;
+
         var html = new StringBuilder();
         html.Append(EmailBranding.Heading(subject));
         html.Append(EmailBranding.Paragraphs(greeting));
@@ -158,7 +167,7 @@ public static class NotificationEmailComposer
         }
         if (hasSurveyLink)
         {
-            html.Append(EmailBranding.Button(surveyUrl!, chrome.OpenSurvey));
+            html.Append(EmailBranding.Button(surveyUrl!, linkLabel));
         }
 
         var footer = new StringBuilder();
@@ -179,7 +188,7 @@ public static class NotificationEmailComposer
             // The bare URL, not a label wrapping one. A plain-text reader has to be able to
             // copy this line into a browser, and every mail client that autolinks text needs
             // the scheme and the whole of the path present as characters.
-            text.Append(chrome.OpenSurvey).Append(": ").Append(surveyUrl).Append("\n\n");
+            text.Append(linkLabel).Append(": ").Append(surveyUrl).Append("\n\n");
         }
 
         text.Append("--\n").Append(why);
@@ -207,5 +216,6 @@ public static class NotificationEmailComposer
         string WhyReceiving,
         string ManagePreferences,
         string SubjectFallback,
-        string OpenSurvey);
+        string OpenSurvey,
+        string OpenActionPlan);
 }

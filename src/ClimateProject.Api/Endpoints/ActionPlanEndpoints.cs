@@ -96,10 +96,13 @@ public static class ActionPlanEndpoints
         var ownerName = plan.OwnerId.HasValue
             ? await db.Users.Where(u => u.Id == plan.OwnerId.Value).Select(u => u.Name).FirstOrDefaultAsync(cancellationToken)
             : null;
+        var departmentName = plan.DepartmentId.HasValue
+            ? await db.Departments.Where(d => d.Id == plan.DepartmentId.Value).Select(d => d.Name).FirstOrDefaultAsync(cancellationToken)
+            : null;
 
         return new ActionPlanDetail(plan.Id, title, description, plan.CompanyId, plan.DepartmentId, plan.CreatedBy,
             plan.DueDate, plan.Status, plan.Priority, plan.Tags, plan.SourceSurveyId, plan.OwnerId, ownerName,
-            plan.TemplateId, kpis, objectives, fallbackFields);
+            plan.TemplateId, kpis, objectives, fallbackFields, departmentName);
     }
 
     private static async Task<IResult> ListAsync(
@@ -139,6 +142,7 @@ public static class ActionPlanEndpoints
                     // navigationless FK. A name per row is what the table prints, and fetching
                     // it per row from the client is N round trips for a column.
                     OwnerName = db.Users.Where(u => u.Id == p.OwnerId).Select(u => u.Name).FirstOrDefault(),
+                    DepartmentName = db.Departments.Where(d => d.Id == p.DepartmentId).Select(d => d.Name).FirstOrDefault(),
                 })
                 .ToListAsync(cancellationToken))
             .Select(p => new ActionPlanListItem(
@@ -148,7 +152,7 @@ public static class ActionPlanEndpoints
                 // The projection is explicit rather than `Select(p => p)` so a column is only
                 // read when a caller needs it; these two are what makes a plan's origin
                 // readable at all, and both were already on the row.
-                p.SourceSurveyId, p.Tags ?? [], p.OwnerId, p.OwnerName))
+                p.SourceSurveyId, p.Tags ?? [], p.OwnerId, p.OwnerName, p.DepartmentName))
             .ToList();
 
         return Results.Ok(new ActionPlanListResponse(plans));

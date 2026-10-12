@@ -48,7 +48,7 @@ public static class ScheduledNotificationCopy
 
     private static readonly Phrase ReminderBodyNamed = new(
         "You have not yet completed \"{0}\". It closes on {1}.",
-        "Aun no has completado \"{0}\". Cierra el {1}.");
+        "Aún no has completado \"{0}\". Cierra el {1}.");
 
     private static readonly Phrase ReminderBodyUnnamed = new(
         "You have a pending response. It closes on {0}.",
@@ -56,15 +56,15 @@ public static class ScheduledNotificationCopy
 
     private static readonly Phrase ReportReadyTitle = new(
         "Your scheduled report is ready",
-        "Tu informe programado esta listo");
+        "Tu informe programado está listo");
 
     private static readonly Phrase ReportReadyBodyNamed = new(
         "Your scheduled report \"{0}\" for {1} has been generated and is ready to download.",
-        "Tu informe programado \"{0}\" del {1} se ha generado y esta listo para descargar.");
+        "Tu informe programado \"{0}\" del {1} se ha generado y está listo para descargar.");
 
     private static readonly Phrase ReportReadyBodyUnnamed = new(
         "Your scheduled report for {0} has been generated and is ready to download.",
-        "Tu informe programado del {0} se ha generado y esta listo para descargar.");
+        "Tu informe programado del {0} se ha generado y está listo para descargar.");
 
     private static readonly Phrase DigestTitle = new(
         "Your activity summary",
@@ -72,19 +72,15 @@ public static class ScheduledNotificationCopy
 
     private static readonly Phrase DigestBodySingle = new(
         "You have 1 new notification since {0}.",
-        "Tienes 1 notificacion nueva desde el {0}.");
+        "Tienes 1 notificación nueva desde el {0}.");
 
     private static readonly Phrase DigestBodyMany = new(
         "You have {0} new notifications since {1}.",
         "Tienes {0} notificaciones nuevas desde el {1}.");
 
-    // Unaccented Spanish, matching every other phrase in this file. That is this file's
-    // existing convention, not a judgement that it is right -- "notificacion" and "esta
-    // listo" are already here. Flagged rather than silently diverged from: fixing it is one
-    // sweep of this file, and a half-accented file would be worse than either state.
     private static readonly Phrase PlanDueSoonTitle = new(
         "An action plan you own is due soon",
-        "Un plan de accion a tu cargo vence pronto");
+        "Un plan de acción a tu cargo vence pronto");
 
     private static readonly Phrase PlanDueSoonBodyNamed = new(
         "\"{0}\" is due on {1}. Record progress or move the date before it lapses.",
@@ -92,19 +88,19 @@ public static class ScheduledNotificationCopy
 
     private static readonly Phrase PlanDueSoonBodyUnnamed = new(
         "An action plan you own is due on {0}. Record progress or move the date before it lapses.",
-        "Un plan de accion a tu cargo vence el {0}. Registra un avance o cambia la fecha antes de que venza.");
+        "Un plan de acción a tu cargo vence el {0}. Registra un avance o cambia la fecha antes de que venza.");
 
     private static readonly Phrase PlanOverdueTitle = new(
         "An action plan you own is overdue",
-        "Un plan de accion a tu cargo esta vencido");
+        "Un plan de acción a tu cargo está vencido");
 
     private static readonly Phrase PlanOverdueBodyNamed = new(
         "\"{0}\" was due on {1} and has not been closed.",
-        "\"{0}\" vencio el {1} y sigue abierto.");
+        "\"{0}\" venció el {1} y sigue abierto.");
 
     private static readonly Phrase PlanOverdueBodyUnnamed = new(
         "An action plan you own was due on {0} and has not been closed.",
-        "Un plan de accion a tu cargo vencio el {0} y sigue abierto.");
+        "Un plan de acción a tu cargo venció el {0} y sigue abierto.");
 
     /// <summary>Subject line for a due-date nudge, which reads differently once the date has passed.</summary>
     public static string PlanDueTitleFor(string? locale, bool overdue)
