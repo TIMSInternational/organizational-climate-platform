@@ -121,8 +121,9 @@ export function outcomeLook(titleKey: string, tone: EntryOutcome['tone']): Outco
  * log in (ruled 2026-10-12) -- the person who scanned a QR on their phone has no account --
  * so this card offers no sign-in, whatever this browser holds. It used to offer one, which
  * was the phone asking a respondent to "inicie sesión" with an account nobody gave them.
- * Since the same ruling a link can no longer be minted on an identified survey
- * (`SurveyDistributionEndpoints.IdentifiedSurveyHasNoLink`), so this is the legacy case.
+ * Since the same ruling an unauthenticated visitor is served on every open survey, identified
+ * or not, and answers it anonymously -- so a 401 here means the survey stopped accepting
+ * responses.
  */
 export function respondFailureOutcome(status: number | null): EntryOutcome {
   switch (status) {

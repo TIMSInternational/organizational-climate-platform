@@ -245,8 +245,12 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
         Assert.True(created.Settings.Anonymous);
     }
 
+    // Every survey has a link and a QR, whatever it records (ruled 2026-10-12, reversing #540):
+    // nobody who opens one logs in, and ResolveRespondentAsync answers an unauthenticated
+    // visitor anonymously on every survey -- SurveyResponseEndpointsTests pins that half.
+
     [Fact]
-    public async Task A_public_link_is_refused_on_a_survey_that_records_who_answers()
+    public async Task A_public_link_is_minted_on_a_survey_that_records_who_answers()
     {
         var client = await AdminAAsync();
         var survey = await CreateActiveSurveyAsync(client); // identified, stated explicitly
@@ -254,16 +258,17 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
         var response = await client.PutAsJsonAsync(
             $"/surveys/{survey.Id}/distribution", new UpsertSurveyDistributionRequest(AccessType: SurveyAccessTypes.Public));
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var detail = await response.Content.ReadFromJsonAsync<SurveyDistributionDetail>();
+        Assert.NotNull(detail!.PublicLink);
 
-        // Refused before anything was written: no link exists to be printed as a QR.
         var stored = await _harness.WithDbAsync(db => db.SurveyDistributions
-            .AsNoTracking().Where(d => d.SurveyId == survey.Id).Select(d => d.PublicUrl).ToListAsync());
-        Assert.All(stored, Assert.Null);
+            .AsNoTracking().Where(d => d.SurveyId == survey.Id).Select(d => d.PublicUrl).SingleAsync());
+        Assert.NotNull(stored);
     }
 
     [Fact]
-    public async Task Regenerating_a_link_is_refused_on_a_survey_that_records_who_answers()
+    public async Task Regenerating_a_link_works_on_a_survey_that_records_who_answers()
     {
         var client = await AdminAAsync();
         var survey = await CreateActiveSurveyAsync(client);
@@ -273,11 +278,13 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
 
         var regenerated = await client.PostAsync($"/surveys/{survey.Id}/distribution/link/regenerate", null);
 
-        Assert.Equal(HttpStatusCode.BadRequest, regenerated.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, regenerated.StatusCode);
+        var detail = await regenerated.Content.ReadFromJsonAsync<SurveyDistributionDetail>();
+        Assert.NotNull(detail!.PublicLink);
     }
 
     [Fact]
-    public async Task A_survey_with_a_live_link_cannot_be_made_one_that_records_who_answers()
+    public async Task A_survey_with_a_live_link_can_be_made_one_that_records_who_answers()
     {
         var client = await AdminAAsync();
 
@@ -292,10 +299,12 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
         var flipped = await client.PutAsJsonAsync(
             $"/surveys/{draft.Id}", new UpdateSurveyRequest(Settings: new SurveySettingsInput(Anonymous: false)));
 
-        Assert.Equal(HttpStatusCode.BadRequest, flipped.StatusCode);
-        var stillAnonymous = await _harness.WithDbAsync(db => db.Surveys
-            .AsNoTracking().Where(x => x.Id == draft.Id).Select(x => x.Settings.Anonymous).SingleAsync());
-        Assert.True(stillAnonymous);
+        Assert.Equal(HttpStatusCode.OK, flipped.StatusCode);
+        var (anonymous, link) = await _harness.WithDbAsync(async db => (
+            await db.Surveys.AsNoTracking().Where(x => x.Id == draft.Id).Select(x => x.Settings.Anonymous).SingleAsync(),
+            await db.SurveyDistributions.AsNoTracking().Where(d => d.SurveyId == draft.Id).Select(d => d.PublicUrl).SingleAsync()));
+        Assert.False(anonymous);
+        Assert.NotNull(link); // the link survives the flip: its holders can still answer
     }
 
     [Fact]

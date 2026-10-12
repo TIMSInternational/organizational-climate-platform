@@ -68,8 +68,7 @@ public static class MicroclimateEndpoints
         // AllowAnonymous so the public MicroclimateRespondPage (Task 7) can load a microclimate's
         // title/questions without a JWT -- GetAsync still enforces its own access rule below
         // (authenticated requests get the usual CanAccessCompany check; unauthenticated requests
-        // are only served when the microclimate is configured for AnonymousResponses AND is
-        // currently active, mirroring the policy SubmitResponseAsync already enforces for the
+        // are served whenever the microclimate is currently active, mirroring the policy SubmitResponseAsync already enforces for the
         // actual submission, and are served a reduced PublicMicroclimateDetail payload instead
         // of the full admin detail).
         group.MapGet("/{id:guid}", GetAsync).AllowAnonymous();
@@ -710,11 +709,11 @@ public static class MicroclimateEndpoints
             // the cross-tenant boundary this route has always had does not move for a respond link.
         }
 
-        // Unauthenticated visitors may only view microclimates that are both configured for
-        // anonymous responses AND currently active -- the same policy SubmitResponseAsync
-        // enforces for the actual submission. Draft (unlaunched) and closed (finished)
-        // microclimates must never be publicly readable, even when AnonymousResponses is true.
-        if (!microclimate.RealtimeSettings.AnonymousResponses || !MicroclimateStatuses.AcceptsResponses(microclimate.Status))
+        // Unauthenticated visitors may view any microclimate that is currently active, whatever
+        // AnonymousResponses says: every link is answerable and nobody who opens one logs in
+        // (ruled 2026-10-12) -- the same policy SubmitResponseAsync enforces for the submission.
+        // Draft (unlaunched) and closed (finished) microclimates are never publicly readable.
+        if (!MicroclimateStatuses.AcceptsResponses(microclimate.Status))
         {
             return Results.Json(new { message = "This microclimate is not currently available" }, statusCode: 401);
         }
@@ -1521,13 +1520,11 @@ public static class MicroclimateEndpoints
 
         var isAuthenticated = httpContext.User.Identity?.IsAuthenticated ?? false;
 
-        if (!microclimate.RealtimeSettings.AnonymousResponses)
+        // An unauthenticated visitor answers any open microclimate, anonymous or not (ruled
+        // 2026-10-12: nobody who opens a link logs in). Nothing about the respondent is stored
+        // on a microclimate response, so there is no identity this could fail to record.
+        if (!microclimate.RealtimeSettings.AnonymousResponses && isAuthenticated)
         {
-            if (!isAuthenticated)
-            {
-                return Results.Json(new { message = "This microclimate requires authentication to respond" }, statusCode: 401);
-            }
-
             // Non-anonymous microclimates require the submitter to belong to the same
             // company -- otherwise any authenticated user from any company could inflate
             // another company's ResponseCount/word cloud. Membership, NOT administration:

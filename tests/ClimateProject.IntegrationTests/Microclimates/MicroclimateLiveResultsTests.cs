@@ -160,7 +160,7 @@ public class MicroclimateLiveResultsTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Non_anonymous_microclimate_requires_authentication_to_submit_a_response()
+    public async Task Non_anonymous_microclimate_accepts_a_signed_out_respondent()
     {
         var client = _factory.CreateClient();
         var adminToken = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin);
@@ -170,7 +170,8 @@ public class MicroclimateLiveResultsTests : IAsyncLifetime
         var response = await anonymousClient.PostAsJsonAsync($"/microclimates/{microclimateId}/responses", new SubmitResponseRequest(
             new Dictionary<Guid, string> { [questionId] = "hello" }));
 
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        // Nobody who opens a link logs in (ruled 2026-10-12), on any microclimate.
+        Assert.True(response.IsSuccessStatusCode, response.StatusCode.ToString());
     }
 
     [Fact]

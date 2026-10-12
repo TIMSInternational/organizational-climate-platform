@@ -1097,8 +1097,8 @@ public class InvitationEmailLinkTests : IAsyncLifetime, IClassFixture<CapturingM
     public async Task Revoking_the_public_distribution_link_does_not_cancel_anybodys_invitation_mail()
     {
         var client = await AdminAsync();
-        // Anonymous: since 2026-10-12 a public link exists only on a survey whoever holds it
-        // can answer without an account (`IdentifiedSurveyHasNoLink`).
+        // Anonymous only because this test is about the e-mail link, not anonymity: every
+        // survey may have a public link since 2026-10-12.
         var survey = await SurveyTestHarness.CreateSurveyAsync(
             client, SurveyTestHarness.MinimalRequest(_companyId) with { Settings = new SurveySettingsInput(Anonymous: true) });
         (await SurveyTestHarness.SetStatusAsync(client, survey.Id, SurveyStatuses.Active)).EnsureSuccessStatusCode();

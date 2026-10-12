@@ -239,11 +239,6 @@ public static class SurveyDistributionEndpoints
 
         var accessType = request.AccessType ?? distribution.AccessType;
 
-        if (accessType == SurveyAccessTypes.Public && !survey!.Settings.Anonymous)
-        {
-            return IdentifiedSurveyHasNoLink();
-        }
-
         ApplyAccessRules(distribution.AccessRules, request.AccessRules);
         ApplyQrCustomization(distribution.QrCustomization, request.QrCustomization);
 
@@ -274,24 +269,6 @@ public static class SurveyDistributionEndpoints
         return isNew ? Results.Json(detail, statusCode: 201) : Results.Ok(detail);
     }
 
-    /// <summary>
-    /// The refusal for a public link or QR on a survey that records who answers.
-    ///
-    /// <para>Whoever scans a QR or follows the mass link has no account -- respondents never
-    /// log in (ruled 2026-10-12) -- and <c>ResolveRespondentAsync</c> serves an unauthenticated
-    /// visitor only on an anonymous survey. A link on an identified survey therefore opened
-    /// onto a 401 the visitor read as "inicie sesión", on a phone with no account to sign in
-    /// with. Refused where the link is minted, so the QR that cannot be answered is never
-    /// printed, rather than explained to every person who scans it.</para>
-    /// </summary>
-    internal static IResult IdentifiedSurveyHasNoLink()
-        => Results.Json(
-            new
-            {
-                message = "A survey shared by link or QR code must be anonymous: whoever opens the link has no account to sign in with.",
-            },
-            statusCode: 400);
-
     private static async Task<IResult> RegenerateLinkAsync(
         Guid surveyId,
         string? lang,
@@ -309,11 +286,6 @@ public static class SurveyDistributionEndpoints
         if (distribution is null)
         {
             return Results.Json(new { message = "This survey has no distribution configured yet." }, statusCode: 404);
-        }
-
-        if (!survey!.Settings.Anonymous)
-        {
-            return IdentifiedSurveyHasNoLink();
         }
 
         var now = UtcNow();

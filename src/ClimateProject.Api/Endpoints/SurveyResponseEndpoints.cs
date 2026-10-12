@@ -172,11 +172,15 @@ public static class SurveyResponseEndpoints
 
         if (!isAuthenticated)
         {
-            // Same policy the microclimate respond path settled on: a public link is only
-            // honoured when the survey is BOTH configured anonymous AND currently open.
+            // Every survey has a link and a QR, and nobody who opens one logs in (ruled
+            // 2026-10-12). So an unauthenticated visitor is served whenever the survey is
+            // open, whatever Settings.Anonymous says -- and is recorded as an ANONYMOUS
+            // respondent even on an identified survey: there is nobody to identify, and the
+            // respond view tells them so (see GetRespondViewAsync). Who took part is a
+            // separate participation list, never joined to the answers.
             // A draft or closed survey is never publicly readable, whatever its settings
             // say -- the settings describe how it will be answered, not whether it may be.
-            return isAnonymousSurvey && SurveyStatuses.AcceptsResponses(survey.Status)
+            return SurveyStatuses.AcceptsResponses(survey.Status)
                 ? new RespondentResolution(new Respondent(null, null, true), null)
                 : new RespondentResolution(null, Unavailable());
         }
@@ -281,7 +285,10 @@ public static class SurveyResponseEndpoints
             fallbackFields,
             survey.StartDate,
             survey.EndDate,
-            survey.Settings.Anonymous,
+            // What is stored for THIS visitor, not the survey's setting: an unauthenticated
+            // visitor to an identified survey answers anonymously, and the promise on their
+            // screen has to say so.
+            respondent.IsAnonymous,
             survey.Settings.AllowPartialResponses,
             survey.Settings.AutoSave,
             survey.Settings.RandomizeQuestions,
@@ -875,9 +882,9 @@ public static class SurveyResponseEndpoints
     /// <list type="bullet">
     /// <item>The survey must have the setting ON. It is opt-in; see
     /// <c>SurveySettings.SelfDeclaredDemographics</c> for why deriving it was rejected.</item>
-    /// <item>The survey must be ANONYMOUS. On an identified survey the public respond GET
-    /// 401s the visitor to a login screen anyway, so there is no unauthenticated
-    /// respondent to ask.</item>
+    /// <item>The respondent must be stored ANONYMOUSLY. An unauthenticated visitor always is
+    /// -- on an identified survey too, since the 2026-10-12 ruling that every survey has a
+    /// link -- so a link visitor is asked whenever the survey has the setting on.</item>
     /// <item>The respondent must be UNAUTHENTICATED. A signed-in respondent's demographics
     /// are snapshotted from their own profile by <see cref="CaptureDemographicsAsync"/>,
     /// through the write-time cohort floor. Letting them self-declare instead would let
