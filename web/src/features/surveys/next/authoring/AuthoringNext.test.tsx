@@ -27,6 +27,7 @@ import * as templatesApi from '../../api/surveyTemplates'
 import * as questionAuthoring from '../../api/surveyQuestionAuthoring'
 import * as bankApi from '../../../questions/api/questionBank'
 import * as usersApi from '../../../org-structure/api/users'
+import es from '../../../../i18n/es.json'
 
 vi.mock('../../api/surveyDrafts', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../api/surveyDrafts')>()),
@@ -89,7 +90,9 @@ function survey(over: Partial<SurveyDetail> = {}): SurveyDetail {
     startDate: '2026-09-03T12:00:00Z', endDate: '2026-10-10T12:00:00Z', responseCount: 3, targetAudienceCount: 24, version: 1,
     departmentIds: ['d1', 'd2'],
     questions: [question(0, 'psychological_safety', 'Puedo plantear preocupaciones.'), question(1, 'workload', 'Mi carga es sostenible.')],
-    settings: { anonymous: false, notificationSendReminders: true, notificationReminderFrequencyDays: 3 } as SurveyDetail['settings'],
+    // Anonymous: the shape every survey the builder and the API create now has (ruled
+    // 2026-10-12). An identified survey is the legacy case and is tested by name below.
+    settings: { anonymous: true, notificationSendReminders: true, notificationReminderFrequencyDays: 3 } as SurveyDetail['settings'],
     allowedStatusTransitions: ['closed'], isContentEditable: false, createdAt: '', updatedAt: '',
     ...over,
   }
@@ -255,6 +258,19 @@ describe('Detalle de encuesta (SurveyDetail artboard)', () => {
     expect(within(card).queryByRole('img', { name: /QR/i })).toBeNull()
     await userEvent.click(within(card).getByRole('button', { name: 'Mostrar el enlace' }))
     expect(screen.getByTestId('detail-link').textContent).toContain(`/s/${LINK_SEGMENT}`)
+  })
+
+  /**
+   * An identified survey's link could not be answered: whoever scans it has no account, and
+   * the API serves an unauthenticated visitor only on an anonymous survey. The phone said
+   * "inicie sesión". So the panel says why there is no link and draws neither it nor a QR.
+   */
+  it('draws no link and no QR for a survey that records who answers, and says why', () => {
+    detail(survey({ settings: { anonymous: false, notificationSendReminders: true, notificationReminderFrequencyDays: 3 } as SurveyDetail['settings'] }))
+    const card = screen.getByTestId('detail-link')
+    expect(card.textContent).toContain(es.surveys.next.distribution.identifiedNoLink)
+    expect(card.textContent).not.toContain(`/s/${LINK_SEGMENT}`)
+    expect(within(card).queryByRole('img', { name: /QR/i })).toBeNull()
   })
 
   it("prints the fact sheet's rows as the artboard does: sentence-case type, no anonymity row", () => {

@@ -4293,6 +4293,7 @@
         "and": "and",
         "linkTitle": "Public link",
         "createLink": "Create link",
+        "identifiedNoLink": "This survey records who answers, so it cannot be shared by link or QR code: whoever opens it has no account to sign in with. New surveys are anonymous.",
         "linkHelpLogin": "Each invitation carries its own personal link. This one can be pasted in the internal channel and asks respondents to sign in first.",
         "linkHelpOpen": "Each invitation carries its own personal link. This one can also be pasted in the internal channel.",
         "noLink": "No public link: the survey arrives by invitation only.",
@@ -5412,7 +5413,8 @@
       "entryPaceOne": "One question. Less than a minute.",
       "entryPaceBrief": "{count} questions, one at a time. Less than a minute.",
       "entrySignInTitle": "This survey records who answers",
-      "entrySignInBody": "To answer it, sign in with your account."
+      "entrySignInBody": "To answer it, sign in with your account.",
+      "entryLinkUnavailableBody": "It may have closed. If you think you should be able to answer it, let whoever shared the link with you know."
     }
   },
   "surveyResults": {

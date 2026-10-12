@@ -877,7 +877,9 @@ function StepForm({
           value={values.targetAudienceCount}
           onChange={(next) => patch({ targetAudienceCount: next })}
         />
-        <CheckboxField label={t('surveys.anonymous')} checked={values.anonymous} onChange={(checked) => patch({ anonymous: checked })} />
+        {/* No "Anónima" checkbox: respondents never log in (ruled 2026-10-12), and only an
+            anonymous survey can be answered without an account, so every survey built here is
+            one (`values.anonymous` defaults to true; the API defaults the same way). */}
         <CheckboxField label={t('surveys.allowPartialResponses')} checked={values.allowPartialResponses} onChange={(checked) => patch({ allowPartialResponses: checked })} />
         <CheckboxField label={t('surveys.showProgress')} checked={values.showProgress} onChange={(checked) => patch({ showProgress: checked })} />
       </>

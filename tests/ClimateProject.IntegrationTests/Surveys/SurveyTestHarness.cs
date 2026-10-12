@@ -242,7 +242,14 @@ internal sealed class SurveyTestHarness(AuthWebApplicationFactory factory, strin
                     "open_ended",
                     Order: 0),
             ],
-            Language: language);
+            Language: language,
+            // Identified, said out loud. Since 2026-10-12 `POST /surveys` makes a survey that
+            // says nothing about it ANONYMOUS (respondents never log in), and every one of
+            // this helper's callers was written against the old identified default: response
+            // counts, seats, the invitation ladder, a named respondent's department. Stating
+            // it keeps each of them testing what it was written to test.
+            // `A_survey_created_without_a_word_about_anonymity_is_anonymous` covers the default.
+            Settings: new SurveySettingsInput(Anonymous: false));
 
     public static async Task<SurveyDetail> CreateSurveyAsync(HttpClient client, CreateSurveyRequest request)
     {

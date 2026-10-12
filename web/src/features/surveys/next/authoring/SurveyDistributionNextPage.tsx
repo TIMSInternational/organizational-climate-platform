@@ -279,7 +279,7 @@ export function DistributionView({
             publicLink={distribution?.publicLink ?? null}
             accessType={distribution?.accessType}
             surveyId={survey.id}
-            requireLogin={distribution?.accessRules?.requireLogin ?? false}
+            anonymous={survey.settings.anonymous}
             onCreate={actionable ? actions.createLink : undefined}
             creating={busy}
             actions={linkActions}

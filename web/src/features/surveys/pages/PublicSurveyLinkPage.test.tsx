@@ -304,7 +304,7 @@ describe('PublicSurveyLinkPage', () => {
    * already ruled out "the survey is closed", so the respondent can be told the one
    * thing they can act on.
    */
-  it('asks a visitor with no session to sign in, when the survey records who answers', async () => {
+  it('never asks a visitor by link to sign in, even when the survey records who answers', async () => {
     serve({
       respond: () =>
         new Response(JSON.stringify({ message: 'This survey is not currently available' }), {
@@ -313,8 +313,13 @@ describe('PublicSurveyLinkPage', () => {
     })
     renderPage()
 
-    expect(await screen.findByText('Esta encuesta registra quién responde')).toBeTruthy()
-    expect(screen.getByRole('link', { name: 'Iniciar sesión' })).toBeTruthy()
+    // Respondents never log in (ruled 2026-10-12): the person who scanned the QR has no
+    // account, and this card asking them to "inicie sesión" is what their phone showed.
+    expect(await screen.findByText('Esta encuesta no está disponible')).toBeTruthy()
+    expect(screen.getByText(/Puede que ya haya cerrado/)).toBeTruthy()
+    expect(screen.queryByText('Esta encuesta registra quién responde')).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Iniciar sesión' })).toBeNull()
+    expect(screen.queryByText(/inici\w+ sesión/i)).toBeNull()
     // And nothing about the survey itself: the payload never arrived.
     expect(screen.queryByText('Clima laboral 2026')).toBeNull()
     expect(screen.queryByRole('button', { name: /Empezar/ })).toBeNull()

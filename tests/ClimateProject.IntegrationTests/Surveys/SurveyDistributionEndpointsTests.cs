@@ -211,7 +211,7 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
     public async Task A_public_distribution_mints_an_opaque_link_that_resolves_without_authentication()
     {
         var client = await AdminAAsync();
-        var survey = await CreateActiveSurveyAsync(client);
+        var survey = await CreateActiveSurveyAsync(client, anonymous: true);
 
         var response = await client.PutAsJsonAsync(
             $"/surveys/{survey.Id}/distribution", new UpsertSurveyDistributionRequest(AccessType: SurveyAccessTypes.Public));
@@ -228,11 +228,81 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
         Assert.Equal("Q3 Climate Survey", resolved.SurveyTitle);
     }
 
+    // -- respondents never log in (ruled 2026-10-12) ---------------------------------------
+    //
+    // A QR on "Q4 Climate Survey (open)" asked a phone to "inicie sesión". The survey was
+    // identified, and `ResolveRespondentAsync` serves an unauthenticated visitor only on an
+    // anonymous one, so the link could be scanned by everyone and answered by no one.
+
+    [Fact]
+    public async Task A_survey_created_without_a_word_about_anonymity_is_anonymous()
+    {
+        var client = await AdminAAsync();
+
+        var created = await SurveyTestHarness.CreateSurveyAsync(
+            client, SurveyTestHarness.MinimalRequest(_companyAId) with { Settings = null });
+
+        Assert.True(created.Settings.Anonymous);
+    }
+
+    [Fact]
+    public async Task A_public_link_is_refused_on_a_survey_that_records_who_answers()
+    {
+        var client = await AdminAAsync();
+        var survey = await CreateActiveSurveyAsync(client); // identified, stated explicitly
+
+        var response = await client.PutAsJsonAsync(
+            $"/surveys/{survey.Id}/distribution", new UpsertSurveyDistributionRequest(AccessType: SurveyAccessTypes.Public));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        // Refused before anything was written: no link exists to be printed as a QR.
+        var stored = await _harness.WithDbAsync(db => db.SurveyDistributions
+            .AsNoTracking().Where(d => d.SurveyId == survey.Id).Select(d => d.PublicUrl).ToListAsync());
+        Assert.All(stored, Assert.Null);
+    }
+
+    [Fact]
+    public async Task Regenerating_a_link_is_refused_on_a_survey_that_records_who_answers()
+    {
+        var client = await AdminAAsync();
+        var survey = await CreateActiveSurveyAsync(client);
+        (await client.PutAsJsonAsync(
+            $"/surveys/{survey.Id}/distribution",
+            new UpsertSurveyDistributionRequest(AccessType: SurveyAccessTypes.Tokenized))).EnsureSuccessStatusCode();
+
+        var regenerated = await client.PostAsync($"/surveys/{survey.Id}/distribution/link/regenerate", null);
+
+        Assert.Equal(HttpStatusCode.BadRequest, regenerated.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_survey_with_a_live_link_cannot_be_made_one_that_records_who_answers()
+    {
+        var client = await AdminAAsync();
+
+        // A draft -- the only status whose content, anonymity included, may still change
+        // (`SurveyStatuses.AllowsContentEdit`) -- that has already been given its link.
+        var draft = await SurveyTestHarness.CreateSurveyAsync(
+            client, SurveyTestHarness.MinimalRequest(_companyAId) with { Settings = new SurveySettingsInput(Anonymous: true) });
+        (await client.PutAsJsonAsync(
+            $"/surveys/{draft.Id}/distribution",
+            new UpsertSurveyDistributionRequest(AccessType: SurveyAccessTypes.Public))).EnsureSuccessStatusCode();
+
+        var flipped = await client.PutAsJsonAsync(
+            $"/surveys/{draft.Id}", new UpdateSurveyRequest(Settings: new SurveySettingsInput(Anonymous: false)));
+
+        Assert.Equal(HttpStatusCode.BadRequest, flipped.StatusCode);
+        var stillAnonymous = await _harness.WithDbAsync(db => db.Surveys
+            .AsNoTracking().Where(x => x.Id == draft.Id).Select(x => x.Settings.Anonymous).SingleAsync());
+        Assert.True(stillAnonymous);
+    }
+
     [Fact]
     public async Task Regenerating_a_link_kills_the_previous_one()
     {
         var client = await AdminAAsync();
-        var survey = await CreateActiveSurveyAsync(client);
+        var survey = await CreateActiveSurveyAsync(client, anonymous: true);
 
         var first = await client.PutAsJsonAsync(
             $"/surveys/{survey.Id}/distribution", new UpsertSurveyDistributionRequest(AccessType: SurveyAccessTypes.Public));
@@ -257,7 +327,7 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
     public async Task A_revoked_link_returns_404_and_revoking_twice_is_not_an_error()
     {
         var client = await AdminAAsync();
-        var survey = await CreateActiveSurveyAsync(client);
+        var survey = await CreateActiveSurveyAsync(client, anonymous: true);
 
         var created = await client.PutAsJsonAsync(
             $"/surveys/{survey.Id}/distribution", new UpsertSurveyDistributionRequest(AccessType: SurveyAccessTypes.Public));
@@ -281,7 +351,7 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
     public async Task Switching_back_to_tokenized_revokes_the_link_rather_than_leaving_it_live()
     {
         var client = await AdminAAsync();
-        var survey = await CreateActiveSurveyAsync(client);
+        var survey = await CreateActiveSurveyAsync(client, anonymous: true);
 
         var created = await client.PutAsJsonAsync(
             $"/surveys/{survey.Id}/distribution", new UpsertSurveyDistributionRequest(AccessType: SurveyAccessTypes.Public));
@@ -298,7 +368,7 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
     public async Task A_share_link_stops_resolving_once_the_survey_stops_collecting()
     {
         var client = await AdminAAsync();
-        var survey = await CreateActiveSurveyAsync(client);
+        var survey = await CreateActiveSurveyAsync(client, anonymous: true);
 
         var created = await client.PutAsJsonAsync(
             $"/surveys/{survey.Id}/distribution", new UpsertSurveyDistributionRequest(AccessType: SurveyAccessTypes.Public));
@@ -316,7 +386,7 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
     public async Task Resolving_a_link_counts_the_access_without_fingerprinting_the_visitor()
     {
         var client = await AdminAAsync();
-        var survey = await CreateActiveSurveyAsync(client);
+        var survey = await CreateActiveSurveyAsync(client, anonymous: true);
 
         var created = await client.PutAsJsonAsync(
             $"/surveys/{survey.Id}/distribution", new UpsertSurveyDistributionRequest(AccessType: SurveyAccessTypes.Public));

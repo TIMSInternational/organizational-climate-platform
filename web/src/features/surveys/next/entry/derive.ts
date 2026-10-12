@@ -115,36 +115,21 @@ export function outcomeLook(titleKey: string, tone: EntryOutcome['tone']): Outco
  * What a failed `GET /surveys/{id}/respond` means **once the share link has already
  * resolved**, which is the only place this function is called from.
  *
- * That precondition is what makes the 401 branch legible. `ResolveRespondentAsync`
- * refuses an unauthenticated caller when the survey is not anonymous **or** is not
- * accepting responses, and deliberately does not say which — telling a stranger "this
- * exists but is not anonymous" is a disclosure about a tenant's survey. Here the second
- * half is already ruled out: `ResolvePublicLinkAsync` answers 404 unless
- * `SurveyStatuses.AcceptsResponses` is true, and it answered a moment ago. So a 401
- * with no credentials in hand means the survey records who answers, and the respondent
- * can be told the one thing they can act on — sign in — instead of the ambiguous
- * sentence the bare respond route has to use.
- *
- * With a token in hand the ambiguity is back: the browser sent a bearer and the server
- * did not accept it, which could be a stale session or a survey that closed in the
- * seconds since the resolve. That branch keeps the honest `unavailable` copy and still
- * offers the sign-in, because signing in again is the one thing that might help.
- *
- * @param signedIn whether this browser holds a token at all — `getToken() !== null`.
+ * A 401 here means `ResolveRespondentAsync` refused an unauthenticated visitor: the survey
+ * is not anonymous, or stopped accepting responses since the link resolved, and the server
+ * deliberately does not say which. Either way the visitor CANNOT act on it. Respondents never
+ * log in (ruled 2026-10-12) -- the person who scanned a QR on their phone has no account --
+ * so this card offers no sign-in, whatever this browser holds. It used to offer one, which
+ * was the phone asking a respondent to "inicie sesión" with an account nobody gave them.
+ * Since the same ruling a link can no longer be minted on an identified survey
+ * (`SurveyDistributionEndpoints.IdentifiedSurveyHasNoLink`), so this is the legacy case.
  */
-export function respondFailureOutcome(status: number | null, signedIn: boolean): EntryOutcome {
+export function respondFailureOutcome(status: number | null): EntryOutcome {
   switch (status) {
     case 400:
       return { titleKey: 'closedTitle', bodyKey: 'closedBody', tone: 'warning', signIn: false }
     case 401:
-      return signedIn
-        ? { titleKey: 'unavailableTitle', bodyKey: 'unavailableBody', tone: 'warning', signIn: true }
-        : {
-            titleKey: 'next.entrySignInTitle',
-            bodyKey: 'next.entrySignInBody',
-            tone: 'warning',
-            signIn: true,
-          }
+      return { titleKey: 'unavailableTitle', bodyKey: 'next.entryLinkUnavailableBody', tone: 'warning', signIn: false }
     case 403:
       return { titleKey: 'notYoursTitle', bodyKey: 'notYoursBody', tone: 'warning', signIn: false }
     case 404:
@@ -191,14 +176,8 @@ export type EntryState =
  *
  * @param answering set by the respondent pressing "Empezar"; the form owns the page
  * from then on.
- * @param signedIn whether this browser holds a token — see `respondFailureOutcome`.
  */
-export function entryState(
-  link: LinkLoad,
-  view: ViewLoad,
-  answering: boolean,
-  signedIn: boolean,
-): EntryState {
+export function entryState(link: LinkLoad, view: ViewLoad, answering: boolean): EntryState {
   if (link.status === 'resolving') return { status: 'waiting' }
 
   if (link.status === 'dead') {
@@ -219,7 +198,7 @@ export function entryState(
     case 'failed':
       return {
         status: 'blocked',
-        outcome: respondFailureOutcome(view.error?.status ?? null, signedIn),
+        outcome: respondFailureOutcome(view.error?.status ?? null),
         serverMessage: view.error?.message ?? '',
       }
     case 'ready':

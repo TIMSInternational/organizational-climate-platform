@@ -443,6 +443,13 @@ public static class SurveyEndpoints
             UpdatedAt = now,
         };
 
+        // Anonymous unless the caller says otherwise. Respondents never log in (ruled
+        // 2026-10-12), and an unauthenticated respondent can answer ONLY an anonymous survey
+        // (`ResolveRespondentAsync`), so a survey created without a word about it must be one
+        // they can answer. The entity's own default (false) is the legacy shape and stays,
+        // because changing it would silently re-read every row materialised without the flag.
+        survey.Settings.Anonymous = true;
+
         if (request.Settings is not null)
         {
             var settingsError = ApplySettings(survey.Settings, request.Settings, language);
@@ -681,6 +688,15 @@ public static class SurveyEndpoints
         survey.StartDate = startDate;
         survey.EndDate = endDate;
         if (request.TargetAudienceCount.HasValue) survey.TargetAudienceCount = request.TargetAudienceCount.Value;
+
+        if (request.Settings?.Anonymous == false
+            && await db.SurveyDistributions.AnyAsync(
+                d => d.SurveyId == survey.Id && d.PublicUrl != null, cancellationToken))
+        {
+            // The converse of the refusal where a link is minted: a survey with a live link or
+            // QR cannot become one that the people holding it are unable to answer.
+            return SurveyDistributionEndpoints.IdentifiedSurveyHasNoLink();
+        }
 
         if (request.Settings is not null)
         {

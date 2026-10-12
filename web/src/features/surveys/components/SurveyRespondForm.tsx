@@ -1452,8 +1452,11 @@ function LoadFailure({
       case 400:
         return { title: t('closedTitle'), description: t('closedBody'), signIn: false }
       case 401:
+        // A visitor by link has no account to sign in with (respondents never log in, ruled
+        // 2026-10-12), so they are told the survey is unavailable and offered nothing they
+        // cannot do. Only the authenticated route's expired session gets a sign-in.
         return publicEntry
-          ? { title: t('unavailableTitle'), description: t('unavailableBody'), signIn: true }
+          ? { title: t('unavailableTitle'), description: t('next.entryLinkUnavailableBody'), signIn: false }
           : { title: t('signInAgainTitle'), description: t('signInAgainBody'), signIn: true }
       case 403:
         return { title: t('notYoursTitle'), description: t('notYoursBody'), signIn: false }

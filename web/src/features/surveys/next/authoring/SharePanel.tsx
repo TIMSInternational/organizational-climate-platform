@@ -36,7 +36,7 @@ export default function SharePanel({
   publicLink,
   accessType,
   surveyId,
-  requireLogin = false,
+  anonymous = true,
   onCreate,
   creating = false,
   stacked = false,
@@ -49,11 +49,14 @@ export default function SharePanel({
   accessType?: string
   surveyId?: string
   /**
-   * Whether the distribution demands a session. It selects which of the two true sentences
-   * the reader gets, and it is NOT the survey's anonymity flag — the two disagreed in
-   * production, which is its own defect.
+   * The survey's own anonymity (`settings.anonymous`) — the flag the server actually decides
+   * a link visitor by. Respondents never log in (ruled 2026-10-12), so a link or QR on a
+   * survey that records who answers opens onto a refusal for everyone who scans it; the
+   * panel says so instead of drawing it, and the API refuses to mint one
+   * (`IdentifiedSurveyHasNoLink`). This replaced the distribution's `requireLogin`, which
+   * the server never enforced and which chose between two sentences, one of them false.
    */
-  requireLogin?: boolean
+  anonymous?: boolean
   /** Offered only where the caller can actually mint a link (`canAuthorSurveys`). */
   onCreate?: () => void
   creating?: boolean
@@ -80,6 +83,15 @@ export default function SharePanel({
   // their initial state from props, so the key remounts them rather than adding a controlled
   // mode to each.
   const [shown, setShown] = useState(true)
+
+  if (!anonymous) {
+    return (
+      <div className={cn('flex flex-col gap-2', className)} data-slot="share-panel" data-testid="share-panel" data-state="identified">
+        <H3>{share('title')}</H3>
+        <p className="m-0 text-sm text-fg-secondary">{dist('identifiedNoLink')}</p>
+      </div>
+    )
+  }
 
   if (publicLink === null) {
     return (
@@ -108,9 +120,7 @@ export default function SharePanel({
               {shown ? link('hide') : link('reveal')}
             </Button>
           </div>
-          <p className="m-0 text-sm text-fg-secondary">
-            {requireLogin ? dist('linkHelpLogin') : dist('linkHelpOpen')}
-          </p>
+          <p className="m-0 text-sm text-fg-secondary">{dist('linkHelpOpen')}</p>
           {/* Secondary ink, not tertiary, and not a warning tile. It is advice for one
               situation rather than a problem with the page, so an alert would cry wolf on
               every visit — but `text-fg-tertiary` measures 3.90:1 on a card in light and is
