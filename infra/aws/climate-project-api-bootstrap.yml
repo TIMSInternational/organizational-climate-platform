@@ -292,6 +292,18 @@ Resources:
                   - apprunner:UntagResource
                   - apprunner:UpdateService
                 Resource: "*"
+              # The service template owns an AWS::AppRunner::AutoScalingConfiguration since
+              # 2026-10-12 (#541: MaxSize 4). Without these the first CI deploy after #541 failed
+              # reading its ARN ("not authorized to perform apprunner:DescribeAutoScalingConfiguration")
+              # and rolled back -- the manual migration deploy had run as an admin and hid it.
+              - Sid: ManageAppRunnerAutoScaling
+                Effect: Allow
+                Action:
+                  - apprunner:CreateAutoScalingConfiguration
+                  - apprunner:DeleteAutoScalingConfiguration
+                  - apprunner:DescribeAutoScalingConfiguration
+                  - apprunner:ListAutoScalingConfigurations
+                Resource: "*"
               - Sid: ManageAppRunnerInstanceRole
                 Effect: Allow
                 Action:
