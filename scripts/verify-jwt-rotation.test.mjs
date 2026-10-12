@@ -62,7 +62,7 @@ function ghStub(prevArn) {
 }
 
 /** An aws that answers the three read-only calls `config` makes. */
-function awsStub(hasPrevious, account = '747814092517') {
+function awsStub(hasPrevious, account = '795965600143') {
   const dir = mkdtempSync(join(tmpdir(), 'aws-stub-'));
   const secrets = hasPrevious
     ? '{"TrackingJwtSecretArn":"a","DatabaseConnectionStringSecretArn":"b","InternalApiKeySecretArn":"c","EmailSmtpUsernameSecretArn":"d","EmailSmtpPasswordSecretArn":"e","TrackingJwtSecretPrevious":"f"}'
@@ -72,7 +72,7 @@ function awsStub(hasPrevious, account = '747814092517') {
     'printf \'%s\\n\' "aws $*" >> "${STUB_LOG:-/dev/null}"',
     'case "$*" in',
     `  *"sts get-caller-identity"*) printf '%s\\n' '${account}' ;;`,
-    "  *ServiceArn*) printf '%s\\n' 'arn:aws:apprunner:us-east-1:747814092517:service/climate-project-api-prod/126c3f28' ;;",
+    "  *ServiceArn*) printf '%s\\n' 'arn:aws:apprunner:us-east-2:795965600143:service/climate-project-api-prod/93676dfc' ;;",
     `  *"apprunner describe-service"*) printf '%s\\n' '${secrets}' ;;`,
     'esac',
     'exit 0',
@@ -278,9 +278,9 @@ test('config: with no previous key it reports the structural proof AND its limit
 });
 
 test('config: the wrong account is refused, not answered', async () => {
-  const dir = awsStub(false, '795965600143');
+  const dir = awsStub(false, '747814092517');
   const r = await run('config', { ghDir: dir });
   assert.equal(r.status, 1);
-  assert.match(r.stderr, /credentials are for account 795965600143/);
+  assert.match(r.stderr, /credentials are for account 747814092517/);
   assert.doesNotMatch(r.stdout, /OLD KEY IS NOT LOADED/);
 });

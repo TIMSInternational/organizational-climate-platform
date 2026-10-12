@@ -91,7 +91,7 @@ permissions:
   id-token: write
 
 env:
-  AWS_REGION: us-east-1
+  AWS_REGION: us-east-2
   SERVICE_NAME: climate-project-api-prod
   SERVICE_STACK_NAME: climate-project-api-prod
   OBSERVABILITY_STACK_NAME: climate-project-observability-prod

@@ -25,7 +25,7 @@ import { fileURLToPath } from 'node:url';
 const REPO = fileURLToPath(new URL('..', import.meta.url));
 const SCRIPT = join(REPO, 'scripts/wire-observability.sh');
 
-const ACCOUNT = '747814092517';
+const ACCOUNT = '795965600143'; // climate's own account since 2026-10-12
 const CRITICAL = `arn:aws:sns:us-east-1:${ACCOUNT}:climate-project-api-prod-alerts-critical`;
 const CONFIRMED_ARN = `${CRITICAL}:0dc4fc5a-1c40-416d-bafa-c41de85d7b07`;
 
@@ -173,11 +173,11 @@ test('CHECK=1 separates the three states by exit code: 1 none, 2 pending, 0 conf
 });
 
 test('the wrong AWS account is refused before anything is written', () => {
-  // The default profile on the dev machine is account 795965600143, where every read answers
-  // about the wrong account and a describe reads as a missing resource.
-  const r = run({ STUB_ACCOUNT: '795965600143' });
+  // The old shared account (747814092517) still answers every read -- about the wrong account,
+  // where the climate stacks no longer live -- so a describe would read as a missing resource.
+  const r = run({ STUB_ACCOUNT: '747814092517' });
   assert.equal(r.status, 1);
-  assert.match(r.stderr, /Refusing to run: account is 795965600143, expected 747814092517/);
+  assert.match(r.stderr, /Refusing to run: account is 747814092517, expected 795965600143/);
   assert.doesNotMatch(r.calls, /cloudformation deploy/);
   assert.doesNotMatch(r.calls, /sns subscribe/);
 });

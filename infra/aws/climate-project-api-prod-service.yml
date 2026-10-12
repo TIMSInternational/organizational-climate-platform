@@ -66,6 +66,14 @@ Parameters:
       - 2 vCPU
       - 4 vCPU
     Description: App Runner CPU allocation.
+  AutoScalingMaxSize:
+    Type: Number
+    Default: 4
+    MinValue: 1
+    MaxValue: 25
+    Description: >-
+      The most instances App Runner may run. See AppRunnerAutoScaling for why 4.
+
   Memory:
     Type: String
     Default: 0.5 GB
@@ -195,10 +203,31 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
 
+  # The service ran on App Runner's DEFAULT autoscaling until 2026-10-12: up to 25 instances.
+  # That is the cost ceiling of a burst nobody could have meant (25 x 0.25 vCPU), and 25
+  # instances x the per-instance pool is more connections than the Supabase pooler budget in
+  # infra/aws/README.md allows. Four answers this product's load -- 15 to a few hundred
+  # respondents, one administrator screen at a time -- with headroom; MinSize 1 keeps the
+  # nine background jobs running (they live in this process, see worker-hosting.md).
+  # The name is capped at 32 characters by App Runner; "-as" keeps the staging name inside it.
+  AppRunnerAutoScaling:
+    Type: AWS::AppRunner::AutoScalingConfiguration
+    Properties:
+      AutoScalingConfigurationName: !Sub ${ServiceName}-as
+      MinSize: 1
+      MaxSize: !Ref AutoScalingMaxSize
+      MaxConcurrency: 100
+      Tags:
+        - Key: Project
+          Value: climate-project-api
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
   AppRunnerService:
     Type: AWS::AppRunner::Service
     Properties:
       ServiceName: !Ref ServiceName
+      AutoScalingConfigurationArn: !GetAtt AppRunnerAutoScaling.AutoScalingConfigurationArn
       SourceConfiguration:
         AuthenticationConfiguration:
           AccessRoleArn: !Ref EcrAccessRoleArn
@@ -351,7 +380,8 @@ Resources:
       #   EF model builds and the first pooled connection opens; UnhealthyThreshold absorbs it
       #   four times over, and at Interval 20 the second probe lands long after warm-up.
       # Interval 20 (the maximum) -- each probe is now a real `SELECT 1` from every instance.
-      #   At the default autoscaling MaxSize of 25 that is 1.25 queries/second of pure
+      #   At the autoscaling MaxSize of 4 that is 0.2 queries/second of pure (it was 1.25 at App Runner's default of 25)
+      #  
       #   health-check traffic against the connection budget documented in infra/aws/README.md;
       #   10 would double it. It also doubles the outage window below, which is the larger win.
       # UnhealthyThreshold 5 -- with Interval 20 an instance survives ~100s of CONTINUOUS

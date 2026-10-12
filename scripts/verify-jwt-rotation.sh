@@ -39,9 +39,11 @@
 set -euo pipefail
 
 API="${API:-https://api.climate.timsint.com}"
-REGION="${AWS_REGION:-us-east-1}"
+# Climate production moved to its own account, us-east-2, on 2026-10-12 (PR #541). The old
+# shared account 747814092517 no longer runs the climate API.
+REGION="${AWS_REGION:-us-east-2}"
 SERVICE_STACK="${SERVICE_STACK:-climate-project-api-prod}"
-EXPECT_ACCOUNT="${EXPECT_ACCOUNT:-747814092517}"
+EXPECT_ACCOUNT="${EXPECT_ACCOUNT:-795965600143}"
 STORE="${STORE:-${TMPDIR:-/tmp}/climate-jwt-rotation-token}"
 BASELINE="${BASELINE:-${STORE:-${TMPDIR:-/tmp}/climate-jwt-rotation-token}.commit}"
 MODE="${1:-}"
@@ -207,7 +209,7 @@ the signing key and this evidence cannot be obtained again."
     account="$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo unknown)"
     if [ "$account" != "$EXPECT_ACCOUNT" ]; then
       die "credentials are for account $account, not $EXPECT_ACCOUNT.
-Set AWS_PROFILE=formmaps-deploy (or claude) and try again."
+Set AWS_PROFILE=tims-new and try again."
     fi
 
     arn="$(aws cloudformation describe-stacks --region "$REGION" --stack-name "$SERVICE_STACK" \

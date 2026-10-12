@@ -37,8 +37,10 @@
 
 set -euo pipefail
 
-REGION="${AWS_REGION:-us-east-1}"
-EXPECTED_ACCOUNT="747814092517"
+# Climate production moved to its own account, us-east-2, on 2026-10-12 (PR #541). The old
+# shared account 747814092517 no longer runs the climate API.
+REGION="${AWS_REGION:-us-east-2}"
+EXPECTED_ACCOUNT="795965600143"
 CURRENT_SECRET="climate-project-api/prod/tracking-jwt-secret"
 PREVIOUS_SECRET="climate-project-api/prod/tracking-jwt-secret-previous"
 GH_VAR="TRACKING_JWT_SECRET_PREVIOUS_ARN"
@@ -62,7 +64,7 @@ command -v openssl >/dev/null || die "openssl not found"
 ACCOUNT="$(aws sts get-caller-identity --query Account --output text)"
 if [ "$ACCOUNT" != "$EXPECTED_ACCOUNT" ]; then
   die "credentials are for account $ACCOUNT, not $EXPECTED_ACCOUNT.
-       Set AWS_PROFILE=formmaps-deploy (or claude) and try again. The default profile is a
+       Set AWS_PROFILE=tims-new and try again. The default profile is a
        different account, where this secret does not exist."
 fi
 
