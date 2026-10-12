@@ -417,7 +417,7 @@ function StatusTile({
       {/* What each verb does, in the product's words: "Programar" and "Activar" sit side by
           side at equal weight and differ in consequence (walkthrough, finding 9). */}
       {canAuthor && survey.allowedStatusTransitions.some((status) => KNOWN_STATUSES.includes(status)) && (
-        <ul className="m-0 flex list-none flex-col gap-0.5 p-0 text-xs text-fg-tertiary" data-testid="status-consequences">
+        <ul className="m-0 flex list-none flex-col gap-0.5 p-0 text-xs text-fg-label" data-testid="status-consequences">
           {survey.allowedStatusTransitions
             .filter((status) => KNOWN_STATUSES.includes(status))
             .map((status) => (
