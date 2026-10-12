@@ -124,9 +124,17 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
             Questions: questions ?? [WorkModeQuestion(bilingual: language == ContentLanguages.Both)],
             // Identified unless the test says otherwise: `POST /surveys` defaults to anonymous
             // since 2026-10-12, and this helper's callers were written against identified.
+            //
+            // Participant identity off unless the test says otherwise, for the same reason:
+            // `POST /surveys` asks for it since 2026-10-12, and these callers were written
+            // before it. SelfDeclaredAreaAndParticipationTests covers it on.
             Settings: settings is null
-                ? new SurveySettingsInput(Anonymous: false)
-                : settings with { Anonymous = settings.Anonymous ?? false },
+                ? new SurveySettingsInput(Anonymous: false, CollectParticipantIdentity: false)
+                : settings with
+                {
+                    Anonymous = settings.Anonymous ?? false,
+                    CollectParticipantIdentity = settings.CollectParticipantIdentity ?? false,
+                },
             Language: language);
 
         var survey = await SurveyTestHarness.CreateSurveyAsync(admin, request);
@@ -1139,7 +1147,9 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
         var view = await RespondViewAsync(_factory.CreateClient(), survey.Id);
 
         Assert.True(view.Anonymous);
-        Assert.Equal(["area"], view.Demographics.Select(d => d.Field));
+        // The company's own field, plus the área every visitor with no account is asked.
+        Assert.Equal(["area"], AdminFields(view).Select(d => d.Field));
+        Assert.Contains(view.Demographics, d => d.Field == SelfDeclaredDepartment.FieldKey);
     }
 
     [Fact]
@@ -1300,13 +1310,13 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
 
         var view = await RespondViewAsync(_factory.CreateClient(), survey.Id);
 
-        Assert.Equal(["area", "antiguedad"], view.Demographics.Select(d => d.Field));
-        var area = view.Demographics[0];
+        Assert.Equal(["area", "antiguedad"], AdminFields(view).Select(d => d.Field));
+        var area = AdminFields(view)[0];
         Assert.True(area.Required);
         Assert.Equal(["operaciones", "ventas"], area.Options.Select(o => o.Value));
         // The admin's own Required flag, not a policy invented here: a field the admin left
         // optional is one the respondent may decline.
-        Assert.False(view.Demographics[1].Required);
+        Assert.False(AdminFields(view)[1].Required);
     }
 
     [Fact]
@@ -1356,7 +1366,7 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
 
         var view = await RespondViewAsync(_factory.CreateClient(), survey.Id);
 
-        Assert.Equal(["area"], view.Demographics.Select(d => d.Field));
+        Assert.Equal(["area"], AdminFields(view).Select(d => d.Field));
     }
 
     [Fact]
@@ -1370,7 +1380,7 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
 
         var view = await RespondViewAsync(_factory.CreateClient(), survey.Id);
 
-        Assert.Equal(["area"], view.Demographics.Select(d => d.Field));
+        Assert.Equal(["area"], AdminFields(view).Select(d => d.Field));
     }
 
     [Fact]
@@ -1382,7 +1392,7 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
 
         var view = await RespondViewAsync(_factory.CreateClient(), survey.Id);
 
-        Assert.Equal(["area"], view.Demographics.Select(d => d.Field));
+        Assert.Equal(["area"], AdminFields(view).Select(d => d.Field));
     }
 
     /// <summary>
@@ -1408,7 +1418,7 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
 
         var stored = Assert.Single(await _harness.WithDbAsync(db => db.ResponseDemographics
             .AsNoTracking()
-            .Where(rd => rd.ResponseId == result.ResponseId)
+            .Where(rd => rd.ResponseId == result.ResponseId && rd.Field != SelfDeclaredDepartment.FieldKey)
             .ToListAsync()));
         Assert.Equal("area", stored.Field);
         // response_demographics.value is jsonb. A bare operaciones is 22P02.
@@ -1506,7 +1516,7 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
 
         var stored = await _harness.WithDbAsync(db => db.ResponseDemographics
             .AsNoTracking()
-            .Where(rd => rd.ResponseId == result.ResponseId)
+            .Where(rd => rd.ResponseId == result.ResponseId && rd.Field != SelfDeclaredDepartment.FieldKey)
             .ToListAsync());
         Assert.Equal(["area"], stored.Select(s => s.Field));
     }
@@ -1609,6 +1619,14 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
         => ActiveSurveyAsync(settings: new SurveySettingsInput(
             Anonymous: true, SelfDeclaredDemographics: true));
 
+    /// <summary>
+    /// The company's OWN fields, without the área every respondent with no account is also
+    /// asked once the company has an active department (this fixture has "Engineering").
+    /// The área has its own tests in <c>SelfDeclaredAreaAndParticipationTests</c>.
+    /// </summary>
+    private static List<SurveyRespondDemographicField> AdminFields(SurveyRespondView view)
+        => [.. view.Demographics.Where(d => d.Field != SelfDeclaredDepartment.FieldKey)];
+
     private async Task<SurveyRespondView> RespondViewAsync(HttpClient client, Guid surveyId)
     {
         var http = await client.GetAsync($"/surveys/{surveyId}/respond");
@@ -1626,7 +1644,12 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
         => SubmitAsync(_factory.CreateClient(), survey.Id, new SubmitSurveyResponseRequest(
             Answers: [new SurveyAnswerInput(survey.Questions[0].Id, "remote")],
             SessionId: Guid.NewGuid().ToString("N"),
-            Demographics: demographics));
+            // The área is required whenever the company has an active department, and this
+            // fixture's company does. Supplied here unless the test supplied its own, so each
+            // test still fails or passes on the field it was written about.
+            Demographics: demographics is null || demographics.ContainsKey(SelfDeclaredDepartment.FieldKey)
+                ? demographics
+                : new Dictionary<string, string?>(demographics) { [SelfDeclaredDepartment.FieldKey] = _departmentId.ToString() }));
 
     private async Task<SurveySubmissionResult> SelfDeclareAsync(
         SurveyDetail survey,

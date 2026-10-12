@@ -187,6 +187,10 @@ public static class SubjectErasure
         }
         actions.Add(Action("UserInvitation", userInvitations.Count));
 
+        // Deleted: a redacted row would still say that somebody answered, the one fact it holds.
+        actions.Add(await DeleteAsync("SurveyParticipation",
+            SubjectAccessExport.ParticipationsFor(db, originalEmail, companyScope), cancellationToken));
+
         // DELETED, not redacted. survey_audit_logs denormalises user_name, user_email and
         // user_role onto every row so history reads correctly after a rename, which means those
         // columns are personal data that outlives the users row. Redacting the three and keeping

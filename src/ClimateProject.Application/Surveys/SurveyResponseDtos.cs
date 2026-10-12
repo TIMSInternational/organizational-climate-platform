@@ -61,6 +61,13 @@ public sealed record SurveyAnswerInput(
 /// comment has decided they do not want it stored, and on a product whose promise is
 /// confidentiality, silently keeping it is the one failure there is no way to walk back.
 /// </param>
+/// <param name="Participant">
+/// Who is answering -- name required, email optional -- sent ONLY on the completing post of a
+/// survey whose respond view said <see cref="SurveyRespondView.AsksParticipantIdentity"/>.
+/// Written to <c>survey_participations</c>, which holds no response id, in a separate
+/// statement after the response commits: the company learns THAT this person answered, never
+/// WHAT. Refused with 400 when the survey did not ask.
+/// </param>
 public sealed record SubmitSurveyResponseRequest(
     IReadOnlyList<SurveyAnswerInput>? Answers = null,
     string? SessionId = null,
@@ -68,7 +75,8 @@ public sealed record SubmitSurveyResponseRequest(
     string? Language = null,
     int? TotalTimeSeconds = null,
     IReadOnlyList<Guid>? ClearedQuestionIds = null,
-    IReadOnlyDictionary<string, string?>? Demographics = null);
+    IReadOnlyDictionary<string, string?>? Demographics = null,
+    SurveyParticipantInput? Participant = null);
 
 /// <param name="Value">Set for a single-valued answer.</param>
 /// <param name="Values">Set for a ranking answer.</param>
@@ -152,6 +160,12 @@ public sealed record SurveyRespondDemographicField(
 /// </param>
 public sealed record SurveyRespondDemographicOption(string Value, string? Label);
 
+/// <param name="AsksParticipantIdentity">
+/// True when this respondent is asked their name and email before the questions: the survey
+/// collects participant identity and the caller has no account -- on an anonymous or an
+/// identified survey alike, since the 2026-10-12 ruling that every survey has a link. Declared last
+/// with a default so a payload from an API that predates it reads as "not asked".
+/// </param>
 public sealed record SurveyRespondView(
     Guid Id,
     string? Title,
@@ -170,7 +184,8 @@ public sealed record SurveyRespondView(
     int? TimeLimitMinutes,
     IReadOnlyList<SurveyQuestionDto> Questions,
     IReadOnlyList<SurveyRespondDemographicField> Demographics,
-    SurveyResponseState? InProgress);
+    SurveyResponseState? InProgress,
+    bool AsksParticipantIdentity = false);
 
 /// <param name="AlreadySubmitted">
 /// True when this call found a response that was already complete and therefore changed

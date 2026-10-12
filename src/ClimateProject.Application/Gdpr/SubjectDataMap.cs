@@ -446,6 +446,16 @@ public static class SubjectDataMap
         NotPersonal("TemplateQuestionOption", "template_question_options",
             "Template answer options. No person referenced."),
 
+        new("SurveyParticipation", "survey_participations", SubjectLink.Subject, ["Email"],
+            ExportTreatment.FullRecord, ErasureTreatment.Deleted,
+            BasisContract,
+            "Deleted with its survey or company (cascade); deleted on erasure.",
+            "That a named person answered a survey, typed by them on the public link -- never what they answered: "
+            + "there is no response id, session id, demographic or timestamp on the row "
+            + "(docs/decisions/participation-is-not-linked-to-answers.md). The person is identified by email "
+            + "alone, as on user_invitations, and a name-only row cannot be matched to anybody, so the export and "
+            + "the erasure match on the lower-cased address. Deleted rather than redacted: a redacted row would "
+            + "still say that somebody answered, which is the only fact the row holds."),
         new("User", "users", SubjectLink.Subject, ["Id", "Email", "ManagerId"],
             ExportTreatment.FullRecord, ErasureTreatment.Anonymised,
             BasisContract,

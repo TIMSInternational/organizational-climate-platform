@@ -167,6 +167,10 @@ public static class SubjectAccessExport
             // as bare attribution. See the LinkKey remark above.
             await MixedInvitationsAsync(db, id, email, companyScope, cancellationToken),
 
+            // Who said they answered, matched on the address they typed (stored lower-cased).
+            await FullAsync(db, "SurveyParticipation", "Email",
+                ParticipationsFor(db, email, companyScope), cancellationToken),
+
             // --- Actor: the subject as author, approver or manager ---------------------------
             // Paired-column labels (#195/#210) are whichever half exists, English first: an
             // access export has no reader locale, and a label is attribution, not content.
@@ -257,6 +261,20 @@ public static class SubjectAccessExport
     {
         var query = db.UserInvitations.Where(i => i.Email == email);
         return companyScope is { } company ? query.Where(i => i.CompanyId == company) : query;
+    }
+
+    /// <summary>
+    /// Participation rows naming the subject's address. Lower-cased on both sides: the row is
+    /// written lower-cased (<c>ParticipantIdentity.Validate</c>) and a user's address may not be.
+    /// </summary>
+    internal static IQueryable<SurveyParticipation> ParticipationsFor(
+        ClimateProjectDbContext db,
+        string email,
+        Guid? companyScope)
+    {
+        var lowered = email.ToLowerInvariant();
+        var query = db.SurveyParticipations.Where(p => p.Email == lowered);
+        return companyScope is { } company ? query.Where(p => p.CompanyId == company) : query;
     }
 
     /// <summary>

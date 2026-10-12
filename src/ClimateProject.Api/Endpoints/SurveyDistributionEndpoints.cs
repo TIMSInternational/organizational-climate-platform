@@ -1456,7 +1456,7 @@ public static class SurveyDistributionEndpoints
             anonymous,
             SurveyInvitationStatuses.HighestRecordableState(anonymous),
             anonymous ? SurveyInvitationStatuses.SuppressedWhenAnonymous : [],
-            InvitationGuaranteeCopy.Survey(anonymous, locale));
+            InvitationGuaranteeCopy.Survey(anonymous, locale, anonymous && survey.Settings.CollectParticipantIdentity));
     }
 
     /// <summary>

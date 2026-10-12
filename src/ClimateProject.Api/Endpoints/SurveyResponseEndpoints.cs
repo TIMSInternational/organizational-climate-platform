@@ -5,6 +5,7 @@ using ClimateProject.Api.Infrastructure;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Localization;
 using ClimateProject.Application.OrgStructure;
+using ClimateProject.Application.Scheduling;
 using ClimateProject.Application.Surveys;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
@@ -302,7 +303,8 @@ public static class SurveyResponseEndpoints
                     survey.Language,
                     fallbackFields)
                 : [],
-            inProgress));
+            inProgress,
+            AsksParticipantIdentity(survey, respondent)));
     }
 
     // ------------------------------------------------------------------
@@ -314,6 +316,7 @@ public static class SurveyResponseEndpoints
         SubmitSurveyResponseRequest request,
         HttpContext httpContext,
         ClimateProjectDbContext db,
+        ILoggerFactory loggerFactory,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -419,7 +422,7 @@ public static class SurveyResponseEndpoints
             // `enforceRequired` is the completion flag: a partial save is allowed to be
             // missing answers the respondent has not reached yet.
             var demographicValidation = DemographicValueValidation.Validate(
-                request.Demographics, ToDefinitions(offered), enforceRequired: request.IsComplete);
+                NormaliseDeclaredDepartment(request.Demographics), ToDefinitions(offered), enforceRequired: request.IsComplete);
             if (!demographicValidation.IsValid)
             {
                 return Results.Json(
@@ -439,6 +442,33 @@ public static class SurveyResponseEndpoints
             // works while recording nothing.
             return Results.Json(
                 new { message = "This survey does not collect self-declared demographics" },
+                statusCode: 400);
+        }
+
+        // Who is answering -- validated here, with everything else a 400 can name, and written
+        // only after the response has committed (see RecordParticipationAsync). Required on
+        // the COMPLETING post only: a partial save never carries it and writes none of it.
+        ValidatedParticipant? participant = null;
+        if (AsksParticipantIdentity(survey, respondent))
+        {
+            if (request.IsComplete || request.Participant is not null)
+            {
+                var (validated, participantError) = ParticipantIdentity.Validate(request.Participant);
+                if (participantError is not null)
+                {
+                    return Results.Json(new { message = participantError }, statusCode: 400);
+                }
+
+                participant = request.IsComplete ? validated : null;
+            }
+        }
+        else if (request.Participant is not null)
+        {
+            // Refused rather than ignored, for the reason the demographics branch above gives:
+            // a signed-in respondent is already known, and a survey that did not ask has an
+            // author who did not turn this on.
+            return Results.Json(
+                new { message = "This survey does not collect participant identity" },
                 statusCode: 400);
         }
 
@@ -552,6 +582,11 @@ public static class SurveyResponseEndpoints
         }
 
         await transaction.CommitAsync(cancellationToken);
+
+        if (participant is not null)
+        {
+            await RecordParticipationAsync(survey, participant, now, db, loggerFactory, cancellationToken);
+        }
 
         var result = await ToResultAsync(response, db, alreadySubmitted: false, suppressed, cancellationToken);
         return existing is null ? Results.Json(result, statusCode: 201) : Results.Ok(result);
@@ -895,9 +930,113 @@ public static class SurveyResponseEndpoints
     /// </para>
     /// </remarks>
     private static bool AsksSelfDeclaredDemographics(Survey survey, Respondent respondent)
+        // No `IsAnonymous` arm since 2026-10-12: every survey has a link, nobody who opens one
+        // logs in, and a link visitor to an identified survey is served anonymously -- so "has
+        // no account" is the whole test, and it is the one that keeps a signed-in respondent
+        // from typing their own cohort.
         => survey.Settings.SelfDeclaredDemographics
-            && respondent.IsAnonymous
             && respondent.ActingUserId is null;
+
+    /// <summary>
+    /// Whether THIS request is asked who is answering: the survey collects participant
+    /// identity and the respondent has no account -- i.e. they came through the link or QR.
+    /// One predicate read by the GET and the POST, so the form never asks what the submit
+    /// then refuses. A signed-in respondent is already known, so asking them would only
+    /// create a second, self-typed copy of who they are.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately NOT gated on the survey being anonymous. Ruled 2026-10-12: every survey
+    /// has a link and QR, nobody who opens one logs in, and the name+email capture applies to
+    /// every survey answered by link, anonymous or identified. The row it writes is unlinked
+    /// from the answers either way (<see cref="RecordParticipationAsync"/>).
+    /// </remarks>
+    private static bool AsksParticipantIdentity(Survey survey, Respondent respondent)
+        => survey.Settings.CollectParticipantIdentity
+            && respondent.ActingUserId is null;
+
+    /// <summary>
+    /// Writes THAT this person answered -- and nothing that could say what they answered.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Its own statement, after the response transaction has committed.</b> In the same
+    /// transaction the participation row and the response row would share a Postgres
+    /// transaction id (<c>xmin</c>), which is a join key handed to anyone with database
+    /// access. Separately they do not. The row carries a random id, the survey and company,
+    /// the name and email, and the DAY in the company's time zone -- no response id, no
+    /// session id, no demographics, no IP, no user agent, no timestamp. What is left is
+    /// recorded in <c>docs/decisions/participation-is-not-linked-to-answers.md</c>.
+    /// </para>
+    /// <para>
+    /// <b>Idempotent on (survey, email).</b> <c>ON CONFLICT DO NOTHING</c> against the partial
+    /// unique index: a person answering twice from two phones is one participation, and the
+    /// second response is never blocked by it.
+    /// </para>
+    /// <para>
+    /// <b>A failure here never fails the response</b>, which has already committed and cannot
+    /// be re-collected. It is logged with the survey id and the database error code ONLY --
+    /// never the name, the email, or the response id, and never the exception text, which for
+    /// a constraint violation quotes the offending key (the email).
+    /// </para>
+    /// </remarks>
+    private static async Task RecordParticipationAsync(
+        Survey survey,
+        ValidatedParticipant participant,
+        DateTimeOffset now,
+        ClimateProjectDbContext db,
+        ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var timezone = await db.Companies
+                .AsNoTracking()
+                .Where(c => c.Id == survey.CompanyId)
+                .Select(c => c.Settings.Timezone)
+                .FirstOrDefaultAsync(cancellationToken);
+            var day = DateOnly.FromDateTime(
+                SchedulingTimeZone.ToLocal(now, SchedulingTimeZone.Resolve(timezone)));
+
+            await db.Database.ExecuteSqlInterpolatedAsync(
+                $"""
+                INSERT INTO survey_participations (id, survey_id, company_id, name, email, participated_on)
+                VALUES ({Guid.NewGuid()}, {survey.Id}, {survey.CompanyId}, {participant.Name}, {participant.Email}, {day})
+                ON CONFLICT DO NOTHING
+                """,
+                cancellationToken);
+        }
+        catch (Exception exception) when (exception is DbUpdateException or Npgsql.PostgresException or InvalidOperationException)
+        {
+            loggerFactory.CreateLogger(typeof(SurveyResponseEndpoints)).LogWarning(
+                "A participation record could not be written for survey {SurveyId} ({ErrorCode})",
+                survey.Id,
+                (exception as Npgsql.PostgresException ?? exception.InnerException as Npgsql.PostgresException)?.SqlState
+                    ?? exception.GetType().Name);
+        }
+    }
+
+    /// <summary>
+    /// The submitted área id in the one spelling the option list holds (lower-case "D"
+    /// format), so a client that upper-cased a GUID is not refused for a value that is the
+    /// right department. Anything that does not parse is passed through untouched and refused
+    /// by the validator like any other value outside the options.
+    /// </summary>
+    private static IReadOnlyDictionary<string, string?>? NormaliseDeclaredDepartment(
+        IReadOnlyDictionary<string, string?>? submitted)
+    {
+        if (submitted is null
+            || !submitted.TryGetValue(SelfDeclaredDepartment.FieldKey, out var raw)
+            || !Guid.TryParse(raw?.Trim(), out var id))
+        {
+            return submitted;
+        }
+
+        var normalised = new Dictionary<string, string?>(submitted, StringComparer.Ordinal)
+        {
+            [SelfDeclaredDepartment.FieldKey] = id.ToString(),
+        };
+        return normalised;
+    }
 
     /// <summary>One of the company's demographic fields, with its options, as configured.</summary>
     private sealed record SelfDeclaredField(
@@ -933,16 +1072,24 @@ public static class SurveyResponseEndpoints
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
     {
+        // The área comes first: the department climate map, and the action plans that hang
+        // off it, are fed by it for every respondent with no account (ruled 2026-10-12).
+        var area = await LoadSelfDeclaredAreaAsync(companyId, db, cancellationToken);
+        List<SelfDeclaredField> offered = area is null ? [] : [area];
+
         var fields = await db.DemographicFields
             .AsNoTracking()
-            .Where(f => f.CompanyId == companyId && f.IsActive && f.Type == "select")
+            // The reserved key is never offered from the admin's configuration, even by a
+            // field created before it was reserved: it would collide with the área above.
+            .Where(f => f.CompanyId == companyId && f.IsActive && f.Type == "select"
+                && f.Field.ToLower() != SelfDeclaredDepartment.FieldKey)
             .OrderBy(f => f.Order)
             .Select(f => new { f.Id, f.Field, f.LabelEn, f.LabelEs, f.Required, f.Order })
             .ToListAsync(cancellationToken);
 
         if (fields.Count == 0)
         {
-            return [];
+            return offered;
         }
 
         var fieldIds = fields.Select(f => f.Id).ToList();
@@ -956,13 +1103,68 @@ public static class SurveyResponseEndpoints
             .GroupBy(o => o.DemographicFieldId)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<DemographicFieldOption>)g.ToList());
 
-        return fields
+        offered.AddRange(fields
             .Select(f => new SelfDeclaredField(
                 f.Field, f.LabelEn, f.LabelEs, f.Required, f.Order,
                 byField.GetValueOrDefault(f.Id, [])))
-            .Where(f => f.Options.Count > 0)
-            .ToList();
+            .Where(f => f.Options.Count > 0));
+        return offered;
     }
+
+    /// <summary>
+    /// "¿En qué área trabaja?": the company's ACTIVE departments, each offered by its id.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The option VALUE is the department id, so the validator that refuses anything outside
+    /// the option list is also what refuses another tenant's department or a retired one --
+    /// no second check to keep in step. Stored under <see cref="SelfDeclaredDepartment.FieldKey"/>
+    /// as a demographic answer, never as <c>responses.department_id</c>; the aggregation lifts it
+    /// into the department and applies the floor of 5 at read time.
+    /// </para>
+    /// <para>
+    /// Required: an área left blank is a respondent the map cannot place, and the map is what
+    /// this question exists for. Null when the company has no active department, because a
+    /// question with no answer is a dead screen.
+    /// </para>
+    /// </remarks>
+    private static async Task<SelfDeclaredField?> LoadSelfDeclaredAreaAsync(
+        Guid companyId,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var departments = await db.Departments
+            .AsNoTracking()
+            .Where(d => d.CompanyId == companyId && d.IsActive)
+            .OrderBy(d => d.Name)
+            .ThenBy(d => d.Id)
+            .Select(d => new { d.Id, d.Name })
+            .ToListAsync(cancellationToken);
+
+        if (departments.Count == 0)
+        {
+            return null;
+        }
+
+        return new SelfDeclaredField(
+            SelfDeclaredDepartment.FieldKey,
+            AreaLabelEn,
+            AreaLabelEs,
+            Required: true,
+            Order: -1,
+            [.. departments.Select((d, index) => new DemographicFieldOption
+            {
+                DemographicFieldId = Guid.Empty,
+                Order = index,
+                Value = d.Id.ToString(),
+                // A department has one name, in whatever language the company wrote it.
+                LabelEn = d.Name,
+                LabelEs = d.Name,
+            })]);
+    }
+
+    private const string AreaLabelEn = "Which area do you work in?";
+    private const string AreaLabelEs = "¿En qué área trabaja?";
 
     /// <summary>
     /// The offered fields as the validator wants them.

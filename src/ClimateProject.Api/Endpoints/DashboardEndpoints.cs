@@ -760,6 +760,17 @@ public static class DashboardEndpoints
             .AggregationDepartments(db.Departments, db.Users, myCompanyId)
             .ToListAsync(cancellationToken);
 
+        // The one demographic this panel needs: a respondent with no account declares their
+        // área under the reserved key, and SurveyAggregation lifts it into the department
+        // (floored at read time like any department). Without it a QR-only survey counts
+        // every respondent as unsegmented here while the climate map counts them by área.
+        var declaredDepartments = await db.ResponseDemographics
+            .AsNoTracking()
+            .Where(rd => rd.Field == SelfDeclaredDepartment.FieldKey
+                && db.Responses.Any(r => r.Id == rd.ResponseId && r.SurveyId == survey.Id && r.CompanyId == myCompanyId && r.IsComplete))
+            .Select(rd => new { rd.ResponseId, rd.Value })
+            .ToDictionaryAsync(rd => rd.ResponseId, rd => rd.Value, cancellationToken);
+
         var noDemographics = new Dictionary<string, string>(StringComparer.Ordinal);
         var aggregate = SurveyAggregation.Compute(
             // Empty, and this is the load-bearing line of the handler. Questions and
@@ -776,7 +787,9 @@ public static class DashboardEndpoints
                 r.StartTime,
                 r.CompletionTime,
                 r.TotalTimeSeconds,
-                noDemographics))],
+                declaredDepartments.TryGetValue(r.ResponseId, out var declared)
+                    ? new Dictionary<string, string>(StringComparer.Ordinal) { [SelfDeclaredDepartment.FieldKey] = declared }
+                    : noDemographics))],
             answers: [],
             departments: departments,
             // No participation rate is rendered here, and the aggregation's own answer for

@@ -450,6 +450,13 @@ public static class SurveyEndpoints
         // because changing it would silently re-read every row materialised without the flag.
         survey.Settings.Anonymous = true;
 
+        // Who answered, asked unless the caller says otherwise (ruled 2026-10-12: "we need to
+        // know who has answered and who has not"). Set here and not as the entity default,
+        // for Anonymous's reason above: a default on the entity would start asking every live
+        // survey materialised without the column. It only ever reaches an unauthenticated
+        // respondent to an anonymous survey -- see SurveyResponseEndpoints.AsksParticipantIdentity.
+        survey.Settings.CollectParticipantIdentity = true;
+
         if (request.Settings is not null)
         {
             var settingsError = ApplySettings(survey.Settings, request.Settings, language);
@@ -1423,6 +1430,7 @@ public static class SurveyEndpoints
         if (input.TimeLimitMinutes.HasValue) settings.TimeLimitMinutes = input.TimeLimitMinutes.Value;
         if (input.ResponseLimit.HasValue) settings.ResponseLimit = input.ResponseLimit.Value;
         if (input.SelfDeclaredDemographics.HasValue) settings.SelfDeclaredDemographics = input.SelfDeclaredDemographics.Value;
+        if (input.CollectParticipantIdentity.HasValue) settings.CollectParticipantIdentity = input.CollectParticipantIdentity.Value;
         if (input.NotificationSendInvitations.HasValue) settings.NotificationSendInvitations = input.NotificationSendInvitations.Value;
         if (input.NotificationSendReminders.HasValue) settings.NotificationSendReminders = input.NotificationSendReminders.Value;
         if (input.NotificationReminderFrequencyDays.HasValue) settings.NotificationReminderFrequencyDays = input.NotificationReminderFrequencyDays.Value;
@@ -1506,6 +1514,7 @@ public static class SurveyEndpoints
             survey.Settings.TimeLimitMinutes,
             survey.Settings.ResponseLimit,
             survey.Settings.SelfDeclaredDemographics,
+            survey.Settings.CollectParticipantIdentity,
             survey.Settings.NotificationSendInvitations,
             survey.Settings.NotificationSendReminders,
             survey.Settings.NotificationReminderFrequencyDays,

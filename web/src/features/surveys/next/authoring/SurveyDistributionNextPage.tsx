@@ -42,6 +42,7 @@ import { isKnownInvitationStatus } from '../../api/surveyDistribution'
 import { IconBox, TH_CLASS } from '../../../shared-next/parts'
 import { Card, Meter, ReadingTile, WithReading, type ShareLinkAction } from './parts'
 import SharePanel from './SharePanel'
+import ParticipationPanel from './ParticipationPanel'
 import {
   INVITATION_COLUMNS,
   MAX_REMINDERS,
@@ -293,25 +294,44 @@ export function DistributionView({
               mirrors the server's `AllowsScheduleEdit` -- so a closed survey shows the
               state without a control that would earn a 409.
 
-              Disabled on a NAMED survey because the flag genuinely does nothing there:
-              `IsAnonymous` is read from the survey, never the request, so the respond
-              endpoint ignores it. A switch that writes a value with no effect is worse
-              than no switch. */}
+              NOT gated on anonymity (ruled 2026-10-12): every survey has a link, a link
+              visitor to a named survey is served anonymously, and the server asks them
+              whenever the flag is on (`AsksSelfDeclaredDemographics`). */}
           <div className="mt-4 border-t border-line-default pt-4">
             <SwitchField
               label={t('surveys.next.share.demographicsLabel')}
-              description={
-                survey.settings.anonymous
-                  ? t('surveys.next.share.demographicsHelp', { floor: ANONYMITY_FLOOR })
-                  : t('surveys.next.share.demographicsNeedsAnonymous')
-              }
+              description={t('surveys.next.share.demographicsHelp', { floor: ANONYMITY_FLOOR })}
               checked={survey.settings.selfDeclaredDemographics}
-              disabled={!actionable || busy || !survey.settings.anonymous}
+              disabled={!actionable || busy}
               onChange={actions.setSelfDeclaredDemographics}
+            />
+          </div>
+
+          {/* Beside the demographics switch, for its reason: it changes what the PUBLIC LINK
+              asks. NOT gated on anonymity (ruled 2026-10-12): every survey has a link, nobody
+              who opens one logs in, and the server asks every link visitor
+              (`AsksParticipantIdentity`). */}
+          <div className="mt-4 border-t border-line-default pt-4">
+            <SwitchField
+              label={t('surveys.next.share.participantIdentityLabel')}
+              description={t('surveys.next.share.participantIdentityHelp')}
+              checked={survey.settings.collectParticipantIdentity === true}
+              disabled={!actionable || busy}
+              onChange={actions.setCollectParticipantIdentity}
             />
           </div>
         </Card>
       </section>
+
+      {/* Who has answered and who has not -- here, beside the response count and the
+          invitations, because this is the page an administrator opens to chase participation.
+          The results page is the opposite surface: it is about WHAT was answered, floored at
+          five, and a list of names has no business beside it. Offered to the scoped admin only
+          (`scoped`): the endpoint answers super_admin and the survey's own company_admin. Not
+          gated on anonymity: every survey has a link (ruled 2026-10-12). */}
+      {scoped ? (
+        <ParticipationPanel surveyId={survey.id} enabled={survey.settings.collectParticipantIdentity === true} />
+      ) : null}
 
       <section aria-labelledby="launch-checklist" className="mt-6 flex flex-col gap-3">
         <div className="flex flex-wrap items-baseline justify-between gap-3">

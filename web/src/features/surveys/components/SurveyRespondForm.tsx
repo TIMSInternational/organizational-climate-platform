@@ -39,6 +39,8 @@ import {
 import { estimatedMinutes, formatDayMonth, isUnderAMinute } from '../respondEstimate'
 import { AnonymityNotice } from './AnonymityNotice'
 import RespondDemographicField from './RespondDemographicField'
+import RespondParticipantFields from './RespondParticipantFields'
+import { participantProblem, type ParticipantProblem } from './participantIdentity'
 import {
   RESPOND_AUTOSAVE_DELAY_MS,
   RESPOND_SAVE_IDLE,
@@ -222,6 +224,15 @@ export default function SurveyRespondForm({
   /** Which prelude screen the respondent is on; `>= demographics.length` means past it. */
   const [demographicStep, setDemographicStep] = useState(0)
   const [demographicInvalid, setDemographicInvalid] = useState(false)
+  /**
+   * Who is answering, when the survey asks (`asksParticipantIdentity`). Held here and sent
+   * on the COMPLETING post only, for the demographics' reason: a respondent who abandons
+   * halfway leaves no name behind, and the server never writes one from a partial save.
+   */
+  const [participantName, setParticipantName] = useState('')
+  const [participantEmail, setParticipantEmail] = useState('')
+  const [identityDone, setIdentityDone] = useState(false)
+  const [identityProblem, setIdentityProblem] = useState<ParticipantProblem>(null)
   const [busy, setBusy] = useState<'idle' | 'saving' | 'submitting'>('idle')
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [result, setResult] = useState<SurveySubmissionResult | null>(null)
@@ -588,6 +599,17 @@ export default function SurveyRespondForm({
           // `?.` and not `.`: see the `demographics` read below for the deploy window
           // this survives.
           ...(isComplete && (view.demographics?.length ?? 0) > 0 ? { demographics: declared } : {}),
+          // Who is answering: on the completing post and no other, exactly like the
+          // demographics above. The server writes it to a table with no response id, after
+          // the response has committed -- see `RespondParticipantFields`.
+          ...(isComplete && view.asksParticipantIdentity === true
+            ? {
+                participant: {
+                  name: participantName.trim(),
+                  ...(participantEmail.trim() !== '' ? { email: participantEmail.trim() } : {}),
+                },
+              }
+            : {}),
         }),
       )
 
@@ -931,7 +953,10 @@ export default function SurveyRespondForm({
           actually answered still will not be re-asked the next time they open the link
           on their own device.
         */}
-        <AnsweredOnThisDevice onShared={publicEntry ? () => setAnsweredHere(false) : undefined} />
+        <AnsweredOnThisDevice
+          recordsParticipation={view.asksParticipantIdentity === true}
+          onShared={publicEntry ? () => setAnsweredHere(false) : undefined}
+        />
       </RespondSurface>
     )
   }
@@ -998,7 +1023,7 @@ export default function SurveyRespondForm({
             to be legible at the moment it is given rather than one tap behind a
             disclosure. The question screens collapse it from question 2 on for vertical
             room, which is a different situation: by then the promise has been read. */}
-        <AnonymityNotice anonymous={view.anonymous} />
+        <AnonymityNotice anonymous={view.anonymous} recordsParticipation={view.asksParticipantIdentity === true} />
 
         <ContentLanguageNotice
           requested={locale}
@@ -1061,11 +1086,105 @@ export default function SurveyRespondForm({
               disabled={busy !== 'idle'}
               onClick={advance}
             >
-              {isLastField ? t('demographics.start') : t('next.next')}
+              {/* "Empezar la encuesta" only when the survey really starts next: when the
+                  identity screen follows, this button leads to it, not to question 1. */}
+              {isLastField && view.asksParticipantIdentity !== true ? t('demographics.start') : t('next.next')}
               <ArrowRight aria-hidden="true" />
             </Button>
           </div>
         </div>
+      </RespondSurface>
+    )
+  }
+
+  /*
+   * "¿Quién responde?": one more stage in front of the questions, after the demographics,
+   * for the reason the demographic prelude gives for being a stage — `page` indexes
+   * `questions`, and nothing that reads it moves.
+   *
+   * Asked only when the server says so (`asksParticipantIdentity`: the survey collects it, is
+   * anonymous, and this respondent has no account). `=== true`, not truthiness, so a payload
+   * from an API that predates the flag asks nothing.
+   */
+  const asksIdentity = view.asksParticipantIdentity === true
+  if (asksIdentity && !identityDone) {
+    const advance = () => {
+      const problem = participantProblem(participantName, participantEmail)
+      if (problem !== null) {
+        setIdentityProblem(problem)
+        announce(problem === 'name' ? t('identity.nameMissing') : t('identity.emailInvalid'))
+        document.getElementById(problem === 'name' ? 'participant-name' : 'participant-email')?.focus()
+        return
+      }
+      setIdentityProblem(null)
+      setIdentityDone(true)
+    }
+
+    return (
+      <RespondSurface>
+        {/* Open, for the demographic screen's reason: this is the moment a name is given,
+            and the promise about what happens to it is the consent. */}
+        <AnonymityNotice anonymous={view.anonymous} recordsParticipation />
+
+        <ContentLanguageNotice
+          requested={locale}
+          resolvedLocale={view.resolvedLocale}
+          fallbackCount={view.fallbackFields.length}
+        />
+
+        <header data-slot="respond-progress" className="flex flex-col gap-1.5">
+          <h1 className="m-0 min-w-0 font-sans text-sm font-bold uppercase leading-snug tracking-eyebrow text-fg-secondary">
+            {t('identity.eyebrow')}
+          </h1>
+        </header>
+
+        <p data-slot="identity-intro" className="m-0 max-w-prose text-respond text-fg-secondary">
+          {t('identity.intro')}
+        </p>
+
+        <form
+          noValidate
+          className="flex flex-col gap-4"
+          onSubmit={(event) => {
+            event.preventDefault()
+            advance()
+          }}
+        >
+          <RespondParticipantFields
+            name={participantName}
+            email={participantEmail}
+            problem={identityProblem}
+            disabled={busy !== 'idle'}
+            onNameChange={(next) => {
+              setParticipantName(next)
+              setIdentityProblem(null)
+            }}
+            onEmailChange={(next) => {
+              setParticipantEmail(next)
+              setIdentityProblem(null)
+            }}
+          />
+
+          <div data-slot="respond-nav" className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 flex-1 text-respond"
+              disabled={demographics.length === 0 || busy !== 'idle'}
+              onClick={() => {
+                setIdentityProblem(null)
+                setDemographicStep(demographics.length - 1)
+              }}
+            >
+              <ArrowLeft aria-hidden="true" />
+              {t('next.previous')}
+            </Button>
+            <Button type="submit" variant="primary" className="h-11 flex-2 text-respond" disabled={busy !== 'idle'}>
+              {t('demographics.start')}
+              <ArrowRight aria-hidden="true" />
+            </Button>
+          </div>
+        </form>
       </RespondSurface>
     )
   }
@@ -1097,7 +1216,7 @@ export default function SurveyRespondForm({
           From the second question on it stays at that head collapsed, not shortened —
           the same characters, one tap away, costing ~40px instead of ~148px of an
           844px fold. `AnonymityNotice` carries the measurement and the reasoning. */}
-      <AnonymityNotice anonymous={view.anonymous} collapsible={index > 0} />
+      <AnonymityNotice anonymous={view.anonymous} recordsParticipation={asksIdentity} collapsible={index > 0} />
 
       <ContentLanguageNotice
         requested={locale}
@@ -1522,7 +1641,18 @@ function AlreadyCompleted() {
  * the call site for the ruling, and `respondReceipt.ts` for why the invitation path
  * deliberately has no such control.
  */
-function AnsweredOnThisDevice({ onShared }: { onShared?: () => void }) {
+function AnsweredOnThisDevice({
+  onShared,
+  recordsParticipation = false,
+}: {
+  onShared?: () => void
+  /**
+   * The survey asked who is answering. The plain body says the platform does not keep who
+   * answered, which is false the moment it does — so this swaps in the body that says what
+   * is kept: THAT they answered, never beside WHAT.
+   */
+  recordsParticipation?: boolean
+}) {
   const { t } = useTranslation('surveyRespond')
 
   return (
@@ -1530,7 +1660,7 @@ function AnsweredOnThisDevice({ onShared }: { onShared?: () => void }) {
       <ShieldCheck aria-hidden="true" />
       <AlertTitle>{t('answeredOnThisDeviceTitle')}</AlertTitle>
       <AlertDescription>
-        {t('answeredOnThisDeviceBody')}
+        {recordsParticipation ? t('answeredOnThisDeviceBodyRecorded') : t('answeredOnThisDeviceBody')}
         {onShared ? (
           <>
             {' '}
