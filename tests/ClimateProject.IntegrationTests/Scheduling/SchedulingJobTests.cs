@@ -621,8 +621,11 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
         db.Surveys.Add(survey);
         await db.SaveChangesAsync();
 
+        // The shape both writers leave since 2026-10-12: the status and the DAY, never a
+        // completion instant. Nothing in the row says when the invitee answered.
         var invitation = NewInvitation(survey, user, Now.AddDays(-7));
-        invitation.CompletedAt = Now.AddDays(-1);
+        invitation.Status = SurveyInvitationStatuses.Completed;
+        invitation.CompletedOn = DateOnly.FromDateTime(Now.AddDays(-1).UtcDateTime);
         db.SurveyInvitations.Add(invitation);
         await db.SaveChangesAsync();
 
@@ -631,6 +634,44 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
 
         Assert.Equal(0, result.Raised);
         Assert.False(await db.Notifications.AnyAsync(n => n.UserId == user.Id));
+    }
+
+    /// <summary>
+    /// The "Pendientes" rule with no completion instant to read: in one sweep the invitee who
+    /// finished (status + day only) is skipped and the one who did not is still chased. A
+    /// sweep that reminded nobody would pass the test above on its own; this one cannot.
+    /// </summary>
+    [Fact]
+    public async Task A_sweep_skips_the_invitee_who_finished_and_still_chases_the_one_who_did_not()
+    {
+        await using var db = await FreshAsync();
+
+        var company = NewCompany();
+        var finished = NewUser(company.Id);
+        var pending = NewUser(company.Id);
+        db.Companies.Add(company);
+        db.Users.AddRange(finished, pending);
+        await db.SaveChangesAsync();
+
+        var survey = NewActiveSurvey(company.Id, finished.Id);
+        db.Surveys.Add(survey);
+        await db.SaveChangesAsync();
+
+        var done = NewInvitation(survey, finished, Now.AddDays(-7));
+        done.Status = SurveyInvitationStatuses.Completed;
+        done.CompletedOn = DateOnly.FromDateTime(Now.AddDays(-1).UtcDateTime);
+        var outstanding = NewInvitation(survey, pending, Now.AddDays(-7));
+        outstanding.Status = SurveyInvitationStatuses.Sent;
+        db.SurveyInvitations.AddRange(done, outstanding);
+        await db.SaveChangesAsync();
+
+        var result = await InvitationReminderJob.RunAsync(
+            db, NullLoggerFactory.Instance, Now, InvitationReminderJob.DefaultBatchSize, default);
+
+        Assert.Equal(1, result.Raised);
+        await using var read = CreateContext();
+        Assert.False(await read.Notifications.AnyAsync(n => n.UserId == finished.Id));
+        Assert.True(await read.Notifications.AnyAsync(n => n.UserId == pending.Id));
     }
 
     [Fact]

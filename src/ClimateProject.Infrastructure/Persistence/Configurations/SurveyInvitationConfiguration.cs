@@ -20,6 +20,7 @@ public class SurveyInvitationConfiguration : IEntityTypeConfiguration<SurveyInvi
         builder.Property(i => i.OpenedAt).HasColumnName("opened_at");
         builder.Property(i => i.StartedAt).HasColumnName("started_at");
         builder.Property(i => i.CompletedAt).HasColumnName("completed_at");
+        builder.Property(i => i.CompletedOn).HasColumnName("completed_on").HasColumnType("date");
         builder.Property(i => i.ReminderCount).HasColumnName("reminder_count").IsRequired().HasDefaultValue(0);
         builder.Property(i => i.LastReminderSent).HasColumnName("last_reminder_sent");
         builder.Property(i => i.ExpiresAt).HasColumnName("expires_at").IsRequired();

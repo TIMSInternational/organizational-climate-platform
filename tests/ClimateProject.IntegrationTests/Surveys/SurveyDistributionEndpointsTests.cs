@@ -1010,8 +1010,61 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
         var invitation = await InvitationRowAsync(invitationId);
         Assert.Equal(SurveyInvitationStatuses.Completed, invitation.Status);
         Assert.NotNull(invitation.OpenedAt);
-        Assert.NotNull(invitation.StartedAt);
-        Assert.NotNull(invitation.CompletedAt);
+        Assert.NotNull(invitation.CompletedOn);
+    }
+
+    /// <summary>
+    /// Ruled 2026-10-12: on an IDENTIFIED survey the invitation keeps only the DAY its invitee
+    /// finished. A start or completion instant -- or an <c>updated_at</c> stamped at that
+    /// instant, which is the same fact under another name -- lines up with
+    /// <c>responses.start_time</c> / <c>completion_time</c> and says which response is whose.
+    /// The day is the company's, so it is asserted in a zone whose day is not UTC's.
+    /// </summary>
+    [Fact]
+    public async Task A_named_survey_records_the_day_its_invitee_finished_and_never_the_time()
+    {
+        var client = await AdminAAsync();
+        var zone = await _harness.SetCompanyTimezoneOffUtcDayAsync(_companyAId);
+        var survey = await CreateActiveSurveyAsync(client);
+        var employee = await SeedEmployeeAsync(_companyAId);
+        var result = await InviteAsync(client, survey.Id, new CreateSurveyInvitationsRequest(UserIds: [employee]));
+        var invitationId = result.InvitationIds[0];
+        var token = await TokenOfAsync(invitationId);
+
+        var anonymous = Anonymous();
+        (await anonymous.PostAsync($"/survey-invitations/{token}/opened", null)).EnsureSuccessStatusCode();
+        var updatedAtAfterOpen = (await InvitationRowAsync(invitationId)).UpdatedAt;
+
+        var before = DateTimeOffset.UtcNow;
+        foreach (var state in new[] { "started", "completed" })
+        {
+            var response = await anonymous.PostAsync($"/survey-invitations/{token}/{state}", null);
+            response.EnsureSuccessStatusCode();
+            var recorded = (await response.Content.ReadFromJsonAsync<SurveyInvitationStateResult>())!;
+            Assert.True(recorded.Recorded);
+            Assert.Equal(state, recorded.Status);
+        }
+        var after = DateTimeOffset.UtcNow;
+
+        var invitation = await InvitationRowAsync(invitationId);
+        Assert.Equal(SurveyInvitationStatuses.Completed, invitation.Status);
+        Assert.Null(invitation.StartedAt);
+        Assert.Null(invitation.CompletedAt);
+        Assert.Equal(updatedAtAfterOpen, invitation.UpdatedAt);
+
+        // The company's day, not UTC's: the zone was chosen so the two differ right now.
+        var localBefore = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(before, zone).DateTime);
+        var localAfter = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(after, zone).DateTime);
+        Assert.NotEqual(DateOnly.FromDateTime(before.UtcDateTime), localBefore);
+        Assert.NotNull(invitation.CompletedOn);
+        Assert.Contains(invitation.CompletedOn!.Value, new[] { localBefore, localAfter });
+
+        // And the admin list carries the day, with both instants null.
+        var listed = (await client.GetFromJsonAsync<SurveyInvitationListResponse>($"/surveys/{survey.Id}/invitations"))!
+            .Invitations.Single(i => i.Id == invitationId);
+        Assert.Equal(invitation.CompletedOn, listed.CompletedOn);
+        Assert.Null(listed.StartedAt);
+        Assert.Null(listed.CompletedAt);
     }
 
     [Fact]
@@ -1102,6 +1155,7 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
         Assert.NotNull(invitation.OpenedAt);
         Assert.Null(invitation.StartedAt);
         Assert.Null(invitation.CompletedAt);
+        Assert.Null(invitation.CompletedOn);
     }
 
     [Fact]

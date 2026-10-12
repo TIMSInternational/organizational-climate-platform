@@ -83,6 +83,12 @@ public sealed record SurveyDistributionDetail(
 /// who can list tokens can open any employee's survey as them, which is a privilege the
 /// admin role does not otherwise carry and which no screen needs.
 /// </summary>
+/// <remarks>
+/// <c>StartedAt</c> and <c>CompletedAt</c> are always null since 2026-10-12: a named invitee's
+/// tracking keeps only <c>CompletedOn</c>, the company-local day they finished. The two fields
+/// stay in the contract for one release so a client built against them still parses, and are
+/// removed with the columns in a follow-up.
+/// </remarks>
 public sealed record SurveyInvitationDetail(
     Guid Id,
     Guid SurveyId,
@@ -94,6 +100,7 @@ public sealed record SurveyInvitationDetail(
     DateTimeOffset? OpenedAt,
     DateTimeOffset? StartedAt,
     DateTimeOffset? CompletedAt,
+    DateOnly? CompletedOn,
     int ReminderCount,
     DateTimeOffset? LastReminderSent,
     DateTimeOffset ExpiresAt,

@@ -1017,17 +1017,24 @@ public static class SurveyDistributionEndpoints
         {
             case SurveyInvitationStatuses.Opened:
                 invitation.OpenedAt ??= now;
+                invitation.UpdatedAt = now;
                 break;
+
+            // Ruled 2026-10-12: a named invitee's tracking keeps only the DAY they finished.
+            // `started` advances the status and records no time at all; `completed` records
+            // the company-local day. Neither stamps UpdatedAt, which on these two transitions
+            // would be the same instant under another name.
             case SurveyInvitationStatuses.Started:
-                invitation.StartedAt ??= now;
                 break;
             case SurveyInvitationStatuses.Completed:
-                invitation.CompletedAt ??= now;
+                invitation.CompletedOn ??= await CompanyLocalDay.OfAsync(db, survey.CompanyId, now, cancellationToken);
+                break;
+            default:
+                invitation.UpdatedAt = now;
                 break;
         }
 
         invitation.Status = targetState;
-        invitation.UpdatedAt = now;
         await db.SaveChangesAsync(cancellationToken);
 
         return Results.Ok(new SurveyInvitationStateResult(
@@ -1479,8 +1486,11 @@ public static class SurveyDistributionEndpoints
             invitation.Status != SurveyInvitationStatuses.Revoked && invitation.ExpiresAt <= now,
             invitation.SentAt,
             invitation.OpenedAt,
-            invitation.StartedAt,
-            invitation.CompletedAt,
+            // No longer written (ruled 2026-10-12); always null, kept in the contract for one
+            // release so an older client reading them does not break. CompletedOn replaces them.
+            StartedAt: null,
+            CompletedAt: null,
+            invitation.CompletedOn,
             invitation.ReminderCount,
             invitation.LastReminderSent,
             invitation.ExpiresAt,

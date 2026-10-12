@@ -1578,7 +1578,8 @@ public class InvitationEmailLinkTests : IAsyncLifetime, IClassFixture<CapturingM
         {
             var invitation = await db.SurveyInvitations.FirstAsync(i => i.Id == invitationId);
             invitation.Status = SurveyInvitationStatuses.Completed;
-            invitation.CompletedAt = DateTimeOffset.UtcNow;
+            // The shape the writers leave since 2026-10-12: the day, never the instant.
+            invitation.CompletedOn = DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime);
             await db.SaveChangesAsync();
             return invitation.InvitationToken;
         });
