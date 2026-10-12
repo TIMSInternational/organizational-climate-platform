@@ -47,8 +47,9 @@ export interface SurveyResultsModelState {
  * and the note under the map says why). The model is published once, with every
  * reading in it, so the page never flashes a "could not load" that is merely early.
  *
- * `sample` is `sampleModel.ts` — the opened group's 1–5 distribution, which no endpoint
- * returns; the view keeps the "sample data" chip on that one region.
+ * Nothing here is a sample: `sampleModel.ts` is gone, and the opened group's 1–5
+ * distribution — the one reading no endpoint returns — is not drawn at all, so the page
+ * wears no "sample data" chip (`SurveyResultsNextPage.test.tsx` asserts none).
  */
 export function useSurveyResultsModel(surveyId: string | undefined): SurveyResultsModelState {
   const { t, locale } = useTranslation()
