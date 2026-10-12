@@ -4205,6 +4205,8 @@
         "closesTomorrow": "{year} · tomorrow",
         "closesIn": "{year} · in {days} days",
         "closedAgo": "{year} · {days} days ago",
+        "closedAgoOne": "{year} · 1 day ago",
+        "closesPassed": "Was due to close",
         "remindersNone": "No reminder sent yet",
         "remindersOne": "1 reminder sent",
         "remindersSome": "{count} reminders sent",
@@ -4216,8 +4218,10 @@
           "closed": "no longer taking responses",
           "archived": "archived, read only"
         },
-        "allowed": "Allowed transition",
-        "noneAllowed": "Final state: no transitions",
+        "allowed": "What you can do now",
+        "noneAllowed": "Final state: it does not change again",
+        "consequence": "{verb}: {meaning}",
+        "endPassedWarning": "The close date has already passed. Activating or scheduling it would open a survey that should have closed already: change the dates first.",
         "closeConfirmTitle": "Close this survey now?",
         "closeConfirmBody": "It stops accepting answers and cannot be reopened — closed only ever moves on to archived. Anyone part-way through loses the rest of their answers. The results are read complete from this moment.",
         "verb": {

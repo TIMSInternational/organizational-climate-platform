@@ -180,6 +180,30 @@ describe('Detalle de encuesta (SurveyDetail artboard)', () => {
     expect(screen.getByTestId('tile-responses').textContent).toContain('de 24 · 13 %')
   })
 
+  it('does not say a draft "closed", and will not open one whose window has already passed', () => {
+    // The walkthrough's draft: end date 21 days behind "now", and "CERRÓ" beside a live "Activar".
+    detail(
+      survey({
+        status: 'draft',
+        endDate: '2026-08-20T12:00:00Z',
+        allowedStatusTransitions: ['scheduled', 'active', 'archived'],
+        isContentEditable: true,
+      }),
+    )
+    const closes = screen.getByTestId('tile-closes').textContent ?? ''
+    expect(closes).toContain('Debía cerrar')
+    expect(closes).not.toContain('Cerró')
+    const status = screen.getByTestId('tile-status')
+    expect(within(status).getByText('Lo que puedes hacer ahora')).toBeTruthy()
+    expect((within(status).getByRole('button', { name: 'Activar' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((within(status).getByRole('button', { name: 'Programar' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((within(status).getByRole('button', { name: 'Archivar' }) as HTMLButtonElement).disabled).toBe(false)
+    expect(screen.getByTestId('status-end-passed').textContent).toContain('La fecha de cierre ya pasó')
+    // Each verb says what it does.
+    expect(screen.getByTestId('status-consequences').textContent).toContain('Programar: abre en su fecha de inicio')
+    expect(screen.getByTestId('status-consequences').textContent).toContain('Activar: recibe respuestas')
+  })
+
   it('asks before closing, and closes only once the reader says so', async () => {
     // Closing is the only transition on this tile that cannot be taken back — the server
     // allows `closed → archived` and nothing else out of it — and it fired on one press.

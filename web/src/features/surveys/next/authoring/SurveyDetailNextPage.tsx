@@ -222,7 +222,15 @@ export function SurveyDetailView({
         </ReadingTile>
         <ReadingTile
           testId="tile-closes"
-          label={closesIn !== null && closesIn < 0 ? copy('closed') : copy('closes')}
+          label={
+            closesIn !== null && closesIn < 0
+              ? // A draft or a scheduled survey never opened, so it did not "close": its window
+                // simply passed. "CERRÓ" there sat beside a live "Activar" (walkthrough, finding 9).
+                survey.status === 'draft' || survey.status === 'scheduled'
+                ? copy('closesPassed')
+                : copy('closed')
+              : copy('closes')
+          }
           value={dayMonth(survey.endDate, locale)}
           unit={closeLine(copy, yearOf(survey.endDate), closesIn)}
         >
@@ -232,7 +240,13 @@ export function SurveyDetailView({
             </span>
           )}
         </ReadingTile>
-        <StatusTile survey={survey} canAuthor={canAuthor} pending={pending} onTransition={onTransition} />
+        <StatusTile
+          survey={survey}
+          canAuthor={canAuthor}
+          pending={pending}
+          onTransition={onTransition}
+          endPassed={closesIn !== null && closesIn < 0}
+        />
       </section>
 
       <div className="mt-6 grid items-start gap-4 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
@@ -337,6 +351,7 @@ function closeLine(copy: (key: string, vars?: Record<string, string | number>) =
   if (days === 0) return copy('closesToday', { year })
   if (days === 1) return copy('closesTomorrow', { year })
   if (days > 1) return copy('closesIn', { year, days })
+  if (days === -1) return copy('closedAgoOne', { year })
   return copy('closedAgo', { year, days: Math.abs(days) })
 }
 
@@ -348,14 +363,21 @@ function StatusTile({
   canAuthor,
   pending,
   onTransition,
+  endPassed,
 }: {
   survey: SurveyDetail
   canAuthor: boolean
   pending: string | null
   onTransition: (status: string) => void
+  /** The survey's end date is behind today. */
+  endPassed: boolean
 }) {
   const { t } = useTranslation()
-  const copy = (key: string) => t(`surveys.next.detail.${key}`)
+  const copy = (key: string, vars?: Record<string, string | number>) => t(`surveys.next.detail.${key}`, vars)
+  // Opening a survey whose window has already ended would take responses for a period that
+  // is over; the server's state machine allows it, so the screen is the guard.
+  const opensIntoThePast = (status: string) => endPassed && (status === 'active' || status === 'scheduled')
+  const verbOf = (status: string) => (KNOWN_STATUSES.includes(status) ? copy(`verb.${status}`) : statusLabel(t, status))
   const tone = survey.status === 'active' ? 'good' : survey.status === 'draft' || survey.status === 'scheduled' ? 'accent' : 'neutral'
   // Closing is the one transition on this tile that cannot be taken back: the server allows
   // `closed → archived` and nothing else out of it, so a mis-click ends the measurement for
@@ -382,15 +404,31 @@ function StatusTile({
                 type="button"
                 size="sm"
                 variant="outline"
-                disabled={pending !== null}
+                disabled={pending !== null || opensIntoThePast(status)}
                 onClick={() => (status === 'closed' ? setConfirmClose(true) : onTransition(status))}
               >
                 {status === 'closed' && <Lock aria-hidden="true" className="size-3.5" />}
-                {KNOWN_STATUSES.includes(status) ? copy(`verb.${status}`) : statusLabel(t, status)}
+                {verbOf(status)}
               </Button>
             ))}
           </span>
         </div>
+      )}
+      {/* What each verb does, in the product's words: "Programar" and "Activar" sit side by
+          side at equal weight and differ in consequence (walkthrough, finding 9). */}
+      {canAuthor && survey.allowedStatusTransitions.some((status) => KNOWN_STATUSES.includes(status)) && (
+        <ul className="m-0 flex list-none flex-col gap-0.5 p-0 text-xs text-fg-tertiary" data-testid="status-consequences">
+          {survey.allowedStatusTransitions
+            .filter((status) => KNOWN_STATUSES.includes(status))
+            .map((status) => (
+              <li key={status}>{copy('consequence', { verb: verbOf(status), meaning: copy(`meaning.${status}`) })}</li>
+            ))}
+        </ul>
+      )}
+      {canAuthor && survey.allowedStatusTransitions.some(opensIntoThePast) && (
+        <p role="note" className="m-0 text-sm text-accent-amber-ink" data-testid="status-end-passed">
+          {copy('endPassedWarning')}
+        </p>
       )}
       <ConfirmationDialog
         open={confirmClose}

@@ -1114,7 +1114,7 @@
     "exportCsv": "Exportar CSV",
     "exportPdf": "Exportar PDF",
     "exportFailedTitle": "La descarga no se inició",
-    "exportFailed": "No se pudo exportar el panel. Revisá tu conexión e intentá de nuevo.",
+    "exportFailed": "No se pudo exportar el panel. Revisa tu conexión e inténtalo de nuevo.",
     "next": {
       "title": "Panel de Control",
       "description": "Dónde está la organización hoy, qué se movió desde la última encuesta y qué necesita tu atención.",
@@ -4205,6 +4205,8 @@
         "closesTomorrow": "{year} · mañana",
         "closesIn": "{year} · en {days} días",
         "closedAgo": "{year} · hace {days} días",
+        "closedAgoOne": "{year} · hace 1 día",
+        "closesPassed": "Debía cerrar",
         "remindersNone": "Ningún recordatorio enviado todavía",
         "remindersOne": "1 recordatorio enviado",
         "remindersSome": "{count} recordatorios enviados",
@@ -4216,8 +4218,10 @@
           "closed": "ya no recibe respuestas",
           "archived": "archivada, solo lectura"
         },
-        "allowed": "Transición permitida",
-        "noneAllowed": "Estado final: sin transiciones",
+        "allowed": "Lo que puedes hacer ahora",
+        "noneAllowed": "Estado final: ya no cambia",
+        "consequence": "{verb}: {meaning}",
+        "endPassedWarning": "La fecha de cierre ya pasó. Activarla o programarla abriría una encuesta que ya debía haber cerrado: cambia primero las fechas.",
         "closeConfirmTitle": "¿Cerrar esta encuesta ahora?",
         "closeConfirmBody": "Deja de recibir respuestas y no se puede reabrir: de cerrada solo se pasa a archivada. Quien la tenga a medias pierde lo que falta. Los resultados se leen completos desde este momento.",
         "verb": {
