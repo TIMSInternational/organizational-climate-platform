@@ -47,21 +47,13 @@
     "fallbackFields": []
   },
   "GET /microclimates/*/live-results": {
-    "sentimentScore": 0,
+    "sentimentScore": null,
     "engagementLevel": "low",
-    "wordCloud": [
-      {
-        "text": "visa",
-        "value": 2,
-        "language": "en"
-      },
-      {
-        "text": "handover",
-        "value": 1,
-        "language": "en"
-      }
-    ],
+    "wordCloud": [],
     "responseCount": 3,
-    "targetParticipantCount": 48
+    "targetParticipantCount": 48,
+    "isSuppressed": true,
+    "suppressionReason": "below_minimum_respondents",
+    "minimumGroupSize": 5
   }
 }

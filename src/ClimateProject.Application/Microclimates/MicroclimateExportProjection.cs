@@ -81,7 +81,7 @@ public static class MicroclimateExportProjection
         int responseCount,
         int targetParticipantCount,
         string engagementLevel,
-        double sentimentScore,
+        double? sentimentScore,
         IReadOnlyList<QuestionDto> questions,
         IReadOnlyList<WordCloudEntry> words,
         DateTimeOffset generatedAt)
@@ -196,7 +196,8 @@ public static class MicroclimateExportProjection
             "",
             export.ParticipationPercent is double pct ? CsvWriter.Number(pct) : "");
         csv.AppendRow("summary", "engagement_level", "", export.EngagementLevel);
-        csv.AppendRow("summary", "sentiment_score", "", CsvWriter.Number(export.SentimentScore));
+        // Empty, not "0": no sentiment is measured anywhere (see LiveResultsDetail).
+        csv.AppendRow("summary", "sentiment_score", "", export.SentimentScore is double sentiment ? CsvWriter.Number(sentiment) : "");
 
         // Suppression bookkeeping is part of the document, not a header a reader can drop.
         csv.AppendRow("summary", "is_suppressed", "", export.IsSuppressed ? "true" : "false");

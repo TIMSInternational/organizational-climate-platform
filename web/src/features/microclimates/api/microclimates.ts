@@ -165,11 +165,17 @@ export interface WordCloudEntry {
 }
 
 export interface LiveResults {
-  sentimentScore: number
+  /** Always `null`: nothing measures sentiment, and the server says so rather than sending a 0. */
+  sentimentScore: number | null
   engagementLevel: string
+  /** Empty while `isSuppressed` — the server applies the session floor itself now. */
   wordCloud: WordCloudEntry[]
   responseCount: number
   targetParticipantCount: number
+  /** True while the session has fewer than `minimumGroupSize` responses. */
+  isSuppressed: boolean
+  suppressionReason: string | null
+  minimumGroupSize: number
 }
 
 export async function listMicroclimates(

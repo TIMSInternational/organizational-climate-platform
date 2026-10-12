@@ -21,11 +21,14 @@
     "demographics": {}
   },
   "GET /microclimates/*/live-results": {
-    "sentimentScore": 0,
+    "sentimentScore": null,
     "engagementLevel": "medium",
     "wordCloud": [],
     "responseCount": 0,
-    "targetParticipantCount": 20
+    "targetParticipantCount": 20,
+    "isSuppressed": true,
+    "suppressionReason": "below_minimum_respondents",
+    "minimumGroupSize": 5
   },
   "GET /microclimates/*": {
     "id": "5e4cf7fd-d792-4cf5-9750-11f7748bd37e",

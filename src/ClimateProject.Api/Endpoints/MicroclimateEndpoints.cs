@@ -1280,7 +1280,8 @@ public static class MicroclimateEndpoints
             microclimate.ResponseCount,
             microclimate.TargetParticipantCount,
             microclimate.LiveResults.EngagementLevel,
-            microclimate.LiveResults.SentimentScore,
+            // Not measured: the stored 0 is a constant SubmitResponseAsync writes, not a reading.
+            sentimentScore: null,
             questions,
             words,
             DateTimeOffset.UtcNow), null);
@@ -1486,14 +1487,23 @@ public static class MicroclimateEndpoints
             return Results.Forbid();
         }
 
-        var wordCloud = ReadWordCloud(microclimate.LiveResults.WordCloudData);
+        // The session floor the export applies (MicroclimateExportProjection): below
+        // MinimumRespondents a session's words are withheld entirely, because on a pulse of
+        // two or three people a word said by two of them is most of who answered. The word
+        // floor inside ReadWordCloud is the second layer, not the first.
+        var disclosed = SurveyResultsPrivacy.MeetsSurveyFloor(microclimate.ResponseCount);
+        var wordCloud = disclosed ? ReadWordCloud(microclimate.LiveResults.WordCloudData) : [];
 
         return Results.Ok(new LiveResultsDetail(
-            microclimate.LiveResults.SentimentScore,
+            // Null, never the stored 0: nothing measures sentiment (see GetInsightsAsync).
+            SentimentScore: null,
             microclimate.LiveResults.EngagementLevel,
             wordCloud,
             microclimate.ResponseCount,
-            microclimate.TargetParticipantCount));
+            microclimate.TargetParticipantCount,
+            IsSuppressed: !disclosed,
+            disclosed ? null : SurveyResultsPrivacy.BelowMinimumRespondents,
+            SurveyResultsPrivacy.MinimumRespondents));
     }
 
     private static async Task<IResult> SubmitResponseAsync(

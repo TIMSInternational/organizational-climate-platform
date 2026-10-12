@@ -24,7 +24,7 @@
     "fallbackFields": []
   },
   "GET /microclimates/*/live-results": {
-    "sentimentScore": 0,
+    "sentimentScore": null,
     "engagementLevel": "high",
     "wordCloud": [
       { "text": "workload", "value": 9, "language": "en" },
@@ -37,6 +37,9 @@
       { "text": "visa", "value": 1, "language": "en" }
     ],
     "responseCount": 31,
-    "targetParticipantCount": 0
+    "targetParticipantCount": 0,
+    "isSuppressed": false,
+    "suppressionReason": null,
+    "minimumGroupSize": 5
   }
 }

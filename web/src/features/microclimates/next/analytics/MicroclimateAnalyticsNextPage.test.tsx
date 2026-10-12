@@ -156,10 +156,13 @@ describe('MicroclimateAnalyticsNextPage', () => {
     const open = session({ id: 'm2', title: 'Pulso de agosto', status: 'closed', responseCount: 6, createdAt: '2026-08-20T00:00:00Z' })
     vi.mocked(listMicroclimates).mockResolvedValue([session({}), open])
     vi.mocked(getLiveResults).mockResolvedValue({
-      sentimentScore: 0,
+      sentimentScore: null,
       engagementLevel: 'low',
       responseCount: 6,
       targetParticipantCount: 20,
+      isSuppressed: false,
+      suppressionReason: null,
+      minimumGroupSize: 5,
       wordCloud: [
         { text: 'carga', value: 4, language: 'es' },
         { text: 'apoyo', value: 2, language: 'es' },

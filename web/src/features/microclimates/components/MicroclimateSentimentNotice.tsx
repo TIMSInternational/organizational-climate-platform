@@ -7,8 +7,9 @@ import { Alert, AlertDescription, AlertTitle } from '../../../components/ui'
  *
  * `MicroclimateEndpoints.SubmitResponseAsync` assigns
  * `microclimate.LiveResults.SentimentScore = 0` on every single submission — it is a
- * placeholder pending #67, not a measurement. So the field is always exactly `0`, and
- * every possible rendering of it is a lie: a gauge at neutral says the workforce is
+ * placeholder pending #67, not a measurement. Since 2026-10-12 the live-results and
+ * export payloads send `null` instead of that stored `0`; before then the field was
+ * always exactly `0`, and every possible rendering of it is a lie: a gauge at neutral says the workforce is
  * neutral, a "0.0" says it was scored, and a badge saying "estimated" still puts a
  * number on screen that a reader will quote in a meeting.
  *

@@ -34,7 +34,7 @@ function detail(overrides: Partial<MicroclimateDetail> = {}): MicroclimateDetail
 
 function results(overrides: Partial<LiveResults> = {}): LiveResults {
   return {
-    sentimentScore: 0,
+    sentimentScore: null,
     engagementLevel: 'high',
     wordCloud: [
       { text: 'workload', value: 9, language: 'en' },
@@ -42,6 +42,9 @@ function results(overrides: Partial<LiveResults> = {}): LiveResults {
     ],
     responseCount: 24,
     targetParticipantCount: 40,
+    isSuppressed: false,
+    suppressionReason: null,
+    minimumGroupSize: 5,
     ...overrides,
   }
 }
