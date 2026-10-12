@@ -83,6 +83,7 @@ export const ERASURE_DELETED_TABLES = [
   'notifications',
   'survey_audit_logs',
   'survey_drafts',
+  'survey_participations',
   'user_demographics',
   'user_invitation_demographics',
 ] as const
@@ -106,6 +107,7 @@ export const DELETED_LABEL_PATH: Record<string, string> = {
   notifications: 'privacy.erasureDeletedNotifications',
   survey_audit_logs: 'privacy.erasureDeletedSurveyAuditLogs',
   survey_drafts: 'privacy.erasureDeletedSurveyDrafts',
+  survey_participations: 'privacy.erasureDeletedSurveyParticipations',
   user_demographics: 'privacy.erasureDeletedUserDemographics',
   user_invitation_demographics: 'privacy.erasureDeletedInvitationDemographics',
 }

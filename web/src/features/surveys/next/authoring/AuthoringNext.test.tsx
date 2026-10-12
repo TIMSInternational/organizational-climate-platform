@@ -27,6 +27,7 @@ import * as templatesApi from '../../api/surveyTemplates'
 import * as questionAuthoring from '../../api/surveyQuestionAuthoring'
 import * as bankApi from '../../../questions/api/questionBank'
 import * as usersApi from '../../../org-structure/api/users'
+import es from '../../../../i18n/es.json'
 
 vi.mock('../../api/surveyDrafts', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../api/surveyDrafts')>()),
