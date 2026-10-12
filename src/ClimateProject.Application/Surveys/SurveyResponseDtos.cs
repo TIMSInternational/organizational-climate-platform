@@ -162,7 +162,8 @@ public sealed record SurveyRespondDemographicOption(string Value, string? Label)
 
 /// <param name="AsksParticipantIdentity">
 /// True when this respondent is asked their name and email before the questions: the survey
-/// collects participant identity, is anonymous, and the caller has no account. Declared last
+/// collects participant identity and the caller has no account -- on an anonymous or an
+/// identified survey alike, since the 2026-10-12 ruling that every survey has a link. Declared last
 /// with a default so a payload from an API that predates it reads as "not asked".
 /// </param>
 public sealed record SurveyRespondView(

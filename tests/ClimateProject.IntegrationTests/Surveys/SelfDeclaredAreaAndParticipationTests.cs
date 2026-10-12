@@ -104,11 +104,11 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
         Assert.Equal(5, operaciones.RespondentCount);
         Assert.NotEmpty(operaciones.Questions);
 
-        var ventas = Assert.Single(departments.Segments, s => s.Key == _ventas.ToString());
-        Assert.True(ventas.IsSuppressed);
-        Assert.Equal(0, ventas.RespondentCount);
-        Assert.Null(ventas.ParticipationRate);
-        Assert.Empty(ventas.Questions);
+        // Since #543 a withheld group is counted, never named: Ventas (4) and Finanzas (1)
+        // are absent from the rows and present only in the counter.
+        Assert.Single(departments.Segments);
+        Assert.DoesNotContain(departments.Segments, s => s.Key == _ventas.ToString() || s.Key == _finanzas.ToString());
+        Assert.Equal(2, departments.SuppressedSegmentCount);
         Assert.Equal(0, departments.UnsegmentedRespondentCount);
 
         // The reserved key is lifted into the department, never ALSO published as a
@@ -152,14 +152,13 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
         var admin = await AdminAsync();
         var json = await admin.GetStringAsync($"/surveys/{survey.Id}/statistics");
         var statistics = JsonSerializer.Deserialize<SurveyStatisticsResponse>(json, JsonOptions)!;
-        var ventas = Assert.Single(
-            Assert.Single(statistics.Breakdowns, b => b.Dimension == "department").Segments,
-            s => s.Key == _ventas.ToString());
+        var departments = Assert.Single(statistics.Breakdowns, b => b.Dimension == "department");
 
-        Assert.True(ventas.IsSuppressed);
-        Assert.Equal(0, ventas.RespondentCount);
-        Assert.Null(ventas.Headcount);
-        Assert.Empty(ventas.Questions);
+        // Withheld, counted, and never named (#543): no row, no key, no label anywhere.
+        Assert.DoesNotContain(departments.Segments, s => s.Key == _ventas.ToString());
+        Assert.Equal(2, departments.SuppressedSegmentCount);
+        Assert.DoesNotContain(_ventas.ToString(), json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Ventas", json, StringComparison.Ordinal);
     }
 
     /// <summary>(d) Ruling 4 holds: the self-declared área is an ANSWER, the FK column stays null.</summary>
@@ -473,12 +472,100 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
     // Fixtures
     // ------------------------------------------------------------------
 
+    // ------------------------------------------------------------------
+    // Part 3: an IDENTIFIED survey answered by link (possible since #544)
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// End to end, the case neither ruling could reach before every survey had a link: a
+    /// visitor with NO account answers an IDENTIFIED survey through its link, declaring an
+    /// área and a name/email. They are served anonymously -- no user id, no IP, no user agent,
+    /// no department FK -- their área feeds the department breakdown under the floor of 5
+    /// (five in one área publish it, four publish no number), and who answered lands in a
+    /// participation row that has no column that could point at the response.
+    /// </summary>
+    [Fact]
+    public async Task A_visitor_answers_an_identified_survey_by_link_anonymously_and_their_area_and_attendance_are_counted_apart()
+    {
+        var survey = await QrSurveyAsync(collectIdentity: true, anonymous: false);
+        var stored = await _harness.WithDbAsync(db => db.Surveys.AsNoTracking().FirstAsync(s => s.Id == survey.Id));
+        Assert.False(stored.Settings.Anonymous);
+
+        // The respond view tells the visitor the truth about THEIR answer, and asks both steps.
+        var view = await RespondViewAsync(_factory.CreateClient(), survey.Id);
+        Assert.True(view.Anonymous);
+        Assert.True(view.AsksParticipantIdentity);
+        Assert.Contains(view.Demographics, d => d.Field == SelfDeclaredDepartment.FieldKey);
+
+        var responseIds = new List<Guid>();
+        for (var i = 0; i < 5; i++)
+        {
+            var http = await SubmitAsync(
+                survey, Area(_operaciones), new SurveyParticipantInput($"Persona {i}", $"persona{i}@{_mail}"));
+            Assert.Equal(HttpStatusCode.Created, http.StatusCode);
+            responseIds.Add((await http.Content.ReadFromJsonAsync<SurveySubmissionResult>())!.ResponseId);
+        }
+        for (var i = 0; i < 4; i++)
+        {
+            var http = await SubmitAsync(
+                survey, Area(_ventas), new SurveyParticipantInput($"Vendedor {i}", null));
+            Assert.Equal(HttpStatusCode.Created, http.StatusCode);
+            responseIds.Add((await http.Content.ReadFromJsonAsync<SurveySubmissionResult>())!.ResponseId);
+        }
+        // One more, elsewhere: withheld groups must total >= 5 or #543's complement rule
+        // withholds Operaciones too (5 shown + 4 withheld would let a reader subtract to 4).
+        var finanzas = await SubmitAsync(survey, Area(_finanzas), new SurveyParticipantInput("Contadora", $"contadora@{_mail}"));
+        Assert.Equal(HttpStatusCode.Created, finanzas.StatusCode);
+        responseIds.Add((await finanzas.Content.ReadFromJsonAsync<SurveySubmissionResult>())!.ResponseId);
+
+        // Stored anonymously, on an identified survey.
+        var rows = await _harness.WithDbAsync(db => db.Responses.AsNoTracking()
+            .Where(r => r.SurveyId == survey.Id).ToListAsync());
+        Assert.Equal(10, rows.Count);
+        Assert.All(rows, row =>
+        {
+            Assert.Null(row.UserId);
+            Assert.Null(row.IpAddress);
+            Assert.Null(row.UserAgent);
+            Assert.Null(row.DepartmentId);
+        });
+
+        // Five in Operaciones publish it; four in Ventas publish no number.
+        var admin = await AdminAsync();
+        var json = await admin.GetStringAsync($"/surveys/{survey.Id}/statistics");
+        var statistics = JsonSerializer.Deserialize<SurveyStatisticsResponse>(json, JsonOptions)!;
+        var departments = Assert.Single(statistics.Breakdowns, b => b.Dimension == "department");
+
+        var operaciones = Assert.Single(departments.Segments, s => s.Key == _operaciones.ToString());
+        Assert.False(operaciones.IsSuppressed);
+        Assert.Equal(5, operaciones.RespondentCount);
+        Assert.NotEmpty(operaciones.Questions);
+
+        // Ventas (and Finanzas) are withheld: counted, never named, no number of their own (#543).
+        Assert.Single(departments.Segments);
+        Assert.Equal(2, departments.SuppressedSegmentCount);
+        Assert.DoesNotContain(_ventas.ToString(), json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Ventas", json, StringComparison.Ordinal);
+
+        // Who answered: ten rows, none of which can be joined to an answer.
+        var columns = await ScalarListAsync(
+            "SELECT column_name AS \"Value\" FROM information_schema.columns WHERE table_name = 'survey_participations' ORDER BY column_name");
+        Assert.Equal(["company_id", "email", "id", "name", "participated_on", "survey_id"], columns);
+
+        var participations = await _harness.WithDbAsync(db => db.SurveyParticipations.AsNoTracking()
+            .Where(p => p.SurveyId == survey.Id).ToListAsync());
+        Assert.Equal(10, participations.Count);
+        Assert.Contains(participations, p => p.Name == "Persona 0" && p.Email == $"persona0@{_mail}");
+        Assert.Equal(4, participations.Count(p => p.Email is null));
+        Assert.All(participations, p => Assert.DoesNotContain(p.Id, responseIds));
+    }
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private Task<HttpClient> AdminAsync() => _harness.ClientAsync(Roles.CompanyAdmin, _companyId);
 
-    /// <summary>An open, anonymous survey answered through the QR: área asked, identity per the test.</summary>
-    private async Task<SurveyDetail> QrSurveyAsync(bool collectIdentity)
+    /// <summary>An open survey answered through the QR: área asked, identity per the test.</summary>
+    private async Task<SurveyDetail> QrSurveyAsync(bool collectIdentity, bool anonymous = true)
     {
         var admin = await AdminAsync();
         var survey = await SurveyTestHarness.CreateSurveyAsync(admin, new CreateSurveyRequest(
@@ -500,7 +587,7 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
                     Category: "liderazgo"),
             ],
             Settings: new SurveySettingsInput(
-                Anonymous: true,
+                Anonymous: anonymous,
                 SelfDeclaredDemographics: true,
                 CollectParticipantIdentity: collectIdentity)));
         (await SurveyTestHarness.SetStatusAsync(admin, survey.Id, SurveyStatuses.Active)).EnsureSuccessStatusCode();
