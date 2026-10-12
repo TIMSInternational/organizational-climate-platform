@@ -15,10 +15,20 @@ namespace ClimateProject.Application.Email;
 public static class EmailBranding
 {
     /// <summary>
-    /// The product name. Matches <c>web/src/i18n/noHardcodedStrings.test.ts</c>'s single
-    /// allowed untranslated literal -- it is a name, so it is identical in both languages.
+    /// The product name, as it appears in every outbound message.
+    ///
+    /// It is a name, so it is identical in both languages and is not translated.
+    ///
+    /// This constant claimed to match <c>web/src/i18n/noHardcodedStrings.test.ts</c>'s single
+    /// allowed untranslated literal for as long as it existed, and did not: the app, the
+    /// brand assets and that guard all said "OCC -- Organizational Climate Check" while every
+    /// invitation and every notification footer said "Organizational Climate Platform", a name
+    /// the product uses nowhere else. Nothing caught it, because the two live in different
+    /// languages and different test suites and no test compared them. The claim is now true,
+    /// and <c>web/src/i18n/productName.test.ts</c> reads this file and fails if it drifts
+    /// again -- a comment asserting agreement is not agreement.
     /// </summary>
-    public const string ProductName = "Organizational Climate Platform";
+    public const string ProductName = "OCC — Organizational Climate Check";
 
     /// <summary>
     /// Wraps a rendered body fragment in the document shell.

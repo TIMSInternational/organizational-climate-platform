@@ -65,6 +65,47 @@ public class ReportRendererTests
         Assert.Contains(EnglishTitle, DrawnStrings(ReportRenderer.BuildPdf(Context())), StringComparer.Ordinal);
     }
 
+    /// <summary>
+    /// A dimension the catalogue names is printed as that name, in the section's own locale.
+    /// </summary>
+    /// <remarks>
+    /// A question's Category is authored free text and is stored as typed, so the server never
+    /// had a name to print and printed the key. On a screen that is invisible -- the client
+    /// resolves it through `surveyRespond.dimensions.*` before drawing. A PDF has no client, so
+    /// the report a customer opens printed `workload` where every screen says Carga de trabajo.
+    ///
+    /// The locale asserted is the SECTION's, not the document chrome's, because that is the one
+    /// a survey's own labels are already written in (`ReportRenderer.WriteSurveySection`).
+    /// </remarks>
+    [Theory]
+    [InlineData(ContentLanguages.English, "Workload")]
+    [InlineData(ContentLanguages.Spanish, "Carga de trabajo")]
+    public void A_dimension_the_catalogue_names_is_printed_by_name_not_by_key(string locale, string expected)
+    {
+        var drawn = DrawnStrings(ReportRenderer.BuildPdf(Context(healthyLocale: locale, category: "workload")));
+
+        Assert.Contains(expected, drawn, StringComparer.Ordinal);
+        // The key itself must be gone, or the document says both and the reader picks.
+        Assert.DoesNotContain("workload", drawn, StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// A category the catalogue does NOT name survives exactly as authored.
+    /// </summary>
+    /// <remarks>
+    /// This is the client's own rule -- "Categories are authored free text; one the catalogue
+    /// does not name is shown as is" -- and it is the half that makes the lookup safe. A
+    /// customer who names a category in their own words must get those words back, not a
+    /// guess, and not an empty cell.
+    /// </remarks>
+    [Fact]
+    public void A_category_the_catalogue_does_not_name_is_printed_exactly_as_authored()
+    {
+        var drawn = DrawnStrings(ReportRenderer.BuildPdf(Context(category: "clima de equipo")));
+
+        Assert.Contains("clima de equipo", drawn, StringComparer.Ordinal);
+    }
+
     [Fact]
     public void The_csv_starts_with_the_header_row()
     {
@@ -586,15 +627,19 @@ public class ReportRendererTests
     // Fixtures -- built the way production builds them
     // ------------------------------------------------------------------
 
-    private static ReportRenderContext Context(string healthyLocale = ContentLanguages.English)
-        => new(ReportId, EnglishTitle, "Quarterly summary", "summary", GeneratedAt, Document(healthyLocale));
+    private static ReportRenderContext Context(
+        string healthyLocale = ContentLanguages.English,
+        string category = "environment")
+        => new(ReportId, EnglishTitle, "Quarterly summary", "summary", GeneratedAt, Document(healthyLocale, category));
 
     /// <summary>
     /// The stored document: one measurable survey with a withheld department and a withheld
     /// demographic group, one survey below the whole-survey floor, one insight, one benchmark
     /// with a prior period.
     /// </summary>
-    private static ReportOutputDocument Document(string healthyLocale = ContentLanguages.English)
+    private static ReportOutputDocument Document(
+        string healthyLocale = ContentLanguages.English,
+        string category = "environment")
         => new(
             "Sections not yet generated: period-over-period comparative analysis, report configuration/filters, "
             + "report templates. The stored `format` IS rendered on download: pdf and csv are produced from this document.",
@@ -612,7 +657,8 @@ public class ReportRendererTests
                         respondentCount: 12,
                         invited: 17,
                         departments: [(Engineering, "Ingeniería", 20, 6), (Direction, "Dirección", 4, 3)],
-                        demographics: [("nationality", "Costarricense", 7), ("nationality", "Venezolana", 2)])),
+                        demographics: [("nationality", "Costarricense", 7), ("nationality", "Venezolana", 2)],
+                        category: category)),
                 // A second measurable survey, so "one row per question per survey" is a claim
                 // about two surveys rather than about one.
                 ReportSurveySections.ToSection(
@@ -663,7 +709,10 @@ public class ReportRendererTests
         int respondentCount,
         int invited,
         IReadOnlyList<(Guid Id, string Name, int Headcount, int Respondents)>? departments = null,
-        IReadOnlyList<(string Field, string Value, int Respondents)>? demographics = null)
+        IReadOnlyList<(string Field, string Value, int Respondents)>? demographics = null,
+        // Default: a category the dimension catalogue has no word for, which is the common
+        // case -- categories are authored free text. Override it to exercise one it names.
+        string category = "environment")
     {
         var questions = new List<AggregationQuestion>
         {
@@ -672,7 +721,7 @@ public class ReportRendererTests
                 0,
                 QuestionTypes.MultipleChoice,
                 "¿Dónde trabajas?",
-                "environment",
+                category,
                 null,
                 null,
                 null,

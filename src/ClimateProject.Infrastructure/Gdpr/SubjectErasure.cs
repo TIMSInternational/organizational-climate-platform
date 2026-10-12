@@ -227,6 +227,20 @@ public static class SubjectErasure
         }
         actions.Add(Action("Response", responses.Count));
 
+        // `owner_id` on a plan is a CURRENT assignment -- who is answerable for it now --
+        // which is a different kind of fact from `created_by`, the history of who filed it.
+        // Erasure pseudonymises the user row rather than deleting it, so an untouched
+        // `owner_id` would leave every plan the subject owned answerable to a pseudonym: a
+        // name no one can contact, that the overdue-plan nudge would address, and that the
+        // list would count as having an owner. The assignment is released and the plan falls
+        // to "sin responsable", a state `/action-plans` already counts and renders.
+        // `created_by` is retained, because provenance is history and history is not an
+        // assignment. Ruled by Federico on 2026-10-10; the reasoning is in SubjectDataMap.
+        var unassignedPlans = await db.ActionPlans
+            .Where(p => p.OwnerId == id)
+            .ExecuteUpdateAsync(set => set.SetProperty(p => p.OwnerId, (Guid?)null), cancellationToken);
+        actions.Add(Action("ActionPlan", unassignedPlans));
+
         AnonymiseAccount(subject, erasedAt);
         actions.Add(Action("User", 1));
 

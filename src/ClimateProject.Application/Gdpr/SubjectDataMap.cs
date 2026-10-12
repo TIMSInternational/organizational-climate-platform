@@ -186,17 +186,21 @@ public static class SubjectDataMap
     public static readonly IReadOnlyList<SubjectDataEntry> Entries =
     [
         new("ActionPlan", "action_plans", SubjectLink.Actor, ["CreatedBy", "OwnerId"],
-            ExportTreatment.Reference, ErasureTreatment.Retained,
+            ExportTreatment.Reference, ErasureTreatment.Redacted,
             BasisLegitimateInterest,
-            "For as long as the record exists; attribution survives erasure.",
-            "TWO columns reach a person here and they mean different things. `created_by` is history -- who "
-            + "filed the plan -- and is retained so that a plan's provenance survives an erasure. `owner_id` is a "
-            + "current assignment: who is answerable for it now. Both are declared because an export that named "
-            + "only the author would under-report where the subject appears, which is the opposite of what Art. 15 "
-            + "asks for; a person who owns twelve plans and wrote none would see an empty section. Neither is "
-            + "cleared by an erasure, because an erasure pseudonymises the user row rather than deleting it, so "
-            + "both links survive pointing at a pseudonym. The plan's own contents are not returned to either "
-            + "person as personal data, because they describe the department, not them."),
+            "`created_by` for as long as the record exists; `owner_id` only until erasure.",
+            "TWO columns reach a person here and they mean different things, and an erasure treats them "
+            + "differently for that reason. `created_by` is history -- who filed the plan -- and is RETAINED, so "
+            + "a plan's provenance survives an erasure pointing at the pseudonymised account. `owner_id` is a "
+            + "current assignment -- who is answerable for the plan now -- and is CLEARED, because an erasure "
+            + "pseudonymises the user row rather than deleting it and an untouched owner would leave the plan "
+            + "answerable to a name nobody can contact: the overdue-plan notification would address it and the "
+            + "list would count it as owned. The plan falls to \"sin responsable\", which `/action-plans` already "
+            + "counts and renders. Both columns are still declared because an export that named only the author "
+            + "would under-report where the subject appears, which is the opposite of what Art. 15 asks for; a "
+            + "person who owns twelve plans and wrote none would see an empty section. The plan's own contents "
+            + "are not returned to either person as personal data, because they describe the department, not "
+            + "them. Ruled by Federico on 2026-10-10, deliberately left open when `owner_id` shipped in #534."),
         NotPersonal("ActionPlanKpi", "action_plan_kpis", "Measurement targets on a plan. No person referenced."),
         NotPersonal("ActionPlanKpiUpdate", "action_plan_kpi_updates",
             "A KPI reading. The person who recorded it is on action_plan_progress_updates, not here."),
