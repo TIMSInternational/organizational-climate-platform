@@ -1147,7 +1147,9 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
         var view = await RespondViewAsync(_factory.CreateClient(), survey.Id);
 
         Assert.True(view.Anonymous);
-        Assert.Equal(["area"], view.Demographics.Select(d => d.Field));
+        // The company's own field, plus the área every visitor with no account is asked.
+        Assert.Equal(["area"], AdminFields(view).Select(d => d.Field));
+        Assert.Contains(view.Demographics, d => d.Field == SelfDeclaredDepartment.FieldKey);
     }
 
     [Fact]
