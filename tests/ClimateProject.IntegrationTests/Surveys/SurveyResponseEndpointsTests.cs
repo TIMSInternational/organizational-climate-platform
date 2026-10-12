@@ -1057,17 +1057,89 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Unauthorized, http.StatusCode);
     }
 
+    // ------------------------------------------------------------------
+    // Every survey has a link, and nobody who opens it logs in (ruled 2026-10-12)
+    // ------------------------------------------------------------------
+
     [Fact]
-    public async Task An_unauthenticated_visitor_cannot_respond_to_a_named_survey()
+    public async Task An_unauthenticated_visitor_answers_a_named_survey_and_is_stored_anonymously()
     {
+        // ActiveSurveyAsync is identified unless told otherwise. The visitor has no account, so
+        // there is nobody to identify: the row must hold exactly what an anonymous survey's
+        // visitor's row holds -- no user, no IP, no user agent, no department.
         var survey = await ActiveSurveyAsync();
+        Assert.False(survey.Settings.Anonymous);
         var visitor = _factory.CreateClient();
+        visitor.DefaultRequestHeaders.Add("User-Agent", "IntegrationTest/1.0");
 
         var http = await SubmitAsync(visitor, survey.Id, new SubmitSurveyResponseRequest(
             Answers: [new SurveyAnswerInput(survey.Questions[0].Id, "remote")],
             SessionId: Guid.NewGuid().ToString("N")));
 
+        Assert.Equal(HttpStatusCode.Created, http.StatusCode);
+        var row = await ResponseRowAsync((await http.Content.ReadFromJsonAsync<SurveySubmissionResult>())!.ResponseId);
+        Assert.True(row.IsAnonymous);
+        Assert.Null(row.UserId);
+        Assert.Null(row.IpAddress);
+        Assert.Null(row.UserAgent);
+        Assert.Null(row.DepartmentId);
+        Assert.True(row.IsComplete);
+    }
+
+    [Fact]
+    public async Task An_unauthenticated_visitor_to_a_named_survey_still_needs_a_session_id()
+    {
+        // The only idempotency key an anonymous row has -- the same rule as an anonymous survey.
+        var survey = await ActiveSurveyAsync();
+        var visitor = _factory.CreateClient();
+
+        var http = await SubmitAsync(visitor, survey.Id, new SubmitSurveyResponseRequest(
+            Answers: [new SurveyAnswerInput(survey.Questions[0].Id, "remote")]));
+
+        Assert.Equal(HttpStatusCode.BadRequest, http.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_signed_in_respondent_to_the_same_named_survey_is_still_stored_identified()
+    {
+        var survey = await ActiveSurveyAsync();
+        var employee = await EmployeeAsync(_departmentId);
+
+        var view = await RespondViewAsync(employee, survey.Id);
+        Assert.False(view.Anonymous);
+
+        var http = await SubmitAsync(employee, survey.Id, new SubmitSurveyResponseRequest(
+            Answers: [new SurveyAnswerInput(survey.Questions[0].Id, "remote")]));
+
+        Assert.Equal(HttpStatusCode.Created, http.StatusCode);
+        var row = await ResponseRowAsync((await http.Content.ReadFromJsonAsync<SurveySubmissionResult>())!.ResponseId);
+        Assert.False(row.IsAnonymous);
+        Assert.NotNull(row.UserId);
+        Assert.Equal(_departmentId, row.DepartmentId);
+    }
+
+    [Fact]
+    public async Task A_closed_named_survey_is_not_publicly_available()
+    {
+        var survey = await ActiveSurveyAsync();
+        await _harness.ForceStatusAsync(survey.Id, SurveyStatuses.Closed);
+
+        var http = await _factory.CreateClient().GetAsync(new Uri($"/surveys/{survey.Id}/respond", UriKind.Relative));
+
         Assert.Equal(HttpStatusCode.Unauthorized, http.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_link_visitor_to_a_named_survey_is_offered_its_self_declared_demographics()
+    {
+        var survey = await ActiveSurveyAsync(settings: new SurveySettingsInput(
+            Anonymous: false, SelfDeclaredDemographics: true));
+        await SeedSelectFieldAsync("area", ["operaciones", "ventas"], required: true, order: 0, labelEs: "Area");
+
+        var view = await RespondViewAsync(_factory.CreateClient(), survey.Id);
+
+        Assert.True(view.Anonymous);
+        Assert.Equal(["area"], view.Demographics.Select(d => d.Field));
     }
 
     [Fact]
@@ -1173,14 +1245,16 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task The_respond_payload_is_not_public_for_a_named_survey()
+    public async Task The_respond_payload_tells_a_visitor_to_a_named_survey_that_they_are_anonymous()
     {
+        // The promise on screen is what is stored for THIS visitor, not the survey's flag.
         var survey = await ActiveSurveyAsync();
-        var visitor = _factory.CreateClient();
+        Assert.False(survey.Settings.Anonymous);
 
-        var http = await visitor.GetAsync(new Uri($"/surveys/{survey.Id}/respond", UriKind.Relative));
+        var view = await RespondViewAsync(_factory.CreateClient(), survey.Id);
 
-        Assert.Equal(HttpStatusCode.Unauthorized, http.StatusCode);
+        Assert.True(view.Anonymous);
+        Assert.Single(view.Questions);
     }
 
     // ------------------------------------------------------------------

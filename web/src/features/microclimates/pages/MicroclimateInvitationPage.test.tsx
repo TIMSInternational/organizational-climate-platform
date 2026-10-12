@@ -475,15 +475,11 @@ describe('MicroclimateInvitationPage', () => {
   })
 
   /**
-   * The one case where an invitee DOES need an account, named before they hit it.
-   *
-   * A non-anonymous session refuses an unauthenticated respondent -- `GET /microclimates/{id}`
-   * serves an anonymous caller only when the session is both anonymous and active. Without the
-   * note, pressing the button produces "this microclimate is not currently available": a
-   * sentence about the session, for a problem about the browser, which reads as the link being
-   * broken.
+   * Nobody who opens a link logs in (ruled 2026-10-12): `GET /microclimates/{id}` and the
+   * submit serve an unauthenticated visitor on every active session, anonymous or not, and a
+   * microclimate response stores nobody. So the invitee is never told to sign in.
    */
-  it('warns an identified session\'s invitee that they will be asked to sign in', async () => {
+  it('never asks an identified session\'s invitee to sign in', async () => {
     serve({
       resolve: () =>
         new Response(
@@ -503,13 +499,8 @@ describe('MicroclimateInvitationPage', () => {
     renderPage()
 
     await screen.findByRole('heading', { name: 'Pulso semanal' })
-    expect(
-      screen.getByText(/se le pedirá iniciar sesión en su cuenta antes de responder/),
-    ).toBeTruthy()
-    expect(screen.getByRole('link', { name: 'Iniciar sesión' }).getAttribute('href')).toBe('/login')
-
-    // The button is still offered: the server is the authority on what this browser may do,
-    // and a session in another tab is a real case.
+    expect(screen.queryByText(/se le pedirá iniciar sesión/)).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Iniciar sesión' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Participar' })).toBeTruthy()
   })
 

@@ -27,7 +27,6 @@ import * as templatesApi from '../../api/surveyTemplates'
 import * as questionAuthoring from '../../api/surveyQuestionAuthoring'
 import * as bankApi from '../../../questions/api/questionBank'
 import * as usersApi from '../../../org-structure/api/users'
-import es from '../../../../i18n/es.json'
 
 vi.mock('../../api/surveyDrafts', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../api/surveyDrafts')>()),
@@ -285,16 +284,15 @@ describe('Detalle de encuesta (SurveyDetail artboard)', () => {
   })
 
   /**
-   * An identified survey's link could not be answered: whoever scans it has no account, and
-   * the API serves an unauthenticated visitor only on an anonymous survey. The phone said
-   * "inicie sesión". So the panel says why there is no link and draws neither it nor a QR.
+   * Every survey has a link and a QR (ruled 2026-10-12), whatever it records: nobody who opens
+   * one logs in, and the API answers an unauthenticated visitor anonymously on every survey.
+   * #540 drew no link here for an identified survey; the owner saw that in production.
    */
-  it('draws no link and no QR for a survey that records who answers, and says why', () => {
+  it('draws the link and the QR for a survey that records who answers too', () => {
     detail(survey({ settings: { anonymous: false, notificationSendReminders: true, notificationReminderFrequencyDays: 3 } as SurveyDetail['settings'] }))
     const card = screen.getByTestId('detail-link')
-    expect(card.textContent).toContain(es.surveys.next.distribution.identifiedNoLink)
-    expect(card.textContent).not.toContain(`/s/${LINK_SEGMENT}`)
-    expect(within(card).queryByRole('img', { name: /QR/i })).toBeNull()
+    expect(card.textContent).toContain(`/s/${LINK_SEGMENT}`)
+    expect(within(card).getByRole('img', { name: /QR/i })).toBeTruthy()
   })
 
   it("prints the fact sheet's rows as the artboard does: sentence-case type, no anonymity row", () => {

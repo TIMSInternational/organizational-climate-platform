@@ -689,15 +689,6 @@ public static class SurveyEndpoints
         survey.EndDate = endDate;
         if (request.TargetAudienceCount.HasValue) survey.TargetAudienceCount = request.TargetAudienceCount.Value;
 
-        if (request.Settings?.Anonymous == false
-            && await db.SurveyDistributions.AnyAsync(
-                d => d.SurveyId == survey.Id && d.PublicUrl != null, cancellationToken))
-        {
-            // The converse of the refusal where a link is minted: a survey with a live link or
-            // QR cannot become one that the people holding it are unable to answer.
-            return SurveyDistributionEndpoints.IdentifiedSurveyHasNoLink();
-        }
-
         if (request.Settings is not null)
         {
             var settingsError = ApplySettings(survey.Settings, request.Settings, survey.Language);

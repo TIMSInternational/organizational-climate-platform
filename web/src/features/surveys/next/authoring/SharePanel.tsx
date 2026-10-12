@@ -36,7 +36,6 @@ export default function SharePanel({
   publicLink,
   accessType,
   surveyId,
-  anonymous = true,
   onCreate,
   creating = false,
   stacked = false,
@@ -48,15 +47,6 @@ export default function SharePanel({
   /** Only `public` carries a QR; `ShareLinkQr` enforces that a second time. */
   accessType?: string
   surveyId?: string
-  /**
-   * The survey's own anonymity (`settings.anonymous`) — the flag the server actually decides
-   * a link visitor by. Respondents never log in (ruled 2026-10-12), so a link or QR on a
-   * survey that records who answers opens onto a refusal for everyone who scans it; the
-   * panel says so instead of drawing it, and the API refuses to mint one
-   * (`IdentifiedSurveyHasNoLink`). This replaced the distribution's `requireLogin`, which
-   * the server never enforced and which chose between two sentences, one of them false.
-   */
-  anonymous?: boolean
   /** Offered only where the caller can actually mint a link (`canAuthorSurveys`). */
   onCreate?: () => void
   creating?: boolean
@@ -84,15 +74,8 @@ export default function SharePanel({
   // mode to each.
   const [shown, setShown] = useState(true)
 
-  if (!anonymous) {
-    return (
-      <div className={cn('flex flex-col gap-2', className)} data-slot="share-panel" data-testid="share-panel" data-state="identified">
-        <H3>{share('title')}</H3>
-        <p className="m-0 text-sm text-fg-secondary">{dist('identifiedNoLink')}</p>
-      </div>
-    )
-  }
-
+  // Every survey has a link and a QR (ruled 2026-10-12), whatever it records: nobody who opens
+  // one logs in, and the server answers an unauthenticated visitor anonymously on every survey.
   if (publicLink === null) {
     return (
       <div className={cn('flex flex-col gap-2', className)} data-slot="share-panel" data-testid="share-panel" data-state="no-link">

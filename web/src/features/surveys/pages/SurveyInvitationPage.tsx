@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { useParams } from 'react-router'
 import { useTranslation } from '../../../i18n'
 import { RespondCaption, RespondReading, RespondShell } from '../../../components/layout'
 import { Button } from '../../../components/ui'
 import { calendarDay } from '../../../lib/calendarDay'
-import { getToken } from '../../../auth/token'
 import SurveyRespondForm, {
   AnonymityNotice,
   RespondSurface,
@@ -243,13 +242,8 @@ function Landing({
 }) {
   const { t } = useTranslation('surveyRespond')
 
-  // Checked, not assumed: `GET /surveys/{id}/respond` serves an unauthenticated caller
-  // only when the survey is anonymous AND open (`ResolveRespondentAsync`), so an invitee
-  // to a named survey who is not signed in is about to be refused. Saying so here beats
-  // letting them press the button and meet a 401 they will read as the link being
-  // broken. The button is still offered — the server is the authority on what this
-  // browser may do, and a session in another tab is a real case.
-  const willNeedSignIn = !detail.anonymity.anonymous && getToken() === null
+  // No sign-in note: nobody who opens an invitation link logs in (ruled 2026-10-12), and the
+  // respond endpoint serves an unauthenticated invitee on every open survey, anonymously.
 
   return (
     <>
@@ -278,11 +272,6 @@ function Landing({
 
       <AnonymityNotice anonymous={detail.anonymity.anonymous} />
 
-      {willNeedSignIn && (
-        <p className="max-w-prose text-sm text-fg-secondary">
-          {t('invitationSignInNote')} <Link to="/login">{t('signIn')}</Link>
-        </p>
-      )}
 
       <p>
         <Button type="button" variant="primary" onClick={onBegin}>

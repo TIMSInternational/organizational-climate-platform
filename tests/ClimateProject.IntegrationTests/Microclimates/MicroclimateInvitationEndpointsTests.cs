@@ -997,30 +997,29 @@ public class MicroclimateInvitationEndpointsTests : IAsyncLifetime
     /// The two refusals that must survive the fix above, so "let the invitee answer" is not
     /// read as "let anyone answer".
     ///
-    /// <para>An unauthenticated caller is still 401 -- that is the rule the sign-in note on
-    /// the card exists to warn about -- and an authenticated employee of ANOTHER tenant is
-    /// still 403. Without the second, the widened check would let any employee of any company
+    /// <para>An unauthenticated caller is served since 2026-10-12 (nobody who opens a link logs
+    /// in), and an authenticated employee of ANOTHER tenant is still 403. Without the second, the widened check would let any employee of any company
     /// inflate this one's response count and word cloud, which is the reason the company match
     /// was there before the role check was the wrong one.</para>
     /// </summary>
     [Fact]
-    public async Task A_microclimate_that_is_not_anonymous_still_refuses_a_stranger_and_a_signed_out_caller()
+    public async Task A_microclimate_that_is_not_anonymous_refuses_a_stranger_but_serves_a_signed_out_caller()
     {
         var microclimateId = await SeedMicroclimateAsync(_companyAId, anonymous: false);
         var questionId = await SeedQuestionAsync(microclimateId);
         var body = new SubmitResponseRequest(new Dictionary<Guid, string> { [questionId] = "good" }, "en");
-
-        Assert.Equal(
-            HttpStatusCode.Unauthorized,
-            (await Anonymous().PostAsJsonAsync($"/microclimates/{microclimateId}/responses", body)).StatusCode);
 
         var foreigner = await _harness.ClientAsync(Roles.Employee, _companyBId);
         Assert.Equal(
             HttpStatusCode.Forbidden,
             (await foreigner.PostAsJsonAsync($"/microclimates/{microclimateId}/responses", body)).StatusCode);
 
+        // Nobody who opens a link logs in (ruled 2026-10-12): a signed-out caller answers.
+        Assert.True(
+            (await Anonymous().PostAsJsonAsync($"/microclimates/{microclimateId}/responses", body)).IsSuccessStatusCode);
+
         Assert.Equal(
-            0,
+            1,
             await _harness.WithDbAsync(db => db.Microclimates
                 .AsNoTracking()
                 .Where(m => m.Id == microclimateId)

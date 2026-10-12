@@ -295,7 +295,6 @@ export function SurveyDetailView({
             <LinkCard
               link={distribution?.publicLink ?? null}
               accessType={distribution?.accessType}
-              anonymous={survey.settings.anonymous}
               surveyId={survey.id}
             />
           )}
@@ -459,13 +458,10 @@ function StatusTile({
 function LinkCard({
   link,
   accessType,
-  anonymous = true,
   surveyId,
 }: {
   link: string | null
   accessType?: string
-  /** @see SharePanel's `anonymous` */
-  anonymous?: boolean
   surveyId?: string
 }) {
   const { t } = useTranslation()
@@ -473,14 +469,13 @@ function LinkCard({
   return (
     <Card className="flex flex-col gap-2 px-4 py-3.5" data-testid="detail-link">
       <span className="text-2xs font-bold uppercase leading-normal tracking-wider text-fg-label">{copy('link')}</span>
-      {link === null && anonymous ? (
+      {link === null ? (
         <p className="m-0 text-sm text-fg-secondary">{copy('noLink')}</p>
       ) : (
         <SharePanel
           publicLink={link}
           accessType={accessType}
           surveyId={surveyId}
-          anonymous={anonymous}
           stacked
         />
       )}

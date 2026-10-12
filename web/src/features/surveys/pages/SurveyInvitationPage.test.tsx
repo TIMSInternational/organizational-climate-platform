@@ -472,11 +472,11 @@ describe('SurveyInvitationPage', () => {
   })
 
   /**
-   * Checked against `ResolveRespondentAsync`, not guessed: an unauthenticated caller is
-   * served only when the survey is anonymous AND open. An invitee to a named survey with
-   * no session is about to meet a 401 they would read as the link being broken.
+   * Nobody who opens a link logs in (ruled 2026-10-12): `ResolveRespondentAsync` serves an
+   * unauthenticated visitor on every open survey and stores them anonymously. So an invitee
+   * with no session is told nothing about signing in, whatever the survey records.
    */
-  it('warns an invitee to a named survey that they will have to sign in', async () => {
+  it('never asks an invitee without a session to sign in, even on a named survey', async () => {
     serve({
       resolve: () =>
         new Response(
@@ -495,8 +495,9 @@ describe('SurveyInvitationPage', () => {
     })
     renderPage()
 
-    expect(await screen.findByText(/tendrá que|se le pedirá iniciar sesión/i)).toBeTruthy()
-    expect(screen.getByRole('link', { name: 'Iniciar sesión' }).getAttribute('href')).toBe('/login')
+    expect(await screen.findByRole('button', { name: 'Comenzar la encuesta' })).toBeTruthy()
+    expect(screen.queryByText(/tendrá que|se le pedirá iniciar sesión/i)).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Iniciar sesión' })).toBeNull()
   })
 
   it('says nothing about signing in when the visitor already holds a session', async () => {

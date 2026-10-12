@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { useParams } from 'react-router'
 import { EyeOff, Info, ShieldCheck } from 'lucide-react'
 import { useTranslation } from '../../../i18n'
 import { RespondCaption, RespondReading, RespondShell } from '../../../components/layout'
 import { Alert, AlertDescription, AlertTitle, Button } from '../../../components/ui'
 import { calendarDay } from '../../../lib/calendarDay'
-import { getToken } from '../../../auth/token'
 import MicroclimatePulseForm from '../components/MicroclimatePulseForm'
 import { microclimateInvitationFailureCopy } from '../microclimateLinkFailure'
 import {
@@ -239,10 +238,8 @@ function Landing({
   // currently available".
   const closed = detail.microclimateStatus !== 'active'
 
-  // The other half of the same check, and the same server rule: an identified session refuses
-  // an anonymous caller outright. `getToken() === null` and not "is the token valid" — this
-  // page has no way to ask, and the note is advice rather than a gate.
-  const willNeedSignIn = !detail.anonymity.anonymous && getToken() === null
+  // No sign-in note: nobody who opens an invitation link logs in (ruled 2026-10-12), and the
+  // respond endpoint serves an unauthenticated invitee on every open survey, anonymously.
 
   return (
     <>
@@ -271,11 +268,6 @@ function Landing({
 
       <AnonymityNotice anonymous={detail.anonymity.anonymous} />
 
-      {willNeedSignIn && !closed && (
-        <p className="max-w-prose text-sm text-fg-secondary">
-          {t('invitationSignInNote')} <Link to="/login">{t('invitationSignIn')}</Link>
-        </p>
-      )}
 
       {closed ? (
         <Alert variant="warning" role="status">
