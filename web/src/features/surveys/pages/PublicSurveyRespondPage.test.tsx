@@ -187,9 +187,10 @@ describe('PublicSurveyRespondPage', () => {
     renderPage()
 
     expect(await screen.findByText('Esta encuesta no está disponible')).toBeTruthy()
-    expect(screen.getByText(/Puede que haya cerrado o que solo esté abierta/)).toBeTruthy()
-    // And it offers the one action that might help.
-    expect(screen.getByRole('link', { name: 'Iniciar sesión' }).getAttribute('href')).toBe('/login')
+    expect(screen.getByText(/Puede que ya haya cerrado/)).toBeTruthy()
+    // And no sign-in: a visitor by link has no account (respondents never log in, ruled
+    // 2026-10-12), so the one action this used to offer is one they cannot take.
+    expect(screen.queryByRole('link', { name: 'Iniciar sesión' })).toBeNull()
   })
 
   it('does not send the visitor to /login on a 401, it renders the page', async () => {

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from '../../../../i18n'
-import { getToken } from '../../../../auth/token'
 import { SurveyLinkError, resolveSurveyPublicLink } from '../../api/surveyLinks'
 import { SurveyRespondError, getSurveyRespondView } from '../../api/surveyResponses'
 import { ensureSessionId } from '../../respondSession'
@@ -128,7 +127,7 @@ export function usePublicEntryModel(token: string | undefined): {
   }, [token])
 
   return {
-    state: entryState(link, view, answering, getToken() !== null),
+    state: entryState(link, view, answering),
     begin,
   }
 }

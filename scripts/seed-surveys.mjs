@@ -481,7 +481,13 @@ async function seedOpenSurvey(adminToken, companyId, roster) {
         en: 'Open for responses. Seeded so the respond and distribution screens have a live survey.',
         es: 'Abierta a respuestas. Sembrada para que las pantallas de respuesta y distribución tengan una encuesta viva.',
       },
-      settings: { anonymous: false, allowPartialResponses: true, showProgress: true },
+      // Anonymous: this is the survey whose QR a person scans from their phone, and
+      // respondents never log in (ruled 2026-10-12). An identified survey refuses every
+      // unauthenticated visitor, which is how its QR came to ask a phone to "inicie sesión";
+      // the API now refuses a public link on one outright. The closed waves above stay
+      // identified -- they are history, answered by the seeded roster, and their
+      // department breakdown is what the results screens are demonstrated with.
+      settings: { anonymous: true, allowPartialResponses: true, showProgress: true },
       departmentIds: roster.map((r) => r.department.id),
       targetAudienceCount: roster.reduce((n, r) => n + r.members.length, 0),
       questions: QUESTIONS.map(([category, en, es], order) => ({
@@ -543,11 +549,11 @@ async function seedDistribution(adminToken, survey) {
     body: JSON.stringify({
       accessType: 'public',
       accessRules: {
-        // Login required and anonymous OFF for the same reason the waves are not
-        // anonymous: a response only carries a department when its author is
-        // authenticated, and the department breakdown is what these screens are for.
-        requireLogin: true,
-        allowAnonymous: false,
+        // Open to whoever holds the link: the survey is anonymous and the person scanning
+        // the QR has no account. (`requireLogin` is not enforced by the server; it is sent
+        // false so the stored row does not claim otherwise.)
+        requireLogin: false,
+        allowAnonymous: true,
         singleResponse: true,
         activeOutsideSchedule: false,
       },

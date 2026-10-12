@@ -122,7 +122,11 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
             EndDate: DateTimeOffset.UtcNow.AddDays(14),
             DepartmentIds: departmentIds,
             Questions: questions ?? [WorkModeQuestion(bilingual: language == ContentLanguages.Both)],
-            Settings: settings,
+            // Identified unless the test says otherwise: `POST /surveys` defaults to anonymous
+            // since 2026-10-12, and this helper's callers were written against identified.
+            Settings: settings is null
+                ? new SurveySettingsInput(Anonymous: false)
+                : settings with { Anonymous = settings.Anonymous ?? false },
             Language: language);
 
         var survey = await SurveyTestHarness.CreateSurveyAsync(admin, request);

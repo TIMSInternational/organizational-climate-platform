@@ -83,7 +83,9 @@ public class SurveyResponseLicensingTests : IAsyncLifetime
             EndDate: DateTimeOffset.UtcNow.AddDays(14),
             DepartmentIds: null,
             Questions: [WorkModeQuestion()],
-            Settings: null,
+            // Identified, stated: `POST /surveys` defaults to anonymous since 2026-10-12, and
+            // these tests submit as a signed-in employee against the identified shape.
+            Settings: new SurveySettingsInput(Anonymous: false),
             Language: null);
 
         var survey = await SurveyTestHarness.CreateSurveyAsync(admin, request);
@@ -219,7 +221,7 @@ public class SurveyResponseLicensingTests : IAsyncLifetime
             EndDate: DateTimeOffset.UtcNow.AddDays(14),
             DepartmentIds: null,
             Questions: [WorkModeQuestion()],
-            Settings: null,
+            Settings: new SurveySettingsInput(Anonymous: false), // identified, stated -- see ActiveSurveyAsync
             Language: null,
             ServiceType: ClimateServiceTypes.GeneralClimate);
         var survey = await SurveyTestHarness.CreateSurveyAsync(admin, request);

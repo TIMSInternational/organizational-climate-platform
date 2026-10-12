@@ -56,7 +56,7 @@ const READY: ViewLoad = { status: 'ready', view: view() }
 
 describe('entryState', () => {
   it('waits while the token is being resolved, with nothing about a survey on screen', () => {
-    expect(entryState({ status: 'resolving' }, { status: 'idle' }, false, false)).toEqual({
+    expect(entryState({ status: 'resolving' }, { status: 'idle' }, false)).toEqual({
       status: 'waiting',
     })
   })
@@ -73,7 +73,7 @@ describe('entryState', () => {
   it('answers a dead link before it ever looks at a survey', () => {
     const dead: LinkLoad = { status: 'dead', error: new SurveyLinkError(404, 'nope', null) }
 
-    const state = entryState(dead, READY, false, false)
+    const state = entryState(dead, READY, false)
 
     expect(state.status).toBe('blocked')
     expect(state.status === 'blocked' && state.outcome.titleKey).toBe('linkInvalidTitle')
@@ -88,23 +88,23 @@ describe('entryState', () => {
   it('a dead link outranks the respondent having begun', () => {
     const dead: LinkLoad = { status: 'dead', error: null }
 
-    expect(entryState(dead, READY, true, false).status).toBe('blocked')
+    expect(entryState(dead, READY, true).status).toBe('blocked')
   })
 
   it('hands over to the form once the respondent presses the button', () => {
-    expect(entryState(RESOLVED, READY, true, false)).toEqual({
+    expect(entryState(RESOLVED, READY, true)).toEqual({
       status: 'answering',
       surveyId: 'survey-77',
     })
   })
 
   it('waits again while the survey itself is being read', () => {
-    expect(entryState(RESOLVED, { status: 'loading' }, false, false).status).toBe('waiting')
-    expect(entryState(RESOLVED, { status: 'idle' }, false, false).status).toBe('waiting')
+    expect(entryState(RESOLVED, { status: 'loading' }, false).status).toBe('waiting')
+    expect(entryState(RESOLVED, { status: 'idle' }, false).status).toBe('waiting')
   })
 
   it('draws the entry card once both loads have landed', () => {
-    const state = entryState(RESOLVED, READY, false, false)
+    const state = entryState(RESOLVED, READY, false)
 
     expect(state.status).toBe('landing')
     expect(state.status === 'landing' && state.view.anonymous).toBe(true)
@@ -128,7 +128,7 @@ describe('entryState', () => {
       },
     })
 
-    const state = entryState(RESOLVED, { status: 'ready', view: complete }, false, false)
+    const state = entryState(RESOLVED, { status: 'ready', view: complete }, false)
 
     expect(state.status).toBe('blocked')
     expect(state.status === 'blocked' && state.outcome.titleKey).toBe('alreadyCompletedTitle')
@@ -150,7 +150,7 @@ describe('entryState', () => {
       },
     })
 
-    expect(entryState(RESOLVED, { status: 'ready', view: partial }, false, false).status).toBe(
+    expect(entryState(RESOLVED, { status: 'ready', view: partial }, false).status).toBe(
       'landing',
     )
   })
@@ -161,7 +161,7 @@ describe('entryState', () => {
       error: new SurveyRespondError(400, 'This survey is not currently accepting responses'),
     }
 
-    const state = entryState(RESOLVED, failed, false, false)
+    const state = entryState(RESOLVED, failed, false)
 
     expect(state.status).toBe('blocked')
     expect(state.status === 'blocked' && state.outcome.titleKey).toBe('closedTitle')
@@ -176,7 +176,7 @@ describe('respondFailureOutcome', () => {
    * goes hunting for a new one that does not exist.
    */
   it('separates a closed survey from a link that does not open', () => {
-    const closed = respondFailureOutcome(400, false)
+    const closed = respondFailureOutcome(400)
 
     expect(closed.titleKey).toBe('closedTitle')
     expect(closed.titleKey).not.toBe('linkInvalidTitle')
@@ -184,45 +184,35 @@ describe('respondFailureOutcome', () => {
   })
 
   /**
-   * The one inference this page is entitled to make, and why.
-   *
-   * `ResolveRespondentAsync` refuses an unauthenticated caller when the survey is not
-   * anonymous OR is not accepting responses, and deliberately does not say which. Here
-   * the second half is already ruled out — `ResolvePublicLinkAsync` answered 404 unless
-   * `SurveyStatuses.AcceptsResponses`, and it answered moments ago — so the remaining
-   * cause is that the survey records who answers, and signing in is the one act that
-   * helps.
+   * Respondents never log in (ruled 2026-10-12). The person who scanned the QR has no
+   * account, so a 401 -- an identified survey, or one that closed since the link resolved --
+   * is told as "not available" with nothing offered they cannot do. This card used to say
+   * "Esta encuesta registra quién responde · inicie sesión", which is what a phone showed.
    */
-  it('tells a visitor with no session that the survey records who answers', () => {
-    const outcome = respondFailureOutcome(401, false)
-
-    expect(outcome.titleKey).toBe('next.entrySignInTitle')
-    expect(outcome.signIn).toBe(true)
-  })
-
-  /**
-   * With a bearer in hand the ambiguity is back: the server saw a credential and did
-   * not accept it, which is as likely to be a stale session as a named survey. The
-   * honest copy stays, and the sign-in is still offered because it is still the only
-   * thing that might help.
-   */
-  it('keeps the ambiguous sentence when a token was sent and refused', () => {
-    const outcome = respondFailureOutcome(401, true)
+  it('never asks a visitor by link to sign in', () => {
+    const outcome = respondFailureOutcome(401)
 
     expect(outcome.titleKey).toBe('unavailableTitle')
+    expect(outcome.bodyKey).toBe('next.entryLinkUnavailableBody')
     expect(outcome.titleKey).not.toBe('next.entrySignInTitle')
-    expect(outcome.signIn).toBe(true)
+    expect(outcome.signIn).toBe(false)
+  })
+
+  it('offers a sign-in for no failure at all', () => {
+    for (const status of [400, 401, 403, 404, 500, null]) {
+      expect(respondFailureOutcome(status).signIn).toBe(false)
+    }
   })
 
   it('does not offer a sign-in for a survey that is not this person to answer', () => {
-    const outcome = respondFailureOutcome(403, true)
+    const outcome = respondFailureOutcome(403)
 
     expect(outcome.titleKey).toBe('notYoursTitle')
     expect(outcome.signIn).toBe(false)
   })
 
   it('reports a missing survey as missing', () => {
-    expect(respondFailureOutcome(404, false).titleKey).toBe('notFoundTitle')
+    expect(respondFailureOutcome(404).titleKey).toBe('notFoundTitle')
   })
 
   /**
@@ -232,7 +222,7 @@ describe('respondFailureOutcome', () => {
    */
   it('falls back to the server message for a status it has no sentence for', () => {
     for (const status of [429, 500, null]) {
-      const outcome = respondFailureOutcome(status, false)
+      const outcome = respondFailureOutcome(status)
       expect(outcome.titleKey).toBe('loadFailedTitle')
       expect(outcome.bodyKey).toBeNull()
     }
@@ -241,8 +231,8 @@ describe('respondFailureOutcome', () => {
   /** No failure branch may wear the success treatment. */
   it('never dresses a failure as a confirmation', () => {
     for (const status of [400, 401, 403, 404, 429, null]) {
-      expect(respondFailureOutcome(status, false).tone).toBe('warning')
-      expect(respondFailureOutcome(status, true).tone).toBe('warning')
+      expect(respondFailureOutcome(status).tone).toBe('warning')
+      expect(respondFailureOutcome(status).tone).toBe('warning')
     }
   })
 })
@@ -312,12 +302,12 @@ describe('entryPace', () => {
  */
 describe('every key these rules can return', () => {
   const outcomes: EntryOutcome[] = [
-    respondFailureOutcome(400, false),
-    respondFailureOutcome(401, false),
-    respondFailureOutcome(401, true),
-    respondFailureOutcome(403, false),
-    respondFailureOutcome(404, false),
-    respondFailureOutcome(500, false),
+    respondFailureOutcome(400),
+    respondFailureOutcome(401),
+    respondFailureOutcome(401),
+    respondFailureOutcome(403),
+    respondFailureOutcome(404),
+    respondFailureOutcome(500),
   ]
 
   function resolves(locale: (typeof LOCALES)[number], key: string): boolean {
