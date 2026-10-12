@@ -672,9 +672,15 @@ public static class SurveyResponseEndpoints
     /// So this is a deliberate no-op there, and an anonymous survey's response rate stays the
     /// aggregate it has always been.</para>
     ///
+    /// <para><b>A day, not a time, on an identified survey too.</b> Ruled 2026-10-12: what is
+    /// recorded is <c>completed_on</c>, the day in the company's time zone -- enough for the
+    /// reminder sweep and the outstanding list, and not a timestamp that lines up with
+    /// <c>responses.completion_time</c>. Neither <c>completed_at</c> nor <c>updated_at</c> is
+    /// written.</para>
+    ///
     /// <para>A respondent who arrived by share link has no user id and so no invitation to
     /// advance; a resubmission finds an invitation already at <c>completed</c>, which
-    /// <see cref="SurveyInvitationStatuses.Advances"/> refuses, so the first timestamp stands.</para>
+    /// <see cref="SurveyInvitationStatuses.Advances"/> refuses, so the first day stands.</para>
     /// </summary>
     private static async Task AdvanceInvitationAsync(
         Survey survey,
@@ -698,9 +704,10 @@ public static class SurveyResponseEndpoints
             return;
         }
 
-        invitation.CompletedAt ??= now;
+        // The DAY, never the instant, and UpdatedAt deliberately left alone: stamping it here
+        // would be the completion time again under another name (ruled 2026-10-12).
+        invitation.CompletedOn ??= await CompanyLocalDay.OfAsync(db, survey.CompanyId, now, cancellationToken);
         invitation.Status = SurveyInvitationStatuses.Completed;
-        invitation.UpdatedAt = now;
     }
 
     private static async Task UpsertAnswersAsync(
@@ -989,13 +996,7 @@ public static class SurveyResponseEndpoints
     {
         try
         {
-            var timezone = await db.Companies
-                .AsNoTracking()
-                .Where(c => c.Id == survey.CompanyId)
-                .Select(c => c.Settings.Timezone)
-                .FirstOrDefaultAsync(cancellationToken);
-            var day = DateOnly.FromDateTime(
-                SchedulingTimeZone.ToLocal(now, SchedulingTimeZone.Resolve(timezone)));
+            var day = await CompanyLocalDay.OfAsync(db, survey.CompanyId, now, cancellationToken);
 
             await db.Database.ExecuteSqlInterpolatedAsync(
                 $"""

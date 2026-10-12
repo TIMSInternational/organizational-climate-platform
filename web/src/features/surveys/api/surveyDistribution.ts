@@ -141,10 +141,14 @@ export interface SurveyDistributionDetail {
 /**
  * One invitation as an admin sees it.
  *
- * Note the absence of a token field — see the module comment. `startedAt` and
- * `completedAt` are `null` for every invitation to an anonymous survey, structurally and
- * not incidentally; read `anonymity.suppressedStates` before drawing a conclusion from
- * their absence.
+ * Note the absence of a token field — see the module comment.
+ *
+ * `startedAt` and `completedAt` are `null` for EVERY invitation since 2026-10-12: a named
+ * invitee's tracking keeps only `completedOn`, the `yyyy-MM-dd` day (company time zone) they
+ * finished — never a time. They stay on the type for one release, until the API drops them.
+ * On an anonymous survey `completedOn` is never written either; read
+ * `anonymity.suppressedStates` before drawing a conclusion from its absence. Whether someone
+ * finished is `invitationIsFinished`, not a null check on any one field.
  */
 export interface SurveyInvitationDetail {
   id: string
@@ -155,12 +159,34 @@ export interface SurveyInvitationDetail {
   isExpired: boolean
   sentAt: string | null
   openedAt: string | null
+  /** Always null since 2026-10-12; see above. */
   startedAt: string | null
+  /** Always null since 2026-10-12; see above. */
   completedAt: string | null
+  /**
+   * The day the invitee finished, `yyyy-MM-dd`, or null. Optional because an API older than
+   * this field does not send it.
+   */
+  completedOn?: string | null
   reminderCount: number
   lastReminderSent: string | null
   expiresAt: string
   createdAt: string
+}
+
+/**
+ * Whether this invitee has finished. The status is the authority; `completedOn` (the current
+ * API) and `completedAt` (an API older than it) are read too, so the answer holds against
+ * either server.
+ */
+export function invitationIsFinished(
+  invitation: Pick<SurveyInvitationDetail, 'status' | 'completedAt' | 'completedOn'>,
+): boolean {
+  return (
+    invitation.status === 'completed' ||
+    (invitation.completedOn ?? null) !== null ||
+    invitation.completedAt !== null
+  )
 }
 
 export interface SurveyInvitationList {

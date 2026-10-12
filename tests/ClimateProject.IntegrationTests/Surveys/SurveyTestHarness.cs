@@ -188,6 +188,28 @@ internal sealed class SurveyTestHarness(AuthWebApplicationFactory factory, strin
             await db.SaveChangesAsync();
         });
 
+    /// <summary>
+    /// Sets the company's time zone to one whose calendar day is NOT UTC's at this moment, and
+    /// returns it, so a test can tell a day taken in the company's zone from a day taken in UTC.
+    /// </summary>
+    /// <remarks>
+    /// The endpoints read <c>DateTimeOffset.UtcNow</c> directly; there is no clock to set to
+    /// "just after midnight UTC". So the zone is chosen to fit the clock instead: before 12:00
+    /// UTC the day in UTC-12 (west of UTC, the client's side of the world) is still yesterday;
+    /// from 12:00 UTC on, the day in UTC+14 is already tomorrow. Either way the two days differ.
+    /// </remarks>
+    public async Task<TimeZoneInfo> SetCompanyTimezoneOffUtcDayAsync(Guid companyId)
+    {
+        var id = DateTimeOffset.UtcNow.Hour < 12 ? "Etc/GMT+12" : "Pacific/Kiritimati";
+        await WithDbAsync(async db =>
+        {
+            var company = await db.Companies.FirstAsync(c => c.Id == companyId);
+            company.Settings.Timezone = id;
+            await db.SaveChangesAsync();
+        });
+        return TimeZoneInfo.FindSystemTimeZoneById(id);
+    }
+
     /// <summary>Forces a status the lifecycle would not permit, so a guard can be tested in isolation.</summary>
     public Task ForceStatusAsync(Guid surveyId, string status)
         => WithDbAsync(async db =>

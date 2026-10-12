@@ -3789,6 +3789,10 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("completed_at");
 
+                    b.Property<DateOnly?>("CompletedOn")
+                        .HasColumnType("date")
+                        .HasColumnName("completed_on");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
