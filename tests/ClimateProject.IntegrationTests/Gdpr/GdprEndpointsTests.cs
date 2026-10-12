@@ -1157,6 +1157,83 @@ public class GdprEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Own_access_export_returns_the_subjects_own_words_in_both_columns()
+    {
+        var (client, subjectId, subjectEmail) = await SignInAsync(Roles.Employee);
+        var (_, authorId, _) = await SignInAsync(Roles.CompanyAdmin);
+        await SeedSubjectDataAsync(subjectId, subjectEmail, authorId);
+
+        // Self-service, both spellings: no userId, and userId naming the caller.
+        foreach (var path in new[] { "/gdpr/access", $"/gdpr/access?userId={subjectId}" })
+        {
+            var export = await (await client.GetAsync(path)).Content.ReadFromJsonAsync<JsonElement>();
+            var answer = Section(export, "QuestionResponse").GetProperty("records").EnumerateArray().Single();
+            Assert.Equal("my honest opinion", answer.GetProperty("ResponseText").GetString());
+            Assert.Equal("\"my honest opinion\"", answer.GetProperty("ResponseValue").GetString());
+        }
+    }
+
+    [Fact]
+    public async Task An_admins_export_of_someone_else_withholds_their_typed_words_and_says_so()
+    {
+        var (_, subjectId, subjectEmail) = await SignInAsync(Roles.Employee);
+        var (adminClient, adminId, _) = await SignInAsync(Roles.CompanyAdmin);
+        var seeded = await SeedSubjectDataAsync(subjectId, subjectEmail, adminId);
+
+        // A closed question on the same response: its value is a choice the author wrote, not
+        // the subject's words, and it stays. Its comment box is free text and does not.
+        var closedQuestionId = Guid.NewGuid();
+        await using (var db = NewContext())
+        {
+            db.Questions.Add(new Question
+            {
+                Id = closedQuestionId,
+                SurveyId = seeded.SurveyId,
+                TextEn = "Scale",
+                TextEs = "Escala",
+                Type = "likert",
+                Required = false,
+                Order = 2,
+            });
+            db.QuestionResponses.Add(new QuestionResponse
+            {
+                ResponseId = seeded.ResponseId,
+                QuestionId = closedQuestionId,
+                ResponseValue = "4",
+                ResponseText = "comment-box-confidence",
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var response = await adminClient.GetAsync($"/gdpr/access?userId={subjectId}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var raw = await response.Content.ReadAsStringAsync();
+        var export = JsonSerializer.Deserialize<JsonElement>(raw);
+
+        // Not in any column, at any depth.
+        Assert.DoesNotContain("my honest opinion", raw, StringComparison.Ordinal);
+        Assert.DoesNotContain("comment-box-confidence", raw, StringComparison.Ordinal);
+
+        var records = Section(export, "QuestionResponse").GetProperty("records").EnumerateArray()
+            .ToDictionary(r => r.GetProperty("QuestionId").GetGuid());
+        Assert.Equal(2, records.Count);
+
+        // Replaced with a marker, never dropped: an absent key would read as "no answer".
+        var open = records.Single(r => r.Key != closedQuestionId).Value;
+        Assert.Equal(SubjectDataMap.WithheldAnswerMarker, open.GetProperty("ResponseText").GetString());
+        Assert.Equal(SubjectDataMap.WithheldAnswerMarker, open.GetProperty("ResponseValue").GetString());
+
+        var closed = records[closedQuestionId];
+        Assert.Equal("4", closed.GetProperty("ResponseValue").GetString());
+        Assert.Equal(SubjectDataMap.WithheldAnswerMarker, closed.GetProperty("ResponseText").GetString());
+
+        // The export states the rule rather than leaving the marker to explain itself.
+        Assert.Contains(
+            export.GetProperty("limitations").EnumerateArray(),
+            l => l.GetString()!.Contains(SubjectDataMap.WithheldAnswerMarker, StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Access_export_redacts_credentials_but_still_discloses_the_column()
     {
         var (client, subjectId, subjectEmail) = await SignInAsync(Roles.Employee);

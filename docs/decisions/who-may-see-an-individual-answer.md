@@ -207,3 +207,30 @@ Date: ____
 | floors are 5 / 5 / 2 | `SurveyResultsPrivacy.MinimumRespondents`, `MinimumSegmentRespondents`, `MinimumWordRespondents` |
 | results do not branch on anonymity | `SurveyAggregation` and `SurveyResultsPrivacy` contain no reference to `Settings.Anonymous` |
 | 5 of 24 cells survive puesto × departamento | measured on `PROCOMER — Demostración`, 43 users, 2026-10-08 |
+
+## 2026-10-12 — the access export is not a back door to one person's words
+
+**Status: RULED by the owner.** The GDPR access export (`GET /gdpr/access`) is the one route
+that returns an individual's `question_responses` rows, and until today it returned them in full
+to whoever was entitled to request the export — including a company administrator exporting an
+employee (`?userId=…`). That made it a per-person read surface for verbatim open text, which §4
+above says does not exist.
+
+The ruling:
+
+- **The subject's own export keeps their words.** No `userId`, or `userId` equal to the caller,
+  is self-service, and Art. 15 is a right to *one's own* data.
+- **Anyone else's export withholds them.** `response_text` (the comment box, free text on every
+  type) is withheld whenever it holds anything; `response_value` is withheld unless the question
+  is positively known to be a closed type (`QuestionTypes.All` minus `QuestionTypes.FreeText`). A
+  question the export cannot find, or a type it does not recognise, counts as open — erring
+  closed is the only direction that cannot print someone's words.
+- **Withheld means replaced, not removed.** Each value becomes
+  `SubjectDataMap.WithheldAnswerMarker` (`[withheld: verbatim answer, returned only to its
+  author]`). A missing key would read as "no answer was given", which is a false statement about
+  the record. The export's `limitations` says the same in prose.
+
+Where it lives: `GdprEndpoints.AccessAsync` passes `withholdVerbatimAnswers: subject.Id !=
+caller.Id`; `SubjectAccessExport.QuestionResponsesAsync` applies it. Tests:
+`GdprEndpointsTests.Own_access_export_returns_the_subjects_own_words_in_both_columns` and
+`GdprEndpointsTests.An_admins_export_of_someone_else_withholds_their_typed_words_and_says_so`.

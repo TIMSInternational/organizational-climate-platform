@@ -1,5 +1,6 @@
 using ClimateProject.Application.Gdpr;
 using ClimateProject.Application.Localization;
+using ClimateProject.Application.Questions;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
 using ClimateProject.Infrastructure.Persistence.Configurations;
@@ -72,10 +73,16 @@ public static class SubjectAccessExport
     /// </summary>
     public static readonly IReadOnlyList<string> KnownLimitations =
     [
-        "Free-text answers (question_responses.response_text) and change payloads "
+        "Free-text answers (question_responses.response_text, and response_value on an open-ended question) "
+        + "are returned verbatim only to the person who wrote them, in their own self-service export. An export "
+        + "requested by an administrator on someone else's behalf replaces each one with \""
+        + SubjectDataMap.WithheldAnswerMarker + "\": the column and the fact of an answer are disclosed, the "
+        + "words are not.",
+
+        "Free-text answers and change payloads "
         + "(survey_audit_logs.changes, audit_logs.details, user_invitations.invitation_data) are opaque strings. "
-        + "They are exported verbatim, but nothing here can find a third party named inside one, so a request "
-        + "about a person mentioned only in someone else's free text will not match.",
+        + "Nothing here can find a third party named inside one, so a request about a person mentioned only in "
+        + "someone else's free text will not match.",
 
         "Responses submitted anonymously carry no user_id and are not linked to the person who submitted them. "
         + "They cannot be included in, or removed from, a response to a request about that person — by design.",
@@ -93,10 +100,18 @@ public static class SubjectAccessExport
     /// of them. Constrains every lookup that matches on an email address rather than on a
     /// foreign key — see the class remarks.
     /// </param>
+    /// <param name="withholdVerbatimAnswers">
+    /// True when the caller is not the subject — an administrator exporting someone else.
+    /// Ruled 2026-10-12 (<c>docs/decisions/who-may-see-an-individual-answer.md</c>): the words a
+    /// person typed into a survey are returned only to that person. Everyone else receives
+    /// <see cref="SubjectDataMap.WithheldAnswerMarker"/> in their place, so the export still says
+    /// an answer exists without becoming the per-person read surface the product refuses to be.
+    /// </param>
     public static async Task<SubjectAccessResponse> BuildAsync(
         ClimateProjectDbContext db,
         User subject,
         Guid? companyScope,
+        bool withholdVerbatimAnswers,
         DateTimeOffset generatedAt,
         CancellationToken cancellationToken)
     {
@@ -126,8 +141,7 @@ public static class SubjectAccessExport
                 db.UserDemographics.Where(d => d.UserId == id), cancellationToken),
             await FullAsync(db, "Response", "UserId",
                 db.Responses.Where(r => r.UserId == id), cancellationToken),
-            await FullAsync(db, "QuestionResponse", "ResponseId",
-                db.QuestionResponses.Where(q => responseIds.Contains(q.ResponseId)), cancellationToken),
+            await QuestionResponsesAsync(db, responseIds, withholdVerbatimAnswers, cancellationToken),
             await FullAsync(db, "ResponseDemographic", "ResponseId",
                 db.ResponseDemographics.Where(rd => responseIds.Contains(rd.ResponseId)), cancellationToken),
             await FullAsync(db, "SurveyInvitation", (SurveyInvitation i) => i.UserId == id ? "UserId" : "Email",
@@ -403,6 +417,64 @@ public static class SubjectAccessExport
             ExportTreatment.Reference,
             [.. rows.Select(r => ReferenceRecord(new Reference(r.Id, r.Title), r.Authored ? "CreatedBy" : "OwnerId"))]);
     }
+
+    /// <summary>
+    /// The subject's answers, with the typed words withheld when the caller is somebody else.
+    /// </summary>
+    /// <remarks>
+    /// <para><c>response_text</c> is the comment box and is free text on every question type, so
+    /// it is withheld whenever it holds anything. <c>response_value</c> is withheld unless the
+    /// question is of a known closed type: an open-ended question stores its words there too,
+    /// and a question this export cannot find or whose type it does not recognise is treated as
+    /// open, because erring closed is the only direction that cannot print someone's words.</para>
+    /// <para>The value is replaced rather than dropped. A missing key reads as "no answer was
+    /// given", which is a false statement about the subject's record.</para>
+    /// </remarks>
+    private static async Task<SubjectAccessSection> QuestionResponsesAsync(
+        ClimateProjectDbContext db,
+        List<Guid> responseIds,
+        bool withholdVerbatimAnswers,
+        CancellationToken cancellationToken)
+    {
+        var rows = await db.QuestionResponses
+            .Where(q => responseIds.Contains(q.ResponseId))
+            .ToListAsync(cancellationToken);
+        var records = rows.Select(row => Flatten(db.Entry(row), "QuestionResponse", "ResponseId")).ToList();
+
+        if (withholdVerbatimAnswers && rows.Count > 0)
+        {
+            var questionIds = rows.Select(r => r.QuestionId).Distinct().ToList();
+            var types = await db.Questions
+                .Where(q => questionIds.Contains(q.Id))
+                .Select(q => new { q.Id, q.Type })
+                .ToDictionaryAsync(q => q.Id, q => q.Type, cancellationToken);
+
+            for (var i = 0; i < rows.Count; i++)
+            {
+                var record = records[i];
+                if (rows[i].ResponseText is not null)
+                {
+                    record[nameof(QuestionResponse.ResponseText)] = SubjectDataMap.WithheldAnswerMarker;
+                }
+
+                if (!types.TryGetValue(rows[i].QuestionId, out var type) || !IsClosedType(type))
+                {
+                    record[nameof(QuestionResponse.ResponseValue)] = SubjectDataMap.WithheldAnswerMarker;
+                }
+            }
+        }
+
+        return Section("QuestionResponse", ExportTreatment.FullRecord, records);
+    }
+
+    /// <summary>
+    /// A type whose answer is one of a fixed set the author wrote — never words the respondent
+    /// typed. Anything not positively known to be closed is treated as free text.
+    /// </summary>
+    internal static bool IsClosedType(string? type)
+        => type is not null
+            && QuestionTypes.All.Contains(type, StringComparer.Ordinal)
+            && !QuestionTypes.FreeText.Contains(type, StringComparer.Ordinal);
 
     private static IReadOnlyDictionary<string, object?> ReferenceRecord(Reference reference, string linkProperty)
         => new Dictionary<string, object?>(StringComparer.Ordinal)
