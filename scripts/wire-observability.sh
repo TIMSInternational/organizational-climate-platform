@@ -21,8 +21,10 @@
 #
 set -euo pipefail
 
-export AWS_PROFILE="${AWS_PROFILE:-formmaps-deploy}"
-REGION="${REGION:-us-east-1}"
+# Climate production moved to its own account, us-east-2, on 2026-10-12 (PR #541). The old
+# shared account 747814092517 no longer runs the climate API.
+export AWS_PROFILE="${AWS_PROFILE:-tims-new}"
+REGION="${REGION:-us-east-2}"
 OBS_STACK=climate-project-observability-prod
 PROBE_STACK=climate-project-synthetic-probe-prod
 SERVICE_STACK=climate-project-api-prod
@@ -54,7 +56,7 @@ case "$FALLBACK_EMAIL" in
     exit 1
     ;;
 esac
-EXPECT_ACCOUNT=747814092517
+EXPECT_ACCOUNT=795965600143
 
 # Armed, not dark. The 21 alarms in the observability stack were deployed AlarmsEnabled=false on
 # 2026-09-25 to see whether they flap before anybody is paged. Measured 2026-09-28, three days

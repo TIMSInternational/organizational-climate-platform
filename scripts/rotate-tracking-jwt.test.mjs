@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 
 const REPO = fileURLToPath(new URL('..', import.meta.url));
 const SCRIPT = join(REPO, 'scripts/rotate-tracking-jwt.sh');
-const ACCOUNT = '747814092517';
+const ACCOUNT = '795965600143';
 
 const AWS_STUB = `#!/usr/bin/env bash
 printf '%s\\n' "aws $*" >> "$STUB_LOG"
@@ -97,9 +97,9 @@ test('plan writes nothing, in either phase', async () => {
 });
 
 test('the wrong account is refused before anything is read or written', async () => {
-  const r = await run(['apply', 'close'], { env: { STUB_ACCOUNT: '795965600143' } });
+  const r = await run(['apply', 'close'], { env: { STUB_ACCOUNT: '747814092517' } });
   assert.equal(r.status, 1);
-  assert.match(r.stderr, /credentials are for account 795965600143, not 747814092517/);
+  assert.match(r.stderr, /credentials are for account 747814092517, not 795965600143/);
   assert.doesNotMatch(r.calls, DESTRUCTIVE);
 });
 
