@@ -531,6 +531,31 @@ export const ROLE_CAPABILITIES: Record<PlatformRole, readonly RoleCapability[]> 
   // role with a jefatura of its own to show.
   leader: [
     ...SELF_SERVICE,
+    // The plans this leader is answerable for. `GET /action-plans` was `CanAccessCompany`
+    // -- the two admin roles -- until the due-date nudge made that untenable: a worker that
+    // mails an owner "your plan is due" and a route that refuses them is the product
+    // contradicting its own notification. The endpoint now scopes a non-admin's list to the
+    // plans they OWN and admits the detail for the same, so this offers a page that answers
+    // rather than one that 403s. Ruled by Federico on 2026-10-11 as the first slice of the
+    // manager layer; supervisor and employee are deliberately NOT given it, because what
+    // else a leader sees of their department is the larger decision and is still open.
+    {
+      route: '/action-plans',
+      labelKey: 'navigation.actionPlans',
+      authorizedBy:
+        'GET /action-plans — ActionPlanEndpoints.ListAsync: a caller without tenant-wide rights has the ' +
+        'query scoped to the plans they own. Owning none returns an empty list, which is an answer and ' +
+        'not a refusal.',
+      inNav: true,
+    },
+    {
+      route: '/action-plans/:id',
+      labelKey: 'actionPlans.title',
+      authorizedBy:
+        'GET /action-plans/{id} — ActionPlanEndpoints.CanReadAsOwner: the plan\'s own owner, in their own ' +
+        'tenant, read-only.',
+      inNav: false,
+    },
     {
       route: '/tracking/tablero',
       labelKey: 'navigation.trackingDashboard',

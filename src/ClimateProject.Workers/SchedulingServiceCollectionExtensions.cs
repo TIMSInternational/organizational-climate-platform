@@ -81,6 +81,7 @@ public static class SchedulingServiceCollectionExtensions
         services.AddHostedService<NotificationDispatchWorker>();
         services.AddHostedService<InvitationReminderWorker>();
         services.AddHostedService<DigestWorker>();
+        services.AddHostedService<ActionPlanDueWorker>();
         services.AddHostedService<ScheduledReportWorker>();
         services.AddHostedService<SurveyDraftRetentionWorker>();
         services.AddHostedService<RetentionCleanupWorker>();

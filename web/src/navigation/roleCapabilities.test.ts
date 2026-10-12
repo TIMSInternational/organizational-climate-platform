@@ -280,6 +280,10 @@ describe('every capability points somewhere real', () => {
       '/surveys/my': 'SurveyEndpoints.ListMineAsync — the caller’s own row, its company and its department.',
       '/surveys/{}/respond':
         'SurveyEndpoints — resolves the caller’s own row and the survey’s own department targets; no role claim.',
+      '/action-plans':
+        'ActionPlanEndpoints.ListAsync — self-scoping: a caller without tenant-wide rights has the query filtered to the plans they own.',
+      '/action-plans/{}':
+        'ActionPlanEndpoints.CanReadAsOwner — the plan’s own owner, in their own tenant, read-only.',
       '/api/mis-tareas': 'ClimateTracking DashboardEndpoints.MisTareasAsync — filtered on the caller’s own sub claim.',
       '/api/planes-accion':
         'ClimateTracking PlanesAccionEndpoints.ListAsync — self-scoping: a non-admin caller gets their own nodo and the plans they are named on.',
@@ -418,16 +422,37 @@ describe('each non-admin role', () => {
   })
 
   /**
-   * The specific defect this issue was opened on, stated as a property.
+   * The specific defect this issue was opened on, stated as a property — and narrowed since.
    *
-   * `ActionPlanEndpoints.CanAccessCompany` is `super_admin`, or `company_admin` on their
-   * own company. `DepartmentAdminDashboardView` — the page only these roles see — used to
-   * put a primary button on `/action-plans`, so every viewer of that button got
-   * "Request failed: 403".
+   * `DepartmentAdminDashboardView` used to put a primary button on `/action-plans`, so every
+   * viewer of that button got "Request failed: 403". The property that fixed it was "no
+   * non-admin may reach the action-plan pages", because the endpoint was `CanAccessCompany`
+   * and there was nothing a non-admin could be shown.
+   *
+   * **That is no longer the reason.** `ActionPlanEndpoints` now scopes a non-admin's list to
+   * the plans they OWN and admits the detail for the same, because a worker that mails an
+   * owner "your plan is due" and a route that refuses them is the product contradicting its
+   * own notification. So a leader reaches both and gets an answer.
+   *
+   * The property being defended was never "non-admins are excluded" — it was **"the sidebar
+   * never offers a destination that refuses the viewer"**, which the suite above states
+   * directly and which still holds: a leader owning no plans gets an empty list, not a 403.
+   * Supervisor and employee stay out, because what else a non-admin sees is the open half of
+   * the manager-layer decision and is not pre-empted here.
    */
-  it.each([...NON_ADMIN_ROLES])('cannot reach the admin action-plan listing (%s)', (role) => {
-    expect(canReach(role, '/action-plans', true)).toBe(false)
-    expect(canReach(role, '/action-plans/some-id', true)).toBe(false)
+  it.each([...NON_ADMIN_ROLES.filter((role) => role !== 'leader')])(
+    'cannot reach the action-plan pages (%s)',
+    (role) => {
+      expect(canReach(role, '/action-plans', true)).toBe(false)
+      expect(canReach(role, '/action-plans/some-id', true)).toBe(false)
+    },
+  )
+
+  it('a leader reaches the action plans they are answerable for', () => {
+    expect(canReach('leader', '/action-plans', true)).toBe(true)
+    expect(canReach('leader', '/action-plans/some-id', true)).toBe(true)
+    // With tracking off too: this is a core-platform capability, not a tracking one.
+    expect(canReach('leader', '/action-plans', false)).toBe(true)
   })
 
   it.each([...NON_ADMIN_ROLES])('cannot reach a survey admin page or its results (%s)', (role) => {

@@ -33,7 +33,14 @@ public sealed record ActionPlanListItem(
     /// page loads for its filter. <c>OwnerName</c> is null exactly when <c>OwnerId</c> is.
     /// </summary>
     Guid? OwnerId,
-    string? OwnerName);
+    string? OwnerName,
+    /// <summary>
+    /// The department's name, null exactly when <c>DepartmentId</c> is. On the row for the
+    /// same reason as <c>OwnerName</c>, and one more: <c>GET /admin/departments</c> answers
+    /// an administrator only, so a plan's OWNER -- who may now read their own plans -- had no
+    /// way to learn the name of the department their plan is for.
+    /// </summary>
+    string? DepartmentName);
 
 public sealed record ActionPlanListResponse(IReadOnlyList<ActionPlanListItem> ActionPlans);
 
@@ -60,7 +67,9 @@ public sealed record ActionPlanDetail(
     // #210: Title, Description and every KPI/objective text arrive resolved for the
     // request's locale; the paths below ("title", "kpis[0].unit", ...) name the ones that
     // had to reach for the other language.
-    IReadOnlyList<string> FallbackFields);
+    IReadOnlyList<string> FallbackFields,
+    /// <inheritdoc cref="ActionPlanListItem.DepartmentName"/>
+    string? DepartmentName);
 
 public sealed record CreateKpiInput(LocalizedInput? Name, decimal TargetValue, LocalizedInput? Unit, string MeasurementFrequency);
 public sealed record CreateObjectiveInput(LocalizedInput? Description, LocalizedInput? SuccessCriteria);

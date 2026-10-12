@@ -32,6 +32,13 @@ public static class WorkerJobs
     public const string Digests = "digests";
 
     /// <summary>
+    /// Nudges the owner of an action plan before it lapses, and once after. The Planes de
+    /// Accion screen has led with an "atrasados" tile since it shipped while nothing ever
+    /// told the person answerable; this is the job that does.
+    /// </summary>
+    public const string ActionPlanDue = "action-plan-due";
+
+    /// <summary>
     /// Advances recurring <c>reports</c> schedules. Replaces legacy
     /// <c>api/cron/scheduled-reports</c>, and is the "one scheduler, not two" that #91 is
     /// asked to build its delivery on top of rather than beside.
@@ -76,6 +83,7 @@ public static class WorkerJobs
         NotificationDispatch,
         InvitationReminders,
         Digests,
+        ActionPlanDue,
         ScheduledReports,
         SurveyDraftRetention,
         RetentionCleanup,

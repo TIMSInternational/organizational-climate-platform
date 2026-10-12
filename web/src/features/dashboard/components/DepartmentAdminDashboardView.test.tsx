@@ -334,8 +334,17 @@ describe('DepartmentAdminDashboardView', () => {
    * given `canOpenSurvey={false}` here for the same reason (`GET /surveys/{id}` is
    * `CanAdminister`). So the loop below currently iterates nothing, and a bare
    * `expect(refused).toEqual([])` would pass whatever the predicate did. The positive
-   * control is what stops that being a green light: `canReach` is made to *refuse* the
-   * exact href this test exists about, in the same call shape the sweep uses.
+   * control is what stops that being a green light: `canReach` is made to *refuse* an href,
+   * in the same call shape the sweep uses, for each of the two roles.
+   *
+   * ## Why the control is no longer `/action-plans` for both roles
+   *
+   * It was, because the endpoint was admin-only and neither role could reach it. A leader
+   * now DOES: `ActionPlanEndpoints` scopes a non-admin's list to the plans they own, so that
+   * page answers a leader instead of refusing them. A supervisor is still refused, and that
+   * is exactly why this view -- which serves both -- still must not render the link. The
+   * property this test defends is unchanged; only one half of its control had to move to an
+   * href both roles are still refused.
    */
   it('renders no link either of its two roles would be refused', async () => {
     serves(team())
@@ -344,9 +353,15 @@ describe('DepartmentAdminDashboardView', () => {
     await screen.findByText('Ingeniería')
 
     // Guard the guard: the predicate has to be capable of saying no, or an empty `refused`
-    // proves nothing. `/action-plans` is the precise href that used to sit on this page.
-    expect(canReach('leader', '/action-plans', true)).toBe(false)
+    // proves nothing.
+    //
+    // `/action-plans` is still the precise href that used to sit on this page, and still the
+    // reason the page may not carry it -- a supervisor is refused. A leader is not, any more,
+    // so their half of the control is a survey admin page, which `SurveyEndpoints
+    // .CanAdminister` refuses to both.
     expect(canReach('supervisor', '/action-plans', true)).toBe(false)
+    expect(canReach('leader', '/surveys/33333333-3333-3333-3333-333333333301', true)).toBe(false)
+    expect(canReach('supervisor', '/surveys/33333333-3333-3333-3333-333333333301', true)).toBe(false)
 
     const hrefs = [...container.querySelectorAll('a[href]')].map((a) => a.getAttribute('href') ?? '')
     const refused = hrefs.filter(

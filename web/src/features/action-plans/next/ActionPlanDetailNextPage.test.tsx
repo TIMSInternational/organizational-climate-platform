@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { TranslationProvider } from '../../../i18n'
 import { setToken, clearToken } from '../../../auth/token'
+import { ApiError } from '../../../api/authFetch'
 import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../company-context'
 import { clearCompanyNameCache } from '../../../company-context/useCompanyName'
 import { tokenFor } from '../../../test/jwtFixture'
@@ -396,9 +397,36 @@ describe('ActionPlanDetailNextPage', () => {
     expect(screen.queryByRole('button', { name: new RegExp(copy.changeStatus) })).toBeNull()
   })
 
-  it('refuses a leader before any request is sent', async () => {
+  /**
+   * The person the due-date nudge links here. The server admits a plan's owner read-only
+   * (`ActionPlanEndpoints.CanReadAsOwner`); the page used to refuse every non-administrator
+   * before asking, so the link in the mail opened onto "acceso restringido".
+   */
+  it('opens a leader’s own plan read-only, named by department, without one administrator read', async () => {
+    vi.mocked(getActionPlan).mockResolvedValue({ ...plan, ownerId: 'u-ana', ownerName: 'Ana Rojas', departmentName: 'Operaciones' })
     renderAs({ role: 'leader', companyId: COMPANY })
+
+    expect(await screen.findByRole('heading', { level: 1, name: plan.title })).toBeTruthy()
+    // From the plan's own `departmentName`: the directory that used to supply it refuses them.
+    expect(await screen.findByText('Operaciones · Plan de acción')).toBeTruthy()
+    expect(screen.getByText(copy.finding.adminOnly)).toBeTruthy()
+    expect(screen.queryByText(es.actionPlans.accessRestricted)).toBeNull()
+
+    // Read-only: the writes are the administration's, as the plan's own guard line says.
+    expect(screen.queryByRole('button', { name: new RegExp(copy.recordProgress) })).toBeNull()
+    expect(screen.queryByRole('button', { name: new RegExp(copy.changeStatus) })).toBeNull()
+
+    // Not sent and then failed: never sent.
+    for (const adminRead of [listDepartments, getUser, listUsers, listActionPlanTemplates, listSurveys, getClimateTrends]) {
+      expect(adminRead).not.toHaveBeenCalled()
+    }
+  })
+
+  it('tells a leader who does not own the plan whose it is, not the server’s raw refusal', async () => {
+    vi.mocked(getActionPlan).mockRejectedValue(new ApiError(403, 'Forbidden'))
+    renderAs({ role: 'leader', companyId: COMPANY })
+
     expect(await screen.findByText(es.actionPlans.accessRestricted)).toBeTruthy()
-    expect(getActionPlan).not.toHaveBeenCalled()
+    expect(screen.queryByText('Forbidden')).toBeNull()
   })
 })

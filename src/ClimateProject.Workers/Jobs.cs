@@ -66,6 +66,41 @@ public sealed class NotificationDispatchWorker(
 }
 
 /// <summary>
+/// Nudges the owner of an action plan before it lapses, and once after. See
+/// <see cref="ActionPlanDueJob"/> for the window, the idempotency and why an unowned plan is
+/// deliberately left alone.
+/// </summary>
+public sealed class ActionPlanDueWorker(
+    IServiceScopeFactory scopeFactory,
+    WorkerHeartbeats heartbeats,
+    IOptions<WorkerSchedulingOptions> options,
+    ILogger<ActionPlanDueWorker> logger)
+    : ScheduledJobWorker(
+        WorkerJobs.ActionPlanDue,
+        options.Value.ActionPlanDueInterval,
+        options.Value.Enabled,
+        scopeFactory,
+        heartbeats,
+        logger)
+{
+    private readonly int _batchSize = options.Value.ActionPlanDueBatchSize;
+    private readonly TimeSpan _window = options.Value.ActionPlanDueWindow;
+    private readonly TimeSpan _lookback = options.Value.ActionPlanDueLookback;
+
+    protected override async Task RunOnceAsync(
+        IServiceProvider services,
+        DateTimeOffset nowUtc,
+        CancellationToken cancellationToken)
+    {
+        var db = services.GetRequiredService<ClimateProjectDbContext>();
+        var loggerFactory = services.GetRequiredService<ILoggerFactory>();
+
+        await ActionPlanDueJob.RunAsync(
+            db, loggerFactory, nowUtc, _batchSize, _window, _lookback, cancellationToken);
+    }
+}
+
+/// <summary>
 /// Raises reminders for outstanding survey and microclimate invitations. See
 /// <see cref="InvitationReminderJob"/> for the rules and for what this replaces.
 /// </summary>

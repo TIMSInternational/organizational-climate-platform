@@ -1167,6 +1167,51 @@ public class InvitationEmailLinkTests : IAsyncLifetime, IClassFixture<CapturingM
         Assert.Contains("The platform will be briefly unavailable", message.TextBody, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// An action plan's due-date nudge links to the plan, under a label that says so. The job
+    /// raised these with no link at all, and the composer labelled every link "Abrir la
+    /// encuesta" -- so the first link a plan mail carried would have said it opened a survey.
+    /// </summary>
+    [Fact]
+    public async Task An_action_plan_nudge_links_to_its_plan_under_a_label_that_says_plan()
+    {
+        var client = await AdminAsync();
+        var (employeeId, employeeEmail) = await SeedEmployeeAsync(ContentLanguages.Spanish);
+        var planId = Guid.NewGuid();
+
+        // Raised the way ActionPlanDueJob raises it: a pending row carrying only the plan id.
+        await _harness.WithDbAsync(async db =>
+        {
+            db.Notifications.Add(new Notification
+            {
+                Id = Guid.NewGuid(),
+                UserId = employeeId,
+                CompanyId = _companyId,
+                Type = NotificationTypes.ActionPlanAlert,
+                Channel = NotificationChannels.Email,
+                Priority = NotificationPriorities.Medium,
+                Status = NotificationStatuses.Pending,
+                Title = "Un plan de acción a tu cargo vence pronto",
+                Message = "\"Reducir la carga\" vence el 2026-10-20.",
+                Data = ActionPlanNotificationData.Serialize(planId),
+                ScheduledFor = DateTimeOffset.UtcNow.AddMinutes(-1),
+                MaxRetries = 3,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow,
+            });
+            await db.SaveChangesAsync();
+            return 0;
+        });
+        await SweepAsync(client);
+
+        var expected = $"{CapturingMailHostFixture.AppBaseUrl}/action-plans/{planId}";
+        var message = Assert.Single(_mail.Mailbox.To(employeeEmail));
+        Assert.Contains($"Abrir el plan: {expected}", message.TextBody, StringComparison.Ordinal);
+        Assert.Contains($"href=\"{expected}\"", message.HtmlBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("Abrir la encuesta", message.TextBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("Abrir la encuesta", message.HtmlBody, StringComparison.Ordinal);
+    }
+
     // ------------------------------------------------------------------
     // The exfiltration primitive, and the scope that closes it
     // ------------------------------------------------------------------

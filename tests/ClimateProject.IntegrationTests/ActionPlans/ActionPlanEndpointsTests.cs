@@ -59,6 +59,193 @@ public class ActionPlanEndpointsTests : IAsyncLifetime
         return (await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
     }
 
+    /// <summary>The id the token carries, which is what the owner check compares against.</summary>
+    private async Task<Guid> UserIdForAsync(string emailDomain, string role)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        return await db.Users.Where(u => u.Email.EndsWith(emailDomain) && u.Role == role)
+            .OrderByDescending(u => u.CreatedAt).Select(u => u.Id).FirstAsync();
+    }
+
+    /// <summary>A plan owned by <paramref name="ownerId"/>, written straight to the database.</summary>
+    private async Task<Guid> SeedPlanAsync(Guid companyId, Guid createdBy, Guid? ownerId, Guid? departmentId = null)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        var plan = new ActionPlan
+        {
+            Id = Guid.NewGuid(),
+            TitleEn = "Owned plan",
+            DescriptionEn = "A plan with somebody answerable for it.",
+            CompanyId = companyId,
+            CreatedBy = createdBy,
+            OwnerId = ownerId,
+            DepartmentId = departmentId,
+            DueDate = DateTimeOffset.UtcNow.AddDays(10),
+            Status = "not_started",
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+        };
+        db.ActionPlans.Add(plan);
+        await db.SaveChangesAsync();
+        return plan.Id;
+    }
+
+    // -- a plan's owner can read it ------------------------------------------------------
+    //
+    // Reads were gated by CanAccessCompany, so only the two admin roles could open a plan.
+    // That became a defect the moment the due-date nudge existed: telling an owner their plan
+    // is due and then 403-ing them on it is the product contradicting its own notification.
+
+    [Fact]
+    public async Task A_leader_who_owns_a_plan_can_read_it_and_sees_it_in_their_list()
+    {
+        var client = _factory.CreateClient();
+        await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        var adminId = await UserIdForAsync(_companyADomain, Roles.CompanyAdmin);
+
+        var leaderClient = _factory.CreateClient();
+        var leaderToken = await SignUpAndGetTokenAsync(leaderClient, Roles.Leader, _companyADomain, _companyAId);
+        var leaderId = await UserIdForAsync(_companyADomain, Roles.Leader);
+        leaderClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", leaderToken);
+
+        var mine = await SeedPlanAsync(_companyAId, adminId, leaderId);
+        var someoneElses = await SeedPlanAsync(_companyAId, adminId, adminId);
+
+        var detail = await leaderClient.GetAsync($"/action-plans/{mine}");
+        Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
+
+        var list = await leaderClient.GetAsync($"/action-plans?companyId={_companyAId}");
+        Assert.Equal(HttpStatusCode.OK, list.StatusCode);
+        var rows = (await list.Content.ReadFromJsonAsync<ActionPlanListResponse>())!.ActionPlans;
+
+        // Exactly their own: the list is scoped, not merely permitted.
+        Assert.Contains(rows, r => r.Id == mine);
+        Assert.DoesNotContain(rows, r => r.Id == someoneElses);
+    }
+
+    [Fact]
+    public async Task An_owner_reads_their_plans_department_by_name_without_the_admin_directory()
+    {
+        var client = _factory.CreateClient();
+        await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        var adminId = await UserIdForAsync(_companyADomain, Roles.CompanyAdmin);
+
+        var leaderClient = _factory.CreateClient();
+        var leaderToken = await SignUpAndGetTokenAsync(leaderClient, Roles.Leader, _companyADomain, _companyAId);
+        var leaderId = await UserIdForAsync(_companyADomain, Roles.Leader);
+        leaderClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", leaderToken);
+
+        var departmentId = Guid.NewGuid();
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            db.Departments.Add(new Department { Id = departmentId, CompanyId = _companyAId, Name = "Consultoría y Servicio al Cliente" });
+            await db.SaveChangesAsync();
+        }
+        var mine = await SeedPlanAsync(_companyAId, adminId, leaderId, departmentId);
+
+        // The name the screen prints, which `GET /admin/departments` refuses this reader.
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            (await leaderClient.GetAsync($"/admin/departments?companyId={_companyAId}")).StatusCode);
+
+        var detail = await (await leaderClient.GetAsync($"/action-plans/{mine}")).Content.ReadFromJsonAsync<ActionPlanDetail>();
+        Assert.Equal("Consultoría y Servicio al Cliente", detail!.DepartmentName);
+
+        var rows = (await (await leaderClient.GetAsync($"/action-plans?companyId={_companyAId}"))
+            .Content.ReadFromJsonAsync<ActionPlanListResponse>())!.ActionPlans;
+        Assert.Equal("Consultoría y Servicio al Cliente", Assert.Single(rows, r => r.Id == mine).DepartmentName);
+    }
+
+    [Fact]
+    public async Task A_leader_cannot_read_a_plan_they_do_not_own()
+    {
+        var client = _factory.CreateClient();
+        await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        var adminId = await UserIdForAsync(_companyADomain, Roles.CompanyAdmin);
+
+        var leaderClient = _factory.CreateClient();
+        var leaderToken = await SignUpAndGetTokenAsync(leaderClient, Roles.Leader, _companyADomain, _companyAId);
+        leaderClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", leaderToken);
+
+        var someoneElses = await SeedPlanAsync(_companyAId, adminId, adminId);
+
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            (await leaderClient.GetAsync($"/action-plans/{someoneElses}")).StatusCode);
+    }
+
+    [Fact]
+    public async Task An_unassigned_plan_is_readable_by_nobody_but_an_admin()
+    {
+        var client = _factory.CreateClient();
+        await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        var adminId = await UserIdForAsync(_companyADomain, Roles.CompanyAdmin);
+
+        var leaderClient = _factory.CreateClient();
+        var leaderToken = await SignUpAndGetTokenAsync(leaderClient, Roles.Leader, _companyADomain, _companyAId);
+        leaderClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", leaderToken);
+
+        // OwnerId is null. A null owner must never match a null-ish subject id or an
+        // unparsable one -- the check has to fail closed, not compare two absences.
+        var unowned = await SeedPlanAsync(_companyAId, adminId, ownerId: null);
+
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            (await leaderClient.GetAsync($"/action-plans/{unowned}")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Owning_a_plan_does_not_let_a_leader_change_it()
+    {
+        var client = _factory.CreateClient();
+        await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        var adminId = await UserIdForAsync(_companyADomain, Roles.CompanyAdmin);
+
+        var leaderClient = _factory.CreateClient();
+        var leaderToken = await SignUpAndGetTokenAsync(leaderClient, Roles.Leader, _companyADomain, _companyAId);
+        var leaderId = await UserIdForAsync(_companyADomain, Roles.Leader);
+        leaderClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", leaderToken);
+
+        var mine = await SeedPlanAsync(_companyAId, adminId, leaderId);
+
+        // Read is granted; write is not. The plan's own screen says so in words --
+        // "Registra avance la administración" -- and this is that sentence as a test.
+        var update = await leaderClient.PutAsJsonAsync(
+            $"/action-plans/{mine}",
+            new UpdateActionPlanRequest(null, null, null, "in_progress", null, null));
+
+        Assert.Equal(HttpStatusCode.Forbidden, update.StatusCode);
+    }
+
+    [Fact]
+    public async Task An_owner_id_does_not_cross_a_company_boundary()
+    {
+        var client = _factory.CreateClient();
+        await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyBDomain, _companyBId);
+        var otherAdminId = await UserIdForAsync(_companyBDomain, Roles.CompanyAdmin);
+
+        var leaderClient = _factory.CreateClient();
+        var leaderToken = await SignUpAndGetTokenAsync(leaderClient, Roles.Leader, _companyADomain, _companyAId);
+        var leaderId = await UserIdForAsync(_companyADomain, Roles.Leader);
+        leaderClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", leaderToken);
+
+        // A plan in company B naming a company A user as its owner. Nothing should produce
+        // this row, but an owner check that trusted the id alone would hand a tenant's plan
+        // to an outsider, so the tenant is compared as well.
+        var crossTenant = await SeedPlanAsync(_companyBId, otherAdminId, leaderId);
+
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            (await leaderClient.GetAsync($"/action-plans/{crossTenant}")).StatusCode);
+
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            (await leaderClient.GetAsync($"/action-plans?companyId={_companyBId}")).StatusCode);
+    }
+
     [Fact]
     public async Task CompanyAdmin_can_create_a_plan_with_kpis_and_objectives_then_read_it_back()
     {
@@ -315,8 +502,26 @@ public class ActionPlanEndpointsTests : IAsyncLifetime
         Assert.Equal("Admin-created", stillOriginal!.Title);
     }
 
+    /// <summary>
+    /// A non-admin who owns nothing sees nothing -- and is told so, rather than refused.
+    /// </summary>
+    /// <remarks>
+    /// <para>This asserted a 403 on the LIST until the due-date nudge made that untenable:
+    /// an owner has to be able to reach the plan they are being mailed about, so the list is
+    /// now scoped to what the caller owns instead of being closed to them. The policy changed
+    /// deliberately; this test changed with it rather than being deleted.</para>
+    ///
+    /// <para><b>200-with-nothing-in-it is the stronger claim, not the weaker one.</b> A 403
+    /// says only "you were not allowed to ask". This says the query ran and returned none of
+    /// the tenant's plans, which is the thing that would actually leak if the scoping filter
+    /// were dropped -- a mutation that removes it turns this empty list into a populated one
+    /// and fails here, where a status-code assertion would have passed.</para>
+    ///
+    /// <para>The DETAIL half is unchanged and still a refusal: ownership is the only key a
+    /// non-admin has, and this plan has no owner at all.</para>
+    /// </remarks>
     [Fact]
-    public async Task NonAdmin_cannot_list_or_read_plans_in_their_own_company()
+    public async Task A_non_admin_owning_nothing_gets_an_empty_list_and_cannot_open_a_plan()
     {
         var client = _factory.CreateClient();
         var adminToken = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
@@ -330,7 +535,10 @@ public class ActionPlanEndpointsTests : IAsyncLifetime
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", employeeToken);
 
         var listResponse = await client.GetAsync($"/action-plans?companyId={_companyAId}");
-        Assert.Equal(HttpStatusCode.Forbidden, listResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
+
+        var rows = (await listResponse.Content.ReadFromJsonAsync<ActionPlanListResponse>())!.ActionPlans;
+        Assert.Empty(rows);
 
         var getResponse = await client.GetAsync($"/action-plans/{created!.Id}");
         Assert.Equal(HttpStatusCode.Forbidden, getResponse.StatusCode);

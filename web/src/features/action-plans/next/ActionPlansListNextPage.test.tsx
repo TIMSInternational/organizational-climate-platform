@@ -411,14 +411,59 @@ describe('ActionPlansListNextPage — company_admin', () => {
   })
 })
 
-describe('ActionPlansListNextPage — the roles GET /action-plans refuses', () => {
+describe('ActionPlansListNextPage — an owner who is not an administrator', () => {
+  // What `ListAsync` answers a non-admin: the plans they own, and nothing else. The
+  // department name rides on the row because `GET /admin/departments` refuses them.
+  const MINE = {
+    actionPlans: [{ ...ACTION_PLANS.actionPlans[0], ownerId: 'u-leader', ownerName: 'Luis Leader', departmentName: 'Personas' }],
+  }
+
+  function adminOnlyCalls() {
+    return calls().filter(
+      (call) =>
+        call.url.includes('/admin/departments') || call.url.includes('/action-plan-templates') || call.url.startsWith(TRACKING),
+    )
+  }
+
+  it('shows a leader the plans they own, named by department, and nothing an administrator manages', async () => {
+    setToken(tokenFor({ sub: 'u-leader', role: 'leader', companyId: COMPANY, nodoId: 'n', isActive: 'true' }))
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.startsWith(`${API}/action-plans?`)) return json(MINE)
+      if (/\/profile(\?|$)/.test(url)) return json({ companyName: 'Grupo Meridiano S.A.' })
+      return json({}, 403)
+    })
+    renderPage()
+
+    // The plan the due-date nudge told them about, reachable from the list.
+    const link = await screen.findByRole('link', { name: 'Programa de reconocimiento entre pares' })
+    expect(link.getAttribute('href')).toBe('/action-plans/p1')
+    expect(screen.getByText(next.ownerDescription)).toBeTruthy()
+    expect(screen.getAllByText('Personas').length).toBeGreaterThan(0)
+
+    expect(screen.queryByText(next.restrictedTitle)).toBeNull()
+    expect(screen.queryByRole('button', { name: next.newPlan })).toBeNull()
+    // Every plan here is theirs, so "sin responsable" could only ever read 0.
+    expect(screen.queryByText(next.tileOwner)).toBeNull()
+    // The administrator reads are not sent at all — not sent and then failed.
+    expect(adminOnlyCalls()).toEqual([])
+  })
+
   for (const role of ['leader', 'supervisor', 'employee']) {
-    it(`tells a ${role} whose screen this is, offers nothing to create, and asks for no plan`, async () => {
+    it(`tells a ${role} who owns no plan that they own none, rather than refusing them`, async () => {
       setToken(tokenFor({ sub: 'u-x', role, companyId: COMPANY, nodoId: 'n', isActive: 'true' }))
+      vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url.startsWith(`${API}/action-plans?`)) return json({ actionPlans: [] })
+        if (/\/profile(\?|$)/.test(url)) return json({ companyName: 'Grupo Meridiano S.A.' })
+        return json({}, 403)
+      })
       renderPage()
-      expect(await screen.findByText(next.restrictedTitle)).toBeTruthy()
+      expect(await screen.findByText(next.ownerEmptyTitle)).toBeTruthy()
+      expect(screen.queryByText(next.restrictedTitle)).toBeNull()
       expect(screen.queryByRole('button', { name: next.newPlan })).toBeNull()
-      expect(calls().some((call) => call.url.includes('/action-plans'))).toBe(false)
+      expect(calls().some((call) => call.url.startsWith(`${API}/action-plans?companyId=${COMPANY}`))).toBe(true)
+      expect(adminOnlyCalls()).toEqual([])
     })
   }
 

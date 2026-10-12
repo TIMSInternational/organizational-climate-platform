@@ -115,6 +115,9 @@
       "restrictedTitle": "This screen belongs to the administration",
       "restrictedBody": "The company's action plans are managed by the administration. What concerns your team is on your Dashboard.",
       "backToDashboard": "Back to the Dashboard",
+      "ownerDescription": "The action plans you are answerable for. The administration records their progress.",
+      "ownerEmptyTitle": "You have no action plans assigned",
+      "ownerEmptyBody": "When the administration makes you answerable for a plan, it will appear here, and you will be notified as its due date approaches.",
       "tileOpen": "Open",
       "unitPlan": "plan",
       "unitPlans": "plans",
@@ -265,7 +268,8 @@
         "moveReading": "{fromCode} {from} → {toCode} {to}",
         "moveFlat": "no change",
         "moveAwaiting": "No survey has closed since {code} yet: it will be compared against the next one.",
-        "moveProtected": "The surveys after {code} do not disclose this group: fewer than 5 responses."
+        "moveProtected": "The surveys after {code} do not disclose this group: fewer than 5 responses.",
+        "adminOnly": "The finding behind this plan is read by the administration, in the survey results."
       },
       "measures": {
         "title": "Indicators and objectives",

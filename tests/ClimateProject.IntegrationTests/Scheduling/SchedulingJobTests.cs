@@ -125,6 +125,369 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
         UpdatedAt = sentAt,
     };
 
+    // -- action plan due nudges ---------------------------------------------------------
+
+    /// <summary>A plan the subject owns, due <paramref name="dueInDays"/> from <see cref="Now"/>.</summary>
+    private static ActionPlan NewPlan(
+        Guid companyId,
+        Guid createdBy,
+        Guid? ownerId,
+        double dueInDays,
+        string status = "not_started") => new()
+        {
+            Id = Guid.NewGuid(),
+            TitleEn = "Reduce the workload in Operations",
+            TitleEs = "Reducir la carga de trabajo en Operaciones",
+            CompanyId = companyId,
+            CreatedBy = createdBy,
+            OwnerId = ownerId,
+            DueDate = Now.AddDays(dueInDays),
+            Status = status,
+            CreatedAt = Now,
+            UpdatedAt = Now,
+        };
+
+    private static Task<ActionPlanDueJob.ActionPlanDueSweepResult> SweepAsync(ClimateProjectDbContext db)
+        => SweepAtAsync(db, Now);
+
+    private static Task<ActionPlanDueJob.ActionPlanDueSweepResult> SweepAtAsync(ClimateProjectDbContext db, DateTimeOffset nowUtc)
+        => ActionPlanDueJob.RunAsync(
+            db,
+            NullLoggerFactory.Instance,
+            nowUtc,
+            ActionPlanDueJob.DefaultBatchSize,
+            ActionPlanDueJob.DefaultWindow,
+            ActionPlanDueJob.DefaultLookback,
+            default);
+
+    [Fact]
+    public async Task An_owned_plan_due_soon_is_nudged_exactly_once_however_many_times_the_sweep_runs()
+    {
+        await using var db = await FreshAsync();
+
+        var company = NewCompany();
+        var owner = NewUser(company.Id);
+        db.Companies.Add(company);
+        db.Users.Add(owner);
+        await db.SaveChangesAsync();
+
+        db.ActionPlans.Add(NewPlan(company.Id, owner.Id, owner.Id, dueInDays: 3));
+        await db.SaveChangesAsync();
+
+        Assert.Equal(1, (await SweepAsync(db)).Raised);
+
+        // A fresh context so nothing is served from the change tracker: the second sweep has
+        // to discover the nudge in the DATABASE, which is the guarantee being claimed.
+        await using var second = await MigratedAsync(CreateContext());
+        for (var i = 0; i < 3; i++)
+        {
+            Assert.Equal(0, (await SweepAsync(second)).Raised);
+        }
+
+        await using var read = CreateContext();
+        var raised = await read.Notifications.Where(n => n.UserId == owner.Id).ToListAsync();
+
+        Assert.Single(raised);
+        Assert.Equal(NotificationTypes.ActionPlanAlert, raised[0].Type);
+        Assert.Equal(NotificationStatuses.Pending, raised[0].Status);
+        Assert.Equal(NotificationPriorities.Medium, raised[0].Priority);
+    }
+
+    [Fact]
+    public async Task The_nudge_names_its_plan_so_the_inbox_and_the_mail_can_link_to_it()
+    {
+        await using var db = await FreshAsync();
+
+        var company = NewCompany();
+        var owner = NewUser(company.Id);
+        db.Companies.Add(company);
+        db.Users.Add(owner);
+        await db.SaveChangesAsync();
+
+        var plan = NewPlan(company.Id, owner.Id, owner.Id, dueInDays: 3);
+        db.ActionPlans.Add(plan);
+        await db.SaveChangesAsync();
+
+        await SweepAsync(db);
+
+        await using var read = CreateContext();
+        var raised = await read.Notifications.SingleAsync(n => n.UserId == owner.Id);
+
+        // The inbox reads `actionPlanId` (`notifications/next/derive.ts`) and the sender builds
+        // the mail's button from it. Nothing wrote it before, so neither ever had a link.
+        Assert.Equal(plan.Id, ActionPlanNotificationData.PlanIdOrNull(raised.Data));
+    }
+
+    [Fact]
+    public async Task A_plan_whose_owner_has_been_deactivated_raises_nothing()
+    {
+        await using var db = await FreshAsync();
+
+        var company = NewCompany();
+        var owner = NewUser(company.Id);
+        owner.IsActive = false;
+        db.Companies.Add(company);
+        db.Users.Add(owner);
+        await db.SaveChangesAsync();
+
+        db.ActionPlans.Add(NewPlan(company.Id, owner.Id, owner.Id, dueInDays: -2));
+        await db.SaveChangesAsync();
+
+        // Delivery would cancel it, and retention keeps a cancelled row for good -- a permanent
+        // record naming the plan, addressed to someone who will never read it.
+        Assert.Equal(0, (await SweepAsync(db)).Examined);
+        Assert.Empty(await db.Notifications.ToListAsync());
+    }
+
+    [Theory]
+    // The owner's own zone answers...
+    [InlineData("America/Costa_Rica", "UTC")]
+    // ...and when theirs was never set, the company's does.
+    [InlineData("UTC", "America/Costa_Rica")]
+    public async Task A_plan_due_tomorrow_is_not_called_overdue_on_the_evening_before(
+        string ownerTimezone, string companyTimezone)
+    {
+        await using var db = await FreshAsync();
+
+        var company = NewCompany(companyTimezone);
+        var owner = NewUser(company.Id, timezone: ownerTimezone);
+        db.Companies.Add(company);
+        db.Users.Add(owner);
+        await db.SaveChangesAsync();
+
+        // Exactly what the list page stores for a plan due on 7 August: `2026-08-07T00:00Z`,
+        // which in Costa Rica (UTC-6) is 18:00 on the 6th.
+        var plan = NewPlan(company.Id, owner.Id, owner.Id, dueInDays: 0);
+        plan.DueDate = new DateTimeOffset(2026, 8, 7, 0, 0, 0, TimeSpan.Zero);
+        db.ActionPlans.Add(plan);
+        await db.SaveChangesAsync();
+
+        // 18:30 on the 6th in Costa Rica. The screen says "vence mañana"; comparing the stored
+        // instant with this one said "está vencido".
+        await SweepAtAsync(db, new DateTimeOffset(2026, 8, 7, 0, 30, 0, TimeSpan.Zero));
+
+        await using var read = CreateContext();
+        var raised = await read.Notifications.SingleAsync(n => n.UserId == owner.Id);
+
+        Assert.Equal(
+            DeterministicNotificationId.ForActionPlanDue(plan.Id, owner.Id, ActionPlanDueJob.DueSoonTrigger),
+            raised.Id);
+        Assert.Equal(NotificationPriorities.Medium, raised.Priority);
+    }
+
+    [Fact]
+    public async Task A_plan_lapses_at_midnight_of_its_due_day_in_the_owners_zone()
+    {
+        await using var db = await FreshAsync();
+
+        var company = NewCompany();
+        var owner = NewUser(company.Id, timezone: "America/Costa_Rica");
+        db.Companies.Add(company);
+        db.Users.Add(owner);
+        await db.SaveChangesAsync();
+
+        // What the results page stores for a plan due on 6 August: noon UTC.
+        var plan = NewPlan(company.Id, owner.Id, owner.Id, dueInDays: 0);
+        plan.DueDate = new DateTimeOffset(2026, 8, 6, 12, 0, 0, TimeSpan.Zero);
+        db.ActionPlans.Add(plan);
+        await db.SaveChangesAsync();
+
+        var overdueId = DeterministicNotificationId.ForActionPlanDue(plan.Id, owner.Id, ActionPlanDueJob.OverdueTrigger);
+
+        // 23:30 on the 6th in Costa Rica: still its due day, so not yet overdue -- although
+        // the stored instant passed eleven hours ago.
+        await SweepAtAsync(db, new DateTimeOffset(2026, 8, 7, 5, 30, 0, TimeSpan.Zero));
+        Assert.False(await db.Notifications.AnyAsync(n => n.Id == overdueId));
+
+        // 00:30 on the 7th: now it is.
+        await using var later = await MigratedAsync(CreateContext());
+        await SweepAtAsync(later, new DateTimeOffset(2026, 8, 7, 6, 30, 0, TimeSpan.Zero));
+
+        await using var read = CreateContext();
+        var overdue = await read.Notifications.SingleAsync(n => n.Id == overdueId);
+
+        // Owed from the first minute of the day after the due day, in the owner's zone --
+        // 7 August 00:00 in Costa Rica -- never from the wall clock of the tick that noticed.
+        Assert.Equal(new DateTimeOffset(2026, 8, 7, 6, 0, 0, TimeSpan.Zero), overdue.ScheduledFor);
+    }
+
+    [Fact]
+    public async Task An_overdue_plan_is_nudged_with_a_different_identity_and_a_higher_priority()
+    {
+        await using var db = await FreshAsync();
+
+        var company = NewCompany();
+        var owner = NewUser(company.Id);
+        db.Companies.Add(company);
+        db.Users.Add(owner);
+        await db.SaveChangesAsync();
+
+        var plan = NewPlan(company.Id, owner.Id, owner.Id, dueInDays: -5);
+        db.ActionPlans.Add(plan);
+        await db.SaveChangesAsync();
+
+        Assert.Equal(1, (await SweepAsync(db)).Raised);
+
+        await using var read = CreateContext();
+        var raised = await read.Notifications.SingleAsync(n => n.UserId == owner.Id);
+
+        Assert.Equal(NotificationPriorities.High, raised.Priority);
+
+        // The two triggers are different notifications, not one row that changes its mind.
+        // Were they the same id, a plan nudged before it lapsed could never be told it had.
+        Assert.Equal(
+            DeterministicNotificationId.ForActionPlanDue(plan.Id, owner.Id, ActionPlanDueJob.OverdueTrigger),
+            raised.Id);
+        Assert.NotEqual(
+            DeterministicNotificationId.ForActionPlanDue(plan.Id, owner.Id, ActionPlanDueJob.DueSoonTrigger),
+            raised.Id);
+
+        // Owed from the start of the day after the due day, not when the tick noticed -- so a
+        // late sweep records the deadline rather than its own wall clock. Due 1 August, UTC.
+        Assert.Equal(new DateTimeOffset(2026, 8, 2, 0, 0, 0, TimeSpan.Zero), raised.ScheduledFor);
+    }
+
+    [Fact]
+    public async Task A_plan_with_no_owner_is_not_nudged_at_all()
+    {
+        await using var db = await FreshAsync();
+
+        var company = NewCompany();
+        var admin = NewUser(company.Id);
+        db.Companies.Add(company);
+        db.Users.Add(admin);
+        await db.SaveChangesAsync();
+
+        // Unassigned and overdue: the most tempting row to mail somebody about, and the one
+        // there is nobody to mail. Its problem is that it has no owner, which the screen's
+        // "sin responsable" tile already says; a nudge to the whole company would be worse.
+        db.ActionPlans.Add(NewPlan(company.Id, admin.Id, ownerId: null, dueInDays: -2));
+        await db.SaveChangesAsync();
+
+        var result = await SweepAsync(db);
+
+        Assert.Equal(0, result.Examined);
+        Assert.Equal(0, result.Raised);
+        Assert.Empty(await db.Notifications.ToListAsync());
+    }
+
+    [Theory]
+    [InlineData("completed")]
+    [InlineData("cancelled")]
+    public async Task A_settled_plan_is_not_nudged(string status)
+    {
+        await using var db = await FreshAsync();
+
+        var company = NewCompany();
+        var owner = NewUser(company.Id);
+        db.Companies.Add(company);
+        db.Users.Add(owner);
+        await db.SaveChangesAsync();
+
+        db.ActionPlans.Add(NewPlan(company.Id, owner.Id, owner.Id, dueInDays: -2, status: status));
+        await db.SaveChangesAsync();
+
+        Assert.Equal(0, (await SweepAsync(db)).Raised);
+        Assert.Empty(await db.Notifications.ToListAsync());
+    }
+
+    [Fact]
+    public async Task A_plan_further_past_its_date_than_the_lookback_leaves_the_candidate_set()
+    {
+        await using var db = await FreshAsync();
+
+        var company = NewCompany();
+        var owner = NewUser(company.Id);
+        db.Companies.Add(company);
+        db.Users.Add(owner);
+        await db.SaveChangesAsync();
+
+        // Long dead. Without a floor on the window this row matches every sweep forever and
+        // occupies a batch slot a plan falling due today needs -- correct, by idempotency,
+        // and useless, by starvation.
+        db.ActionPlans.Add(NewPlan(company.Id, owner.Id, owner.Id, dueInDays: -120));
+
+        // ... and one that is genuinely due, to prove the sweep still reaches it.
+        db.ActionPlans.Add(NewPlan(company.Id, owner.Id, owner.Id, dueInDays: 2));
+        await db.SaveChangesAsync();
+
+        var result = await SweepAsync(db);
+
+        Assert.Equal(1, result.Examined);
+        Assert.Equal(1, result.Raised);
+    }
+
+    [Fact]
+    public async Task A_plan_due_beyond_the_window_is_not_nudged_yet()
+    {
+        await using var db = await FreshAsync();
+
+        var company = NewCompany();
+        var owner = NewUser(company.Id);
+        db.Companies.Add(company);
+        db.Users.Add(owner);
+        await db.SaveChangesAsync();
+
+        db.ActionPlans.Add(NewPlan(company.Id, owner.Id, owner.Id, dueInDays: 30));
+        await db.SaveChangesAsync();
+
+        Assert.Equal(0, (await SweepAsync(db)).Raised);
+    }
+
+    [Fact]
+    public async Task The_nudge_is_written_in_the_owners_language()
+    {
+        await using var db = await FreshAsync();
+
+        var company = NewCompany();
+        var owner = NewUser(company.Id, language: "es");
+        db.Companies.Add(company);
+        db.Users.Add(owner);
+        await db.SaveChangesAsync();
+
+        db.ActionPlans.Add(NewPlan(company.Id, owner.Id, owner.Id, dueInDays: 3));
+        await db.SaveChangesAsync();
+
+        await SweepAsync(db);
+
+        await using var read = CreateContext();
+        var raised = await read.Notifications.SingleAsync(n => n.UserId == owner.Id);
+
+        Assert.Equal("Un plan de acción a tu cargo vence pronto", raised.Title);
+        // The plan's OWN Spanish title, resolved for the recipient, not the English column.
+        Assert.Contains("Reducir la carga de trabajo en Operaciones", raised.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_reassigned_plan_owes_its_new_owner_a_nudge_of_their_own()
+    {
+        await using var db = await FreshAsync();
+
+        var company = NewCompany();
+        var first = NewUser(company.Id);
+        var second = NewUser(company.Id);
+        db.Companies.Add(company);
+        db.Users.AddRange(first, second);
+        await db.SaveChangesAsync();
+
+        var plan = NewPlan(company.Id, first.Id, first.Id, dueInDays: 3);
+        db.ActionPlans.Add(plan);
+        await db.SaveChangesAsync();
+
+        Assert.Equal(1, (await SweepAsync(db)).Raised);
+
+        // Handed over. The nudge is keyed per recipient, so the new owner is owed one and the
+        // old owner must not be sent anything a second time.
+        plan.OwnerId = second.Id;
+        await db.SaveChangesAsync();
+
+        Assert.Equal(1, (await SweepAsync(db)).Raised);
+
+        await using var read = CreateContext();
+        Assert.Single(await read.Notifications.Where(n => n.UserId == first.Id).ToListAsync());
+        Assert.Single(await read.Notifications.Where(n => n.UserId == second.Id).ToListAsync());
+    }
+
     // -- reminders ----------------------------------------------------------------------
 
     [Fact]

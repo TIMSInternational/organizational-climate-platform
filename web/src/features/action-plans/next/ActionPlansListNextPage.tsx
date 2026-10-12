@@ -109,18 +109,19 @@ const PRIORITY_TONE: Record<string, 'critical' | 'warning' | 'neutral'> = {
  *
  * ## Roles, as the server rules them
  *
- * `GET /action-plans` is `CanAccessCompany` (`ActionPlanEndpoints.cs:72`): a
- * `super_admin` for the company they chose, a `company_admin` for their own, nobody else.
- * So a leader, a supervisor or an employee who types the URL is told whose screen this
- * is — never shown a table that 403s. Creating and cancelling are `Roles.Admin` plus
- * `CanAccessCompany` (`:103`, `:300`) — `canCreateActionPlan` in the seam — and are drawn
- * only for that viewer.
+ * `GET /action-plans` (`ActionPlanEndpoints.ListAsync`) answers an administrator with the
+ * whole tenant — a `super_admin` for the company they chose, a `company_admin` for their
+ * own — and anybody else in the tenant with the plans they OWN, an empty list when they own
+ * none. So a non-administrator gets the same screen in owner mode: their plans, under a
+ * description that says whose they are, without the "sin responsable" tile (every plan on
+ * it is theirs) and without the administrator reads the model then skips. This is where the
+ * due-date nudge sends an owner; a refusal here was the product contradicting its own mail.
  *
- * ## Sample data
+ * Creating and cancelling are `Roles.Admin` plus `CanAccessCompany` — `canCreateActionPlan`
+ * in the seam — and are drawn only for that viewer.
  *
- * The originating finding's dimension has no endpoint (see `sampleModel.ts`). Its column
- * and the tile that counts it wear the "Datos de muestra" chip; nothing else on the screen
- * does. The owner is not sample: the entity has no owner, so "Sin asignar" is the reading.
+ * The originating finding's dimension is read from the plan's own `dimension:` tag
+ * (`findingFromTags`); a plan raised by hand has none, which is the truth.
  */
 export default function ActionPlansListNextPage() {
   const { t } = useTranslation()
@@ -133,27 +134,13 @@ export default function ActionPlansListNextPage() {
   if (scope.status === 'no-company') {
     return <p role="alert">{t('common.noCompanyAssociated')}</p>
   }
-  if (!capabilities.seesWholeCompany) {
-    return (
-      <EmptyState
-        fill
-        title={t('actionPlans.next.restrictedTitle')}
-        description={t('actionPlans.next.restrictedBody')}
-        action={
-          <Button asChild variant="outline">
-            <Link to="/dashboard">{t('actionPlans.next.backToDashboard')}</Link>
-          </Button>
-        }
-      />
-    )
-  }
-  return <ActionPlansListBody />
+  return <ActionPlansListBody ownerView={!capabilities.seesWholeCompany} />
 }
 
-function ActionPlansListBody() {
+function ActionPlansListBody({ ownerView }: { ownerView: boolean }) {
   const { t, locale } = useTranslation()
   const capabilities = useViewerCapabilities()
-  const state = useActionPlansListModel()
+  const state = useActionPlansListModel(!ownerView)
   const { model } = state
   const [filters, setFilters] = useState<PlanFilters>(EMPTY_PLAN_FILTERS)
   const [showCreate, setShowCreate] = useState(false)
@@ -182,7 +169,7 @@ function ActionPlansListBody() {
       <PageTopBar
         eyebrow={model.companyName}
         title={t('navigation.actionPlans')}
-        description={t('actionPlans.next.description')}
+        description={t(ownerView ? 'actionPlans.next.ownerDescription' : 'actionPlans.next.description')}
         actions={
           capabilities.canCreateActionPlan ? (
             <Button
@@ -239,9 +226,20 @@ function ActionPlansListBody() {
         <LoadingRegion loading={loading} label={t('common.loading')}>
           {loading ? (
             <SkeletonText lines={6} />
+          ) : ownerView && model.rows.length === 0 ? (
+            <EmptyState
+              fill
+              title={t('actionPlans.next.ownerEmptyTitle')}
+              description={t('actionPlans.next.ownerEmptyBody')}
+              action={
+                <Button asChild variant="outline">
+                  <Link to="/dashboard">{t('actionPlans.next.backToDashboard')}</Link>
+                </Button>
+              }
+            />
           ) : (
             <div className="flex flex-col gap-section">
-              <Tiles model={model} t={t} locale={locale} />
+              <Tiles model={model} t={t} locale={locale} ownerView={ownerView} />
               <TimelineCard model={model} t={t} locale={locale} />
               <Filters filters={filters} onChange={setFilters} summary={summary} t={t} />
 
@@ -314,7 +312,18 @@ function dimensionName(t: TranslateFn, key: string): string {
   return text === messageKey ? key : text
 }
 
-function Tiles({ model, t, locale }: { model: ActionPlansListModel; t: TranslateFn; locale: string }) {
+function Tiles({
+  model,
+  t,
+  locale,
+  ownerView,
+}: {
+  model: ActionPlansListModel
+  t: TranslateFn
+  locale: string
+  /** Every plan on an owner's screen is theirs, so "sin responsable" would always read 0. */
+  ownerView: boolean
+}) {
   const summary = summarize(model.rows, model.asOf)
   const finding = findingReading(model.rows)
   const owner = ownerReading(model.rows)
@@ -357,17 +366,19 @@ function Tiles({ model, t, locale }: { model: ActionPlansListModel; t: Translate
           </span>
         }
       />
-      <KpiTile
-        label={t('actionPlans.next.tileOwner')}
-        value={owner.unassigned}
-        locale={locale}
-        unit={t('actionPlans.next.ofTotal', { total: owner.open })}
-        sub={
-          <span className={owner.unassigned > 0 ? 'text-accent-amber-ink' : 'text-fg-label'}>
-            {owner.unassigned > 0 ? t('actionPlans.next.ownerSub') : t('actionPlans.next.ownerAllAssigned')}
-          </span>
-        }
-      />
+      {!ownerView && (
+        <KpiTile
+          label={t('actionPlans.next.tileOwner')}
+          value={owner.unassigned}
+          locale={locale}
+          unit={t('actionPlans.next.ofTotal', { total: owner.open })}
+          sub={
+            <span className={owner.unassigned > 0 ? 'text-accent-amber-ink' : 'text-fg-label'}>
+              {owner.unassigned > 0 ? t('actionPlans.next.ownerSub') : t('actionPlans.next.ownerAllAssigned')}
+            </span>
+          }
+        />
+      )}
       <KpiTile
         label={t('actionPlans.next.tileTracking')}
         value={overdue.count}

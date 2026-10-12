@@ -201,7 +201,15 @@ public sealed class EmailNotificationSender(
             return MicroclimateUrlAsync(notification, recipient, cancellationToken);
         }
 
-        // Everything else -- an action_plan_alert, a system_notification, a user_invitation --
+        // An action plan's nudge links to the plan page, which authorizes the reader itself,
+        // so there is no table to consult and no token to resolve: the id is the whole link.
+        if (notification.Type == NotificationTypes.ActionPlanAlert)
+        {
+            var planId = ActionPlanNotificationData.PlanIdOrNull(notification.Data);
+            return Task.FromResult(planId is { } id ? options.LinkTo(ActionPlanNotificationData.PlanPath(id)) : null);
+        }
+
+        // Everything else -- a system_notification, a user_invitation --
         // returns before either payload is parsed and before either table is touched. The
         // dispatch sweep sends in batches; one wasted round trip per mail is a wasted round
         // trip per mail.

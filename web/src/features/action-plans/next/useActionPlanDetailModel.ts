@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from '../../../i18n'
+import { isApiStatus } from '../../../api/authFetch'
 import { todayCalendarDay } from '../../../lib/calendarDay'
 import {
   getActionPlan,
@@ -23,6 +24,11 @@ import type { ActionPlanDetailModel, Settled } from './planDetailModel'
 export interface ActionPlanDetailState {
   status: 'loading' | 'ready' | 'error'
   error: string | null
+  /**
+   * The server refused this reader the plan (403): somebody who is neither an administrator
+   * nor its owner. The page says whose plan it is instead of printing the raw refusal.
+   */
+  forbidden: boolean
   model: ActionPlanDetailModel | null
   /** A status or priority change is in flight. */
   saving: boolean
@@ -52,15 +58,26 @@ async function settle<T>(work: () => Promise<T>): Promise<Settled<T>> {
  * and the same writes (`updateActionPlan`, `recordProgress`) as `ActionPlanDetailPage`, the
  * page this replaced — plus the enrichments `model.ts` tabulates, each settled on its own.
  *
- * `enabled` is false for a viewer the server would refuse (`GET /action-plans/{id}` is
- * `CanAccessCompany`: an administrator), so a leader who typed the URL sends nothing.
+ * `enabled` is false while there is nobody the server could answer -- no company in scope.
+ * `GET /action-plans/{id}` answers an administrator of the plan's company and the plan's own
+ * OWNER (`ActionPlanEndpoints.CanReadAsOwner`); anyone else is told so by a 403.
+ *
+ * `administers` is false for that owner. The enrichments behind it -- the department
+ * directory, the user directory, the template catalogue and the climate-trends read the
+ * finding is joined from -- are administrator reads, so none of them is sent: each region
+ * is settled from what the plan itself carries, or left to say the administration reads it.
  */
-export function useActionPlanDetailModel(id: string | undefined, enabled: boolean): ActionPlanDetailState {
+export function useActionPlanDetailModel(
+  id: string | undefined,
+  enabled: boolean,
+  administers = true,
+): ActionPlanDetailState {
   const { t, locale } = useTranslation()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const [plan, setPlan] = useState<ActionPlanDetail | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [error, setError] = useState<string | null>(null)
+  const [forbidden, setForbidden] = useState(false)
   const [departmentName, setDepartmentName] = useState<Settled<string | null>>(LOADING)
   const [authorName, setAuthorName] = useState<Settled<string | null>>(LOADING)
   const [createdAt, setCreatedAt] = useState<Settled<string | null>>(LOADING)
@@ -80,6 +97,7 @@ export function useActionPlanDetailModel(id: string | undefined, enabled: boolea
     let cancelled = false
     setStatus('loading')
     setError(null)
+    setForbidden(false)
     getActionPlan(baseUrl, id, locale)
       .then((loaded) => {
         if (cancelled) return
@@ -88,6 +106,7 @@ export function useActionPlanDetailModel(id: string | undefined, enabled: boolea
       })
       .catch((err: unknown) => {
         if (cancelled) return
+        setForbidden(isApiStatus(err, 403))
         setError(err instanceof Error ? err.message : t('errors.generic'))
         setStatus('error')
       })
@@ -100,6 +119,7 @@ export function useActionPlanDetailModel(id: string | undefined, enabled: boolea
   // they wait for it and re-run only when one of those changes — not on a status change.
   const companyId = plan?.companyId
   const departmentId = plan?.departmentId ?? null
+  const planDepartmentName = plan?.departmentName ?? null
   const createdBy = plan?.createdBy
   const templateId = plan?.templateId ?? null
   const planId = plan?.id
@@ -116,11 +136,32 @@ export function useActionPlanDetailModel(id: string | undefined, enabled: boolea
     }
 
     if (departmentId === null) setDepartmentName({ status: 'ready', value: null })
+    // The server joins the name onto the plan now; the directory is the fallback, and only
+    // an administrator may read it.
+    else if (planDepartmentName !== null) setDepartmentName({ status: 'ready', value: planDepartmentName })
+    else if (!administers) setDepartmentName({ status: 'failed' })
     else
       void settle(async () => {
         const departments = await listDepartments(baseUrl, companyId)
         return departments.find((department) => department.id === departmentId)?.name ?? null
       }).then(apply(setDepartmentName))
+
+    if (!administers) {
+      // The author's name is a user-directory read, and so is the list of people the plan
+      // could be handed to -- which this reader cannot hand it to anyway.
+      setAuthorName({ status: 'ready', value: null })
+      setOwners({ status: 'ready', value: [] })
+      setTemplateName(templateId === null ? { status: 'ready', value: null } : { status: 'failed' })
+      setFinding({ status: 'failed' })
+      setMove({ status: 'failed' })
+      void settle(async () => {
+        const plans = await listActionPlans(baseUrl, companyId, {}, locale)
+        return plans.find((candidate) => candidate.id === planId)?.createdAt ?? null
+      }).then(apply(setCreatedAt))
+      return () => {
+        cancelled = true
+      }
+    }
 
     if (createdBy)
       void settle(async () => (await getUser(baseUrl, createdBy)).name || null).then(apply(setAuthorName))
@@ -168,7 +209,19 @@ export function useActionPlanDetailModel(id: string | undefined, enabled: boolea
     return () => {
       cancelled = true
     }
-  }, [baseUrl, companyId, createdBy, departmentId, dimensionKey, locale, planId, sourceSurveyId, templateId])
+  }, [
+    administers,
+    baseUrl,
+    companyId,
+    createdBy,
+    departmentId,
+    dimensionKey,
+    locale,
+    planDepartmentName,
+    planId,
+    sourceSurveyId,
+    templateId,
+  ])
 
   const change = useCallback(
     async (patch: { status?: string; priority?: string; ownerId?: string; clearOwner?: boolean }) => {
@@ -207,6 +260,7 @@ export function useActionPlanDetailModel(id: string | undefined, enabled: boolea
   return {
     status,
     error,
+    forbidden,
     model,
     saving,
     actionError,

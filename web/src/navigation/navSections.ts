@@ -574,8 +574,16 @@ export function buildNavSections(
   // client's §7 gives the full board to -- and it is the only one of these roles
   // with a jefatura to show. An `employee` or `supervisor` gets the task-only view
   // (`/tracking/mis-tareas`) instead.
+  //
+  // A leader without a tracking service gets Planes de Acción instead, for the reason the
+  // admin branches swap the same two rows (`workspacePlanItems`): one place to see plans,
+  // not two that disagree. It is the list of the plans they OWN -- `ListAsync` scopes a
+  // non-admin to those -- and it is where the due-date nudge sends them. Declared `inNav`
+  // in `roleCapabilities.ts` since the nudge shipped and, until now, offered by no sidebar.
   const trackingItems: NavItem[] = !options.trackingEnabled
-    ? []
+    ? role === 'leader'
+      ? [ACTION_PLANS_ITEM]
+      : []
     : role === 'leader'
       ? // The node leader manages: their own board, the plans they own, and the
         // tasks they were named on like anybody else.
