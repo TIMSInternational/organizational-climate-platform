@@ -354,6 +354,18 @@ Resources:
           DefaultValue: 0
           Unit: Count
 
+  ActionPlanDueHeartbeatFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Sub /aws/apprunner/${ServiceName}/${ServiceId}/application
+      FilterPattern: '"Heartbeat: scheduled job action-plan-due completed a run"'
+      MetricTransformations:
+        - MetricNamespace: ClimateProject/Prod
+          MetricName: Heartbeat.ActionPlanDue
+          MetricValue: "1"
+          DefaultValue: 0
+          Unit: Count
+
   ScheduledReportsHeartbeatFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
@@ -662,6 +674,27 @@ Resources:
       MetricName: Heartbeat.Digests
       Statistic: Sum
       Period: 900
+      EvaluationPeriods: 3
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions: !If [NotifyingEnabled, [!Ref WarningTopic], !Ref "AWS::NoValue"]
+
+  ActionPlanDueStoppedAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ServiceName}-job-action-plan-due-stopped
+      AlarmDescription: >-
+        action-plan-due has not completed a run in 3 hours. Owners are not being told that a
+        plan is about to lapse or has lapsed, so the Planes de Accion "atrasados" tile is the
+        only thing saying so and nobody is being sent to look at it.
+      # Interval 1 hour x 3 = 3 hours. Warning rather than Critical: a due date is a calendar
+      # fact that does not expire, so a sweep missed for an hour sends the same nudge an hour
+      # late, and the deterministic id means the catch-up raises each one exactly once.
+      Namespace: ClimateProject/Prod
+      MetricName: Heartbeat.ActionPlanDue
+      Statistic: Sum
+      Period: 3600
       EvaluationPeriods: 3
       Threshold: 1
       ComparisonOperator: LessThanThreshold

@@ -78,6 +78,65 @@ public static class ScheduledNotificationCopy
         "You have {0} new notifications since {1}.",
         "Tienes {0} notificaciones nuevas desde el {1}.");
 
+    // Unaccented Spanish, matching every other phrase in this file. That is this file's
+    // existing convention, not a judgement that it is right -- "notificacion" and "esta
+    // listo" are already here. Flagged rather than silently diverged from: fixing it is one
+    // sweep of this file, and a half-accented file would be worse than either state.
+    private static readonly Phrase PlanDueSoonTitle = new(
+        "An action plan you own is due soon",
+        "Un plan de accion a tu cargo vence pronto");
+
+    private static readonly Phrase PlanDueSoonBodyNamed = new(
+        "\"{0}\" is due on {1}. Record progress or move the date before it lapses.",
+        "\"{0}\" vence el {1}. Registra un avance o cambia la fecha antes de que venza.");
+
+    private static readonly Phrase PlanDueSoonBodyUnnamed = new(
+        "An action plan you own is due on {0}. Record progress or move the date before it lapses.",
+        "Un plan de accion a tu cargo vence el {0}. Registra un avance o cambia la fecha antes de que venza.");
+
+    private static readonly Phrase PlanOverdueTitle = new(
+        "An action plan you own is overdue",
+        "Un plan de accion a tu cargo esta vencido");
+
+    private static readonly Phrase PlanOverdueBodyNamed = new(
+        "\"{0}\" was due on {1} and has not been closed.",
+        "\"{0}\" vencio el {1} y sigue abierto.");
+
+    private static readonly Phrase PlanOverdueBodyUnnamed = new(
+        "An action plan you own was due on {0} and has not been closed.",
+        "Un plan de accion a tu cargo vencio el {0} y sigue abierto.");
+
+    /// <summary>Subject line for a due-date nudge, which reads differently once the date has passed.</summary>
+    public static string PlanDueTitleFor(string? locale, bool overdue)
+        => (overdue ? PlanOverdueTitle : PlanDueSoonTitle).For(locale);
+
+    /// <summary>
+    /// Body for a due-date nudge.
+    ///
+    /// <paramref name="planTitle"/> is nullable for the same reason the reminder body's is:
+    /// <c>ActionPlan</c> stores its title in paired language columns and BOTH are nullable, so
+    /// a row imported without one resolves to nothing. Interpolating that would print an empty
+    /// pair of quotes, so there is a second phrasing that names no plan at all.
+    /// </summary>
+    public static string PlanDueBodyFor(string? locale, string? planTitle, DateTimeOffset dueAtUtc, bool overdue)
+    {
+        var due = dueAtUtc.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+        if (string.IsNullOrWhiteSpace(planTitle))
+        {
+            return string.Format(
+                CultureInfo.InvariantCulture,
+                (overdue ? PlanOverdueBodyUnnamed : PlanDueSoonBodyUnnamed).For(locale),
+                due);
+        }
+
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            (overdue ? PlanOverdueBodyNamed : PlanDueSoonBodyNamed).For(locale),
+            planTitle,
+            due);
+    }
+
     /// <summary>Subject line for an invitation reminder.</summary>
     public static string ReminderTitleFor(string? locale) => ReminderTitle.For(locale);
 

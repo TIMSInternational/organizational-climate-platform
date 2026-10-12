@@ -60,6 +60,13 @@ public sealed class WorkerSchedulingOptions
 
     public TimeSpan DigestInterval { get; set; } = TimeSpan.FromMinutes(15);
 
+    /// <summary>
+    /// Hourly, not by the minute: a due date is a calendar fact, so noticing it within the
+    /// hour is as timely as the thing being measured, and a tighter tick would only re-read
+    /// the same rows to discover the same answer.
+    /// </summary>
+    public TimeSpan ActionPlanDueInterval { get; set; } = TimeSpan.FromHours(1);
+
     public TimeSpan ScheduledReportInterval { get; set; } = TimeSpan.FromMinutes(5);
 
     public TimeSpan SurveyDraftRetentionInterval { get; set; } = TimeSpan.FromHours(1);
@@ -98,6 +105,18 @@ public sealed class WorkerSchedulingOptions
     public int NotificationBatchSize { get; set; } = NotificationDelivery.DefaultBatchSize;
 
     public int ReminderBatchSize { get; set; } = InvitationReminderJob.DefaultBatchSize;
+
+    public int ActionPlanDueBatchSize { get; set; } = ActionPlanDueJob.DefaultBatchSize;
+
+    /// <summary>How long before the due date the first nudge goes out.</summary>
+    public TimeSpan ActionPlanDueWindow { get; set; } = ActionPlanDueJob.DefaultWindow;
+
+    /// <summary>
+    /// How far past its date a plan still earns an overdue nudge. A floor as well as a
+    /// ceiling, so a long-dead plan leaves the candidate set instead of occupying a batch
+    /// slot forever -- see <see cref="ActionPlanDueJob"/>.
+    /// </summary>
+    public TimeSpan ActionPlanDueLookback { get; set; } = ActionPlanDueJob.DefaultLookback;
 
     public int DigestPageSize { get; set; } = DigestJob.DefaultPageSize;
 
@@ -146,6 +165,7 @@ public sealed class WorkerSchedulingOptions
     public void Validate()
     {
         Require(NotificationDispatchInterval, nameof(NotificationDispatchInterval));
+        Require(ActionPlanDueInterval, nameof(ActionPlanDueInterval));
         Require(InvitationReminderInterval, nameof(InvitationReminderInterval));
         Require(DigestInterval, nameof(DigestInterval));
         Require(ScheduledReportInterval, nameof(ScheduledReportInterval));

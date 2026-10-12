@@ -58,6 +58,14 @@ public static class DeterministicNotificationId
     /// </summary>
     public static readonly Guid TrackingPlanNamespace = new("c7f24b90-8d51-5e36-b0a9-6f38e1d05427");
 
+    /// <summary>
+    /// Namespace for due-date nudges on CORE action plans. Separate from
+    /// <see cref="TrackingPlanNamespace"/> on purpose: that one keys the tracking module's
+    /// own <c>planes_accion</c>, which is a different table in a different GUID space, and
+    /// nothing forbids an id in one colliding with an id in the other.
+    /// </summary>
+    public static readonly Guid ActionPlanDueNamespace = new("8a4f61d3-2c07-5b94-9e18-7d35c0b2f48a");
+
     /// <summary>The id of the digest for <paramref name="userId"/> covering <paramref name="periodKey"/>.</summary>
     public static Guid ForDigest(Guid userId, string periodKey)
         => Create(DigestNamespace, string.Create(null, $"{userId:D}:{periodKey}"));
@@ -94,6 +102,26 @@ public static class DeterministicNotificationId
     /// </summary>
     public static Guid ForTrackingPlanNotification(Guid planId, Guid recipientUserId, string trigger)
         => Create(TrackingPlanNamespace, string.Create(null, $"{planId:D}:{recipientUserId:D}:{trigger}"));
+
+    /// <summary>
+    /// The id of one due-date nudge, for one action plan and one recipient.
+    ///
+    /// Keyed on (plan, recipient, trigger) and deliberately NOT on the due date, for the
+    /// reason <see cref="ForReminder"/> gives: a deadline that moves is still the same
+    /// commitment, and a date an administrator corrects must not re-notify everyone.
+    ///
+    /// <para>The consequence is worth stating rather than discovering: a plan nudged once as
+    /// due-soon is never nudged as due-soon again, even if its date is extended and it falls
+    /// due a second time. One notice per trigger per owner, for the life of the plan. That is
+    /// the quiet failure mode rather than the noisy one, and it is the right way round for
+    /// something that arrives in a person's inbox.</para>
+    ///
+    /// <para>Keyed per RECIPIENT because the owner can change: a plan reassigned after its
+    /// first nudge owes the new owner their own, and the old owner must not be re-sent
+    /// anything.</para>
+    /// </summary>
+    public static Guid ForActionPlanDue(Guid planId, Guid recipientUserId, string trigger)
+        => Create(ActionPlanDueNamespace, string.Create(null, $"{planId:D}:{recipientUserId:D}:{trigger}"));
 
     /// <summary>
     /// The id of the delivery notification for one occurrence of a recurring report (#91).

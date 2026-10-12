@@ -25,6 +25,43 @@ public static class ActionPlanEndpoints
         => currentUser.Role == Roles.SuperAdmin
            || (currentUser.Role == Roles.CompanyAdmin && currentUser.CompanyId == companyId.ToString());
 
+    /// <summary>
+    /// The caller's own id, when the token carries a parsable one.
+    ///
+    /// <c>Sub</c> is a string claim with nothing validating its shape, so a malformed token
+    /// yields <c>null</c> and every owner check below fails closed rather than throwing.
+    /// </summary>
+    private static Guid? SubjectId(CurrentUser currentUser)
+        => Guid.TryParse(currentUser.Sub, out var id) ? id : null;
+
+    /// <summary>
+    /// Whether a non-admin may READ this plan: only the person answerable for it.
+    ///
+    /// <para>Until now <see cref="CanAccessCompany"/> gated reads as well as writes, so the
+    /// only people who could open an action plan were the two admin roles. That was already
+    /// recorded as a gap -- <c>web/src/navigation/roleCapabilities.ts</c> says a leader
+    /// "cannot ... open the action plans their own dashboard counts" -- and it became a
+    /// defect the moment <c>ActionPlanDueJob</c> existed: a nudge that tells an owner their
+    /// plan is due, addressed to someone the next click gives a 403, is worse than no nudge.
+    /// A notification and an authorization rule that disagree is the product lying to a
+    /// person about what they may do.</para>
+    ///
+    /// <para><b>Read only, and only the plan itself.</b> Creating, editing, deleting and
+    /// recording progress stay <see cref="Roles.Admin"/>, which is what the plan's own screen
+    /// already tells the reader: "Registra avance la administración." This grants exactly the
+    /// access the nudge implies and nothing beyond it.</para>
+    ///
+    /// <para>Scoped by OWNERSHIP rather than by department, deliberately. "The person
+    /// answerable for this plan may read it" is true whatever a leader is eventually allowed
+    /// to see of their team; a department-wide rule is the larger decision (S1) and is not
+    /// pre-empted here. The tenant is still checked, because an owner id alone must never
+    /// cross a company boundary.</para>
+    /// </summary>
+    private static bool CanReadAsOwner(CurrentUser currentUser, ActionPlan plan)
+        => plan.OwnerId is not null
+           && SubjectId(currentUser) == plan.OwnerId
+           && currentUser.CompanyId == plan.CompanyId.ToString();
+
     private static async Task<ActionPlanDetail> ToDetailAsync(ActionPlan plan, ClimateProjectDbContext db, string? lang, CancellationToken cancellationToken)
     {
         // #210: every authored field arrives resolved for the reader, never en/es-shaped,
@@ -75,12 +112,19 @@ public static class ActionPlanEndpoints
         CancellationToken cancellationToken)
     {
         var currentUser = principal.GetCurrentUser();
-        if (!CanAccessCompany(currentUser, companyId))
+
+        // An admin reads the whole tenant. Anyone else reads the plans they are answerable
+        // for -- an empty list where they own none, which is a true answer, not a refusal.
+        // The 403 stays for a caller asking about a company that is not theirs at all.
+        var admin = CanAccessCompany(currentUser, companyId);
+        var subjectId = SubjectId(currentUser);
+        if (!admin && (subjectId is null || currentUser.CompanyId != companyId.ToString()))
         {
             return Results.Forbid();
         }
 
         var query = db.ActionPlans.Where(p => p.CompanyId == companyId);
+        if (!admin) query = query.Where(p => p.OwnerId == subjectId);
         if (departmentId.HasValue) query = query.Where(p => p.DepartmentId == departmentId.Value);
         if (!string.IsNullOrWhiteSpace(status)) query = query.Where(p => p.Status == status);
 
@@ -335,7 +379,7 @@ public static class ActionPlanEndpoints
             return Results.Json(new { message = "Action plan not found" }, statusCode: 404);
         }
 
-        if (!CanAccessCompany(currentUser, plan.CompanyId))
+        if (!CanAccessCompany(currentUser, plan.CompanyId) && !CanReadAsOwner(currentUser, plan))
         {
             return Results.Forbid();
         }
