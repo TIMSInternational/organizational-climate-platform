@@ -163,7 +163,7 @@ public class DemographicFieldEndpointsTests : IAsyncLifetime
 
         var createResponse = await client.PostAsJsonAsync("/admin/demographic-fields", new CreateDemographicFieldRequest(
             _companyAId,
-            "department",
+            "business_unit", // "department" is reserved for the área a respondent declares (SelfDeclaredDepartment).
             LocalizedInput.FromLocales(new Dictionary<string, string?> { ["en"] = "Department", ["es"] = "Departamento" }),
             "select",
             [
@@ -176,7 +176,7 @@ public class DemographicFieldEndpointsTests : IAsyncLifetime
 
         var spanish = await (await client.GetAsync($"/admin/demographic-fields?companyId={_companyAId}&lang=es"))
             .Content.ReadFromJsonAsync<DemographicFieldListResponse>();
-        var field = Assert.Single(spanish!.Fields, f => f.Field == "department");
+        var field = Assert.Single(spanish!.Fields, f => f.Field == "business_unit");
         Assert.Equal("Departamento", field.Label);
         Assert.NotNull(field.Options);
         var firstOption = field.Options.First();
@@ -195,13 +195,13 @@ public class DemographicFieldEndpointsTests : IAsyncLifetime
         }
 
         var byValue = await client.PutAsJsonAsync($"/admin/users/{employeeId}",
-            new UpdateUserRequest(null, null, null, null, new Dictionary<string, string?> { ["department"] = "sales" }));
+            new UpdateUserRequest(null, null, null, null, new Dictionary<string, string?> { ["business_unit"] = "sales" }));
         Assert.Equal(HttpStatusCode.OK, byValue.StatusCode);
 
         // The label is not an allowed answer, so a client that renders "Ventas" and
         // posts it back cannot quietly store a second value for the same department.
         var byLabel = await client.PutAsJsonAsync($"/admin/users/{employeeId}",
-            new UpdateUserRequest(null, null, null, null, new Dictionary<string, string?> { ["department"] = "Ventas" }));
+            new UpdateUserRequest(null, null, null, null, new Dictionary<string, string?> { ["business_unit"] = "Ventas" }));
         Assert.Equal(HttpStatusCode.BadRequest, byLabel.StatusCode);
     }
 }

@@ -120,6 +120,18 @@ export interface SurveyRespondView {
    */
   demographics: SurveyRespondDemographicField[]
   inProgress: SurveyResponseState | null
+  /**
+   * The respondent is asked their name and email before the questions. Optional because an
+   * API that predates it sends nothing, which must read as "not asked" -- see the
+   * `demographics` note for the deploy window this survives.
+   */
+  asksParticipantIdentity?: boolean
+}
+
+/** Who is answering, as typed. Sent on the completing post only, never on a partial save. */
+export interface SurveyParticipantInput {
+  name: string
+  email?: string
 }
 
 /** @param options Always non-empty — the server drops a field nobody could answer. */
@@ -178,6 +190,8 @@ export interface SubmitSurveyResponseRequest {
    * a blank, so no row is written. A required field cannot be declined.
    */
   demographics?: Record<string, string>
+  /** Only when the respond view said `asksParticipantIdentity`, and only on the completing post. */
+  participant?: SurveyParticipantInput
 }
 
 export interface SurveySubmissionResult {

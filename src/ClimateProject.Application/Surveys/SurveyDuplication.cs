@@ -197,6 +197,7 @@ public static class SurveyDuplication
         TimeLimitMinutes = s.TimeLimitMinutes,
         ResponseLimit = s.ResponseLimit,
         SelfDeclaredDemographics = s.SelfDeclaredDemographics,
+        CollectParticipantIdentity = s.CollectParticipantIdentity,
         NotificationSendInvitations = s.NotificationSendInvitations,
         NotificationSendReminders = s.NotificationSendReminders,
         NotificationReminderFrequencyDays = s.NotificationReminderFrequencyDays,

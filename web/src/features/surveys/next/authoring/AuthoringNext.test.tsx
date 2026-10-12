@@ -72,6 +72,15 @@ vi.mock('../../api/surveys', async (importOriginal) => ({
   listSurveyDimensions: vi.fn(async () => []),
   getSurvey: vi.fn(),
   setSurveySelfDeclaredDemographics: vi.fn(async () => undefined),
+  setSurveyCollectParticipantIdentity: vi.fn(async () => undefined),
+  getSurveyParticipation: vi.fn(async () => ({
+    surveyId: 's1',
+    collectsParticipantIdentity: true,
+    answeredCount: 0,
+    pendingCount: 0,
+    answered: [],
+    pending: [],
+  })),
 }))
 
 /** A share-link path segment. Low entropy on purpose: it stands for a credential, and is not one. */
@@ -340,6 +349,7 @@ const noop: DistributionActions = {
   resendInvitation: () => undefined,
   revokeInvitation: () => undefined,
   setSelfDeclaredDemographics: () => undefined,
+  setCollectParticipantIdentity: () => undefined,
   openCopy: () => undefined,
   editCopy: () => undefined,
   saveCopy: async () => true,
@@ -744,7 +754,7 @@ describe('Distribución — the self-declared demographics switch', () => {
     expect(toggle().hasAttribute('disabled')).toBe(true)
     // The reason, not just the state: without this the test passes while the control is
     // merely still loading.
-    expect(screen.getByText(/Solo aplica a encuestas anónimas/)).toBeTruthy()
+    expect(screen.getByText(/los datos demográficos ya vienen del perfil/)).toBeTruthy()
   })
 
   it('is disabled once the survey is closed, which is the status the server would 409', async () => {
@@ -755,7 +765,7 @@ describe('Distribución — the self-declared demographics switch', () => {
     expect(toggle().hasAttribute('disabled')).toBe(true)
     // The anonymous help text, NOT the named-survey reason: this proves the control is
     // disabled because the survey closed, not because it fell back to the other branch.
-    expect(screen.getByText(/Quien responda por el enlace/)).toBeTruthy()
+    expect(screen.getByText(/elegirá su área y su antigüedad/)).toBeTruthy()
   })
 
   it('is not offered to a leader, who does not administer the survey', async () => {
@@ -765,7 +775,90 @@ describe('Distribución — the self-declared demographics switch', () => {
     renderAs('leader', <SurveyDistributionNextPage />, 'c1', '/surveys/s1/distribution', '/surveys/:surveyId/distribution')
     await settled()
     expect(toggle().hasAttribute('disabled')).toBe(true)
-    expect(screen.getByText(/Quien responda por el enlace/)).toBeTruthy()
+    expect(screen.getByText(/elegirá su área y su antigüedad/)).toBeTruthy()
+  })
+})
+
+describe('Distribución — who has answered (ruled 2026-10-12)', () => {
+  const LABEL = 'Preguntar el nombre de quien responde'
+
+  const open = (over: Partial<SurveyDetail> = {}, role = 'company_admin') => {
+    vi.mocked(surveysApi.getSurvey).mockResolvedValue(survey(over))
+    vi.mocked(distributionApi.getSurveyDistribution).mockResolvedValue({ publicLink: `/s/${LINK_SEGMENT}`, accessType: 'public', accessRules: { requireLogin: false } } as never)
+    vi.mocked(distributionApi.listSurveyInvitations).mockResolvedValue(invitationList())
+    vi.mocked(usersApi.listUsers).mockResolvedValue(users)
+    return renderAs(role, <SurveyDistributionNextPage />, 'c1', '/surveys/s1/distribution', '/surveys/:surveyId/distribution')
+  }
+
+  const settings = (over: Partial<SurveyDetail['settings']> = {}) =>
+    ({ settings: { anonymous: true, selfDeclaredDemographics: true, collectParticipantIdentity: true, notificationSendReminders: true, notificationReminderFrequencyDays: 3, ...over } } as Partial<SurveyDetail>)
+
+  it('sits beside the demographics switch and writes only its own setting', async () => {
+    open(settings({ collectParticipantIdentity: false }))
+    await screen.findByTestId('step-audience')
+    const toggle = () => screen.getByRole('switch', { name: LABEL })
+    await waitFor(() => expect(toggle().hasAttribute('disabled')).toBe(false))
+    expect(toggle().getAttribute('aria-checked')).toBe('false')
+
+    vi.mocked(surveysApi.getSurvey).mockResolvedValue(survey(settings({ collectParticipantIdentity: true })))
+    await userEvent.click(toggle())
+
+    await waitFor(() => {
+      const calls = vi.mocked(surveysApi.setSurveyCollectParticipantIdentity).mock.calls
+      expect(calls.some(([, id, enabled]) => id === 's1' && enabled === true)).toBe(true)
+    })
+    expect(vi.mocked(surveysApi.setSurveySelfDeclaredDemographics)).not.toHaveBeenCalled()
+    await waitFor(() => expect(screen.getByRole('switch', { name: LABEL }).getAttribute('aria-checked')).toBe('true'))
+  })
+
+  it('lists who answered and who is pending, with a day and never an answer', async () => {
+    vi.mocked(surveysApi.getSurveyParticipation).mockResolvedValueOnce({
+      surveyId: 's1',
+      collectsParticipantIdentity: true,
+      answeredCount: 2,
+      pendingCount: 1,
+      answered: [
+        { name: 'Ana Pérez', email: 'ana@meridiano.test', participatedOn: '2026-10-12' },
+        { name: 'José Mora', email: null, participatedOn: '2026-10-11' },
+      ],
+      pending: [{ name: 'Persona 2', email: 'persona2@meridiano.test' }],
+    })
+    open(settings())
+
+    const answered = await screen.findByTestId('participation-answered')
+    expect(within(answered).getByText('Ana Pérez')).toBeTruthy()
+    expect(within(answered).getByText(es.surveys.next.participation.noEmail)).toBeTruthy()
+    // The day as a day, in the reader's locale -- parsed as a LOCAL date, so the suite's
+    // America/Chicago clock does not print the 11th for the 12th.
+    expect(within(answered).getByText(/12 oct 2026/i)).toBeTruthy()
+    const pending = screen.getByTestId('participation-pending')
+    expect(within(pending).getByText('persona2@meridiano.test')).toBeTruthy()
+    expect(within(pending).getByText(es.surveys.next.participation.pendingNote)).toBeTruthy()
+  })
+
+  it('says why it is empty when the survey does not ask', async () => {
+    vi.mocked(surveysApi.getSurveyParticipation).mockResolvedValueOnce({
+      surveyId: 's1', collectsParticipantIdentity: false, answeredCount: 0, pendingCount: 3, answered: [], pending: [],
+    })
+    open(settings({ collectParticipantIdentity: false }))
+
+    expect(await screen.findByText(es.surveys.next.participation.off)).toBeTruthy()
+  })
+
+  it('is offered on an IDENTIFIED survey too, because every survey has a link (ruled 2026-10-12)', async () => {
+    open(settings({ anonymous: false }))
+    await screen.findByTestId('step-audience')
+
+    await waitFor(() => expect(screen.getByRole('switch', { name: LABEL }).hasAttribute('disabled')).toBe(false))
+    expect(await screen.findByTestId('participation-panel')).toBeTruthy()
+  })
+
+  it('is not drawn for a leader, who does not administer the survey, and the list is never asked for', async () => {
+    open(settings(), 'leader')
+    await screen.findByTestId('step-audience')
+
+    expect(screen.queryByTestId('participation-panel')).toBeNull()
+    expect(vi.mocked(surveysApi.getSurveyParticipation)).not.toHaveBeenCalled()
   })
 })
 

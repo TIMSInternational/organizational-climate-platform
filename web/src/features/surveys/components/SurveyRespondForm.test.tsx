@@ -1553,3 +1553,130 @@ describe('SurveyRespondForm — the answered flag on a shared device', () => {
     expect(screen.queryByRole('button', { name: copy.es('surveyRespond.sharedDeviceAnswer') })).toBeNull()
   })
 })
+
+/**
+ * "¿Quién responde?" (ruled 2026-10-12): the respondent's name and email are asked after
+ * the demographics and before the first question, and sent on the COMPLETING post only.
+ * The server stores them in a table with no response id; what this page owes is that it
+ * asks only when told to, never sends them early, and says on screen exactly what is kept.
+ */
+describe('SurveyRespondForm — who is answering', () => {
+  const area: SurveyRespondDemographicField = {
+    field: 'department',
+    label: '¿En qué área trabaja?',
+    options: [
+      { value: '7f6c1c8e-0000-4000-8000-000000000001', label: 'Operaciones' },
+      { value: '7f6c1c8e-0000-4000-8000-000000000002', label: 'Ventas' },
+    ],
+    required: true,
+    order: -1,
+  }
+
+  /**
+   * Through the área. The way-on reads "Siguiente" when the identity screen follows and
+   * "Empezar la encuesta" only when question 1 does -- asserted, not tolerated.
+   */
+  async function throughTheArea(identityFollows = true) {
+    await screen.findByText('¿En qué área trabaja?')
+    await userEvent.click(screen.getByLabelText('Operaciones'))
+    const name = identityFollows ? 'Siguiente' : copy.es('surveyRespond.demographics.start')
+    expect(
+      screen.queryByRole('button', { name: identityFollows ? copy.es('surveyRespond.demographics.start') : 'Siguiente' }),
+    ).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name }))
+  }
+
+  it('asks after the demographics and before the first question, with the promise open', async () => {
+    respondWith(view({ demographics: [area], asksParticipantIdentity: true }))
+    renderForm({ publicEntry: true })
+    await throughTheArea()
+
+    await screen.findByText(copy.es('surveyRespond.identity.question'))
+    expect(screen.queryByText('¿Qué tan satisfecho estás?')).toBeNull()
+    expect(screen.getByText(copy.es('surveyRespond.identity.intro'))).toBeTruthy()
+    // The anonymity body is unchanged and still literally true of the response row; the
+    // second sentence says what IS kept, apart from it.
+    expect(document.querySelector('[data-slot="anonymity-notice"]')?.tagName).toBe('SECTION')
+    expect(screen.getByText(copy.es('surveyRespond.anonymousBody'))).toBeTruthy()
+    expect(screen.getByText(copy.es('surveyRespond.participationBody'))).toBeTruthy()
+  })
+
+  it('will not move on without a name, and refuses a malformed email', async () => {
+    respondWith(view({ demographics: [area], asksParticipantIdentity: true }))
+    renderForm({ publicEntry: true })
+    await throughTheArea()
+    await screen.findByText(copy.es('surveyRespond.identity.question'))
+
+    await userEvent.click(screen.getByRole('button', { name: copy.es('surveyRespond.demographics.start') }))
+    expect(screen.getByText(copy.es('surveyRespond.identity.nameMissing'))).toBeTruthy()
+
+    await userEvent.type(screen.getByLabelText(copy.es('surveyRespond.identity.name'), { exact: false }), 'Ana Pérez')
+    await userEvent.type(screen.getByLabelText(copy.es('surveyRespond.identity.email'), { exact: false }), 'ana@planta')
+    await userEvent.click(screen.getByRole('button', { name: copy.es('surveyRespond.demographics.start') }))
+    expect(screen.getByText(copy.es('surveyRespond.identity.emailInvalid'))).toBeTruthy()
+    expect(screen.queryByText('¿Qué tan satisfecho estás?')).toBeNull()
+  })
+
+  it('sends the identity on the completing post, trimmed, and an empty email not at all', async () => {
+    respondWith(view({ demographics: [area], asksParticipantIdentity: true }))
+    renderForm({ publicEntry: true })
+    await throughTheArea()
+    await screen.findByText(copy.es('surveyRespond.identity.question'))
+
+    await userEvent.type(screen.getByLabelText(copy.es('surveyRespond.identity.name'), { exact: false }), '  José Mora ')
+    await userEvent.click(screen.getByRole('button', { name: copy.es('surveyRespond.demographics.start') }))
+
+    await screen.findByText('¿Qué tan satisfecho estás?')
+    // The question pages keep saying what is kept.
+    expect(screen.getByText(copy.es('surveyRespond.participationBody'))).toBeTruthy()
+    await userEvent.click(screen.getByLabelText('Muy de acuerdo'))
+    await userEvent.click(screen.getByRole('button', { name: copy.es('surveyRespond.submitResponse') }))
+
+    await screen.findByText(copy.es('surveyRespond.thankYouTitle'))
+    const body = lastSubmission()
+    expect(body.isComplete).toBe(true)
+    expect(body.participant).toEqual({ name: 'José Mora' })
+    expect(body.demographics).toEqual({ department: '7f6c1c8e-0000-4000-8000-000000000001' })
+  })
+
+  it('never puts the identity on a PARTIAL save', async () => {
+    respondWith(view({ demographics: [area], asksParticipantIdentity: true, allowPartialResponses: true }))
+    renderForm({ publicEntry: true })
+    await throughTheArea()
+    await screen.findByText(copy.es('surveyRespond.identity.question'))
+    await userEvent.type(screen.getByLabelText(copy.es('surveyRespond.identity.name'), { exact: false }), 'Ana')
+    await userEvent.click(screen.getByRole('button', { name: copy.es('surveyRespond.demographics.start') }))
+
+    await screen.findByText('¿Qué tan satisfecho estás?')
+    await userEvent.click(screen.getByLabelText('Muy de acuerdo'))
+    await userEvent.click(screen.getByRole('button', { name: copy.es('surveyRespond.saveAndFinishLater') }))
+
+    const partial = lastSubmission()
+    expect(partial.isComplete).toBe(false)
+    expect(partial.participant).toBeUndefined()
+  })
+
+  it('asks nothing when the server did not say to, including an API that predates the flag', async () => {
+    respondWith(view({ demographics: [area] }))
+    renderForm({ publicEntry: true })
+    await throughTheArea(false)
+
+    await screen.findByText('¿Qué tan satisfecho estás?')
+    expect(screen.queryByText(copy.es('surveyRespond.identity.question'))).toBeNull()
+    expect(screen.queryByText(copy.es('surveyRespond.participationBody'))).toBeNull()
+    await userEvent.click(screen.getByLabelText('Muy de acuerdo'))
+    await userEvent.click(screen.getByRole('button', { name: copy.es('surveyRespond.submitResponse') }))
+    await screen.findByText(copy.es('surveyRespond.thankYouTitle'))
+    expect(lastSubmission().participant).toBeUndefined()
+  })
+
+  it('stops saying the platform keeps no record of who answered once it does', async () => {
+    markAnswered('s1')
+    respondWith(view({ asksParticipantIdentity: true }))
+    renderForm({ publicEntry: true })
+
+    await screen.findByText(copy.es('surveyRespond.answeredOnThisDeviceTitle'))
+    expect(screen.getByText(copy.es('surveyRespond.answeredOnThisDeviceBodyRecorded'), { exact: false })).toBeTruthy()
+    expect(screen.queryByText(copy.es('surveyRespond.answeredOnThisDeviceBody'), { exact: false })).toBeNull()
+  })
+})

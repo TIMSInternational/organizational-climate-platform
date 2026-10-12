@@ -116,3 +116,11 @@ survey identically today, but self-declaration makes it the main way a no-accoun
 reads their results. The labels are in `demographic_field_options`, and the same problem was
 already fixed once on the confirmation screen — see `SuppressedDemographicLabels`, added
 after the TIMS dry run printed `tiempo_de_laborar_en_tims_anos` at a respondent.
+
+## Addendum 2026-10-12: two more readers of `response_demographics`
+
+Both read ONLY the reserved `department` key and feed a floored path, so the condition above
+holds: `DashboardEndpoints.EmployeeLastOutcomeAsync` passes it into `SurveyAggregation.Compute`
+(department segment floor + complement rule), and `SurveyResultsEndpoints.GetRealTimeStatsAsync`
+counts it under `SurveyResultsPrivacy.MeetsSegmentFloor`. See
+`participation-is-not-linked-to-answers.md`.

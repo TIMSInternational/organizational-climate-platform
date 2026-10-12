@@ -62,8 +62,18 @@ import { useTranslation } from '../../../i18n'
 export function AnonymityNotice({
   anonymous,
   collapsible = false,
+  recordsParticipation = false,
 }: {
   anonymous: boolean
+  /**
+   * The respondent is asked their name and email (`asksParticipantIdentity`). The anonymous
+   * body stays true word for word — the response row still holds no name, account, IP or
+   * browser — but it no longer says everything that is kept, so a second sentence says the
+   * rest: that they answered is recorded, apart from what they answered. Only the respond
+   * form passes it, and only when the server said it asks: the invitation card and Home have
+   * no respondent with no account to describe.
+   */
+  recordsParticipation?: boolean
   /**
    * Draw the promise collapsed behind a disclosure, open on demand.
    *
@@ -97,9 +107,16 @@ export function AnonymityNotice({
   )
   const heading = <h2 className="sr-only">{anonymous ? t('anonymousTitle') : t('identifiedTitle')}</h2>
   const body = (
-    <p className="m-0 text-respond text-fg-secondary">
-      {anonymous ? t('anonymousBody') : t('identifiedBody')}
-    </p>
+    <>
+      <p className="m-0 text-respond text-fg-secondary">
+        {anonymous ? t('anonymousBody') : t('identifiedBody')}
+      </p>
+      {anonymous && recordsParticipation ? (
+        <p data-slot="participation-promise" className="m-0 mt-1 text-respond text-fg-secondary">
+          {t('participationBody')}
+        </p>
+      ) : null}
+    </>
   )
 
   /*

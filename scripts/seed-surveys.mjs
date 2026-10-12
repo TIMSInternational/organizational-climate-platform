@@ -487,7 +487,19 @@ async function seedOpenSurvey(adminToken, companyId, roster) {
       // the API now refuses a public link on one outright. The closed waves above stay
       // identified -- they are history, answered by the seeded roster, and their
       // department breakdown is what the results screens are demonstrated with.
-      settings: { anonymous: true, allowPartialResponses: true, showProgress: true },
+      //
+      // And it asks the whole QR flow (ruled 2026-10-12): the área -- offered from the
+      // company's active departments, feeding the climate map -- with the company's other
+      // demographic fields, then the respondent's name and optional email, then the
+      // questions. Both are said out loud rather than left to the create default, so the
+      // local QR demonstrates every screen whatever that default becomes.
+      settings: {
+        anonymous: true,
+        allowPartialResponses: true,
+        showProgress: true,
+        selfDeclaredDemographics: true,
+        collectParticipantIdentity: true,
+      },
       departmentIds: roster.map((r) => r.department.id),
       targetAudienceCount: roster.reduce((n, r) => n + r.members.length, 0),
       questions: QUESTIONS.map(([category, en, es], order) => ({

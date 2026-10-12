@@ -2,6 +2,7 @@ using System.Security.Claims;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Localization;
 using ClimateProject.Application.OrgStructure;
+using ClimateProject.Application.Surveys;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -208,6 +209,18 @@ public static class DemographicFieldEndpoints
         }
 
         var fieldKey = request.Field.Trim();
+
+        // Reserved: a respondent with no account declares their área under this key, and it
+        // is the department pseudo-field every breakdown and the results filter already use.
+        // An admin field with it would be a second "department" dimension and would collide
+        // with the área on the respond form. Case-insensitive, because the two would read as
+        // one to the person choosing it.
+        if (SelfDeclaredDepartment.IsReservedKey(fieldKey))
+        {
+            return Results.Json(
+                new { message = $"'{fieldKey}' is reserved for the área a respondent declares; choose another key" },
+                statusCode: 400);
+        }
         // IX_demographic_fields_company_id_field is a UNIQUE index (companyId, field).
         // Pre-check and return 409, matching the sibling pattern in
         // CompanyEndpoints.CreateAsync/UpdateAsync for the analogous unique

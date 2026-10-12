@@ -90,6 +90,27 @@ public class SurveySettings
     /// </remarks>
     public bool SelfDeclaredDemographics { get; set; }
 
+    /// <summary>
+    /// Ask a respondent who has no account for their name (required) and email (optional),
+    /// so the company can see WHO has answered and who has not -- never WHAT they answered.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Ruled 2026-10-12: "collect name and email because we need to know who has answered and
+    /// who has not, but DON'T link them to their answers." The identity is written to
+    /// <c>survey_participations</c>, a table with no response id, no session id, no
+    /// demographics, no IP or user agent and a DATE rather than a timestamp, in its own
+    /// statement after the response has committed. See
+    /// <c>docs/decisions/participation-is-not-linked-to-answers.md</c>.
+    /// </para>
+    /// <para>
+    /// The entity default stays <c>false</c>, like <see cref="Anonymous"/>'s: changing it would
+    /// silently start asking every live survey materialised without the column. The CREATE path
+    /// sets it on, so a survey made from today asks unless its author says otherwise.
+    /// </para>
+    /// </remarks>
+    public bool CollectParticipantIdentity { get; set; }
+
     public bool NotificationSendInvitations { get; set; } = true;
     public bool NotificationSendReminders { get; set; } = true;
     public int NotificationReminderFrequencyDays { get; set; } = 3;

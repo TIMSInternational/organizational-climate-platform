@@ -147,7 +147,7 @@ public class QuestionBankEndpointsTests : IAsyncLifetime
             StartDate: DateTimeOffset.UtcNow.AddDays(-1),
             EndDate: DateTimeOffset.UtcNow.AddDays(14),
             Questions: questions,
-            Settings: new SurveySettingsInput(Anonymous: anonymous)));
+            Settings: new SurveySettingsInput(Anonymous: anonymous, CollectParticipantIdentity: false)));
 
         (await SurveyTestHarness.SetStatusAsync(admin, survey.Id, SurveyStatuses.Active)).EnsureSuccessStatusCode();
         return survey;

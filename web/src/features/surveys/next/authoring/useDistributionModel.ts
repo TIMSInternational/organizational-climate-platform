@@ -4,7 +4,12 @@ import { useCompanyScope } from '../../../../company-context'
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { listDepartments, type Department } from '../../../org-structure/api/departments'
 import { listUsers, type User } from '../../../org-structure/api/users'
-import { getSurvey, setSurveySelfDeclaredDemographics, type SurveyDetail } from '../../api/surveys'
+import {
+  getSurvey,
+  setSurveyCollectParticipantIdentity,
+  setSurveySelfDeclaredDemographics,
+  type SurveyDetail,
+} from '../../api/surveys'
 import {
   createSurveyInvitations,
   getSurveyDistribution,
@@ -62,6 +67,8 @@ export interface DistributionActions {
   revokeInvitation: (invitationId: string) => void
   /** Turns the public link's self-declared demographic questions on or off. */
   setSelfDeclaredDemographics: (next: boolean) => void
+  /** Turns "ask who is answering" on the public link on or off. */
+  setCollectParticipantIdentity: (next: boolean) => void
   openCopy: () => void
   editCopy: (locale: Locale, field: InvitationCopyField, text: string) => void
   /** Resolves true once saved, so the dialog closes on success and stays open on a failure. */
@@ -209,6 +216,15 @@ export function useDistributionModel(surveyId: string) {
         async () => {
           await setSurveySelfDeclaredDemographics(baseUrl, surveyId, next)
           return t(next ? 'surveys.next.share.demographicsOn' : 'surveys.next.share.demographicsOff')
+        },
+        { refreshSurvey: true },
+      ),
+    /** The same narrow `PUT` as the demographics switch, legal on a live survey for the same reason. */
+    setCollectParticipantIdentity: (next) =>
+      void run(
+        async () => {
+          await setSurveyCollectParticipantIdentity(baseUrl, surveyId, next)
+          return t(next ? 'surveys.next.share.participantIdentityOn' : 'surveys.next.share.participantIdentityOff')
         },
         { refreshSurvey: true },
       ),

@@ -87,6 +87,16 @@ export interface SurveySettings {
    * survey, never the request, so a named survey ignores the flag entirely.
    */
   selfDeclaredDemographics: boolean
+  /**
+   * The public link asks a respondent with no account for their name (required) and email
+   * (optional) before the questions, so the company can see WHO has answered and who has
+   * not -- never WHAT. On for every survey created since 2026-10-12, unless its author turned
+   * it off. Stored in `survey_participations`, which holds no response id
+   * (`docs/decisions/participation-is-not-linked-to-answers.md`).
+   *
+   * Optional in the type because an API that predates it does not send it.
+   */
+  collectParticipantIdentity?: boolean
   notificationSendInvitations: boolean
   notificationSendReminders: boolean
   notificationReminderFrequencyDays: number
@@ -345,6 +355,55 @@ export async function setSurveySelfDeclaredDemographics(
     method: 'PUT',
     body: JSON.stringify({ settings: { selfDeclaredDemographics: enabled } }),
   })
+}
+
+/**
+ * Turns "ask who is answering" on the public link on or off -- the same narrow
+ * `PUT /surveys/{id}` as `setSurveySelfDeclaredDemographics`, for the same reasons: it is a
+ * setting, not content, so it is legal on a live survey and lands in the audit trail as
+ * `settings.collectParticipantIdentity`.
+ */
+export async function setSurveyCollectParticipantIdentity(
+  baseUrl: string,
+  id: string,
+  enabled: boolean,
+): Promise<void> {
+  await authFetch(`${baseUrl}/surveys/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ settings: { collectParticipantIdentity: enabled } }),
+  })
+}
+
+/** One person who said they answered. A day, never a time: the row holds no more. */
+export interface SurveyParticipant {
+  name: string
+  email: string | null
+  participatedOn: string
+}
+
+/** One of the company's active users with an email and no participation row yet. */
+export interface SurveyPendingParticipant {
+  name: string
+  email: string
+}
+
+/**
+ * `GET /surveys/{id}/participation` -- who has answered and who has not. Administrators only,
+ * and there is nothing about answers, áreas or times in it to leak: the endpoint reads
+ * `survey_participations` and the user list, and nothing else.
+ */
+export interface SurveyParticipationView {
+  surveyId: string
+  collectsParticipantIdentity: boolean
+  answeredCount: number
+  pendingCount: number
+  answered: SurveyParticipant[]
+  pending: SurveyPendingParticipant[]
+}
+
+export async function getSurveyParticipation(baseUrl: string, id: string): Promise<SurveyParticipationView> {
+  const response = await authFetch(`${baseUrl}/surveys/${id}/participation`)
+  return response.json() as Promise<SurveyParticipationView>
 }
 
 /** `DELETE /surveys/{id}` answers 204, so there is no body to parse. */

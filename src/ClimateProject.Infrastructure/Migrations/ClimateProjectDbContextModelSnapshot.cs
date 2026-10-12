@@ -3870,6 +3870,46 @@ namespace ClimateProject.Infrastructure.Migrations
                     b.ToTable("survey_invitations", (string)null);
                 });
 
+            modelBuilder.Entity("ClimateProject.Domain.Entities.SurveyParticipation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("company_id");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .HasColumnName("email");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<DateOnly>("ParticipatedOn")
+                        .HasColumnType("date")
+                        .HasColumnName("participated_on");
+
+                    b.Property<Guid>("SurveyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex("SurveyId", "Email")
+                        .IsUnique()
+                        .HasFilter("email IS NOT NULL");
+
+                    b.ToTable("survey_participations", (string)null);
+                });
+
             modelBuilder.Entity("ClimateProject.Domain.Entities.SurveyTemplate", b =>
                 {
                     b.Property<Guid>("Id")
@@ -5776,6 +5816,12 @@ namespace ClimateProject.Infrastructure.Migrations
                                 .HasDefaultValue(true)
                                 .HasColumnName("settings_auto_save");
 
+                            b1.Property<bool>("CollectParticipantIdentity")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("boolean")
+                                .HasDefaultValue(false)
+                                .HasColumnName("settings_collect_participant_identity");
+
                             b1.Property<bool>("InvitationBrandingEnabled")
                                 .ValueGeneratedOnAdd()
                                 .HasColumnType("boolean")
@@ -6042,6 +6088,21 @@ namespace ClimateProject.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ClimateProject.Domain.Entities.SurveyParticipation", b =>
+                {
+                    b.HasOne("ClimateProject.Domain.Entities.Company", null)
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ClimateProject.Domain.Entities.Survey", null)
+                        .WithMany()
+                        .HasForeignKey("SurveyId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 

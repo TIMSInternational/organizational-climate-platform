@@ -78,6 +78,17 @@ public static class SurveyAggregation
         // earlier tool or the ETL) a different fate on each surface.
         responses = [.. responses.Select(r => r with { Demographics = DecodeDemographics(r.Demographics) })];
 
+        // A respondent with no account declares their área as a demographic ANSWER under the
+        // reserved key, never as responses.department_id (docs/decisions/
+        // self-declared-demographics.md, ruling 1). It is lifted into the department here,
+        // once, before the filter and every breakdown read it -- so the department segment
+        // floor (MeetsSegmentFloor, read time) applies to it exactly as to a stored
+        // department, and -- when it names one of the tenant's departments -- the key is removed
+        // from the demographics so it never also forms a second "department" dimension keyed
+        // by raw ids.
+        var companyDepartmentIds = departments.Select(d => d.DepartmentId).ToHashSet();
+        responses = [.. responses.Select(r => WithSelfDeclaredDepartment(r, companyDepartmentIds))];
+
         var narrowing = filter ?? SurveyResultsFilter.None;
         if (!narrowing.IsEmpty)
         {
@@ -908,6 +919,30 @@ public static class SurveyAggregation
         }
 
         return decoded;
+    }
+
+    private static AggregationResponse WithSelfDeclaredDepartment(
+        AggregationResponse response,
+        IReadOnlySet<Guid> companyDepartmentIds)
+    {
+        // Only a value that names one of the tenant's departments is the área. A company that
+        // configured its own "department" field before the key was reserved stores labels
+        // like "sales" under it, and those stay exactly the demographic they always were.
+        if (!response.Demographics.TryGetValue(SelfDeclaredDepartment.FieldKey, out var declared)
+            || SelfDeclaredDepartment.Effective(null, declared, companyDepartmentIds) is null)
+        {
+            return response;
+        }
+
+        var remaining = response.Demographics
+            .Where(pair => !string.Equals(pair.Key, SelfDeclaredDepartment.FieldKey, StringComparison.Ordinal))
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+
+        return response with
+        {
+            DepartmentId = SelfDeclaredDepartment.Effective(response.DepartmentId, declared, companyDepartmentIds),
+            Demographics = remaining,
+        };
     }
 
     private static double Percent(int part, int whole)

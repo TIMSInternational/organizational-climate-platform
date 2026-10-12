@@ -48,6 +48,7 @@ public sealed record SurveySettingsDto(
     int? TimeLimitMinutes,
     int? ResponseLimit,
     bool SelfDeclaredDemographics,
+    bool CollectParticipantIdentity,
     bool NotificationSendInvitations,
     bool NotificationSendReminders,
     int NotificationReminderFrequencyDays,
@@ -194,7 +195,8 @@ public sealed record SurveySettingsInput(
     LocalizedInput? InvitationCustomSubject = null,
     bool? InvitationIncludeCredentials = null,
     bool? InvitationSendImmediately = null,
-    bool? InvitationBrandingEnabled = null);
+    bool? InvitationBrandingEnabled = null,
+    bool? CollectParticipantIdentity = null);
 
 public sealed record CreateSurveyRequest(
     LocalizedInput? Title,

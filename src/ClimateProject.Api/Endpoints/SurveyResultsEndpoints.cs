@@ -276,15 +276,45 @@ public static class SurveyResultsEndpoints
         // Query 2: one row per department that has responded. Grouping on the nullable
         // column directly and filtering client-side -- EF cannot translate
         // Nullable<Guid>.Value inside a group key.
-        var byDepartment = await db.Responses
+        var byStoredDepartment = await db.Responses
             .AsNoTracking()
-            .Where(r => r.SurveyId == id && r.IsComplete)
+            .Where(r => r.SurveyId == id && r.IsComplete && r.DepartmentId != null)
             .GroupBy(r => r.DepartmentId)
             .Select(g => new { DepartmentId = g.Key, Count = g.Count() })
             .ToListAsync(cancellationToken);
 
         var departments = await SurveyAggregateLoader.LoadDepartmentsAsync(db, survey.CompanyId, cancellationToken);
         var departmentsById = departments.ToDictionary(d => d.DepartmentId);
+
+        // A response with no department_id may still carry a self-declared área (a respondent
+        // with no account). Resolved by the same SelfDeclaredDepartment.Effective the full
+        // aggregation uses, so this live panel and the climate map count one population --
+        // and the floor below applies to it unchanged.
+        var declaredRows = await db.ResponseDemographics
+            .AsNoTracking()
+            .Where(rd => rd.Field == SelfDeclaredDepartment.FieldKey
+                && db.Responses.Any(r => r.Id == rd.ResponseId && r.SurveyId == id && r.IsComplete && r.DepartmentId == null))
+            .Select(rd => rd.Value)
+            .ToListAsync(cancellationToken);
+        var unsegmentedStored = completed - byStoredDepartment.Sum(row => row.Count);
+
+        var companyDepartmentIds = departmentsById.Keys.ToHashSet();
+        var declaredCounts = declaredRows
+            .Select(value => SelfDeclaredDepartment.Effective(null, SurveyResponseValues.Read(value).Value, companyDepartmentIds))
+            .Where(department => department is not null)
+            .GroupBy(department => department)
+            .Select(g => new { DepartmentId = g.Key, Count = g.Count() })
+            .ToList();
+
+        var byDepartment = byStoredDepartment
+            .Concat(declaredCounts)
+            .GroupBy(row => row.DepartmentId)
+            .Select(g => new { DepartmentId = g.Key, Count = g.Sum(row => row.Count) })
+            .ToList();
+        if (unsegmentedStored - declaredCounts.Sum(row => row.Count) is > 0 and var stillUnsegmented)
+        {
+            byDepartment.Add(new { DepartmentId = (Guid?)null, Count = stillUnsegmented });
+        }
 
         var participation = new List<SurveyDepartmentParticipation>();
         var suppressedDepartments = 0;
