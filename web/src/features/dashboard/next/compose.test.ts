@@ -411,16 +411,34 @@ describe('composeModel', () => {
     expect('bands' in model).toBe(false)
   })
 
-  it('a tenant with no closed survey is an empty fallback, not a failure', () => {
+  it('a company on its FIRST survey still shows that open survey, and is not "incomplete"', () => {
+    // EAGLE, 2026-10-12: one active survey with 15 responses, nothing closed. The surveys
+    // region used to come back empty and take the open survey with it.
     const parts = live()
     parts.surveys = { status: 'live', value: surveys().filter((survey) => survey.status !== 'closed') }
+    parts.trends = { status: 'fallback', reason: 'empty' }
+    const { model, regions } = composeModel(parts, options())
+
+    expect(regions.surveys.status).toBe('live')
+    expect(model.openSurvey).toMatchObject({ id: 'sv-q4', responses: 3, audience: 24 })
+    expect(model.latestClosedWave).toBeNull()
+    expect(model.participation).toEqual({ responses: null, completed: null })
+    expect(model.waves.map((wave) => wave.id)).toEqual(['sv-q4', 'sv-next'])
+    // An empty region is "nothing yet", not a failure: no "Datos incompletos" badge.
+    expect(model.isPartial).toBe(false)
+  })
+
+  it('a company with no survey at all is an empty fallback, still not a failure', () => {
+    const parts = live()
+    parts.surveys = { status: 'live', value: [] }
     const { model, regions } = composeModel(parts, options())
 
     expect(regions.surveys).toEqual({ status: 'fallback', reason: 'empty' })
-    expect(model.isPartial).toBe(true)
+    expect(model.isPartial).toBe(false)
     // Empty is not a licence to substitute either: no waves means no waves.
     expect(model.waves).toEqual([])
     expect(model.latestClosedWave).toBeNull()
+    expect(model.openSurvey).toBeNull()
   })
 
   it('with no tracking service, the plans are the company payload and no overdue plan is named', () => {
