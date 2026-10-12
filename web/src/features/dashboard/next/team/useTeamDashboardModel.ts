@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from '../../../../i18n'
+import { isApiStatus } from '../../../../api/authFetch'
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { getDepartmentAdminDashboard, type DepartmentAdminDashboardResult } from '../../api/dashboard'
 import { useDashboardData, type DashboardData } from '../../useDashboardData'
@@ -53,7 +54,7 @@ function useDepartment(): DashboardData<DepartmentAdminDashboardResult> {
 
 /**
  * One read of the tracking service, settled into a `TrackingRead`: `off` without asking
- * when `enabled` is false, `null` while the request is out, then `ok` or `failed`. Keyed by
+ * when `enabled` is false, `null` while the request is out, then `ok` or `failed` (refused or not). Keyed by
  * `nonce`, so a reload never shows the previous answer as the new one.
  */
 function useTrackingRead<T>(enabled: boolean, read: () => Promise<T>, nonce: number): TrackingRead<T> | null {
@@ -66,7 +67,10 @@ function useTrackingRead<T>(enabled: boolean, read: () => Promise<T>, nonce: num
         if (!cancelled) setSettled({ nonce, read: { status: 'ok', value } })
       })
       .catch((reason: unknown) => {
-        if (!cancelled) setSettled({ nonce, read: { status: 'failed', error: reason instanceof Error ? reason.message : null } })
+        // Only the status is kept: a 401/403 is the service refusing this reader, and no
+        // message — the server's or the browser's — is ever handed to the screen.
+        const refused = isApiStatus(reason, 403) || isApiStatus(reason, 401)
+        if (!cancelled) setSettled({ nonce, read: { status: 'failed', refused } })
       })
     return () => {
       cancelled = true

@@ -198,9 +198,12 @@ function PlansCard({
       {plans.source === 'off' && <p className="m-0 text-sm text-fg-label">{t('dashboard.next.supervisor.plansOff')}</p>}
       {plans.source === 'failed' && (
         <p role="status" className="m-0 text-sm text-fg-label">
-          {plans.error
-            ? t('dashboard.next.supervisor.plansFailed', { error: plans.error })
-            : t('dashboard.next.supervisor.plansFailedNoReason')}
+          {t('dashboard.next.supervisor.plansFailedNoReason')}
+        </p>
+      )}
+      {plans.source === 'refused' && (
+        <p role="status" className="m-0 text-sm text-fg-label">
+          {t('dashboard.next.supervisor.plansRefused')}
         </p>
       )}
       {plans.source === 'tracking' && plans.plans.length === 0 && (

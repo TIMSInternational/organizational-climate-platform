@@ -327,7 +327,8 @@ describe("the leader's model", () => {
   it("counts the department's action plans when there is no board, and waits for one in flight", () => {
     expect(leader({ tablero: { status: 'off' } }).plans).toEqual({ source: 'counts', open: 1, overdue: 0 })
     expect(leader({ tablero: null }).plans).toEqual({ source: 'loading' })
-    expect(leader({ tablero: { status: 'failed', error: 'boom' } }).plans).toEqual({ source: 'failed', error: 'boom' })
+    expect(leader({ tablero: { status: 'failed', refused: false } }).plans).toEqual({ source: 'failed' })
+    expect(leader({ tablero: { status: 'failed', refused: true } }).plans).toEqual({ source: 'refused' })
   })
 
   it('names a responsable only when it is the reader, since no directory answers this role', () => {
@@ -382,7 +383,8 @@ describe("the supervisor's model", () => {
 
   it('has no plans to read without a tracking service, and says a failed read failed', () => {
     expect(supervisor({ misTareas: { status: 'off' } }).plans).toEqual({ source: 'off' })
-    expect(supervisor({ misTareas: { status: 'failed', error: null } }).plans).toEqual({ source: 'failed', error: null })
+    expect(supervisor({ misTareas: { status: 'failed', refused: false } }).plans).toEqual({ source: 'failed' })
+    expect(supervisor({ misTareas: { status: 'failed', refused: true } }).plans).toEqual({ source: 'refused' })
   })
 
   /**

@@ -84,7 +84,11 @@ export default function MisTareasNextPage() {
         description={t('tracking.next.misTareasDescription')}
       />
 
-      {state.status === 'error' ? (
+      {state.status === 'refused' ? (
+        // A REFUSAL, not an outage: the service answered 401/403 instantly. No retry — asking
+        // again gets the same answer — and the same sentence the legacy page gives.
+        <NetworkError title={t('tracking.noAccessTitle')} description={t('tracking.noAccessBody')} />
+      ) : state.status === 'error' ? (
         // `tracking.serviceUnavailable*`, never the browser's own words: a rejected `fetch`
         // is what a stopped container, a DNS failure and an unlisted CORS origin all look
         // like here, and "Failed to fetch" was once shown to an end user on this very route.

@@ -209,6 +209,19 @@ describe('SupervisorDashboardView', () => {
     expect(within(card(copy.tasksHeading)).getByText(copy.tasksPendingOne)).toBeTruthy()
   })
 
+  it('reads a refused mis-tareas (403) as a module not enabled, never as an outage or a raw message', () => {
+    renderSupervisor({ misTareas: { status: 'failed', refused: true } })
+    expect(screen.getByText(copy.plansRefused)).toBeTruthy()
+    expect(screen.queryByText(copy.plansFailedNoReason)).toBeNull()
+    expect(screen.queryByText(/Request failed|403/)).toBeNull()
+  })
+
+  it('says a failed mis-tareas read failed, in its own words only', () => {
+    renderSupervisor({ misTareas: { status: 'failed', refused: false } })
+    expect(screen.getByText(copy.plansFailedNoReason)).toBeTruthy()
+    expect(screen.queryByText(copy.plansRefused)).toBeNull()
+  })
+
   it('says the surveys she owes could not be read rather than claiming there are none', () => {
     renderSupervisor({ mySurveys: null })
 

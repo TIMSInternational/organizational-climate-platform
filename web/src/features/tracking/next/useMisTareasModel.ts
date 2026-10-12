@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { isApiStatus } from '../../../api/authFetch'
 import { useViewerCapabilities } from '../../../auth/viewerCapabilities'
 import { useCompanyScope } from '../../../company-context'
 import { getProfile } from '../../profile/api/profile'
@@ -9,7 +10,11 @@ import { canManagePlan, readTrackingClaims } from '../trackingAccess'
 import { toTareas, type TareaRow } from './misTareas'
 
 export interface MisTareasState {
-  status: 'loading' | 'ready' | 'error'
+  /**
+   * `refused` is the service ANSWERING 401/403 — the module is not this company's — and is
+   * kept apart from `error` (no answer at all), because only the outage is worth a retry.
+   */
+  status: 'loading' | 'ready' | 'error' | 'refused'
   /** Ordered by compromiso, nearest first — the board's "ordenadas por compromiso". */
   rows: readonly TareaRow[]
   asOf: string
@@ -64,8 +69,8 @@ export function useMisTareasModel(): MisTareasState {
         if (cancelled) return
         setPlans(tareas)
         setStatus('ready')
-      } catch {
-        if (!cancelled) setStatus('error')
+      } catch (err) {
+        if (!cancelled) setStatus(isApiStatus(err, 403) || isApiStatus(err, 401) ? 'refused' : 'error')
       }
     }
     void load()

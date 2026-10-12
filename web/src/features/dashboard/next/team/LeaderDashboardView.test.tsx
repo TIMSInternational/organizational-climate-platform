@@ -431,10 +431,20 @@ describe('LeaderDashboardView', () => {
     expect(within(plans).queryAllByRole('link')).toHaveLength(0)
   })
 
-  it('says the board could not be read rather than drawing an empty one', () => {
-    renderLeader({ tablero: { status: 'failed', error: 'Request failed: 503' } })
+  it('says the board could not be read rather than drawing an empty one, and prints no raw message', () => {
+    renderLeader({ tablero: { status: 'failed', refused: false } })
 
-    expect(screen.getByText(copy.plansFailed.replace('{error}', 'Request failed: 503'))).toBeTruthy()
+    expect(screen.getByText(copy.plansFailedNoReason)).toBeTruthy()
+    expect(screen.queryByText(/Request failed/)).toBeNull()
+    expect(screen.queryByText(copy.plansRefused)).toBeNull()
+  })
+
+  it('reads a refused board (403) as a module not enabled, not as an outage', () => {
+    renderLeader({ tablero: { status: 'failed', refused: true } })
+
+    expect(screen.getByText(copy.plansRefused)).toBeTruthy()
+    expect(screen.queryByText(copy.plansFailedNoReason)).toBeNull()
+    expect(screen.queryByText(/403/)).toBeNull()
   })
 
   it("offers the department's export to a leader, and it fetches the department's own file", async () => {

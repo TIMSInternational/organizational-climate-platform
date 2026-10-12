@@ -29,10 +29,12 @@ import type {
 
 /**
  * One read of the tracking service, as the hook hands it over: `off` when this deployment
- * has no tracking service or this reader has nothing to read there, `failed` with the
- * server's message, or the payload.
+ * has no tracking service or this reader has nothing to read there, `failed` (with
+ * `refused` true when the service ANSWERED 401/403 — a rule, not an outage), or the payload.
+ * It carries no message: the server's or the browser's words ("Request failed: 403") are
+ * never printed on a dashboard.
  */
-export type TrackingRead<T> = { status: 'off' } | { status: 'failed'; error: string | null } | { status: 'ok'; value: T }
+export type TrackingRead<T> = { status: 'off' } | { status: 'failed'; refused: boolean } | { status: 'ok'; value: T }
 
 /**
  * The floor a count is held to: the server's own `minimumGroupSize` when it sent one, and
@@ -224,7 +226,7 @@ export function composeLeaderDashboard(input: LeaderInput): LeaderDashboardModel
       .sort(byDue)
     plans = { source: 'tracking', plans: open, open: open.length, overdue: open.filter((plan) => plan.overdue).length }
   } else if (tablero.status === 'failed') {
-    plans = { source: 'failed', error: tablero.error }
+    plans = tablero.refused ? { source: 'refused' } : { source: 'failed' }
   } else {
     plans = { source: 'counts', open: department.openActionPlanCount, overdue: department.overdueActionPlanCount }
   }
@@ -294,7 +296,7 @@ export function composeSupervisorDashboard(input: SupervisorInput): SupervisorDa
         .sort(byDue),
     }
   } else if (misTareas.status === 'failed') {
-    plans = { source: 'failed', error: misTareas.error }
+    plans = misTareas.refused ? { source: 'refused' } : { source: 'failed' }
   } else {
     plans = { source: 'off' }
   }
