@@ -1343,9 +1343,12 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
         var area = AdminFields(view)[0];
         Assert.True(area.Required);
         Assert.Equal(["operaciones", "ventas"], area.Options.Select(o => o.Value));
-        // The admin's own Required flag, not a policy invented here: a field the admin left
-        // optional is one the respondent may decline.
-        Assert.False(AdminFields(view)[1].Required);
+        // Ruled 2026-10-13: this flow forces Required on every field it offers, so the one
+        // the admin left optional arrives required here too. The admin's own
+        // DemographicField.Required still governs every other surface -- nothing is written to
+        // the company's definitions -- but a respondent with no account must end with a value,
+        // because these demographics are the whole segmentation basis for their response.
+        Assert.True(AdminFields(view)[1].Required);
     }
 
     [Fact]
@@ -1528,26 +1531,28 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
             (await SubmitSelfDeclaredAsync(survey, demographics: null)).StatusCode);
     }
 
+    /// <summary>
+    /// The blank used to clear the answer, which is how "prefiero no decir" was expressed on a
+    /// field the admin had left optional. Ruled 2026-10-13 -- "si el Excel no dice 'prefiero no
+    /// decir', no hay que ponerlo", and the respondent must end with a specific value -- so the
+    /// blank is refused instead. Forced at `ToDefinitions`, the validator the POST runs, by the
+    /// same line that offers the field as Required to the form, so the form cannot ask what the
+    /// submit then accepts blank.
+    /// </summary>
     [Fact]
-    public async Task An_optional_field_may_be_declined()
+    public async Task A_field_the_admin_left_optional_may_still_not_be_declined()
     {
         var survey = await SelfDeclaringSurveyAsync();
         await SeedSelectFieldAsync("area", ["operaciones"], required: true, order: 0);
         await SeedSelectFieldAsync("sexo", ["hombre", "mujer"], required: false, order: 1);
 
-        // A blank clears the answer rather than storing an empty string, so "prefiero no
-        // decir" is a real choice the respondent makes and not a skipped screen.
-        var result = await SelfDeclareAsync(survey, new Dictionary<string, string?>
+        var http = await SubmitSelfDeclaredAsync(survey, new Dictionary<string, string?>
         {
             ["area"] = "operaciones",
             ["sexo"] = "",
         });
 
-        var stored = await _harness.WithDbAsync(db => db.ResponseDemographics
-            .AsNoTracking()
-            .Where(rd => rd.ResponseId == result.ResponseId && rd.Field != SelfDeclaredDepartment.FieldKey)
-            .ToListAsync());
-        Assert.Equal(["area"], stored.Select(s => s.Field));
+        Assert.Equal(HttpStatusCode.BadRequest, http.StatusCode);
     }
 
     [Fact]
