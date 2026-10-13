@@ -94,6 +94,80 @@ public class SystemSettingsEndpointsTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Forbidden, putResponse.StatusCode);
     }
 
+    /// <summary>
+    /// A super admin could store a session timeout of 0 or -5. It is defended downstream --
+    /// `SessionWindows.IdleWindow` reads a non-positive value as the shipped default rather than
+    /// minting tokens that are already expired -- but the value stayed in the row, where this
+    /// screen reads it back as if it were the policy. Now refused at the door.
+    /// </summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-5)]
+    public async Task A_non_positive_session_timeout_is_refused_and_writes_nothing(int minutes)
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.SuperAdmin);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var before = await (await client.GetAsync("/admin/system-settings"))
+            .Content.ReadFromJsonAsync<SystemSettingsDetail>();
+
+        var response = await client.PutAsJsonAsync("/admin/system-settings", new UpdateSystemSettingsRequest(
+            LoginEnabled: null,
+            MaintenanceMode: null,
+            MaintenanceMessage: null,
+            MaxLoginAttempts: null,
+            SessionTimeoutMinutes: minutes,
+            PasswordPolicy: null,
+            EmailSettings: null));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        // The refusal path writes nothing: the guard runs before the settings row is read or
+        // created, so the stored timeout is exactly what it was.
+        var after = await (await client.GetAsync("/admin/system-settings"))
+            .Content.ReadFromJsonAsync<SystemSettingsDetail>();
+        Assert.Equal(before!.SessionTimeoutMinutes, after!.SessionTimeoutMinutes);
+    }
+
+    /// <summary>
+    /// The boundary on the allowed side, so the guard cannot be widened into refusing a real
+    /// policy without this failing.
+    /// </summary>
+    [Fact]
+    public async Task A_session_timeout_of_one_minute_is_accepted()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.SuperAdmin);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.PutAsJsonAsync("/admin/system-settings", new UpdateSystemSettingsRequest(
+            LoginEnabled: null,
+            MaintenanceMode: null,
+            MaintenanceMessage: null,
+            MaxLoginAttempts: null,
+            SessionTimeoutMinutes: 1,
+            PasswordPolicy: null,
+            EmailSettings: null));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var updated = await response.Content.ReadFromJsonAsync<SystemSettingsDetail>();
+        Assert.Equal(1, updated!.SessionTimeoutMinutes);
+
+        // Restore the shipped default: this class shares one Postgres database with every other
+        // class in the "Postgres" collection, and a one-minute token lifetime would expire the
+        // tokens a later class signs in with.
+        var restore = await client.PutAsJsonAsync("/admin/system-settings", new UpdateSystemSettingsRequest(
+            LoginEnabled: null,
+            MaintenanceMode: null,
+            MaintenanceMessage: null,
+            MaxLoginAttempts: null,
+            SessionTimeoutMinutes: 60,
+            PasswordPolicy: null,
+            EmailSettings: null));
+        Assert.Equal(HttpStatusCode.OK, restore.StatusCode);
+    }
+
     [Fact]
     public async Task SuperAdmin_can_update_settings_and_the_change_persists()
     {
