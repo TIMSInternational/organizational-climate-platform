@@ -396,7 +396,7 @@ export default function SurveyRespondForm({
   // long as someone is answering, and the next session gets a fresh one. Seeding by
   // `view.id` gave every respondent of a survey the same order, forever, which is a
   // randomisation that removes no bias between people. See `orderQuestions`.
-  const questions = useMemo(
+  const orderedQuestions = useMemo(
     () => (view ? orderQuestions(view.questions, view.randomizeQuestions, sessionId) : []),
     [view, sessionId],
   )
@@ -411,8 +411,30 @@ export default function SurveyRespondForm({
   // the headings the analysis will report under. It returns the whole form either
   // way — `sectioned: false` means "print no headings", not "here is half of it".
   const dimensions = useMemo(
-    () => respondDimensions(questions, randomizeQuestions, sessionId),
-    [questions, randomizeQuestions, sessionId],
+    () => respondDimensions(orderedQuestions, randomizeQuestions, sessionId),
+    [orderedQuestions, randomizeQuestions, sessionId],
+  )
+
+  /**
+   * The order the questions are actually ASKED in, which is the sections laid end to
+   * end — not the flat list they were grouped from.
+   *
+   * `respondDimensions` already defines reading order this way: its `firstIndex` and
+   * `lastIndex` are a running position over the sections, and its own note says that
+   * when an author interleaves categories (A, B, A) the grouping pulls the third
+   * question up under the first heading. Paging through the flat list instead asked
+   * them in arrival order while printing a heading looked up per question, so a
+   * randomised survey was asked PSYCHOLOGICAL SAFETY, WORKLOAD, PSYCHOLOGICAL SAFETY
+   * — the interleaving the 2026-10-13 ruling forbids, since keeping the headings is
+   * the whole reason a randomised 80-item instrument stays navigable — and the
+   * "1–2 of 12" beside each heading did not describe the questions under it.
+   *
+   * Flattening is identity whenever there is nothing to regroup: `unsectioned` holds
+   * the whole form in one section, and an empty form has no sections at all.
+   */
+  const questions = useMemo(
+    () => dimensions.sections.flatMap((section) => section.questions),
+    [dimensions],
   )
 
   const announce = useCallback((message: string) => setAnnouncement(message), [])

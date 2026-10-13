@@ -323,6 +323,62 @@ describe('SurveyRespondForm dimension labels', () => {
   })
 
   /**
+   * The order the questions are ASKED in is the sections laid end to end, not the order
+   * they arrived in.
+   *
+   * `respondDimensions` already defines reading order that way — `firstIndex` and
+   * `lastIndex` are a running position over the sections, and its own note says an
+   * interleaved author (A, B, A) has their third question pulled up under the first
+   * heading. This page used to page through the FLAT list while looking the heading up
+   * per question, so the respondent was asked A, B, A under PSYCHOLOGICAL SAFETY,
+   * WORKLOAD, PSYCHOLOGICAL SAFETY, and the "1–2 of 3" beside the first heading
+   * described two questions that were not the two under it.
+   *
+   * Deliberately NOT randomised. The randomised case above asks the same thing but can
+   * only ask it of whichever seed the session happened to mint — it passed for roughly
+   * half of them and was the flake that found this. This one holds for every seed.
+   */
+  it('asks an interleaved author’s questions grouped, not in the order they arrived', async () => {
+    respondWith(
+      view({
+        questions: [
+          question({ id: 'a', text: 'Pregunta A', category: 'psychological_safety' }),
+          question({ id: 'b', text: 'Pregunta B', category: 'workload' }),
+          question({ id: 'c', text: 'Pregunta C', category: 'psychological_safety' }),
+        ],
+      }),
+    )
+    renderForm()
+
+    await screen.findByText('Pregunta A')
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+
+    // The author's THIRD question, gathered under the first heading — not their second.
+    expect(screen.getByText('Pregunta C')).toBeTruthy()
+    expect(screen.queryByText('Pregunta B')).toBeNull()
+  })
+
+  it('prints two contiguous headings for an interleaved author, not three', async () => {
+    respondWith(
+      view({
+        questions: [
+          question({ id: 'a', text: 'Pregunta A', category: 'psychological_safety' }),
+          question({ id: 'b', text: 'Pregunta B', category: 'workload' }),
+          question({ id: 'c', text: 'Pregunta C', category: 'psychological_safety' }),
+        ],
+      }),
+    )
+    renderForm()
+
+    await screen.findByText('Pregunta A')
+    expect(await dimensionsAcrossPages()).toEqual([
+      copy.es('surveyRespond.dimensions.psychological_safety').toUpperCase(),
+      copy.es('surveyRespond.dimensions.psychological_safety').toUpperCase(),
+      copy.es('surveyRespond.dimensions.workload').toUpperCase(),
+    ])
+  })
+
+  /**
    * `Question.Category` is free text the server neither controls nor translates, so the
    * catalogue is a translation table for the values the product ships, not a vocabulary.
    * A value outside it is the author's own word and is printed as such; a question with
