@@ -173,10 +173,16 @@ jobs:
           # A dump that holds the schema and no rows is the failure docs/runbooks/
           # backup-restore-verification.md records once already ("schema-only by default").
           # Read the archive's own table of contents and require the rows to be there.
+          #
+          # Here-strings, never `printf | grep -q`: under pipefail, grep -q exits at its first
+          # match, printf then dies of SIGPIPE writing the rest, and the pipeline reports a table
+          # that IS there as missing. It bites only once the TOC outgrows the 64 KB pipe buffer --
+          # production's did on the first run (2026-10-13, "printf: write error: Broken pipe",
+          # "no TABLE DATA entry for public.users"); the local rehearsal's did not.
           toc="$(pg_restore --list "$out")"
-          data_entries="$(printf '%s\n' "$toc" | grep -c ' TABLE DATA public ' || true)"
+          data_entries="$(grep -c ' TABLE DATA public ' <<<"$toc" || true)"
           for t in '__EFMigrationsHistory' users companies surveys responses question_responses survey_invitations; do
-            if ! printf '%s\n' "$toc" | grep -qE " TABLE DATA public \"?${t}\"? "; then
+            if ! grep -qE " TABLE DATA public \"?${t}\"? " <<<"$toc"; then
               echo "::error::The dump has no TABLE DATA entry for public.${t}." >&2
               exit 1
             fi
