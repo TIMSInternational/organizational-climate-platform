@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Claims;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Surveys;
@@ -35,6 +36,16 @@ public static class SurveyParticipationEndpoints
             .MapGet("/{surveyId:guid}/participation", GetAsync);
     }
 
+    /// <summary>
+    /// The order a person reads a list of names in: Spanish rules, case and accents aside, and
+    /// numbers by value. Sorted here, not by ORDER BY, because the database's collation decides
+    /// that -- under "C" (measured locally) "Álvaro" came after "Zoe", and "Persona 10" before
+    /// "Persona 2" (EAGLE, 2026-10-12).
+    /// </summary>
+    internal static readonly StringComparer NameOrder = StringComparer.Create(
+        CultureInfo.GetCultureInfo("es"),
+        CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace | CompareOptions.NumericOrdering);
+
     private static async Task<IResult> GetAsync(
         Guid surveyId,
         ClaimsPrincipal principal,
@@ -59,10 +70,9 @@ public static class SurveyParticipationEndpoints
         var answered = await db.SurveyParticipations
             .AsNoTracking()
             .Where(p => p.SurveyId == survey.Id && p.CompanyId == survey.CompanyId)
-            .OrderBy(p => p.Name)
-            .ThenBy(p => p.Email)
             .Select(p => new SurveyParticipantRow(p.Name, p.Email, p.ParticipatedOn))
             .ToListAsync(cancellationToken);
+        answered = [.. answered.OrderBy(p => p.Name, NameOrder).ThenBy(p => p.Email, StringComparer.OrdinalIgnoreCase)];
 
         var answeredEmails = answered
             .Where(p => p.Email is not null)
@@ -72,10 +82,9 @@ public static class SurveyParticipationEndpoints
         var users = await db.Users
             .AsNoTracking()
             .Where(u => u.CompanyId == survey.CompanyId && u.IsActive && u.Email != "")
-            .OrderBy(u => u.Name)
-            .ThenBy(u => u.Email)
             .Select(u => new { u.Name, u.Email })
             .ToListAsync(cancellationToken);
+        users = [.. users.OrderBy(u => u.Name, NameOrder).ThenBy(u => u.Email, StringComparer.OrdinalIgnoreCase)];
 
         var pending = users
             .Where(u => !string.IsNullOrWhiteSpace(u.Email) && !answeredEmails.Contains(u.Email.Trim()))

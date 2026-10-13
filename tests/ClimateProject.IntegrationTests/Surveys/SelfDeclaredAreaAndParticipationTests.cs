@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using ClimateProject.Application.Auth;
+using ClimateProject.Application.Dashboard;
 using ClimateProject.Application.Localization;
 using ClimateProject.Application.OrgStructure;
 using ClimateProject.Application.Surveys;
@@ -236,6 +237,52 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
         Assert.False(await _harness.WithDbAsync(db => db.DemographicFields.AnyAsync(f => f.CompanyId == _companyId)));
     }
 
+    /// <summary>
+    /// The company dashboard's per-department count includes the área a visitor declared.
+    /// It read 0 for every área of EAGLE's link-only survey (2026-10-12), because it counted
+    /// <c>responses.department_id</c> only, which a declared área never sets. The payload is
+    /// unfloored by contract; the dashboard export floors it (DashboardExport).
+    /// </summary>
+    [Fact]
+    public async Task The_company_dashboard_counts_the_area_a_visitor_declared()
+    {
+        var survey = await QrSurveyAsync(collectIdentity: false);
+        await AnswerAsAreaAsync(survey, _ventas, 6);
+        await AnswerAsAreaAsync(survey, _finanzas, 2);
+        // A partial save is not a completed response, declared área or not.
+        Assert.Equal(HttpStatusCode.Created, (await SubmitAsync(survey, Area(_ventas), isComplete: false)).StatusCode);
+
+        var admin = await AdminAsync();
+        var dashboard = (await admin.GetFromJsonAsync<CompanyAdminDashboard>("/dashboard/company-admin"))!;
+
+        var counts = dashboard.Departments.ToDictionary(d => d.Id, d => d.CompletedResponseCount);
+        Assert.Equal(6, counts[_ventas]);
+        Assert.Equal(2, counts[_finanzas]);
+        Assert.Equal(0, counts[_operaciones]);
+    }
+
+    [Fact]
+    public async Task The_export_names_the_area_and_each_field_and_option_with_the_companys_labels()
+    {
+        var admin = await AdminAsync();
+        (await admin.PostAsJsonAsync("/admin/demographic-fields", new CreateDemographicFieldRequest(
+            _companyId, "turno", LocalizedInput.FromBare("Turno"), "select",
+            [new DemographicFieldOptionInput("manana", LocalizedInput.FromBare("Mañana"))], Required: false, Order: 1)))
+            .EnsureSuccessStatusCode();
+        var survey = await QrSurveyAsync(collectIdentity: false);
+        for (var i = 0; i < 6; i++)
+        {
+            var http = await SubmitAsync(survey, new Dictionary<string, string?>(Area(_ventas)) { ["turno"] = "manana" });
+            Assert.Equal(HttpStatusCode.Created, http.StatusCode);
+        }
+
+        var csv = await admin.GetStringAsync($"/surveys/{survey.Id}/export/csv?lang=es");
+
+        Assert.Contains("\"breakdown\",\"\",\"department\",\"es\",\"label\",\"Área\"", csv);
+        Assert.Contains("\"breakdown\",\"\",\"turno\",\"es\",\"label\",\"Turno\"", csv);
+        Assert.Contains("\"segment\",\"\",\"turno:manana\",\"es\",\"label\",\"Mañana\"", csv);
+    }
+
     // ------------------------------------------------------------------
     // Part 2: who answered, never linked to what they said
     // ------------------------------------------------------------------
@@ -393,6 +440,16 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
     // ------------------------------------------------------------------
     // Part 2: the admin view
     // ------------------------------------------------------------------
+
+    [Fact]
+    public void Names_are_listed_as_a_person_reads_them_whatever_the_database_collation()
+    {
+        string[] names = ["Zoe", "Persona 10", "álvaro", "Persona 2", "Ana", "Óscar"];
+
+        var ordered = names.OrderBy(n => n, ClimateProject.Api.Endpoints.SurveyParticipationEndpoints.NameOrder).ToList();
+
+        Assert.Equal(["álvaro", "Ana", "Óscar", "Persona 2", "Persona 10", "Zoe"], ordered);
+    }
 
     [Fact]
     public async Task An_admin_sees_who_answered_and_who_is_pending_and_nothing_else()

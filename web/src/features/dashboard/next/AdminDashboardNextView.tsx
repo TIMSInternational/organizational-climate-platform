@@ -216,11 +216,14 @@ export default function AdminDashboardNextView({
               value={open ? open.responses : null}
               unit={
                 open
-                  ? t('dashboard.next.openSurveySub', {
-                      // The dash the product prints for "not read" -- never a 0.
-                      audience: open.audience === null ? '—' : open.audience.toLocaleString(locale),
-                      date: calendarDay(Date.parse(open.closesAt), locale),
-                    })
+                  ? open.audience === null
+                    ? // A link-only survey has no audience to be "of": "15 de —" read as a
+                      // missing number (EAGLE, 2026-10-12). Say what is counted instead.
+                      t('dashboard.next.openSurveySubNoAudience', { date: calendarDay(Date.parse(open.closesAt), locale) })
+                    : t('dashboard.next.openSurveySub', {
+                        audience: open.audience.toLocaleString(locale),
+                        date: calendarDay(Date.parse(open.closesAt), locale),
+                      })
                   : undefined
               }
               locale={locale}

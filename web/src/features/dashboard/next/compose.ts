@@ -244,24 +244,28 @@ export function remindersOf(list: Pick<SurveyInvitationList, 'invitations'>): nu
 
 interface SurveysRegion {
   waves: Wave[]
-  latestClosedWave: Wave
+  /** Null on a company's first survey: nothing has closed yet, and that is not a gap. */
+  latestClosedWave: Wave | null
   previousWave: Wave | null
   openSurvey: OpenSurvey | null
-  latest: SurveyListItem
+  latest: SurveyListItem | null
 }
 
 function composeSurveys(surveys: readonly SurveyListItem[]): SurveysRegion | null {
   const kept = surveys.filter((survey) => survey.status !== 'archived')
   const closed = closedByClose(kept)
-  const latest = closed[closed.length - 1]
-  if (latest === undefined) return null
+  const latest = closed[closed.length - 1] ?? null
   const open = openByClose(kept)
   const planned = kept
     .filter((survey) => survey.status !== 'closed' && survey.status !== 'active')
     .sort((a, b) => a.startDate.localeCompare(b.startDate))
     .slice(0, 1)
+  // Empty only when there is no survey at all. A company on its FIRST survey has nothing
+  // closed, and returning null here used to drop its open survey too: the dashboard read
+  // "Encuesta abierta —" all through EAGLE's first collection (2026-10-12).
+  if (latest === null && open.length === 0 && planned.length === 0) return null
   const waves = [...closed.slice(-CLOSED_WAVES_ON_RAIL), ...open, ...planned].map(toWave)
-  const latestClosedWave = toWave(latest)
+  const latestClosedWave = latest ? toWave(latest) : null
   const previous = closed[closed.length - 2]
   const first = open[0]
   return {
@@ -390,14 +394,14 @@ export function composeModel(parts: ModelParts, options: ComposeOptions): Compos
     ? trends?.surveys.find((survey) => survey.surveyId === latestClosedWave.id)?.completedCount
     : undefined
   const participation = {
-    responses: surveys ? surveys.latest.responseCount : null,
+    responses: surveys?.latest ? surveys.latest.responseCount : null,
     completed: completedOnWire ?? null,
   }
 
   // map
   const grouped = parts.map.status === 'live' ? parts.map.value : null
   const questionOrder = parts.questionOrder?.status === 'live' ? parts.questionOrder.value : null
-  const map = grouped ? composeMap(grouped, surveys ? surveys.latestClosedWave.id : null, questionOrder) : NO_MAP
+  const map = grouped ? composeMap(grouped, surveys?.latestClosedWave?.id ?? null, questionOrder) : NO_MAP
   if (grouped && map.rows.length === 0) statuses.map = toRegionState(EMPTY)
   const mapOrNothing = statuses.map.status === 'live' ? map : NO_MAP
 
@@ -478,7 +482,10 @@ export function composeModel(parts: ModelParts, options: ComposeOptions): Compos
       : null
 
   const regions: RegionStatuses = statuses
-  const isPartial = Object.values(regions).some((region) => region.status === 'fallback')
+  // A region that FAILED makes the page partial. An EMPTY one does not: a company on its
+  // first survey has no trend and no map yet, each section already says so, and a
+  // "Datos incompletos" badge on a brand-new company read as a fault (2026-10-12).
+  const isPartial = Object.values(regions).some((region) => region.status === 'fallback' && region.reason === 'failed')
   return {
     model: {
       isPartial,

@@ -511,6 +511,19 @@ describe('AdminDashboardNextView', () => {
     expect(live.textContent).not.toContain('¿cómo fue la semana?')
   })
 
+  it('says "responses" for an open survey with no audience, never "of —"', () => {
+    // A link-only survey (EAGLE, 2026-10-12) has no audience to be "of"; "15 of —" read as a
+    // number that failed to load.
+    const openSurvey = fullModel.openSurvey ? { ...fullModel.openSurvey, responses: 15, audience: null } : null
+    // Only the tile: the low-participation attention item is never composed without an
+    // audience (compose.ts guards `open.audience !== null`), so fullModel's is not reachable here.
+    renderView({ ...fullModel, openSurvey, attention: fullModel.attention.filter((item) => item.kind !== 'low-participation') })
+    const text = document.body.textContent ?? ''
+    expect(text).toContain(`15${copy.openSurveySubNoAudience.replace('{date}', '')}`)
+    expect(text).not.toContain('of —')
+    expect(document.querySelector('[role="progressbar"]')).toBeNull()
+  })
+
   it('sets the four tiles at the artboard’s hero size', () => {
     renderView()
     const values = [...document.querySelectorAll('[data-slot="kpi-value"]')]
