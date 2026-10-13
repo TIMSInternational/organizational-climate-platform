@@ -57,8 +57,15 @@ public sealed record BulkImportRowInput(
 /// does not have yet). A row naming one is valid in preview and, on approval, the department is
 /// created — once, and only if a row that is actually invited uses it.
 /// </param>
+/// <param name="WithCredentials">
+/// Mass invite (ruled 2026-10-13): create each person's account now, with a generated username and
+/// password emailed to them, instead of an invitation to choose their own. Their demographics go on
+/// the account, so the survey never asks for them. A created row's status is <c>created</c>; one
+/// whose email did not go out carries the issue <c>credentials_not_sent</c>.
+/// </param>
 public sealed record BulkImportRowsRequest(
     Guid CompanyId,
     bool Preview,
     IReadOnlyList<BulkImportRowInput>? Rows,
-    IReadOnlyList<string>? NewDepartments = null);
+    IReadOnlyList<string>? NewDepartments = null,
+    bool WithCredentials = false);

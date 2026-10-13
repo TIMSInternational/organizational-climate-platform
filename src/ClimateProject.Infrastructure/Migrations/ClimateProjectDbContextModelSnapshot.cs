@@ -4366,6 +4366,11 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
 
+                    b.Property<string>("Username")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("username");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CompanyId");
@@ -4385,6 +4390,10 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasDatabaseName("IX_users_search_vector");
 
                     NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SearchVector"), "gin");
+
+                    b.HasIndex("Username")
+                        .IsUnique()
+                        .HasFilter("username IS NOT NULL");
 
                     b.ToTable("users", (string)null);
                 });

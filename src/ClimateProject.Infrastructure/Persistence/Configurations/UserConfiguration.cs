@@ -15,6 +15,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.Email).HasColumnName("email").HasMaxLength(255).IsRequired();
         builder.Property(u => u.Name).HasColumnName("name").HasMaxLength(200).IsRequired();
         builder.Property(u => u.PasswordHash).HasColumnName("password_hash");
+        builder.Property(u => u.Username).HasColumnName("username").HasMaxLength(40);
         builder.Property(u => u.Role).HasColumnName("role").HasMaxLength(32).IsRequired();
         builder.Property(u => u.PersonaExternalId).HasColumnName("persona_external_id").HasMaxLength(64);
         builder.Property(u => u.DepartmentId).HasColumnName("department_id");
@@ -48,6 +49,11 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         // (every user until that backfill runs) remain allowed, matching the
         // Company.EmailDomain precedent.
         builder.HasIndex(u => u.PersonaExternalId).IsUnique().HasFilter("persona_external_id IS NOT NULL");
+
+        // A mass invite's generated sign-in name. Unique across the platform, like email, because
+        // /auth/login resolves it with no company to scope by; filtered because every account
+        // that signs in by email has none.
+        builder.HasIndex(u => u.Username).IsUnique().HasFilter("username IS NOT NULL");
 
         // OnDelete is now PINNED rather than left to EF's default, because the default
         // FLIPS when an FK becomes optional: a required FK defaults to Cascade, an optional

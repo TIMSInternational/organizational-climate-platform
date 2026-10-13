@@ -139,6 +139,7 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
 
         var survey = await SurveyTestHarness.CreateSurveyAsync(admin, request);
         (await SurveyTestHarness.SetStatusAsync(admin, survey.Id, SurveyStatuses.Active)).EnsureSuccessStatusCode();
+        await SurveyTestHarness.OpenPublicLinkAsync(admin, survey.Id);
         return survey;
     }
 
@@ -1135,6 +1136,34 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
         var http = await _factory.CreateClient().GetAsync(new Uri($"/surveys/{survey.Id}/respond", UriKind.Relative));
 
         Assert.Equal(HttpStatusCode.Unauthorized, http.StatusCode);
+    }
+
+    /// <summary>
+    /// Mass invite (ruled 2026-10-13) is login only, so its survey's link is off. With no live
+    /// link, a visitor holding the survey's id is refused both the form and a submission, the
+    /// way a closed survey refuses them, and nothing is written. Giving the survey a link again
+    /// is what reopens it to visitors.
+    /// </summary>
+    [Fact]
+    public async Task With_its_link_revoked_an_open_survey_serves_no_visitor_and_stores_nothing()
+    {
+        var survey = await ActiveSurveyAsync();
+        var admin = await AdminAsync();
+        (await admin.PostAsync($"/surveys/{survey.Id}/distribution/link/revoke", null)).EnsureSuccessStatusCode();
+
+        var view = await _factory.CreateClient().GetAsync(new Uri($"/surveys/{survey.Id}/respond", UriKind.Relative));
+        var submit = await _factory.CreateClient().PostAsJsonAsync($"/surveys/{survey.Id}/responses", new SubmitSurveyResponseRequest(
+            Answers: [new SurveyAnswerInput(survey.Questions[0].Id, "remote")],
+            SessionId: Guid.NewGuid().ToString("N"),
+            IsComplete: true));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, view.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, submit.StatusCode);
+        Assert.Equal(0, await _harness.WithDbAsync(db => db.Responses.CountAsync(r => r.SurveyId == survey.Id)));
+
+        await SurveyTestHarness.OpenPublicLinkAsync(admin, survey.Id);
+        var reopened = await _factory.CreateClient().GetAsync(new Uri($"/surveys/{survey.Id}/respond", UriKind.Relative));
+        Assert.Equal(HttpStatusCode.OK, reopened.StatusCode);
     }
 
     [Fact]

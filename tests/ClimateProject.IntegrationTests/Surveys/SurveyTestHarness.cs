@@ -282,4 +282,15 @@ internal sealed class SurveyTestHarness(AuthWebApplicationFactory factory, strin
 
     public static Task<HttpResponseMessage> SetStatusAsync(HttpClient client, Guid surveyId, string status)
         => client.PutAsJsonAsync($"/surveys/{surveyId}/status", new UpdateSurveyStatusRequest(status));
+
+    /// <summary>
+    /// Gives the survey a live link and QR, as an admin does on Distribución. Since 2026-10-13
+    /// a visitor with no account is served only while one exists: a mass-invite survey has its
+    /// link off and is answered by signing in.
+    /// </summary>
+    public static async Task OpenPublicLinkAsync(HttpClient admin, Guid surveyId)
+        => (await admin.PutAsJsonAsync(
+                $"/surveys/{surveyId}/distribution",
+                new UpsertSurveyDistributionRequest(AccessType: SurveyAccessTypes.Public)))
+            .EnsureSuccessStatusCode();
 }

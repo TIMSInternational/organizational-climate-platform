@@ -52,9 +52,13 @@ public static class AuthEndpoints
             return Results.Json(new ErrorResponse("Email and password are required"), statusCode: 400);
         }
 
-        var email = request.Email.ToLowerInvariant();
-        var user = await db.Users
-            .FirstOrDefaultAsync(u => u.Email == email && u.IsActive, cancellationToken);
+        // The one field takes an email or a mass invite's generated username (ruled 2026-10-13).
+        // An '@' decides which: a username is drawn from an alphabet that has none, and every
+        // email has one, so the two lookups can never both match.
+        var identifier = request.Email.Trim().ToLowerInvariant();
+        var user = identifier.Contains('@', StringComparison.Ordinal)
+            ? await db.Users.FirstOrDefaultAsync(u => u.Email == identifier && u.IsActive, cancellationToken)
+            : await db.Users.FirstOrDefaultAsync(u => u.Username == identifier && u.IsActive, cancellationToken);
 
         if (user is null)
         {

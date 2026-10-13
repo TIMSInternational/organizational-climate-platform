@@ -93,7 +93,7 @@ public static class UserEndpoints
 
         var users = await query
             .OrderBy(u => u.Name)
-            .Select(u => new UserListItem(u.Id, u.Email, u.Name, u.Role, u.DepartmentId, u.IsActive, u.LastLoginAt, u.CreatedAt))
+            .Select(u => new UserListItem(u.Id, u.Email, u.Name, u.Role, u.DepartmentId, u.IsActive, u.LastLoginAt, u.CreatedAt, u.Username))
             .ToListAsync(cancellationToken);
 
         return Results.Ok(new UserListResponse(users));

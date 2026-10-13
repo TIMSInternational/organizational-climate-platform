@@ -181,7 +181,19 @@ public static class SurveyResponseEndpoints
             // separate participation list, never joined to the answers.
             // A draft or closed survey is never publicly readable, whatever its settings
             // say -- the settings describe how it will be answered, not whether it may be.
-            return SurveyStatuses.AcceptsResponses(survey.Status)
+            if (!SurveyStatuses.AcceptsResponses(survey.Status))
+            {
+                return new RespondentResolution(null, Unavailable());
+            }
+
+            // ...but only while the survey HAS a live link or QR. A mass-invite survey has its
+            // link revoked (ruled 2026-10-13: login only), and before this check anyone holding
+            // its id was still served as an anonymous visitor and asked their demographics --
+            // a second, uncounted way in beside the roster. Same answer as a closed survey: an
+            // id with no live link should learn nothing from a direct request.
+            var hasLiveLink = await db.SurveyDistributions
+                .AnyAsync(d => d.SurveyId == survey.Id && d.PublicUrl != null, cancellationToken);
+            return hasLiveLink
                 ? new RespondentResolution(new Respondent(null, null, true), null)
                 : new RespondentResolution(null, Unavailable());
         }
