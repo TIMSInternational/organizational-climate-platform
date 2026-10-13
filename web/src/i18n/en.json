@@ -260,7 +260,7 @@
         "failed": "The climate map could not be read.",
         "none": "There is no closed survey with data for this plan yet.",
         "protected": "protected",
-        "protectedNote": "{survey} · fewer than 5 responses in {scope}: no figure",
+        "protectedNote": "{survey} · fewer than {floor} responses in {scope}: no figure",
         "lowestOfMap": "the lowest cell on the map",
         "lowestOfRow": "the lowest in {scope}",
         "target": "target {target}",
@@ -272,7 +272,7 @@
         "moveReading": "{fromCode} {from} → {toCode} {to}",
         "moveFlat": "no change",
         "moveAwaiting": "No survey has closed since {code} yet: it will be compared against the next one.",
-        "moveProtected": "The surveys after {code} do not disclose this group: fewer than 5 responses.",
+        "moveProtected": "The surveys after {code} do not disclose this group: fewer than {floor} responses.",
         "adminOnly": "The finding behind this plan is read by the administration, in the survey results."
       },
       "measures": {
@@ -5262,7 +5262,7 @@
       "emptyTitle": "No findings yet",
       "emptyReason": "AI analysis is not configured yet: that is why {company} has no findings.",
       "emptyNext": "Once it is, each finding will state its priority, its type and the survey it comes from, and it will be marked as reviewed here.",
-      "privacy": "A finding never quotes open answers or describes a group with fewer than 5 responses.",
+      "privacy": "A finding never quotes open answers or describes a group with fewer than {floor} responses.",
       "acknowledge": "Mark as reviewed",
       "acknowledged": "Reviewed",
       "loadFailed": "The findings could not be loaded",
@@ -5406,7 +5406,7 @@
     },
     "demographics": {
       "eyebrow": "About you",
-      "intro": "Before the questions, tell us a little about yourself. That is what lets the results be compared between groups. Nothing is reported about a group of fewer than 5 people.",
+      "intro": "Before the questions, tell us a little about yourself. That is what lets the results be compared between groups. Nothing is reported about a group of fewer than {floor} people.",
       "preferNotToSay": "Prefer not to say",
       "choose": "Choose an option",
       "missing": "Choose an option to continue.",

@@ -260,7 +260,7 @@
         "failed": "No se pudo leer el mapa de clima.",
         "none": "Todavía no hay una encuesta cerrada con datos para este plan.",
         "protected": "protegido",
-        "protectedNote": "{survey} · menos de 5 respuestas en {scope}: sin cifra",
+        "protectedNote": "{survey} · menos de {floor} respuestas en {scope}: sin cifra",
         "lowestOfMap": "la celda más baja del mapa",
         "lowestOfRow": "la más baja de {scope}",
         "target": "meta {target}",
@@ -272,7 +272,7 @@
         "moveReading": "{fromCode} {from} → {toCode} {to}",
         "moveFlat": "sin cambio",
         "moveAwaiting": "Aún no cierra una encuesta posterior a {code}: se comparará con la siguiente.",
-        "moveProtected": "Las encuestas posteriores a {code} no revelan este grupo: menos de 5 respuestas.",
+        "moveProtected": "Las encuestas posteriores a {code} no revelan este grupo: menos de {floor} respuestas.",
         "adminOnly": "El hallazgo que originó este plan lo consulta la administración, en los resultados de la encuesta."
       },
       "measures": {
@@ -5262,7 +5262,7 @@
       "emptyTitle": "Aún no hay hallazgos",
       "emptyReason": "El análisis de IA aún no está configurado: por eso {company} no tiene hallazgos.",
       "emptyNext": "Cuando lo esté, cada hallazgo dirá su prioridad, su tipo y la encuesta de la que proviene, y aquí se marcará como revisado.",
-      "privacy": "Un hallazgo nunca cita respuestas abiertas ni describe un grupo con menos de 5 respuestas.",
+      "privacy": "Un hallazgo nunca cita respuestas abiertas ni describe un grupo con menos de {floor} respuestas.",
       "acknowledge": "Marcar como revisado",
       "acknowledged": "Revisado",
       "loadFailed": "No se pudieron cargar los hallazgos",
@@ -5406,7 +5406,7 @@
     },
     "demographics": {
       "eyebrow": "Sobre usted",
-      "intro": "Antes de las preguntas, cuéntenos un poco sobre usted. Así los resultados se pueden comparar entre grupos. Nada se informa sobre un grupo de menos de 5 personas.",
+      "intro": "Antes de las preguntas, cuéntenos un poco sobre usted. Así los resultados se pueden comparar entre grupos. Nada se informa sobre un grupo de menos de {floor} personas.",
       "preferNotToSay": "Prefiero no decir",
       "choose": "Elija una opción",
       "missing": "Elija una opción para continuar.",

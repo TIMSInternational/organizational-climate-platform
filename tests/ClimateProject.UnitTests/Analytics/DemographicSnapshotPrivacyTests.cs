@@ -1,4 +1,5 @@
 using ClimateProject.Application.Analytics;
+using ClimateProject.Domain.Entities;
 
 namespace ClimateProject.UnitTests.Analytics;
 
@@ -132,12 +133,22 @@ public class DemographicSnapshotPrivacyTests
         Assert.Null(DemographicSnapshotPrivacy.ToJson(distribution));
     }
 
+    /// <summary>
+    /// This test used to assert the opposite: that the group-count floor was HIGHER than a
+    /// microclimate's participation floor of 3, because demographic quasi-identifiers combine
+    /// (department x role x tenure) while a microclimate gates one aggregate sentiment reading.
+    ///
+    /// <para>
+    /// Ruled 2026-10-13: the privacy floor is 3 platform-wide, so the two are now equal and
+    /// that argument no longer holds. Kept, inverted, rather than deleted -- the number is now
+    /// a DECISION that two different disclosure surfaces share one floor, and a test asserting
+    /// it is what stops the next reader restoring the gap as an obvious correction. The
+    /// reasoning it replaces is preserved on <see cref="DemographicSnapshotPrivacy"/>.
+    /// </para>
+    /// </summary>
     [Fact]
-    public void The_threshold_is_higher_than_the_microclimate_participation_floor()
+    public void The_threshold_is_the_same_as_the_microclimate_participation_floor()
     {
-        // Deliberate: demographic quasi-identifiers combine (department x role x tenure),
-        // so the floor for group counts is higher than the floor for a single aggregate
-        // sentiment reading. See the type's doc comment.
-        Assert.True(DemographicSnapshotPrivacy.MinimumGroupSize > 3);
+        Assert.Equal(DemographicSnapshotPrivacy.MinimumGroupSize, new Microclimate().RealtimeSettings.ParticipationThreshold);
     }
 }

@@ -1043,7 +1043,7 @@ export default function SurveyRespondForm({
             field it would push the field itself down the phone, which is the same
             reasoning the author's description follows on the question pages. */}
         {demographicStep === 0 ? (
-          <p className="m-0 max-w-prose text-respond text-fg-secondary">{t('demographics.intro')}</p>
+          <p className="m-0 max-w-prose text-respond text-fg-secondary">{t('demographics.intro', { floor: ANONYMITY_FLOOR })}</p>
         ) : null}
 
         <div className="flex flex-col gap-4">

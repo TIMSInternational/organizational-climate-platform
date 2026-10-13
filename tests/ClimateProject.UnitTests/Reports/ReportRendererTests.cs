@@ -122,11 +122,15 @@ public class ReportRendererTests
     // ==================================================================
 
     /// <summary>
-    /// Direction has three respondents, below
+    /// Direction has two respondents, below
     /// <see cref="SurveyResultsPrivacy.MinimumSegmentRespondents"/>. It used to be drawn as a
-    /// named row reading "Withheld" -- beside a paragraph printing the withheld headcount, 3,
+    /// named row reading "Withheld" -- beside a paragraph printing the withheld headcount,
     /// which with one withheld department IS Direction's size. Since 2026-10-12 it is counted
     /// and never named, the rule SurveyExport applies to every breakdown.
+    ///
+    /// The fixture's count moved from 3 to 2 when the floor became 3 (ruled 2026-10-13): at a
+    /// floor of 3 a department of 3 is disclosed on its own merits, so leaving it at 3 would
+    /// have made this a test about a department that is NOT withheld.
     /// </summary>
     [Fact]
     public void A_withheld_department_is_counted_and_never_named_in_the_pdf()
@@ -352,7 +356,7 @@ public class ReportRendererTests
         // "why is this section empty" has to reach the same answer as the screen without
         // anybody translating back.
         Assert.Contains(SurveyResultsPrivacy.BelowMinimumRespondents, drawn, StringComparison.Ordinal);
-        Assert.Contains("4 complete responses", drawn, StringComparison.Ordinal);
+        Assert.Contains("2 complete responses", drawn, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -368,7 +372,7 @@ public class ReportRendererTests
 
         // The participation counters ARE there: a count identifies nobody, and it is the number
         // that tells an admin whether to keep chasing responses.
-        Assert.Equal("4", Cell(rows, ReportRenderer.SurveySection, "completed_count", "value", thin));
+        Assert.Equal("2", Cell(rows, ReportRenderer.SurveySection, "completed_count", "value", thin));
 
         // Not "the flag is set" -- the CONTENT is absent, for every question-scoped section.
         Assert.DoesNotContain(rows, r => r.Survey == thin && r.Section == ReportRenderer.QuestionSection);
@@ -679,14 +683,15 @@ public class ReportRendererTests
                     "Clima anual",
                     SurveyStatuses.Active,
                     healthyLocale,
-                    // 6 + 3 by department and 7 + 2 by nationality, plus three who carry
-                        // neither: so the people outside Engineering, and outside
-                        // Costarricense, are at least five and neither is withheld for
-                        // what a subtraction would reveal (SurveyAggregation.WithholdComplement).
+                    // 6 + 2 by department and 7 + 2 by nationality, out of 12: so the people
+                        // outside Engineering (6) and outside Costarricense (5) both reach the
+                        // floor, and neither disclosed segment is withheld for what a
+                        // subtraction would reveal (SurveyAggregation.WithholdComplement).
+                        // Dirección's 2 and Venezolana's 2 are the withheld ones.
                     Aggregate(
                         respondentCount: 12,
                         invited: 17,
-                        departments: [(Engineering, "Ingeniería", 20, 6), (Direction, "Dirección", 4, 3)],
+                        departments: [(Engineering, "Ingeniería", 20, 6), (Direction, "Dirección", 4, 2)],
                         demographics: [("nationality", "Costarricense", 7), ("nationality", "Venezolana", 2)],
                         category: category)),
                 // A second measurable survey, so "one row per question per survey" is a claim
@@ -702,7 +707,7 @@ public class ReportRendererTests
                     "Piloto",
                     SurveyStatuses.Active,
                     ContentLanguages.English,
-                    Aggregate(respondentCount: 4, invited: 12)),
+                    Aggregate(respondentCount: 2, invited: 12)),
             ],
             [
                 new ReportAIInsightItem(

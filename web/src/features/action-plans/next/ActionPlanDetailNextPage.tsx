@@ -33,7 +33,7 @@ import { calendarDay, calendarDayLong } from '../../../lib/calendarDay'
 import { cn } from '../../../lib/cn'
 import { dimensionLabel } from '../../surveys/dimensionLabel'
 import { reading } from '../../dashboard/next/derive'
-import { BandChip, bandOf } from '../../../components/charts'
+import { ANONYMITY_FLOOR, BandChip, bandOf } from '../../../components/charts'
 import { useResultBands } from '../../result-bands/useResultBands'
 import ProgressUpdateForm from '../components/ProgressUpdateForm'
 import { ACTION_PLAN_PRIORITIES, ACTION_PLAN_STATUSES, kpiProgressPercent, priorityLabel, statusLabel } from '../actionPlanVocabulary'
@@ -563,7 +563,7 @@ function FindingBlock({
           <HatchTag label={t('actionPlans.next.finding.protected')} />
         </div>
         <span className="text-sm text-fg-tertiary">
-          {t('actionPlans.next.finding.protectedNote', { survey: value.surveyTitle, scope })}
+          {t('actionPlans.next.finding.protectedNote', { survey: value.surveyTitle, scope, floor: ANONYMITY_FLOOR })}
         </span>
         {openLink}
       </div>
@@ -619,7 +619,7 @@ function MoveLine({ move }: { move: Settled<PlanMove> }) {
   }
   if (value.status === 'protected') {
     return (
-      <span className="text-sm text-fg-tertiary">{t('actionPlans.next.finding.moveProtected', { code: value.code })}</span>
+      <span className="text-sm text-fg-tertiary">{t('actionPlans.next.finding.moveProtected', { code: value.code, floor: ANONYMITY_FLOOR })}</span>
     )
   }
   const delta = value.to - value.from

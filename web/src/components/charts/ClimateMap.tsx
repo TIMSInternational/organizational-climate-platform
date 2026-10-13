@@ -6,6 +6,7 @@ import { DIVERGING_COLORS, DIVERGING_INKS, divergingPair } from './palette'
 import BandGlyph from './BandGlyph'
 import BandLegend from './BandLegend'
 import ProtectedCell from './ProtectedCell'
+import { ANONYMITY_FLOOR } from './suppression'
 import { BAND_PAINT, bandCellStyle, bandName, bandOf, scoreText, type ResultBands } from './resultBands'
 import { PROTECTED_HATCH, isSuppressed } from './suppression'
 
@@ -223,7 +224,7 @@ export default function ClimateMap({
   target,
   deadBandAt = 2,
   extremeAt = 10,
-  threshold = 5,
+  threshold = ANONYMITY_FLOOR,
   decimals,
   title,
   size = 'default',

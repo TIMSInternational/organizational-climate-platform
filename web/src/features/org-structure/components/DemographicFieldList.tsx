@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '../../../components/ui'
-import { formatMetric, isSuppressed } from '../../../components/charts'
+import { ANONYMITY_FLOOR, formatMetric, isSuppressed } from '../../../components/charts'
 import { peoplePerValue } from './demographicReach'
 
 /**
@@ -81,7 +81,7 @@ const FIXED_VALUE_TYPE = 'select'
 export default function DemographicFieldList({
   fields,
   people,
-  threshold = 5,
+  threshold = ANONYMITY_FLOOR,
   onEdit,
 }: {
   fields: DemographicField[]

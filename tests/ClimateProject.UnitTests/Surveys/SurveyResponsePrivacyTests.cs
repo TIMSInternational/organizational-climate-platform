@@ -18,11 +18,14 @@ public class SurveyResponsePrivacyTests
         Assert.Equal(DemographicSnapshotPrivacy.MinimumGroupSize, SurveyResponsePrivacy.MinimumCohortSize);
     }
 
+    // The cases straddle the floor, which is 3 (ruled 2026-10-13; it was 5). They move with
+    // the number: at 3, "4 is too small" is false and "5 is big enough" no longer touches the
+    // boundary this test exists to pin.
     [Theory]
     [InlineData(0, false)]
     [InlineData(1, false)]
-    [InlineData(4, false)]
-    [InlineData(5, true)]
+    [InlineData(2, false)]
+    [InlineData(3, true)]
     [InlineData(500, true)]
     public void A_cohort_hides_a_respondent_only_once_it_is_big_enough(int size, bool expected)
         => Assert.Equal(expected, SurveyResponsePrivacy.CohortIsLargeEnough(size));
