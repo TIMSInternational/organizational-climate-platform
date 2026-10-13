@@ -367,6 +367,11 @@ public static class ProfileEndpoints
             // whose account died mid-request has to go to the login page, not be told the
             // save failed.
             Results.Json(new { message = "Account is no longer active" }, statusCode: 401),
+            // Carried off the presented token. A password change is not a new sign-in: it
+            // re-mints so the caller is not signed out by their own stamp rotation, and
+            // restarting the ceiling here would turn "change your password" into a way to
+            // extend a session past 24 hours.
+            sessionStartedAt: SessionWindows.StartedAt(principal, now),
             cancellationToken);
     }
 

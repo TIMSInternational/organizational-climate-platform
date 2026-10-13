@@ -134,3 +134,33 @@ export async function googleLogin(baseUrl: string, idToken: string): Promise<Log
 
   return response.json() as Promise<LoginResponse>
 }
+
+/**
+ * `POST /auth/refresh` — a new token for the session the caller already holds.
+ *
+ * ## Why not `authFetch`
+ *
+ * `authFetch` turns every 401 into `clearToken()` + `/login` with no reason, which is the
+ * right default for a screen's data load and the wrong one here. This call's refusals are
+ * the feature: a 401 means the session is over — the idle window ran out between the click
+ * and the request, the absolute 24-hour ceiling was reached, or the account was deactivated
+ * — and the caller takes the reader to `/auth/error?reason=session-expired` rather than a
+ * bare login form. A transport failure is not a refusal at all and must not sign anyone
+ * out, so it stays a plain `Error` the caller can tell apart from an `AuthRequestError`.
+ *
+ * The endpoint is `RequireAuthorization()` and re-resolves the user through
+ * `ActingUserResolver`, so a deactivated or erased account is refused here even though the
+ * presented token is still perfectly valid.
+ */
+export async function refreshSession(baseUrl: string, token: string): Promise<LoginResponse> {
+  const response = await fetch(`${baseUrl}/auth/refresh`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+  })
+
+  if (!response.ok) {
+    throw await toRequestError(response)
+  }
+
+  return response.json() as Promise<LoginResponse>
+}

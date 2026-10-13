@@ -9,7 +9,6 @@ namespace ClimateProject.Infrastructure.Auth;
 
 public class JwtTokenService : IJwtTokenService
 {
-    private static readonly TimeSpan TokenLifetime = TimeSpan.FromHours(24);
     private readonly SymmetricSecurityKey _signingKey;
 
     public JwtTokenService(IConfiguration configuration)
@@ -23,7 +22,7 @@ public class JwtTokenService : IJwtTokenService
         _signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
     }
 
-    public string IssueToken(TokenClaims claims)
+    public string IssueToken(TokenClaims claims, SessionWindow window)
     {
         var now = DateTimeOffset.UtcNow;
 
@@ -44,11 +43,23 @@ public class JwtTokenService : IJwtTokenService
             new(TokenClaimNames.SecurityStamp, claims.SecurityStamp.ToString()),
 
             new(JwtRegisteredClaimNames.Iat, now.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
+
+            // The absolute ceiling, carried in the token rather than recomputed (#idle).
+            // `iat` cannot stand in for it: iat is when THIS token was minted, and a sliding
+            // window re-mints on activity, so a ceiling measured from iat would move forward
+            // with every refresh and never arrive.
+            new(
+                TokenClaimNames.SessionStart,
+                window.StartedAt.ToUnixTimeSeconds().ToString(),
+                ClaimValueTypes.Integer64),
         };
 
         var token = new JwtSecurityToken(
             claims: jwtClaims,
-            expires: now.UtcDateTime.Add(TokenLifetime),
+            // SessionWindows.Next decided this: the idle window from SystemSettings, or the
+            // ceiling, whichever lands first. The lifetime used to be a constant here, which
+            // is precisely why the setting a super admin edits enforced nothing.
+            expires: window.ExpiresAt.UtcDateTime,
             signingCredentials: new SigningCredentials(_signingKey, SecurityAlgorithms.HmacSha256));
 
         return new JwtSecurityTokenHandler().WriteToken(token);

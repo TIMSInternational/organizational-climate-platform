@@ -21,6 +21,12 @@ public static class AuthEndpoints
     // company already owns. One constant, shared by /auth/signup and /auth/google, because
     // the two paths used to disagree -- signup refused an unknown domain while Google
     // silently provisioned a brand-new tenant for it, gmail.com included (#280).
+    // Said plainly, and only ever to a caller who already holds a valid token for the
+    // account: reaching the ceiling is not a credential failure and there is nothing the
+    // holder can do about it but sign in again.
+    private const string SessionCeilingReachedMessage =
+        "This session has reached its maximum length. Please sign in again.";
+
     private const string NoCompanyForDomainMessage =
         "No company found for this email domain. Please contact your administrator for an invitation.";
 
@@ -87,6 +93,9 @@ public static class AuthEndpoints
         return await IssueTokenForAsync(
             user, db, jwtTokenService,
             Results.Json(new ErrorResponse("Invalid email or password"), statusCode: 401),
+            // A sign-in is where the absolute ceiling starts counting. Every other mint
+            // carries this instant forward instead of replacing it.
+            sessionStartedAt: DateTimeOffset.UtcNow,
             cancellationToken);
     }
 
@@ -164,6 +173,7 @@ public static class AuthEndpoints
         return await IssueTokenForAsync(
             user, db, jwtTokenService,
             Results.Json(new ErrorResponse("Account is no longer active"), statusCode: 401),
+            sessionStartedAt: DateTimeOffset.UtcNow,
             cancellationToken,
             successStatusCode: 201);
     }
@@ -246,6 +256,7 @@ public static class AuthEndpoints
         return await IssueTokenForAsync(
             user, db, jwtTokenService,
             Results.Json(new ErrorResponse("Google sign-in failed"), statusCode: 401),
+            sessionStartedAt: now,
             cancellationToken);
     }
 
@@ -279,6 +290,10 @@ public static class AuthEndpoints
         return await IssueTokenForAsync(
             user, db, jwtTokenService,
             Results.Json(new ErrorResponse("Account is no longer active"), statusCode: 401),
+            // Carried off the presented token, never restarted. This endpoint is the sliding
+            // half of the idle window -- the client calls it on real interaction -- so basing
+            // the ceiling on "now" here would mean a session that is used never ends.
+            sessionStartedAt: SessionWindows.StartedAt(principal, DateTimeOffset.UtcNow),
             cancellationToken);
     }
 
@@ -310,12 +325,29 @@ public static class AuthEndpoints
         ClimateProjectDbContext db,
         IJwtTokenService jwtTokenService,
         IResult inactiveResponse,
+        DateTimeOffset sessionStartedAt,
         CancellationToken cancellationToken,
         int successStatusCode = 200)
     {
         if (!user.IsActive)
         {
             return inactiveResponse;
+        }
+
+        // The idle window, read here because this is the single mint: every path that hands
+        // out a token gets the configured timeout without having to remember it, which is the
+        // same argument the deactivation guard above is placed here for. Before this,
+        // SessionTimeoutMinutes was a control a super admin could edit that enforced nothing.
+        var window = SessionWindows.Next(
+            sessionStartedAt,
+            DateTimeOffset.UtcNow,
+            await SessionTimeouts.LoadMinutesAsync(db, cancellationToken));
+
+        if (window is null)
+        {
+            // The ceiling, which only a re-mint can reach: a fresh sign-in starts the clock,
+            // so `sessionStartedAt` is `now` there and the window is always open.
+            return Results.Json(new ErrorResponse(SessionCeilingReachedMessage), statusCode: 401);
         }
 
         var token = jwtTokenService.IssueToken(new TokenClaims(
@@ -340,7 +372,8 @@ public static class AuthEndpoints
             // the OTHER sessions gone rotates the column and saves before calling this, and
             // the token minted here then carries the new value -- which is what lets a
             // password change hand its own caller a working session back.
-            SecurityStamp: user.SecurityStamp));
+            SecurityStamp: user.SecurityStamp),
+            window);
 
         return Results.Json(new TokenResponse(token), statusCode: successStatusCode);
     }
