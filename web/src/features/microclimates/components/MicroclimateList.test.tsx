@@ -20,7 +20,7 @@ function session(overrides: Partial<Microclimate> = {}): Microclimate {
     companyId: 'c1',
     status: 'closed',
     language: 'en',
-    responseCount: 4,
+    responseCount: MINIMUM_RESPONDENTS - 1,
     targetParticipantCount: 4,
     createdAt: '2026-08-21T09:00:00Z',
     ...overrides,
@@ -62,7 +62,7 @@ describe('MicroclimateList results suppression', () => {
   it('never puts the suppressed count in the locked cell or its accessible name', () => {
     // Publishing "4" for a protected cell leaks exactly what the floor exists to
     // protect. The Responses column shows the count; the lock must not repeat it.
-    renderList([session({ responseCount: 4, targetParticipantCount: 4 })])
+    renderList([session({ responseCount: MINIMUM_RESPONDENTS - 1, targetParticipantCount: 4 })])
 
     const lock = screen.getByRole('img', { name: /protected/ })
     expect(lock.getAttribute('aria-label')).not.toContain('4')

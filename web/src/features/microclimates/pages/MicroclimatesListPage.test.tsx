@@ -8,6 +8,7 @@ import { TranslationProvider } from '../../../i18n'
 import { setToken, clearToken } from '../../../auth/token'
 import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../company-context'
 import { tokenFor } from '../../../test/jwtFixture'
+import { MINIMUM_RESPONDENTS } from '../microclimatePrivacy'
 
 /**
  * The list `/microclimates` drew until the redesign replaced it with
@@ -143,7 +144,7 @@ describe('MicroclimatesListPage strip and live panel', () => {
     renderPage()
 
     expect(
-      await screen.findByText(/stay anonymous at the same floor of 5\./),
+      await screen.findByText(new RegExp(`stay anonymous at the same floor of ${MINIMUM_RESPONDENTS}\\.`)),
     ).toBeTruthy()
   })
 })

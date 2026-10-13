@@ -24,6 +24,7 @@ import type {
   SurveySegmentSelector,
 } from '../api/surveyResults'
 import en from '../../../i18n/en.json'
+import { ANONYMITY_FLOOR } from '../../../components/charts'
 
 vi.mock('../api/surveyResults', async (importOriginal) => ({
   ...(await importOriginal<typeof resultsApi>()),
@@ -318,7 +319,7 @@ describe('SurveyCrossPanel — comparing', () => {
 
     // ONE row-level statement, not one "Protegido" per category: the cohort is withheld as a
     // unit, and six cells saying so implied six separate decisions.
-    const refusal = copy.protectedRow.replace('{floor}', '5')
+    const refusal = copy.protectedRow.replace('{floor}', String(ANONYMITY_FLOOR))
     await waitFor(() => expect(screen.getByText(refusal, { exact: false })).toBeTruthy())
     expect(screen.getAllByText(refusal, { exact: false })).toHaveLength(1)
     // For a cross the size IS the disclosure, so the cohort's own count never appears.
@@ -416,7 +417,7 @@ describe('SurveyCrossPanel — the follow-up', () => {
     await choose('puesto', 'gerencia')
     await userEvent.click(screen.getByRole('button', { name: copy.compare }))
     await waitFor(() =>
-      expect(screen.getByText(copy.protectedRow.replace('{floor}', '5'), { exact: false })).toBeTruthy(),
+      expect(screen.getByText(copy.protectedRow.replace('{floor}', String(ANONYMITY_FLOOR)), { exact: false })).toBeTruthy(),
     )
 
     // A group that cannot be read is still a group that can be helped; the floor must not

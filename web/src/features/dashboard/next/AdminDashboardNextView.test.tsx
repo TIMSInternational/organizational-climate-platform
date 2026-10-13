@@ -432,7 +432,7 @@ describe('AdminDashboardNextView', () => {
     try {
       const live = fullModel.liveMicroclimate!
       renderView({ ...fullModel, liveMicroclimate: { ...live, closesAt: '2026-09-12T02:06:08.992+00:00' } })
-      const sentence = (date: string) => copy.liveSub.replace('{date}', date).replace('{floor}', '5')
+      const sentence = (date: string) => copy.liveSub.replace('{date}', date).replace('{floor}', String(ANONYMITY_FLOOR))
       expect(document.body.textContent).toContain(sentence('Sep 11'))
       expect(document.body.textContent).not.toContain(sentence('Sep 12'))
     } finally {

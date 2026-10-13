@@ -7,6 +7,7 @@ import { TranslationProvider } from '../../../i18n'
 import { LOCALE_STORAGE_KEY } from '../../../i18n/locale'
 import { setToken, clearToken } from '../../../auth/token'
 import type { LiveResults, MicroclimateDetail } from '../api/microclimates'
+import { MINIMUM_RESPONDENTS } from '../microclimatePrivacy'
 
 function detail(overrides: Partial<MicroclimateDetail> = {}): MicroclimateDetail {
   return {
@@ -121,7 +122,10 @@ describe('MicroclimateResultsPage', () => {
   })
 
   it('withholds wording below the disclosure floor', async () => {
-    routeFetch(detail({ responseCount: 3 }), results({ responseCount: 3 }))
+    routeFetch(
+      detail({ responseCount: MINIMUM_RESPONDENTS - 1 }),
+      results({ responseCount: MINIMUM_RESPONDENTS - 1 }),
+    )
     renderPage()
 
     expect(await screen.findByText('Word cloud withheld')).toBeTruthy()

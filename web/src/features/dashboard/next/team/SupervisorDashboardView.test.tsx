@@ -11,6 +11,7 @@ import { CompanyContextProvider } from '../../../../company-context'
 import { setToken } from '../../../../auth/token'
 import { tokenFor } from '../../../../test/jwtFixture'
 import en from '../../../../i18n/en.json'
+import { ANONYMITY_FLOOR } from '../../../../components/charts'
 
 /**
  * The supervisor's Panel de Control — a proposal — drawn from a model composed the way the
@@ -131,7 +132,7 @@ describe('SupervisorDashboardView', () => {
     expect(screen.getByText(`${copy.proposal} · Ingeniería · ${en.users.supervisor}`)).toBeTruthy()
     const note = screen.getByRole('note')
     expect(note.textContent).toContain(copy.proposalLead)
-    expect(note.textContent).toContain(copy.proposalBody.replace('{floor}', '5'))
+    expect(note.textContent).toContain(copy.proposalBody.replace('{floor}', String(ANONYMITY_FLOOR)))
   })
 
   /**
@@ -142,8 +143,8 @@ describe('SupervisorDashboardView', () => {
     renderSupervisor()
 
     const coverage = card(copy.coverageHeading)
-    expect(within(coverage).getByRole('img', { name: copy.respondedHiddenLabel.replace('{floor}', '5') })).toBeTruthy()
-    expect(within(coverage).getByRole('img', { name: copy.remainingHiddenLabel.replace('{floor}', '5') })).toBeTruthy()
+    expect(within(coverage).getByRole('img', { name: copy.respondedHiddenLabel.replace('{floor}', String(ANONYMITY_FLOOR)) })).toBeTruthy()
+    expect(within(coverage).getByRole('img', { name: copy.remainingHiddenLabel.replace('{floor}', String(ANONYMITY_FLOOR)) })).toBeTruthy()
     expect(coverage.textContent).not.toMatch(/(^|\D)(3|11)(\D|$)/)
     expect(within(coverage).getByText('14')).toBeTruthy()
     expect(within(coverage).getByText(/^Encuesta de Clima Q4 · closes Oct 10$/)).toBeTruthy()

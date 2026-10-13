@@ -12,6 +12,7 @@ import { listSurveys, type SurveyListItem } from '../../api/surveys'
 import ClimateTrendsNextPage from './ClimateTrendsNextPage'
 import { downloadTextFile } from '../../../../lib/downloadTextFile'
 import en from '../../../../i18n/en.json'
+import { ANONYMITY_FLOOR } from '../../../../components/charts'
 
 const copy = en.surveys.next.trends
 
@@ -179,7 +180,7 @@ describe('ClimateTrendsNextPage', () => {
     expect(screen.queryByText(en.dashboard.next.sampleChip)).toBeNull()
     // The artboard's one footnote: the floor's rule, and that the whole company is never under it.
     const footnote = document.querySelector('[data-slot="trends-footnote"]') as HTMLElement
-    expect(footnote.textContent).toBe(`${copy.floorNote.replace('{floor}', '5')} ${copy.companyNeverWithheld}`)
+    expect(footnote.textContent).toBe(`${copy.floorNote.replace('{floor}', String(ANONYMITY_FLOOR))} ${copy.companyNeverWithheld}`)
   })
 
   /**
@@ -423,7 +424,7 @@ describe('ClimateTrendsNextPage', () => {
     renderAt('company_admin')
     await waitFor(() => expect(document.querySelector('[data-slot="trends-footnote"]')).not.toBeNull())
     const footnote = document.querySelector('[data-slot="trends-footnote"]') as HTMLElement
-    expect(footnote.textContent).toBe(copy.floorNote.replace('{floor}', '5'))
+    expect(footnote.textContent).toBe(copy.floorNote.replace('{floor}', String(ANONYMITY_FLOOR)))
     // And no "group(s)": the count sentence the artboard does not have is gone from the page.
     expect(document.body.textContent).not.toContain('(s)')
   })

@@ -12,6 +12,7 @@ import { getMicroclimateCsv } from '../../api/microclimateExport'
 import { downloadBlobFile } from '../../../../lib/downloadBlobFile'
 import MicroclimateResultsNextPage from './MicroclimateResultsNextPage'
 import es from '../../../../i18n/es.json'
+import { MINIMUM_RESPONDENTS } from '../../microclimatePrivacy'
 
 const copy = es.microclimates.next
 
@@ -107,8 +108,8 @@ describe('MicroclimateResultsNextPage', () => {
     expect(await screen.findByText('de 20 esperadas · faltan 17')).toBeTruthy()
     const who = screen.getByRole('heading', { name: copy.results.whoTitle }).closest('section') as HTMLElement
     expect(within(who).getByText('3')).toBeTruthy()
-    expect(screen.getByText(copy.results.figureProtected.replace('{floor}', '5'))).toBeTruthy()
-    expect(screen.getByText(copy.results.wordsProtected.replace('{floor}', '5'))).toBeTruthy()
+    expect(screen.getByText(copy.results.figureProtected.replace('{floor}', String(MINIMUM_RESPONDENTS)))).toBeTruthy()
+    expect(screen.getByText(copy.results.wordsProtected.replace('{floor}', String(MINIMUM_RESPONDENTS)))).toBeTruthy()
     for (const word of WORDS) expect(screen.queryByText(word.text)).toBeNull()
   })
 
