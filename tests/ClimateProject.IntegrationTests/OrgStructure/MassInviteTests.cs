@@ -4,10 +4,14 @@ using System.Net.Http.Json;
 using ClimateProject.Api.Endpoints;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Email;
+using ClimateProject.Application.Localization;
 using ClimateProject.Application.OrgStructure;
+using ClimateProject.Application.Questions;
+using ClimateProject.Application.Surveys;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
 using ClimateProject.IntegrationTests.Support;
+using ClimateProject.IntegrationTests.Surveys;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
@@ -146,6 +150,121 @@ public class MassInviteTests(PostgresContainerFixture postgres, CapturingCredent
         // Typed from a phone, with a capital and a trailing space: still the same person.
         Assert.Equal(HttpStatusCode.OK, await LoginStatusAsync(anonymous, " " + sent.Username.ToUpperInvariant() + " ", sent.Password));
         Assert.Equal(HttpStatusCode.Unauthorized, await LoginStatusAsync(anonymous, sent.Username, sent.Password + "x"));
+    }
+
+    /// <summary>
+    /// The seam ESPH launches on, and the one thing no test spanned: an account the roster
+    /// import created, authenticated with the credentials it EMAILED, answering a survey.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Each half was already covered and the join was not.
+    /// <c>An_imported_person_gets_an_account_...</c> proves the import and the sign-in but
+    /// never asks for a survey; <c>A_signed_in_respondent_resumes_even_when_the_survey_says
+    /// _one_session_only</c> proves a signed-in respondent answers, but with an employee the
+    /// harness built. Nothing proved that the token a USERNAME login mints is one the respond
+    /// endpoints accept, and no test that touches <c>bulk-import/rows</c> posts a response.
+    /// </para>
+    /// <para>
+    /// <c>SelfDeclaredDemographics: true</c> deliberately, because that is the configuration
+    /// ESPH will actually run: mode 2's backfill turns the flag on for every answerable
+    /// survey. The guarantee is that it changes nothing for these respondents --
+    /// <c>AsksSelfDeclaredDemographics</c> keys on <c>ActingUserId is null</c>, so somebody
+    /// who signed in is never asked an área the roster already stated. A prelude here would
+    /// ask eighty-item respondents to re-type what the import knows.
+    /// </para>
+    /// <para>
+    /// Identified rather than anonymous: on an anonymous survey the department is kept only
+    /// when the respondent's own department clears the write-time cohort floor, so a
+    /// one-person department would drop it BY DESIGN and this would be asserting about the
+    /// floor instead of about the seam.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task An_imported_person_answers_a_survey_with_the_credentials_they_were_emailed()
+    {
+        var admin = await AdminClientAsync(_companyId);
+
+        Guid departmentId;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            var department = new Department
+            {
+                Id = Guid.NewGuid(),
+                CompanyId = _companyId,
+                Name = "Operaciones",
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow,
+            };
+            db.Departments.Add(department);
+            await db.SaveChangesAsync();
+            departmentId = department.Id;
+        }
+
+        var email = $"luis-{Guid.NewGuid():N}@example.com";
+        var import = await ImportAsync(admin, preview: false,
+            new BulkImportRowInput(2, "Luis Mora", email, "Colaborador", "Operaciones", new() { ["sede"] = "belen" }));
+        Assert.Equal(HttpStatusCode.OK, import.StatusCode);
+        var sent = Assert.Single(_factory.Sent, s => s.ToEmail == email);
+
+        var survey = await SurveyTestHarness.CreateSurveyAsync(admin, new CreateSurveyRequest(
+            Title: LocalizedInput.FromBare("Clima 2026"),
+            CompanyId: _companyId,
+            Type: "periodic",
+            StartDate: DateTimeOffset.UtcNow.AddDays(-1),
+            EndDate: DateTimeOffset.UtcNow.AddDays(14),
+            DepartmentIds: [departmentId],
+            Questions:
+            [
+                new CreateSurveyQuestionInput(
+                    LocalizedInput.FromBare("¿Dónde trabajas?"),
+                    QuestionTypes.MultipleChoice,
+                    Options:
+                    [
+                        new CreateSurveyQuestionOptionInput("remote", LocalizedInput.FromBare("Remoto")),
+                        new CreateSurveyQuestionOptionInput("hybrid", LocalizedInput.FromBare("Híbrido")),
+                    ],
+                    Order: 0),
+            ],
+            Settings: new SurveySettingsInput(Anonymous: false, SelfDeclaredDemographics: true)));
+        (await SurveyTestHarness.SetStatusAsync(admin, survey.Id, SurveyStatuses.Active))
+            .EnsureSuccessStatusCode();
+
+        // Signing in exactly as the person does: the username and the password off the email,
+        // on a client that has never held an administrator's token.
+        var person = _factory.CreateClient();
+        var login = await person.PostAsJsonAsync("/auth/login", new LoginRequest(sent.Username, sent.Password));
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        person.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer", (await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token);
+
+        var sessionId = Guid.NewGuid().ToString("N");
+        var view = (await person.GetFromJsonAsync<SurveyRespondView>(
+            $"/surveys/{survey.Id}/respond?sessionId={sessionId}"))!;
+
+        // Asked no demographics though the survey asks for them, and never asked who they are.
+        Assert.Empty(view.Demographics);
+        Assert.False(view.AsksParticipantIdentity);
+
+        var submit = await person.PostAsJsonAsync(
+            $"/surveys/{survey.Id}/responses",
+            new SubmitSurveyResponseRequest(
+                Answers: [new SurveyAnswerInput(view.Questions.Single().Id, "hybrid")],
+                SessionId: sessionId,
+                IsComplete: true));
+        Assert.Equal(HttpStatusCode.Created, submit.StatusCode);
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            var user = await db.Users.SingleAsync(u => u.Email == email);
+            var stored = await db.Responses.SingleAsync(r => r.SurveyId == survey.Id);
+            Assert.Equal(user.Id, stored.UserId);
+            // The department the ROSTER placed them in, which is what puts this answer on the
+            // department climate map rather than in an unplaceable total.
+            Assert.Equal(departmentId, stored.DepartmentId);
+        }
     }
 
     [Fact]
