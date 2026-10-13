@@ -39,9 +39,12 @@
  *   carrying the answer scale's labels, the open questions as open_ended, the description, and
  *   the invitation subject and message. Matched by title.
  *
- * 5. The result bands, through `PUT /admin/companies/{id}/settings` (the same call the
- *    company's settings page makes): the band with the highest minimum is the strength band,
- *    the middle one opportunity, the lowest critical.
+ * 5. The result bands and the company's time zone (`--timezone`, default America/Costa_Rica),
+ *    through `PUT /admin/companies/{id}/settings` (the same call the company's settings page
+ *    makes): the band with the highest minimum is the strength band, the middle one
+ *    opportunity, the lowest critical. The zone decides which DAY an answer, a participation
+ *    and a closing time fall on; left at the product's UTC default, an answer sent at 20:56 in
+ *    Costa Rica was recorded on the next day ("EAGLE (prueba)", 2026-10-13).
  *
  * In the LINK-ONLY mode (OPCIONES, no people) step 3 is replaced by creating the departments
  * the "Área / Departamento" column lists, and step 2 takes its fields and options from
@@ -481,6 +484,21 @@ export function toBandsRequest(bands) {
   }
 }
 
+/** The company settings the import applies: the bands, and the zone every "day" is read in. */
+export function toSettingsRequest(bands, timezone) {
+  return { resultBands: toBandsRequest(bands), timezone }
+}
+
+/** An IANA zone the runtime knows ("America/Costa_Rica"), or null: a typo would leave UTC. */
+export function validTimeZone(zone) {
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: zone })
+    return /^[A-Za-z_]+(\/[A-Za-z_+-]+)+$|^UTC$/.test(zone) ? zone : null
+  } catch {
+    return null
+  }
+}
+
 /** One line per thing the run would do — what the dry run prints. */
 export function summarise(climate) {
   const likert = climate.dimensions.filter((d) => !d.open).reduce((n, d) => n + d.questions.length, 0)
@@ -518,6 +536,7 @@ async function main() {
       'company-name': { type: 'string' },
       domain: { type: 'string' },
       country: { type: 'string', default: 'Costa Rica' },
+      timezone: { type: 'string', default: 'America/Costa_Rica' },
       title: { type: 'string' },
       api: { type: 'string', default: 'http://127.0.0.1:5080' },
       email: { type: 'string', default: 'fede.super@acme.test' },
@@ -541,11 +560,13 @@ async function main() {
   const parsed = parseClimate(readWorkbook(values.file))
   const skipping = skipDemographics(parsed.climate, values['skip-demographic'])
   const window = surveyWindow({ start: values.start, end: values.end })
-  const problems = [...parsed.problems, ...skipping.problems, ...window.problems]
+  const zoneProblems = validTimeZone(values.timezone) ? [] : [`--timezone "${values.timezone}" no es una zona horaria válida (ej. America/Costa_Rica).`]
+  const problems = [...parsed.problems, ...skipping.problems, ...window.problems, ...zoneProblems]
   const climate = skipping.climate
   log(`import-climate-workbook: ${values.file}`)
   for (const line of summarise(climate)) log(`  ${line}`)
   if (skipping.skipped.length) log(`  sin importar (--skip-demographic): ${skipping.skipped.join(' · ')}`)
+  log(`  zona horaria de la empresa: ${values.timezone}`)
   if (!window.problems.length) log(`  ventana de la encuesta: ${window.startDate} → ${window.endDate}${values.start ? '' : ' (por defecto: sin --start/--end)'}`)
   log(anonymous
     ? '  anonimato: ANÓNIMA — no se guarda quién respondió, así que nada impide que alguien la responda otra vez'
@@ -656,9 +677,11 @@ async function main() {
     if (!id) throw new Error(`survey create: unexpected body ${JSON.stringify(created).slice(0, 200)}`)
     log(`survey created as a DRAFT: ${surveyTitle} (${id}), ${body.questions.length} questions — review and launch it in the product`)
   }
-  // 5. The company's result bands.
-  const bandsRequest = toBandsRequest(climate.bands)
-  await call('PUT', `/admin/companies/${companyId}/settings`, { resultBands: bandsRequest }, token)
+  // 5. The company's result bands and time zone.
+  const settings = toSettingsRequest(climate.bands, values.timezone)
+  const bandsRequest = settings.resultBands
+  await call('PUT', `/admin/companies/${companyId}/settings`, settings, token)
+  log(`time zone set: ${values.timezone}`)
   log(`result bands set: ${bandsRequest.criticalName} < ${bandsRequest.opportunityMin} ≤ ${bandsRequest.opportunityName} < ${bandsRequest.strengthMin} ≤ ${bandsRequest.strengthName}`)
 }
 

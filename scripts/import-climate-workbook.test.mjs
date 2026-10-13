@@ -10,7 +10,7 @@ import assert from 'node:assert/strict'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import {
-  readWorkbook, parseClimate, skipDemographics, surveyWindow, roleForTitle, slug, toImportRows, toSurveyRequest, toFieldRequest, toBandsRequest, decodeXml, parseStyles,
+  readWorkbook, parseClimate, skipDemographics, surveyWindow, roleForTitle, slug, toImportRows, toSurveyRequest, toFieldRequest, toBandsRequest, toSettingsRequest, validTimeZone, decodeXml, parseStyles,
 } from './import-climate-workbook.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -230,4 +230,14 @@ test('bands: ordered by minimum into critical < opportunity < strength, names ca
     { name: 'Áreas criticas', min: 1, max: 3.79 },
   ])
   assert.deepEqual(request, { opportunityMin: 3.8, strengthMin: 4.3, criticalName: 'Áreas criticas', opportunityName: 'Áreas de oportunidad', strengthName: 'Áreas de fortaleza' })
+})
+
+test('settings: the bands and the time zone travel in one request; a mistyped zone is refused', () => {
+  const bands = [{ name: 'C', min: 1, max: 3.79 }, { name: 'O', min: 3.8, max: 4.29 }, { name: 'F', min: 4.3, max: 5 }]
+  // "EAGLE (prueba)" was left on UTC: an answer at 20:56 in Costa Rica was dated the next day.
+  assert.deepEqual(toSettingsRequest(bands, 'America/Costa_Rica'), { resultBands: toBandsRequest(bands), timezone: 'America/Costa_Rica' })
+  assert.equal(validTimeZone('America/Costa_Rica'), 'America/Costa_Rica')
+  assert.equal(validTimeZone('UTC'), 'UTC')
+  assert.equal(validTimeZone('America/Costa Rica'), null)
+  assert.equal(validTimeZone('Costa Rica'), null)
 })
