@@ -23,7 +23,8 @@ import { useViewerCapabilities, type ViewerCapabilities } from '../../../../auth
 import { formatMetric } from '../../../../components/charts/formatMetric'
 import { calendarDay, calendarDayOf, todayCalendarDay } from '../../../../lib/calendarDay'
 import { cn } from '../../../../lib/cn'
-import { daysBetween, percentReading, signedReading } from '../../../dashboard/next/derive'
+import { daysBetween, percentReading, printedMove, signedReading } from '../../../dashboard/next/derive'
+import { useResultBands } from '../../../result-bands/useResultBands'
 import { statusLabel, typeLabel } from '../../surveyVocabulary'
 import { surveyResponseReading } from '../../surveyListView'
 import {
@@ -371,6 +372,9 @@ function SurveyTableRow({
   duplicating: string | null
 }) {
   const section = sectionOf(row.status)
+  // The company's scale for the move; the cached read every banded screen shares. Until it
+  // is known the move reads on 1–5, exactly as before the scale existed.
+  const scale = useResultBands().bands?.scale ?? 'mean'
   const archived = section === 'archived'
   const name = row.title ?? t('surveys.untitled')
   const counts = surveyResponseReading(row.responseCount, row.targetAudienceCount)
@@ -402,7 +406,13 @@ function SurveyTableRow({
         ? wave.first
           ? t('surveys.next.list.firstReading')
           : wave.delta !== null && wave.previousCode
-            ? t('surveys.next.list.vsWave', { delta: signedReading(wave.delta, locale, 2), wave: wave.previousCode })
+            ? t('surveys.next.list.vsWave', {
+                delta:
+                  scale === 'percent' && wave.between
+                    ? signedReading(printedMove(wave.between.to, wave.between.from, 2, scale), locale, 2, scale)
+                    : signedReading(wave.delta, locale, 2),
+                wave: wave.previousCode,
+              })
             : null
         : null
   const ink = archived ? 'text-fg-label' : 'text-fg-primary'

@@ -8,7 +8,8 @@ import {
   bandName,
   bandOf,
   bandShortName,
-  formatMetric,
+  deltaScoreText,
+  scoreText,
   type ClimateMapSelection,
   type ResultBands,
 } from '../../../components/charts'
@@ -135,13 +136,11 @@ export default function ResultsClimateGrid({
   onSelectCell,
 }: ResultsClimateGridProps) {
   const { t, locale } = useTranslation()
-  const score = (value: number) => formatMetric(value, { kind: 'number', decimals: 1 }, locale)
-  const score2 = (value: number) => formatMetric(value, { kind: 'number', decimals: 2 }, locale)
+  // Every figure reads on the company's scale; the bands still judge the 1–5 value.
+  const score = (value: number) => scoreText(value, bands.scale, locale, 1)
+  const score2 = (value: number) => scoreText(value, bands.scale, locale, 2)
   // Rounded to what is printed first, so the sign and the ink agree with the figure.
-  const signed = (value: number) => {
-    const shown = Math.round(value * 10) / 10 || 0
-    return `${shown > 0 ? '+' : ''}${score(shown)}`
-  }
+  const signed = (value: number) => deltaScoreText(value, bands.scale, locale, 1)
   const compare = previous.status === 'loaded' ? previous.wave : null
   const columns = dimensions.length + (compare ? 3 : 2)
 
@@ -211,7 +210,7 @@ export default function ResultsClimateGrid({
                       {band && <span className="sr-only">{` — ${bandName(band, bands, t)}`}</span>}
                     </span>
                     {value !== null && delta !== null && (
-                      <span className={cn('font-mono text-2xs tabular-nums', deltaInkOf(delta, 1))}>{signed(delta)}</span>
+                      <span className={cn('font-mono text-2xs tabular-nums', deltaInkOf(delta, 1, bands.scale))}>{signed(delta)}</span>
                     )}
                   </span>
                 </td>
@@ -230,7 +229,7 @@ export default function ResultsClimateGrid({
                 className={cn(
                   CELL,
                   'text-center font-mono text-xs font-semibold tabular-nums',
-                  companyDelta === null ? 'text-fg-label' : deltaInkOf(companyDelta, 1),
+                  companyDelta === null ? 'text-fg-label' : deltaInkOf(companyDelta, 1, bands.scale),
                 )}
               >
                 {company.mean === null || companyDelta === null ? '—' : signed(companyDelta)}
@@ -368,7 +367,7 @@ export default function ResultsClimateGrid({
                       // is nothing to compare with, said in words and never as a 0.
                       t('surveyResults.next.noPrevious', { wave: compare.code })
                     ) : (
-                      <span className={cn('font-mono tabular-nums', deltaInkOf(row.vsPrevious, 1))}>
+                      <span className={cn('font-mono tabular-nums', deltaInkOf(row.vsPrevious, 1, bands.scale))}>
                         {signed(row.vsPrevious)}
                       </span>
                     )}

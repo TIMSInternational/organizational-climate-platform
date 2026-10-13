@@ -1,5 +1,5 @@
 import { WHOLE_COMPANY_KEY, type ClimateTrendsResponse } from '../../api/climateTrends'
-import { bandOf, type ResultBandKey, type ResultBands } from '../../../../components/charts'
+import { bandOf, type ResultBandKey, type ResultBands, type ResultScale } from '../../../../components/charts'
 import { printedMove } from '../../../dashboard/next/derive'
 import type { TrendDimension } from './model'
 
@@ -80,7 +80,7 @@ export function latestValue(dimension: TrendDimension): number | null {
  * the delta — both readings are already on the page, and the difference of two
  * disclosed numbers says nothing about the wave between them.
  */
-export function deltaSince(values: readonly (number | null)[], fromIndex: number): number | null {
+export function deltaSince(values: readonly (number | null)[], fromIndex: number, scale: ResultScale = 'mean'): number | null {
   const to = latestIndex(values)
   if (to === -1 || fromIndex < 0 || fromIndex >= to) return null
   const from = values[fromIndex]
@@ -88,7 +88,7 @@ export function deltaSince(values: readonly (number | null)[], fromIndex: number
   if (from === null || from === undefined || latest === null || latest === undefined) return null
   // The difference of the two readings AS PRINTED (`printedMove`): Carga de trabajo's
   // 2,75 → 3,33 prints "2,8" and "3,3", so its move is "+0,5", never the raw "+0,6".
-  return printedMove(latest, from)
+  return printedMove(latest, from, 1, scale)
 }
 
 /** Mean of the disclosed dimension readings of one wave, or `null` when there are none. */
@@ -115,7 +115,7 @@ export function standings(dimensions: readonly TrendDimension[], bands: ResultBa
     const value = index === -1 ? null : (dimension.values[index] ?? null)
     return value === null
       ? []
-      : [{ dimension, value, band: bandOf(value, bands), lastMove: index > 0 ? deltaSince(dimension.values, index - 1) : null }]
+      : [{ dimension, value, band: bandOf(value, bands), lastMove: index > 0 ? deltaSince(dimension.values, index - 1, bands.scale) : null }]
   })
 }
 

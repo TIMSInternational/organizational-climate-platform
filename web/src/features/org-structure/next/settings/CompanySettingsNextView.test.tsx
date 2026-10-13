@@ -262,6 +262,32 @@ describe('CompanySettingsNextView (/admin/companies/:id for a company administra
       expect(within(card).getByRole('status').textContent).toBe(bandsCopy.valid)
     })
 
+    it('reads on 1 to 5 by default, with no 0–100 figure beside the boxes', async () => {
+      renderAs({ role: 'company_admin', companyId: 'c1' })
+      const card = (await screen.findByRole('heading', { name: bandsCopy.heading })).closest('section') as HTMLElement
+      const group = within(card).getByRole('radiogroup', { name: bandsCopy.scaleLabel })
+      expect(within(group).getByRole('radio', { name: bandsCopy.scaleMean }).getAttribute('aria-checked')).toBe('true')
+      expect(card.querySelectorAll('[data-equivalent]')).toHaveLength(0)
+      // The bar's ticks are the 1–5 boundaries, as before the scale existed.
+      expect(within(card).getByTestId('band-scale').textContent).toContain('3.00')
+    })
+
+    it('chooses 0 to 100: the boxes stay on 1–5 with the 0–100 figure beside them, and the scale saves with the bands', async () => {
+      renderAs({ role: 'company_admin', companyId: 'c1' })
+      const card = (await screen.findByRole('heading', { name: bandsCopy.heading })).closest('section') as HTMLElement
+      await userEvent.click(within(card).getByRole('radio', { name: bandsCopy.scalePercent }))
+      expect(box(bandsCopy.fromLabel.replace('{band}', en.resultBands.name.opportunity)).value).toBe('3.00')
+      const equivalents = [...card.querySelectorAll('[data-equivalent]')].map((node) => node.textContent)
+      expect(equivalents).toEqual(['= 80 of 100', '= 100 of 100', '= 60 of 100', '= 79.8 of 100', '= 20 of 100', '= 59.8 of 100'])
+      expect(within(card).getByTestId('band-scale').textContent).toContain('60')
+      expect(within(card).getByTestId('band-scale').textContent).not.toContain('3.00')
+      await userEvent.click(screen.getByRole('button', { name: copy.save }))
+      expect(vi.mocked(updateCompanySettings).mock.calls[1].slice(1)).toEqual([
+        'c1',
+        { resultBands: { opportunityMin: 3, strengthMin: 4, criticalName: null, opportunityName: null, strengthName: null, scale: 'percent' } },
+      ])
+    })
+
     it('names a gap, marks the boxes that make it, and holds Save until the scale is whole again', async () => {
       renderAs({ role: 'company_admin', companyId: 'c1' })
       await screen.findByRole('heading', { name: bandsCopy.heading })
@@ -284,7 +310,7 @@ describe('CompanySettingsNextView (/admin/companies/:id for a company administra
       // The whole scale, as two boundaries and three names — the defaults sent as null.
       expect(vi.mocked(updateCompanySettings).mock.calls[1].slice(1)).toEqual([
         'c1',
-        { resultBands: { opportunityMin: 3.1, strengthMin: 4, criticalName: null, opportunityName: null, strengthName: null } },
+        { resultBands: { opportunityMin: 3.1, strengthMin: 4, criticalName: null, opportunityName: null, strengthName: null, scale: 'mean' } },
       ])
     })
 
@@ -301,7 +327,7 @@ describe('CompanySettingsNextView (/admin/companies/:id for a company administra
       await userEvent.type(box(bandsCopy.nameLabel.replace('{colour}', 'red')), 'Zona roja')
       await userEvent.click(screen.getByRole('button', { name: copy.save }))
       expect(vi.mocked(updateCompanySettings).mock.calls[1][2]).toEqual({
-        resultBands: { opportunityMin: 3, strengthMin: 4, criticalName: 'Zona roja', opportunityName: null, strengthName: null },
+        resultBands: { opportunityMin: 3, strengthMin: 4, criticalName: 'Zona roja', opportunityName: null, strengthName: null, scale: 'mean' },
       })
     })
 

@@ -243,6 +243,7 @@ describe('ClimateTrendsNextPage', () => {
       opportunityMin: 3.5,
       strengthMin: 4,
       names: { critical: 'Zona roja', opportunity: null, strength: null },
+      scale: 'mean',
     })
     renderAt('company_admin')
     await waitFor(() => expect(document.querySelectorAll('[data-slot="trend-card"]')).toHaveLength(2))

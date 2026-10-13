@@ -6,6 +6,7 @@ import AdminDashboardNextView from './AdminDashboardNextView'
 import { getCompanyDashboardExport } from '../api/dashboardExport'
 import { downloadBlobFile } from '../../../lib/downloadBlobFile'
 import { fullModel } from './__fixture__'
+import { latestAverage, previousAverage } from './derive'
 import type { AdminDashboardModel, RegionStatuses } from './model'
 import { TranslationProvider } from '../../../i18n'
 import { CompanyContextProvider } from '../../../company-context'
@@ -131,6 +132,38 @@ describe('AdminDashboardNextView', () => {
     const carga = document.querySelector('[data-slot="trend-card"][data-dimension="carga"]') as HTMLElement
     expect(carga.getAttribute('data-band')).toBe('critical')
     expect(within(carga).getByText('Zona roja')).toBeTruthy()
+  })
+
+  it('prints the climate KPI on 1–5 by default, exactly as before the scale existed', () => {
+    renderView()
+    const tile = screen.getAllByText(copy.climateLabel.replace('{wave}', 'Q3'))[0].closest('[data-slot="kpi-tile"]') as HTMLElement
+    const latest = latestAverage(fullModel)!
+    const value = within(tile).getByText((_, node) => node?.getAttribute('data-slot') === 'kpi-value')
+    expect(value.textContent).toBe(latest.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+    expect(tile.textContent).toContain(en.resultBands.results.climateUnit)
+  })
+
+  it('prints the climate KPI, its move and every trend card on 0–100 for a percent company', () => {
+    const model = { ...fullModel, bands: { ...fullModel.bands, scale: 'percent' as const } }
+    renderView(model)
+    const tile = screen.getAllByText(copy.climateLabel.replace('{wave}', 'Q3'))[0].closest('[data-slot="kpi-tile"]') as HTMLElement
+    const latest = latestAverage(model)!
+    const previous = previousAverage(model)!
+    const value = within(tile).getByText((_, node) => node?.getAttribute('data-slot') === 'kpi-value')
+    expect(value.textContent).toBe((latest * 20).toLocaleString('en', { minimumFractionDigits: 1, maximumFractionDigits: 1 }))
+    expect(tile.textContent).toContain(en.resultBands.scale.unitPercent)
+    expect(tile.textContent).not.toContain(en.resultBands.results.climateUnit)
+    const move = Math.round(latest * 200) / 10 - Math.round(previous * 200) / 10
+    const sign = move > 0 ? '+' : ''
+    expect(tile.querySelector('[data-slot="climate-move"]')?.textContent).toContain(`${sign}${move.toFixed(1)}`)
+    // Every trend card's headline figure is a whole 0–100 number: no 1–5 reading survives.
+    const cards = document.querySelectorAll('[data-slot="trend-card"]')
+    expect(cards.length).toBeGreaterThan(0)
+    for (const card of cards) {
+      const figure = card.querySelector('.text-reading')?.textContent ?? ''
+      expect(figure).toMatch(/^\d{2,3}$/)
+      expect(Number(figure)).toBeGreaterThanOrEqual(20)
+    }
   })
 
   it('renders the three attention items, each with its action as a link', () => {

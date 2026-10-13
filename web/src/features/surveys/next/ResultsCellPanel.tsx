@@ -13,11 +13,14 @@ import {
   bandOf,
   bandRangeText,
   bandShortName,
-  formatMetric,
+  deltaScoreText,
+  scoreText,
+  shownDelta,
   segmentsOf as bandSegmentsOf,
   SCALE_MAX,
   SCALE_MIN,
   type ResultBands,
+  type ResultScale,
 } from '../../../components/charts'
 import { Button } from '../../../components/ui'
 import type { ViewerCapabilities } from '../../../auth/viewerCapabilities'
@@ -103,7 +106,7 @@ export default function ResultsCellPanel({
   // payload was fetched before it existed and is not refetched. Until it is, the plan the
   // reader just created from THIS cell is the one the control should open.
   const plan = detail.cellPlan ?? (createdForCell === null ? null : { id: createdForCell.id })
-  const score = (value: number) => formatMetric(value, { kind: 'number', decimals: 1 }, locale)
+  const score = (value: number) => scoreText(value, bands.scale, locale, 1)
   const dimension = dimensionName(detail.dimensionKey)
 
   // "[Área crítica] menos de 3,00 · la celda más baja del mapa · una pregunta por
@@ -442,19 +445,21 @@ function axisOf(
 function WaveDelta({
   from,
   to,
+  scale,
   locale,
   t,
 }: {
   from: number
   to: number
+  scale: ResultScale
   locale: string
   t: Translate
 }) {
   // Rounded to the decimal both figures are printed at, so the arrow cannot contradict them.
-  const shown = Math.round((to - from) * 10) / 10 || 0
-  const text = `${shown > 0 ? '+' : ''}${formatMetric(shown, { kind: 'number', decimals: 1 }, locale)}`
+  const shown = shownDelta(to - from, scale, 1)
+  const text = deltaScoreText(to - from, scale, locale, 1)
   return (
-    <span className={`font-mono text-xs tabular-nums ${deltaInkOf(shown, 1)}`}>
+    <span className={`font-mono text-xs tabular-nums ${deltaInkOf(to - from, 1, scale)}`}>
       <span aria-hidden="true">{shown < 0 ? '▼' : shown > 0 ? '▲' : '–'} </span>
       {text}
       <span className="sr-only">
@@ -504,10 +509,10 @@ function WaveSlope({
   const at = (value: number) => ((Math.min(Math.max(value, SCALE_MIN), SCALE_MAX) - SCALE_MIN) / span) * 100
   const fromAt = at(from)
   const toAt = at(to)
-  const shown = Math.round((to - from) * 10) / 10 || 0
+  const shown = shownDelta(to - from, bands.scale, 1)
   const left = Math.min(fromAt, toAt)
   const width = Math.abs(toAt - fromAt)
-  const number = (value: number) => formatMetric(value, { kind: 'number', decimals: 1 }, locale)
+  const number = (value: number) => scoreText(value, bands.scale, locale, 1)
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -515,7 +520,7 @@ function WaveSlope({
         <span className="font-mono tabular-nums">{`${fromLabel} ${number(from)}`}</span>
         <span aria-hidden="true" className="text-fg-label">→</span>
         <span className="font-mono tabular-nums font-semibold">{`${toLabel} ${number(to)}`}</span>
-        <WaveDelta from={from} to={to} locale={locale} t={t} />
+        <WaveDelta from={from} to={to} scale={bands.scale} locale={locale} t={t} />
       </p>
       {/* Decorative: every value it draws is printed above it, and the band each wave falls
           in is already named in the panel's own summary line. */}

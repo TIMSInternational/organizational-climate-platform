@@ -1,4 +1,4 @@
-import { SCALE_MAX, SCALE_MIN, type ResultBands } from '../../../components/charts/resultBands'
+import { SCALE_MAX, SCALE_MIN, parseResultScale, type ResultBands } from '../../../components/charts/resultBands'
 import { parseReportDocument, type ReportDocument } from '../reportDocument'
 
 /**
@@ -129,6 +129,7 @@ function parseResultBands(value: unknown): ResultBands | null {
     opportunityMin,
     strengthMin,
     names: { critical: name(wire.criticalName), opportunity: name(wire.opportunityName), strength: name(wire.strengthName) },
+    scale: parseResultScale(wire.scale),
   }
 }
 

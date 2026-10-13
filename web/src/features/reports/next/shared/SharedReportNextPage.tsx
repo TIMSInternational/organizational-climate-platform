@@ -18,7 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from '../../../../components/ui'
-import { BandChip, BandLegend, BandScaleBar, ProtectedCell, formatMetric } from '../../../../components/charts'
+import { BandChip, BandLegend, BandScaleBar, ProtectedCell, formatMetric, scoreText } from '../../../../components/charts'
 import ResultsSuppressionNotice from '../../../surveys/components/ResultsSuppressionNotice'
 import { dimensionLabel } from '../../../surveys/dimensionLabel'
 import type { SurveyQuestionResult } from '../../../surveys/api/surveyResults'
@@ -454,20 +454,27 @@ function SurveyBlock({ section, named }: { section: SharedSection; named: boolea
 function DimensionsCard({ section, headingId }: { section: SharedSection; headingId: string }) {
   const { t, locale } = useTranslation()
   const bands = section.bands
+  // The company's scale, from the bands the link carries; a report without bands reads 1–5.
+  const percent = bands?.scale === 'percent'
+  const scale = bands?.scale ?? 'mean'
 
   return (
-    <ReportCard id={headingId} heading={t(`${K}.dimensionsHeading`)} meta={t('resultBands.report.dimensionsMeta')}>
+    <ReportCard
+      id={headingId}
+      heading={t(`${K}.dimensionsHeading`)}
+      meta={t(percent ? 'resultBands.report.dimensionsMetaPercent' : 'resultBands.report.dimensionsMeta')}
+    >
       <Table>
-        <TableCaption className="text-left">{t(`${K}.dimensionsCaption`)}</TableCaption>
+        <TableCaption className="text-left">{t(percent ? `${K}.dimensionsCaptionPercent` : `${K}.dimensionsCaption`)}</TableCaption>
         <TableHeader>
           <TableRow>
             <TableHead className={TH}>{t('sharedReport.dimension')}</TableHead>
             <TableHead className={TH}>{t('sharedReport.averageScore')}</TableHead>
             <TableHead className={TH}>
-              <span className="sr-only">{t(`${K}.scaleHeader`)}</span>
+              <span className="sr-only">{t(percent ? `${K}.scaleHeaderPercent` : `${K}.scaleHeader`)}</span>
               <span aria-hidden="true" className="flex w-50 justify-between font-mono text-2xs font-normal text-fg-tertiary">
                 {SCALE_TICKS.map((tick) => (
-                  <span key={tick}>{tick.toLocaleString(locale)}</span>
+                  <span key={tick}>{percent ? scoreText(tick, scale, locale, 0) : tick.toLocaleString(locale)}</span>
                 ))}
               </span>
             </TableHead>
@@ -485,7 +492,10 @@ function DimensionsCard({ section, headingId }: { section: SharedSection; headin
               <TableCell className="font-mono text-base tabular-nums">
                 {row.average === null
                   ? t('surveyResults.notApplicable')
-                  : formatMetric(row.average, { kind: 'number', decimals: 1 }, locale)}
+                  : row.offScale
+                    ? // Not a 1–5 mean, so not converted: it keeps its own number (below).
+                      formatMetric(row.average, { kind: 'number', decimals: 1 }, locale)
+                    : scoreText(row.average, scale, locale, 1)}
               </TableCell>
               <TableCell>
                 {row.average !== null && row.band !== null && bands !== null && (
@@ -497,7 +507,7 @@ function DimensionsCard({ section, headingId }: { section: SharedSection; headin
                   // A figure that is not on the 1-to-5 scale the bands belong to keeps
                   // its number and says so, rather than being read in an area it was
                   // never measured on. `derive.ts` `SCALE_MIN` has the argument.
-                  t(`${K}.readingOffScale`)
+                  t(percent ? `${K}.readingOffScalePercent` : `${K}.readingOffScale`)
                 ) : row.band === null || bands === null ? (
                   t('surveyResults.notApplicable')
                 ) : (

@@ -1,5 +1,5 @@
 import type { AdminDashboardModel, MapRow } from './model'
-import { isSuppressed } from '../../../components/charts'
+import { isSuppressed, scaleDecimals, scaledValue, scoreText, signedScoreText, type ResultScale } from '../../../components/charts'
 
 /**
  * Every derived reading on the redesigned Panel de Control, as pure functions of
@@ -84,9 +84,12 @@ export function printedReading(value: number): number {
  * "3,3" and "3,7"; the raw difference 0,34 printed "+0,3" beside two numbers a reader can
  * subtract to 0,4. `decimals` is the precision the two readings are printed at.
  */
-export function printedMove(to: number, from: number, decimals = 1): number {
-  const scale = 10 ** decimals
-  return (Math.round(to * scale) - Math.round(from * scale)) / scale
+export function printedMove(to: number, from: number, decimals = 1, scale: ResultScale = 'mean'): number {
+  // Judged on the figures the reader sees: on 0–100 those are `× 20` at one decimal fewer,
+  // so the move is rounded there and handed back in 1–5 units for `signedReading`.
+  const factor = scaledValue(1, scale)
+  const step = 10 ** scaleDecimals(decimals, scale)
+  return (Math.round(to * factor * step) - Math.round(from * factor * step)) / step / factor
 }
 
 /**
@@ -169,21 +172,14 @@ export function lowestCell(model: Pick<AdminDashboardModel, 'map'>, floor: numbe
   return lowest
 }
 
-/** A 1–5 reading in the reader's locale: `3.67` → "3,67" in Spanish. */
-export function reading(value: number, locale: string, decimals = 1): string {
-  return value.toLocaleString(locale, {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  })
+/** A 1–5 reading in the reader's locale: `3.67` → "3,67" in Spanish; on `percent`, "73,4". */
+export function reading(value: number, locale: string, decimals = 1, scale: ResultScale = 'mean'): string {
+  return scoreText(value, scale, locale, decimals)
 }
 
-/** A delta with its sign always shown: `0.32` → "+0,32". */
-export function signedReading(value: number, locale: string, decimals = 1): string {
-  return value.toLocaleString(locale, {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-    signDisplay: 'always',
-  })
+/** A delta with its sign always shown: `0.32` → "+0,32"; on `percent`, "+6,4". */
+export function signedReading(value: number, locale: string, decimals = 1, scale: ResultScale = 'mean'): string {
+  return signedScoreText(value, scale, locale, decimals)
 }
 
 /** A 0–100 value as a localised percentage: `100` → "100 %" in Spanish. */

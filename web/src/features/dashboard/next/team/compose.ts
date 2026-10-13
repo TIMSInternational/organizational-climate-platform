@@ -1,4 +1,4 @@
-import { bandOf, type ResultBandKey, type ResultBands } from '../../../../components/charts'
+import { bandOf, type ResultBandKey, type ResultBands, type ResultScale } from '../../../../components/charts'
 import type { DashboardTeamClimate, DepartmentAdminDashboard } from '../../api/dashboard'
 import type { MySurveyListItem } from '../../../surveys/api/surveys'
 import type { PlanAccion, TableroResponse } from '../../../tracking/api/trackingApi'
@@ -113,9 +113,9 @@ export function teamClosedWave(climate: DashboardTeamClimate | null, asOf?: stri
  * canvas's Seguridad psicológica is 4,00 against 3,75: the raw difference rounds to +0,3
  * beside two numbers a reader subtracts to 0,2. `null` when either side is missing.
  */
-export function dimensionMove(dimension: TeamDimension): number | null {
+export function dimensionMove(dimension: TeamDimension, scale: ResultScale = 'mean'): number | null {
   if (dimension.team === null || dimension.organization === null) return null
-  return printedMove(dimension.team, dimension.organization, 1)
+  return printedMove(dimension.team, dimension.organization, 1, scale)
 }
 
 /**

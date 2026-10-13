@@ -10,7 +10,7 @@ import { rememberResultBands, useResultBands } from './useResultBands'
 
 const wrapper = ({ children }: { children: ReactNode }) => <CompanyContextProvider>{children}</CompanyContextProvider>
 
-const CUSTOM = { opportunityMin: 2.5, strengthMin: 4.25, names: { critical: 'Zona roja', opportunity: null, strength: null } }
+const CUSTOM = { opportunityMin: 2.5, strengthMin: 4.25, names: { critical: 'Zona roja', opportunity: null, strength: null }, scale: 'mean' as const }
 
 describe('useResultBands', () => {
   afterEach(() => {

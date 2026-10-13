@@ -15,6 +15,7 @@ describe('the result-scale draft', () => {
       opportunityMin: '3,00',
       opportunityMax: '3,99',
       strengthMin: '4,00',
+      scale: 'mean',
     })
   })
 
