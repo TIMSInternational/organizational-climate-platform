@@ -371,9 +371,15 @@ export default function SurveyRespondForm({
     return () => window.clearInterval(handle)
   }, [timeLimitMinutes])
 
+  // Seeded by the RESPONDENT'S SESSION, not by the survey id. `respondSession` mints
+  // the id once per survey per respondent, keeps it across a reload and a closed tab,
+  // and clears it the moment the response completes — so the order holds still for as
+  // long as someone is answering, and the next session gets a fresh one. Seeding by
+  // `view.id` gave every respondent of a survey the same order, forever, which is a
+  // randomisation that removes no bias between people. See `orderQuestions`.
   const questions = useMemo(
-    () => (view ? orderQuestions(view.questions, view.randomizeQuestions, view.id) : []),
-    [view],
+    () => (view ? orderQuestions(view.questions, view.randomizeQuestions, sessionId) : []),
+    [view, sessionId],
   )
 
   // Read out of `view` into a scalar first, so the memo below depends on a boolean

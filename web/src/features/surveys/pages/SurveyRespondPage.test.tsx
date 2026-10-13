@@ -415,9 +415,55 @@ describe('SurveyRespondPage settings', () => {
     const secondOrder = await legendsAcrossPages()
 
     // The same order both times. A `Math.random` shuffle would move the question a
-    // respondent was halfway through on every reload.
+    // respondent was halfway through on every reload. The session id is minted once
+    // and kept in `localStorage`, so the second mount is the SAME session: this is
+    // within-session stability, which the per-session seed below must not cost.
     expect(secondOrder).toEqual(firstOrder)
     expect(firstOrder).toHaveLength(3)
+  })
+
+  it('asks the next session in a different order from the one before it', async () => {
+    const questions = [
+      question({ id: 'a', text: 'Pregunta A', order: 0 }),
+      question({ id: 'b', text: 'Pregunta B', order: 1 }),
+      question({ id: 'c', text: 'Pregunta C', order: 2 }),
+      question({ id: 'd', text: 'Pregunta D', order: 3 }),
+      question({ id: 'e', text: 'Pregunta E', order: 4 }),
+      question({ id: 'f', text: 'Pregunta F', order: 5 }),
+    ]
+
+    // Two KNOWN session ids rather than two minted ones. `respondSession` keys its id
+    // `surveyResponseSession:<surveyId>`, and writing it here makes both orders fixed
+    // values rather than "probably different" — a shuffle of six is deterministic once
+    // the seed is, so this cannot flake, and it fails if the seed goes back to being
+    // the survey id (both mounts would then order identically).
+    window.localStorage.setItem('surveyResponseSession:s1', 'session-one')
+    respondWith(view({ randomizeQuestions: true, questions }))
+    const first = renderPage()
+    await screen.findByRole('heading', { name: 'Clima laboral 2026' })
+    const firstOrder = await legendsAcrossPages()
+    first.unmount()
+
+    // What completing a response does — `clearSessionId` — followed by whoever opens
+    // the survey next on this browser getting a new id.
+    window.localStorage.setItem('surveyResponseSession:s1', 'session-two')
+    respondWith(view({ randomizeQuestions: true, questions }))
+    renderPage()
+    await screen.findByRole('heading', { name: 'Clima laboral 2026' })
+    const secondOrder = await legendsAcrossPages()
+
+    // The legend carries the reading position as well as the question, so compare the
+    // questions alone: `1/6 Pregunta 1 de 6 Pregunta D` → `D`.
+    const asked = (legends: string[]): string[] =>
+      legends.map((legend) => legend.match(/Pregunta ([A-F])(?![a-z])/)?.[1] ?? '?')
+
+    expect(asked(firstOrder)).toHaveLength(6)
+    expect(asked(firstOrder)).not.toContain('?')
+    expect(asked(secondOrder)).not.toEqual(asked(firstOrder))
+    // Not merely "a different sequence": the same six questions, reordered. A shuffle
+    // that dropped or duplicated one would pass the line above.
+    expect([...asked(secondOrder)].sort()).toEqual(['A', 'B', 'C', 'D', 'E', 'F'])
+    expect([...asked(firstOrder)].sort()).toEqual(['A', 'B', 'C', 'D', 'E', 'F'])
   })
 
   it('numbers the questions by the order they are actually asked in', async () => {
