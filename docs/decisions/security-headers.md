@@ -5,8 +5,10 @@
 `climate.timsint.com` served no security headers at all — measured on the live
 response: no `strict-transport-security`, no `content-security-policy`, no
 `x-frame-options`. The admin console was framable and MIME-sniffable, and it holds a
-24-hour session JWT in `localStorage` that cross-service revocation cannot recall
-inside its window. `web/vercel.json` now sets them.
+session JWT in `localStorage` that cross-service revocation cannot recall inside its
+window — 24 hours when this was written, and one idle window (60 minutes as shipped)
+since the idle session timeout made `SessionTimeoutMinutes` the token's lifetime.
+`web/vercel.json` now sets them.
 
 ## The four that are enforced, and one that is not
 

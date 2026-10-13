@@ -19,4 +19,17 @@ namespace ClimateProject.Application.Auth;
 public static class TokenClaimNames
 {
     public const string SecurityStamp = "securityStamp";
+
+    /// <summary>
+    /// Unix seconds of first sign-in, carried forward unchanged by every re-mint.
+    /// </summary>
+    /// <remarks>
+    /// Here for the same reason as <see cref="SecurityStamp"/>: a typo on either side fails
+    /// silently. Written but not read means the absolute ceiling is never enforced and a
+    /// session slides forever; read but not written means every refresh restarts the
+    /// ceiling, which is the same hole with a different cause. <see cref="SessionWindows"/>
+    /// writes it through <c>JwtTokenService</c> and reads it back in
+    /// <see cref="SessionWindows.StartedAt"/>, and those two are the only sides.
+    /// </remarks>
+    public const string SessionStart = "sessionStart";
 }

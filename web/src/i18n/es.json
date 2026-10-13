@@ -2902,7 +2902,7 @@
     "maxLoginAttempts": "Intentos Máximos de Inicio de Sesión",
     "sessionTimeoutMinutes": "Tiempo de Espera de Sesión (minutos)",
     "enforcedOnEveryLoginNote": "Inicio de Sesión Habilitado y Modo de Mantenimiento se aplican en cada intento de inicio de sesión (una cuenta SuperAdmin siempre puede iniciar sesión).",
-    "notYetEnforcedNote": "Intentos Máximos de Inicio de Sesión y Tiempo de Espera de Sesión se guardan pero la API aún no los aplica: actualmente no bloquean cuentas ni expiran sesiones antes de tiempo.",
+    "notYetEnforcedNote": "El Tiempo de Espera de Sesión sí se aplica: una sesión que permanezca inactiva ese tiempo se cierra, para todas las personas con sesión iniciada. Los Intentos Máximos de Inicio de Sesión se guardan pero la API aún no los aplica: actualmente no bloquean cuentas.",
     "availabilityTitle": "Disponibilidad de la plataforma",
     "loginEnabledDescription": "Cuando está desactivado, nadie puede iniciar sesión salvo una cuenta SuperAdmin.",
     "maintenanceModeDescription": "Muestra el mensaje de mantenimiento en lugar de la aplicación para todos, salvo una cuenta SuperAdmin.",
@@ -2942,7 +2942,7 @@
       "maxAttempts": "Intentos máximos de inicio de sesión",
       "timeout": "Tiempo de espera de sesión",
       "minutesUnit": "minutos",
-      "notEnforced": "Estos dos valores se guardan, pero la API todavía no los aplica: hoy no bloquean cuentas ni cierran sesiones antes de tiempo.",
+      "notEnforced": "El tiempo de espera de sesión se aplica a todas las personas con sesión iniciada: una sesión que permanezca inactiva ese tiempo se cierra, y antes se avisa a la persona. El máximo de intentos de inicio de sesión se guarda pero todavía no se aplica: hoy no bloquea ninguna cuenta.",
       "passwordHeading": "Política de contraseñas",
       "readOnly": "solo lectura",
       "minLength": "Longitud mínima",
@@ -7259,5 +7259,11 @@
     "scale": {
       "unitPercent": "de 100"
     }
+  },
+  "session": {
+    "idleWarningTitle": "¿Sigue ahí?",
+    "idleWarningBody": "Ha estado inactivo, así que esta sesión terminará en {seconds} segundos para proteger su cuenta.",
+    "staySignedIn": "Seguir conectado",
+    "signOutNow": "Cerrar sesión ahora"
   }
 }

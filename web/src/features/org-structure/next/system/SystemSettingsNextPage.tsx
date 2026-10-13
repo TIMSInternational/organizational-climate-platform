@@ -34,8 +34,11 @@ import { useSystemSettingsModel } from './useSystemSettingsModel'
  *   `SystemEmailSettings` to send. So the page does not say "nothing goes out by email".
  * - The privacy floor is `SurveyResultsPrivacy.MinimumRespondents` (5) for every company;
  *   no company setting raises it (`CompanySettingsDtos.cs` has none).
- * - Attempts and timeout are stored and not applied — nothing outside the settings
- *   endpoints reads `MaxLoginAttempts` or `SessionTimeoutMinutes`.
+ * - `SessionTimeoutMinutes` IS applied, and this note used to say it was not: it is the
+ *   lifetime of every token the API mints (`SessionWindows.Next` →
+ *   `AuthEndpoints.IssueTokenForAsync` → `JwtTokenService`), so an idle session ends after
+ *   it, and `IdleSessionGuard` warns the reader first. `MaxLoginAttempts` is still stored
+ *   and not applied — nothing outside the settings endpoints reads it.
  *
  * `super_admin` only on the server; a platform page no company scopes, so the header's
  * company switcher stands down while it is mounted.

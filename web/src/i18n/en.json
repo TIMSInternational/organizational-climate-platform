@@ -2902,7 +2902,7 @@
     "maxLoginAttempts": "Max login attempts",
     "sessionTimeoutMinutes": "Session timeout (minutes)",
     "enforcedOnEveryLoginNote": "Login enabled and Maintenance mode are enforced on every login attempt (a SuperAdmin account can always still sign in).",
-    "notYetEnforcedNote": "Max login attempts and Session timeout are saved but not yet enforced by the API — they do not currently lock out accounts or expire sessions early.",
+    "notYetEnforcedNote": "Session timeout is enforced: a session left unused for that long ends, for everyone signed in. Max login attempts is saved but not yet enforced by the API — it does not currently lock out accounts.",
     "availabilityTitle": "Platform availability",
     "loginEnabledDescription": "When off, nobody can sign in except a SuperAdmin account.",
     "maintenanceModeDescription": "Shows the maintenance message instead of the app for everyone except a SuperAdmin account.",
@@ -2942,7 +2942,7 @@
       "maxAttempts": "Maximum sign-in attempts",
       "timeout": "Session timeout",
       "minutesUnit": "minutes",
-      "notEnforced": "Both values are saved, but the API does not apply them yet: today they neither lock accounts nor end sessions early.",
+      "notEnforced": "Session timeout applies to everyone signed in: a session left unused for that long ends, and the reader is warned before it does. Max login attempts is saved but not applied yet — today it locks no accounts.",
       "passwordHeading": "Password policy",
       "readOnly": "read only",
       "minLength": "Minimum length",
@@ -7259,5 +7259,11 @@
     "scale": {
       "unitPercent": "of 100"
     }
+  },
+  "session": {
+    "idleWarningTitle": "Are you still there?",
+    "idleWarningBody": "You have been inactive, so this session will end in {seconds} seconds to keep your account safe.",
+    "staySignedIn": "Stay signed in",
+    "signOutNow": "Sign out now"
   }
 }

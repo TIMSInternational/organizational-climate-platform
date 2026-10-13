@@ -1,6 +1,7 @@
 import { Navigate, Outlet } from 'react-router'
 import { getToken } from '../auth/token'
 import { decodeJwtPayload } from '../auth/jwt'
+import IdleSessionGuard from '../auth/IdleSessionGuard'
 
 /**
  * The auth gate on every admin route.
@@ -35,6 +36,16 @@ import { decodeJwtPayload } from '../auth/jwt'
  * rather than `!== 'true'` so a token minted before the claim existed (absent,
  * not `"false"`) is treated as active rather than locked out.
  *
+ * ## The idle session timeout rides here
+ *
+ * `IdleSessionGuard` is mounted on this gate rather than in `App` because this is exactly
+ * the set of routes that hold a token: every authenticated route passes through here, and
+ * nothing unauthenticated does, so the countdown cannot start on the login page and cannot
+ * be forgotten on a new admin route. It renders nothing until the warning is due.
+ *
+ * It applies to everyone signed in, with no role carve-out — a shared or kiosk terminal is
+ * the respondent case, not the staff one.
+ *
  * This is deliberately not checked at login: `LoginAsync` filters on
  * `u.IsActive`, so a deactivated user gets 401 "Invalid email or password",
  * identical to a wrong password. That identical response is what stops the login
@@ -52,5 +63,10 @@ export default function RequireAuth() {
     return <Navigate to="/auth/inactive" replace />
   }
 
-  return <Outlet />
+  return (
+    <>
+      <IdleSessionGuard />
+      <Outlet />
+    </>
+  )
 }
