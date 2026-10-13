@@ -298,17 +298,28 @@ describe('SurveyRespondForm dimension labels', () => {
   })
 
   /**
-   * `respondDimensions` switches grouping off for a randomised survey, because naming a
-   * shuffled list by dimension gathers each dimension back together in the reader's head
-   * and undoes the randomisation the author asked for. The page honours that rather than
-   * re-deriving its own answer — and every question is still asked.
+   * This asserted three nulls until 2026-10-13, because `respondDimensions` switched grouping
+   * off entirely for a randomised survey. Ruled that day: the headings stay, and randomisation
+   * means the SECTION order is shuffled and so is the order within each section. The page
+   * honours that rather than re-deriving its own answer, and every question is still asked —
+   * now under a name.
    */
-  it('prints no dimension at all when the survey randomises its questions', async () => {
+  it('still prints a dimension for every question when the survey randomises them', async () => {
     respondWith(view({ ...sectioned, randomizeQuestions: true }))
     renderForm()
 
     await screen.findByRole('radio', { name: 'Muy de acuerdo' })
-    expect(await dimensionsAcrossPages()).toEqual([null, null, null])
+    const dimensions = await dimensionsAcrossPages()
+
+    expect(dimensions).toHaveLength(3)
+    expect(dimensions.filter((dimension) => dimension === null)).toEqual([])
+
+    // Two CONTIGUOUS runs over the three pages, in whichever order the shuffle put the two
+    // sections. Contiguity is what sectioning means: the two psychological-safety questions are
+    // asked together under one heading rather than interleaved with workload. A flat run would
+    // give three nulls, and a regrouping that lost the sections would give three runs.
+    const runs = dimensions.filter((dimension, index) => index === 0 || dimension !== dimensions[index - 1])
+    expect(runs).toHaveLength(2)
   })
 
   /**
