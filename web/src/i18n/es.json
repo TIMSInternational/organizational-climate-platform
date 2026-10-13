@@ -2041,7 +2041,7 @@
         "createNote": "dos preguntas, un equipo, una fecha",
         "shareNote": "enlace o QR, sin iniciar sesión",
         "liveNote": "un conteo que sube",
-        "readNote": "al cerrar: el conteo y las palabras desde 5",
+        "readNote": "al cerrar: el conteo y las palabras desde {floor}",
         "createdAt": "{date}, {time}",
         "createDraft": "borrador: falta lanzar",
         "shareNow": "en curso",

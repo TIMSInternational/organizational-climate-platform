@@ -17,6 +17,7 @@ import {
 import { listMicroclimateTemplates } from '../../api/microclimateTemplates'
 import MicroclimateCreateNextPage from './MicroclimateCreateNextPage'
 import es from '../../../../i18n/es.json'
+import { ANONYMITY_FLOOR } from '../../../../components/charts'
 
 const copy = es.microclimates.next.create
 
@@ -214,6 +215,22 @@ describe('MicroclimateCreateNextPage', () => {
       startTime: '2026-09-10T21:00',
       endTime: '2026-09-11T08:30',
     })
+  })
+
+  /**
+   * The journey rail's Leer note states the privacy floor, and it is the one floor
+   * sentence in this feature that spelled the number instead of interpolating it — so it
+   * went on promising "las palabras desde 5" after the platform floor became 3. Asserted
+   * against `ANONYMITY_FLOOR` rather than against a literal, which is the whole point: a
+   * test naming 3 here would be the same defect one number later.
+   */
+  it('states the privacy floor in the journey rail from the constant, not from a literal', async () => {
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+
+    const note = es.microclimates.next.journey.readNote.replace('{floor}', String(ANONYMITY_FLOOR))
+    expect(await screen.findByText(note)).toBeTruthy()
+    // The superseded wording, which is what shipped until the floor moved.
+    expect(screen.queryByText('al cerrar: el conteo y las palabras desde 5')).toBeNull()
   })
 
   it('says what launching does: it opens the session now, and the sweep closes it at the end', async () => {

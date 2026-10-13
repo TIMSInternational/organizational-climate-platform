@@ -2041,7 +2041,7 @@
         "createNote": "two questions, a team, a date",
         "shareNote": "link or QR, no sign-in",
         "liveNote": "a count that climbs",
-        "readNote": "at close: the count and the words from 5",
+        "readNote": "at close: the count and the words from {floor}",
         "createdAt": "{date}, {time}",
         "createDraft": "draft: not launched yet",
         "shareNow": "in progress",
