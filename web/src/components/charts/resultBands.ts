@@ -126,12 +126,33 @@ export function bandName(key: ResultBandKey, bands: ResultBands, t: TranslateFn)
 
 /**
  * The band's name where a cell has room for one word: the product's short word
- * ("Crítica") for a default name, the company's own name verbatim otherwise — a custom
- * name cannot be shortened without inventing a word the company never chose, so the cell
- * truncates it and carries the whole name in its title and its accessible label.
+ * ("Crítica") for a default name, the company's own name otherwise — never a word the
+ * company did not write. One shortening is allowed because it invents nothing: when all
+ * three names share leading words, those are dropped, since they are exactly the part
+ * that cannot tell the bands apart. EAGLE's "Áreas de fortaleza / oportunidad / criticas"
+ * truncated to three identical "ÁREAS DE…" cells (2026-10-12); they now read FORTALEZA,
+ * OPORTUNIDAD, CRITICAS. The whole name stays in the cell's title and accessible label.
  */
 export function bandShortName(key: ResultBandKey, bands: ResultBands, t: TranslateFn): string {
-  return bands.names[key] ?? t(`resultBands.short.${key}`)
+  const own = bands.names[key]
+  if (own === null) return t(`resultBands.short.${key}`)
+  const shared = sharedLeadingWords(bands)
+  if (shared === 0) return own
+  const rest = own.trim().split(/\s+/).slice(shared)
+  // "Áreas criticas / de oportunidad / de fortaleza" share only "Áreas"; the connector left
+  // in front ("de", "of") still pushed the word that matters out of a narrow cell.
+  return (rest.length > 1 && rest[0].length <= 3 && rest[0] === rest[0].toLocaleLowerCase() ? rest.slice(1) : rest).join(' ')
+}
+
+/** How many leading words all three custom names share, leaving each at least one word. */
+function sharedLeadingWords(bands: ResultBands): number {
+  const all = [bands.names.critical, bands.names.opportunity, bands.names.strength]
+  if (all.some((name) => name === null)) return 0
+  const words = all.map((name) => name!.trim().split(/\s+/))
+  const most = Math.min(...words.map((list) => list.length)) - 1
+  let shared = 0
+  while (shared < most && words.every((list) => list[shared].toLocaleLowerCase() === words[0][shared].toLocaleLowerCase())) shared += 1
+  return shared
 }
 
 /** Two decimals in the reader's locale ("3,00"), the precision the scale is defined at. */

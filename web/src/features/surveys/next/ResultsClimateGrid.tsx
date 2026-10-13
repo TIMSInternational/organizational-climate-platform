@@ -37,10 +37,22 @@ const CELL = 'border-0 p-0'
 // `[overflow-wrap:normal]`: `index.css` lets a cell break an unbreakable run anywhere,
 // which on a narrow column split "RECONOCIMIENTO" mid-word (measured at 1024). A label
 // wraps between words here, and the grid's minimum width keeps every word on a line.
+// `hyphens-auto` is the last resort for a word longer than its column: a hyphenated break
+// rather than ink spilling into the next header ("ADMINISTRACIÓNPERSONAL", EAGLE's ten
+// dimensions at 1440, 2026-10-12). It needs the table's `lang`.
 const HEAD = cn(
   CELL,
-  'text-center align-bottom text-2xs font-bold uppercase leading-tight tracking-label text-fg-label [overflow-wrap:normal]',
+  'text-center align-bottom text-2xs font-bold uppercase leading-tight tracking-label text-fg-label [overflow-wrap:normal] hyphens-auto',
 )
+/**
+ * The grid's minimum width in rem: the label column, the mean (and comparison) column,
+ * and 5.5rem per dimension -- one-word labels like "RECONOCIMIENTO" fit; longer ones hyphenate.
+ * Never under the 59rem the six-dimension artboard was measured at. Past what the card
+ * holds, the grid scrolls inside it; it never squeezes columns until headers collide.
+ */
+export function gridMinWidthRem(dimensionCount: number, compare: boolean): number {
+  return Math.max(59, 8.75 + (compare ? 12 : 6) + dimensionCount * 5.5)
+}
 /** The row labels stay put while a narrow viewport scrolls the grid under them. */
 const STICKY = 'sticky left-0 z-10 bg-surface-card'
 /** `index.css` tints every body row on hover; a grid of coloured cells must not flash. */
@@ -143,7 +155,9 @@ export default function ResultsClimateGrid({
         // 59rem is where it stops shrinking and scrolls instead: ~96px per dimension,
         // the narrowest a one-word label ("RECONOCIMIENTO") fits — met from 1280 up,
         // scrolled inside the card at 1024 (measured in the 1024 shot).
-        className="min-w-[59rem] table-fixed border-separate border-spacing-1 text-base"
+        className="table-fixed border-separate border-spacing-1 text-base"
+        style={{ minWidth: `${gridMinWidthRem(dimensions.length, compare !== null)}rem` }}
+        lang={locale}
       >
         <caption className="sr-only">{t('resultBands.results.gridCaption')}</caption>
         <colgroup>

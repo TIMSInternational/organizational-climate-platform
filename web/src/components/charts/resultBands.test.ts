@@ -87,6 +87,32 @@ describe('the result bands', () => {
     expect(bandShortName('critical', named, tEs)).toBe('Zona roja')
   })
 
+  it('drops only the leading words all three company names share, and never a whole name', () => {
+    const eagle: ResultBands = {
+      ...DEFAULT_RESULT_BANDS,
+      names: { critical: 'Áreas criticas', opportunity: 'Áreas de oportunidad', strength: 'Áreas de fortaleza' },
+    }
+    // "Áreas" is shared by all three, and the connector left in front of the word that
+    // matters ("de") goes too: three cells read CRITICAS, OPORTUNIDAD, FORTALEZA.
+    expect(bandShortName('critical', eagle, tEs)).toBe('criticas')
+    expect(bandShortName('opportunity', eagle, tEs)).toBe('oportunidad')
+    expect(bandShortName('strength', eagle, tEs)).toBe('fortaleza')
+    // The full name is untouched where there is room for it.
+    expect(bandName('strength', eagle, tEs)).toBe('Áreas de fortaleza')
+
+    const sharedTwo: ResultBands = {
+      ...DEFAULT_RESULT_BANDS,
+      names: { critical: 'Zona de riesgo', opportunity: 'Zona de mejora', strength: 'Zona de orgullo' },
+    }
+    expect(bandShortName('critical', sharedTwo, tEs)).toBe('riesgo')
+    // Identical names keep their last word rather than vanishing.
+    const same: ResultBands = { ...DEFAULT_RESULT_BANDS, names: { critical: 'Nivel', opportunity: 'Nivel', strength: 'Nivel' } }
+    expect(bandShortName('strength', same, tEs)).toBe('Nivel')
+    // One default name among custom ones: nothing is shared with a word the company did not write.
+    const mixed: ResultBands = { ...DEFAULT_RESULT_BANDS, names: { critical: 'Áreas críticas', opportunity: null, strength: 'Áreas fuertes' } }
+    expect(bandShortName('critical', mixed, tEs)).toBe('Áreas críticas')
+  })
+
   it('lays the three areas end to end over 1 to 5', () => {
     expect(segmentsOf(DEFAULT_RESULT_BANDS)).toEqual([
       { key: 'critical', from: 1, to: 3 },
