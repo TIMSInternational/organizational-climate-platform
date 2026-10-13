@@ -1,0 +1,231 @@
+name: db-backup
+
+# Nightly logical dump of the production database to S3 (#512, decision B in
+# docs/decisions/database-backups.md).
+#
+# Success is not "the job went green". It is the DumpSucceeded metric, published as the LAST
+# step and only after the dump was taken, checked to contain table data, uploaded, and found in
+# the bucket at a sane size. infra/aws/climate-project-db-backup.yml alarms on the critical
+# topic when 26 hours pass without one, so every failure mode below -- including this workflow
+# not running at all -- ends as a page, not as a red X nobody opens.
+#
+# One-time setup (Federico, not CI): scripts/backup-setup/1-deploy-stack.sh, 2-set-github-vars.sh,
+# 3-first-run.sh, in that order.
+
+on:
+  schedule:
+    # 07:00 UTC = 01:00 in Costa Rica (UTC-6, no DST). GitHub may start a scheduled run late
+    # under load; the alarm allows two hours of slack for that.
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+
+# Never two dumps at once, and never cancel one in flight: a cancelled run publishes no metric,
+# which is correct, but a queued one costs nothing.
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: us-east-2
+  # The client major. pg_dump refuses a server NEWER than itself and dumps older ones, and its
+  # custom-format output must be restored by a pg_restore of at least the same major. The
+  # production server's major is not recorded anywhere in this repository; the 2026-09-04
+  # manual dump (docs/runbooks/backup-restore-verification.md) records "pg_dump 17.6", which
+  # the Supabase CLI matches to the server. If Supabase upgrades the project past 17 this
+  # job fails at pg_dump ("server version mismatch"), publishes nothing, and the alarm fires.
+  PG_MAJOR: "17"
+  METRIC_NAMESPACE: ClimateProject/Backup
+  METRIC_NAME: DumpSucceeded
+  BACKUP_PREFIX: climate
+  # Below this the "dump" is an error page or an empty schema, not a backup. The 2026-09-04
+  # plain-SQL data dump of production was 294 KB; a custom-format dump compresses well below
+  # that, so the floor is deliberately low -- the TABLE DATA check below is the real test.
+  MIN_DUMP_BYTES: "20000"
+
+jobs:
+  dump:
+    name: Dump production database to S3
+    runs-on: ubuntu-24.04
+    # production: where MIGRATION_DATABASE_CONNECTION_STRING lives, and the environment whose
+    # branch policy admits main only. The backup role trusts this environment's OIDC sub.
+    environment: production
+    timeout-minutes: 30
+    steps:
+      - name: Verify configuration
+        env:
+          AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+          DB_BACKUP_BUCKET: ${{ vars.DB_BACKUP_BUCKET }}
+          DB_BACKUP_ROLE_ARN: ${{ vars.DB_BACKUP_ROLE_ARN }}
+          MIGRATION_DATABASE_CONNECTION_STRING: ${{ secrets.MIGRATION_DATABASE_CONNECTION_STRING }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in AWS_ACCOUNT_ID DB_BACKUP_BUCKET DB_BACKUP_ROLE_ARN MIGRATION_DATABASE_CONNECTION_STRING; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name is empty. Run scripts/backup-setup/2-set-github-vars.sh (variables) or set the production environment secret."
+              missing=1
+            fi
+          done
+          [ "$missing" -eq 0 ] || exit 1
+          case "$DB_BACKUP_ROLE_ARN" in
+            "arn:aws:iam::${AWS_ACCOUNT_ID}:role/"*) ;;
+            *) echo "::error::DB_BACKUP_ROLE_ARN is not a role in account $AWS_ACCOUNT_ID."; exit 1 ;;
+          esac
+          echo "Backup configuration is present."
+
+      - name: Install the PostgreSQL ${{ env.PG_MAJOR }} client (PGDG)
+        run: |
+          set -euo pipefail
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -sSfL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          . /etc/os-release
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq "postgresql-client-${PG_MAJOR}"
+          echo "/usr/lib/postgresql/${PG_MAJOR}/bin" >> "$GITHUB_PATH"
+          "/usr/lib/postgresql/${PG_MAJOR}/bin/pg_dump" --version
+
+      - name: Dump the application schema
+        id: dump
+        env:
+          CONN: ${{ secrets.MIGRATION_DATABASE_CONNECTION_STRING }}
+        run: |
+          set -euo pipefail
+
+          # Same two guards as deploy-prod.yml's migration step, for the same reasons: 6543 is
+          # the transaction-mode pooler (pg_dump needs a session: it holds one snapshot across
+          # many statements), and db.<ref>.supabase.co is IPv6-only, unreachable from a runner.
+          if printf '%s' "$CONN" | grep -qE '(^|[^0-9])6543([^0-9]|$)'; then
+            echo "::error::MIGRATION_DATABASE_CONNECTION_STRING points at port 6543 (transaction pooler). pg_dump needs the session pooler, port 5432." >&2
+            exit 1
+          fi
+          if printf '%s' "$CONN" | grep -qE 'db\.[a-z0-9-]+\.supabase\.co'; then
+            echo "::error::MIGRATION_DATABASE_CONNECTION_STRING points at the IPv6-only db.<ref>.supabase.co host. Use the session pooler (port 5432)." >&2
+            exit 1
+          fi
+
+          # The secret is an ADO.NET/Npgsql string (Host=..;Port=..;Username=..;Password=..).
+          # libpq does not read that, so split it into the five libpq variables. Python, not
+          # shell string-splitting, because Npgsql allows a quoted value to contain ';'.
+          # Fields are emitted NUL-separated and read into an array: nothing is echoed, and
+          # nothing is written to $GITHUB_ENV, so the password exists only in this step.
+          mapfile -d '' -t f < <(python3 - <<'PY'
+          import os, re, sys
+          s = os.environ["CONN"]
+          kv = {}
+          for m in re.finditer(r'\s*([^=;]+?)\s*=\s*("(?:[^"]|"")*"|\'(?:[^\']|\'\')*\'|[^;]*)\s*(?:;|$)', s):
+              k, v = m.group(1).strip().lower().replace(" ", ""), m.group(2).strip()
+              if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
+                  v = v[1:-1].replace(v[0] * 2, v[0])
+              kv[k] = v
+          def pick(*names, default=None):
+              for n in names:
+                  if kv.get(n):
+                      return kv[n]
+              if default is None:
+                  sys.stderr.write("connection string has none of: %s\n" % ", ".join(names))
+                  sys.exit(2)
+              return default
+          out = [
+              pick("host", "server"),
+              pick("port", default="5432"),
+              pick("database", "db", "initialcatalog", default="postgres"),
+              pick("username", "userid", "user", "uid", "username"),
+              pick("password", "pwd"),
+          ]
+          sys.stdout.write("\0".join(out) + "\0")
+          PY
+          )
+          if [ "${#f[@]}" -ne 5 ]; then
+            echo "::error::Could not parse MIGRATION_DATABASE_CONNECTION_STRING into host/port/database/user/password." >&2
+            exit 1
+          fi
+          echo "::add-mask::${f[4]}"
+          export PGHOST="${f[0]}" PGPORT="${f[1]}" PGDATABASE="${f[2]}" PGUSER="${f[3]}" PGPASSWORD="${f[4]}"
+          export PGSSLMODE=require PGCONNECT_TIMEOUT=20 PGAPPNAME=climate-db-backup
+
+          if [ "$PGPORT" != "5432" ]; then
+            echo "::error::Port is $PGPORT; the session pooler is 5432." >&2
+            exit 1
+          fi
+
+          echo "Server: $(psql -XAtqc 'show server_version')"
+
+          ts="$(date -u +%Y%m%dT%H%M%SZ)"
+          key="${BACKUP_PREFIX}/$(date -u +%Y/%m/%d)/climate-${ts}.dump"
+          out="${RUNNER_TEMP}/climate-${ts}.dump"
+
+          # --schema=public: every EF Core table, including __EFMigrationsHistory, is in public
+          # (no HasDefaultSchema/EnsureSchema anywhere in src/). Supabase's own schemas (auth,
+          # storage, realtime, extensions, vault, ...) are not this application's data and are
+          # recreated by Supabase, not by a restore. --no-owner/--no-privileges: Supabase roles
+          # (service_role, anon, authenticated) do not exist on a plain Postgres restore target.
+          pg_dump --format=custom --compress=6 --schema=public \
+            --no-owner --no-privileges --no-publications --no-subscriptions \
+            --file="$out"
+
+          # A dump that holds the schema and no rows is the failure docs/runbooks/
+          # backup-restore-verification.md records once already ("schema-only by default").
+          # Read the archive's own table of contents and require the rows to be there.
+          toc="$(pg_restore --list "$out")"
+          data_entries="$(printf '%s\n' "$toc" | grep -c ' TABLE DATA public ' || true)"
+          for t in '__EFMigrationsHistory' users companies surveys responses question_responses survey_invitations; do
+            if ! printf '%s\n' "$toc" | grep -qE " TABLE DATA public \"?${t}\"? "; then
+              echo "::error::The dump has no TABLE DATA entry for public.${t}." >&2
+              exit 1
+            fi
+          done
+          bytes="$(stat -c %s "$out")"
+          echo "Dump: ${bytes} bytes, ${data_entries} TABLE DATA entries."
+          if [ "$bytes" -lt "$MIN_DUMP_BYTES" ]; then
+            echo "::error::Dump is ${bytes} bytes, below the ${MIN_DUMP_BYTES}-byte floor." >&2
+            exit 1
+          fi
+
+          {
+            echo "file=$out"
+            echo "key=$key"
+            echo "bytes=$bytes"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ vars.DB_BACKUP_ROLE_ARN }}
+
+      - name: Upload and verify
+        env:
+          BUCKET: ${{ vars.DB_BACKUP_BUCKET }}
+          FILE: ${{ steps.dump.outputs.file }}
+          KEY: ${{ steps.dump.outputs.key }}
+          LOCAL_BYTES: ${{ steps.dump.outputs.bytes }}
+        run: |
+          set -euo pipefail
+          aws s3 cp "$FILE" "s3://${BUCKET}/${KEY}" --only-show-errors --sse AES256
+
+          # Read it back from S3, not from the cp exit code. The role can list the prefix
+          # (size, no content) but cannot GetObject, so this is list-objects-v2 on the key.
+          remote_bytes="$(aws s3api list-objects-v2 --bucket "$BUCKET" --prefix "$KEY" \
+            --query "Contents[?Key=='${KEY}'].Size | [0]" --output text)"
+          echo "s3://${BUCKET}/${KEY}: ${remote_bytes} bytes (local ${LOCAL_BYTES})."
+          if [ "$remote_bytes" != "$LOCAL_BYTES" ]; then
+            echo "::error::Uploaded object size '${remote_bytes}' does not match the local dump (${LOCAL_BYTES})." >&2
+            exit 1
+          fi
+          rm -f "$FILE"
+
+      # LAST, and only reached if everything above succeeded. This datapoint is what keeps the
+      # climate-project-db-backup-stopped alarm quiet.
+      - name: Publish success metric
+        run: |
+          set -euo pipefail
+          aws cloudwatch put-metric-data --namespace "$METRIC_NAMESPACE" \
+            --metric-name "$METRIC_NAME" --value 1 --unit Count
+          echo "Published ${METRIC_NAMESPACE}/${METRIC_NAME}=1."
