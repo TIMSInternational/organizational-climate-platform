@@ -13,7 +13,7 @@ import {
   Lock,
   ShieldCheck,
 } from 'lucide-react'
-import { useTranslation } from '../../../i18n'
+import { isLocale, useTranslation } from '../../../i18n'
 import {
   Alert,
   AlertDescription,
@@ -199,7 +199,7 @@ export default function SurveyRespondForm({
   publicEntry = false,
   onSubmitted,
 }: SurveyRespondFormProps) {
-  const { t, locale } = useTranslation('surveyRespond')
+  const { t, locale, adoptContentLocale } = useTranslation('surveyRespond')
   const { t: tRoot } = useTranslation()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
 
@@ -364,6 +364,23 @@ export default function SurveyRespondForm({
 
   const view = state.status === 'ready' ? state.view : null
   const timeLimitMinutes = view?.timeLimitMinutes ?? null
+
+  // The frame follows the content. `resolvedLocale` is the language the payload actually
+  // came back in, which for a survey authored only in Spanish is Spanish however the
+  // device is configured -- so until this existed a respondent on an English laptop read
+  // Spanish questions inside English chrome, and there is no `?lang` in the link to fix it
+  // with. `adoptContentLocale` does not persist and is a no-op once the respondent has
+  // used the picker on `RespondShell`, so this cannot fight an explicit choice; when the
+  // two still disagree `ContentLanguageNotice` below says which language the content is in.
+  //
+  // Guarded on inequality because `locale` is a dependency of the read above: adopting
+  // re-issues it once, in the adopted language, and must then settle rather than loop.
+  useEffect(() => {
+    if (!view) return
+    if (!isLocale(view.resolvedLocale)) return
+    if (view.resolvedLocale === locale) return
+    adoptContentLocale(view.resolvedLocale)
+  }, [view, locale, adoptContentLocale])
 
   // Only ticks for a survey that actually sets a limit, so every other survey costs
   // no timer at all.

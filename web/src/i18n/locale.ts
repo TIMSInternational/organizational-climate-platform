@@ -26,20 +26,39 @@ export function isLocale(value: unknown): value is Locale {
 }
 
 /**
+ * The reader's own stored choice, or `null` if they have never made one.
+ *
+ * Exported because "has this reader chosen a language?" is a different question from
+ * "what language do we start in", and the respond flow needs the first one: it adopts a
+ * survey's own language as the chrome language, and must never do that over an explicit
+ * choice. See `adoptContentLocale` in `TranslationProvider`.
+ */
+export function storedLocale(): Locale | null {
+  try {
+    const stored = window.localStorage.getItem(LOCALE_STORAGE_KEY)
+    return isLocale(stored) ? stored : null
+  } catch {
+    // Storage throws outright in private-browsing / blocked-cookie modes.
+    return null
+  }
+}
+
+/**
  * The locale to start in: an explicit stored choice wins, otherwise the browser's
  * preference, otherwise English.
  *
  * The legacy app defaulted flatly to `en`, which is the wrong default for a
  * Spanish-facing Procomer deployment — but honouring the browser rather than
  * hardcoding `es` keeps English users working too.
+ *
+ * It reads the browser and nothing else about the CONTENT, which is why a survey
+ * authored only in Spanish used to render Spanish questions inside English chrome on
+ * an English-configured device. `adoptContentLocale` is the answer to that; this
+ * function stays the opening guess.
  */
 export function detectLocale(): Locale {
-  try {
-    const stored = window.localStorage.getItem(LOCALE_STORAGE_KEY)
-    if (isLocale(stored)) return stored
-  } catch {
-    // Storage throws outright in private-browsing / blocked-cookie modes.
-  }
+  const stored = storedLocale()
+  if (stored) return stored
 
   const languages = typeof navigator === 'undefined' ? [] : (navigator.languages ?? [navigator.language])
   for (const language of languages) {

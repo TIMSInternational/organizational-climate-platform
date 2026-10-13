@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router'
 import SurveyRespondPage from './SurveyRespondPage'
 import { TranslationProvider } from '../../../i18n'
 import { LOCALE_STORAGE_KEY } from '../../../i18n/locale'
+import type { Locale } from '../../../i18n'
 import type { SurveyRespondQuestion, SurveyRespondView } from '../api/surveyResponses'
 
 function question(overrides: Partial<SurveyRespondQuestion> = {}): SurveyRespondQuestion {
@@ -82,9 +83,14 @@ function failWith(status: number, message: string) {
   vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ message }), { status }))
 }
 
-function renderPage() {
+/**
+ * `initialLocale` models the locale the app STARTED in without reaching for
+ * `navigator`: detection's browser arm is what it stands in for, and stubbing a
+ * read-only navigator property per test leaks into every test that follows it.
+ */
+function renderPage(initialLocale?: Locale) {
   return render(
-    <TranslationProvider>
+    <TranslationProvider initialLocale={initialLocale}>
       <MemoryRouter initialEntries={['/surveys/s1/respond']}>
         <Routes>
           <Route path="/surveys/:id/respond" element={<SurveyRespondPage />} />
@@ -172,6 +178,39 @@ describe('SurveyRespondPage language', () => {
     renderPage()
 
     expect(await screen.findByText(/Not everything is available in your language/)).toBeTruthy()
+  })
+
+  /**
+   * Found on Eagle, 2026-10-13. A respondent on an English-configured device opened a
+   * survey written only in Spanish and read Spanish questions inside ENGLISH chrome —
+   * the buttons, the promise and the progress all in the wrong language — because
+   * `detectLocale()` consults the stored choice and the browser and never the survey.
+   * There is no `?lang` in a respond link, so nothing could correct it from outside.
+   *
+   * The storage is cleared deliberately: the global `beforeEach` stores a preference,
+   * and with one stored this must NOT fire. The test above holds that other end — it
+   * stores `en`, is served Spanish, and still reads its chrome in English.
+   */
+  it('renders a Spanish-only survey in Spanish chrome when the reader has expressed no preference', async () => {
+    window.localStorage.clear()
+    respondWith(view({ language: 'es', resolvedLocale: 'es' }))
+    renderPage('en')
+
+    expect(await screen.findByRole('button', { name: 'Enviar mis respuestas' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Submit my answers' })).toBeNull()
+    // What assistive tech and the browser's own translation prompt read.
+    expect(document.documentElement.lang).toBe('es')
+  })
+
+  it('adopts the survey language without remembering it as a preference', async () => {
+    window.localStorage.clear()
+    respondWith(view({ language: 'es', resolvedLocale: 'es' }))
+    renderPage('en')
+
+    await screen.findByRole('button', { name: 'Enviar mis respuestas' })
+    // Answering one Spanish survey must not re-language the rest of the app for an
+    // employee who also administers one.
+    expect(window.localStorage.getItem(LOCALE_STORAGE_KEY)).toBeNull()
   })
 
   it('reports per-field fallbacks even when the payload resolved correctly overall', async () => {
