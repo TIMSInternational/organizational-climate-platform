@@ -12,6 +12,9 @@ import { MERIDIANO_ID, superMeridianoFetch } from '../../../../test/superMeridia
 import type { DemographicField } from '../../api/demographicFields'
 import { PROTECTED_HATCH } from '../../../../components/charts/suppression'
 import es from '../../../../i18n/es.json'
+import { ANONYMITY_FLOOR } from '../../../../components/charts'
+import { SAMPLE_CATALOGUE } from './sampleCatalogue'
+import { mergedRanges } from './adminDemographics'
 
 /**
  * The company administrator's *Campos demográficos* (`DemographicFields` artboard) through its
@@ -23,6 +26,25 @@ const FIXTURE = JSON.parse(raw) as Record<string, unknown>
 const PEOPLE = (FIXTURE['GET /dashboard/company-admin'] as { activeUserCount: number }).activeUserCount
 const T = es.demographicFields.next
 const ROUTE = `/admin/companies/${MERIDIANO_ID}/demographic-fields`
+
+/** The proposal's own age bands — read off `SAMPLE_CATALOGUE`, never counted by hand. */
+const AGE_BANDS = SAMPLE_CATALOGUE.find((entry) => entry.field === 'rango_edad')!.valueKeys.length
+/**
+ * The largest headcount at which the proposal's age cut is still UNDER the floor:
+ * `⌊people ÷ bands⌋ < floor`. Derived, because the capture's 42 people were under a
+ * floor of 5 and are over a floor of 3 — a fixture that stops straddling the boundary
+ * is no longer a boundary fixture, it is a test that asserts nothing.
+ */
+const SMALL_TENANT = AGE_BANDS * ANONYMITY_FLOOR - 1
+/** The dashboard read, re-served for a tenant small enough that the age cut is withheld. */
+function smallTenant() {
+  return {
+    'GET /dashboard/company-admin': () =>
+      new Response(
+        JSON.stringify({ ...(FIXTURE['GET /dashboard/company-admin'] as object), activeUserCount: SMALL_TENANT, userCount: SMALL_TENANT }),
+      ),
+  }
+}
 
 function fill(text: string, values: Record<string, string | number>): string {
   return Object.entries(values).reduce((out, [key, value]) => out.replace(`{${key}}`, String(value)), text)
@@ -60,7 +82,7 @@ const OWN_FIELDS = [
     field: 'edad',
     label: 'Edad',
     order: 2,
-    options: Array.from({ length: 9 }, (_, order) => ({ order, value: `r${order}`, label: `Rango ${order}` })),
+    options: Array.from({ length: Math.floor(PEOPLE / ANONYMITY_FLOOR) + 1 }, (_, order) => ({ order, value: `r${order}`, label: `Rango ${order}` })),
   }),
   field({ id: 'ingreso', field: 'ingreso', label: 'Ingreso', type: 'date', options: null, order: 3 }),
   field({ id: 'nivel', field: 'nivel', label: 'Nivel', order: 4, isActive: false }),
@@ -109,23 +131,22 @@ describe('AdminDemographicFieldsView (company administrator)', () => {
     expect(document.querySelector('section[aria-labelledby="demographics-catalogue"]')?.textContent).toContain(tail)
   })
 
-  it('never prints a mean under the floor: the narrow list reads "menos de 5" and says what would clear it', async () => {
-    vi.stubGlobal('fetch', fetchWith())
+  it('never prints a mean under the floor: the narrow list reads "menos de N" and says what would clear it', async () => {
+    vi.stubGlobal('fetch', fetchWith(smallTenant()))
     renderAt()
     await screen.findByRole('heading', { name: T.catalogue.headingSample })
     const age = row('rango_edad')
     expect(age.querySelector('[data-per-value]')).toBeNull()
-    expect(within(age).getByText(fill(T.catalogue.belowFloor, { floor: 5 }))).toBeTruthy()
-    // Nine bands merged in pairs until the whole-number mean clears the floor: the board's
-    // "con 5 rangos serían 8 por valor" for its 42 people, computed here from the capture.
-    let ranges = 9
-    while (ranges >= 2 && Math.floor(PEOPLE / ranges) < 5) ranges = Math.ceil(ranges / 2)
-    expect(Math.floor(PEOPLE / ranges)).toBeGreaterThanOrEqual(5)
-    expect(within(age).getByText(fill(T.catalogue.narrowSub, { ranges, perValue: Math.floor(PEOPLE / ranges) }))).toBeTruthy()
+    expect(within(age).getByText(fill(T.catalogue.belowFloor, { floor: ANONYMITY_FLOOR }))).toBeTruthy()
+    // The bands merged in pairs until the whole-number mean clears the floor — read from
+    // `mergedRanges`, the same helper the row renders, rather than re-derived here.
+    const merged = mergedRanges(SMALL_TENANT, AGE_BANDS, ANONYMITY_FLOOR)!
+    expect(merged.perValue).toBeGreaterThanOrEqual(ANONYMITY_FLOOR)
+    expect(within(age).getByText(fill(T.catalogue.narrowSub, { ranges: merged.ranges, perValue: merged.perValue }))).toBeTruthy()
   })
 
   it('marks a protected mean and the floor legend with the canvas hatch, and draws no figure in either', async () => {
-    vi.stubGlobal('fetch', fetchWith())
+    vi.stubGlobal('fetch', fetchWith(smallTenant()))
     renderAt()
     await screen.findByRole('heading', { name: T.catalogue.headingSample })
     const marks = [row('rango_edad'), document.querySelector('[data-slot="floor-band"]') as HTMLElement].map((region) =>

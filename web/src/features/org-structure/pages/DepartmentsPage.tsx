@@ -11,7 +11,7 @@ import {
 import { getCompanyAdminDashboard } from '../../dashboard/api/dashboard'
 import DepartmentList, { type DepartmentReading } from '../components/DepartmentList'
 import DepartmentForm, { type DepartmentFormValues } from '../components/DepartmentForm'
-import { KpiTile, isSuppressed } from '../../../components/charts'
+import { KpiTile, isSuppressed, ANONYMITY_FLOOR } from '../../../components/charts'
 import { useCompanyScope } from '../../../company-context'
 import { useTranslation } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
@@ -31,15 +31,17 @@ import {
 /**
  * The anonymity floor this screen states and enforces.
  *
- * `charts/ProtectedCell.tsx` defaults to the same 5. It is named here because the
- * page description, the "under the floor" tile and every suppressed cell all have
- * to agree about it, and three separate literals would be three places to drift.
+ * `charts/ProtectedCell.tsx` defaults to the same value, because both read
+ * `ANONYMITY_FLOOR`. It is named here because the page description, the "under the
+ * floor" tile and every suppressed cell all have to agree about it, and three
+ * separate literals would be three places to drift — as a re-typed `5` did until
+ * the floor moved to 3.
  *
- * A constant rather than a fetched value because there is nothing to fetch:
+ * Read from the constant rather than fetched because there is nothing to fetch:
  * `api/companySettings.ts` carries `anonymousSurveys` and no threshold field, so
  * the platform has no per-company floor to read yet.
  */
-const FLOOR = 5
+const FLOOR = ANONYMITY_FLOOR
 
 /**
  * UNROUTED — kept as the wiring reference. `/departments` now mounts

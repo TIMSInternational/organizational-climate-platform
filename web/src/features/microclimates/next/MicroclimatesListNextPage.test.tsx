@@ -10,6 +10,7 @@ import { clearToken, setToken } from '../../../auth/token'
 import { COMPANY_CONTEXT_STORAGE_KEY, CompanyContextProvider } from '../../../company-context'
 import { tokenFor } from '../../../test/jwtFixture'
 import en from '../../../i18n/en.json'
+import { MINIMUM_RESPONDENTS } from '../microclimatePrivacy'
 
 /**
  * The redesigned Microclimas (`/microclimates`), against the MicroclimatesList artboard:
@@ -190,7 +191,7 @@ describe('the sessions', () => {
     const meta = await screen.findByText((_, node) => node?.getAttribute('data-slot') === 'session-meta' && /preguntas/.test(node.textContent ?? ''))
 
     expect(meta.textContent).toBe(
-      '0 de 20 respuestas · abierto hasta el 11 sept a las 21:06 · 2 preguntas · anónimo · palabras protegidas hasta 5',
+      `0 de 20 respuestas · abierto hasta el 11 sept a las 21:06 · 2 preguntas · anónimo · palabras protegidas hasta ${MINIMUM_RESPONDENTS}`,
     )
     // The counts are readings: the figure face, and nothing else in the line.
     expect([...meta.querySelectorAll('.font-mono')].map((node) => node.textContent)).toEqual(['0', '20'])
@@ -201,7 +202,7 @@ describe('the sessions', () => {
     renderPage()
     const meta = await screen.findByText((_, node) => node?.getAttribute('data-slot') === 'session-meta')
 
-    expect(meta.textContent).toBe('0 of 20 responses · words protected until 5')
+    expect(meta.textContent).toBe(`0 of 20 responses · words protected until ${MINIMUM_RESPONDENTS}`)
     // No close date, so the empty past note names no session.
     expect(screen.getByText(/when a microclimate closes/)).toBeTruthy()
   })
@@ -221,13 +222,18 @@ describe('the sessions', () => {
     renderPage()
 
     expect(
-      await screen.findByText(/La primera aparece aquí cuando el pulso semanal cierre el 11 de septiembre: .* si 5 personas respondieron\./),
+      await screen.findByText(
+        new RegExp(
+          `La primera aparece aquí cuando el pulso semanal cierre el 11 de septiembre: .* si ${MINIMUM_RESPONDENTS} personas respondieron\\.`,
+        ),
+      ),
     ).toBeTruthy()
     expect(screen.getByText('ninguna todavía')).toBeTruthy()
   })
 
   it('offers no results link for a past session under the floor, and the hatch instead', async () => {
-    const few = row({ id: 'few', title: 'Tiny team', status: 'closed', responseCount: 4 })
+    // Under the floor: 4 was under 5 and is over 3.
+    const few = row({ id: 'few', title: 'Tiny team', status: 'closed', responseCount: MINIMUM_RESPONDENTS - 1 })
     const many = row({ id: 'many', title: 'Whole floor', status: 'closed', responseCount: 5 })
     routeFetch([few, many], {})
     renderPage()

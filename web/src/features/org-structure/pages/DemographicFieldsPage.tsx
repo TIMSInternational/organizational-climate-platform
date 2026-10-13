@@ -9,7 +9,7 @@ import { useTranslation } from '../../../i18n'
 import { readViewerClaims } from '../../../auth/viewerCapabilities'
 import SuperDemographicFieldsView from '../next/super/SuperDemographicFieldsView'
 import { PageTopBar } from '../../../components/layout'
-import { KpiTile, isSuppressed } from '../../../components/charts'
+import { KpiTile, isSuppressed, ANONYMITY_FLOOR } from '../../../components/charts'
 import {
   Button,
   Card,
@@ -64,11 +64,13 @@ import {
 
 /**
  * The anonymity floor this screen states and enforces. Same value and same
- * reasoning as `DepartmentsPage`: `charts/ProtectedCell.tsx` defaults to 5, and
- * `api/companySettings.ts` has no threshold field for a company to override it
- * with yet, so it is a constant rather than a fetched value.
+ * reasoning as `DepartmentsPage`: it is the one platform constant
+ * `charts/suppression.ts` publishes, and `api/companySettings.ts` has no
+ * threshold field for a company to override it with yet, so it is read from
+ * there rather than fetched — and never re-typed, because a page that wrote its
+ * own number would keep advertising the old floor after a ruling moved it.
  */
-const FLOOR = 5
+const FLOOR = ANONYMITY_FLOOR
 
 // UNROUTED since the per-role canvas (10 Sep): `/admin/companies/:companyId/demographic-fields`
 // mounts `next/DemographicsNextPage` (`next/admin/AdminDemographicFieldsView` for a company

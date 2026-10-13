@@ -8,6 +8,11 @@ import { setToken, clearToken } from '../../../auth/token'
 import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../company-context'
 import type { Department } from '../api/departments'
 import { tokenFor } from '../../../test/jwtFixture'
+import { ANONYMITY_FLOOR } from '../../../components/charts'
+import en from '../../../i18n/en.json'
+
+/** The row chip the page prints for a department under the floor, with the floor in it. */
+const UNDER_FLOOR = en.departments.underFloor.replace('{threshold}', String(ANONYMITY_FLOOR))
 
 /**
  * The URLs of requests for company-scoped DATA.
@@ -383,14 +388,14 @@ describe('DepartmentsPage as an instrument', () => {
   })
 
   it('says a department under the floor can never be reported on its own', async () => {
-    serveList(() => [department({ name: 'Finance', employeeCount: 4 })])
+    serveList(() => [department({ name: 'Finance', employeeCount: ANONYMITY_FLOOR - 1 })])
 
     renderPage()
 
     const row = (await screen.findByText('Finance')).closest('tr')!
-    expect(within(row).getByText('Under 5')).toBeTruthy()
+    expect(within(row).getByText(UNDER_FLOOR)).toBeTruthy()
     // The headcount itself is not secret -- it is org structure, not a response.
-    expect(within(row).getByText('4')).toBeTruthy()
+    expect(within(row).getByText(String(ANONYMITY_FLOOR - 1))).toBeTruthy()
   })
 
   it('marks a department that clears the floor as reportable, in a word', async () => {
@@ -400,15 +405,16 @@ describe('DepartmentsPage as an instrument', () => {
 
     const row = (await screen.findByText('Engineering')).closest('tr')!
     expect(within(row).getByText('Yes')).toBeTruthy()
-    expect(within(row).queryByText('Under 5')).toBeNull()
+    expect(within(row).queryByText(UNDER_FLOOR)).toBeNull()
   })
 
   it('protects a response reading under the floor instead of blanking it', async () => {
-    // 3 responses from 48 people. The cell must be shown as withheld -- an empty
-    // cell reads as missing data rather than as a guarantee being enforced.
+    // One response short of the floor, from 48 people. The cell must be shown as
+    // withheld -- an empty cell reads as missing data rather than as a guarantee
+    // being enforced.
     serveListAndReadings(
       () => [department({ id: 'sup', name: 'Support', employeeCount: 48 })],
-      () => [{ id: 'sup', name: 'Support', memberCount: 48, completedResponseCount: 3 }],
+      () => [{ id: 'sup', name: 'Support', memberCount: 48, completedResponseCount: ANONYMITY_FLOOR - 1 }],
     )
 
     renderPage()
@@ -416,10 +422,10 @@ describe('DepartmentsPage as an instrument', () => {
     const row = (await screen.findByText('Support')).closest('tr')!
     const protectedCell = within(row).getByRole('img')
     expect(protectedCell.getAttribute('aria-label')).toContain('protected')
-    // And it never says how far under the floor it is: publishing "3" beside a
-    // known headcount is exactly what the floor exists to prevent.
-    expect(row.textContent).not.toContain('3')
-    expect(protectedCell.getAttribute('aria-label')).not.toContain('3')
+    // And it never says how far under the floor it is: publishing the sub-floor
+    // count beside a known headcount is exactly what the floor exists to prevent.
+    expect(row.textContent).not.toContain(String(ANONYMITY_FLOOR - 1))
+    expect(protectedCell.getAttribute('aria-label')).not.toContain(String(ANONYMITY_FLOOR - 1))
   })
 
   it('shows the response count once the floor is met', async () => {
@@ -542,7 +548,7 @@ describe('DepartmentsPage as an instrument', () => {
   it('counts the departments that can never be reported on their own', async () => {
     serveList(() => [
       department({ id: 'a', name: 'Alpha', employeeCount: 40 }),
-      department({ id: 'b', name: 'Beta', employeeCount: 4 }),
+      department({ id: 'b', name: 'Beta', employeeCount: ANONYMITY_FLOOR - 1 }),
       department({ id: 'c', name: 'Gamma', employeeCount: 1 }),
     ])
 

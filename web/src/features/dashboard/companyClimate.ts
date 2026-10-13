@@ -1,4 +1,4 @@
-import { isSuppressed, participationRate } from '../../components/charts'
+import { ANONYMITY_FLOOR, isSuppressed, participationRate } from '../../components/charts'
 import type { CompanyAdminDashboard, DashboardDepartmentSummary } from './api/dashboard'
 
 /**
@@ -91,7 +91,7 @@ export function organisationResponseRate(
  */
 export function readDepartments(
   departments: readonly DashboardDepartmentSummary[],
-  threshold = 5,
+  threshold = ANONYMITY_FLOOR,
 ): DepartmentReading[] {
   return departments.map((department) => {
     const rate = participationRate(department.completedResponseCount, department.memberCount)

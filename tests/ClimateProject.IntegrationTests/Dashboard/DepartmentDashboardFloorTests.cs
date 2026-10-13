@@ -16,7 +16,7 @@ namespace ClimateProject.IntegrationTests.Dashboard;
 ///
 /// <para>
 /// The leader's and the supervisor's panels (the canvas's LeaderDashboard and
-/// SupervisorDashboard, 10 Sep) hatch the open survey's team count under 5. A screen that
+/// SupervisorDashboard, 10 Sep) hatch the open survey's team count under the floor. A screen that
 /// hides a number the network tab still shows has hidden nothing, so every count those panels
 /// hatch must be absent from <c>GET /dashboard/department-admin</c> itself -- and the numbers
 /// the leader's panel does print beside the team's (the whole company's) must not give a
@@ -77,16 +77,17 @@ public class DepartmentDashboardFloorTests : IAsyncLifetime
     public async Task An_open_surveys_team_count_under_the_floor_travels_as_null_and_so_does_a_company_total_under_it()
     {
         var survey = await SeedSurveyAsync(
-            "Q4 open", SurveyStatuses.Active, DateTimeOffset.UtcNow.AddDays(30), companyResponseCount: 3, targetAudienceCount: 24);
-        await SeedResponsesAsync(survey, _engineeringId, 3);
+            "Q4 open", SurveyStatuses.Active, DateTimeOffset.UtcNow.AddDays(30), companyResponseCount: SurveyResultsPrivacy.MinimumRespondents - 1, targetAudienceCount: 24);
+        await SeedResponsesAsync(survey, _engineeringId, SurveyResultsPrivacy.MinimumRespondents - 1);
 
         var raw = await ReadRawAsync(await LeaderAsync());
         var row = SurveyRow(raw, survey);
 
-        // Null -- not 3, and not 0, which would read "nobody in this team has answered".
+        // Null -- not the seeded count, and not 0, which would read "nobody in this team has
+        // answered".
         Assert.Equal(JsonValueKind.Null, row.GetProperty("responseCount").ValueKind);
-        // The whole company's 3 is under the floor as well: beside a hatched team count it
-        // would say the team has at most 3.
+        // The whole company's count is under the floor as well: beside a hatched team count it
+        // would bound the team from above.
         Assert.Equal(JsonValueKind.Null, row.GetProperty("companyResponseCount").ValueKind);
         // The invited headcount is not a response count, and travels as the author entered it.
         Assert.Equal(24, row.GetProperty("companyTargetAudienceCount").GetInt32());
@@ -124,21 +125,21 @@ public class DepartmentDashboardFloorTests : IAsyncLifetime
         var closed = await SeedSurveyAsync("Q3", SurveyStatuses.Closed, DateTimeOffset.UtcNow.AddDays(-10));
         await SeedResponsesAsync(closed, _engineeringId, 6);
         var open = await SeedSurveyAsync("Q4 open", SurveyStatuses.Active, DateTimeOffset.UtcNow.AddDays(30));
-        await SeedResponsesAsync(open, _engineeringId, 3);
+        await SeedResponsesAsync(open, _engineeringId, SurveyResultsPrivacy.MinimumRespondents - 2);
 
         var leader = await LeaderAsync();
         Assert.Equal(6, (await ReadAsync(leader)).CompletedResponseCount);
 
-        // A fourth answer to the open survey: the total must not move, or the two reads
+        // One more answer, still under the floor: the total must not move, or the two reads
         // give the hatched count back by subtraction.
         await SeedResponsesAsync(open, _engineeringId, 1);
         Assert.Equal(6, (await ReadAsync(leader)).CompletedResponseCount);
 
-        // At five the open survey's count is printed anyway, so the total may carry it.
+        // At the floor the open survey's count is printed anyway, so the total may carry it.
         await SeedResponsesAsync(open, _engineeringId, 1);
         var body = await ReadAsync(leader);
-        Assert.Equal(11, body.CompletedResponseCount);
-        Assert.Equal<int?>(5, Assert.Single(body.ActiveSurveys, s => s.Id == open).ResponseCount);
+        Assert.Equal(6 + SurveyResultsPrivacy.MinimumRespondents, body.CompletedResponseCount);
+        Assert.Equal<int?>(SurveyResultsPrivacy.MinimumRespondents, Assert.Single(body.ActiveSurveys, s => s.Id == open).ResponseCount);
     }
 
     // ------------------------------------------------------------------
@@ -181,18 +182,18 @@ public class DepartmentDashboardFloorTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Engineering five, everyone else three: the company's reading and the team's, with both
-    /// counts, give the other three's reading by subtraction. This surface used to keep the
+    /// Engineering at the floor, everyone else below it: the company's reading and the team's,
+    /// with both counts, give the rest's reading by subtraction. This surface used to keep the
     /// team's reading and withhold only the organisation side, but an administrator reads the
     /// company's means on the results page, so the team's reading beside them still yielded
     /// the three. Ruled 2026-10-02 after the TIMS dry run: one rule everywhere -- a segment
-    /// whose complement is 1 to 4 people is withheld on every surface
+    /// whose complement is between 1 person and the floor is withheld on every surface
     /// (<c>SurveyAggregation.WithholdComplement</c>), the leader's team included.
     /// </summary>
     [Fact]
     public async Task A_team_is_withheld_whole_when_the_rest_of_the_company_is_under_the_floor()
     {
-        await SeedScoredSurveyAsync("Q3", SurveyStatuses.Closed, DateTimeOffset.UtcNow.AddDays(-30), engineering: 5, sales: 3);
+        await SeedScoredSurveyAsync("Q3", SurveyStatuses.Closed, DateTimeOffset.UtcNow.AddDays(-30), engineering: 5, sales: SurveyResultsPrivacy.MinimumRespondents - 1);
 
         var climate = (await ReadAsync(await LeaderAsync())).Climate!;
 
@@ -219,7 +220,7 @@ public class DepartmentDashboardFloorTests : IAsyncLifetime
     [Fact]
     public async Task A_withheld_team_reading_carries_no_organisation_side()
     {
-        await SeedScoredSurveyAsync("Q3", SurveyStatuses.Closed, DateTimeOffset.UtcNow.AddDays(-30), engineering: 3, sales: 6);
+        await SeedScoredSurveyAsync("Q3", SurveyStatuses.Closed, DateTimeOffset.UtcNow.AddDays(-30), engineering: SurveyResultsPrivacy.MinimumRespondents - 1, sales: 6);
 
         var climate = (await ReadAsync(await LeaderAsync())).Climate!;
 

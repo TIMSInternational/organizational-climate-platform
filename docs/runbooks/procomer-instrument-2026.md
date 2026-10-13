@@ -141,7 +141,7 @@ UTC-6). Without them the draft opens a week out for three weeks — a placeholde
 
 ## Measured on the local stack, 2026-10-08
 
-Against `PROCOMER — Demostración` (`procomer.test`, 43 users, 5 nodos of 12/9/8/7/6 — all above the floor of 5, so every one of them can appear in a breakdown):
+Against `PROCOMER — Demostración` (`procomer.test`, 43 users, 5 nodos of 12/9/8/7/6 — all above the floor of 3, so every one of them can appear in a breakdown):
 
 - library: **72 rows created** (13 categories + 59 items); second run `0 created`; verify clean.
 - survey: **59 questions**, every statement, type, scale, anchor and theme matching the
@@ -165,9 +165,9 @@ Against `PROCOMER — Demostración` (`procomer.test`, 43 users, 5 nodos of 12/9
    on a screen, not in the CSV, not in the PDF; the results surface gives word frequencies only,
    and `SurveyExport` refuses the raw-response export by name (#122). An open question that
    invites a written comment and then shows a word cloud is a conversation to have now.
-3. **A nodo with fewer than 5 people will never appear in a breakdown.** On an anonymous survey
+3. **A nodo with fewer than 3 people will never appear in a breakdown.** On an anonymous survey
    `SurveyResponsePrivacy.DepartmentFor` records the department only when its company headcount
-   is at least 5; below that the response is stored with no department at all. Diego still owes
+   is at least 3; below that the response is stored with no department at all. Diego still owes
    the real organisational structure — this is the constraint to give him before he fixes it.
 4. **Resume works per browser, not per person.** With anonymous storage the part-finished
    response is found again by the client's session id, not a user id, so switching device or

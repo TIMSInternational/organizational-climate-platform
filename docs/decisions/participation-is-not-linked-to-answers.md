@@ -1,5 +1,10 @@
 # Decision: who answered is recorded apart from what they answered, and the área feeds the map
 
+> **Superseded on the number, 2026-10-13:** the privacy floor is **3**, not 5 — ruled by
+> Federico, platform-wide. The reasoning below stands as written; only the threshold moved.
+> See [`privacy-floor-is-three.md`](privacy-floor-is-three.md).
+
+
 Recorded 2026-10-12 with the code that implements it (branch `who-answered-and-area-map`).
 Owner: Federico. Rulings by the product owner the same day, quoted rather than characterised:
 

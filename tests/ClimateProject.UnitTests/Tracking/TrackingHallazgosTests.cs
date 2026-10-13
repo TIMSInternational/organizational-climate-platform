@@ -116,7 +116,9 @@ public class TrackingHallazgosTests
 
         var aggregate = Aggregate(
             questions,
-            new Dictionary<Guid, int> { [Engineering] = 6, [Sales] = 4 },
+            // Sales at 2, not 4: at a floor of 3 a segment of 4 is disclosed and carries a
+            // real score, so the old fixture proved the opposite of this test's name.
+            new Dictionary<Guid, int> { [Engineering] = 6, [Sales] = 2 },
             new Dictionary<Guid, int> { [Engineering] = 4, [Sales] = 2 });
 
         var hallazgos = TrackingHallazgos.ForSurvey(SurveyId, aggregate, Nodos);
@@ -166,7 +168,8 @@ public class TrackingHallazgosTests
 
         var aggregate = Aggregate(
             questions,
-            new Dictionary<Guid, int> { [Engineering] = 3 },
+            // Two, not three: three IS the floor now, so a survey of three is published.
+            new Dictionary<Guid, int> { [Engineering] = 2 },
             new Dictionary<Guid, int> { [Engineering] = 4 });
 
         Assert.True(aggregate.IsSuppressed);

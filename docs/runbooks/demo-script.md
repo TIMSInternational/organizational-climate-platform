@@ -98,7 +98,7 @@ which is the story the product tells.
    headings; **Finanzas hatched** — under five respondents, never opened; Operaciones red.
    Click the Operaciones · Seguridad psicológica cell: the **Celda abierta** panel shows the
    question, the same question for the whole company, the other groups, and the plan that
-   already attends it. *"Un grupo con menos de cinco respuestas nunca se abre: ni aquí, ni en
+   already attends it. *"Un grupo con menos de tres respuestas nunca se abre: ni aquí, ni en
    un export, ni en un enlace compartido. Es la regla más importante del producto."*
    **Exportar informe (PDF)** and the **CSV** menu produce real files.
 
@@ -147,7 +147,7 @@ which is the story the product tells.
 
 12. **Switch to the leader** — `luis.mora`. Ingeniería against the organisation on the six
     dimensions; **El plan que atiende al equipo** (`PA-2026-00005`, Luis Mora); participation
-    for both open surveys as "menos de 5 respuestas". *"Un líder ve su equipo, nunca a una
+    for both open surveys as "menos de 3 respuestas". *"Un líder ve su equipo, nunca a una
     persona."*
 
 13. **Back to the admin: Informes** — `/admin/companies/16c97c29-07f8-4522-86fc-e6cc56298829/reports`.

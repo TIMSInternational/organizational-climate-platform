@@ -1,5 +1,10 @@
 # Who may see an individual answer, and what may be crossed with what
 
+> **Superseded on the number, 2026-10-13:** the privacy floor is **3**, not 5 — ruled by
+> Federico, platform-wide. The reasoning below stands as written; only the threshold moved.
+> See [`privacy-floor-is-three.md`](privacy-floor-is-three.md).
+
+
 **Status: OPEN. Owner: Andrés, with Federico.** Raised 2026-10-08 by TIMS: "it's extremely
 important for us to understand and know what were the results per person, their answers, who has
 completed the assessment … we should be able to cross reference and ask for specific reports, so

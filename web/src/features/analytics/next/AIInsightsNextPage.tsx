@@ -10,6 +10,7 @@ import { EmptyRow, Note, PanelHeading, TABLE_CARD_CLASS, TH_CLASS } from '../../
 import { useAIInsightsModel } from './useAnalyticsModels'
 import { priorityTone } from './model'
 import SuperAIInsightsView from './super/SuperAIInsightsView'
+import { ANONYMITY_FLOOR } from '../../../components/charts'
 
 /**
  * Información de IA, redesigned (canvas board "AIInsights").
@@ -151,7 +152,7 @@ function AIInsightsForCompany() {
 
       {/* The board's column gap: 24px from the table to the note (AIInsights.dc.html). */}
       <Note icon={<ShieldCheck />} className="mt-section">
-        {t('insights.next.privacy')}
+        {t('insights.next.privacy', { floor: ANONYMITY_FLOOR })}
       </Note>
     </div>
   )

@@ -372,10 +372,17 @@ public class SurveyAggregationTests
 
         var aggregate = SurveyAggregation.Compute([], responses, [], [], targetAudienceCount: 40);
 
+        // The point is that the counters survive suppression, not what they happen to read, so
+        // they are derived from the floor rather than written as literals -- which is what used
+        // to tie this test to a floor of 5 (4 completed, 10%).
+        var belowTheFloor = SurveyResultsPrivacy.MinimumRespondents - 1;
         Assert.True(aggregate.IsSuppressed);
-        Assert.Equal(4, aggregate.Summary.CompletedCount);
+        Assert.Equal(belowTheFloor, aggregate.Summary.CompletedCount);
         Assert.Equal(40, aggregate.Summary.InvitedCount);
-        Assert.Equal(10d, aggregate.Summary.ParticipationRate);
+        Assert.Equal(belowTheFloor / 40d * 100d, aggregate.Summary.ParticipationRate);
+        // ...and a rate of zero would satisfy the line above if the product stopped computing
+        // one, so pin that it is a real reading.
+        Assert.True(aggregate.Summary.ParticipationRate > 0);
     }
 
     [Fact]
@@ -473,8 +480,8 @@ public class SurveyAggregationTests
     [Fact]
     public void Participation_above_100_is_reported_raw_not_clamped()
     {
-        // Six completed responses -- above both the survey floor and the segment floor of
-        // five, so nothing here is suppressed -- against a headcount of four.
+        // Six completed responses -- above both the survey floor and the segment floor, so
+        // nothing here is suppressed -- against a headcount of four.
         var responses = Enumerable.Range(1, 6)
             .Select(n => Response(ResponseId(n), departmentId: Sales))
             .ToList();
@@ -561,11 +568,14 @@ public class SurveyAggregationTests
     }
 
     /// <summary>
-    /// The TIMS dry run, as measured: femenino 6 disclosed beside masculino 3 withheld, in a
-    /// survey of 9. The survey's own means sit beside the breakdown, so the three men's
-    /// per-question mean was (3,22 x 9 - 3,00 x 6) / 3 = 3,66 against a true 3,67 -- a
-    /// withheld segment yielding a number by subtraction. Both go: with femenino withheld
-    /// too, nothing is left to subtract from.
+    /// The TIMS dry run's shape, scaled to the floor of 3 (ruled 2026-10-13). As originally
+    /// measured it was femenino 6 beside masculino 3 in a survey of 9, which at a floor of 5
+    /// put the 3 under it; at a floor of 3 that same 3 is disclosed on its own merits and there
+    /// is nothing to demonstrate, so the withheld segment is 2 and the survey is 8. The defect
+    /// is identical and so is the arithmetic that exposes it: the survey's own means sit beside
+    /// the breakdown, so the two men's per-question mean is (2,50 x 8 - 2,00 x 6) / 2 = 4,00 --
+    /// exactly their true 4,00, a withheld segment yielding a number by subtraction. Both go:
+    /// with femenino withheld too, nothing is left to subtract from.
     ///
     /// Mutation-proved: dropping the <c>WithholdComplement</c> pass fails this with
     /// femenino disclosed.
@@ -578,7 +588,7 @@ public class SurveyAggregationTests
 
         var question = Scale(QuestionId, 0, "leadership");
         var responses = Enumerable.Range(1, 6).Select(n => Response(ResponseId(n), demographics: Gender("femenino")))
-            .Concat(Enumerable.Range(7, 3).Select(n => Response(ResponseId(n), demographics: Gender("masculino"))))
+            .Concat(Enumerable.Range(7, 2).Select(n => Response(ResponseId(n), demographics: Gender("masculino"))))
             .ToList();
         var answers = responses
             .Select((r, i) => new AggregationAnswer(r.ResponseId, QuestionId, Stored(i < 6 ? "2" : "4"), null))
@@ -594,10 +604,10 @@ public class SurveyAggregationTests
             Assert.Empty(segment.Questions);
         });
         Assert.Equal(2, breakdown.SuppressedSegmentCount);
-        Assert.Equal(9, breakdown.SuppressedRespondentCount);
+        Assert.Equal(8, breakdown.SuppressedRespondentCount);
         Assert.Equal(0, breakdown.UnsegmentedRespondentCount);
-        // The survey-level reading is not touched: it is a group of 9.
-        Assert.Equal(9, aggregate.Questions.Single().AnsweredCount);
+        // The survey-level reading is not touched: it is a group of 8.
+        Assert.Equal(8, aggregate.Questions.Single().AnsweredCount);
     }
 
     /// <summary>

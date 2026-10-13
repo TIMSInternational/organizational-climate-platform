@@ -10,6 +10,7 @@ import { downloadBlobFile } from '../../../lib/downloadBlobFile'
 import type { ReportListItem } from '../api/reports'
 import type { ReportShareSummary } from '../api/reportShares'
 import ReportsListNextPage from './ReportsListNextPage'
+import { ANONYMITY_FLOOR } from '../../../components/charts'
 
 /**
  * `/admin/companies/:companyId/reports` — the guarantees the route keeps now that the
@@ -347,7 +348,9 @@ describe('ReportsListNextPage — what it reads', () => {
     expect(contents).toContain('4 de 5 grupos · Finanzas protegido')
     expect(contents).not.toMatch(/Finanzas\s*·?\s*\d/)
     expect(contents).not.toContain('0')
-    expect(document.querySelector('[data-slot="floor-note"]')?.textContent).toContain('menos de 5 respuestas')
+    expect(document.querySelector('[data-slot="floor-note"]')?.textContent).toContain(
+      `menos de ${ANONYMITY_FLOOR} respuestas`,
+    )
   })
 
   it('prints no number on the links tile when a completed report\'s links could not be read — never "0 enlaces"', async () => {

@@ -37,14 +37,14 @@ public class SurveyExportTests
     // ==================================================================
 
     /// <summary>
-    /// Four complete responses is below <see cref="SurveyResultsPrivacy.MinimumRespondents"/>,
+    /// Two complete responses is below <see cref="SurveyResultsPrivacy.MinimumRespondents"/>,
     /// and an export is exactly where that gets bypassed by accident -- different code from
     /// the screen, read by people the screen never reached.
     /// </summary>
     [Fact]
     public async Task Below_the_survey_floor_the_csv_carries_no_per_question_content()
     {
-        var rows = await CsvRowsAsync(Context(Aggregate(respondentCount: 4)));
+        var rows = await CsvRowsAsync(Context(Aggregate(respondentCount: 2)));
 
         // Not "the flag is set" -- the CONTENT is absent. A test that only asserted
         // is_suppressed would pass on a file that set the flag and printed the answers anyway,
@@ -58,7 +58,7 @@ public class SurveyExportTests
 
         // The participation counters ARE still there. "3 of 40 so far" identifies nobody and
         // is the number that tells an admin whether to keep chasing responses.
-        Assert.Equal("4", Summary(rows, "completed_count"));
+        Assert.Equal("2", Summary(rows, "completed_count"));
         Assert.Equal("true", Summary(rows, "is_suppressed"));
         Assert.Equal(SurveyResultsPrivacy.BelowMinimumRespondents, Summary(rows, "suppression_reason"));
     }
@@ -88,7 +88,7 @@ public class SurveyExportTests
     /// <remarks>
     /// A segment is the real disclosure surface: a survey can clear its own floor while a slice
     /// of it does not, and the slice is what identifies people. Engineering has six respondents
-    /// here and Direction has three.
+    /// here and Direction has two.
     ///
     /// <para>
     /// The CSV used to emit a full row for Direction -- name, a zeroed count, is_suppressed=true
@@ -102,10 +102,12 @@ public class SurveyExportTests
     public async Task A_segment_below_the_floor_is_neither_answered_for_nor_named()
     {
         var context = Context(Aggregate(
-            // 6 + 3 + 2 with no department: the 5 outside Engineering keep it disclosable
-            // (SurveyAggregation.WithholdComplement).
+            // 6 + 2 + 3 with no department: Dirección is under the floor on its own, and the
+            // 5 outside Engineering keep Engineering disclosable
+            // (SurveyAggregation.WithholdComplement) rather than the complement pass being
+            // what withholds Dirección.
             respondentCount: 11,
-            departments: [(Engineering, "Ingeniería", 20, 6), (Direction, "Dirección", 4, 3)]));
+            departments: [(Engineering, "Ingeniería", 20, 6), (Direction, "Dirección", 4, 2)]));
 
         var rows = await CsvRowsAsync(context);
         var engineering = $"department:{Engineering}";
@@ -133,7 +135,7 @@ public class SurveyExportTests
         // totals still reconcile against completed_count.
         var breakdown = rows.Where(r => r.Section == SurveyExport.BreakdownSection && r.Group == "department").ToList();
         Assert.Equal("1", breakdown.Single(r => r.Metric == "suppressed_segment_count").Value);
-        Assert.Equal("3", breakdown.Single(r => r.Metric == "suppressed_respondent_count").Value);
+        Assert.Equal("2", breakdown.Single(r => r.Metric == "suppressed_respondent_count").Value);
     }
 
     /// <summary>
@@ -188,8 +190,8 @@ public class SurveyExportTests
     /// whole of the reconciliation.
     /// </summary>
     /// <remarks>
-    /// Twelve respondents: six in Engineering, three in Direction, and three in no department
-    /// at all. 6 disclosed + 3 withheld + 3 unsegmented = 12, and each of those three numbers
+    /// Twelve respondents: six in Engineering, two in Direction, and four in no department
+    /// at all. 6 disclosed + 2 withheld + 4 unsegmented = 12, and each of those three numbers
     /// comes from a different line of the exporter.
     /// </remarks>
     [Fact]
@@ -197,7 +199,7 @@ public class SurveyExportTests
     {
         var rows = await CsvRowsAsync(Context(Aggregate(
             respondentCount: 12,
-            departments: [(Engineering, "Ingeniería", 20, 6), (Direction, "Dirección", 4, 3)])));
+            departments: [(Engineering, "Ingeniería", 20, 6), (Direction, "Dirección", 4, 2)])));
 
         var breakdown = rows.Where(r => r.Section == SurveyExport.BreakdownSection && r.Group == "department").ToList();
 
@@ -206,8 +208,8 @@ public class SurveyExportTests
         var unsegmented = int.Parse(breakdown.Single(r => r.Metric == "unsegmented_respondent_count").Value, CultureInfo.InvariantCulture);
 
         Assert.Equal(6, disclosed);
-        Assert.Equal(3, withheld);
-        Assert.Equal(3, unsegmented);
+        Assert.Equal(2, withheld);
+        Assert.Equal(4, unsegmented);
 
         // The property, not the three literals: the file has to account for everyone.
         Assert.Equal(
@@ -247,10 +249,12 @@ public class SurveyExportTests
     public async Task A_segments_per_question_rows_name_which_question_they_are_about()
     {
         var rows = await CsvRowsAsync(Context(Aggregate(
-            // 6 + 3 + 2 with no department: the 5 outside Engineering keep it disclosable
-            // (SurveyAggregation.WithholdComplement).
+            // 6 + 2 + 3 with no department: Dirección is under the floor on its own, and the
+            // 5 outside Engineering keep Engineering disclosable
+            // (SurveyAggregation.WithholdComplement) rather than the complement pass being
+            // what withholds Dirección.
             respondentCount: 11,
-            departments: [(Engineering, "Ingeniería", 20, 6), (Direction, "Dirección", 4, 3)],
+            departments: [(Engineering, "Ingeniería", 20, 6), (Direction, "Dirección", 4, 2)],
             openText: true)));
 
         var engineering = $"department:{Engineering}";
@@ -322,10 +326,12 @@ public class SurveyExportTests
         // exporter never trips it -- across every section, including the ones a small fixture
         // would not reach.
         var bytes = await CsvBytesAsync(Context(Aggregate(
-            // 6 + 3 + 2 with no department: the 5 outside Engineering keep it disclosable
-            // (SurveyAggregation.WithholdComplement).
+            // 6 + 2 + 3 with no department: Dirección is under the floor on its own, and the
+            // 5 outside Engineering keep Engineering disclosable
+            // (SurveyAggregation.WithholdComplement) rather than the complement pass being
+            // what withholds Dirección.
             respondentCount: 11,
-            departments: [(Engineering, "Ingeniería", 20, 6), (Direction, "Dirección", 4, 3)],
+            departments: [(Engineering, "Ingeniería", 20, 6), (Direction, "Dirección", 4, 2)],
             openText: true)));
 
         var lines = Encoding.UTF8.GetString(bytes.AsSpan(3))
@@ -350,11 +356,11 @@ public class SurveyExportTests
         // A reader of a FILE cannot ask anyone why a section is missing. An export that simply
         // omitted the results would read as "the survey got no answers", which is a different
         // and materially wrong statement about a workforce.
-        var document = SurveyExport.BuildPdf(Context(Aggregate(respondentCount: 4), locale: ContentLanguages.Spanish));
+        var document = SurveyExport.BuildPdf(Context(Aggregate(respondentCount: 2), locale: ContentLanguages.Spanish));
         var drawn = DrawnText(document);
 
         Assert.Contains("Resultados reservados", drawn, StringComparison.Ordinal);
-        Assert.Contains("4 respuestas completas", drawn, StringComparison.Ordinal);
+        Assert.Contains("2 respuestas completas", drawn, StringComparison.Ordinal);
 
         // And no answer content anywhere in the document.
         Assert.DoesNotContain("remote", drawn, StringComparison.OrdinalIgnoreCase);
@@ -367,10 +373,12 @@ public class SurveyExportTests
         // documents. Held separately from the CSV's test because a filter dropped from either
         // projection has to fail on its own.
         var document = SurveyExport.BuildPdf(Context(Aggregate(
-            // 6 + 3 + 2 with no department: the 5 outside Engineering keep it disclosable
-            // (SurveyAggregation.WithholdComplement).
+            // 6 + 2 + 3 with no department: Dirección is under the floor on its own, and the
+            // 5 outside Engineering keep Engineering disclosable
+            // (SurveyAggregation.WithholdComplement) rather than the complement pass being
+            // what withholds Dirección.
             respondentCount: 11,
-            departments: [(Engineering, "Ingeniería", 20, 6), (Direction, "Dirección", 4, 3)])));
+            departments: [(Engineering, "Ingeniería", 20, 6), (Direction, "Dirección", 4, 2)])));
 
         var drawn = DrawnText(document);
 
@@ -420,10 +428,12 @@ public class SurveyExportTests
         // the failure that makes an export untrustworthy, and it is only impossible if
         // something asserts it.
         var context = Context(Aggregate(
-            // 6 + 3 + 2 with no department: the 5 outside Engineering keep it disclosable
-            // (SurveyAggregation.WithholdComplement).
+            // 6 + 2 + 3 with no department: Dirección is under the floor on its own, and the
+            // 5 outside Engineering keep Engineering disclosable
+            // (SurveyAggregation.WithholdComplement) rather than the complement pass being
+            // what withholds Dirección.
             respondentCount: 11,
-            departments: [(Engineering, "Ingeniería", 20, 6), (Direction, "Dirección", 4, 3)]));
+            departments: [(Engineering, "Ingeniería", 20, 6), (Direction, "Dirección", 4, 2)]));
 
         var rows = await CsvRowsAsync(context);
         var drawn = DrawnText(SurveyExport.BuildPdf(context));

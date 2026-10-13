@@ -3,13 +3,22 @@ import type { ReactElement } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { TranslationProvider } from '../../i18n'
 import ProtectedCell from './ProtectedCell'
-import { isSuppressed } from './suppression'
+import { ANONYMITY_FLOOR, isSuppressed } from './suppression'
 
 afterEach(cleanup)
 
 function render(ui: ReactElement, locale: 'en' | 'es' = 'en') {
   return rtlRender(<TranslationProvider initialLocale={locale}>{ui}</TranslationProvider>)
 }
+
+/**
+ * Counts are expressed against the floor rather than written as literals. The floor moved from
+ * 5 to 3 on 2026-10-13 and these tests were the largest casualty: `responses={4}` meant
+ * "withheld" at 5 and means "disclosed" at 3, so a literal here does not merely break, it
+ * silently tests the opposite rule.
+ */
+const AT_THE_FLOOR = ANONYMITY_FLOOR
+const BELOW_THE_FLOOR = ANONYMITY_FLOOR - 1
 
 describe('ProtectedCell', () => {
   it('renders the reading when the floor is met', () => {
@@ -22,11 +31,11 @@ describe('ProtectedCell', () => {
   })
 
   it('renders the reading when the count is exactly at the floor', () => {
-    // The floor is "fewer than five is withheld", so five itself is shown. An
-    // off-by-one here either leaks a four-response cell or needlessly withholds
-    // a five-response one, and both are silent.
+    // The floor is "fewer than the floor is withheld", so the floor itself is shown. An
+    // off-by-one here either leaks a cell one under it or needlessly withholds one at it,
+    // and both are silent.
     render(
-      <ProtectedCell responses={5}>
+      <ProtectedCell responses={AT_THE_FLOOR}>
         <span>74</span>
       </ProtectedCell>,
     )
@@ -35,7 +44,7 @@ describe('ProtectedCell', () => {
 
   it('withholds the reading below the floor', () => {
     render(
-      <ProtectedCell responses={4}>
+      <ProtectedCell responses={BELOW_THE_FLOOR}>
         <span>74</span>
       </ProtectedCell>,
     )
@@ -47,7 +56,7 @@ describe('ProtectedCell', () => {
     // product failed to collect something. A labelled locked cell says a
     // guarantee was enforced.
     const { container } = render(
-      <ProtectedCell responses={4}>
+      <ProtectedCell responses={BELOW_THE_FLOOR}>
         <span>74</span>
       </ProtectedCell>,
     )
@@ -59,7 +68,7 @@ describe('ProtectedCell', () => {
 
   it('names what the cell is, so a grid of them is navigable', () => {
     const { container } = render(
-      <ProtectedCell responses={4} description="Finance, psychological safety">
+      <ProtectedCell responses={BELOW_THE_FLOOR} description="Finance, psychological safety">
         <span>74</span>
       </ProtectedCell>,
     )
@@ -72,7 +81,13 @@ describe('ProtectedCell', () => {
     // This is the one that matters. Publishing an exact sub-threshold count
     // defeats the floor: with a known headcount it re-identifies people, and two
     // adjacent published counts can be differenced.
-    it.each([1, 2, 3, 4])('does not render or announce a count of %i', (responses) => {
+    // Every count the floor withholds, derived. Written out as [1, 2, 3, 4] this broke twice
+    // over when the floor moved to 3: the 4 case started FAILING (4 is disclosed, and the
+    // child "74" contains a "4"), and the 3 case started passing for no reason at all --
+    // "74" happens not to contain a "3", so it asserted nothing about a disclosed cell.
+    it.each(Array.from({ length: ANONYMITY_FLOOR - 1 }, (_, i) => i + 1))(
+      'does not render or announce a count of %i',
+      (responses) => {
       const { container } = render(
         <ProtectedCell responses={responses} description="Finance, workload">
           <span>74</span>
@@ -92,14 +107,17 @@ describe('ProtectedCell', () => {
       expect(label).not.toContain(String(responses))
       // The title attribute is a second surface that would leak it just as well —
       // and the one a mouse user actually reads.
-      expect(container.querySelector('[role="img"]')?.getAttribute('title') ?? '').not.toContain(
-        String(responses),
-      )
-    })
+        expect(container.querySelector('[role="img"]')?.getAttribute('title') ?? '').not.toContain(
+          String(responses),
+        )
+      },
+    )
 
     it('does state the floor itself, which is not sensitive', () => {
-      const { container } = render(<ProtectedCell responses={3}>{null}</ProtectedCell>)
-      expect(container.querySelector('[role="img"]')?.getAttribute('aria-label')).toContain('5')
+      const { container } = render(<ProtectedCell responses={BELOW_THE_FLOOR}>{null}</ProtectedCell>)
+      expect(container.querySelector('[role="img"]')?.getAttribute('aria-label')).toContain(
+        String(ANONYMITY_FLOOR),
+      )
     })
   })
 
@@ -128,7 +146,7 @@ describe('ProtectedCell', () => {
   })
 
   it('announces in Spanish when the catalogue is Spanish', () => {
-    const { container } = render(<ProtectedCell responses={3}>{null}</ProtectedCell>, 'es')
+    const { container } = render(<ProtectedCell responses={BELOW_THE_FLOOR}>{null}</ProtectedCell>, 'es')
     const label = container.querySelector('[role="img"]')?.getAttribute('aria-label') ?? ''
     expect(label).toContain('Protegido')
     // A missing key would fall through as the raw key name; this catches that.
@@ -151,7 +169,7 @@ describe('ProtectedCell', () => {
       )
 
     it('renders by default, so a caller cannot forget it', () => {
-      const { container } = render(<ProtectedCell responses={3}>{null}</ProtectedCell>)
+      const { container } = render(<ProtectedCell responses={BELOW_THE_FLOOR}>{null}</ProtectedCell>)
       expect(wordOf(container)).toBeTruthy()
     })
 
@@ -161,7 +179,7 @@ describe('ProtectedCell', () => {
       // accessible name and then the word, hearing "protected" twice. Nothing
       // caught this when the contract landed; a mutation removing the attribute
       // passed all 500 tests across charts and microclimates.
-      const { container } = render(<ProtectedCell responses={3}>{null}</ProtectedCell>)
+      const { container } = render(<ProtectedCell responses={BELOW_THE_FLOOR}>{null}</ProtectedCell>)
       expect(wordOf(container)?.getAttribute('aria-hidden')).toBe('true')
       // And the statement is still on the box, so it is announced exactly once.
       // Case-insensitive: the unnamed string opens with "Protected — withheld
@@ -175,7 +193,7 @@ describe('ProtectedCell', () => {
       // `ClimateMap` (a legend under the whole matrix) and `LiveOpenAnswers` (a
       // badge above and a sentence below) are the two opt-outs; see `showWord`.
       const { container } = render(
-        <ProtectedCell responses={3} showWord={false}>
+        <ProtectedCell responses={BELOW_THE_FLOOR} showWord={false}>
           {null}
         </ProtectedCell>,
       )
@@ -189,7 +207,7 @@ describe('ProtectedCell', () => {
       // landed on the wrapper instead, the word would be clipped by a width chosen
       // before the word existed.
       const { container } = render(
-        <ProtectedCell responses={3} suppressedClassName="h-5 w-7">
+        <ProtectedCell responses={BELOW_THE_FLOOR} suppressedClassName="h-5 w-7">
           {null}
         </ProtectedCell>,
       )
@@ -201,8 +219,8 @@ describe('ProtectedCell', () => {
 
   describe('isSuppressed', () => {
     it('is the same decision the component makes', () => {
-      expect(isSuppressed(4)).toBe(true)
-      expect(isSuppressed(5)).toBe(false)
+      expect(isSuppressed(BELOW_THE_FLOOR)).toBe(true)
+      expect(isSuppressed(AT_THE_FLOOR)).toBe(false)
       expect(isSuppressed(7, 10)).toBe(true)
       expect(isSuppressed(10, 10)).toBe(false)
     })

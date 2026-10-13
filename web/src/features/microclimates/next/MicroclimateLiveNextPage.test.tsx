@@ -12,6 +12,10 @@ import { tokenFor } from '../../../test/jwtFixture'
 import en from '../../../i18n/en.json'
 import tokensCss from '../../../styles/tokens.css?raw'
 import themeCss from '../../../styles/theme.css?raw'
+import { MINIMUM_RESPONDENTS } from '../microclimatePrivacy'
+
+/** One response under the platform floor: what a hatched block is drawn from. */
+const BELOW_THE_FLOOR = MINIMUM_RESPONDENTS - 1
 
 /**
  * The redesigned live session (`/microclimates/:id/live`), against the MicroclimateLive
@@ -207,18 +211,22 @@ describe('the figure', () => {
 
 describe('what people wrote', () => {
   it('under the floor, is the hatch and the published floor — no word, and no count of what is held back', async () => {
-    routeFetch(detail(), results({ responseCount: 3, wordCloud: [{ text: 'visa', value: 2, language: 'en' }, { text: 'handover', value: 1, language: 'en' }] }))
+    // One under the floor. It was 3 against a floor of 5; at a floor of 3 that same 3 is
+    // DISCLOSED, so the hatch this test is about never rendered.
+    routeFetch(detail(), results({ responseCount: BELOW_THE_FLOOR, wordCloud: [{ text: 'visa', value: 2, language: 'en' }, { text: 'handover', value: 1, language: 'en' }] }))
     renderPage()
-    await waitFor(() => expect(figure()).toBe('3'))
+    await waitFor(() => expect(figure()).toBe(String(BELOW_THE_FLOOR)))
 
     const block = wordsBlock()
-    expect(within(block).getByText('Protected until 5 responses')).toBeTruthy()
+    expect(within(block).getByText(`Protected until ${MINIMUM_RESPONDENTS} responses`)).toBeTruthy()
     expect(block.querySelector('[data-slot="words-hatch"]')).toBeTruthy()
     expect(screen.queryByText('visa')).toBeNull()
     expect(screen.queryByText('handover')).toBeNull()
     // "2 words held back" or "2 more to go" inverts into the sub-floor count. The only
     // number this block may carry is the floor itself.
-    expect((block.textContent ?? '').replace(/5/g, '')).not.toMatch(/\d/)
+    expect(
+      (block.textContent ?? '').replaceAll(String(MINIMUM_RESPONDENTS), ''),
+    ).not.toMatch(/\d/)
   })
 
   it('above the floor, is word frequencies: the rare words dropped and reported, never an answer', async () => {
@@ -244,7 +252,7 @@ describe('what people wrote', () => {
     expect(items).toEqual(['workload7', 'support4'])
     expect(screen.queryByText('visa')).toBeNull()
     expect(screen.getByText('1 rare word is held back.')).toBeTruthy()
-    expect(within(wordsBlock()).queryByText('Protected until 5 responses')).toBeNull()
+    expect(within(wordsBlock()).queryByText(`Protected until ${MINIMUM_RESPONDENTS} responses`)).toBeNull()
   })
 
   it('before any reading lands, says there is none — not that nobody wrote', async () => {
@@ -385,7 +393,7 @@ describe('to respond', () => {
     expect(await screen.findByText(/This session is named/)).toBeTruthy()
     expect(document.querySelector('[data-slot="respond-link"]')).toBeNull()
     expect(screen.queryByRole('img', { name: 'QR code of the respond link' })).toBeNull()
-    expect(screen.getByText('Named · disclosure floor 5')).toBeTruthy()
+    expect(screen.getByText(`Named · disclosure floor ${MINIMUM_RESPONDENTS}`)).toBeTruthy()
   })
 
   it.each([
@@ -400,13 +408,13 @@ describe('to respond', () => {
     expect(screen.queryByRole('img', { name: 'QR code of the respond link' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Copy' })).toBeNull()
     // Anonymous all the same — the facts say so — so the withheld link is the status's doing.
-    expect(screen.getByText('Anonymous · disclosure floor 5')).toBeTruthy()
+    expect(screen.getByText(`Anonymous · disclosure floor ${MINIMUM_RESPONDENTS}`)).toBeTruthy()
   })
 
   it('states the questions and the floor among the facts', async () => {
     renderPage()
     expect(await screen.findByText('2 · a scale from 1 to 5, one word (optional)')).toBeTruthy()
-    expect(screen.getByText('Anonymous · disclosure floor 5')).toBeTruthy()
+    expect(screen.getByText(`Anonymous · disclosure floor ${MINIMUM_RESPONDENTS}`)).toBeTruthy()
   })
 
   it('wears no sample chip: every field has an endpoint', async () => {
@@ -418,9 +426,9 @@ describe('to respond', () => {
 
 describe('the glyphs', () => {
   it('draws the artboard’s own glyphs, outlined: the page, the sheet, the clock and the padlock', async () => {
-    routeFetch(detail(), results({ responseCount: 3 }))
+    routeFetch(detail(), results({ responseCount: BELOW_THE_FLOOR }))
     renderPage()
-    await waitFor(() => expect(figure()).toBe('3'))
+    await waitFor(() => expect(figure()).toBe(String(BELOW_THE_FLOOR)))
 
     // The canvas's own paths in its 16-unit box, stroked 2 and never filled: the render
     // measures as an outline (MicroclimateLive.png, the page glyph's rows 121-127).

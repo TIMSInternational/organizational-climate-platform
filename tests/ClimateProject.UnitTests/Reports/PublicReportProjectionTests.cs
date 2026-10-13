@@ -502,7 +502,9 @@ public class PublicReportProjectionTests
     [Fact]
     public void A_stored_breakdown_whose_remainder_is_under_the_floor_publishes_no_rows()
     {
-        // 10 completed, 7 disclosed in one group, 3 nobody can account for but by subtraction.
+        // 10 completed, 8 disclosed in one group, 2 nobody can account for but by subtraction.
+        // The remainder was 3 until the floor became 3 (ruled 2026-10-13), at which point a
+        // remainder of 3 is a group that may stand on its own and there is nothing to withhold.
         var stored = Serialize(new ReportOutputDocument(
             "a note",
             [
@@ -510,9 +512,9 @@ public class PublicReportProjectionTests
                     SurveyId, "Clima Q3", SurveyStatuses.Closed, "en",
                     new SurveyResultsSummary(12, 10, 10, 0, 83, 100, 120, null, null, [new SurveyLanguageCount("es", 10)]),
                     [], [],
-                    [new ReportDepartmentParticipation("d1", "Engineering", 7, 70, false)],
+                    [new ReportDepartmentParticipation("d1", "Engineering", 8, 80, false)],
                     SuppressedDepartmentCount: 1,
-                    SuppressedRespondentCount: 3,
+                    SuppressedRespondentCount: 2,
                     UnsegmentedRespondentCount: 0,
                     [
                         new ReportDemographicBreakdown(

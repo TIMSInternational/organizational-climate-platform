@@ -10,6 +10,7 @@ import { setToken } from '../../../../auth/token'
 import { tokenFor } from '../../../../test/jwtFixture'
 import type { DashboardPendingSurvey, EmployeeDashboard, EmployeeLastOutcome } from '../../api/dashboard'
 import { markAnswered } from '../../../surveys/respondReceipt'
+import { ANONYMITY_FLOOR } from '../../../../components/charts'
 
 /**
  * The redesigned employee Home, rendered against the payload shapes the local API returned
@@ -476,7 +477,7 @@ describe('EmployeeHomeView', () => {
     renderHome()
 
     expect(await screen.findByText(es('employee.next.resultsGoToBody', { floor: 8 }))).toBeTruthy()
-    expect(screen.queryByText(es('employee.next.resultsGoToBody', { floor: 5 }))).toBeNull()
+    expect(screen.queryByText(es('employee.next.resultsGoToBody', { floor: ANONYMITY_FLOOR }))).toBeNull()
     expect(
       screen.getByText(es('employee.next.resultsGoToTitle', { department: 'Ingeniería' })),
     ).toBeTruthy()
@@ -490,7 +491,7 @@ describe('EmployeeHomeView', () => {
     renderHome()
 
     expect(await screen.findByText(es('employee.next.resultsGoToBodyNoFloor'))).toBeTruthy()
-    expect(screen.queryByText(es('employee.next.resultsGoToBody', { floor: 5 }))).toBeNull()
+    expect(screen.queryByText(es('employee.next.resultsGoToBody', { floor: ANONYMITY_FLOOR }))).toBeNull()
   })
 
   it('keeps the standing note off the answered page, where the column beside it says the same', async () => {

@@ -13,6 +13,7 @@ import AIInsightsNextPage from './AIInsightsNextPage'
 import AnalyticsNextPage from './AnalyticsNextPage'
 import { groupSizeOf, latestClosedSurvey, sortInsights } from './model'
 import en from '../../../i18n/en.json'
+import { ANONYMITY_FLOOR } from '../../../components/charts'
 
 vi.mock('../api/insights', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../api/insights')>()),
@@ -119,7 +120,7 @@ describe('AIInsightsNextPage', () => {
     expect(await screen.findByText(insightsCopy.emptyTitle)).toBeTruthy()
     expect(screen.getByText(insightsCopy.emptyReason.replace('{company}', 'Grupo Meridiano S.A.'))).toBeTruthy()
     expect(screen.getByRole('heading', { name: `${insightsCopy.heading} 0` })).toBeTruthy()
-    expect(screen.getByText(insightsCopy.privacy)).toBeTruthy()
+    expect(screen.getByText(insightsCopy.privacy.replace('{floor}', String(ANONYMITY_FLOOR)))).toBeTruthy()
   })
 
   it('names each category in words, never the raw slug', async () => {
@@ -228,6 +229,6 @@ describe('AIInsightsNextPage — the board\'s spacing and inks', () => {
     expect(reason).not.toContain('max-w-measure')
     expect(screen.getByText(insightsCopy.emptyNext).className.split(' ')).toContain('text-fg-tertiary')
     // AIInsights.dc.html: the page column's 24px between the table and the privacy note.
-    expect(screen.getByText(insightsCopy.privacy).closest('[data-slot="note"]')?.className.split(' ')).toContain('mt-section')
+    expect(screen.getByText(insightsCopy.privacy.replace('{floor}', String(ANONYMITY_FLOOR))).closest('[data-slot="note"]')?.className.split(' ')).toContain('mt-section')
   })
 })
