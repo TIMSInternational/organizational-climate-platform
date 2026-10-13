@@ -254,6 +254,10 @@ internal sealed record ReportRenderCopy(
             ? NotAvailable
             : Localise(Math.Round(value.Value, 2).ToString("0.##", CultureInfo.InvariantCulture));
 
+    /// <summary>A score on the company's scale (see <see cref="ScoreScales.Display"/>); counts and rates use <see cref="Decimal"/>.</summary>
+    public string Score(double? value, ScoreScale scale)
+        => value is null ? NotAvailable : Localise(scale.Display(value.Value));
+
     public string Percent(double? value) => value is null ? NotAvailable : $"{Decimal(value)} %";
 
     public string Day(DateTimeOffset? value)

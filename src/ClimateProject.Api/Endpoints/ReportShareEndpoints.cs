@@ -342,7 +342,8 @@ public static class ReportShareEndpoints
         // The company's result bands as they are NOW, not as they were when the document was
         // generated: the bands are a reading of the numbers, applied at read time like the
         // anonymity floor, so a link and the authenticated screens never disagree on a colour.
-        // Only the two boundaries and the three names -- no identifier of the company.
+        // Only the two boundaries, the three names and the reading scale -- no identifier of
+        // the company.
         var bandSettings = await db.Companies
             .AsNoTracking()
             .Where(c => c.Id == match.Report.CompanyId)

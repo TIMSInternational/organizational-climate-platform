@@ -198,8 +198,8 @@ function CompareCard({
 }) {
   const wave = model.closedWave
   const boundaries = t('resultBands.boundaries', {
-    low: boundaryText(model.bands.opportunityMin, locale),
-    high: boundaryText(model.bands.strengthMin, locale),
+    low: boundaryText(model.bands.opportunityMin, locale, model.bands.scale),
+    high: boundaryText(model.bands.strengthMin, locale, model.bands.scale),
   })
   const surveyName = wave?.name ?? t('surveys.untitled')
   const meta = wave ? (
@@ -305,7 +305,7 @@ function DimensionCard({
 }) {
   const name = dimensionLabel(dimension.key, t)
   const band = dimensionBand(dimension, bands)
-  const move = dimensionMove(dimension)
+  const move = dimensionMove(dimension, bands.scale)
   // A plan is offered for any reading outside the strength area; only the critical one
   // tints the whole card.
   const planWorthy = band !== null && band !== 'strength'
@@ -338,7 +338,7 @@ function DimensionCard({
         <>
           <div className="flex items-baseline gap-2">
             <span data-slot="team-reading" className="font-mono text-3xl leading-none text-fg-primary tabular-nums">
-              {reading(dimension.team, locale)}
+              {reading(dimension.team, locale, 1, bands.scale)}
             </span>
             <span className="text-xs text-fg-label">{t('dashboard.next.leader.teamWord')}</span>
           </div>
@@ -354,7 +354,7 @@ function DimensionCard({
                   move > 0 ? 'text-accent-green-ink' : move < 0 ? 'text-accent-red-ink' : 'text-fg-label',
                 )}
               >
-                {move === 0 ? reading(0, locale) : signedReading(move, locale)}
+                {move === 0 ? reading(0, locale, 1, bands.scale) : signedReading(move, locale, 1, bands.scale)}
               </span>{' '}
               {t('dashboard.next.leader.vsOrg')}
             </span>
@@ -431,7 +431,7 @@ function CompareBar({
           />
         ))}
       </div>
-      <span className="text-right font-mono text-2xs text-fg-label tabular-nums">{reading(value, locale)}</span>
+      <span className="text-right font-mono text-2xs text-fg-label tabular-nums">{reading(value, locale, 1, bands.scale)}</span>
     </div>
   )
 }

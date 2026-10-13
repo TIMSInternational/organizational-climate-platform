@@ -191,6 +191,7 @@ public static class SurveyExportEndpoints
 
         var results = loaded.Context!;
         var labels = await LoadLabelsAsync(results.Survey.CompanyId, results.ResolvedLocale, db, cancellationToken);
+        var scale = await CompanyScoreScale.LoadAsync(db, results.Survey.CompanyId, cancellationToken);
         return (
             new SurveyExportContext(
                 results.Survey.Id,
@@ -201,7 +202,8 @@ public static class SurveyExportEndpoints
                 results.FallbackFields,
                 results.Aggregate,
                 DateTimeOffset.UtcNow,
-                labels),
+                labels,
+                scale),
             null);
     }
 

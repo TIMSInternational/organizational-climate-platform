@@ -44,7 +44,7 @@ vi.mock('../../org-structure/api/demographicFields', async (importOriginal) => (
 
 const copy = en.surveyResults.cross
 /** The product's own defaults: opportunity from 3,00, strength from 4,00. */
-const BANDS = { opportunityMin: 3, strengthMin: 4, names: { critical: null, opportunity: null, strength: null } }
+const BANDS = { opportunityMin: 3, strengthMin: 4, names: { critical: null, opportunity: null, strength: null }, scale: 'mean' as const }
 const FINANCE = 'd1'
 
 function segment(key: string, label: string | null, count: number, suppressed = false): SurveySegmentResult {

@@ -3976,7 +3976,8 @@
         "exportFileName": "climate-over-time",
         "csvColGroup": "Group",
         "csvColClosed": "Closed",
-        "csvColResponses": "Responses"
+        "csvColResponses": "Responses",
+        "tableScalePercent": "{group} · scale of 0 to 100"
       },
       "list": {
         "description": "Which survey is open today, how long until it closes, and where to read the ones that already closed.",
@@ -6905,7 +6906,10 @@
       "noteLinkBody": "Whoever shared it can withdraw it at any time. If it stops opening, ask them for a new one.",
       "unavailableNote": "For security, this page does not distinguish between those cases and does not lead anywhere else in the application.",
       "readingOffScale": "outside the 1-to-5 scale",
-      "groupsSuppressed": "the whole survey is under the floor of {floor}: no group is published"
+      "groupsSuppressed": "the whole survey is under the floor of {floor}: no group is published",
+      "dimensionsCaptionPercent": "Average of each dimension across the whole company, from 0 to 100.",
+      "scaleHeaderPercent": "Scale from 0 to 100",
+      "readingOffScalePercent": "outside the 0 to 100 scale"
     }
   },
   "storefront": {
@@ -7200,7 +7204,8 @@
       "heading": "How to read this report",
       "meta": "the company's result scale",
       "mapSub": "average of each group in each dimension · three result areas",
-      "dimensionsMeta": "whole company · average from 1 to 5"
+      "dimensionsMeta": "whole company · average from 1 to 5",
+      "dimensionsMetaPercent": "whole company · score from 0 to 100"
     },
     "trends": {
       "description": "How each dimension moved between closed surveys, read in the company's three result areas.",
@@ -7231,7 +7236,15 @@
       "errorInverted": "{band} starts at {min} and ends at {max}: an area cannot end before it starts.",
       "errorNameTooLong": "“{band}…” is too long: a name has at most 60 characters.",
       "fixedEnds": "1.00 and 5.00 are fixed: the scale always starts and ends there.",
-      "reset": "Restore the defaults"
+      "reset": "Restore the defaults",
+      "scaleLabel": "How results are shown",
+      "scaleMean": "Mean from 1 to 5",
+      "scalePercent": "Score from 0 to 100",
+      "scaleHint": "Boundaries are always entered from 1.00 to 5.00. On 0 to 100, every result is shown multiplied by 20: 3.80 reads 76.",
+      "equivalent": "= {value} of 100"
+    },
+    "scale": {
+      "unitPercent": "of 100"
     }
   }
 }

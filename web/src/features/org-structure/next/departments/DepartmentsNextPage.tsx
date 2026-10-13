@@ -3,7 +3,7 @@ import { Link } from 'react-router'
 import { CircleAlert, MoreHorizontal, Network, Plus, Users } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
-import { ANONYMITY_FLOOR, BandChip, bandOf, formatMetric, type ResultBands } from '../../../../components/charts'
+import { ANONYMITY_FLOOR, BandChip, bandOf, scoreText, type ResultBands } from '../../../../components/charts'
 import { PROTECTED_HATCH } from '../../../../components/charts/suppression'
 import {
   Button,
@@ -40,8 +40,9 @@ const DASH = '—'
 const HEAD = 'px-2 py-2 text-left text-2xs font-bold uppercase leading-normal tracking-label text-fg-label whitespace-nowrap xl:px-3'
 const CELL = 'px-2 py-2.5 xl:px-3'
 
-function score(value: number, locale: string): string {
-  return formatMetric(value, { kind: 'number', decimals: 1 }, locale)
+/** A department's mean on the company's scale; 1–5 while the bands are unknown. */
+function score(value: number, locale: string, bands: ResultBands | null): string {
+  return scoreText(value, bands?.scale ?? 'mean', locale, 1)
 }
 
 /**
@@ -502,7 +503,7 @@ function ClimateCell({
   const band = bands === null ? null : bandOf(climate.mean, bands)
   return (
     <span className="inline-flex items-center gap-1.5">
-      <span className="font-mono tabular-nums">{score(climate.mean, locale)}</span>
+      <span className="font-mono tabular-nums">{score(climate.mean, locale, bands)}</span>
       {band !== null && bands !== null && band !== 'strength' ? (
         <BandChip band={band} bands={bands} short />
       ) : (
@@ -536,7 +537,7 @@ function CardNoteLine({
     const name = t(key)
     return (
       <span className={cn(base, 'text-fg-tertiary')}>
-        {t(`${K}.noteLowest`, { dimension: name === key ? note.key : name, score: score(note.score, locale), wave: note.wave })}
+        {t(`${K}.noteLowest`, { dimension: name === key ? note.key : name, score: score(note.score, locale, bands), wave: note.wave })}
       </span>
     )
   }

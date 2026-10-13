@@ -576,7 +576,7 @@ function FindingBlock({
         <Chip label={scope} />
         <span className="font-medium text-fg-primary">{dimensionLabel(value.dimensionKey, t)}</span>
         <span className={cn('font-mono font-semibold tabular-nums', band === 'critical' ? 'text-chip-critical-ink' : 'text-fg-primary')}>
-          {reading(value.score, locale)}
+          {reading(value.score, locale, 1, bands?.scale)}
         </span>
         {band !== null && bands !== null && <BandChip band={band} bands={bands} />}
       </div>
@@ -607,6 +607,8 @@ function FindingBlock({
  */
 function MoveLine({ move }: { move: Settled<PlanMove> }) {
   const { t, locale } = useTranslation()
+  // The company's scale for the two readings and the move; 1–5 until it is read.
+  const scale = useResultBands().bands?.scale ?? 'mean'
   if (move.status !== 'ready') return null
   const value = move.value
   if (value.status === 'none') return null
@@ -631,15 +633,15 @@ function MoveLine({ move }: { move: Settled<PlanMove> }) {
       <span className="font-mono tabular-nums text-fg-secondary">
         {t('actionPlans.next.finding.moveReading', {
           fromCode: value.fromCode,
-          from: reading(value.from, locale),
+          from: reading(value.from, locale, 1, scale),
           toCode: value.toCode,
-          to: reading(value.to, locale),
+          to: reading(value.to, locale, 1, scale),
         })}
       </span>
       {!flat && (
         <span className={cn('font-mono tabular-nums', rose ? 'text-accent-green-ink' : 'text-accent-red-ink')}>
           {rose ? '\u25b2' : '\u25bc'} {delta > 0 ? '+' : '\u2212'}
-          {reading(Math.abs(delta), locale)}
+          {reading(Math.abs(delta), locale, 1, scale)}
         </span>
       )}
       {flat && <span className="text-fg-tertiary">{t('actionPlans.next.finding.moveFlat')}</span>}

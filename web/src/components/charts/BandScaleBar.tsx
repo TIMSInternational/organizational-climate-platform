@@ -48,7 +48,7 @@ export default function BandScaleBar({
   const placed = sorted.map((value, index) => ({ value, row: rows[index] ?? 0 }))
   const label = drawn
     .filter((segment): segment is BandScaleSegment & { key: ResultBandKey } => segment.key !== 'gap')
-    .map((segment) => `${bandName(segment.key, bands, t)} ${boundaryText(segment.from, locale)}–${boundaryText(segment.to, locale)}`)
+    .map((segment) => `${bandName(segment.key, bands, t)} ${boundaryText(segment.from, locale, bands.scale)}–${boundaryText(segment.to, locale, bands.scale)}`)
     .join(' · ')
 
   return (
@@ -105,7 +105,7 @@ export default function BandScaleBar({
               className={`absolute font-mono text-xs tabular-nums ${badTicks.includes(value) ? 'text-accent-red-ink' : 'text-fg-tertiary'}`}
               style={{ left: `${left}%`, top: row * 14, transform: `translateX(${shift})` }}
             >
-              {boundaryText(value, locale)}
+              {boundaryText(value, locale, bands.scale)}
             </span>
           )
         })}

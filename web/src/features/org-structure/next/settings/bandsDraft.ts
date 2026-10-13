@@ -6,6 +6,7 @@ import {
   boundaryText,
   type ResultBandKey,
   type ResultBands,
+  type ResultScale,
 } from '../../../../components/charts'
 import type { TranslateFn } from '../../../../i18n/translate'
 
@@ -21,6 +22,8 @@ export interface BandsDraft {
   opportunityMin: string
   opportunityMax: string
   strengthMin: string
+  /** How results read: the 1–5 mean or 0–100. The edges above stay on 1–5 either way. */
+  scale: ResultScale
 }
 
 /** The longest name the API keeps (`ResultBandsValidation.MaxNameLength`). */
@@ -41,6 +44,7 @@ export function bandsDraftOf(bands: ResultBands, t: TranslateFn, locale: string)
     opportunityMin: boundaryText(opportunity.min, locale),
     opportunityMax: boundaryText(opportunity.max, locale),
     strengthMin: boundaryText(bands.strengthMin, locale),
+    scale: bands.scale,
   }
 }
 
@@ -53,15 +57,15 @@ export function parseBoundary(text: string): number | null {
 }
 
 export type BandsProblem =
-  | { kind: 'invalid'; field: keyof Omit<BandsDraft, 'names'>; text: string }
-  | { kind: 'gap'; from: number; to: number; fields: (keyof Omit<BandsDraft, 'names'>)[] }
-  | { kind: 'overlap'; from: number; to: number; fields: (keyof Omit<BandsDraft, 'names'>)[] }
-  | { kind: 'inverted'; band: ResultBandKey; min: number; max: number; fields: (keyof Omit<BandsDraft, 'names'>)[] }
+  | { kind: 'invalid'; field: keyof Omit<BandsDraft, 'names' | 'scale'>; text: string }
+  | { kind: 'gap'; from: number; to: number; fields: (keyof Omit<BandsDraft, 'names' | 'scale'>)[] }
+  | { kind: 'overlap'; from: number; to: number; fields: (keyof Omit<BandsDraft, 'names' | 'scale'>)[] }
+  | { kind: 'inverted'; band: ResultBandKey; min: number; max: number; fields: (keyof Omit<BandsDraft, 'names' | 'scale'>)[] }
   | { kind: 'nameTooLong'; band: ResultBandKey }
 
 export type BandsVerdict =
   | { ok: true; opportunityMin: number; strengthMin: number }
-  | { ok: false; problems: BandsProblem[]; edges: Partial<Record<keyof Omit<BandsDraft, 'names'>, number>> }
+  | { ok: false; problems: BandsProblem[]; edges: Partial<Record<keyof Omit<BandsDraft, 'names' | 'scale'>, number>> }
 
 const cents = (value: number) => Math.round(value * 100)
 
@@ -126,7 +130,7 @@ export function namesOut(draft: BandsDraft, t: TranslateFn): Record<ResultBandKe
 export function bandsOut(draft: BandsDraft, t: TranslateFn): ResultBands | null {
   const verdict = judgeBands(draft)
   if (!verdict.ok) return null
-  return { opportunityMin: verdict.opportunityMin, strengthMin: verdict.strengthMin, names: namesOut(draft, t) }
+  return { opportunityMin: verdict.opportunityMin, strengthMin: verdict.strengthMin, names: namesOut(draft, t), scale: draft.scale }
 }
 
 /** Whether the draft says anything different from the scale the server holds. */
@@ -136,6 +140,7 @@ export function bandsChanged(saved: ResultBands, draft: BandsDraft, t: Translate
   return (
     cents(next.opportunityMin) !== cents(saved.opportunityMin) ||
     cents(next.strengthMin) !== cents(saved.strengthMin) ||
+    next.scale !== saved.scale ||
     (['critical', 'opportunity', 'strength'] as const).some((band) => next.names[band] !== saved.names[band])
   )
 }

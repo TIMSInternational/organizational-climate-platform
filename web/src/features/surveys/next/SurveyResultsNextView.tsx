@@ -9,9 +9,12 @@ import {
   bandCellStyle,
   bandName,
   bandOf,
-  formatMetric,
+  deltaScoreText,
+  scaleUnitText,
+  scoreText,
   type ClimateMapSelection,
   type ResultBands,
+  type ResultScale,
 } from '../../../components/charts'
 import {
   Button,
@@ -124,16 +127,13 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
   const headingRef = useRef<HTMLHeadingElement>(null)
 
   const climate = model.climate
-  const score = useCallback((value: number) => formatMetric(value, { kind: 'number', decimals: 1 }, locale), [locale])
-  // Rounded to what is printed first, so the sign and the ink agree with the figure
-  // (`|| 0` folds a rounded -0 into 0).
+  const scale = model.bands.scale
+  // Every score on this page reads on the company's scale (`scoreText`); bands judge 1–5.
+  const score = useCallback((value: number) => scoreText(value, scale, locale, 1), [scale, locale])
+  // Rounded to what is printed first, so the sign and the ink agree with the figure.
   const signed = useCallback(
-    (value: number, decimals: number) => {
-      const scale = 10 ** decimals
-      const shown = Math.round(value * scale) / scale || 0
-      return `${shown > 0 ? '+' : ''}${formatMetric(shown, { kind: 'number', decimals }, locale)}`
-    },
-    [locale],
+    (value: number, decimals: number) => deltaScoreText(value, scale, locale, decimals),
+    [scale, locale],
   )
   const dimensionName = useCallback(
     (key: string) => (key === UNCATEGORISED_DIMENSION ? t('surveyResults.uncategorised') : dimensionLabel(key, t)),
@@ -230,7 +230,7 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
   // Panel de Control prints for this survey, so the two screens cannot disagree.
   const previous = model.previous
   const previousWave = previous.status === 'loaded' ? previous.wave : null
-  const climateLine = climateSentence(previous, climateDelta, t, signed)
+  const climateLine = climateSentence(previous, climateDelta, t, signed, scale)
 
   return (
     <div>
@@ -351,10 +351,11 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
             label={t('surveyResults.next.climateLabelWave', { wave: model.code })}
             value={company.mean}
             format={{ kind: 'number', decimals: 2 }}
+            valueText={company.mean === null ? undefined : scoreText(company.mean, scale, locale, 2)}
             locale={locale}
             unit={
               <span className="inline-flex flex-wrap items-center gap-2">
-                {t('resultBands.results.climateUnit')}
+                {scaleUnitText(scale, t)}
                 {/* The mean is printed at two decimals, so it is judged at two. */}
                 {company.mean !== null && <BandChip band={bandOf(company.mean, bands, 2)} bands={bands} />}
               </span>
@@ -620,7 +621,7 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
               </section>
             )}
 
-            <SurveyResultsQuestions questions={model.questions} dimensionName={dimensionName} />
+            <SurveyResultsQuestions questions={model.questions} dimensionName={dimensionName} scale={scale} />
           </>
         )}
       </div>
@@ -654,6 +655,7 @@ function climateSentence(
   delta: number | null,
   t: Translate,
   signed: (value: number, decimals: number) => string,
+  scale: ResultScale,
 ): { text: string; ink: string } {
   if (previous.status === 'failed') return { text: t('surveyResults.next.climatePreviousFailed'), ink: 'text-fg-label' }
   if (previous.status === 'none') return { text: t('surveyResults.next.climateFirstWave'), ink: 'text-fg-label' }
@@ -661,7 +663,7 @@ function climateSentence(
   if (delta === null) return { text: t('surveyResults.next.climateNotComparable', { wave }), ink: 'text-fg-label' }
   const change = t('surveyResults.next.climateVsWave', { delta: signed(delta, 2), wave })
   const rises = risesPhrase(previous.wave.risesInARow, t)
-  return { text: rises === null ? change : `${change} · ${rises}`, ink: deltaInkOf(delta, 2) }
+  return { text: rises === null ? change : `${change} · ${rises}`, ink: deltaInkOf(delta, 2, scale) }
 }
 
 /**

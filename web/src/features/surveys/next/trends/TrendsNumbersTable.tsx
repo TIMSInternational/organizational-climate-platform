@@ -155,7 +155,7 @@ export default function TrendsNumbersTable({
                     className="flex h-10 flex-col items-center justify-center gap-px overflow-hidden rounded border px-1"
                     style={bandCellStyle(band)}
                   >
-                    <span className="font-mono text-sm font-semibold tabular-nums">{reading(value, locale)}</span>
+                    <span className="font-mono text-sm font-semibold tabular-nums">{reading(value, locale, 1, bands.scale)}</span>
                     <span className="sr-only">{` — ${bandName(band, bands, t)}`}</span>
                     <span
                       aria-hidden="true"
@@ -180,7 +180,7 @@ export default function TrendsNumbersTable({
             {dimensions.map((dimension) => {
               const from = withheld[0] ? null : (dimension.values[0] ?? null)
               const to = withheld[lastIndex] ? null : (dimension.values[lastIndex] ?? null)
-              const move = from === null || to === null ? null : printedMove(to, from)
+              const move = from === null || to === null ? null : printedMove(to, from, 1, bands.scale)
               return (
                 <td key={dimension.key} className="border-t border-b-0 border-line-light pt-2 pb-0 text-center">
                   {move === null ? (
@@ -195,7 +195,7 @@ export default function TrendsNumbersTable({
                         move >= 0 ? 'text-accent-green-ink' : 'text-fg-primary',
                       )}
                     >
-                      {signedReading(move, locale)}
+                      {signedReading(move, locale, 1, bands.scale)}
                     </span>
                   )}
                 </td>

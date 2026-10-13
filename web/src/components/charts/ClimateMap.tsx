@@ -6,7 +6,7 @@ import { DIVERGING_COLORS, DIVERGING_INKS, divergingPair } from './palette'
 import BandGlyph from './BandGlyph'
 import BandLegend from './BandLegend'
 import ProtectedCell from './ProtectedCell'
-import { BAND_PAINT, bandCellStyle, bandName, bandOf, type ResultBands } from './resultBands'
+import { BAND_PAINT, bandCellStyle, bandName, bandOf, scoreText, type ResultBands } from './resultBands'
 import { PROTECTED_HATCH, isSuppressed } from './suppression'
 
 /**
@@ -239,7 +239,11 @@ export default function ClimateMap({
   const density = canvas ? CANVAS_DENSITY : DENSITY[size]
 
   const deadBand = deadBandAt / (2 * extremeAt)
-  const reading = (value: number) => formatMetric(value, { kind: 'number', decimals }, locale)
+  // A banded grid reads on the company's scale (`scoreText`); banding stays on the 1–5 value.
+  const reading = (value: number) =>
+    bands?.scale === 'percent'
+      ? scoreText(value, 'percent', locale, decimals ?? 1)
+      : formatMetric(value, { kind: 'number', decimals }, locale)
 
   return (
     <figure className={cn('m-0 flex flex-col', canvas ? 'gap-3' : 'gap-2')}>

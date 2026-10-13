@@ -10,7 +10,7 @@ import assert from 'node:assert/strict'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import {
-  readWorkbook, parseClimate, skipDemographics, surveyWindow, roleForTitle, slug, toImportRows, toSurveyRequest, toFieldRequest, toBandsRequest, toSettingsRequest, validTimeZone, decodeXml, parseStyles,
+  readWorkbook, parseClimate, skipDemographics, surveyWindow, roleForTitle, slug, toImportRows, toSurveyRequest, toFieldRequest, toBandsRequest, toSettingsRequest, validTimeZone, validScale, decodeXml, parseStyles,
 } from './import-climate-workbook.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -235,9 +235,25 @@ test('bands: ordered by minimum into critical < opportunity < strength, names ca
 test('settings: the bands and the time zone travel in one request; a mistyped zone is refused', () => {
   const bands = [{ name: 'C', min: 1, max: 3.79 }, { name: 'O', min: 3.8, max: 4.29 }, { name: 'F', min: 4.3, max: 5 }]
   // "EAGLE (prueba)" was left on UTC: an answer at 20:56 in Costa Rica was dated the next day.
-  assert.deepEqual(toSettingsRequest(bands, 'America/Costa_Rica'), { resultBands: toBandsRequest(bands), timezone: 'America/Costa_Rica' })
+  assert.deepEqual(toSettingsRequest(bands, 'America/Costa_Rica'), { resultBands: { ...toBandsRequest(bands), scale: 'mean' }, timezone: 'America/Costa_Rica' })
   assert.equal(validTimeZone('America/Costa_Rica'), 'America/Costa_Rica')
   assert.equal(validTimeZone('UTC'), 'UTC')
   assert.equal(validTimeZone('America/Costa Rica'), null)
   assert.equal(validTimeZone('Costa Rica'), null)
+})
+
+test('--scale: mean by default, percent on request, sent as resultBands.scale; anything else is refused', () => {
+  const bands = [{ name: 'C', min: 1, max: 3.79 }, { name: 'O', min: 3.8, max: 4.29 }, { name: 'F', min: 4.3, max: 5 }]
+  // The default leaves every company reading the 1,00–5,00 mean, as before the option existed.
+  assert.equal(toSettingsRequest(bands, 'UTC').resultBands.scale, 'mean')
+  // EAGLE answers on 20..100: its bands go on 1–5 (3,8 / 4,3) and read 76 / 86 on percent.
+  const percent = toSettingsRequest(bands, 'America/Costa_Rica', 'percent')
+  assert.equal(percent.resultBands.scale, 'percent')
+  assert.equal(percent.resultBands.opportunityMin, 3.8)
+  assert.equal(percent.resultBands.strengthMin, 4.3)
+  assert.equal(validScale('mean'), 'mean')
+  assert.equal(validScale('percent'), 'percent')
+  assert.equal(validScale('Percent'), null)
+  assert.equal(validScale('0-100'), null)
+  assert.equal(validScale(''), null)
 })

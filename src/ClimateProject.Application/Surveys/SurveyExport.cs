@@ -23,6 +23,12 @@ namespace ClimateProject.Application.Surveys;
 /// JSON payload an admin never sees: an export is forwarded to people who cannot ask why a
 /// question is in the wrong language.
 /// </param>
+/// <param name="Scale">
+/// The company's reading of a score (<c>CompanySettings.ResultScale</c>). On
+/// <see cref="ScoreScale.Percent"/> every SCORE in the file -- a question's average and
+/// median, a dimension's average, a group's average -- is written on 0–100. Counts, rates and
+/// percentages are not scores and never convert.
+/// </param>
 public sealed record SurveyExportContext(
     Guid SurveyId,
     string? Title,
@@ -32,7 +38,8 @@ public sealed record SurveyExportContext(
     IReadOnlyList<string> FallbackFields,
     SurveyAggregate Aggregate,
     DateTimeOffset GeneratedAt,
-    SurveyExportLabels? Labels = null)
+    SurveyExportLabels? Labels = null,
+    ScoreScale Scale = ScoreScale.Mean)
 {
     /// <summary>A breakdown's name for a reader: the field's label, or its key when none is known.</summary>
     public string DimensionLabel(string dimension)
@@ -242,6 +249,11 @@ public static class SurveyExport
         await Summary("suppression_reason", aggregate.SuppressionReason).ConfigureAwait(false);
         await Summary("generated_at", context.GeneratedAt.ToString("O")).ConfigureAwait(false);
 
+        // Which scale every score below is on. Without it a column of 81.4s is
+        // indistinguishable from a column of means someone multiplied by hand.
+        await Summary("score_scale", context.Scale.RangeLabel()).ConfigureAwait(false);
+        var scale = context.Scale;
+
         foreach (var language in summary.ByLanguage)
         {
             await Row(LanguageSection, null, language.Language, language.Language, "response_count", Number(language.Count))
@@ -264,8 +276,8 @@ public static class SurveyExport
             await Row(QuestionSection, order, id, null, "type", question.Type).ConfigureAwait(false);
             await Row(QuestionSection, order, id, null, "category", question.Category).ConfigureAwait(false);
             await Row(QuestionSection, order, id, null, "answered_count", Number(question.AnsweredCount)).ConfigureAwait(false);
-            await Row(QuestionSection, order, id, null, "average", Optional(question.Average)).ConfigureAwait(false);
-            await Row(QuestionSection, order, id, null, "median", Optional(question.Median)).ConfigureAwait(false);
+            await Row(QuestionSection, order, id, null, "average", scale.CsvNumber(question.Average)).ConfigureAwait(false);
+            await Row(QuestionSection, order, id, null, "median", scale.CsvNumber(question.Median)).ConfigureAwait(false);
             await Row(QuestionSection, order, id, null, "scale_min", Optional(question.ScaleMin)).ConfigureAwait(false);
             await Row(QuestionSection, order, id, null, "scale_max", Optional(question.ScaleMax)).ConfigureAwait(false);
             await Row(QuestionSection, order, id, locale, "scale_label_min", question.ScaleLabelMin).ConfigureAwait(false);
@@ -294,7 +306,7 @@ public static class SurveyExport
         {
             await Row(DimensionSection, null, dimension.Dimension, null, "question_count", Number(dimension.QuestionCount)).ConfigureAwait(false);
             await Row(DimensionSection, null, dimension.Dimension, null, "answered_count", Number(dimension.AnsweredCount)).ConfigureAwait(false);
-            await Row(DimensionSection, null, dimension.Dimension, null, "average_score", Optional(dimension.AverageScore)).ConfigureAwait(false);
+            await Row(DimensionSection, null, dimension.Dimension, null, "average_score", scale.CsvNumber(dimension.AverageScore)).ConfigureAwait(false);
         }
 
         foreach (var breakdown in aggregate.Breakdowns)
@@ -337,7 +349,7 @@ public static class SurveyExport
                 {
                     var order = Number(orderByQuestion.GetValueOrDefault(segmentQuestion.QuestionId) + 1);
                     await Row(SegmentQuestionSection, order, key, null, "answered_count", Number(segmentQuestion.AnsweredCount)).ConfigureAwait(false);
-                    await Row(SegmentQuestionSection, order, key, null, "average", Optional(segmentQuestion.Average)).ConfigureAwait(false);
+                    await Row(SegmentQuestionSection, order, key, null, "average", scale.CsvNumber(segmentQuestion.Average)).ConfigureAwait(false);
                 }
             }
         }
@@ -363,6 +375,7 @@ public static class SurveyExport
         ArgumentNullException.ThrowIfNull(context);
 
         var copy = SurveyExportCopy.For(context.ResolvedLocale);
+        var scale = context.Scale;
         var aggregate = context.Aggregate;
         var summary = aggregate.Summary;
 
@@ -416,7 +429,7 @@ public static class SurveyExport
                     d.Dimension,
                     copy.Format(d.QuestionCount),
                     copy.Format(d.AnsweredCount),
-                    copy.Decimal(d.AverageScore),
+                    copy.Score(d.AverageScore, scale),
                 })]);
         }
 
@@ -438,8 +451,8 @@ public static class SurveyExport
 
             if (question.Average is not null)
             {
-                facts.Add((copy.Average, copy.Decimal(question.Average)));
-                facts.Add((copy.Median, copy.Decimal(question.Median)));
+                facts.Add((copy.Average, copy.Score(question.Average, scale)));
+                facts.Add((copy.Median, copy.Score(question.Median, scale)));
             }
 
             document.KeyValues(facts);
@@ -674,6 +687,10 @@ internal sealed record SurveyExportCopy(
 
     public string Decimal(double? value)
         => value is null ? NotAvailable : Localise(Math.Round(value.Value, 2).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
+
+    /// <summary>A score on the company's scale (see <see cref="ScoreScales.Display"/>); counts and rates use <see cref="Decimal"/>.</summary>
+    public string Score(double? value, ScoreScale scale)
+        => value is null ? NotAvailable : Localise(scale.Display(value.Value));
 
     public string Percent(double? value) => value is null ? NotAvailable : $"{Decimal(value)} %";
 

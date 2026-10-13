@@ -126,6 +126,8 @@ describe('getSharedReport', () => {
       strengthMin: 4.25,
       // A blank name is the product's default, never an empty chip.
       names: { critical: 'Zona roja', opportunity: null, strength: null },
+      // No scale on the wire: an API from before the scale existed, read as the 1–5 mean.
+      scale: 'mean',
     })
 
     // An API older than the bands, and scales that are not a scale: the page judges nothing

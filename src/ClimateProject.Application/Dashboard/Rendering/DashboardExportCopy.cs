@@ -54,6 +54,7 @@ internal sealed record DashboardExportCopy(
     string NoClosedSurvey,
     string ClimateWithheldNotice,
     string MinimumGroupSize,
+    string ScoreScale,
     string SourceSurvey,
     string ClosedOn,
     string StartDate,
@@ -93,6 +94,7 @@ internal sealed record DashboardExportCopy(
                 + "That is not a score of zero: with this few respondents a score would amount "
                 + "to reading what each person answered.",
             MinimumGroupSize: "Minimum group size",
+            ScoreScale: "Score scale",
             SourceSurvey: "Source survey",
             ClosedOn: "Closed on",
             StartDate: "Start date",
@@ -135,6 +137,7 @@ internal sealed record DashboardExportCopy(
                 + "pocas personas que respondieron, una puntuación equivaldría a leer lo que "
                 + "contestó cada una.",
             MinimumGroupSize: "Tamaño mínimo del grupo",
+            ScoreScale: "Escala de puntaje",
             SourceSurvey: "Encuesta de origen",
             ClosedOn: "Cerrada el",
             StartDate: "Fecha de inicio",

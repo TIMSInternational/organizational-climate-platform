@@ -56,7 +56,7 @@ function row(over: Partial<SurveyRow>): SurveyRow {
 describe('waveReadings — the "+0,29 frente a Q2" under a closed row', () => {
   it('reads each closed wave against the closed wave before it, skipping an archived one', () => {
     const readings = waveReadings(trends())
-    expect(readings.get('q1')).toEqual({ first: true, delta: null, previousCode: null, completedCount: 24 })
+    expect(readings.get('q1')).toEqual({ first: true, delta: null, between: null, previousCode: null, completedCount: 24 })
     // (3.4 + 3.4) / 2 − (3.0 + 3.2) / 2 = +0.3, against Q1.
     expect(readings.get('q2')?.delta).toBeCloseTo(0.3)
     expect(readings.get('q2')?.previousCode).toBe('Q1')
@@ -78,7 +78,7 @@ describe('waveReadings — the "+0,29 frente a Q2" under a closed row', () => {
 })
 
 describe('closedSummary — "Cada una con 24 respuestas · 100 % completadas"', () => {
-  const read = (completed: number): WaveReading => ({ first: false, delta: null, previousCode: null, completedCount: completed })
+  const read = (completed: number): WaveReading => ({ first: false, delta: null, between: null, previousCode: null, completedCount: completed })
 
   it('says the shared count and the completed share when both are known', () => {
     const rows = [row({ id: 'a' }), row({ id: 'b' })]

@@ -10,6 +10,8 @@ import {
   KpiTile,
   bandOf,
   boundaryText,
+  scaleUnitText,
+  scoreText,
   isSuppressed,
   type ResultBands,
 } from '../../../components/charts'
@@ -83,7 +85,7 @@ export default function AdminDashboardNextView({
   const latest = latestAverage(model)
   const previous = previousAverage(model)
   // The move between the two averages AS the tile prints them, at two decimals.
-  const move = latest !== null && previous !== null ? printedMove(latest, previous, 2) : null
+  const move = latest !== null && previous !== null ? printedMove(latest, previous, 2, model.bands.scale) : null
   const rises = risesInARow(model)
   const withheld = protectedRows(model, ANONYMITY_FLOOR)
   // The two halves come from different regions (trends and surveys), so a completion
@@ -171,9 +173,10 @@ export default function AdminDashboardNextView({
               label={t('dashboard.next.climateLabel', { wave: model.latestClosedWave?.code ?? '—' })}
               value={latest}
               format={{ kind: 'number', decimals: 2 }}
+              valueText={latest === null ? undefined : scoreText(latest, bands.scale, locale, 2)}
               unit={
                 <span className="inline-flex flex-wrap items-center gap-2">
-                  {t('resultBands.results.climateUnit')}
+                  {scaleUnitText(bands.scale, t)}
                   {/* Printed at two decimals, so judged at two. */}
                   {latest !== null && <BandChip band={bandOf(latest, bands, 2)} bands={bands} />}
                 </span>
@@ -183,7 +186,7 @@ export default function AdminDashboardNextView({
                 move !== null && model.previousWave ? (
                   // The sign is in the reading, so the colour is a second channel.
                   <span data-slot="climate-move" className={move >= 0 ? 'text-accent-green-ink' : 'text-accent-red-ink'}>
-                    <span className="font-mono tabular-nums">{signedReading(move, locale, 2)}</span>{' '}
+                    <span className="font-mono tabular-nums">{signedReading(move, locale, 2, bands.scale)}</span>{' '}
                     {t('dashboard.next.climateVs', { wave: model.previousWave.code })}
                     {rises >= 2 && <> · {risesPhrase(rises, t)}</>}
                   </span>
@@ -512,7 +515,7 @@ function SparkCard({
   const band = bandOf(value, bands)
   // The move between the two readings AS PRINTED: Confianza's 3,33 → 3,67 prints "3,3" and
   // "3,7", so its move is "+0,4" — the raw difference printed "+0,3" beside them.
-  const move = before === undefined ? null : printedMove(value, before)
+  const move = before === undefined ? null : printedMove(value, before, 1, bands.scale)
   return (
     <div
       data-slot="trend-card"
@@ -528,13 +531,13 @@ function SparkCard({
         <BandChip band={band} bands={bands} short className="h-4.5 shrink-0 px-1.5 text-2xs" />
       </div>
       <div className="flex flex-wrap items-baseline gap-2">
-        <span className="font-mono text-reading leading-none tabular-nums text-fg-primary">{reading(value, locale)}</span>
+        <span className="font-mono text-reading leading-none tabular-nums text-fg-primary">{reading(value, locale, 1, bands.scale)}</span>
         {move !== null && (
           <span
             data-slot="trend-move"
             className={cn('font-mono text-sm tabular-nums', move >= 0 ? 'text-accent-green-ink' : 'text-accent-red-ink')}
           >
-            {signedReading(move, locale)}
+            {signedReading(move, locale, 1, bands.scale)}
           </span>
         )}
       </div>
@@ -545,9 +548,9 @@ function SparkCard({
         domain={domain}
         label={t('resultBands.dashboard.sparklineLabel', {
           dimension: dimension.name,
-          values: dimension.values.map((v) => reading(v, locale)).join(' → '),
-          low: boundaryText(bands.opportunityMin, locale),
-          high: boundaryText(bands.strengthMin, locale),
+          values: dimension.values.map((v) => reading(v, locale, 1, bands.scale)).join(' → '),
+          low: boundaryText(bands.opportunityMin, locale, bands.scale),
+          high: boundaryText(bands.strengthMin, locale, bands.scale),
         })}
       />
     </div>
@@ -568,8 +571,8 @@ function risesPhrase(rises: number, t: TranslateFn): string {
  * words up to ten, as the artboard writes it.
  */
 function movedLegend(count: number, bands: ResultBands, t: TranslateFn, locale: string): string {
-  const low = boundaryText(bands.opportunityMin, locale)
-  const high = boundaryText(bands.strengthMin, locale)
+  const low = boundaryText(bands.opportunityMin, locale, bands.scale)
+  const high = boundaryText(bands.strengthMin, locale, bands.scale)
   if (count === 1) return t('resultBands.dashboard.movedLegendOne', { low, high })
   const words = count >= 2 && count <= 10 ? t(`dashboard.next.countWord.${count}`) : count.toLocaleString(locale)
   return t('resultBands.dashboard.movedLegend', { low, high, count: words })
@@ -694,7 +697,7 @@ function AttentionRow({
             params={{
               department: { strong: cell.row.name },
               dimension: dimension.toLocaleLowerCase(locale),
-              score: { mono: reading(cell.score, locale) },
+              score: { mono: reading(cell.score, locale, 1, model.bands.scale) },
             }}
           />
         }

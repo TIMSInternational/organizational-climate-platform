@@ -290,7 +290,10 @@ public static class ReportEndpoints
             // The instant the numbers are true as of, not "now": restamping the document on
             // every download would make two copies of one report disagree about their own date.
             report.GenerationCompletedAt ?? report.CreatedAt,
-            ReportDocumentReader.Parse(report.ReportOutput));
+            ReportDocumentReader.Parse(report.ReportOutput),
+            // The company's reading as it is NOW, like the bands: the stored document keeps
+            // the 1-5 mean, and the file converts at download.
+            await CompanyScoreScale.LoadAsync(db, report.CompanyId, cancellationToken));
 
         var bytes = csv
             ? ReportRenderer.BuildCsv(context).ToBytes()

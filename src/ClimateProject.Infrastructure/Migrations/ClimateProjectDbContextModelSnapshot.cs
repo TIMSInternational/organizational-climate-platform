@@ -4883,6 +4883,14 @@ namespace ClimateProject.Infrastructure.Migrations
                                 .HasColumnType("character varying(60)")
                                 .HasColumnName("settings_band_strength_name");
 
+                            b1.Property<string>("ResultScale")
+                                .IsRequired()
+                                .ValueGeneratedOnAdd()
+                                .HasMaxLength(16)
+                                .HasColumnType("character varying(16)")
+                                .HasDefaultValue("mean")
+                                .HasColumnName("settings_result_scale");
+
                             b1.Property<string>("SurveyFrequency")
                                 .IsRequired()
                                 .ValueGeneratedOnAdd()

@@ -39,7 +39,9 @@
  *   carrying the answer scale's labels, the open questions as open_ended, the description, and
  *   the invitation subject and message. Matched by title.
  *
- * 5. The result bands and the company's time zone (`--timezone`, default America/Costa_Rica),
+ * 5. The result bands, how a result is read (`--scale mean|percent`, default mean: percent
+ *    prints 0–100, i.e. mean × 20, the way EAGLE answers on 20..100) and the company's time
+ *    zone (`--timezone`, default America/Costa_Rica),
  *    through `PUT /admin/companies/{id}/settings` (the same call the company's settings page
  *    makes): the band with the highest minimum is the strength band, the middle one
  *    opportunity, the lowest critical. The zone decides which DAY an answer, a participation
@@ -484,9 +486,18 @@ export function toBandsRequest(bands) {
   }
 }
 
-/** The company settings the import applies: the bands, and the zone every "day" is read in. */
-export function toSettingsRequest(bands, timezone) {
-  return { resultBands: toBandsRequest(bands), timezone }
+/**
+ * The company settings the import applies: the bands, how a result is READ (`scale`: "mean"
+ * prints 1,00–5,00, "percent" prints 0–100 = mean × 20 -- the bands themselves stay on 1–5
+ * either way), and the zone every "day" is read in.
+ */
+export function toSettingsRequest(bands, timezone, scale = 'mean') {
+  return { resultBands: { ...toBandsRequest(bands), scale }, timezone }
+}
+
+/** "mean" or "percent", or null: anything else the API refuses with a 400 after the import ran. */
+export function validScale(scale) {
+  return scale === 'mean' || scale === 'percent' ? scale : null
 }
 
 /** An IANA zone the runtime knows ("America/Costa_Rica"), or null: a typo would leave UTC. */
@@ -537,6 +548,7 @@ async function main() {
       domain: { type: 'string' },
       country: { type: 'string', default: 'Costa Rica' },
       timezone: { type: 'string', default: 'America/Costa_Rica' },
+      scale: { type: 'string', default: 'mean' },
       title: { type: 'string' },
       api: { type: 'string', default: 'http://127.0.0.1:5080' },
       email: { type: 'string', default: 'fede.super@acme.test' },
@@ -561,12 +573,14 @@ async function main() {
   const skipping = skipDemographics(parsed.climate, values['skip-demographic'])
   const window = surveyWindow({ start: values.start, end: values.end })
   const zoneProblems = validTimeZone(values.timezone) ? [] : [`--timezone "${values.timezone}" no es una zona horaria válida (ej. America/Costa_Rica).`]
-  const problems = [...parsed.problems, ...skipping.problems, ...window.problems, ...zoneProblems]
+  const scaleProblems = validScale(values.scale) ? [] : [`--scale "${values.scale}" debe ser mean (1,00–5,00) o percent (0–100).`]
+  const problems = [...parsed.problems, ...skipping.problems, ...window.problems, ...zoneProblems, ...scaleProblems]
   const climate = skipping.climate
   log(`import-climate-workbook: ${values.file}`)
   for (const line of summarise(climate)) log(`  ${line}`)
   if (skipping.skipped.length) log(`  sin importar (--skip-demographic): ${skipping.skipped.join(' · ')}`)
   log(`  zona horaria de la empresa: ${values.timezone}`)
+  log(`  escala de resultados: ${values.scale === 'percent' ? 'percent — 0 a 100 (promedio × 20)' : values.scale === 'mean' ? 'mean — promedio de 1,00 a 5,00' : values.scale}`)
   if (!window.problems.length) log(`  ventana de la encuesta: ${window.startDate} → ${window.endDate}${values.start ? '' : ' (por defecto: sin --start/--end)'}`)
   log(anonymous
     ? '  anonimato: ANÓNIMA — no se guarda quién respondió, así que nada impide que alguien la responda otra vez'
@@ -677,11 +691,12 @@ async function main() {
     if (!id) throw new Error(`survey create: unexpected body ${JSON.stringify(created).slice(0, 200)}`)
     log(`survey created as a DRAFT: ${surveyTitle} (${id}), ${body.questions.length} questions — review and launch it in the product`)
   }
-  // 5. The company's result bands and time zone.
-  const settings = toSettingsRequest(climate.bands, values.timezone)
+  // 5. The company's result bands, result scale and time zone.
+  const settings = toSettingsRequest(climate.bands, values.timezone, values.scale)
   const bandsRequest = settings.resultBands
   await call('PUT', `/admin/companies/${companyId}/settings`, settings, token)
   log(`time zone set: ${values.timezone}`)
+  log(`result scale set: ${values.scale}`)
   log(`result bands set: ${bandsRequest.criticalName} < ${bandsRequest.opportunityMin} ≤ ${bandsRequest.opportunityName} < ${bandsRequest.strengthMin} ≤ ${bandsRequest.strengthName}`)
 }
 

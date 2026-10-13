@@ -186,12 +186,12 @@ public static class ReportRenderer
 
         foreach (var section in stored.Surveys)
         {
-            WriteSurveySection(document, section);
+            WriteSurveySection(document, section, context.Scale);
         }
 
         WriteInsights(document, copy, stored.AiInsights);
         WriteBenchmarks(document, copy, stored.Benchmarks);
-        WriteComparison(document, copy, stored.Comparison, context.ChromeLocale);
+        WriteComparison(document, copy, stored.Comparison, context.ChromeLocale, context.Scale);
 
         return document;
     }
@@ -206,7 +206,7 @@ public static class ReportRenderer
     /// on the section header, because a reader of a mixed-language document has no other way to
     /// know which language they are looking at.
     /// </remarks>
-    private static void WriteSurveySection(PdfDocument document, ReportSurveySection section)
+    private static void WriteSurveySection(PdfDocument document, ReportSurveySection section, ScoreScale scale)
     {
         var copy = ReportRenderCopy.For(section.ResolvedLocale);
         var participation = section.Participation;
@@ -261,7 +261,7 @@ public static class ReportRenderer
                     DimensionNames.Resolve(d.Dimension, section.ResolvedLocale),
                     copy.Count(d.QuestionCount),
                     copy.Count(d.AnsweredCount),
-                    copy.Decimal(d.AverageScore),
+                    copy.Score(d.AverageScore, scale),
                 })]);
         }
 
@@ -296,8 +296,8 @@ public static class ReportRenderer
                     q.Type,
                     DimensionNames.Resolve(q.Category, section.ResolvedLocale),
                     copy.Count(q.AnsweredCount),
-                    copy.Decimal(q.Average),
-                    copy.Decimal(q.Median),
+                    copy.Score(q.Average, scale),
+                    copy.Score(q.Median, scale),
                 })]);
         }
 
@@ -454,7 +454,8 @@ public static class ReportRenderer
         ReportComparisonSection? comparison,
         // The chrome locale, not a section's: the comparison table is document-level and
         // names dimensions across two surveys that may each be authored in a different one.
-        string? locale)
+        string? locale,
+        ScoreScale scale)
     {
         document.Heading(copy.Comparison);
 
@@ -486,9 +487,10 @@ public static class ReportRenderer
             [.. comparison.Dimensions.Select(d => new string?[]
             {
                 DimensionNames.Resolve(d.Dimension, locale),
-                copy.Decimal(d.EarlierScore),
-                copy.Decimal(d.LaterScore),
-                copy.Decimal(d.Delta),
+                copy.Score(d.EarlierScore, scale),
+                copy.Score(d.LaterScore, scale),
+                // A difference of two means converts by the same factor as the means.
+                copy.Score(d.Delta, scale),
             })]);
     }
 
@@ -601,6 +603,10 @@ public static class ReportRenderer
         Row(ReportSection, null, null, "document_readable", null, "value", Boolean(context.Document is not null));
         Row(ReportSection, null, null, "generation_note", null, "value", context.Document?.GenerationNote);
 
+        // Which scale every score below is on (see ScoreScale).
+        var scale = context.Scale;
+        Row(ReportSection, null, null, "score_scale", null, "value", scale.RangeLabel());
+
         if (context.Document is null)
         {
             return csv;
@@ -608,7 +614,7 @@ public static class ReportRenderer
 
         foreach (var section in context.Document.Surveys)
         {
-            WriteSurveyRows(Row, section);
+            WriteSurveyRows(Row, section, scale);
         }
 
         foreach (var insight in context.Document.AiInsights)
@@ -658,9 +664,9 @@ public static class ReportRenderer
 
             foreach (var movement in comparison.Dimensions)
             {
-                Row(ComparisonSection, null, null, movement.Dimension, null, "earlier_score", Optional(movement.EarlierScore));
-                Row(ComparisonSection, null, null, movement.Dimension, null, "later_score", Optional(movement.LaterScore));
-                Row(ComparisonSection, null, null, movement.Dimension, null, "delta", Optional(movement.Delta));
+                Row(ComparisonSection, null, null, movement.Dimension, null, "earlier_score", scale.CsvNumber(movement.EarlierScore));
+                Row(ComparisonSection, null, null, movement.Dimension, null, "later_score", scale.CsvNumber(movement.LaterScore));
+                Row(ComparisonSection, null, null, movement.Dimension, null, "delta", scale.CsvNumber(movement.Delta));
             }
         }
 
@@ -701,7 +707,7 @@ public static class ReportRenderer
 
     private delegate void CsvRow(string section, string? survey, string? question, string? group, string? language, string metric, string? value);
 
-    private static void WriteSurveyRows(CsvRow row, ReportSurveySection section)
+    private static void WriteSurveyRows(CsvRow row, ReportSurveySection section, ScoreScale scale)
     {
         var survey = section.SurveyId.ToString();
         var locale = section.ResolvedLocale;
@@ -747,8 +753,8 @@ public static class ReportRenderer
             row(QuestionMetricSection, survey, order, id, null, "type", question.Type);
             row(QuestionMetricSection, survey, order, id, null, "category", question.Category);
             row(QuestionMetricSection, survey, order, id, null, "answered_count", Number(question.AnsweredCount));
-            row(QuestionMetricSection, survey, order, id, null, "average", Optional(question.Average));
-            row(QuestionMetricSection, survey, order, id, null, "median", Optional(question.Median));
+            row(QuestionMetricSection, survey, order, id, null, "average", scale.CsvNumber(question.Average));
+            row(QuestionMetricSection, survey, order, id, null, "median", scale.CsvNumber(question.Median));
             row(QuestionMetricSection, survey, order, id, null, "suppressed_word_count", Number(question.SuppressedWordCount));
 
             foreach (var bucket in question.Distribution)
@@ -772,7 +778,7 @@ public static class ReportRenderer
         {
             row(DimensionSection, survey, null, dimension.Dimension, null, "question_count", Number(dimension.QuestionCount));
             row(DimensionSection, survey, null, dimension.Dimension, null, "answered_count", Number(dimension.AnsweredCount));
-            row(DimensionSection, survey, null, dimension.Dimension, null, "average_score", Optional(dimension.AverageScore));
+            row(DimensionSection, survey, null, dimension.Dimension, null, "average_score", scale.CsvNumber(dimension.AverageScore));
         }
 
         // Disclosed departments only, for the reason WriteDepartments gives.
@@ -809,7 +815,7 @@ public static class ReportRenderer
 
                 foreach (var score in segment.Dimensions)
                 {
-                    row(DemographicSegmentSection, survey, null, $"{key}:{score.Dimension}", null, "average_score", Optional(score.AverageScore));
+                    row(DemographicSegmentSection, survey, null, $"{key}:{score.Dimension}", null, "average_score", scale.CsvNumber(score.AverageScore));
                 }
             }
         }

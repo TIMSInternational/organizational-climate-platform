@@ -127,7 +127,7 @@ public class CompanySettingsEndpointTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var bands = await response.Content.ReadFromJsonAsync<ResultBandsDto>();
-        Assert.Equal(new ResultBandsDto(3.00m, 4.00m, null, null, null), bands);
+        Assert.Equal(new ResultBandsDto(3.00m, 4.00m, null, null, null, "mean"), bands);
     }
 
     [Fact]
@@ -155,7 +155,7 @@ public class CompanySettingsEndpointTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var saved = (await response.Content.ReadFromJsonAsync<CompanySettingsResponse>())!.ResultBands;
         // Trimmed, and a blank name returns to the product's default (null).
-        Assert.Equal(new ResultBandsDto(2.75m, 4.25m, "Zona roja", null, "Fortaleza"), saved);
+        Assert.Equal(new ResultBandsDto(2.75m, 4.25m, "Zona roja", null, "Fortaleza", "mean"), saved);
 
         var reader = _factory.CreateClient();
         var leaderToken = await SignUpAndGetTokenAsync(reader, Roles.Leader, _companyADomain, _companyAId);
