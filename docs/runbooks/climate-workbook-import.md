@@ -20,6 +20,13 @@ data: no name, email, domain or author survives anywhere in the package.
 | ESCALAS | the result bands (name, min, max, the Color cell's fill) and the answer scale (label, value) |
 | PREGUNTAS | under each dimension title (a filled cell), its statements; "Preguntas abiertas" holds the open ones |
 | DEMOGRAFICOS | one person per row from row 6: Nombre, Apellido, Correo, Puesto, then any demographic columns, and Área / Departamento |
+| OPCIONES (optional) | row 5 one header per field, each field's options listed downward from row 6 in the order respondents see them; one column must be Área / Departamento |
+
+**Link-only climates (added 2026-10-12, EAGLE's shape).** A workbook with an OPCIONES sheet and
+**no people** in DEMOGRAFICOS is imported with nobody invited: the Área / Departamento column
+becomes the company's departments, every other column a list field with its options in the
+workbook's order, and every respondent declares their área and those fields on the first
+screen of the link or QR. The dry run says `modo: SOLO POR ENLACE`.
 
 A demographic column is created as a **list** when its values are words and as a **number**
 when every value is a number. **A number field never splits results** — the product says so
@@ -76,9 +83,11 @@ invitation text in the dry run first.
   anonymous. An anonymous survey stays on a person's list after they answer (it does not know
   who answered — `SurveyQueries.AssignedTo`).
 - **Names** are sent, but an invitation keeps no name; a person's name appears when they register.
-- **The result bands are read and validated but not applied**: the product has no band
-  setting yet — results are coloured against the fixed `CLIMATE_TARGET` of 3,7
-  (`web/src/features/dashboard/next/compose.ts:78`). Building the bands is the next piece of work.
+- **The result bands are applied** to the company (since 2026-10-12), through
+  `PUT /admin/companies/{id}/settings` — the call the company settings page makes. The band
+  with the highest minimum becomes strength, the middle opportunity, the lowest critical; the
+  workbook must hold exactly three. (This line used to say the product had no band setting;
+  it has had one since #515.)
 
 ## The floor of 5, measured on TIMS
 

@@ -20,6 +20,11 @@
  *   statements. A dimension titled "Preguntas abiertas" holds open-ended questions.
  * - DEMOGRAFICOS — row 5 headers, one person per row from row 6, until the first row without
  *   an email ("Promedio" ends it too).
+ * - OPCIONES (optional) — row 5 headers, each column's OPTIONS listed downward from row 6, in
+ *   the order the respondent should see them. A workbook with this sheet and no people is a
+ *   LINK-ONLY climate (EAGLE's shape): nobody is invited, every respondent declares their área
+ *   and these options on the first screen of the link, and the "Área / Departamento" column
+ *   becomes the company's departments.
  *
  * ## What it creates, in order, each through the endpoint the UI calls
  *
@@ -34,9 +39,13 @@
  *   carrying the answer scale's labels, the open questions as open_ended, the description, and
  *   the invitation subject and message. Matched by title.
  *
- * The result bands are read and validated, and printed, but not sent: every company starts on
- * the product's default bands (docs/decisions/result-bands.md), which are TIMS's own; a company
- * whose workbook differs has them set by a super_admin in the product.
+ * 5. The result bands, through `PUT /admin/companies/{id}/settings` (the same call the
+ *    company's settings page makes): the band with the highest minimum is the strength band,
+ *    the middle one opportunity, the lowest critical.
+ *
+ * In the LINK-ONLY mode (OPCIONES, no people) step 3 is replaced by creating the departments
+ * the "Área / Departamento" column lists, and step 2 takes its fields and options from
+ * OPCIONES in the workbook's own order.
  *
  * ## What it refuses to decide
  *
@@ -271,19 +280,45 @@ export function parseClimate(sheets) {
     if (!row.department) problems.push(`DEMOGRAFICOS fila ${r}: falta el área / departamento.`)
     persons.push(row)
   }
-  if (persons.length === 0) problems.push('DEMOGRAFICOS: no hay personas.')
+  // OPCIONES — one column per field, options downward. With no people, it is the link-only mode.
+  const optionsSheet = sheets.OPCIONES
+  const linkOnly = Boolean(optionsSheet) && persons.length === 0
+  const optionColumns = []
+  if (optionsSheet) {
+    for (let c = 2; c <= 30; c += 1) {
+      const letter = String.fromCharCode(64 + c)
+      const header = str(optionsSheet[`${letter}5`])
+      if (!header) continue
+      const options = []
+      for (let r = 6; r <= rowsOf(optionsSheet); r += 1) {
+        const option = str(optionsSheet[`${letter}${r}`])
+        if (option && !options.includes(option)) options.push(option)
+      }
+      if (options.length === 0) problems.push(`OPCIONES columna ${letter} ("${header}"): no tiene opciones.`)
+      optionColumns.push({ header, role: PERSON_COLUMNS[norm(header)] ?? 'demographic', options })
+    }
+    if (optionColumns.length === 0) problems.push('OPCIONES: no hay columnas (encabezados en la fila 5).')
+  }
+  const departments = optionColumns.find((c) => c.role === 'department')?.options ?? []
+  if (linkOnly && departments.length === 0) problems.push('OPCIONES: falta la columna "Área / Departamento" con las áreas de la empresa.')
+  if (persons.length === 0 && !linkOnly) problems.push('DEMOGRAFICOS: no hay personas (o agregue la hoja OPCIONES para una encuesta solo por enlace).')
 
   // A demographic column is numeric when every filled value is a number; otherwise a list.
-  const demographicColumns = columns.filter((c) => c.role === 'demographic').map((c) => {
+  // Link-only: the fields are OPCIONES's columns, as lists, in the order the client wrote them.
+  const demographicColumns = linkOnly
+    ? optionColumns.filter((c) => c.role === 'demographic').map((c) => ({ header: c.header, field: slug(c.header), type: 'select', options: c.options }))
+    : columns.filter((c) => c.role === 'demographic').map((c) => {
     const values = persons.map((p) => p.demographics[c.header]).filter((v) => v !== null && v !== undefined && String(v).trim() !== '')
     const numeric = values.length > 0 && values.every((v) => typeof v === 'number' || /^-?\d+([.,]\d+)?$/.test(String(v).trim()))
     const options = numeric ? [] : [...new Set(values.map((v) => String(v).trim()))].sort((a, b) => a.localeCompare(b, 'es'))
     return { header: c.header, field: slug(c.header), type: numeric ? 'number' : 'select', options }
   })
 
+  if (bands.length !== 3) problems.push(`ESCALAS: se esperan 3 bandas de calificación (crítica, oportunidad, fortaleza); se leyeron ${bands.length}.`)
+
   return {
     problems,
-    climate: { intro, invitation, bands, scale, dimensions, columns: demographicColumns, persons },
+    climate: { intro, invitation, bands, scale, dimensions, columns: demographicColumns, persons, linkOnly, departments },
   }
 }
 
@@ -395,7 +430,7 @@ export function toSurveyRequest(climate, { companyId, title, departmentIds, star
     startDate,
     endDate,
     departmentIds,
-    targetAudienceCount: climate.persons.length,
+    targetAudienceCount: climate.persons.length || null,
     settings: {
       /**
        * Anonymous STORAGE, which is not the same thing as what the client is shown — and the
@@ -418,12 +453,31 @@ export function toSurveyRequest(climate, { companyId, title, departmentIds, star
        * respondents the truth either way: the respond screen's notice changes with it.
        */
       anonymous,
+      // Explicit, though every survey now asks them (ruled 2026-10-12): a link-only climate
+      // has no other source of área or demographics at all.
+      selfDeclaredDemographics: true,
       allowPartialResponses: true,
       showProgress: true,
       ...(climate.invitation?.subject ? { invitationCustomSubject: both(climate.invitation.subject) } : {}),
       ...(climate.invitation?.message ? { invitationCustomMessage: both(climate.invitation.message) } : {}),
     },
     questions,
+  }
+}
+
+/**
+ * The company's result bands as `UpdateResultBandsRequest`: ordered by their minimum, the
+ * highest is strength, the middle opportunity, the lowest critical. The two lower bands'
+ * maxima are not sent -- the product derives them (opportunity ends 0,01 below strength).
+ */
+export function toBandsRequest(bands) {
+  const [critical, opportunity, strength] = [...bands].sort((a, b) => a.min - b.min)
+  return {
+    opportunityMin: opportunity.min,
+    strengthMin: strength.min,
+    criticalName: critical.name,
+    opportunityName: opportunity.name,
+    strengthName: strength.name,
   }
 }
 
@@ -440,8 +494,15 @@ export function summarise(climate) {
     `escala: ${climate.scale.map((p) => `${p.value} ${p.label}`).join(' · ')}`,
     `preguntas: ${climate.dimensions.filter((d) => !d.open).length} dimensiones, ${likert} afirmaciones (likert) + ${open} abiertas`,
     `campos demográficos: ${climate.columns.map((c) => `${c.header} [${c.type}${c.type === 'select' ? `: ${c.options.join(', ')}` : ''}]`).join(' · ')}`,
-    `personas: ${climate.persons.length} en ${departments.length} departamentos (${departments.join(', ')})`,
-    `rol líder por puesto: ${leaders.map((r) => r.email).join(', ') || 'ninguno'}`,
+    ...(climate.linkOnly
+      ? [
+          `modo: SOLO POR ENLACE — sin personas ni invitaciones; cada quien declara su área y sus datos al inicio`,
+          `áreas (departamentos): ${climate.departments.length} (${climate.departments.join(', ')})`,
+        ]
+      : [
+          `personas: ${climate.persons.length} en ${departments.length} departamentos (${departments.join(', ')})`,
+          `rol líder por puesto: ${leaders.map((r) => r.email).join(', ') || 'ninguno'}`,
+        ]),
   ]
 }
 
@@ -542,12 +603,25 @@ async function main() {
     log(`field created: ${column.field} (${column.type})`)
   }
 
+  // 3a. Link-only: the departments OPCIONES lists, matched by name; nobody is invited.
+  if (climate.linkOnly) {
+    const listed = await call('GET', `/admin/departments?companyId=${companyId}`, null, token)
+    const have = new Set((listed.departments ?? listed).map((d) => norm(d.name)))
+    for (const name of climate.departments) {
+      if (have.has(norm(name))) { log(`department exists: ${name}`); continue }
+      await call('POST', '/admin/departments', { companyId, name, description: null, parentDepartmentId: null, isActive: true }, token)
+      log(`department created: ${name}`)
+    }
+  }
+
   // 3. People — preview first, apply only a clean preview.
-  const rows = toImportRows(climate)
+  const rows = climate.linkOnly ? [] : toImportRows(climate)
   const departments = await call('GET', `/admin/departments?companyId=${companyId}`, null, token)
   const known = new Set((departments.departments ?? departments).map((d) => norm(d.name)))
   const newDepartments = [...new Set(rows.map((r) => r.department).filter((d) => d && !known.has(norm(d))))]
-  const preview = await call('POST', '/admin/users/bulk-import/rows', { companyId, preview: true, rows, newDepartments }, token)
+  const preview = rows.length
+    ? await call('POST', '/admin/users/bulk-import/rows', { companyId, preview: true, rows, newDepartments }, token)
+    : { rows: [] }
   // BulkImportResponse { rows: [{ rowNumber, email, status: valid|error|invited, errors[], issues[{code}] }] }.
   // The natural key of a person is the email: one already invited or already registered is
   // ALREADY THERE (a re-run), not a failure — it is left out of the import, never re-sent.
@@ -566,7 +640,7 @@ async function main() {
     ? await call('POST', '/admin/users/bulk-import/rows', { companyId, preview: false, rows: toImport, newDepartments }, token)
     : { rows: [], successCount: 0, errorCount: 0 }
   const byStatus = imported.rows.reduce((acc, r) => ({ ...acc, [r.status]: (acc[r.status] ?? 0) + 1 }), {})
-  log(`people: ${JSON.stringify(byStatus)} (success ${imported.successCount}, errors ${imported.errorCount})${newDepartments.length ? `; departments created: ${newDepartments.join(', ')}` : ''}`)
+  if (!climate.linkOnly) log(`people: ${JSON.stringify(byStatus)} (success ${imported.successCount}, errors ${imported.errorCount})${newDepartments.length ? `; departments created: ${newDepartments.join(', ')}` : ''}`)
   if (imported.errorCount > 0) for (const r of imported.rows.filter((x) => x.errors.length)) log(`  - fila ${r.rowNumber} ${r.email}: ${r.errors.join('; ')}`)
 
   // 4. The survey, as a draft, matched by title.
@@ -582,7 +656,10 @@ async function main() {
     if (!id) throw new Error(`survey create: unexpected body ${JSON.stringify(created).slice(0, 200)}`)
     log(`survey created as a DRAFT: ${surveyTitle} (${id}), ${body.questions.length} questions — review and launch it in the product`)
   }
-  log(`\nbands read but not sent — every company starts on the product's default bands (≥4 fortaleza, 3–3,99 oportunidad, <3 crítica); if these differ, set them in the company's result bands as super_admin: ${climate.bands.map((b) => `${b.name} ${b.min}–${b.max}`).join(' · ')}`)
+  // 5. The company's result bands.
+  const bandsRequest = toBandsRequest(climate.bands)
+  await call('PUT', `/admin/companies/${companyId}/settings`, { resultBands: bandsRequest }, token)
+  log(`result bands set: ${bandsRequest.criticalName} < ${bandsRequest.opportunityMin} ≤ ${bandsRequest.opportunityName} < ${bandsRequest.strengthMin} ≤ ${bandsRequest.strengthName}`)
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
