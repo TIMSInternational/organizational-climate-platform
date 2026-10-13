@@ -1354,9 +1354,12 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
     [Fact]
     public async Task The_respond_view_offers_nothing_when_the_survey_did_not_ask()
     {
-        // Opt-in. The setting defaults false precisely so that surveys already collecting
-        // responses do not start asking three questions nobody turned on.
-        var survey = await ActiveSurveyAsync(settings: new SurveySettingsInput(Anonymous: true));
+        // Opt-OUT since 2026-10-13: the setting now defaults TRUE, because a climate QR asks
+        // the área and the company's fields. So "did not ask" has to be said explicitly here --
+        // the guarantee under test is still that a survey with the setting off offers nothing,
+        // and the fixture moves rather than the expectation.
+        var survey = await ActiveSurveyAsync(
+            settings: new SurveySettingsInput(Anonymous: true, SelfDeclaredDemographics: false));
         await SeedSelectFieldAsync("area", ["operaciones"], required: true, order: 0);
 
         var view = await RespondViewAsync(_factory.CreateClient(), survey.Id);

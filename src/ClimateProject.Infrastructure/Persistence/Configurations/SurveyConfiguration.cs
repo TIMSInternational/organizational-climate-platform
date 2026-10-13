@@ -42,7 +42,7 @@ public class SurveyConfiguration : IEntityTypeConfiguration<Survey>
             settings.Property(x => x.AutoSave).HasColumnName("settings_auto_save").IsRequired().HasDefaultValue(true);
             settings.Property(x => x.TimeLimitMinutes).HasColumnName("settings_time_limit_minutes");
             settings.Property(x => x.ResponseLimit).HasColumnName("settings_response_limit");
-            settings.Property(x => x.SelfDeclaredDemographics).HasColumnName("settings_self_declared_demographics").IsRequired().HasDefaultValue(false);
+            settings.Property(x => x.SelfDeclaredDemographics).HasColumnName("settings_self_declared_demographics").IsRequired().HasDefaultValue(true);
             settings.Property(x => x.CollectParticipantIdentity).HasColumnName("settings_collect_participant_identity").IsRequired().HasDefaultValue(false);
             settings.Property(x => x.NotificationSendInvitations).HasColumnName("settings_notification_send_invitations").IsRequired().HasDefaultValue(true);
             settings.Property(x => x.NotificationSendReminders).HasColumnName("settings_notification_send_reminders").IsRequired().HasDefaultValue(true);
