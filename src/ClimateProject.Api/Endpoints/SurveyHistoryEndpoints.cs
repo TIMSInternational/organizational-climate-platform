@@ -251,7 +251,8 @@ public static class SurveyHistoryEndpoints
                 locale, language, "settings.invitationCustomSubject", fallbackFields),
             content.Settings.InvitationIncludeCredentials,
             content.Settings.InvitationSendImmediately,
-            content.Settings.InvitationBrandingEnabled);
+            content.Settings.InvitationBrandingEnabled,
+            content.Settings.OneSessionOnly);
 
         authors.TryGetValue(version.CreatedBy, out var author);
         var isCurrent = version.VersionNumber == survey.Version;

@@ -137,4 +137,23 @@ public class SurveySettings
     public string? InvitationCustomSubjectEn { get; set; }
     public string? InvitationCustomSubjectEs { get; set; }
     public bool InvitationBrandingEnabled { get; set; }
+
+    /// <summary>
+    /// Whether a respondent WITHOUT an account gets one session only: reloading or coming back
+    /// serves the form as it was first served, instead of the half they left.
+    /// </summary>
+    /// <remarks>
+    /// Default FALSE, deliberately. Ruled 2026-10-13 after weighing the alternative: applying it
+    /// per-respondent would have taken effect instantly on every live survey, and an Eagle
+    /// respondent sixty items into eighty who reloaded would have lost the lot. A per-survey flag
+    /// changes nothing until somebody ticks it.
+    ///
+    /// It withholds the ANSWERS, never the session id. On an anonymous survey that id is the only
+    /// thing that can tell a retried request from a second respondent, so it goes on being minted
+    /// and matched -- see `respondSession.ts` and `FindExistingResponseAsync`.
+    ///
+    /// Only for a respondent with no account; a signed-in mass-invite respondent keeps resume,
+    /// which the same ruling requires.
+    /// </remarks>
+    public bool OneSessionOnly { get; set; }
 }

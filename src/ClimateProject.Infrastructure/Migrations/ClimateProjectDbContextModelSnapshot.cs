@@ -5899,6 +5899,12 @@ namespace ClimateProject.Infrastructure.Migrations
                                 .HasDefaultValue(true)
                                 .HasColumnName("settings_notification_send_reminders");
 
+                            b1.Property<bool>("OneSessionOnly")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("boolean")
+                                .HasDefaultValue(false)
+                                .HasColumnName("settings_one_session_only");
+
                             b1.Property<bool>("RandomizeQuestions")
                                 .ValueGeneratedOnAdd()
                                 .HasColumnType("boolean")

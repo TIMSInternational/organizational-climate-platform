@@ -276,7 +276,20 @@ public static class SurveyResponseEndpoints
         var questions = await LoadQuestionDtosAsync(survey, db, locale, fallbackFields, cancellationToken);
 
         var existing = await FindExistingResponseAsync(survey, respondent, sessionId, db, cancellationToken);
-        var inProgress = existing is null
+
+        // `OneSessionOnly` withholds the ANSWERS, never the lookup. The row above is still needed
+        // by the POST as the retry and duplicate guard -- on an anonymous survey the session id is
+        // the only thing that can tell a retried request from a second respondent -- so
+        // `respondSession` goes on minting it and this goes on matching it. What the flag ends is
+        // RESUMING: a respondent who reloads is served the form as it was first served rather than
+        // the half they left.
+        //
+        // `ActingUserId is null` and not `IsAnonymous`, for the reason `AsksSelfDeclaredDemographics`
+        // gives: every survey has a link, nobody who opens one logs in, and a link visitor to an
+        // identified survey is served anonymously -- so "has no account" is the whole test. A
+        // signed-in mass-invite respondent therefore keeps resume, which the ruling requires.
+        var resumes = !(survey.Settings.OneSessionOnly && respondent.ActingUserId is null);
+        var inProgress = existing is null || !resumes
             ? null
             : await ToResponseStateAsync(existing, db, cancellationToken);
 

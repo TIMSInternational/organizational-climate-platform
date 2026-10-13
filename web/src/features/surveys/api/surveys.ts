@@ -105,6 +105,14 @@ export interface SurveySettings {
   invitationIncludeCredentials: boolean
   invitationSendImmediately: boolean
   invitationBrandingEnabled: boolean
+  /**
+   * One session only: a respondent WITHOUT an account is served the form as it was first
+   * served when they come back, instead of the half they left. Default false, so nothing
+   * changes for a live survey until somebody ticks it (ruled 2026-10-13).
+   *
+   * Optional in the type because an API that predates it does not send it.
+   */
+  oneSessionOnly?: boolean
 }
 
 /** A row of `GET /surveys` — see `SurveyListItem` in SurveyDtos.cs. */
@@ -354,6 +362,24 @@ export async function setSurveySelfDeclaredDemographics(
   await authFetch(`${baseUrl}/surveys/${id}`, {
     method: 'PUT',
     body: JSON.stringify({ settings: { selfDeclaredDemographics: enabled } }),
+  })
+}
+
+/**
+ * The same narrow `PUT` as the demographics switch, legal on a live survey for the same reason,
+ * and attributable in the audit trail as `settings.oneSessionOnly` (`SurveyVersioning.Diff`).
+ *
+ * It ends RESUMING for a respondent with no account; it does not touch the session id, which is
+ * the only retry and duplicate guard an anonymous survey has.
+ */
+export async function setSurveyOneSessionOnly(
+  baseUrl: string,
+  id: string,
+  enabled: boolean,
+): Promise<void> {
+  await authFetch(`${baseUrl}/surveys/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ settings: { oneSessionOnly: enabled } }),
   })
 }
 

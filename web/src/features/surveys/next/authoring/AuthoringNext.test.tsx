@@ -343,6 +343,7 @@ describe('Detalle de encuesta (SurveyDetail artboard)', () => {
 
 const noop: DistributionActions = {
   invite: () => undefined,
+  setOneSessionOnly: () => undefined,
   remind: () => undefined,
   createLink: () => undefined,
   regenerateLink: () => undefined,

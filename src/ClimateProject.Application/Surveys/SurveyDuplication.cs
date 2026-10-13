@@ -211,5 +211,6 @@ public static class SurveyDuplication
         InvitationCustomSubjectEn = s.InvitationCustomSubjectEn,
         InvitationCustomSubjectEs = s.InvitationCustomSubjectEs,
         InvitationBrandingEnabled = s.InvitationBrandingEnabled,
+        OneSessionOnly = s.OneSessionOnly,
     };
 }

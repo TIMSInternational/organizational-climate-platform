@@ -4458,7 +4458,11 @@
         "participantIdentityLabel": "Ask respondents for their name",
         "participantIdentityHelp": "Whoever answers through the link or QR code will give their name and, optionally, their email before the first question. That they answered, and the day, are recorded apart from their answers and never linked to them. It tells you who has yet to answer.",
         "participantIdentityOn": "The public link now asks respondents for their name.",
-        "participantIdentityOff": "The public link no longer asks respondents for their name."
+        "participantIdentityOff": "The public link no longer asks respondents for their name.",
+        "oneSessionOnlyLabel": "One session only on the public link",
+        "oneSessionOnlyHelp": "Someone answering without an account starts again if they come back. Their answers are not handed back to them.",
+        "oneSessionOnlyOn": "The public link no longer hands answers back.",
+        "oneSessionOnlyOff": "The public link hands answers back again."
       },
       "participation": {
         "title": "Participation",

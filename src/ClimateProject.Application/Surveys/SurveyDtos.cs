@@ -56,7 +56,8 @@ public sealed record SurveySettingsDto(
     string? InvitationCustomSubject,
     bool InvitationIncludeCredentials,
     bool InvitationSendImmediately,
-    bool InvitationBrandingEnabled);
+    bool InvitationBrandingEnabled,
+    bool OneSessionOnly);
 
 public sealed record SurveyListItem(
     Guid Id,
@@ -196,7 +197,8 @@ public sealed record SurveySettingsInput(
     bool? InvitationIncludeCredentials = null,
     bool? InvitationSendImmediately = null,
     bool? InvitationBrandingEnabled = null,
-    bool? CollectParticipantIdentity = null);
+    bool? CollectParticipantIdentity = null,
+    bool? OneSessionOnly = null);
 
 public sealed record CreateSurveyRequest(
     LocalizedInput? Title,

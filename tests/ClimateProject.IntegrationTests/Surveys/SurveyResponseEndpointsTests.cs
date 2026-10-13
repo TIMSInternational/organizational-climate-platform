@@ -984,6 +984,99 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
         Assert.Equal(1, await _harness.WithDbAsync(db => db.Responses.CountAsync(r => r.SurveyId == survey.Id)));
     }
 
+    /// <summary>
+    /// "One session only", ruled 2026-10-13 as a per-survey flag defaulting OFF — so nothing
+    /// changes for a live survey until somebody ticks it, and an Eagle respondent sixty items into
+    /// eighty does not lose the lot the day it ships.
+    /// </summary>
+    /// <remarks>
+    /// Both halves matter. The flag withholds the ANSWERS; it must NOT stop the session being
+    /// matched, because on an anonymous survey the session id is the only thing that can tell a
+    /// retried request from a second respondent. Remove the `resumes` guard and the first
+    /// assertion fails; widen it to skip the lookup as well and the last two do.
+    /// </remarks>
+    [Fact]
+    public async Task A_one_session_only_survey_hands_a_visitor_no_answers_back_but_still_knows_the_session()
+    {
+        var survey = await ActiveSurveyAsync(
+            [WorkModeQuestion(bilingual: false)],
+            new SurveySettingsInput(Anonymous: true, SelfDeclaredDemographics: false, OneSessionOnly: true));
+        var visitor = _factory.CreateClient();
+        var sessionId = Guid.NewGuid().ToString("N");
+        var choice = survey.Questions.Single(q => q.Type == QuestionTypes.MultipleChoice).Id;
+
+        var partial = await SubmitAsync(visitor, survey.Id, new SubmitSurveyResponseRequest(
+            Answers: [new SurveyAnswerInput(choice, "hybrid")],
+            SessionId: sessionId,
+            IsComplete: false));
+        Assert.Equal(HttpStatusCode.Created, partial.StatusCode);
+        var responseId = (await partial.Content.ReadFromJsonAsync<SurveySubmissionResult>())!.ResponseId;
+
+        // The reload is served the form, not the half they left.
+        var view = (await visitor.GetFromJsonAsync<SurveyRespondView>(
+            $"/surveys/{survey.Id}/respond?sessionId={sessionId}"))!;
+        Assert.Null(view.InProgress);
+
+        // ...and the retry guard is untouched: the same session still resolves to the SAME row, so
+        // a second save is one respondent saving twice rather than two respondents.
+        var again = await SubmitAsync(visitor, survey.Id, new SubmitSurveyResponseRequest(
+            Answers: [new SurveyAnswerInput(choice, "remote")],
+            SessionId: sessionId,
+            IsComplete: false));
+        Assert.Equal(responseId, (await again.Content.ReadFromJsonAsync<SurveySubmissionResult>())!.ResponseId);
+        Assert.Equal(1, await _harness.WithDbAsync(db => db.Responses.CountAsync(r => r.SurveyId == survey.Id)));
+    }
+
+    /// <summary>
+    /// The control. Identical but for the flag, so the test above is about the flag and not about
+    /// being anonymous, or about the session id, or about a partial save.
+    /// </summary>
+    [Fact]
+    public async Task The_same_visitor_resumes_when_the_survey_does_not_say_one_session_only()
+    {
+        var survey = await ActiveSurveyAsync(
+            [WorkModeQuestion(bilingual: false)],
+            new SurveySettingsInput(Anonymous: true, SelfDeclaredDemographics: false, OneSessionOnly: false));
+        var visitor = _factory.CreateClient();
+        var sessionId = Guid.NewGuid().ToString("N");
+        var choice = survey.Questions.Single(q => q.Type == QuestionTypes.MultipleChoice).Id;
+
+        await SubmitAsync(visitor, survey.Id, new SubmitSurveyResponseRequest(
+            Answers: [new SurveyAnswerInput(choice, "hybrid")],
+            SessionId: sessionId,
+            IsComplete: false));
+
+        var view = (await visitor.GetFromJsonAsync<SurveyRespondView>(
+            $"/surveys/{survey.Id}/respond?sessionId={sessionId}"))!;
+        Assert.Equal("hybrid", view.InProgress!.Answers.Single(a => a.QuestionId == choice).Value);
+    }
+
+    /// <summary>
+    /// The arm the ruling insisted on: a respondent WITH an account keeps resume whatever the
+    /// survey says, because a mass-invite respondent signs in and an eighty-item instrument is not
+    /// something to make them start over. The flag reads `ActingUserId is null`, not the survey's
+    /// anonymity, for the reason `AsksSelfDeclaredDemographics` gives.
+    /// </summary>
+    [Fact]
+    public async Task A_signed_in_respondent_resumes_even_when_the_survey_says_one_session_only()
+    {
+        var survey = await ActiveSurveyAsync(
+            [WorkModeQuestion(bilingual: false)],
+            new SurveySettingsInput(SelfDeclaredDemographics: false, OneSessionOnly: true));
+        var employee = await EmployeeAsync(_departmentId);
+        var sessionId = Guid.NewGuid().ToString("N");
+        var choice = survey.Questions.Single(q => q.Type == QuestionTypes.MultipleChoice).Id;
+
+        await SubmitAsync(employee, survey.Id, new SubmitSurveyResponseRequest(
+            Answers: [new SurveyAnswerInput(choice, "hybrid")],
+            SessionId: sessionId,
+            IsComplete: false));
+
+        var view = (await employee.GetFromJsonAsync<SurveyRespondView>(
+            $"/surveys/{survey.Id}/respond?sessionId={sessionId}"))!;
+        Assert.Equal("hybrid", view.InProgress!.Answers.Single(a => a.QuestionId == choice).Value);
+    }
+
     [Fact]
     public async Task Revisiting_a_question_updates_the_answer_rather_than_conflicting()
     {

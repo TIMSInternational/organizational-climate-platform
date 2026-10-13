@@ -1439,6 +1439,7 @@ public static class SurveyEndpoints
         if (input.InvitationIncludeCredentials.HasValue) settings.InvitationIncludeCredentials = input.InvitationIncludeCredentials.Value;
         if (input.InvitationSendImmediately.HasValue) settings.InvitationSendImmediately = input.InvitationSendImmediately.Value;
         if (input.InvitationBrandingEnabled.HasValue) settings.InvitationBrandingEnabled = input.InvitationBrandingEnabled.Value;
+        if (input.OneSessionOnly.HasValue) settings.OneSessionOnly = input.OneSessionOnly.Value;
 
         if (input.InvitationCustomMessage is not null)
         {
@@ -1528,7 +1529,8 @@ public static class SurveyEndpoints
                 locale, survey.Language, "settings.invitationCustomSubject", fallbackFields),
             survey.Settings.InvitationIncludeCredentials,
             survey.Settings.InvitationSendImmediately,
-            survey.Settings.InvitationBrandingEnabled);
+            survey.Settings.InvitationBrandingEnabled,
+            survey.Settings.OneSessionOnly);
 
         // ResolvedLocale names the language the caller is actually READING, not the one
         // they asked for. A Spanish-only survey fetched with ?lang=en comes back in

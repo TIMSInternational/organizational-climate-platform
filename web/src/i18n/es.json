@@ -4458,7 +4458,11 @@
         "participantIdentityLabel": "Preguntar el nombre de quien responde",
         "participantIdentityHelp": "Quien responda por el enlace o el código QR escribirá su nombre y, si quiere, su correo antes de la primera pregunta. Se registra que respondió y el día, aparte de sus respuestas y sin vincularse a ellas. Sirve para saber quién falta por responder.",
         "participantIdentityOn": "El enlace público ahora pregunta el nombre de quien responde.",
-        "participantIdentityOff": "El enlace público ya no pregunta el nombre de quien responde."
+        "participantIdentityOff": "El enlace público ya no pregunta el nombre de quien responde.",
+        "oneSessionOnlyLabel": "Una sola sesión en el enlace público",
+        "oneSessionOnlyHelp": "Quien responde sin cuenta empieza de nuevo si vuelve. No se le devuelven sus respuestas.",
+        "oneSessionOnlyOn": "El enlace público ya no devuelve las respuestas.",
+        "oneSessionOnlyOff": "El enlace público vuelve a devolver las respuestas."
       },
       "participation": {
         "title": "Participación",

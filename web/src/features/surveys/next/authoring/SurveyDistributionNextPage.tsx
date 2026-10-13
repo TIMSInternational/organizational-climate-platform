@@ -307,6 +307,20 @@ export function DistributionView({
             />
           </div>
 
+          {/* Beside it, because it also changes what the PUBLIC LINK does. Off by default and
+              per-survey on purpose (ruled 2026-10-13): applied per RESPONDENT it would have taken
+              effect instantly on every live survey, and someone sixty items into eighty who
+              reloaded would have lost the lot. It ends resuming, never the session id. */}
+          <div className="mt-4 border-t border-line-default pt-4">
+            <SwitchField
+              label={t('surveys.next.share.oneSessionOnlyLabel')}
+              description={t('surveys.next.share.oneSessionOnlyHelp')}
+              checked={survey.settings.oneSessionOnly ?? false}
+              disabled={!actionable || busy}
+              onChange={actions.setOneSessionOnly}
+            />
+          </div>
+
           {/* Beside the demographics switch, for its reason: it changes what the PUBLIC LINK
               asks. NOT gated on anonymity (ruled 2026-10-12): every survey has a link, nobody
               who opens one logs in, and the server asks every link visitor
