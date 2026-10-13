@@ -7,8 +7,7 @@ import {
   type PublicMicroclimateDetail,
   type Question,
 } from '../api/microclimates'
-import { useTranslation } from '../../../i18n'
-import { detectLocale } from '../../../i18n/locale'
+import { isLocale, useTranslation } from '../../../i18n'
 import { Alert, AlertDescription, AlertTitle, Button, Input } from '../../../components/ui'
 import { SegmentedScale } from '../../../components/ui/SegmentedScale'
 import { MINIMUM_RESPONDENTS } from '../microclimatePrivacy'
@@ -493,7 +492,7 @@ export default function MicroclimatePulseForm({
    */
   onSubmitted?: () => void
 }) {
-  const { t } = useTranslation()
+  const { t, locale, adoptContentLocale } = useTranslation()
   const id = microclimateId
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const [microclimate, setMicroclimate] = useState<PublicMicroclimateDetail | null>(null)
@@ -513,17 +512,32 @@ export default function MicroclimatePulseForm({
   const [submitted, setSubmitted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
-  // An invited respondent has no stored preference and no authenticated locale, so
-  // the language they are served has to come from the request itself -- exactly the
-  // `?lang=` parameter web/src/i18n/README.md anticipated for this one public route.
-  const locale = detectLocale()
-
+  // A respondent arriving from a QR or a link has no stored preference and no
+  // authenticated locale, so the language they are served comes from the request itself --
+  // exactly the `?lang=` parameter web/src/i18n/README.md anticipated for this one public
+  // route. Taken from the provider rather than by calling `detectLocale()` here: the two
+  // agree on first render (the provider's initial locale IS `detectLocale()`), but only the
+  // provider's value moves when the chrome adopts the content's language below, and a
+  // request that kept asking in the old locale would be asking for something nobody is
+  // reading.
   useEffect(() => {
     if (!id) return
     getMicroclimatePublic(baseUrl, id, locale)
       .then(setMicroclimate)
       .catch((err) => setError(toPageError(err)))
   }, [id, baseUrl, locale])
+
+  // The frame follows the content, exactly as `SurveyRespondForm` does -- the same defect
+  // was on both respond surfaces, and mode 3 (ruled 2026-10-13) makes the link the ONLY way
+  // into a microclimate, so this is now the only chrome a respondent ever sees. Does not
+  // persist, and is a no-op once the respondent has used the picker on `RespondShell`;
+  // guarded on inequality because `locale` is a dependency of the read above, so adopting
+  // re-issues it once and must then settle rather than loop.
+  useEffect(() => {
+    const resolved = microclimate?.resolvedLocale
+    if (!resolved || !isLocale(resolved) || resolved === locale) return
+    adoptContentLocale(resolved)
+  }, [microclimate, locale, adoptContentLocale])
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()

@@ -3,7 +3,7 @@ import { render, screen, cleanup, waitFor, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import MicroclimateRespondPage from './MicroclimateRespondPage'
-import { TranslationProvider } from '../../../i18n'
+import { TranslationProvider, type Locale } from '../../../i18n'
 import { LOCALE_STORAGE_KEY } from '../../../i18n/locale'
 import type { PublicMicroclimateDetail } from '../api/microclimates'
 import { MINIMUM_RESPONDENTS } from '../microclimatePrivacy'
@@ -62,9 +62,15 @@ function pulseMicroclimate(): PublicMicroclimateDetail {
   }
 }
 
-function renderPage() {
+/**
+ * `initialLocale` stands in for detection's browser arm without touching `navigator`:
+ * stubbing a read-only navigator property leaks into every test that follows it, and the
+ * provider's own initial locale IS `detectLocale()`, so starting it explicitly models the
+ * same thing.
+ */
+function renderPage(initialLocale?: Locale) {
   return render(
-    <TranslationProvider>
+    <TranslationProvider initialLocale={initialLocale}>
       <MemoryRouter initialEntries={['/microclimates/m1/respond']}>
         <Routes>
           <Route path="/microclimates/:id/respond" element={<MicroclimateRespondPage />} />
@@ -86,6 +92,29 @@ describe('MicroclimateRespondPage option values', () => {
     cleanup()
     window.localStorage.clear()
     vi.unstubAllGlobals()
+  })
+
+  /**
+   * The same defect `SurveyRespondForm` had: the questions came back in Spanish because the
+   * session is written in Spanish, while the chrome around them stayed in whatever the
+   * device said. Mode 3 (ruled 2026-10-13) makes the QR or the link the ONLY way into a
+   * microclimate, so this frame is the only one a respondent ever sees.
+   *
+   * The storage is cleared deliberately: with a preference stored this must NOT fire, which
+   * is what `adoptContentLocale` guards and what the picker on `RespondShell` is for.
+   */
+  it('renders a Spanish session in Spanish chrome when the respondent has expressed no preference', async () => {
+    window.localStorage.clear()
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify(spanishMicroclimate()), { status: 200 }))
+
+    renderPage('en')
+
+    // A catalogue string the payload has no say in, so it is the chrome and not the content.
+    expect(await screen.findByRole('link', { name: 'Ir a las preguntas' })).toBeTruthy()
+    expect(screen.queryByRole('link', { name: 'Skip to the questions' })).toBeNull()
+    expect(document.documentElement.lang).toBe('es')
+    // Not remembered: answering one Spanish session is not a preference about this reader.
+    expect(window.localStorage.getItem(LOCALE_STORAGE_KEY)).toBeNull()
   })
 
   it('requests the microclimate in the respondent\'s own locale', async () => {
