@@ -1390,19 +1390,50 @@ describe('SurveyRespondForm — the demographic prelude', () => {
     expect(screen.queryByText('¿Qué tan satisfecho estás?')).toBeNull()
   })
 
-  it('offers "prefiero no decir" on an OPTIONAL field and not on a required one', async () => {
+  it('offers no "prefiero no decir", on an optional field either', async () => {
+    // `sexo` is the OPTIONAL field — the one that used to be given a synthesised decline
+    // choice. Ruled 2026-10-13: the options are exactly the field definition's.
     respondWith(view({ demographics: [area(), sexo] }))
     renderForm({ publicEntry: true })
     await screen.findByText('¿En qué área trabaja?')
 
-    // Whether a field may be declined is the admin's call, taken on the field.
-    expect(screen.queryByLabelText(copy.es('surveyRespond.demographics.preferNotToSay'))).toBeNull()
+    expect(screen.queryByLabelText('Prefiero no decir')).toBeNull()
+    expect(screen.getAllByRole('radio')).toHaveLength(2)
 
     await userEvent.click(screen.getByLabelText('Operaciones'))
     await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
 
     await screen.findByText('Sexo')
-    expect(screen.getByLabelText(copy.es('surveyRespond.demographics.preferNotToSay'))).toBeTruthy()
+    expect(screen.queryByLabelText('Prefiero no decir')).toBeNull()
+    // The field's own two options and no third one.
+    expect(screen.getAllByRole('radio')).toHaveLength(2)
+  })
+
+  it('does not let a blank hide in the dropdown either', async () => {
+    // Over RADIO_CEILING options the field renders a native `<select>`, whose blank
+    // placeholder used to be SELECTABLE and labelled "Prefiero no decir" on a field that
+    // was not required — the second surface, and the one that would have survived fixing
+    // only the radio list above.
+    const muchas = area({
+      field: 'antiguedad',
+      label: 'Antigüedad',
+      required: false,
+      options: Array.from({ length: 7 }, (_, index) => ({
+        value: `a${index}`,
+        label: `Tramo ${index}`,
+      })),
+    })
+    respondWith(view({ demographics: [muchas] }))
+    renderForm({ publicEntry: true })
+    await screen.findByText('Antigüedad')
+
+    const placeholder = screen.getByRole('option', {
+      name: copy.es('surveyRespond.demographics.choose'),
+    }) as HTMLOptionElement
+    expect(placeholder.disabled).toBe(true)
+    expect(screen.queryByRole('option', { name: 'Prefiero no decir' })).toBeNull()
+    // Seven real options plus the one disabled placeholder.
+    expect(screen.getAllByRole('option')).toHaveLength(8)
   })
 
   it('sends what was declared on the COMPLETING post, keyed by field and valued by option', async () => {
@@ -1426,15 +1457,29 @@ describe('SurveyRespondForm — the demographic prelude', () => {
     expect(lastSubmission().demographics).toEqual({ area: 'operaciones', sexo: 'mujer' })
   })
 
-  it('records a DECLINED optional field as an empty value rather than omitting it', async () => {
-    respondWith(view({ demographics: [area(), sexo] }))
+  it('ends with a specific value for every field it asked, and no blank', async () => {
+    // Every self-declared field now arrives `required: true` — the server forces it, for
+    // the reason it already forced the área: this respondent has no roster row, so these
+    // answers ARE the segmentation and a blank one is a response no breakdown can place
+    // (SurveyResponseEndpoints.LoadSelfDeclaredFieldsAsync).
+    respondWith(view({ demographics: [area(), area({ field: 'sexo', label: 'Sexo', order: 1, options: [
+      { value: 'hombre', label: 'Hombre' },
+      { value: 'mujer', label: 'Mujer' },
+    ] })] }))
     renderForm({ publicEntry: true })
     await screen.findByText('¿En qué área trabaja?')
 
     await userEvent.click(screen.getByLabelText('Operaciones'))
     await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
     await screen.findByText('Sexo')
-    await userEvent.click(screen.getByLabelText(copy.es('surveyRespond.demographics.preferNotToSay')))
+
+    // Untouched, the way on refuses — there is no longer any control that would have let
+    // the respondent past this screen without saying something.
+    await userEvent.click(screen.getByRole('button', { name: copy.es('surveyRespond.demographics.start') }))
+    expect(screen.getByText(copy.es('surveyRespond.demographics.missing'))).toBeTruthy()
+    expect(screen.queryByText('¿Qué tan satisfecho estás?')).toBeNull()
+
+    await userEvent.click(screen.getByLabelText('Mujer'))
     await userEvent.click(screen.getByRole('button', { name: copy.es('surveyRespond.demographics.start') }))
 
     await screen.findByText('¿Qué tan satisfecho estás?')
@@ -1442,10 +1487,8 @@ describe('SurveyRespondForm — the demographic prelude', () => {
     await userEvent.click(screen.getByRole('button', { name: copy.es('surveyRespond.submitResponse') }))
 
     await screen.findByText(copy.es('surveyRespond.thankYouTitle'))
-    // An empty string is a deliberate declination, which the server treats as clearing
-    // the answer so no row is written. Omitting the key entirely would be the shape of
-    // a screen the respondent never reached.
-    expect(lastSubmission().demographics).toEqual({ area: 'operaciones', sexo: '' })
+    expect(lastSubmission().demographics).toEqual({ area: 'operaciones', sexo: 'mujer' })
+    expect(Object.values(lastSubmission().demographics ?? {})).not.toContain('')
   })
 
   it('never puts a demographic on a PARTIAL save', async () => {

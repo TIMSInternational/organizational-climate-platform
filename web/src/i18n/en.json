@@ -5407,7 +5407,6 @@
     "demographics": {
       "eyebrow": "About you",
       "intro": "Before the questions, tell us a little about yourself. That is what lets the results be compared between groups. Nothing is reported about a group of fewer than 5 people.",
-      "preferNotToSay": "Prefer not to say",
       "choose": "Choose an option",
       "missing": "Choose an option to continue.",
       "start": "Start the survey"

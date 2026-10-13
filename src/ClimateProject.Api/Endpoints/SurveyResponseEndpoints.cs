@@ -1123,8 +1123,18 @@ public static class SurveyResponseEndpoints
             .ToDictionary(g => g.Key, g => (IReadOnlyList<DemographicFieldOption>)g.ToList());
 
         offered.AddRange(fields
+            // `Required: true`, not `f.Required`. Ruled 2026-10-13: the respondent must end
+            // with a specific value. In THIS flow the self-declared demographics are the
+            // whole segmentation basis -- the respondent has no account and no roster row, so
+            // a blank field is a response no breakdown can place, which is the same argument
+            // `LoadSelfDeclaredAreaAsync` already makes for the área. The admin's own
+            // `DemographicField.Required` (default false) still governs every other surface:
+            // nothing is written to a company's field definitions, so Eagle's are untouched.
+            // Forced here rather than at the DTO so that `ToDefinitions` -- the validator the
+            // POST runs on completion -- is forced by the same line, and the form cannot ask
+            // what the submit then accepts blank.
             .Select(f => new SelfDeclaredField(
-                f.Field, f.LabelEn, f.LabelEs, f.Required, f.Order,
+                f.Field, f.LabelEn, f.LabelEs, Required: true, f.Order,
                 byField.GetValueOrDefault(f.Id, [])))
             .Where(f => f.Options.Count > 0));
         return offered;

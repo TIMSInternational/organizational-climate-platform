@@ -31,15 +31,25 @@ import type { SurveyRespondDemographicField } from '../api/surveyResponses'
  * on a phone, which is a full-screen wheel on iOS and a sheet on Android, and no
  * keyboard, focus or announcement behaviour has to be re-implemented to get there.
  *
- * ## "Prefiero no decir" is an option, not a skipped screen
+ * ## There is no "Prefiero no decir", because the Excel does not have one
  *
- * A field the admin left optional offers declining as a choice beside the real ones,
- * so the respondent makes a deliberate decision rather than discovering that the way
- * on works without touching anything. It submits an empty value, which
- * `DemographicValueValidation` already treats as clearing the answer, so no row is
- * written and no new server behaviour was invented to carry it. A required field does
- * not offer it: whether a field may be declined is the admin's call, taken on the
- * field, and this screen does not get to overrule it.
+ * This screen used to APPEND a decline choice to any field the admin had left optional,
+ * and to label the `<select>`'s blank placeholder with it, making the blank entry
+ * selectable. Both were the platform inventing an option: neither is in the company's
+ * field definition. The reasoning for it was that a respondent should make a deliberate
+ * decision rather than discover the way on works untouched — which is right, and is now
+ * served by refusing to let them past instead.
+ *
+ * Ruled 2026-10-13: "los demográficos deben quedar exactamente igual que en el Excel; si
+ * el Excel no dice 'prefiero no decir', no hay que ponerlo", and the person must end with
+ * a specific value. So the choices are `field.options` and nothing else, and the
+ * placeholder is `disabled` whatever the field says. A company that wants a decline
+ * choice adds it to the field definition, where it arrives as a real option like any
+ * other.
+ *
+ * The consequence, stated rather than buried: a respondent can no longer decline a
+ * sensitive field. What protects them is the read-time floor on the aggregate, not an
+ * opt-out on the screen.
  *
  * ## Every control emits the stable option VALUE
  *
@@ -50,9 +60,6 @@ import type { SurveyRespondDemographicField } from '../api/surveyResponses'
 
 /** The longest option list that still reads as a list rather than a scroll. */
 export const RADIO_CEILING = 6
-
-/** The value a declined optional field submits. Empty clears the answer server-side. */
-export const DECLINED = ''
 
 export default function RespondDemographicField({
   field,
@@ -66,7 +73,7 @@ export default function RespondDemographicField({
   field: SurveyRespondDemographicField
   position: number
   total: number
-  /** The chosen option value, {@link DECLINED} for a declined field, or undefined for untouched. */
+  /** The chosen option value, or undefined for untouched. Never an empty string: see above. */
   value: string | undefined
   invalid: boolean
   disabled: boolean
@@ -79,11 +86,15 @@ export default function RespondDemographicField({
   const errorId = `${fieldId}-error`
   const label = field.label ?? field.field
 
-  // Declining is a choice on the same list as the real options, so it is reachable by
-  // the same arrow keys and reads in the same pass.
-  const choices = field.required
-    ? field.options
-    : [...field.options, { value: DECLINED, label: t('demographics.preferNotToSay') }]
+  // The choices are the field's own options and nothing else. A "Prefiero no decir" entry
+  // used to be APPENDED here whenever the field was not required — synthesised by the
+  // platform, never present in the company's field definition. Ruled 2026-10-13: "los
+  // demográficos deben quedar exactamente igual que en el Excel; si el Excel no dice
+  // 'prefiero no decir', no hay que ponerlo", and the respondent must end with a specific
+  // value. A company that genuinely wants a decline choice adds it as a real option, which
+  // is what "igual que en el Excel" means — and it then arrives in `field.options` like any
+  // other, reachable by the same arrow keys the old note was written for.
+  const choices = field.options
 
   return (
     <fieldset
@@ -161,12 +172,15 @@ export default function RespondDemographicField({
             // of options, and the respond page wants the platform's own picker.
             className="h-11 w-full rounded-lg text-respond text-fg-primary"
           >
-            {/* The placeholder is not a selectable answer: an untouched required field
-                has to stay untouched, so the way on can refuse it rather than record
-                the first option as a choice nobody made. A DECLINED option, where the
-                admin allowed one, is a real entry further down the list. */}
-            <option value="" disabled={field.required}>
-              {field.required ? t('demographics.choose') : t('demographics.preferNotToSay')}
+            {/* The placeholder is never a selectable answer. It used to be selectable on a
+                field that was not required, labelled "Prefiero no decir", which made the
+                BLANK entry read as an answer — a second surface for the synthesised decline
+                option removed above, and the one that would have survived fixing only the
+                radio list. `disabled` unconditionally: an untouched field has to stay
+                untouched, so the way on can refuse it rather than record the first option as
+                a choice nobody made. */}
+            <option value="" disabled>
+              {t('demographics.choose')}
             </option>
             {field.options.map((option) => (
               <option key={option.value} value={option.value}>

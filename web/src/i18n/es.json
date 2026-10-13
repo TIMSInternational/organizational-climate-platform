@@ -5407,7 +5407,6 @@
     "demographics": {
       "eyebrow": "Sobre usted",
       "intro": "Antes de las preguntas, cuéntenos un poco sobre usted. Así los resultados se pueden comparar entre grupos. Nada se informa sobre un grupo de menos de 5 personas.",
-      "preferNotToSay": "Prefiero no decir",
       "choose": "Elija una opción",
       "missing": "Elija una opción para continuar.",
       "start": "Empezar la encuesta"

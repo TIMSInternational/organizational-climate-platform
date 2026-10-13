@@ -209,9 +209,11 @@ export default function SurveyRespondForm({
 
   /**
    * What the respondent has said about themselves, keyed by field, for the demographic
-   * prelude below. `DECLINED` (an empty string) is a real entry and not an absence: it
-   * is how an optional field records that the respondent chose not to say, which the
-   * server treats as clearing the answer so no row is written.
+   * prelude below. Every entry is a real option value. It used to be able to hold an
+   * empty string — `DECLINED`, the synthesised "prefiero no decir" — which the server
+   * treated as clearing the answer; that option was removed on 2026-10-13 (see
+   * `RespondDemographicField`), so a field is either answered with one of its own
+   * options or not present at all.
    *
    * Held here rather than merged into `answers` because these are not answers: they
    * have no question id, they are validated against the company's configuration rather
