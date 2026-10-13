@@ -947,7 +947,11 @@ describe('SurveyRespondForm confirmation', () => {
     expect(screen.getByText(/menos de 5 personas/)).toBeTruthy()
     // The close date is `view.endDate`, spelled out rather than abbreviated.
     expect(screen.getByText('La encuesta cierra el 12 de septiembre de 2026')).toBeTruthy()
-    expect(screen.getByText('Los resultados llegan a su departamento')).toBeTruthy()
+    // Ruled 2026-10-13: the card may not promise the results reach the respondent's
+    // department, nor that they will be emailed when results publish.
+    expect(screen.getByText('Nosotros procesamos y analizamos los resultados')).toBeTruthy()
+    expect(screen.queryByText(/llegan a su departamento/)).toBeNull()
+    expect(screen.queryByText(/avisaremos por correo/)).toBeNull()
   })
 
   it('says plainly that it cannot show the answers again', async () => {
