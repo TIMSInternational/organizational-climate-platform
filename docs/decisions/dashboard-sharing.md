@@ -1,5 +1,10 @@
 # Decision needed: may a dashboard be shared on an anonymous link? (#134)
 
+> **Superseded on the number, 2026-10-13:** the privacy floor is **3**, not 5 — ruled by
+> Federico, platform-wide. The reasoning below stands as written; only the threshold moved.
+> See [`privacy-floor-is-three.md`](privacy-floor-is-three.md).
+
+
 **Status: EXPORT SHIPPED. SHARING DEFERRED, and it needs Federico — it would be this
 product's second anonymous public surface.**
 Written 2026-09-05 against `main` at `6f8e1296`.

@@ -1,5 +1,10 @@
 # Decision: `Comparison` and `Scope` stay withheld from public report share links
 
+> **Superseded on the number, 2026-10-13:** the privacy floor is **3**, not 5 — ruled by
+> Federico, platform-wide. The reasoning below stands as written; only the threshold moved.
+> See [`privacy-floor-is-three.md`](privacy-floor-is-three.md).
+
+
 **Status: DECIDED 2026-09-05 by Federico Tafur. Both sections remain withheld.**
 Recorded against `main` at `6f8e1296`.
 

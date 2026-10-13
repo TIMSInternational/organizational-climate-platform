@@ -70,7 +70,7 @@ downstream, and each has been deferred at least once already.
 | 19 | | **#156 steps 1–7** as written: GitHub `staging` environment → Supabase DB → three Secrets Manager entries → bootstrap stack (+ OIDC provider if DEV) → Vercel project → `gh workflow run deploy-staging.yml` → wire web to API. | 6, 7, 8, 9 |
 | 20 | [H] | **Step 5a — turn Vercel Deployment Protection off, or decide to leave it on** and rewrite step 7's smoke test. On by default; 302s every request including `curl`, and reads as a broken deploy for an hour. | 19 |
 | 21 | | **Step 8 — bootstrap the first user out-of-band.** Without this the environment is unreachable and #156 fails its own acceptance criteria. The exact three statements are in §3.2. Choose a **fresh** password and an admin email domain that does not exist in production. | 19 |
-| 22 | | **Step 8.5 — seed synthetic data**, respecting the anonymity floor of 5 and the authenticated-respondent constraint. Re-derive both from source before seeding, not after. | 7, 21 |
+| 22 | | **Step 8.5 — seed synthetic data**, respecting the anonymity floor of 3 and the authenticated-respondent constraint. Re-derive both from source before seeding, not after. | 7, 21 |
 | 23 | [H] | **Turn `staging` on in the drift/alarm story too**, or note deliberately that staging is unmonitored. | 16, 19 |
 
 ### Then — tracking, and the tested rollback

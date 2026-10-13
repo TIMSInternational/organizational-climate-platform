@@ -1,5 +1,10 @@
 # Decision: the public surface says the promise once — RULED 2026-09-22
 
+> **Superseded on the number, 2026-10-13:** the privacy floor is **3**, not 5 — ruled by
+> Federico, platform-wide. The reasoning below stands as written; only the threshold moved.
+> See [`privacy-floor-is-three.md`](privacy-floor-is-three.md).
+
+
 **Status: RULED.** Federico approved the "La sede" direction and then said the text *"is all
 the same."* It was. This file records the measurement, the editorial rule that follows from
 it, and the deck the implementation draws from. Owner: Federico.

@@ -1,5 +1,10 @@
 # Self-service signup: there is no gate
 
+> **Superseded on the number, 2026-10-13:** the privacy floor is **3**, not 5 — ruled by
+> Federico, platform-wide. The reasoning below stands as written; only the threshold moved.
+> See [`privacy-floor-is-three.md`](privacy-floor-is-three.md).
+
+
 **Status: UNDECIDED. Needs Federico.**
 **Measured 2026-09-03 at `835bcee`.** Every line below was re-opened in the working tree
 before it was written here.
