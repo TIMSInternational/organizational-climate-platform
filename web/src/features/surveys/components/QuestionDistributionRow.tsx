@@ -1,5 +1,5 @@
 import { useTranslation } from '../../../i18n'
-import { DistributionStrip, formatMetric, type MetricFormat } from '../../../components/charts'
+import { DistributionStrip, formatMetric, scoreText, type MetricFormat, type ResultScale } from '../../../components/charts'
 import { cn } from '../../../lib/cn'
 import type { SurveyQuestionResult } from '../api/surveyResults'
 import type { DistributionStripModel } from '../surveyResultsView'
@@ -15,6 +15,8 @@ interface QuestionDistributionRowProps {
   strip: DistributionStripModel
   /** The per-question baseline the standing chip reads. `null` renders no chip. */
   standings: QuestionStandings | null
+  /** The company's result scale. Only a 1–5 question's average is read on it; default `mean`. */
+  scale?: ResultScale
   /** Already-translated short identifier, e.g. "Q3". */
   shortLabel: string
   /** Already-translated dimension display text — the category, or the uncategorised word. */
@@ -55,6 +57,7 @@ export default function QuestionDistributionRow({
   shortLabel,
   dimensionName,
   uncategorised,
+  scale = 'mean',
 }: QuestionDistributionRowProps) {
   const { t, locale } = useTranslation()
 
@@ -99,7 +102,9 @@ export default function QuestionDistributionRow({
             <span>
               {t('surveyResults.averageLabel')}{' '}
               <span className="font-mono font-semibold tabular-nums text-fg-primary">
-                {formatMetric(question.average, SCORE_FORMAT, locale)}
+                {question.scaleMin === 1 && question.scaleMax === 5
+                  ? scoreText(question.average, scale, locale, 1)
+                  : formatMetric(question.average, SCORE_FORMAT, locale)}
               </span>
             </span>
           )}

@@ -1,5 +1,5 @@
 import { authFetch } from '../../api/authFetch'
-import type { ResultBands } from '../../components/charts'
+import { parseResultScale, type ResultBands } from '../../components/charts'
 
 /** `ResultBandsDto` on the wire: two boundaries and three names, a null name meaning "the default". */
 export interface ResultBandsWire {
@@ -8,6 +8,8 @@ export interface ResultBandsWire {
   criticalName: string | null
   opportunityName: string | null
   strengthName: string | null
+  /** `"mean"` or `"percent"`; absent from an API that predates the scale, which means mean. */
+  scale?: 'mean' | 'percent'
 }
 
 export function fromWire(wire: ResultBandsWire): ResultBands {
@@ -15,6 +17,7 @@ export function fromWire(wire: ResultBandsWire): ResultBands {
     opportunityMin: wire.opportunityMin,
     strengthMin: wire.strengthMin,
     names: { critical: wire.criticalName, opportunity: wire.opportunityName, strength: wire.strengthName },
+    scale: parseResultScale(wire.scale),
   }
 }
 
@@ -25,6 +28,7 @@ export function toWire(bands: ResultBands): ResultBandsWire {
     criticalName: bands.names.critical,
     opportunityName: bands.names.opportunity,
     strengthName: bands.names.strength,
+    scale: bands.scale,
   }
 }
 

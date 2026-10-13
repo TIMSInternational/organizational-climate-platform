@@ -35,7 +35,16 @@ export interface ResultBands {
   strengthMin: number
   /** The company's own names; `null` is the product's default name in the reader's language. */
   names: Readonly<Record<ResultBandKey, string | null>>
+  /**
+   * How a person reads a score: `mean` is the 1,00–5,00 mean itself; `percent` is the same
+   * mean on 0–100 (`mean × 20`), the client's EAGLE convention. The data, the boundaries
+   * above and every banding decision stay on 1–5 — only the printed figure changes, and it
+   * changes in exactly one place (`scoreText` and its siblings below).
+   */
+  scale: ResultScale
 }
+
+export type ResultScale = 'mean' | 'percent'
 
 export const SCALE_MIN = 1
 export const SCALE_MAX = 5
@@ -47,6 +56,7 @@ export const DEFAULT_RESULT_BANDS: ResultBands = {
   opportunityMin: 3,
   strengthMin: 4,
   names: { critical: null, opportunity: null, strength: null },
+  scale: 'mean',
 }
 
 /** Highest first — the order every legend and the settings card read in. */
@@ -155,16 +165,96 @@ function sharedLeadingWords(bands: ResultBands): number {
   return shared
 }
 
-/** Two decimals in the reader's locale ("3,00"), the precision the scale is defined at. */
-export function boundaryText(value: number, locale: string): string {
+/** A wire value as a scale: anything but `"percent"` — absent included — is the 1–5 mean. */
+export function parseResultScale(raw: unknown): ResultScale {
+  return raw === 'percent' ? 'percent' : 'mean'
+}
+
+/** `mean × 20`: 1,00 → 20, 3,80 → 76, 5,00 → 100. */
+export const PERCENT_PER_POINT = 20
+
+/** The figure a reader sees for a 1–5 mean (or a 1–5 delta) on this scale. */
+export function scaledValue(value: number, scale: ResultScale): number {
+  return scale === 'percent' ? value * PERCENT_PER_POINT : value
+}
+
+/**
+ * The decimals a value prints at on this scale. On 0–100 one decimal fewer than the 1–5
+ * call asked for, because ×20 moves the figure one order up: 4,07 → "81,4", 4,1 → "81".
+ */
+export function scaleDecimals(decimals: number, scale: ResultScale): number {
+  return scale === 'percent' ? Math.max(0, decimals - 1) : decimals
+}
+
+/** The top of the scale a reader is told ("de 5" / "de 100"). */
+export function scaleMax(scale: ResultScale): number {
+  return scale === 'percent' ? 100 : SCALE_MAX
+}
+
+/** "de 5" / "de 100" — the unit a headline score is printed with. */
+export function scaleUnitText(scale: ResultScale, t: TranslateFn): string {
+  return scale === 'percent' ? t('resultBands.scale.unitPercent') : t('resultBands.results.climateUnit')
+}
+
+function scoreFormat(value: number, scale: ResultScale, locale: string, decimals: number, signed: boolean): string {
+  const places = scaleDecimals(decimals, scale)
+  return new Intl.NumberFormat(locale, {
+    minimumFractionDigits: places,
+    maximumFractionDigits: places,
+    ...(signed ? { signDisplay: 'always' as const } : {}),
+  }).format(scaledValue(value, scale))
+}
+
+/**
+ * **The** place a 1–5 mean becomes reader text. `mean`: "4,1" (unchanged from before the
+ * scale existed); `percent`: "81". `decimals` is the 1–5 precision the caller wants.
+ */
+export function scoreText(value: number, scale: ResultScale, locale: string, decimals = 1): string {
+  return scoreFormat(value, scale, locale, decimals, false)
+}
+
+/** A change between two means with its sign always shown: "+0,32" / "+6,4". */
+export function signedScoreText(delta: number, scale: ResultScale, locale: string, decimals = 1): string {
+  return scoreFormat(delta, scale, locale, decimals, true)
+}
+
+/**
+ * A change as the results screens print one: rounded to what is shown first, then a plus
+ * only when that figure is above zero — "+0,12", "0,00", "-0,3" (on 0–100: "+2,4", "0", "-6").
+ */
+export function deltaScoreText(delta: number, scale: ResultScale, locale: string, decimals = 1): string {
+  const shown = shownDelta(delta, scale, decimals)
+  const places = scaleDecimals(decimals, scale)
+  const text = new Intl.NumberFormat(locale, { minimumFractionDigits: places, maximumFractionDigits: places }).format(shown)
+  return shown > 0 ? `+${text}` : text
+}
+
+/** A change as the figure the reader sees, rounded the way it is printed (`|| 0` folds -0). */
+export function shownDelta(delta: number, scale: ResultScale, decimals = 1): number {
+  const step = 10 ** scaleDecimals(decimals, scale)
+  return Math.round(scaledValue(delta, scale) * step) / step || 0
+}
+
+/**
+ * A boundary in the reader's locale. `mean`: two decimals, the precision the scale is
+ * defined at ("3,00"). `percent`: the 0–100 figure with at most one decimal, so EAGLE's
+ * 3,80 / 4,30 read "76" / "86" and 2,99 reads "59,8".
+ */
+export function boundaryText(value: number, locale: string, scale: ResultScale = 'mean'): string {
+  if (scale === 'percent') {
+    return new Intl.NumberFormat(locale, { minimumFractionDigits: 0, maximumFractionDigits: 1 }).format(
+      Math.round(value * PERCENT_PER_POINT * 10) / 10,
+    )
+  }
   return new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)
 }
 
 /** "4,00 a 5,00" / "menos de 3,00" — the range a legend prints beside the name. */
 export function bandRangeText(key: ResultBandKey, bands: ResultBands, t: TranslateFn, locale: string): string {
   const { min, max } = bandRange(key, bands)
-  if (key === 'critical') return t('resultBands.range.under', { value: boundaryText(bands.opportunityMin, locale) })
-  return t('resultBands.range.between', { min: boundaryText(min, locale), max: boundaryText(max, locale) })
+  const text = (value: number) => boundaryText(value, locale, bands.scale)
+  if (key === 'critical') return t('resultBands.range.under', { value: text(bands.opportunityMin) })
+  return t('resultBands.range.between', { min: text(min), max: text(max) })
 }
 
 /** The whole reading in words, for an accessible label: "2,4 — Área crítica". */

@@ -10,15 +10,16 @@ import {
   SCALE_MIN,
   boundaryText,
   type BandScaleSegment,
+  type ResultScale,
   type ResultBandKey,
   type ResultBands,
 } from '../../../../components/charts'
-import { Button, Input } from '../../../../components/ui'
+import { Button, Input, RadioGroup, RadioGroupItem } from '../../../../components/ui'
 import { cn } from '../../../../lib/cn'
 import { Panel } from '../super/parts'
-import { gapExample, judgeBands, type BandsDraft, type BandsProblem } from './bandsDraft'
+import { gapExample, judgeBands, parseBoundary, type BandsDraft, type BandsProblem } from './bandsDraft'
 
-type Edge = keyof Omit<BandsDraft, 'names'>
+type Edge = keyof Omit<BandsDraft, 'names' | 'scale'>
 
 /** Each band's two edges in the draft; `null` is the fixed end of the scale. */
 const EDGES: Record<ResultBandKey, { from: Edge | null; to: Edge | null }> = {
@@ -37,6 +38,9 @@ const COLS = 'grid grid-cols-[7rem_minmax(0,1fr)_6rem_6rem] items-center gap-3'
  *   amber and red are the product's, so a colour means the same thing to every tenant.
  * - **1,00 and 5,00 are not editable**: the scale always starts and ends there, so the two
  *   outer boxes are disabled and print the fixed value.
+ * - **The scale a reader sees** (1–5 mean or 0–100) is chosen above the bar. The edges are
+ *   still typed on 1–5 — that is what is stored and validated — and on 0–100 each box shows
+ *   the figure a reader will see beside it ("= 76 de 100").
  * - **The four inner edges are**, as text, and the card judges them as typed
  *   (`judgeBands`): a gap or an overlap is named in words with the values on either side,
  *   the boxes that make it are marked invalid and point at the message, the bar draws the
@@ -68,8 +72,8 @@ export default function ResultBandsCard({
   // The bar: the draft's scale when it is one, else the edges that parse, with every gap
   // drawn as one — and the saved scale when not even that much can be drawn.
   const preview: ResultBands = verdict.ok
-    ? { ...saved, opportunityMin: verdict.opportunityMin, strengthMin: verdict.strengthMin }
-    : saved
+    ? { ...saved, opportunityMin: verdict.opportunityMin, strengthMin: verdict.strengthMin, scale: draft.scale }
+    : { ...saved, scale: draft.scale }
   let segments: BandScaleSegment[] | undefined
   let badTicks: number[] = []
   if (!verdict.ok) {
@@ -97,6 +101,30 @@ export default function ResultBandsCard({
       className="gap-3.5 pb-5"
     >
       <p className="m-0 max-w-measure text-base text-fg-secondary">{t('resultBands.settings.description')}</p>
+      <div className="flex flex-col gap-1.5">
+        <span id={`${ids}-scale`} className="text-sm font-semibold text-fg-primary">
+          {t('resultBands.settings.scaleLabel')}
+        </span>
+        <RadioGroup
+          aria-labelledby={`${ids}-scale`}
+          aria-describedby={`${ids}-scale-hint`}
+          value={draft.scale}
+          onValueChange={(next) => set({ scale: next as ResultScale })}
+          className="flex flex-wrap gap-x-5 gap-y-2"
+        >
+          <label className="m-0 flex items-center gap-2 text-base font-normal text-fg-primary">
+            <RadioGroupItem value="mean" />
+            {t('resultBands.settings.scaleMean')}
+          </label>
+          <label className="m-0 flex items-center gap-2 text-base font-normal text-fg-primary">
+            <RadioGroupItem value="percent" />
+            {t('resultBands.settings.scalePercent')}
+          </label>
+        </RadioGroup>
+        <span id={`${ids}-scale-hint`} className="max-w-measure text-sm text-fg-tertiary">
+          {t('resultBands.settings.scaleHint')}
+        </span>
+      </div>
       <BandScaleBar bands={preview} segments={segments} ticks={ticks} badTicks={badTicks} />
 
       <div role="group" aria-labelledby={`${ids}-heading`} className="flex flex-col gap-2.5">
@@ -110,8 +138,8 @@ export default function ResultBandsCard({
           const paint = BAND_PAINT[band]
           const colour = t(`resultBands.settings.colour.${band}`)
           const edge = EDGES[band]
-          const box = (field: Edge | null, fixed: number, label: string) =>
-            field === null ? (
+          const box = (field: Edge | null, fixed: number, label: string) => {
+            const input = field === null ? (
               <Input
                 aria-label={label}
                 value={boundaryText(fixed, locale)}
@@ -129,6 +157,18 @@ export default function ResultBandsCard({
                 className={cn('text-right font-mono tabular-nums', flagged.has(field) && 'border-accent-red ring-1 ring-accent-red')}
               />
             )
+            if (draft.scale !== 'percent') return input
+            // The 0–100 figure this edge reads as; nothing while the box does not hold a number.
+            const value = field === null ? fixed : parseBoundary(draft[field])
+            return (
+              <span className="flex flex-col items-end gap-0.5">
+                {input}
+                <span data-equivalent="" className="font-mono text-2xs text-fg-tertiary tabular-nums">
+                  {value === null ? '\u00a0' : t('resultBands.settings.equivalent', { value: boundaryText(value, locale, 'percent') })}
+                </span>
+              </span>
+            )
+          }
           return (
             <div key={band} data-band={band} className={COLS}>
               <span className="inline-flex items-center gap-2">

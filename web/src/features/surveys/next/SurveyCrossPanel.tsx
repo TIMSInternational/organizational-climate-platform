@@ -18,7 +18,10 @@ import {
   bandCellStyle,
   bandName,
   bandOf,
-  formatMetric,
+  deltaScoreText,
+  scaledValue,
+  scoreText,
+  shownDelta,
   type ResultBands,
 } from '../../../components/charts'
 import { PROTECTED_HATCH } from '../../../components/charts/suppression'
@@ -116,10 +119,11 @@ function CrossCell({
     return <span className="font-mono text-sm text-fg-label">—</span>
   }
   const band = bandOf(value, bands)
-  const text = formatMetric(value, { kind: 'number', decimals }, locale)
-  // Rounded to what is printed, so the arrow, the bar and the figure cannot disagree.
-  const shown = delta === null ? null : Math.round(delta * 10) / 10 || 0
-  const reach = shown === null ? 0 : Math.min(Math.abs(shown) / DELTA_SCALE, 1) * 50
+  const text = scoreText(value, bands.scale, locale, decimals)
+  // Rounded to what is printed, so the arrow, the bar and the figure cannot disagree. `shown`
+  // is on the reader's scale; the bar's geometry is on 1–5, so it divides that back out.
+  const shown = delta === null ? null : shownDelta(delta, bands.scale, 1)
+  const reach = shown === null ? 0 : Math.min(Math.abs(shown) / scaledValue(DELTA_SCALE, bands.scale), 1) * 50
   return (
     <span
       className={cn('flex flex-col items-center gap-px rounded px-1 py-1.5', painted && 'border')}
@@ -138,7 +142,7 @@ function CrossCell({
         <>
           <span className={cn('font-mono text-2xs tabular-nums', widest && 'font-bold')}>
             <span aria-hidden="true">{shown < 0 ? '▼' : shown > 0 ? '▲' : '–'} </span>
-            {`${shown > 0 ? '+' : ''}${formatMetric(shown, { kind: 'number', decimals: 1 }, locale)}`}
+            {deltaScoreText(delta ?? 0, bands.scale, locale, 1)}
             <span className="sr-only">{` ${directionLabel(shown)}`}</span>
           </span>
           {/* Decorative: every value it encodes is already in the text above it. */}
@@ -278,7 +282,7 @@ export default function SurveyCrossPanel({
   const fieldLabel = (field: string) =>
     field === 'department' ? t('surveyResults.cross.department') : (authored[field]?.label ?? field)
   // `formatMetric`, as the grid uses: one locale-aware formatter for every number on the page.
-  const score = (value: number) => formatMetric(value, { kind: 'number', decimals: 2 }, locale)
+  const score = (value: number) => scoreText(value, bands.scale, locale, 2)
   const bandLabel = (band: ReturnType<typeof bandOf>) => bandName(band, bands, t)
   const directionLabel = (delta: number) =>
     delta < 0 ? t('surveyResults.cross.deltaBelow') : delta > 0 ? t('surveyResults.cross.deltaAbove') : ''
@@ -683,7 +687,7 @@ export default function SurveyCrossPanel({
 
             <BandLegend bands={bands} className="mt-3">
               <span className="text-2xs text-fg-label">
-                {t('surveyResults.cross.barNote', { scale: formatMetric(DELTA_SCALE, { kind: 'number', decimals: 2 }, locale) })}
+                {t('surveyResults.cross.barNote', { scale: scoreText(DELTA_SCALE, bands.scale, locale, 2) })}
               </span>
             </BandLegend>
 

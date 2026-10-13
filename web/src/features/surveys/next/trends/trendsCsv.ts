@@ -1,4 +1,5 @@
 import { printedMove, printedReading } from '../../../dashboard/next/derive'
+import { printed, scaleDecimals, scaledValue, type ResultScale } from '../../../../components/charts'
 import type { TrendDimension, TrendWave } from './model'
 
 /**
@@ -33,6 +34,8 @@ export interface TrendsCsvInput {
   respondents: readonly (number | null)[]
   dimensions: readonly TrendDimension[]
   labels: TrendsCsvLabels
+  /** The company's result scale; on `percent` every figure is the 0–100 one the page prints. */
+  scale?: ResultScale
 }
 
 const FORMULA_LEAD = /^[=+\-@\t\r]/
@@ -44,17 +47,21 @@ function text(value: string): string {
 }
 
 /** A reading at the decimal the page prints. */
-function readingCell(value: number): string {
-  return printedReading(value).toFixed(1)
+function readingCell(value: number, scale: ResultScale): string {
+  if (scale === 'mean') return printedReading(value).toFixed(1)
+  const places = scaleDecimals(1, scale)
+  return printed(scaledValue(value, scale), places).toFixed(places)
 }
 
-/** A move with its sign, as the page prints it. */
-function moveCell(value: number): string {
-  return `${value > 0 ? '+' : ''}${value.toFixed(1)}`
+/** A move with its sign, as the page prints it (`value` is a 1–5 move from `printedMove`). */
+function moveCell(value: number, scale: ResultScale): string {
+  const places = scaleDecimals(1, scale)
+  const shown = printed(scaledValue(value, scale), places) || 0
+  return `${shown > 0 ? '+' : ''}${shown.toFixed(places)}`
 }
 
 export function buildTrendsCsv(input: TrendsCsvInput): string {
-  const { groupName, waves, withheld, respondents, dimensions, labels } = input
+  const { groupName, waves, withheld, respondents, dimensions, labels, scale = 'mean' } = input
   const rows: string[][] = [
     [labels.group, labels.survey, labels.closed, labels.responses, ...dimensions.map((dimension) => dimension.name)].map(text),
   ]
@@ -69,7 +76,7 @@ export function buildTrendsCsv(input: TrendsCsvInput): string {
       ...dimensions.map((dimension) => {
         if (held) return text(labels.withheld)
         const value = dimension.values[index]
-        return value === null || value === undefined ? '' : readingCell(value)
+        return value === null || value === undefined ? '' : readingCell(value, scale)
       }),
     ])
   })
@@ -85,7 +92,7 @@ export function buildTrendsCsv(input: TrendsCsvInput): string {
       ...dimensions.map((dimension) => {
         const from = withheld[0] ? null : (dimension.values[0] ?? null)
         const to = withheld[last] ? null : (dimension.values[last] ?? null)
-        return from === null || to === null ? '' : moveCell(printedMove(to, from))
+        return from === null || to === null ? '' : moveCell(printedMove(to, from, 1, scale), scale)
       }),
     ])
   }

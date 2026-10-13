@@ -13,6 +13,8 @@ import { downloadBlobFile } from '../../../lib/downloadBlobFile'
 import { downloadTextFile } from '../../../lib/downloadTextFile'
 import type { SurveyAnalyticsResponse, SurveyQuestionResult, SurveySegmentResult } from '../api/surveyResults'
 import en from '../../../i18n/en.json'
+import { DEFAULT_RESULT_BANDS } from '../../../components/charts'
+import { forgetResultBands, rememberResultBands } from '../../result-bands/useResultBands'
 
 vi.mock('../../../lib/downloadBlobFile', () => ({ downloadBlobFile: vi.fn() }))
 // The only part of a CSV export that touches the DOM, stubbed so the assertions can read
@@ -245,6 +247,47 @@ describe('SurveyResultsNextPage', () => {
     // No sample chip anywhere: every figure is measured, and the opened group's spread —
     // the one reading no endpoint returns — is not drawn at all.
     expect(screen.queryAllByText(en.dashboard.next.sampleChip)).toHaveLength(0)
+  })
+
+  /** The climate tile's figure and unit, and every group cell's figure in the grid. */
+  async function readings(scale: 'mean' | 'percent') {
+    forgetResultBands()
+    rememberResultBands('c1', { ...DEFAULT_RESULT_BANDS, scale })
+    renderAt({ role: 'company_admin' })
+    await screen.findByRole('heading', { level: 1, name: 'Results of Q3 climate survey' })
+    const tile = screen.getByText(copy.climateLabelWave.replace('{wave}', 'Q3')).closest('[data-slot="kpi-tile"]') as HTMLElement
+    const value = tile.querySelector('[data-slot="kpi-value"]')!.textContent!
+    const grid = screen.getByTestId('climate-grid')
+    const cells = [...grid.querySelectorAll('tr[data-testid^="group-row-"] [data-band] span.font-mono.font-semibold')].map((cell) => cell.textContent!)
+    const out = { value, tile: tile.textContent!, cells, bands: [...grid.querySelectorAll('tr[data-testid^="group-row-"] [data-band]')].map((cell) => cell.getAttribute('data-band')) }
+    cleanup()
+    forgetResultBands()
+    return out
+  }
+
+  it('reads the climate tile and the grid on 1–5 for a mean company, exactly as before', async () => {
+    const mean = await readings('mean')
+    expect(mean.value).toMatch(/^\d\.\d{2}$/)
+    expect(mean.tile).toContain(en.resultBands.results.climateUnit)
+    expect(mean.cells.length).toBeGreaterThan(0)
+    for (const cell of mean.cells) expect(cell).toMatch(/^\d\.\d$/)
+  })
+
+  it('reads the climate tile and the grid on 0–100 for a percent company, banded as before', async () => {
+    const mean = await readings('mean')
+    const percent = await readings('percent')
+    // × 20 at one decimal fewer: the tile's 2-decimal mean becomes a 1-decimal score…
+    expect(Number(percent.value)).toBeCloseTo(Number(mean.value) * 20, 0)
+    expect(percent.value).toMatch(/^\d{2,3}\.\d$/)
+    expect(percent.tile).toContain(en.resultBands.scale.unitPercent)
+    expect(percent.tile).not.toContain(en.resultBands.results.climateUnit)
+    // …and each 1-decimal cell a whole number, in the same band it was in.
+    expect(percent.cells).toHaveLength(mean.cells.length)
+    percent.cells.forEach((cell, index) => {
+      expect(cell).toMatch(/^\d{2,3}$/)
+      expect(Math.abs(Number(cell) - Number(mean.cells[index]) * 20)).toBeLessThanOrEqual(1)
+    })
+    expect(percent.bands).toEqual(mean.bands)
   })
 
   it('never prints a number for a protected group, in any panel', async () => {

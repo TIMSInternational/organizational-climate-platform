@@ -26,6 +26,7 @@ const BANDS: ResultBands = {
   opportunityMin: 3,
   strengthMin: 4,
   names: { critical: null, opportunity: null, strength: null },
+  scale: 'mean',
 }
 
 /** One cell of the map, with no plan on the group — what the payload says before one is raised. */

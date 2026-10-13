@@ -12,6 +12,7 @@ import {
   bandOf,
   bandShortName,
   formatMetric,
+  scoreText,
   type ResultBandKey,
   type ResultBands,
 } from '../../../../components/charts'
@@ -205,6 +206,9 @@ export function ClimateMapGrid({
 }) {
   const { t, locale } = useTranslation()
   const score = (value: number) => formatMetric(value, { kind: 'number', decimals: 1 }, locale)
+  // A banded cell is a 1–5 mean, so it reads on the company's scale; an off-scale or
+  // unbanded figure keeps its own number above.
+  const banded = (value: number, on: ResultBands) => scoreText(value, on.scale, locale, 1)
 
   return (
     // `w-auto`, not the primitive's `w-full`, and every column a fixed width: the
@@ -301,7 +305,7 @@ export function ClimateMapGrid({
                     title={bandName(band, bands, t)}
                   >
                     <span className="sr-only">{`${description}: `}</span>
-                    <span className="font-mono text-sm font-semibold tabular-nums">{score(value)}</span>
+                    <span className="font-mono text-sm font-semibold tabular-nums">{banded(value, bands)}</span>
                     <span className="sr-only">{` — ${bandName(band, bands, t)}`}</span>
                     <span
                       aria-hidden="true"

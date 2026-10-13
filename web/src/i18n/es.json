@@ -3976,7 +3976,8 @@
         "exportFileName": "clima-en-el-tiempo",
         "csvColGroup": "Grupo",
         "csvColClosed": "Cerró",
-        "csvColResponses": "Respuestas"
+        "csvColResponses": "Respuestas",
+        "tableScalePercent": "{group} · escala de 0 a 100"
       },
       "list": {
         "description": "Cuál encuesta está abierta hoy, cuánto le falta para cerrar y dónde leer las que ya cerraron.",
@@ -6905,7 +6906,10 @@
       "noteLinkBody": "Quien se lo compartió puede retirarlo en cualquier momento. Si deja de abrir, pídale uno nuevo.",
       "unavailableNote": "Por seguridad, esta página no distingue entre esos casos y no lleva a ninguna otra parte de la aplicación.",
       "readingOffScale": "fuera de la escala de 1 a 5",
-      "groupsSuppressed": "toda la encuesta está bajo el umbral de {floor}: no se publica ningún grupo"
+      "groupsSuppressed": "toda la encuesta está bajo el umbral de {floor}: no se publica ningún grupo",
+      "dimensionsCaptionPercent": "Promedio de cada dimensión en toda la empresa, de 0 a 100.",
+      "scaleHeaderPercent": "Escala de 0 a 100",
+      "readingOffScalePercent": "fuera de la escala de 0 a 100"
     }
   },
   "storefront": {
@@ -7200,7 +7204,8 @@
       "heading": "Cómo leer este informe",
       "meta": "la escala de resultados de la empresa",
       "mapSub": "media de cada grupo en cada dimensión · tres áreas de resultado",
-      "dimensionsMeta": "toda la empresa · media de 1 a 5"
+      "dimensionsMeta": "toda la empresa · media de 1 a 5",
+      "dimensionsMetaPercent": "toda la empresa · puntaje de 0 a 100"
     },
     "trends": {
       "description": "Cómo se movió cada dimensión entre encuestas cerradas, leída en las tres áreas de resultado de la empresa.",
@@ -7231,7 +7236,15 @@
       "errorInverted": "{band} empieza en {min} y termina en {max}: un área no puede terminar antes de empezar.",
       "errorNameTooLong": "«{band}…» es demasiado largo: un nombre tiene como máximo 60 caracteres.",
       "fixedEnds": "1,00 y 5,00 son fijos: la escala siempre empieza y termina ahí.",
-      "reset": "Restablecer valores predeterminados"
+      "reset": "Restablecer valores predeterminados",
+      "scaleLabel": "Cómo se muestran los resultados",
+      "scaleMean": "Media de 1 a 5",
+      "scalePercent": "Puntaje de 0 a 100",
+      "scaleHint": "Los límites se escriben siempre de 1,00 a 5,00. En 0 a 100, cada resultado se muestra multiplicado por 20: 3,80 se lee 76.",
+      "equivalent": "= {value} de 100"
+    },
+    "scale": {
+      "unitPercent": "de 100"
     }
   }
 }

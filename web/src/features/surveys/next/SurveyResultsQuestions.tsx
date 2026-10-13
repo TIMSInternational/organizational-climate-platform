@@ -1,3 +1,4 @@
+import type { ResultScale } from '../../../components/charts'
 import { useMemo, useState } from 'react'
 import { useTranslation } from '../../../i18n'
 import { EmptyState, H2 } from '../../../components/ui'
@@ -18,6 +19,8 @@ interface SurveyResultsQuestionsProps {
   questions: readonly SurveyQuestionResult[]
   /** Already-translated display text for a category key — the view's own lookup, so the chip and the filter agree. */
   dimensionName: (key: string) => string
+  /** The company's result scale, which each 1–5 question's average is read on. */
+  scale?: ResultScale
 }
 
 /**
@@ -49,7 +52,7 @@ interface SurveyResultsQuestionsProps {
  * `QuestionResultCard` for everything the strip cannot paint honestly —
  * `distributionStripModel` returns `null` exactly where the server refused a mean.
  */
-export default function SurveyResultsQuestions({ questions, dimensionName }: SurveyResultsQuestionsProps) {
+export default function SurveyResultsQuestions({ questions, dimensionName, scale = 'mean' }: SurveyResultsQuestionsProps) {
   const { t } = useTranslation()
   const [filter, setFilter] = useState<QuestionFilter>(EMPTY_QUESTION_FILTER)
 
@@ -111,6 +114,7 @@ export default function SurveyResultsQuestions({ questions, dimensionName }: Sur
                 shortLabel={shortLabel(question)}
                 dimensionName={dimensionName(dimensionKey)}
                 uncategorised={dimensionKey === UNCATEGORISED_DIMENSION}
+                scale={scale}
               />
             ) : (
               <QuestionResultCard key={question.questionId} question={question} shortLabel={shortLabel(question)} />

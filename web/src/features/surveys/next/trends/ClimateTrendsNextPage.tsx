@@ -5,7 +5,18 @@ import { downloadTextFile } from '../../../../lib/downloadTextFile'
 import { useTranslation } from '../../../../i18n'
 import { useCompanyScope } from '../../../../company-context'
 import { PageTopBar } from '../../../../components/layout'
-import { BandChip, BandLegend, KpiTile, bandName, bandOf, boundaryText, type ResultBandKey } from '../../../../components/charts'
+import {
+  BandChip,
+  BandLegend,
+  KpiTile,
+  bandName,
+  bandOf,
+  boundaryText,
+  scaleUnitText,
+  scoreText,
+  type ResultBandKey,
+  type ResultScale,
+} from '../../../../components/charts'
 import { Button, EmptyState, LoadingRegion, NetworkError } from '../../../../components/ui'
 import { KpiRow } from '../../../dashboard/components/dashboardGrammar'
 import { printedMove, reading, signedReading } from '../../../dashboard/next/derive'
@@ -167,6 +178,7 @@ function ClimateTrendsNextView({
           responses: t('surveys.next.trends.csvColResponses'),
           withheld: t('surveys.next.trends.withheld'),
         },
+        scale: bands.scale,
       }),
     )
   }
@@ -202,9 +214,10 @@ function ClimateTrendsNextView({
                   label={t('surveys.next.trends.climateLabel', { wave: latestWave?.code ?? '' })}
                   value={latestMean}
                   format={{ kind: 'number', decimals: 2 }}
+                  valueText={latestMean === null ? undefined : scoreText(latestMean, bands.scale, locale, 2)}
                   unit={
                     <span className="inline-flex flex-wrap items-center gap-2">
-                      {t('surveys.next.trends.climateOf')}
+                      {bands.scale === 'percent' ? scaleUnitText(bands.scale, t) : t('surveys.next.trends.climateOf')}
                       {/* Printed at two decimals, so judged at two. */}
                       {latestMean !== null && <BandChip band={bandOf(latestMean, bands, 2)} bands={bands} />}
                     </span>
@@ -216,7 +229,7 @@ function ClimateTrendsNextView({
                         {moves.map((move, index) => (
                           <span key={move.wave.id} className={move.delta >= 0 ? 'text-accent-green-ink' : 'text-fg-primary'}>
                             {index > 0 && <span aria-hidden="true">· </span>}
-                            <span className="font-mono tabular-nums">{signedReading(move.delta, locale, 2)}</span>{' '}
+                            <span className="font-mono tabular-nums">{signedReading(move.delta, locale, 2, bands.scale)}</span>{' '}
                             {t('surveys.next.trends.climateVs', { wave: move.wave.code })}
                           </span>
                         ))}
@@ -259,7 +272,7 @@ function ClimateTrendsNextView({
                           {entries.length === 0
                             ? t('surveys.next.trends.none')
                             : [
-                                  ...entries.map((entry) => `${entry.dimension.name} ${reading(entry.value, locale)}`),
+                                  ...entries.map((entry) => `${entry.dimension.name} ${reading(entry.value, locale, 1, bands.scale)}`),
                                   ...(band === 'critical' && rising ? [rising] : []),
                                 ].join(' · ')}
                         </span>
@@ -322,7 +335,7 @@ function ClimateTrendsNextView({
                 <h2 id="trends-next-table" className="m-0 text-2xl">
                   {t('surveys.next.trends.tableHeading')}
                 </h2>
-                <p className="m-0 text-sm text-fg-label">{t('surveys.next.trends.tableScale', { group: groupName })}</p>
+                <p className="m-0 text-sm text-fg-label">{t(bands.scale === 'percent' ? 'surveys.next.trends.tableScalePercent' : 'surveys.next.trends.tableScale', { group: groupName })}</p>
               </div>
               <TrendsNumbersTable
                 waves={waves}
@@ -366,8 +379,8 @@ function TrendCard({
   const last = latestIndex(dimension.values)
   const value = last === -1 ? null : (dimension.values[last] ?? null)
   const band = value === null ? null : bandOf(value, bands)
-  const sincePrevious = last > 0 ? deltaSince(dimension.values, last - 1) : null
-  const sinceFirst = last > 1 ? deltaSince(dimension.values, 0) : null
+  const sincePrevious = last > 0 ? deltaSince(dimension.values, last - 1, bands.scale) : null
+  const sinceFirst = last > 1 ? deltaSince(dimension.values, 0, bands.scale) : null
   const previousWave: TrendWave | undefined = last > 0 ? waves[last - 1] : undefined
   const firstWave: TrendWave | undefined = waves[0]
 
@@ -387,9 +400,9 @@ function TrendCard({
           (ClimateTrends.dc.html, `.card` with `padding: 14px 16px 12px; gap: 8px`). */}
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
         <span data-slot="trend-reading" className="font-mono text-reading leading-normal tabular-nums text-fg-primary">
-          {value === null ? t('surveys.next.trends.withheld') : reading(value, locale)}
+          {value === null ? t('surveys.next.trends.withheld') : reading(value, locale, 1, bands.scale)}
         </span>
-        {sincePrevious !== null && previousWave && <Move value={sincePrevious} />}
+        {sincePrevious !== null && previousWave && <Move value={sincePrevious} scale={bands.scale} />}
         {(sincePrevious !== null || sinceFirst !== null) && (
           <span className="text-xs text-fg-label">
             {sincePrevious !== null && previousWave && (
@@ -398,7 +411,7 @@ function TrendCard({
             {sinceFirst !== null && firstWave && (
               <>
                 {sincePrevious !== null && <span aria-hidden="true"> · </span>}
-                <Move value={sinceFirst} small /> <span>{t('surveys.next.trends.sinceWave', { wave: firstWave.code })}</span>
+                <Move value={sinceFirst} scale={bands.scale} small /> <span>{t('surveys.next.trends.sinceWave', { wave: firstWave.code })}</span>
               </>
             )}
           </span>
@@ -410,7 +423,7 @@ function TrendCard({
         bands={bands}
         axis={axis}
         labels={tickLabels}
-        format={(reading_) => reading(reading_, locale)}
+        format={(reading_) => reading(reading_, locale, 1, bands.scale)}
         withheldText={t('surveys.next.trends.withheld')}
         label={t('resultBands.trends.chartLabel', {
           dimension: dimension.name,
@@ -420,11 +433,11 @@ function TrendCard({
                 ? model.withheld[index]
                   ? t('surveys.next.trends.withheld')
                   : t('surveys.next.trends.notAsked')
-                : reading(entry, locale),
+                : reading(entry, locale, 1, bands.scale),
             )
             .join(' → '),
-          low: boundaryText(bands.opportunityMin, locale),
-          high: boundaryText(bands.strengthMin, locale),
+          low: boundaryText(bands.opportunityMin, locale, bands.scale),
+          high: boundaryText(bands.strengthMin, locale, bands.scale),
         })}
       />
     </div>
@@ -436,7 +449,7 @@ function TrendCard({
  * colour is not load-bearing; green marks a rise and a fall stays in the primary ink
  * rather than the red the feature-wide contrast sweep refuses.
  */
-function Move({ value, small = false }: { value: number; small?: boolean }) {
+function Move({ value, scale, small = false }: { value: number; scale: ResultScale; small?: boolean }) {
   const { locale } = useTranslation()
   return (
     <span
@@ -446,7 +459,7 @@ function Move({ value, small = false }: { value: number; small?: boolean }) {
         value >= 0 ? 'text-accent-green-ink' : 'text-fg-primary',
       )}
     >
-      {signedReading(value, locale)}
+      {signedReading(value, locale, 1, scale)}
     </span>
   )
 }

@@ -278,7 +278,7 @@ describe('SuperCompanyDetailView Escala de resultados', () => {
     await waitFor(() => expect(writes()).toHaveLength(1))
     expect(writes()[0].url).toMatch(new RegExp(`/admin/companies/${C}/settings$`))
     expect(JSON.parse(writes()[0].body ?? '')).toEqual({
-      resultBands: { opportunityMin: 3.1, strengthMin: 4, criticalName: null, opportunityName: null, strengthName: null },
+      resultBands: { opportunityMin: 3.1, strengthMin: 4, criticalName: null, opportunityName: null, strengthName: null, scale: 'mean' },
     })
   })
 

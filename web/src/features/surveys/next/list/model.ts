@@ -22,6 +22,8 @@ export interface WaveReading {
   first: boolean
   /** Its climate average minus the previous wave's, or `null` when either is withheld. */
   delta: number | null
+  /** The two averages the delta is taken between, so a 0–100 company can print its own move. */
+  between: { from: number; to: number } | null
   /** The previous wave's short code ("Q2"), or `null` for the first. */
   previousCode: string | null
   /** Completed responses on the wire (`ClimateTrendSurvey.completedCount`). */

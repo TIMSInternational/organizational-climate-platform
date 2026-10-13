@@ -151,6 +151,7 @@ export function waveReadings(trends: ClimateTrendsResponse): Map<string, WaveRea
       // At the two decimals the row prints, as the CLIMA tile and Clima en el tiempo do: the
       // difference of the printed readings, never the rounding of the raw difference.
       delta: here !== null && before !== null ? printedMove(here, before, 2) : null,
+      between: here !== null && before !== null ? { from: before, to: here } : null,
       previousCode: previous ? waveCode(previous.title, previous.surveyId.slice(0, 8)) : null,
       completedCount: survey.completedCount,
     })

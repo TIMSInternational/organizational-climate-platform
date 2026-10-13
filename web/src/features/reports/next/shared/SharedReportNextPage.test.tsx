@@ -540,6 +540,53 @@ describe('SharedReportNextPage', () => {
    * against the other prints a confident "sobre la meta" beside a figure that was never
    * on that scale — and paints its map cell the darkest blue on the ramp.
    */
+  /** A report with one 1–5 dimension at 4,07 and one off-scale eNPS, under EAGLE's bands. */
+  async function renderScaled(scale: 'mean' | 'percent' | undefined) {
+    const bands = { opportunityMin: 3.8, strengthMin: 4.3, criticalName: null, opportunityName: null, strengthName: null }
+    vi.mocked(fetch).mockResolvedValueOnce(
+      jsonResponse(
+        reportBody(
+          documentOf([
+            survey({
+              dimensions: [
+                { dimension: 'leadership', questionCount: 4, answeredCount: 172, averageScore: 4.07 },
+                { dimension: 'enps', questionCount: 1, answeredCount: 172, averageScore: 7.8 },
+              ],
+            }),
+          ]),
+          { resultBands: scale === undefined ? bands : { ...bands, scale } },
+        ),
+      ),
+    )
+    const view = renderPage()
+    await screen.findByRole('heading', { name: 'Informe ejecutivo de clima — Q3 2026' })
+    return view
+  }
+
+  it('reads a mean report on 1 to 5, as before, when the link carries no scale', async () => {
+    const view = await renderScaled(undefined)
+    const text = view.container.textContent ?? ''
+    expect(screen.getByText('4,1').closest('tr')?.textContent).toContain('Área de oportunidad')
+    expect(text).toContain('Promedio de cada dimensión en toda la empresa, de 1 a 5.')
+    expect(text).toContain('3,80')
+    expect(screen.getByText('7,8').closest('tr')?.textContent).toContain('fuera de la escala de 1 a 5')
+  })
+
+  it('reads a percent report on 0 to 100, banded on the 1–5 value, off-scale figures untouched', async () => {
+    const view = await renderScaled('percent')
+    const text = view.container.textContent ?? ''
+    // 4,07 × 20 = 81,4, printed at one decimal fewer than the 1–5 table's one: "81".
+    expect(screen.getByText('81').closest('tr')?.textContent).toContain('Área de oportunidad')
+    expect(screen.queryByText('4,1')).toBeNull()
+    expect(text).toContain('Promedio de cada dimensión en toda la empresa, de 0 a 100.')
+    expect(text).toContain('toda la empresa · puntaje de 0 a 100')
+    // EAGLE's 3,80 / 4,30 read 76 / 86 in the legend; no 1–5 boundary is left.
+    expect(text).toContain('76')
+    expect(text).toContain('86')
+    expect(text).not.toContain('3,80')
+    expect(screen.getByText('7,8').closest('tr')?.textContent).toContain('fuera de la escala de 0 a 100')
+  })
+
   it('prints an off-scale reading without judging it against the target', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(
       jsonResponse(
