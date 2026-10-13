@@ -150,6 +150,14 @@ public class QuestionBankEndpointsTests : IAsyncLifetime
             Settings: new SurveySettingsInput(Anonymous: anonymous, CollectParticipantIdentity: false)));
 
         (await SurveyTestHarness.SetStatusAsync(admin, survey.Id, SurveyStatuses.Active)).EnsureSuccessStatusCode();
+
+        // Every measurement below answers through the PUBLIC respond endpoint with no account,
+        // and since 2026-10-13 that is served only while the survey has a live link or QR: a
+        // mass-invite survey revokes its link and is answered by signing in
+        // (SurveyResponseEndpoints, the hasLiveLink check). Without this the ten tests that
+        // submit here get 401 at SubmitAsync, which reads as a question-bank defect and is not
+        // one -- they simply never needed to say how their respondents got in before.
+        await SurveyTestHarness.OpenPublicLinkAsync(admin, survey.Id);
         return survey;
     }
 

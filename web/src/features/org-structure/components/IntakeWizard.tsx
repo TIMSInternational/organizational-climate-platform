@@ -70,6 +70,18 @@ interface IntakeWizardProps {
 export default function IntakeWizard({ baseUrl, companyId, onImported, revealDelayMs = 700 }: IntakeWizardProps) {
   const { t, locale } = useTranslation()
   const [step, setStep] = useState<Step>('upload')
+  /**
+   * How the people in this file will reach the survey (ruled 2026-10-13).
+   *
+   * `invitation` is what every import did before: an email asking the person to choose their own
+   * password. `credentials` is the mass invite — the platform generates a username and password,
+   * emails both with the login link, and the file's demographics are already on the account, so
+   * the survey never asks for them.
+   *
+   * Defaults to `invitation` deliberately. Mass invite creates live accounts and mails passwords;
+   * that is not something an admin should trigger by not noticing a control.
+   */
+  const [accessMode, setAccessMode] = useState<'invitation' | 'credentials'>('invitation')
   const [file, setFile] = useState<File | null>(null)
   const [progress, setProgress] = useState<Progress | null>(null)
   const [understanding, setUnderstanding] = useState<IntakeUnderstanding | null>(null)
@@ -199,16 +211,25 @@ export default function IntakeWizard({ baseUrl, companyId, onImported, revealDel
 
   const handleValidate = () =>
     run(async () => {
-      setVerdict(await submitIntakeRows(baseUrl, companyId, rows, true, approvedNew))
+      setVerdict(
+        await submitIntakeRows(baseUrl, companyId, rows, true, approvedNew, accessMode === 'credentials'),
+      )
     })
 
   const handleApprove = () =>
     run(async () => {
-      const committed = await submitIntakeRows(baseUrl, companyId, rows, false, approvedNew)
+      const committed = await submitIntakeRows(
+        baseUrl, companyId, rows, false, approvedNew, accessMode === 'credentials',
+      )
       setResult(committed)
       setStep('done')
       onImported()
     })
+
+  function chooseAccessMode(mode: 'invitation' | 'credentials') {
+    setAccessMode(mode)
+    setVerdict(null)
+  }
 
   function patchRow(rowNumber: number, patch: Partial<IntakeRow>) {
     setRows((current) => current.map((row) => (row.rowNumber === rowNumber ? { ...row, ...patch } : row)))
@@ -233,6 +254,7 @@ export default function IntakeWizard({ baseUrl, companyId, onImported, revealDel
     setReviewSource(null)
     setVerdict(null)
     setResult(null)
+    setAccessMode('invitation')
     setStep('upload')
   }
 
@@ -297,6 +319,8 @@ export default function IntakeWizard({ baseUrl, companyId, onImported, revealDel
           demographicTargets={understanding.targets.demographics}
           onPatch={patchRow}
           onRemove={removeRow}
+          accessMode={accessMode}
+          onAccessModeChange={chooseAccessMode}
           onValidate={handleValidate}
           onApprove={handleApprove}
           onBack={() => setStep('understand')}

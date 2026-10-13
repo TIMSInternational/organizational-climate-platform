@@ -517,3 +517,113 @@ describe('IntakeWizard — language', () => {
     expect(screen.getByRole('button', { name: 'Continue to review' })).toBeTruthy()
   })
 })
+
+/**
+ * The access mode (ruled 2026-10-13). `withCredentials` is the sixth argument of
+ * `submitIntakeRows`; it decides whether each row becomes an invitation that asks the person to
+ * choose a password, or an account whose generated username and password are emailed to them.
+ */
+describe('IntakeWizard — how the people reach the survey', () => {
+  const INVITATION = 'Enviar una invitación por correo'
+  const MASS_INVITE = 'Invitación masiva con datos de acceso'
+  const APPROVE_INVITATION = 'Crear invitaciones'
+  const APPROVE_CREDENTIALS = 'Crear cuentas y enviar los datos de acceso'
+
+  it('asks the question, and defaults to the invitation rather than to creating accounts', async () => {
+    const user = await uploadAndUnderstand()
+    await continueToReview(user)
+
+    expect(screen.getByRole('group', { name: '¿Cómo llegarán estas personas a la encuesta?' })).toBeTruthy()
+    // Mass invite creates live accounts and mails passwords. It must never be what an admin
+    // gets by not noticing a control.
+    expect((screen.getByRole('radio', { name: new RegExp(INVITATION) }) as HTMLInputElement).checked).toBe(true)
+    expect((screen.getByRole('radio', { name: new RegExp(MASS_INVITE) }) as HTMLInputElement).checked).toBe(false)
+    expect(screen.getByRole('button', { name: APPROVE_INVITATION })).toBeTruthy()
+  })
+
+  it('sends withCredentials false while the invitation is chosen', async () => {
+    const user = await uploadAndUnderstand()
+    await continueToReview(user)
+
+    submitIntakeRows.mockImplementation(async (...args: unknown[]) => allValid(args[2] as IntakeRow[]))
+    await user.click(screen.getByRole('button', { name: 'Validar' }))
+
+    await waitFor(() => expect(submitIntakeRows).toHaveBeenCalled())
+    expect((submitIntakeRows.mock.calls[0] as unknown[])[5]).toBe(false)
+  })
+
+  it('renames the button it will press, so the admin reads what approving does', async () => {
+    const user = await uploadAndUnderstand()
+    await continueToReview(user)
+
+    await user.click(screen.getByRole('radio', { name: new RegExp(MASS_INVITE) }))
+
+    expect(screen.getByRole('button', { name: APPROVE_CREDENTIALS })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: APPROVE_INVITATION })).toBeNull()
+  })
+
+  it('carries the mode on the preview AND the approval, so the verdict matches what happens', async () => {
+    const onImported = vi.fn()
+    const user = await uploadAndUnderstand(aiUnderstanding(), 'es', onImported)
+    await continueToReview(user)
+
+    await user.click(screen.getByRole('radio', { name: new RegExp(MASS_INVITE) }))
+
+    submitIntakeRows.mockImplementation(async (...args: unknown[]) => allValid(args[2] as IntakeRow[]))
+    await user.click(screen.getByRole('button', { name: 'Validar' }))
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: APPROVE_CREDENTIALS }).hasAttribute('disabled')).toBe(false),
+    )
+
+    submitIntakeRows.mockImplementation(async (...args: unknown[]) => {
+      const sent = args[2] as IntakeRow[]
+      return { ...allValid(sent), rows: sent.map((row) => ({ ...row, status: 'created', errors: [], issues: [] })) }
+    })
+    await user.click(screen.getByRole('button', { name: APPROVE_CREDENTIALS }))
+    await waitFor(() => expect(onImported).toHaveBeenCalled())
+
+    const calls = submitIntakeRows.mock.calls as unknown as unknown[][]
+    expect(calls).toHaveLength(2)
+    expect(calls[0][3]).toBe(true)
+    expect(calls[1][3]).toBe(false)
+    for (const call of calls) {
+      expect(call[5]).toBe(true)
+    }
+  })
+
+  /**
+   * The same property editing a cell has. A verdict is about the rows AND the mode it was asked
+   * for; approving a verdict taken in the other mode would create accounts the admin was shown
+   * invitations for.
+   */
+  it('withdraws approval when the mode changes after a clean verdict', async () => {
+    const user = await uploadAndUnderstand()
+    await continueToReview(user)
+
+    submitIntakeRows.mockImplementation(async (...args: unknown[]) => allValid(args[2] as IntakeRow[]))
+    await user.click(screen.getByRole('button', { name: 'Validar' }))
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: APPROVE_INVITATION }).hasAttribute('disabled')).toBe(false),
+    )
+
+    await user.click(screen.getByRole('radio', { name: new RegExp(MASS_INVITE) }))
+
+    expect(screen.getByRole('button', { name: APPROVE_CREDENTIALS }).hasAttribute('disabled')).toBe(true)
+    expect(screen.getByText('Valide las filas antes de crear las invitaciones.')).toBeTruthy()
+  })
+
+  it('reads a created account back as its own status, not as an unknown one', async () => {
+    const user = await uploadAndUnderstand()
+    await continueToReview(user)
+
+    await user.click(screen.getByRole('radio', { name: new RegExp(MASS_INVITE) }))
+    submitIntakeRows.mockImplementation(async (...args: unknown[]) => {
+      const sent = args[2] as IntakeRow[]
+      return { ...allValid(sent), rows: sent.map((row) => ({ ...row, status: 'created', errors: [], issues: [] })) }
+    })
+    await user.click(screen.getByRole('button', { name: 'Validar' }))
+
+    expect((await screen.findAllByText('Cuenta creada')).length).toBeGreaterThan(0)
+  })
+})
+

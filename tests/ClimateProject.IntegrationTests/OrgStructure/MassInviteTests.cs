@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -24,17 +23,18 @@ namespace ClimateProject.IntegrationTests.OrgStructure;
 /// because that is the only place the product ever puts one.
 /// </summary>
 [Collection("Postgres")]
-public class MassInviteTests(PostgresContainerFixture postgres) : IAsyncLifetime
+public class MassInviteTests(PostgresContainerFixture postgres, CapturingCredentialsHostFixture credentials)
+    : IAsyncLifetime, IClassFixture<CapturingCredentialsHostFixture>
 {
     private readonly string _companyDomain = $"massinvite-{Guid.NewGuid():N}.test";
     private Guid _companyId;
     private Guid _otherCompanyId;
     private Guid _areaFieldId;
-    private CapturingFactory _factory = null!;
+    private CapturingCredentialsFactory _factory = null!;
 
     public async Task InitializeAsync()
     {
-        _factory = new CapturingFactory(postgres.ConnectionString);
+        _factory = credentials.HostFor(postgres.ConnectionString);
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
 
@@ -68,7 +68,12 @@ public class MassInviteTests(PostgresContainerFixture postgres) : IAsyncLifetime
         await db.SaveChangesAsync();
     }
 
-    public async Task DisposeAsync() => await _factory.DisposeAsync();
+    /// <summary>
+    /// Deliberately does NOT dispose the host: it is the run's single credentials-capturing
+    /// host, held by <see cref="CapturingCredentialsHostFixture"/> and reused by every test
+    /// case here. Disposing it after the first one would leave the rest holding a dead host.
+    /// </summary>
+    public Task DisposeAsync() => Task.CompletedTask;
 
     private async Task<HttpClient> AdminClientAsync(Guid companyId)
     {
@@ -273,38 +278,5 @@ public class MassInviteTests(PostgresContainerFixture postgres) : IAsyncLifetime
         Assert.All(list.Users.Where(u => u.Email != email && !u.Email.StartsWith("ana-") && !u.Email.StartsWith("resend-")
                                          && !u.Email.StartsWith("bounce-") && !u.Email.StartsWith("tenant-")),
             u => Assert.Null(u.Username));
-    }
-
-    internal sealed record SentCredentials(string ToEmail, string Username, string Password, string? Language);
-
-    private sealed class CapturingSender(CapturingFactory owner) : ICredentialsEmailSender
-    {
-        public Task<EmailSendOutcome> SendAsync(
-            string toEmail, string username, string password, string? companyLanguage, CancellationToken cancellationToken)
-        {
-            if (owner.FailFor.Contains(toEmail))
-            {
-                return Task.FromResult(EmailSendOutcome.PermanentFailure("refused for the test"));
-            }
-
-            owner.Sent.Enqueue(new SentCredentials(toEmail, username, password, companyLanguage));
-            return Task.FromResult(EmailSendOutcome.Success());
-        }
-    }
-
-    private sealed class CapturingFactory(string connectionString) : AuthWebApplicationFactory(connectionString)
-    {
-        public ConcurrentQueue<SentCredentials> Sent { get; } = new();
-        public ConcurrentBag<string> FailFor { get; } = [];
-
-        protected override void ConfigureWebHost(IWebHostBuilder builder)
-        {
-            base.ConfigureWebHost(builder);
-            builder.ConfigureTestServices(services =>
-            {
-                services.RemoveAll<ICredentialsEmailSender>();
-                services.AddScoped<ICredentialsEmailSender>(_ => new CapturingSender(this));
-            });
-        }
     }
 }

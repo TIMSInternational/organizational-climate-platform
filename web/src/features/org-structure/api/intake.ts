@@ -137,10 +137,20 @@ export async function submitIntakeRows(
    * would show errors the approval then does not have.
    */
   newDepartments: string[] = [],
+  /**
+   * Mass invite (ruled 2026-10-13): create an ACCOUNT per row with a generated username and
+   * password, emailed with the login link, and the Excel's demographics already on it — instead
+   * of an invitation that asks the person to choose their own password.
+   *
+   * Sent on the preview too, although the server only acts on it when committing. The preview
+   * and the approval must describe the same intent, or a future server-side difference between
+   * the two modes would first appear as a verdict that did not match what happened.
+   */
+  withCredentials = false,
 ): Promise<BulkImportResponse> {
   const response = await authFetch(`${baseUrl}/admin/users/bulk-import/rows`, {
     method: 'POST',
-    body: JSON.stringify({ companyId, preview, rows, newDepartments }),
+    body: JSON.stringify({ companyId, preview, rows, newDepartments, withCredentials }),
   })
 
   if (!response.ok) {

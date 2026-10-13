@@ -4563,7 +4563,20 @@
         "valid": "Válida",
         "duplicate": "Duplicada",
         "error": "Error",
-        "invited": "Invitada"
+        "invited": "Invitada",
+        "created": "Cuenta creada"
+      },
+      "access": {
+        "legend": "\u00bfC\u00f3mo llegar\u00e1n estas personas a la encuesta?",
+        "invitation": {
+          "label": "Enviar una invitaci\u00f3n por correo",
+          "help": "Cada persona recibe un enlace y elige su propia contrase\u00f1a. \u00daselo para personal que volver\u00e1 a ingresar."
+        },
+        "credentials": {
+          "label": "Invitaci\u00f3n masiva con datos de acceso",
+          "help": "La plataforma genera un usuario y una contrase\u00f1a para cada persona y los env\u00eda por correo con el enlace. Los datos demogr\u00e1ficos de su archivo ya quedan en la cuenta, as\u00ed que la encuesta nunca los pregunta."
+        },
+        "approveCredentials": "Crear cuentas y enviar los datos de acceso"
       },
       "validateFirst": "Valide las filas antes de crear las invitaciones.",
       "fixBeforeApproving": "Corrija las filas marcadas con error y valide de nuevo.",
