@@ -703,7 +703,10 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
     [Fact]
     public async Task An_anonymous_retry_with_the_same_session_does_not_duplicate()
     {
-        var survey = await ActiveSurveyAsync(settings: new SurveySettingsInput(Anonymous: true));
+        var survey = // SelfDeclaredDemographics: false — this test is about the retry guard, not about demographics.
+        // The setting defaults TRUE since 2026-10-13 and the área alone makes the prelude
+        // mandatory in any company with a department, so saying so keeps this test about one thing.
+        await ActiveSurveyAsync(settings: new SurveySettingsInput(Anonymous: true, SelfDeclaredDemographics: false));
         var visitor = _factory.CreateClient();
         var request = new SubmitSurveyResponseRequest(
             Answers: [new SurveyAnswerInput(survey.Questions[0].Id, "remote")],
@@ -738,7 +741,10 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
     [Fact]
     public async Task An_anonymous_visitor_may_respond_without_authenticating()
     {
-        var survey = await ActiveSurveyAsync(settings: new SurveySettingsInput(Anonymous: true));
+        var survey = // SelfDeclaredDemographics: false — this test is about answering without an account, not about demographics.
+        // The setting defaults TRUE since 2026-10-13 and the área alone makes the prelude
+        // mandatory in any company with a department, so saying so keeps this test about one thing.
+        await ActiveSurveyAsync(settings: new SurveySettingsInput(Anonymous: true, SelfDeclaredDemographics: false));
         var visitor = _factory.CreateClient();
 
         var http = await SubmitAsync(visitor, survey.Id, new SubmitSurveyResponseRequest(
@@ -752,7 +758,10 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
     [Fact]
     public async Task An_anonymous_response_carries_no_attributable_identifier()
     {
-        var survey = await ActiveSurveyAsync(settings: new SurveySettingsInput(Anonymous: true));
+        var survey = // SelfDeclaredDemographics: false — this test is about what an anonymous row stores, not about demographics.
+        // The setting defaults TRUE since 2026-10-13 and the área alone makes the prelude
+        // mandatory in any company with a department, so saying so keeps this test about one thing.
+        await ActiveSurveyAsync(settings: new SurveySettingsInput(Anonymous: true, SelfDeclaredDemographics: false));
         var visitor = _factory.CreateClient();
         visitor.DefaultRequestHeaders.Add("User-Agent", "IntegrationTest/1.0");
 
@@ -1076,7 +1085,10 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
         // ActiveSurveyAsync is identified unless told otherwise. The visitor has no account, so
         // there is nobody to identify: the row must hold exactly what an anonymous survey's
         // visitor's row holds -- no user, no IP, no user agent, no department.
-        var survey = await ActiveSurveyAsync();
+        var survey = // SelfDeclaredDemographics: false — this test is about an identified survey answered by a stranger, not about demographics.
+        // The setting defaults TRUE since 2026-10-13 and the área alone makes the prelude
+        // mandatory in any company with a department, so saying so keeps this test about one thing.
+        await ActiveSurveyAsync(settings: new SurveySettingsInput(SelfDeclaredDemographics: false));
         Assert.False(survey.Settings.Anonymous);
         var visitor = _factory.CreateClient();
         visitor.DefaultRequestHeaders.Add("User-Agent", "IntegrationTest/1.0");
@@ -1630,7 +1642,10 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
     [Fact]
     public async Task A_survey_that_did_not_ask_refuses_submitted_demographics()
     {
-        var survey = await ActiveSurveyAsync(settings: new SurveySettingsInput(Anonymous: true));
+        var survey = // SelfDeclaredDemographics: false — this test is about a survey that did NOT ask, not about demographics.
+        // The setting defaults TRUE since 2026-10-13 and the área alone makes the prelude
+        // mandatory in any company with a department, so saying so keeps this test about one thing.
+        await ActiveSurveyAsync(settings: new SurveySettingsInput(Anonymous: true, SelfDeclaredDemographics: false));
         await SeedSelectFieldAsync("area", ["operaciones"], required: false, order: 0);
 
         var http = await SubmitSelfDeclaredAsync(survey, new Dictionary<string, string?> { ["area"] = "operaciones" });
