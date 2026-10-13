@@ -3,6 +3,7 @@ import { setToken, clearToken } from '../../../auth/token'
 import {
   SurveyRespondError,
   getSurveyRespondView,
+  respondSendsCredentials,
   submitSurveyResponse,
 } from './surveyResponses'
 
@@ -50,6 +51,83 @@ describe('surveyResponses api', () => {
     await getSurveyRespondView('http://api', 's1')
 
     expect(headerOf('Authorization')).toBe('Bearer jwt-value')
+  })
+
+  /**
+   * The open share link and its QR code, answered the same way.
+   *
+   * `ShareLinkQr` encodes the same `publicLink` the copy button writes to the clipboard, so
+   * the URL is identical by construction and the only thing that can differ is what the
+   * browser opening it carries. A camera opens a browser with no session; a pasted link
+   * opens the tab the administrator is signed in to. Volunteering that session made the API
+   * resolve an authenticated respondent on `/s/{token}` — measured against the local API on
+   * `/s/Z9LFWdcZ…`: 5 demographic fields with no bearer, `[]` with an Acme `company_admin`'s
+   * bearer, and **403** with another tenant's, where the respondent only ever sees the
+   * padlock card. The link looked broken; the QR worked.
+   *
+   * @see respondSendsCredentials
+   */
+  describe('on the open share link', () => {
+    const PUBLIC_LINK = '/s/Wit0Q1tKsuq5llHTSHvgd2TVImCK5zGZ55vYSigZW20'
+
+    beforeEach(() => {
+      history.pushState({}, '', PUBLIC_LINK)
+    })
+
+    afterEach(() => {
+      history.pushState({}, '', '/')
+    })
+
+    it('sends no Authorization header even when the browser holds a session', async () => {
+      setToken('jwt-value')
+      vi.mocked(fetch).mockResolvedValue(ok({ id: 's1' }))
+
+      await getSurveyRespondView('http://api', 's1')
+
+      expect(window.location.pathname).toBe(PUBLIC_LINK)
+      expect(headerOf('Authorization')).toBeNull()
+    })
+
+    it('submits the answers anonymously too, so the post agrees with the form that was shown', async () => {
+      setToken('jwt-value')
+      vi.mocked(fetch).mockResolvedValue(ok({ responseId: 'r1' }))
+
+      await submitSurveyResponse('http://api', 's1', { Answers: [] } as never)
+
+      expect(headerOf('Authorization')).toBeNull()
+      // The body is still JSON: dropping the bearer must not drop the content type with it.
+      expect(headerOf('Content-Type')).toBe('application/json')
+    })
+  })
+
+  /**
+   * The deterministic sibling for the two above. `/survey/:id` is the route an employee
+   * reaches from `/surveys/my`, and the API's tenant and department checks are exactly what
+   * it needs — so a pass there proves the fix is scoped to the share link rather than having
+   * quietly made the whole respond surface anonymous.
+   */
+  it('still attaches the bearer on the authenticated respond route', async () => {
+    history.pushState({}, '', '/survey/8792ca95-72c4-4033-8c91-7d7ae47cb65d')
+    setToken('jwt-value')
+    vi.mocked(fetch).mockResolvedValue(ok({ id: 's1' }))
+
+    await getSurveyRespondView('http://api', 's1')
+
+    expect(headerOf('Authorization')).toBe('Bearer jwt-value')
+    history.pushState({}, '', '/')
+  })
+
+  /**
+   * `/survey/` and `/surveys/` both begin with `/s`; only `/s/` is the share link, and the
+   * trailing slash is what keeps them apart. Asserted directly because the predicate is the
+   * whole of the rule and a rendering test would only ever walk one of these paths.
+   */
+  it('reads the credential rule off the route, and only off the share link', () => {
+    expect(respondSendsCredentials('/s/Wit0Q1tKsuq5llHTSHvgd2TVImCK5zGZ55vYSigZW20')).toBe(false)
+    expect(respondSendsCredentials('/survey/8792ca95-72c4-4033-8c91-7d7ae47cb65d')).toBe(true)
+    expect(respondSendsCredentials('/surveys/8792ca95-72c4-4033-8c91-7d7ae47cb65d/respond')).toBe(true)
+    expect(respondSendsCredentials('/survey-invitations/Wit0Q1tKsuq5llHTSHvgd2TVImCK5zGZ55vYSigZW20')).toBe(true)
+    expect(respondSendsCredentials('/')).toBe(true)
   })
 
   it('asks for the reader locale explicitly, and passes the resume key', async () => {

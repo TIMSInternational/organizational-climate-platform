@@ -242,6 +242,62 @@ function authHeaders(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
+/**
+ * The open share link's own route, as `router.tsx` registers it (`/s/:token`) and as
+ * `SurveyAccessTokens.PublicLinkPrefix` composes it on the C# side.
+ *
+ * `/survey/:id` and `/surveys/…` do NOT match it: the slash is part of the literal.
+ */
+const PUBLIC_LINK_PREFIX = '/s/'
+
+/**
+ * Whether the two respond requests made from `pathname` may present the browser's bearer.
+ *
+ * **They may not on `/s/{token}`, and this is the difference between the link and the QR.**
+ *
+ * The share link and the QR code encode the same URL — `ShareLinkQr` draws the code from the
+ * same `publicLink` the copy button writes to the clipboard — so the two can only differ in
+ * what the browser that opens it is carrying. A QR is scanned by a phone camera, which opens
+ * a browser with no session; a link is pasted into the tab the administrator is already
+ * signed in to. If the respond requests present that session, the API resolves an
+ * *authenticated* respondent instead of a link visitor, and three things change at once
+ * (`SurveyResponseEndpoints.ResolveRespondentAsync`):
+ *
+ * - `AsksSelfDeclaredDemographics` is `respondent.ActingUserId is null`, so the demographic
+ *   prelude is **skipped** — measured on `/s/Z9LFWdcZ…` locally: 5 fields with no bearer,
+ *   `[]` with an Acme `company_admin`'s bearer, same link, same survey.
+ * - `AsksParticipantIdentity` is the same predicate, so "¿Quién responde?" is skipped too.
+ * - A respondent from another tenant, and one outside a targeted department, is **403**
+ *   (`An_employee_of_another_tenant_cannot_respond`) — measured as 403 with
+ *   `ana.rojas@meridiano.test`'s bearer against Acme's link, where the same link with no
+ *   bearer is 200. On screen that is `respondFailureOutcome(403)`: the padlock card, not the
+ *   survey. The link appears broken while the QR works.
+ *
+ * The API is right — those checks are what `/survey/:id` needs — and the client is wrong to
+ * volunteer a credential on a route whose whole contract is that its visitor has no account.
+ * The token in the path IS the credential (`PublicSurveyLinkPage`), nobody who opens one logs
+ * in (ruled 2026-10-12), and the endpoint's own comments are written on that assumption.
+ *
+ * Decided by the route rather than threaded through each call site because the respond flow
+ * makes its requests from two places — this module's two functions are called by
+ * `usePublicEntryModel` for the entry card and by `SurveyRespondForm` for the questions, the
+ * autosave and the final post — and a flag one of them forgets is a guarantee silently
+ * dropped on that path. The route is the one fact all of them agree on.
+ */
+export function respondSendsCredentials(pathname: string): boolean {
+  return !pathname.startsWith(PUBLIC_LINK_PREFIX)
+}
+
+/**
+ * `authHeaders()` everywhere but on the open share link, where it is deliberately nothing.
+ *
+ * @see respondSendsCredentials
+ */
+function respondHeaders(): Record<string, string> {
+  const pathname = typeof window === 'undefined' ? '' : window.location.pathname
+  return respondSendsCredentials(pathname) ? authHeaders() : {}
+}
+
 async function fail(response: Response): Promise<never> {
   const body: unknown = await response.json().catch(() => null)
   const message =
@@ -269,7 +325,7 @@ export async function getSurveyRespondView(
   const suffix = query.size > 0 ? `?${query.toString()}` : ''
 
   const response = await fetch(`${baseUrl}/surveys/${encodeURIComponent(id)}/respond${suffix}`, {
-    headers: authHeaders(),
+    headers: respondHeaders(),
   })
   if (!response.ok) return fail(response)
   return response.json() as Promise<SurveyRespondView>
@@ -302,7 +358,7 @@ export async function submitSurveyResponse(
 ): Promise<SurveySubmissionResult> {
   const response = await fetch(`${baseUrl}/surveys/${encodeURIComponent(id)}/responses`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    headers: { 'Content-Type': 'application/json', ...respondHeaders() },
     body: JSON.stringify(request),
     ...(options.keepalive === true ? { keepalive: true } : {}),
   })
