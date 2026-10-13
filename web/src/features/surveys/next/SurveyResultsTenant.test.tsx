@@ -141,7 +141,8 @@ describe('the survey results on the tenant’s real payload', () => {
     const delta = screen.getByTestId('climate-delta')
     expect(delta.textContent).toBe('+0,29 frente a Q2 · segunda alza seguida')
     expect(delta.className).toContain('text-accent-green-ink')
-    expect(tiles).toContain('respuestas · 100 % completadas')
+    expect(tiles).toContain('24respuestas completas')
+    expect(tiles).not.toContain('sin terminar')
     expect(tiles).toContain('cerró el 6 de agosto · sin lista de invitados')
     expect(tiles).toContain('de 5 legibles')
     // Finanzas is withheld: counted, and since 2026-10-12 never named -- beside the
@@ -157,6 +158,20 @@ describe('the survey results on the tenant’s real payload', () => {
     expect(tiles).not.toContain('media')
     // Every figure on the tiles is measured: no sample chip among them.
     expect(tiles).not.toContain(SAMPLE)
+  })
+
+  it('counts COMPLETE responses and names an unfinished one beside them, never folded in', async () => {
+    // EAGLE, 2026-10-12: the tile read 16 -- 15 complete and one abandoned on question 1 --
+    // beside a Distribución that read 15.
+    const analytics = fixture['GET /surveys/*/analytics'] as { summary: Record<string, unknown> }
+    const withPartial = { ...analytics, summary: { ...analytics.summary, responseCount: 25, completedCount: 24, partialCount: 1 } }
+    vi.mocked(fetch).mockImplementation((input) =>
+      String(input).includes(`/surveys/${SURVEY}/analytics`) ? Promise.resolve(json(withPartial)) : tenant(input as RequestInfo))
+    await open()
+
+    const tiles = screen.getByRole('region', { name: 'Resumen' }).textContent ?? ''
+    expect(tiles).toContain('24respuestas completas · 1 sin terminar')
+    expect(tiles).not.toContain('25')
   })
 
   it('asks climate-trends which wave came before, and reads that wave’s own analytics', async () => {

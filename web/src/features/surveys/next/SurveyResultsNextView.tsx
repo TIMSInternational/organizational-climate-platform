@@ -226,7 +226,6 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
       ? t('surveyResults.next.eyebrowClosed', { name, date: calendarDayLong(Date.parse(lastResponse), locale) })
       : t('surveyResults.next.eyebrowOpen', { name })
   const protectedGroups = rows.filter((row) => row.isProtected).map((row) => row.name)
-  const completedPercent = Math.round(model.summary.completionRate)
   // The previous wave, measured (`compose.ts` `composePrevious`) — the readings the
   // Panel de Control prints for this survey, so the two screens cannot disagree.
   const previous = model.previous
@@ -372,9 +371,16 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
           />
           <KpiTile
             label={t('surveyResults.next.participationLabel')}
-            value={model.summary.responseCount}
+            // Complete responses, the number Distribución and the participation list count.
+            // A started-but-unfinished response is named beside it, never folded in: the tile
+            // read "16" beside a "15" on the next screen (EAGLE, 2026-10-12).
+            value={model.summary.completedCount}
             locale={locale}
-            unit={t('surveyResults.next.participationSub', { percent: completedPercent })}
+            unit={
+              model.summary.partialCount > 0
+                ? t('surveyResults.next.participationSubPartial', { partial: model.summary.partialCount })
+                : t('surveyResults.next.participationSubComplete')
+            }
             sub={
               <span className="text-fg-label">
                 {[
