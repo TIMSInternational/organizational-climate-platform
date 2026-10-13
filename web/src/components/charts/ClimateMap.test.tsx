@@ -145,7 +145,7 @@ describe('ClimateMap', () => {
     })
 
     it('suppresses a row the default floor would have published', () => {
-      // 7 responses clears the platform minimum of 5 and is withheld anyway,
+      // 7 responses clears the platform minimum and is withheld anyway,
       // because this company is held to 10.
       const { container } = render(
         <ClimateMap dimensions={DIMENSIONS} rows={belowRaisedFloor} target={70} threshold={10} />,

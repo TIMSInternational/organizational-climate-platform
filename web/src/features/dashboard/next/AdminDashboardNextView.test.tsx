@@ -258,7 +258,7 @@ describe('AdminDashboardNextView', () => {
    *
    * "Quién respondió" draws one dot per respondent. For a group UNDER the floor that would
    * BE the count — a reader counts the dots and knows the headcount, which is exactly what
-   * the floor of 5 exists to prevent — and it would slip past every assertion that only
+   * the floor exists to prevent — and it would slip past every assertion that only
    * checks no NUMBER is rendered, because the disclosure is in the geometry.
    *
    * So a withheld band draws a constant number of marks unrelated to its own count, and

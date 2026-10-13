@@ -21,7 +21,7 @@ export interface DashboardSurveyTableRow {
   /**
    * Completed responses, **already scoped by the server to whatever this page is about** —
    * the whole tenant on the company dashboard, this department alone on the department one.
-   * `null` where the server withheld it under the floor of 5 (the department dashboard's
+   * `null` where the server withheld it under the floor (the department dashboard's
    * `activeSurveys[].responseCount`): drawn as a protected cell, never as "0".
    */
   responseCount: number | null

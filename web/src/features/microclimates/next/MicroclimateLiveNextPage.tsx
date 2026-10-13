@@ -63,7 +63,7 @@ const CARD = 'flex min-w-0 flex-col gap-3 rounded-xl border border-line-default 
  * ## What people wrote
  *
  * Word frequencies, never text: each bar is a word and how many times it was written
- * (`liveWordBars`, which applies both floors of `microclimatePrivacy.ts`). Under 5 responses
+ * (`liveWordBars`, which applies both floors of `microclimatePrivacy.ts`). Under the floor
  * the panel is the hatch and a sentence naming the floor — never the count of words
  * held back, never how far the session is from the floor, because either inverts in one
  * step into the sub-floor count the floor exists to hide. The response count itself is

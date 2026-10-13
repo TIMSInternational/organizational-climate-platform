@@ -1177,7 +1177,7 @@ public static class SurveyResponseEndpoints
     /// the option list is also what refuses another tenant's department or a retired one --
     /// no second check to keep in step. Stored under <see cref="SelfDeclaredDepartment.FieldKey"/>
     /// as a demographic answer, never as <c>responses.department_id</c>; the aggregation lifts it
-    /// into the department and applies the floor of 5 at read time.
+    /// into the department and applies the segment floor at read time.
     /// </para>
     /// <para>
     /// Required: an área left blank is a respondent the map cannot place, and the map is what

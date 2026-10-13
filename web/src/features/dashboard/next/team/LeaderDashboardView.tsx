@@ -42,7 +42,7 @@ const PLANS_LISTED = 3
  *   would give the other half back.
  * - **A sub-floor count.** The open survey's team count is `null` under the floor — on the
  *   wire (`DashboardEndpoints.DepartmentCountFloor`) and again in the model — so the row can
- *   only draw "menos de 5 respuestas", and the file behind "Exportar" holds it to the same
+ *   only draw "menos de {floor} respuestas", and the file behind "Exportar" holds it to the same
  *   floor (`DashboardExport.TeamCountFloor`). The whole company's count under the list is held
  *   to it too: beside a hatched team count, "toda la empresa: 3" would say the team has at
  *   most 3.
@@ -640,7 +640,7 @@ function ParticipationCard({ model, t, locale }: { model: LeaderDashboardModel; 
 /**
  * "Toda la empresa: 3 de 24 respuestas." — the artboard's line under the list, for the survey
  * the card is headed by. The count is held to the floor like the team's, in words: under it,
- * "menos de 5". No "Recordar al equipo" beside it: `POST /surveys/{id}/invitations/reminders`
+ * "menos de {floor}". No "Recordar al equipo" beside it: `POST /surveys/{id}/invitations/reminders`
  * is `CanAdminister` (`SurveyDistributionEndpoints.cs:131`, `:1121`), and a button that 403s
  * is worse than none.
  */

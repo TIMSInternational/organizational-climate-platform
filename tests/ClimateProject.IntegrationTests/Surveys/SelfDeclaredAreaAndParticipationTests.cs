@@ -577,8 +577,9 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
     /// End to end, the case neither ruling could reach before every survey had a link: a
     /// visitor with NO account answers an IDENTIFIED survey through its link, declaring an
     /// área and a name/email. They are served anonymously -- no user id, no IP, no user agent,
-    /// no department FK -- their área feeds the department breakdown under the floor of 5
-    /// (five in one área publish it, four publish no number), and who answered lands in a
+    /// no department FK -- their área feeds the department breakdown under the segment floor
+    /// (an área at the floor publishes its number, one under it publishes none), and who
+    /// answered lands in a
     /// participation row that has no column that could point at the response.
     /// </summary>
     [Fact]

@@ -24,7 +24,7 @@ import type {
 /**
  * Every derived reading on the two team dashboards, as pure functions of the payloads.
  * The pages never carry a computed number as a literal: the artboards' "+0,3 frente a la
- * org.", "bajo la meta 3,7", "menos de 5 respuestas", "30 días" are all outputs of these.
+ * org.", "bajo la meta 3,7", "menos de {floor} respuestas", "30 días" are all outputs of these.
  */
 
 /**

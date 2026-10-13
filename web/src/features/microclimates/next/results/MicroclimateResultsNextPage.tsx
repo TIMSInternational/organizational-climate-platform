@@ -30,7 +30,7 @@ import { useMicroclimateResultsModel } from './useMicroclimateResultsModel'
  * ## The words
  *
  * The one per-session content that exists, shown only as frequencies and only through
- * `wordBars` (`suppressWordCloud`'s two floors): nothing under 5 responses, and never a word
+ * `wordBars` (`suppressWordCloud`'s two floors): nothing under the response floor, and never a word
  * said once. Below the floor the payload's words are not even passed to the view.
  *
  * ## Removed by ruling

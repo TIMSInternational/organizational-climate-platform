@@ -239,8 +239,8 @@ public static class DashboardExport
         };
 
         // The team's count to a survey still open is held to the floor the leader's panel
-        // holds it to (`compose.flooredCount`, "menos de 5 respuestas"). The endpoint already
-        // sends it floored (null under 5, `DashboardEndpoints.DepartmentCountFloor`); the file
+        // holds it to (`compose.flooredCount`, "menos de {floor} respuestas"). The endpoint
+        // already sends it floored (null under `DashboardEndpoints.DepartmentCountFloor`); the file
         // keeps its own floor as a second lock, so a payload built any other way still cannot
         // print it -- see TeamCountFloor. Null is withheld, never zero.
         var floor = TeamCountFloor(dashboard.Climate);
@@ -280,8 +280,9 @@ public static class DashboardExport
     /// <remarks>
     /// <para>
     /// <see cref="DashboardDepartmentSurveySummary.ResponseCount"/> arrives floored from the
-    /// endpoint (null under 5), and the leader's Panel de Control hatches it under this floor -- "menos de 5 respuestas", with
-    /// the sentence "El conteo del equipo se muestra al llegar a 5 respuestas" (the canvas's
+    /// endpoint (null under the floor), and the leader's Panel de Control hatches it under that
+    /// same floor -- "menos de {floor} respuestas", with the sentence
+    /// "El conteo del equipo se muestra al llegar a {floor} respuestas" (the canvas's
     /// LeaderDashboard, 10 Sep; <c>web/src/features/dashboard/next/team/compose.ts</c>'s
     /// <c>countFloor</c> and <c>flooredCount</c>). The file behind that screen's "Exportar" is
     /// the same payload, so printing the raw count here would put in a file that leaves the

@@ -120,7 +120,7 @@ export interface WordBars {
 }
 
 /**
- * The word bars a session may show: `suppressWordCloud`'s two floors (the session under 5
+ * The word bars a session may show: `suppressWordCloud`'s two floors (the session under the response floor
  * withholds everything; a word said once is dropped and counted), then the most frequent
  * first, alphabetical among equals so the order is stable, capped at `limit`.
  */

@@ -165,7 +165,7 @@ public class DashboardExportTests
     [Fact]
     public void An_open_surveys_team_count_under_the_floor_prints_the_word_never_the_count()
     {
-        // The endpoint no longer sends a sub-floor count (null under 5); a payload built any
+        // The endpoint no longer sends a sub-floor count (null under the floor); a payload built any
         // other way still must not print one, which is what the raw 3 and 0 below stand for.
         var dashboard = DepartmentDashboard(SuppressedClimate()) with
         {

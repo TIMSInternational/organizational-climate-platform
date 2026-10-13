@@ -1855,7 +1855,7 @@ function Submitted({
         //
         // Deliberately not `charts/ProtectedCell`: that primitive decides
         // suppression itself from a response count against the anonymity floor, and
-        // its label states the floor ("withheld below 5 responses"). Neither number
+        // its label states the floor ("withheld below {threshold} responses"). Neither number
         // reaches this page — `SurveySubmissionResult` carries the suppressed field
         // names and neither a cohort count nor the company's floor — so rendering it
         // here would mean inventing a count to force the suppressed branch and

@@ -19,7 +19,7 @@ import type { ReportContents } from './model'
  * Kept as a fixture because it is a realistic single-survey shape and `derive.test.ts`
  * asserts the readings against it. Shaped from the real document of "Datos de clima — T3
  * 2026" as the local API returned it on 10 Sep 2026: its Q3 section, 24 responses, five
- * departments of which Finanzas is under the floor of 5. Nothing derived is typed here —
+ * departments of which Finanzas is under the floor. Nothing derived is typed here —
  * "4 de 5 grupos" is counted in `derive.ts`.
  */
 export const contentsFixture: ReportContents = {

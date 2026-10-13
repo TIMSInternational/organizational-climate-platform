@@ -116,7 +116,7 @@ const MAX_DOTS = 40
  * A dot per respondent **is** the count. Drawing `responses` dots for a group under the
  * privacy floor discloses its headcount exactly as surely as printing the number — a
  * reader counts four dots and knows there are four people, which is the disclosure the
- * floor of 5 exists to prevent. It would also pass every test that checks no *number* is
+ * floor exists to prevent. It would also pass every test that checks no *number* is
  * rendered, because the leak is in the geometry, not the text.
  *
  * So a protected band draws a CONSTANT `WITHHELD_DOTS` hatched marks and no count. The

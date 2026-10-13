@@ -15,7 +15,7 @@ import type { ResultBands } from '../../../../components/charts'
  *
  * A count under the anonymity floor is `null` in these models, never the number: the view
  * cannot print what it was never handed. `DepartmentAdminDashboard.activeSurveys[].responseCount`
- * arrives floored from the server (`null` under 5, `DashboardEndpoints.DepartmentCountFloor`)
+ * arrives floored from the server (`null` under `DashboardEndpoints.DepartmentCountFloor`)
  * and both artboards hatch it; the composer floors it again, so a payload built any other way
  * still cannot reach the view, and every reader of the model inherits it. The team's SIZE
  * stays unfloored, as the 27 Aug ruling says: a leader already knows their team.
@@ -85,7 +85,7 @@ export interface TeamOpenSurvey {
   daysLeft: number | null
   /**
    * This department's completed responses — `null` under the floor, so no reader of the
-   * model can print a sub-floor count (both artboards hatch it: "menos de 5 respuestas").
+   * model can print a sub-floor count (both artboards hatch it: "menos de {floor} respuestas").
    */
   responses: number | null
   /**

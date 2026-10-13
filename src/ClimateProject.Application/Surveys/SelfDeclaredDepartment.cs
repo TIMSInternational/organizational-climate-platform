@@ -10,7 +10,7 @@ namespace ClimateProject.Application.Surveys;
 /// (<c>docs/decisions/self-declared-demographics.md</c>, ruling 1). The column flows through
 /// the write-time floor, which needs a population this respondent is not in. So the value
 /// lives in <c>response_demographics</c> under <see cref="FieldKey"/>, holding the
-/// department's id, and the floor of 5 is applied at READ time by the same
+/// department's id, and the floor is applied at READ time by the same
 /// <c>SurveyResultsPrivacy.MeetsSegmentFloor</c> every department segment already passes.
 /// </para>
 /// <para>
