@@ -1368,6 +1368,34 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// The inverse, and the one that gives the 2026-10-13 default its teeth: a survey created
+    /// without a word about demographics ASKS them, because a climate QR asks the área and the
+    /// company's own fields and an opt-in default meant a QR survey segmented nothing unless an
+    /// admin remembered a checkbox.
+    /// </summary>
+    /// <remarks>
+    /// `SurveySettingsInput.SelfDeclaredDemographics` is left null here on purpose, so what is
+    /// under test is the entity initialiser rather than anything this test passes. Set
+    /// `Survey.Settings.SelfDeclaredDemographics` back to `false` and only this fails -- the
+    /// test above keeps passing, because it now says `false` explicitly.
+    /// </remarks>
+    [Fact]
+    public async Task A_survey_created_without_a_word_about_it_asks_the_demographics()
+    {
+        var survey = await ActiveSurveyAsync(settings: new SurveySettingsInput(Anonymous: true));
+        await SeedSelectFieldAsync("antiguedad", ["menos_1", "mas_3"], required: false, order: 0);
+
+        var view = await RespondViewAsync(_factory.CreateClient(), survey.Id);
+
+        Assert.NotEmpty(view.Demographics);
+        Assert.Contains(view.Demographics, d => d.Field == "antiguedad");
+
+        // And the stored row says so, so this is the default and not a read-time substitution.
+        var stored = await _harness.WithDbAsync(db => db.Surveys.AsNoTracking().FirstAsync(x => x.Id == survey.Id));
+        Assert.True(stored.Settings.SelfDeclaredDemographics);
+    }
+
+    /// <summary>
     /// A respondent who HAS an account is never asked, because their answer would be a
     /// claim rather than a fact: their demographics are snapshotted from their own profile
     /// through the write-time cohort floor. Self-declaring would let anyone with an account
