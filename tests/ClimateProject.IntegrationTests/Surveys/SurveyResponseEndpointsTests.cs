@@ -1354,14 +1354,45 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
     [Fact]
     public async Task The_respond_view_offers_nothing_when_the_survey_did_not_ask()
     {
-        // Opt-in. The setting defaults false precisely so that surveys already collecting
-        // responses do not start asking three questions nobody turned on.
-        var survey = await ActiveSurveyAsync(settings: new SurveySettingsInput(Anonymous: true));
+        // Opt-OUT since 2026-10-13: the setting now defaults TRUE, because a climate QR asks
+        // the área and the company's fields. So "did not ask" has to be said explicitly here --
+        // the guarantee under test is still that a survey with the setting off offers nothing,
+        // and the fixture moves rather than the expectation.
+        var survey = await ActiveSurveyAsync(
+            settings: new SurveySettingsInput(Anonymous: true, SelfDeclaredDemographics: false));
         await SeedSelectFieldAsync("area", ["operaciones"], required: true, order: 0);
 
         var view = await RespondViewAsync(_factory.CreateClient(), survey.Id);
 
         Assert.Empty(view.Demographics);
+    }
+
+    /// <summary>
+    /// The inverse, and the one that gives the 2026-10-13 default its teeth: a survey created
+    /// without a word about demographics ASKS them, because a climate QR asks the área and the
+    /// company's own fields and an opt-in default meant a QR survey segmented nothing unless an
+    /// admin remembered a checkbox.
+    /// </summary>
+    /// <remarks>
+    /// `SurveySettingsInput.SelfDeclaredDemographics` is left null here on purpose, so what is
+    /// under test is the entity initialiser rather than anything this test passes. Set
+    /// `Survey.Settings.SelfDeclaredDemographics` back to `false` and only this fails -- the
+    /// test above keeps passing, because it now says `false` explicitly.
+    /// </remarks>
+    [Fact]
+    public async Task A_survey_created_without_a_word_about_it_asks_the_demographics()
+    {
+        var survey = await ActiveSurveyAsync(settings: new SurveySettingsInput(Anonymous: true));
+        await SeedSelectFieldAsync("antiguedad", ["menos_1", "mas_3"], required: false, order: 0);
+
+        var view = await RespondViewAsync(_factory.CreateClient(), survey.Id);
+
+        Assert.NotEmpty(view.Demographics);
+        Assert.Contains(view.Demographics, d => d.Field == "antiguedad");
+
+        // And the stored row says so, so this is the default and not a read-time substitution.
+        var stored = await _harness.WithDbAsync(db => db.Surveys.AsNoTracking().FirstAsync(x => x.Id == survey.Id));
+        Assert.True(stored.Settings.SelfDeclaredDemographics);
     }
 
     /// <summary>

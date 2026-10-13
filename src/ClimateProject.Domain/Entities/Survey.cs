@@ -88,7 +88,21 @@ public class SurveySettings
     /// RECORDED, which this setting makes false.
     /// </para>
     /// </remarks>
-    public bool SelfDeclaredDemographics { get; set; }
+    /// <summary>
+    /// Whether the respondent is asked the área and the company's own demographic fields
+    /// before the questions.
+    /// </summary>
+    /// <remarks>
+    /// Defaults TRUE since 2026-10-13: a climate QR asks these, and an opt-in default meant a
+    /// QR survey segmented nothing unless an admin remembered a checkbox. It is still a
+    /// per-survey setting, because a microclimate asks nothing -- though a microclimate is a
+    /// different entity reached through <c>MicroclimateEndpoints</c> and does not read this at
+    /// all, so flipping the default cannot start one asking.
+    ///
+    /// Only read for a respondent with no account; a signed-in one's demographics are
+    /// snapshotted from their profile. See <c>AsksSelfDeclaredDemographics</c>.
+    /// </remarks>
+    public bool SelfDeclaredDemographics { get; set; } = true;
 
     /// <summary>
     /// Ask a respondent who has no account for their name (required) and email (optional),

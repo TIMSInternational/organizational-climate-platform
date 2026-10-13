@@ -355,77 +355,70 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
     /// last assertion fails.
     /// </summary>
     [Fact]
-    public async Task Completing_records_who_answered_in_a_row_that_cannot_be_joined_to_the_answers()
+    public async Task No_path_fills_the_participation_table_and_it_still_keeps_no_join_key()
     {
         var survey = await QrSurveyAsync(collectIdentity: true);
 
-        var http = await SubmitAsync(survey, Area(_operaciones), new SurveyParticipantInput("  Ana   Pérez ", " Ana@Planta.TEST "));
+        // The only submit the server now accepts: no identity at all. It used to carry a name
+        // and an email, and the row that produced is what the rest of this test measured.
+        var http = await SubmitAsync(survey, Area(_operaciones));
         Assert.Equal(HttpStatusCode.Created, http.StatusCode);
         var responseId = (await http.Content.ReadFromJsonAsync<SurveySubmissionResult>())!.ResponseId;
 
+        // The table's shape is still a guarantee worth pinning: no response id, no session, no
+        // demographics, no IP, no timestamp -- so if the ruling moves again and the write comes
+        // back, it comes back to a table that cannot be joined to the answers.
         var columns = await ScalarListAsync(
             "SELECT column_name AS \"Value\" FROM information_schema.columns WHERE table_name = 'survey_participations' ORDER BY column_name");
         Assert.Equal(["company_id", "email", "id", "name", "participated_on", "survey_id"], columns);
 
-        var participation = Assert.Single(await _harness.WithDbAsync(db => db.SurveyParticipations
+        // And nothing reaches it, from a completing post or any other path (ruled 2026-10-13:
+        // nobody is asked who they are, so there is nothing to record). The xmin ordering this
+        // test used to assert is gone with the write it ordered.
+        Assert.Empty(await _harness.WithDbAsync(db => db.SurveyParticipations
             .AsNoTracking().Where(p => p.SurveyId == survey.Id).ToListAsync()));
-        Assert.Equal("Ana Pérez", participation.Name);
-        Assert.Equal("ana@planta.test", participation.Email);
-        Assert.Equal(_companyId, participation.CompanyId);
-        Assert.NotEqual(responseId, participation.Id);
-        Assert.InRange(
-            participation.ParticipatedOn,
-            DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1)),
-            DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)));
 
-        var responseXmin = Assert.Single(await ScalarListAsync(
-            $"SELECT xmin::text AS \"Value\" FROM responses WHERE \"Id\" = '{responseId}'"));
-        var participationXmin = Assert.Single(await ScalarListAsync(
-            $"SELECT xmin::text AS \"Value\" FROM survey_participations WHERE id = '{participation.Id}'"));
-        // GREATER, not merely different -- and the first version of this assertion was
-        // "different", which a compiling mutation (write moved inside the response transaction)
-        // passed: EF Core's SaveChanges takes a SAVEPOINT inside a user transaction, so the
-        // response row carries the subtransaction's xid while a same-transaction participation
-        // row carries the parent's, and the two differ anyway. A participation written by a
-        // LATER transaction, after commit, has a larger xid; one written in the same
-        // transaction has an equal (no savepoint) or smaller (savepoint) one.
-        Assert.True(
-            long.Parse(participationXmin, CultureInfo.InvariantCulture) > long.Parse(responseXmin, CultureInfo.InvariantCulture),
-            $"participation xmin {participationXmin} must be later than response xmin {responseXmin}");
-
-        // And the response itself carries no trace of who.
+        // The response itself carries no trace of who, as before.
         var row = await _harness.WithDbAsync(db => db.Responses.AsNoTracking().FirstAsync(r => r.Id == responseId));
         Assert.Null(row.UserId);
         Assert.Null(row.IpAddress);
         Assert.Null(row.UserAgent);
     }
 
+    /// <summary>
+    /// A name with no email used to be the "operario sin correo" case, and enough to record a
+    /// participation. It is now refused like any other identity -- kept as its own test because
+    /// <c>A_submit_that_carries_a_name_is_refused</c> sends both halves, and a name-only body is
+    /// the shape a stale bundle is most likely to send.
+    /// </summary>
     [Fact]
-    public async Task A_name_without_an_email_is_enough()
+    public async Task A_submit_that_carries_only_a_name_is_refused_too()
     {
         var survey = await QrSurveyAsync(collectIdentity: true);
 
         var http = await SubmitAsync(survey, Area(_operaciones), new SurveyParticipantInput("José Mora"));
 
-        Assert.Equal(HttpStatusCode.Created, http.StatusCode);
-        var participation = Assert.Single(await _harness.WithDbAsync(db => db.SurveyParticipations
+        Assert.Equal(HttpStatusCode.BadRequest, http.StatusCode);
+        Assert.Empty(await _harness.WithDbAsync(db => db.SurveyParticipations
             .AsNoTracking().Where(p => p.SurveyId == survey.Id).ToListAsync()));
-        Assert.Null(participation.Email);
     }
 
+    /// <summary>
+    /// Every one of these is refused because it carries an identity AT ALL, not because the
+    /// identity is malformed -- which is why the `(null, null)` case that used to head this list
+    /// is gone: a post with no identity is now the accepted shape, and
+    /// <c>No_path_fills_the_participation_table_and_it_still_keeps_no_join_key</c> pins it.
+    /// Refusing writes nothing, not even the response.
+    /// </summary>
     [Theory]
-    [InlineData(null, null)]
     [InlineData("   ", "ana@planta.test")]
     [InlineData("Ana", "not-an-email")]
     [InlineData("Ana", "ana@@planta.test")]
-    public async Task A_completing_post_without_a_valid_identity_is_refused_and_writes_nothing(string? name, string? email)
+    public async Task A_completing_post_that_carries_any_identity_is_refused_and_writes_nothing(string? name, string? email)
     {
         var survey = await QrSurveyAsync(collectIdentity: true);
 
-        var http = await SubmitAsync(
-            survey,
-            Area(_operaciones),
-            name is null && email is null ? null : new SurveyParticipantInput(name, email));
+        var http = await SubmitAsync(survey, Area(_operaciones), new SurveyParticipantInput(name, email));
 
         Assert.Equal(HttpStatusCode.BadRequest, http.StatusCode);
         Assert.Equal(0, await _harness.WithDbAsync(db => db.Responses.CountAsync(r => r.SurveyId == survey.Id)));
@@ -437,22 +430,30 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
     {
         var survey = await QrSurveyAsync(collectIdentity: true);
 
-        var http = await SubmitAsync(survey, Area(_operaciones), new SurveyParticipantInput("Ana", $"ana@{_mail}"), isComplete: false);
+        // Without an identity, which is the only shape accepted now. The guarantee is unchanged:
+        // a respondent who abandons halfway leaves nothing behind that says they were here.
+        var http = await SubmitAsync(survey, Area(_operaciones), isComplete: false);
 
-        Assert.True(http.IsSuccessStatusCode);
+        Assert.True(http.IsSuccessStatusCode, $"a partial save must be accepted, got {http.StatusCode}");
         Assert.Equal(0, await _harness.WithDbAsync(db => db.SurveyParticipations.CountAsync(p => p.SurveyId == survey.Id)));
     }
 
+    /// <summary>
+    /// The de-duplication this used to assert (one participation for two answers from one email)
+    /// is unreachable now that no email is collected. What survives is the half that matters to
+    /// a respondent: answering twice is never blocked, and the second answer is a second
+    /// response rather than a refusal.
+    /// </summary>
     [Fact]
-    public async Task Answering_twice_with_one_email_is_one_participation_and_never_blocks_the_response()
+    public async Task Answering_twice_is_never_blocked_and_records_no_participation()
     {
         var survey = await QrSurveyAsync(collectIdentity: true);
 
-        Assert.Equal(HttpStatusCode.Created, (await SubmitAsync(survey, Area(_operaciones), new SurveyParticipantInput("Ana", $"ana@{_mail}"))).StatusCode);
-        Assert.Equal(HttpStatusCode.Created, (await SubmitAsync(survey, Area(_ventas), new SurveyParticipantInput("Ana P.", $"ANA@{_mail}"))).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await SubmitAsync(survey, Area(_operaciones))).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await SubmitAsync(survey, Area(_ventas))).StatusCode);
 
         Assert.Equal(2, await _harness.WithDbAsync(db => db.Responses.CountAsync(r => r.SurveyId == survey.Id && r.IsComplete)));
-        Assert.Equal(1, await _harness.WithDbAsync(db => db.SurveyParticipations.CountAsync(p => p.SurveyId == survey.Id)));
+        Assert.Equal(0, await _harness.WithDbAsync(db => db.SurveyParticipations.CountAsync(p => p.SurveyId == survey.Id)));
     }
 
     [Fact]
@@ -481,14 +482,15 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task An_admin_sees_who_answered_and_who_is_pending_and_nothing_else()
+    public async Task An_admin_sees_nobody_answered_everybody_pending_and_nothing_else()
     {
         var survey = await QrSurveyAsync(collectIdentity: true);
         await SeedUserAsync("Ana Pérez", $"ana@{_mail}", isActive: true);
         await SeedUserAsync("Bruno Solís", $"bruno@{_mail}", isActive: true);
         await SeedUserAsync("Carla Ruiz", $"carla@{_mail}", isActive: false);
-        await SubmitAsync(survey, Area(_operaciones), new SurveyParticipantInput("Ana Pérez", $"ANA@{_mail}"));
-        await SubmitAsync(survey, Area(_ventas), new SurveyParticipantInput("Operario sin correo"));
+        // No identity on either submit: one carrying a name is refused outright now.
+        Assert.Equal(HttpStatusCode.Created, (await SubmitAsync(survey, Area(_operaciones))).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await SubmitAsync(survey, Area(_ventas))).StatusCode);
 
         var admin = await AdminAsync();
         var http = await admin.GetAsync($"/surveys/{survey.Id}/participation");
@@ -496,13 +498,23 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
         var json = await http.Content.ReadAsStringAsync();
         var view = JsonSerializer.Deserialize<SurveyParticipationView>(json, JsonOptions)!;
 
+        // KNOWN INCONSISTENCY, reported rather than asserted away: this still reports TRUE,
+        // because the endpoint reads the stored `CollectParticipantIdentity` column and the
+        // 2026-10-13 ruling was applied at `AsksParticipantIdentity` instead, deliberately, so
+        // it is one line to revert. The result is a screen that says a survey collects who
+        // answered beside an empty list of who answered. Worth settling with Federico: either
+        // the view reads the predicate, or the column is migrated off.
         Assert.True(view.CollectsParticipantIdentity);
-        Assert.Equal(2, view.AnsweredCount);
-        Assert.Equal(["Ana Pérez", "Operario sin correo"], view.Answered.Select(a => a.Name));
-        Assert.Equal($"ana@{_mail}", view.Answered[0].Email);
 
+        // Two people answered and the view knows of neither, because there is no identity to
+        // know. This is the ruling, not a defect: `survey_participations` recorded THAT an
+        // anonymous respondent answered, and nobody is asked who they are any more.
+        Assert.Equal(0, view.AnsweredCount);
+        Assert.Empty(view.Answered);
+
+        // So every active user is still pending, and the deactivated one is in neither list.
+        Assert.Contains(view.Pending, p => p.Email == $"ana@{_mail}");
         Assert.Contains(view.Pending, p => p.Email == $"bruno@{_mail}");
-        Assert.DoesNotContain(view.Pending, p => p.Email == $"ana@{_mail}");
         Assert.DoesNotContain(view.Pending, p => p.Email == $"carla@{_mail}");
         Assert.Equal(view.Pending.Count, view.PendingCount);
 
@@ -511,9 +523,6 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
         Assert.Equal(
             ["answered", "answeredCount", "collectsParticipantIdentity", "pending", "pendingCount", "surveyId"],
             document.RootElement.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
-        Assert.Equal(
-            ["email", "name", "participatedOn"],
-            document.RootElement.GetProperty("answered")[0].EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
         Assert.DoesNotContain(_operaciones.ToString(), json, StringComparison.OrdinalIgnoreCase);
     }
 
