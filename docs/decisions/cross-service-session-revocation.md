@@ -6,7 +6,8 @@ writes "deactivating a user ends their sessions" has to reckon with the word *wh
 
 **The gap in one sentence:** climate-project-api can revoke a token mid-life; climate-tracking
 cannot see that revocation, so a session ended on one service stays live on the other for the
-rest of the token's lifetime — **at most 24 hours, and typically less.**
+rest of the token's lifetime — **at most one idle window: 60 minutes as shipped, and 24 hours
+only on a deployment whose super admin has raised `SessionTimeoutMinutes` to the ceiling.**
 
 ## The mechanism, on both sides
 
@@ -47,15 +48,29 @@ So the revocation is real, it is enforced, and it stops at the service boundary.
 ## The window, stated exactly
 
 **A token revoked on climate-project-api remains valid on climate-tracking until its `exp`.** The
-mint's lifetime is 24 hours (`JwtTokenService.cs:12`), so the window is *at most* 24 hours — it is
-the token's *remaining* life, which for a session revoked late in its day may be minutes.
+mint's lifetime is the idle window — `SystemSettings.SessionTimeoutMinutes`, shipped at 60 minutes
+and clamped to a 24-hour ceiling by `SessionWindows` — so the window is *at most* that, and it is
+the token's *remaining* life, which for a session revoked late in its window may be seconds.
 
-Nothing shortens it: there is no refresh cycle that would re-mint on a shorter cadence (the web
-client's `authFetch` does not refresh — a 401 clears the token and redirects to `/login`), and no
-client re-authenticates against climate-tracking separately.
+This section read a flat 24 hours until the idle session timeout landed. The shipped window is
+therefore now **24 times shorter**, and only a deployment that raises `SessionTimeoutMinutes` to
+the ceiling restores the old figure.
+
+**The refresh cycle does not widen it.** `POST /auth/refresh` re-mints on evidence of a person, so
+an active session slides. It is `RequireAuthorization()`, which means
+`OnTokenValidated = SecurityStampValidation.ValidateAsync` (`Program.cs:261`) compares the
+presented token's `securityStamp` against the row *before* `RefreshAsync` runs — so a revoked
+session cannot refresh itself, and the slide stops at the same gate every other authenticated
+request stops at. What bounds a session that is being used is `SessionWindows.AbsoluteCeiling`:
+24 hours from first sign-in, carried in `StartedAt` through every re-mint precisely so that
+sliding cannot extend it.
+
+No client re-authenticates against climate-tracking separately.
 
 `CrossServiceTokenTests.The_window_a_revoked_token_stays_live_over_there_for_is_the_token_lifetime`
-pins that 24 to the token itself, so this paragraph cannot quietly go stale.
+pins that number to the token itself, so this paragraph cannot quietly go stale. It is a
+hand-written literal on purpose: it failed the moment the idle window landed, which is how this
+section came to be corrected instead of left wrong.
 
 ## What is and is not affected
 

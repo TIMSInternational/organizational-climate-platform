@@ -11,7 +11,8 @@ namespace ClimateProject.Api.Infrastructure;
 /// <remarks>
 /// ## What this closes
 ///
-/// Tokens here are stateless HS256 with a 24-hour lifetime, so before this ran, changing a
+/// Tokens here are stateless HS256 that stay valid for their whole lifetime, so before this ran,
+/// changing a
 /// password ended no session at all: the new hash stopped a future *login*, and every token
 /// already in somebody's hands — including an attacker's — kept working until it expired.
 /// Somebody changing their password because they believe they are compromised is the exact

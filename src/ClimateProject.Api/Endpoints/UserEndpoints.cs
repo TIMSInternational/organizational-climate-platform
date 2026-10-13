@@ -192,7 +192,7 @@ public static class UserEndpoints
         if (request.IsActive.HasValue)
         {
             // Deactivating has to end the sessions the account already has, not just refuse
-            // it new ones (#286). Tokens here are stateless HS256 with a 24-hour lifetime and
+            // it new ones (#286). Tokens here are stateless HS256 valid for their whole lifetime and
             // #280's policy reads the isActive claim minted INTO the token, so flipping this
             // column alone left the deactivated user's browser working for up to a day --
             // which is the whole window an offboarding exists to close. Rotating the stamp
