@@ -42,6 +42,7 @@ public class CompanyConfiguration : IEntityTypeConfiguration<Company>
             settings.Property(s => s.ResultBandCriticalName).HasColumnName("settings_band_critical_name").HasMaxLength(60);
             settings.Property(s => s.ResultBandOpportunityName).HasColumnName("settings_band_opportunity_name").HasMaxLength(60);
             settings.Property(s => s.ResultBandStrengthName).HasColumnName("settings_band_strength_name").HasMaxLength(60);
+            settings.Property(s => s.ResultScale).HasColumnName("settings_result_scale").HasMaxLength(16).IsRequired().HasDefaultValue("mean");
         });
     }
 }

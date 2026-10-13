@@ -1,3 +1,4 @@
+using ClimateProject.Application.Exports;
 using ClimateProject.Domain.Entities;
 
 namespace ClimateProject.Application.OrgStructure;
@@ -22,23 +23,35 @@ public sealed record ResultBandsDto(
     decimal StrengthMin,
     string? CriticalName,
     string? OpportunityName,
-    string? StrengthName)
+    string? StrengthName,
+    string Scale)
 {
+    /// <param name="settings">
+    /// <c>Scale</c> is how the company READS a result: <c>"mean"</c> (1,00–5,00) or
+    /// <c>"percent"</c> (0–100, mean × 20). The two boundaries above stay on 1–5 either way;
+    /// a reader on percent converts them for display exactly as it converts the scores.
+    /// </param>
     public static ResultBandsDto From(CompanySettings settings) => new(
         settings.ResultBandOpportunityMin,
         settings.ResultBandStrengthMin,
         settings.ResultBandCriticalName,
         settings.ResultBandOpportunityName,
-        settings.ResultBandStrengthName);
+        settings.ResultBandStrengthName,
+        ScoreScales.Parse(settings.ResultScale).Key());
 }
 
 /// <summary>The whole scale, replaced at once: a half-written scale is not a scale.</summary>
+/// <param name="Scale">
+/// <c>"mean"</c> or <c>"percent"</c>; <c>null</c> leaves the company's reading as it is, so a
+/// caller written before the reading existed cannot reset it.
+/// </param>
 public sealed record UpdateResultBandsRequest(
     decimal OpportunityMin,
     decimal StrengthMin,
     string? CriticalName,
     string? OpportunityName,
-    string? StrengthName);
+    string? StrengthName,
+    string? Scale = null);
 
 public static class ResultBandsValidation
 {
@@ -76,6 +89,11 @@ public static class ResultBandsValidation
             return "The strength area must start at 5.00 or below";
         }
 
+        if (request.Scale is not null && !ScoreScales.IsKnown(request.Scale))
+        {
+            return "The result scale must be \"mean\" or \"percent\"";
+        }
+
         foreach (var name in new[] { request.CriticalName, request.OpportunityName, request.StrengthName })
         {
             if (name is not null && name.Trim().Length > MaxNameLength)
@@ -95,6 +113,10 @@ public static class ResultBandsValidation
         settings.ResultBandCriticalName = Normalise(request.CriticalName);
         settings.ResultBandOpportunityName = Normalise(request.OpportunityName);
         settings.ResultBandStrengthName = Normalise(request.StrengthName);
+        if (request.Scale is not null)
+        {
+            settings.ResultScale = request.Scale;
+        }
     }
 
     private static string? Normalise(string? name) => string.IsNullOrWhiteSpace(name) ? null : name.Trim();

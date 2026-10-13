@@ -146,7 +146,7 @@ public class ReportShareEndpointsTests : IAsyncLifetime
         var share = await MintAsync(admin, reportId);
 
         var before = await AnonymousClient().GetFromJsonAsync<SharedReportResponse>($"/shared/reports/{share.Token}");
-        Assert.Equal(new ResultBandsDto(3.00m, 4.00m, null, null, null), before!.ResultBands);
+        Assert.Equal(new ResultBandsDto(3.00m, 4.00m, null, null, null, "mean"), before!.ResultBands);
 
         await WithDbAsync(async db =>
         {
@@ -160,7 +160,7 @@ public class ReportShareEndpointsTests : IAsyncLifetime
         var response = await AnonymousClient().GetAsync($"/shared/reports/{share.Token}");
         var raw = await response.Content.ReadAsStringAsync();
         var after = JsonSerializer.Deserialize<SharedReportResponse>(raw, new JsonSerializerOptions(JsonSerializerDefaults.Web));
-        Assert.Equal(new ResultBandsDto(2.50m, 4.50m, "Zona roja", null, null), after!.ResultBands);
+        Assert.Equal(new ResultBandsDto(2.50m, 4.50m, "Zona roja", null, null, "mean"), after!.ResultBands);
         Assert.DoesNotContain(_companyId.ToString(), raw, StringComparison.OrdinalIgnoreCase);
     }
 

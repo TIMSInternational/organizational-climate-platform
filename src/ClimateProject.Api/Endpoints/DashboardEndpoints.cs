@@ -282,7 +282,8 @@ public static class DashboardEndpoints
             return loaded.Failure;
         }
 
-        var document = DashboardExport.ForDepartmentAdmin(loaded.Dashboard!, lang, DateTimeOffset.UtcNow);
+        var scale = await CompanyScoreScale.LoadAsync(db, loaded.Dashboard!.CompanyId, cancellationToken);
+        var document = DashboardExport.ForDepartmentAdmin(loaded.Dashboard!, lang, DateTimeOffset.UtcNow, scale);
         return File(document, resolved);
     }
 

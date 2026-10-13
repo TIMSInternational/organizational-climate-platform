@@ -41,4 +41,9 @@ public class CompanySettings
     public string? ResultBandCriticalName { get; set; }
     public string? ResultBandOpportunityName { get; set; }
     public string? ResultBandStrengthName { get; set; }
+
+    // How a human reads a result: "mean" prints the 1,00–5,00 mean, "percent" prints it on
+    // 0–100 (mean × 20). Storage, aggregation, the privacy floor and the bands above stay on
+    // 1–5 whatever this says; only what is displayed or downloaded converts.
+    public string ResultScale { get; set; } = "mean";
 }

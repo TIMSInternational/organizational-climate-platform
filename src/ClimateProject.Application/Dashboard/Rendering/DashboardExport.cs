@@ -209,7 +209,8 @@ public static class DashboardExport
     public static DashboardExportDocument ForDepartmentAdmin(
         DepartmentAdminDashboard dashboard,
         string? locale,
-        DateTimeOffset generatedAt)
+        DateTimeOffset generatedAt,
+        ScoreScale scale = ScoreScale.Mean)
     {
         ArgumentNullException.ThrowIfNull(dashboard);
 
@@ -261,7 +262,7 @@ public static class DashboardExport
                     s.ResponseCount is int count && count >= floor ? shared.Count(count) : shared.Withheld,
                 ])]));
 
-        sections.Add(ClimateSection(dashboard.Climate, copy));
+        sections.Add(ClimateSection(dashboard.Climate, copy, scale));
 
         return new DashboardExportDocument(
             copy.DepartmentDashboardTitle,
@@ -312,7 +313,7 @@ public static class DashboardExport
     /// "not available" rather than as <c>0</c>.</item>
     /// </list>
     /// </remarks>
-    private static DashboardExportSection ClimateSection(DashboardTeamClimate? climate, DashboardExportCopy copy)
+    private static DashboardExportSection ClimateSection(DashboardTeamClimate? climate, DashboardExportCopy copy, ScoreScale scale)
     {
         var shared = copy.Shared;
 
@@ -336,6 +337,13 @@ public static class DashboardExport
             new(shared.Respondents, shared.Count(climate.RespondentCount)),
         };
 
+        // Stated only when it is not the mean, so a company that never chose a scale gets the
+        // file it always got; the CSV and the PDF both carry it, since both print the scores.
+        if (scale == ScoreScale.Percent)
+        {
+            rows.Add(new(copy.ScoreScale, scale.RangeLabel()));
+        }
+
         return new DashboardExportSection(
             copy.TeamClimate,
             rows,
@@ -343,8 +351,8 @@ public static class DashboardExport
             TableRows: [.. climate.Dimensions.Select(d => (IReadOnlyList<string>)
             [
                 d.Dimension,
-                // Null is NOT zero. `Decimal` renders it as the locale's "not available".
-                shared.Decimal(d.AverageScore),
+                // Null is NOT zero. `Score` renders it as the locale's "not available".
+                shared.Score(d.AverageScore, scale),
             ])]);
     }
 
