@@ -93,7 +93,12 @@ public static class SurveyParticipationEndpoints
 
         return Results.Ok(new SurveyParticipationView(
             survey.Id,
-            survey.CollectParticipantIdentity,
+            // What the respond flow ACTUALLY does, not what the survey was authored to do.
+            // Reading the stored column here reported "this survey collects who answered"
+            // beside an answered list that the 2026-10-13 ruling guarantees is empty -- the
+            // column survives so the ruling is one line to revert, but it is not something
+            // an administrator should be shown as though it were still in force.
+            SurveyResponsePrivacy.CollectsParticipantIdentity(survey.CollectParticipantIdentity),
             answered.Count,
             pending.Count,
             answered,

@@ -498,13 +498,15 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
         var json = await http.Content.ReadAsStringAsync();
         var view = JsonSerializer.Deserialize<SurveyParticipationView>(json, JsonOptions)!;
 
-        // KNOWN INCONSISTENCY, reported rather than asserted away: this still reports TRUE,
-        // because the endpoint reads the stored `CollectParticipantIdentity` column and the
-        // 2026-10-13 ruling was applied at `AsksParticipantIdentity` instead, deliberately, so
-        // it is one line to revert. The result is a screen that says a survey collects who
-        // answered beside an empty list of who answered. Worth settling with Federico: either
-        // the view reads the predicate, or the column is migrated off.
-        Assert.True(view.CollectsParticipantIdentity);
+        // SETTLED 2026-10-13: the view reports the PREDICATE, not the stored column. This
+        // survey was authored with `collectIdentity: true` and the flag still reads false,
+        // because no path can act on it any more -- a screen saying a survey collects who
+        // answered, beside an answered list the ruling guarantees is empty, was a false claim
+        // about the product rather than a record of intent. The column, the table, the DTO
+        // flag and the authoring switch all survive; the revert is one line, in
+        // `SurveyResponsePrivacy.CollectsParticipantIdentity`, and it moves this view and the
+        // respond flow together instead of letting them disagree again.
+        Assert.False(view.CollectsParticipantIdentity);
 
         // Two people answered and the view knows of neither, because there is no identity to
         // know. This is the ruling, not a defect: `survey_participations` recorded THAT an

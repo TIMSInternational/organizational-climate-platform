@@ -999,9 +999,12 @@ public static class SurveyResponseEndpoints
     /// </remarks>
     private static bool AsksParticipantIdentity(Survey survey, Respondent respondent)
     {
-        _ = survey;
         _ = respondent;
-        return false;
+        // One predicate for the whole product, in SurveyResponsePrivacy. The admin's
+        // participation view reads the same call, because it was reporting the stored
+        // column while this path had stopped asking -- see that method's remarks.
+        return SurveyResponsePrivacy.CollectsParticipantIdentity(
+            survey.Settings.CollectParticipantIdentity);
     }
 
     /// <summary>
