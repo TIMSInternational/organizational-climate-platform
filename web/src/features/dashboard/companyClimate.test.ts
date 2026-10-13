@@ -8,6 +8,7 @@ import {
   readDepartments,
 } from './companyClimate'
 import type { DashboardDepartmentSummary } from './api/dashboard'
+import { ANONYMITY_FLOOR } from '../../components/charts'
 
 function department(
   overrides: Partial<DashboardDepartmentSummary> & { id: string },
@@ -43,13 +44,15 @@ describe('readDepartments', () => {
 
   /**
    * The floor is decided on RESPONSES, not on headcount: a 40-person department with
-   * three answers is exactly the case the anonymity floor exists for, and keying it off
-   * `memberCount` would publish it.
+   * a handful of answers is exactly the case the anonymity floor exists for, and keying
+   * it off `memberCount` would publish it. Both counts are derived from the floor so the
+   * pair keeps straddling it when the floor moves — a literal below one floor is a
+   * literal above the next.
    */
   it('suppresses a department by its response count, not by its headcount', () => {
     const [big, small] = readDepartments([
-      department({ id: 'big', memberCount: 40, completedResponseCount: 3 }),
-      department({ id: 'small', memberCount: 4, completedResponseCount: 9 }),
+      department({ id: 'big', memberCount: 40, completedResponseCount: ANONYMITY_FLOOR - 1 }),
+      department({ id: 'small', memberCount: ANONYMITY_FLOOR - 1, completedResponseCount: ANONYMITY_FLOOR + 1 }),
     ])
 
     expect(big.suppressed).toBe(true)
@@ -148,7 +151,7 @@ describe('publishableDepartments', () => {
 
   it('is empty when every department is under the floor', () => {
     const readings = readDepartments([
-      department({ id: 'a', memberCount: 8, completedResponseCount: 4 }),
+      department({ id: 'a', memberCount: 8, completedResponseCount: ANONYMITY_FLOOR - 1 }),
       department({ id: 'b', memberCount: 6, completedResponseCount: 1 }),
     ])
 

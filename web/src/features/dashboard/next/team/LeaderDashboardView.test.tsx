@@ -15,6 +15,17 @@ import en from '../../../../i18n/en.json'
 import { downloadBlobFile } from '../../../../lib/downloadBlobFile'
 import { ANONYMITY_FLOOR } from '../../../../components/charts'
 
+/**
+ * The floor the SERVER says it applied, deliberately higher than `ANONYMITY_FLOOR`.
+ *
+ * `compose.ts`'s `countFloor` is `Math.max(ANONYMITY_FLOOR, climate.minimumGroupSize)`,
+ * so every number this screen states is the server's when the tenant was held to a
+ * higher one. A fixture equal to the platform constant could not tell the max apart
+ * from "ignore the payload", which is the half of `countFloor` that protects a tenant
+ * that raised its own floor.
+ */
+const SERVER_FLOOR = ANONYMITY_FLOOR + 2
+
 // The file is saved through a Blob; the test reads which URL was fetched, not the disk.
 vi.mock('../../../../lib/downloadBlobFile', () => ({ downloadBlobFile: vi.fn() }))
 
@@ -48,7 +59,7 @@ function climate(scores: readonly number[], overrides: Partial<DashboardTeamClim
     surveyEndDate: '2026-08-06T02:05:22.922+00:00',
     respondentCount: 6,
     isSuppressed: false,
-    minimumGroupSize: 5,
+    minimumGroupSize: SERVER_FLOOR,
     dimensions: KEYS.map((dimension, index) => ({ dimension, averageScore: scores[index] ?? null })),
     organization: organization(ORG_Q3),
     ...overrides,
@@ -294,7 +305,7 @@ describe('LeaderDashboardView', () => {
     expect(legend().textContent).not.toContain('24')
     expect(legend().textContent).not.toContain(copy.legendOrg.replace('{count}', '24'))
     // The respondents tile is hatched, not "0".
-    expect(screen.getByRole('img', { name: copy.responsesWithheldLabel.replace('{floor}', String(ANONYMITY_FLOOR)) })).toBeTruthy()
+    expect(screen.getByRole('img', { name: copy.responsesWithheldLabel.replace('{floor}', String(SERVER_FLOOR)) })).toBeTruthy()
     const tiles = [...document.querySelectorAll<HTMLElement>('[data-slot="nodo-tile"]')]
     expect(tiles[1]?.textContent).not.toMatch(/\b0\b/)
   })
@@ -314,7 +325,7 @@ describe('LeaderDashboardView', () => {
 
     expect(
       screen.getByText(
-        copy.surveyWithheld.replace('{survey}', 'Encuesta de Clima Q4 (abierta) (Copia)').replace('{floor}', String(ANONYMITY_FLOOR)),
+        copy.surveyWithheld.replace('{survey}', 'Encuesta de Clima Q4 (abierta) (Copia)').replace('{floor}', String(SERVER_FLOOR)),
       ),
     ).toBeTruthy()
     expect(document.querySelectorAll('[data-slot="team-dimension"]')).toHaveLength(0)
@@ -347,7 +358,7 @@ describe('LeaderDashboardView', () => {
     for (const key of KEYS) {
       expect(within(dimensionCard(key)).queryByText(copy.orgWord), key).toBeNull()
     }
-    expect(legend().textContent).toContain(copy.legendOrgWithheld.replace('{floor}', String(ANONYMITY_FLOOR)))
+    expect(legend().textContent).toContain(copy.legendOrgWithheld.replace('{floor}', String(SERVER_FLOOR)))
     expect(legend().textContent).not.toMatch(/\b24\b/)
     // The plan rule still stands: the team's own cells are still judged, by the shared rule
     // — Q3's Reconocimiento 3,5 is inside the band, so 'on'. What matters here is that a
@@ -365,11 +376,11 @@ describe('LeaderDashboardView', () => {
 
     const participation = card(copy.participationHeading.replace('{wave}', 'Q4'))
     const hatch = within(participation).getByRole('img', {
-      name: copy.participationUnderFloorLabel.replace('{floor}', String(ANONYMITY_FLOOR)),
+      name: copy.participationUnderFloorLabel.replace('{floor}', String(SERVER_FLOOR)),
     })
-    expect(hatch.textContent).toBe(copy.participationUnderFloor.replace('{floor}', String(ANONYMITY_FLOOR)))
+    expect(hatch.textContent).toBe(copy.participationUnderFloor.replace('{floor}', String(SERVER_FLOOR)))
     expect(
-      within(participation).getByText(copy.companyUnderFloor.replace('{floor}', String(ANONYMITY_FLOOR)).replace('{target}', '24')),
+      within(participation).getByText(copy.companyUnderFloor.replace('{floor}', String(SERVER_FLOOR)).replace('{target}', '24')),
     ).toBeTruthy()
     expect(participation.textContent).not.toMatch(/(^|\D)3(\D|$)/)
     expect(hatch.getAttribute('title')).not.toMatch(/(^|\D)3(\D|$)/)

@@ -492,7 +492,7 @@ describe('AdminDashboardNextView', () => {
       'critical',
     ])
     expect(legend.textContent).toContain('4.00 to 5.00')
-    expect(legend.textContent).toContain(en.charts.next.legendProtected.replace('{threshold}', '5'))
+    expect(legend.textContent).toContain(en.charts.next.legendProtected.replace('{threshold}', String(ANONYMITY_FLOOR)))
   })
 
   it('heads the map with whole dimension names in the model’s column order, the whole name on hover', () => {

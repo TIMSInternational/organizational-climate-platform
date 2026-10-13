@@ -7,6 +7,10 @@ import { CompanyContextProvider } from '../../../company-context'
 import { setToken } from '../../../auth/token'
 import type { CompanyAdminDashboard } from '../api/dashboard'
 import { tokenFor as tokenForClaims } from '../../../test/jwtFixture'
+import { ANONYMITY_FLOOR } from '../../../components/charts'
+
+/** One response short of the floor: the withheld case, derived so it stays withheld. */
+const WITHHELD_RESPONSES = ANONYMITY_FLOOR - 1
 
 /**
  * The company view `/dashboard` drew until the redesign replaced it with
@@ -211,7 +215,8 @@ describe('CompanyAdminDashboardView', () => {
   /**
    * The suppression principle, both halves of it.
    *
-   * Finance has 3 completed responses from 40 people — under the floor — so its cell is
+   * Finance has one response fewer than the floor, from twelve times that many people
+   * (so its withheld rate is 8 per 100 whatever the floor is) — so its cell is
    * drawn as protected rather than left empty, and neither its rate (8 per 100) nor the
    * count behind it may appear anywhere. It must also not be counted among the
    * departments below target: one hatched row plus a below-target count of two would tell
@@ -222,7 +227,7 @@ describe('CompanyAdminDashboardView', () => {
     const payload = companyPayload()
     payload.departments = [
       ...payload.departments,
-      { id: 'd2', name: 'Finance', memberCount: 40, completedResponseCount: 3 },
+      { id: 'd2', name: 'Finance', memberCount: WITHHELD_RESPONSES * 12, completedResponseCount: WITHHELD_RESPONSES },
     ]
     serves(payload)
 
@@ -230,8 +235,10 @@ describe('CompanyAdminDashboardView', () => {
 
     const cell = await screen.findByRole('img', { name: /Finance/ })
     expect(cell.getAttribute('aria-label')).toContain('protected')
-    // Neither the withheld rate nor the count behind it.
-    expect(cell.getAttribute('aria-label')).not.toContain('3')
+    // Neither the withheld rate nor the count behind it. The count is derived, because the
+    // label legitimately states the FLOOR: a literal here can be the floor's own digit, and
+    // the assertion would then fail on the very sentence it exists to allow.
+    expect(cell.getAttribute('aria-label')).not.toContain(String(WITHHELD_RESPONSES))
     expect(screen.queryByText('8')).toBeNull()
     // Engineering alone is behind; Finance is not counted even though it is further back.
     expect(screen.getByText(/Engineering is behind the organisation/)).toBeTruthy()
@@ -340,7 +347,7 @@ describe('CompanyAdminDashboardView', () => {
     payload.userCount = 24
     payload.completedResponseCount = 12
     payload.departments = [
-      { id: 'd1', name: 'Operations', memberCount: 8, completedResponseCount: 4 },
+      { id: 'd1', name: 'Operations', memberCount: 8, completedResponseCount: ANONYMITY_FLOOR - 1 },
       { id: 'd2', name: 'Support', memberCount: 6, completedResponseCount: 1 },
     ]
     serves(payload)

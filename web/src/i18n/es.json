@@ -526,7 +526,7 @@
         "accountExistsBody": "Inicie sesión con esa dirección. Si no recuerda la contraseña, pida a un administrador que la restablezca."
       },
       "stageHeadline": "Escuchar a toda una organización sin exponer a nadie.",
-      "stageBody": "Cada respuesta cuenta en el conjunto y ninguna queda ligada a quien la escribió. Los grupos con menos de cinco respuestas nunca muestran una cifra.",
+      "stageBody": "Cada respuesta cuenta en el conjunto y ninguna queda ligada a quien la escribió. Los grupos con menos de tres respuestas nunca muestran una cifra.",
       "skipToForm": "Ir al formulario",
       "noAccount": "¿No tiene cuenta?",
       "createOne": "Crear una"
@@ -6926,7 +6926,7 @@
       "lede": "Un instrumento de clima que se responde en anonimato y se lee por dimensión, con un piso mínimo por segmento que decide qué puede mostrarse y qué no.",
       "cta": "Ver un informe de ejemplo",
       "chipDimensions": "4 dimensiones",
-      "chipFloor": "Piso mínimo 5"
+      "chipFloor": "Piso mínimo {floor}"
     },
     "dimensions": {
       "title": "Cuatro lecturas, no un promedio.",

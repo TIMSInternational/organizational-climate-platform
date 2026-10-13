@@ -22,6 +22,7 @@
  */
 
 import { useTranslation } from '../../../i18n/useTranslation'
+import { ANONYMITY_FLOOR } from '../../../components/charts/suppression'
 import {
   Chip,
   Display,
@@ -98,7 +99,7 @@ export default function StorefrontGalleryPage() {
           <div className="flex flex-wrap items-center gap-3 pt-2">
             <StoreButton>{t('storefront.hero.cta')}</StoreButton>
             <Chip>{t('storefront.hero.chipDimensions')}</Chip>
-            <Chip slot={4}>{t('storefront.hero.chipFloor')}</Chip>
+            <Chip slot={4}>{t('storefront.hero.chipFloor', { floor: ANONYMITY_FLOOR })}</Chip>
           </div>
         </header>
 

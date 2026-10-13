@@ -526,7 +526,7 @@
         "accountExistsBody": "Sign in with that address. If you do not remember the password, ask an administrator to reset it."
       },
       "stageHeadline": "Hear a whole organisation without exposing anyone.",
-      "stageBody": "Every answer counts in the aggregate and none is tied back to the person who wrote it. A group of fewer than five never yields a figure.",
+      "stageBody": "Every answer counts in the aggregate and none is tied back to the person who wrote it. A group of fewer than three never yields a figure.",
       "skipToForm": "Skip to the form",
       "noAccount": "Don't have an account?",
       "createOne": "Create one"
@@ -6926,7 +6926,7 @@
       "lede": "A climate instrument answered anonymously and read dimension by dimension, with a per-segment minimum that decides what may be shown and what may not.",
       "cta": "See a sample report",
       "chipDimensions": "4 dimensions",
-      "chipFloor": "Minimum of 5"
+      "chipFloor": "Minimum of {floor}"
     },
     "dimensions": {
       "title": "Four readings, not one average.",

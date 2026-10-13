@@ -7,6 +7,7 @@ import { TranslationProvider } from '../../../i18n'
 import { LOCALE_STORAGE_KEY } from '../../../i18n/locale'
 import { setToken, clearToken } from '../../../auth/token'
 import type { LiveResults, MicroclimateDetail } from '../api/microclimates'
+import { MINIMUM_RESPONDENTS } from '../microclimatePrivacy'
 
 /**
  * The live session `/microclimates/:id/live` drew until the redesign replaced it with
@@ -14,7 +15,7 @@ import type { LiveResults, MicroclimateDetail } from '../api/microclimates'
  * comment on the page says why it is still in the tree. Rendered directly, because
  * nothing routes to it any more; the route's own guarantees (the figure moves on a
  * later poll, only an open session polls, a failed read keeps the last good figure, the
- * words under the floor of 5, who may watch and close) are asserted against the new
+ * words under the disclosure floor, who may watch and close) are asserted against the new
  * screen in `../next/MicroclimateLiveNextPage.test.tsx`.
  */
 
@@ -223,7 +224,7 @@ describe('MicroclimateLivePage', () => {
     // `ProtectedCell` renders the hatch as `role="img"` with the floor in its name,
     // so a screen reader gets the same statement the hatch makes visually.
     const hatch = await screen.findByRole('img', {
-      name: 'What people wrote: protected — withheld below 5 responses',
+      name: `What people wrote: protected — withheld below ${MINIMUM_RESPONDENTS} responses`,
     })
     expect(hatch).toBeTruthy()
     expect(screen.getByText('Protected')).toBeTruthy()
@@ -249,7 +250,7 @@ describe('MicroclimateLivePage', () => {
     renderPage()
 
     const hatch = await screen.findByRole('img', {
-      name: 'What people wrote: protected — withheld below 5 responses',
+      name: `What people wrote: protected — withheld below ${MINIMUM_RESPONDENTS} responses`,
     })
     const panel = hatch.closest('section')
     expect(panel).not.toBeNull()
@@ -258,7 +259,7 @@ describe('MicroclimateLivePage', () => {
     // only figure it is allowed to state is the floor itself, which is a published
     // constant rather than a fact about these two people.
     const text = `${panel?.textContent ?? ''} ${panel?.querySelector('[role="img"]')?.getAttribute('aria-label') ?? ''}`
-    expect(text.match(/\d+/g)).toEqual(['5', '5'])
+    expect(text.match(/\d+/g)).toEqual([String(MINIMUM_RESPONDENTS), String(MINIMUM_RESPONDENTS)])
 
     // The count is still on the page, in the readings row, where it belongs.
     expect(screen.getByText('2')).toBeTruthy()
@@ -347,7 +348,7 @@ describe('MicroclimateLivePage', () => {
 
     expect(await screen.findByText('Disclosure floor')).toBeTruthy()
     const floor = screen.getByText('Disclosure floor').nextElementSibling
-    expect(floor?.textContent).toBe('5')
+    expect(floor?.textContent).toBe(String(MINIMUM_RESPONDENTS))
   })
 
   it('puts the session facts on the plate rather than inside the polled panel', async () => {

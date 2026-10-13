@@ -14,6 +14,7 @@ import {
 import type { DashboardTeamClimate, DepartmentAdminDashboard } from '../../api/dashboard'
 import type { MySurveyListItem } from '../../../surveys/api/surveys'
 import type { PlanAccion, TableroResponse } from '../../../tracking/api/trackingApi'
+import { ANONYMITY_FLOOR } from '../../../../components/charts'
 
 const DEPARTMENT = 'd-ing'
 const KEYS = ['belonging', 'growth', 'psychological_safety', 'recognition', 'trust', 'workload']
@@ -140,10 +141,12 @@ function supervisor(
 }
 
 describe('the floor', () => {
-  it('holds a count to the server floor and never below 5', () => {
-    expect(countFloor(null)).toBe(5)
-    expect(countFloor(climate([], { minimumGroupSize: 3 }))).toBe(5)
-    expect(countFloor(climate([], { minimumGroupSize: 7 }))).toBe(7)
+  it('holds a count to the server floor and never below the platform floor', () => {
+    expect(countFloor(null)).toBe(ANONYMITY_FLOOR)
+    // A server floor BELOW the platform's is raised to it, derived so the two still
+    // straddle when the platform floor moves.
+    expect(countFloor(climate([], { minimumGroupSize: ANONYMITY_FLOOR - 1 }))).toBe(ANONYMITY_FLOOR)
+    expect(countFloor(climate([], { minimumGroupSize: ANONYMITY_FLOOR + 4 }))).toBe(ANONYMITY_FLOOR + 4)
     expect(flooredCount(4, 5)).toBeNull()
     expect(flooredCount(5, 5)).toBe(5)
     // An absent count is not zero: zero is under the floor too, and prints nothing.

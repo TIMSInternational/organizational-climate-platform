@@ -25,7 +25,7 @@ import { ANONYMITY_FLOOR } from '../../../../components/charts'
 const copy = en.dashboard.next.supervisor
 const DEPARTMENT = '5bfdb04e-8847-4baa-89c8-d4411654a129'
 
-function department(responseCount = 3): DepartmentAdminDashboard {
+function department(responseCount = ANONYMITY_FLOOR - 1): DepartmentAdminDashboard {
   return {
     departmentId: DEPARTMENT,
     departmentName: 'Ingeniería',
@@ -89,7 +89,7 @@ interface Options {
   role?: string
 }
 
-function renderSupervisor({ responseCount = 3, misTareas = { status: 'ok', value: [plan] }, mySurveys = [owed], role = 'supervisor' }: Options = {}) {
+function renderSupervisor({ responseCount = ANONYMITY_FLOOR - 1, misTareas = { status: 'ok', value: [plan] }, mySurveys = [owed], role = 'supervisor' }: Options = {}) {
   setToken(tokenFor({ sub: 'sofia', name: 'Sofía Vargas', role, companyId: 'c1', nodoId: DEPARTMENT }))
   // The one seam: the capability the page reads is the one the model is composed with.
   const mayRecord = (target: { nodoExternalId: string }) => role === 'leader' && target.nodoExternalId === DEPARTMENT
@@ -136,8 +136,10 @@ describe('SupervisorDashboardView', () => {
   })
 
   /**
-   * Three people have answered, of fourteen. The artboard hatches both boxes: "who has not"
-   * is eleven, and eleven beside the team's fourteen gives the three back by subtraction.
+   * One response short of the floor, of fourteen people. The artboard hatches both boxes:
+   * "who has not" is the complement, and the complement beside the team's fourteen gives
+   * the withheld count back by subtraction. Both counts are derived from the floor so the
+   * pair keeps straddling it when the floor moves.
    */
   it('hatches who answered under the floor, and who has not with it, printing neither', () => {
     renderSupervisor()
@@ -145,7 +147,8 @@ describe('SupervisorDashboardView', () => {
     const coverage = card(copy.coverageHeading)
     expect(within(coverage).getByRole('img', { name: copy.respondedHiddenLabel.replace('{floor}', String(ANONYMITY_FLOOR)) })).toBeTruthy()
     expect(within(coverage).getByRole('img', { name: copy.remainingHiddenLabel.replace('{floor}', String(ANONYMITY_FLOOR)) })).toBeTruthy()
-    expect(coverage.textContent).not.toMatch(/(^|\D)(3|11)(\D|$)/)
+    const answered = ANONYMITY_FLOOR - 1
+    expect(coverage.textContent).not.toMatch(new RegExp(`(^|\\D)(${answered}|${14 - answered})(\\D|$)`))
     expect(within(coverage).getByText('14')).toBeTruthy()
     expect(within(coverage).getByText(/^Encuesta de Clima Q4 · closes Oct 10$/)).toBeTruthy()
   })

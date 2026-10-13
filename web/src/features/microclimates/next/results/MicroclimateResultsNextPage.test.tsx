@@ -58,6 +58,9 @@ const WORDS = [
   { text: 'visa', value: 1, language: 'es' },
 ]
 
+/** One response short of the floor: the withheld case, derived so it stays withheld. */
+const UNDER_FLOOR = MINIMUM_RESPONDENTS - 1
+
 function live(responseCount: number): LiveResults {
   return {
     sentimentScore: null,
@@ -65,8 +68,8 @@ function live(responseCount: number): LiveResults {
     wordCloud: WORDS,
     responseCount,
     targetParticipantCount: 20,
-    isSuppressed: responseCount < 5,
-    suppressionReason: responseCount < 5 ? 'below_minimum_respondents' : null,
+    isSuppressed: responseCount < MINIMUM_RESPONDENTS,
+    suppressionReason: responseCount < MINIMUM_RESPONDENTS ? 'below_minimum_respondents' : null,
     minimumGroupSize: 5,
   }
 }
@@ -91,7 +94,7 @@ describe('MicroclimateResultsNextPage', () => {
     window.localStorage.clear()
     window.localStorage.setItem('preferredLocale', 'es')
     vi.mocked(getMicroclimate).mockReset().mockResolvedValue(detail)
-    vi.mocked(getLiveResults).mockReset().mockResolvedValue(live(3))
+    vi.mocked(getLiveResults).mockReset().mockResolvedValue(live(UNDER_FLOOR))
     vi.mocked(getMicroclimateCsv).mockReset().mockResolvedValue(new Blob(['id'], { type: 'text/csv' }))
     vi.mocked(downloadBlobFile).mockReset()
   })
@@ -105,9 +108,9 @@ describe('MicroclimateResultsNextPage', () => {
 
   it('under the floor shows the count and not one word, even though the payload carries them', async () => {
     renderAs({ role: 'company_admin', companyId: COMPANY })
-    expect(await screen.findByText('de 20 esperadas · faltan 17')).toBeTruthy()
+    expect(await screen.findByText(`de 20 esperadas · faltan ${20 - UNDER_FLOOR}`)).toBeTruthy()
     const who = screen.getByRole('heading', { name: copy.results.whoTitle }).closest('section') as HTMLElement
-    expect(within(who).getByText('3')).toBeTruthy()
+    expect(within(who).getByText(String(UNDER_FLOOR))).toBeTruthy()
     expect(screen.getByText(copy.results.figureProtected.replace('{floor}', String(MINIMUM_RESPONDENTS)))).toBeTruthy()
     expect(screen.getByText(copy.results.wordsProtected.replace('{floor}', String(MINIMUM_RESPONDENTS)))).toBeTruthy()
     for (const word of WORDS) expect(screen.queryByText(word.text)).toBeNull()
