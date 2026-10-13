@@ -957,21 +957,39 @@ public static class SurveyResponseEndpoints
             && respondent.ActingUserId is null;
 
     /// <summary>
-    /// Whether THIS request is asked who is answering: the survey collects participant
-    /// identity and the respondent has no account -- i.e. they came through the link or QR.
-    /// One predicate read by the GET and the POST, so the form never asks what the submit
-    /// then refuses. A signed-in respondent is already known, so asking them would only
-    /// create a second, self-typed copy of who they are.
+    /// Whether THIS request is asked who is answering. <b>It never is.</b> One predicate read
+    /// by the GET and the POST, so the form never asks what the submit then refuses.
     /// </summary>
     /// <remarks>
-    /// Deliberately NOT gated on the survey being anonymous. Ruled 2026-10-12: every survey
-    /// has a link and QR, nobody who opens one logs in, and the name+email capture applies to
-    /// every survey answered by link, anonymous or identified. The row it writes is unlinked
-    /// from the answers either way (<see cref="RecordParticipationAsync"/>).
+    /// <para>
+    /// Ruled 2026-10-13, superseding 2026-10-12. There are three ways to answer -- a mass
+    /// invite, where the platform generates a username and password per person and the
+    /// demographics come pre-linked from the import; a climate QR, which asks the área and the
+    /// company's own demographic fields and then the survey; and a microclimate link, which
+    /// asks nothing at all -- and in none of them is a name or an email collected directly.
+    /// </para>
+    /// <para>
+    /// Forced here rather than only at the create path, because every survey created between
+    /// the two rulings carries <c>Settings.CollectParticipantIdentity = true</c> and would
+    /// otherwise go on asking. With this <c>false</c>, the GET reports
+    /// <c>AsksParticipantIdentity: false</c> and the POST falls into the branch below that
+    /// REFUSES a request carrying a participant, so <c>participant</c> stays null and
+    /// <see cref="RecordParticipationAsync"/> is never reached: no new row can be written to
+    /// <c>survey_participations</c> from any path. The rows already there are not touched --
+    /// deleting collected data is not this change's business.
+    /// </para>
+    /// <para>
+    /// The column, the table, the DTO flag and the authoring switch all survive on purpose, so
+    /// that this is one line to revert if the ruling moves again. The two parameters are
+    /// discarded rather than removed so the signature still says what the question was.
+    /// </para>
     /// </remarks>
     private static bool AsksParticipantIdentity(Survey survey, Respondent respondent)
-        => survey.Settings.CollectParticipantIdentity
-            && respondent.ActingUserId is null;
+    {
+        _ = survey;
+        _ = respondent;
+        return false;
+    }
 
     /// <summary>
     /// Writes THAT this person answered -- and nothing that could say what they answered.
@@ -1117,8 +1135,18 @@ public static class SurveyResponseEndpoints
             .ToDictionary(g => g.Key, g => (IReadOnlyList<DemographicFieldOption>)g.ToList());
 
         offered.AddRange(fields
+            // `Required: true`, not `f.Required`. Ruled 2026-10-13: the respondent must end
+            // with a specific value. In THIS flow the self-declared demographics are the
+            // whole segmentation basis -- the respondent has no account and no roster row, so
+            // a blank field is a response no breakdown can place, which is the same argument
+            // `LoadSelfDeclaredAreaAsync` already makes for the área. The admin's own
+            // `DemographicField.Required` (default false) still governs every other surface:
+            // nothing is written to a company's field definitions, so Eagle's are untouched.
+            // Forced here rather than at the DTO so that `ToDefinitions` -- the validator the
+            // POST runs on completion -- is forced by the same line, and the form cannot ask
+            // what the submit then accepts blank.
             .Select(f => new SelfDeclaredField(
-                f.Field, f.LabelEn, f.LabelEs, f.Required, f.Order,
+                f.Field, f.LabelEn, f.LabelEs, Required: true, f.Order,
                 byField.GetValueOrDefault(f.Id, [])))
             .Where(f => f.Options.Count > 0));
         return offered;

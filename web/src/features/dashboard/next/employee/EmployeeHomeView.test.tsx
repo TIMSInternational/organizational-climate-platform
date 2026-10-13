@@ -478,9 +478,12 @@ describe('EmployeeHomeView', () => {
 
     expect(await screen.findByText(es('employee.next.resultsGoToBody', { floor: 8 }))).toBeTruthy()
     expect(screen.queryByText(es('employee.next.resultsGoToBody', { floor: ANONYMITY_FLOOR }))).toBeNull()
-    expect(
-      screen.getByText(es('employee.next.resultsGoToTitle', { department: 'Ingeniería' })),
-    ).toBeTruthy()
+    // The title no longer names the department, because the results no longer go to
+    // it (ruled 2026-10-13). The absence of the old promise is the half of this that
+    // can fail if it comes back — the department name itself is NOT asserted absent,
+    // because the reader's own identity line prints it, legitimately.
+    expect(screen.getByText(es('employee.next.resultsGoToTitle'))).toBeTruthy()
+    expect(screen.queryByText(/resultados llegan a/)).toBeNull()
   })
 
   it('states the rule without a number when no outcome has told it the floor', async () => {

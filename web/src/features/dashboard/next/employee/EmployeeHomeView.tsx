@@ -379,11 +379,13 @@ function WhatHappensNow({ model }: { model: EmployeeHomeModel }) {
         />
         <NextStep
           icon={<FileText className="size-icon" />}
-          title={
-            model.departmentName
-              ? t('employee.next.resultsGoToTitle', { department: model.departmentName })
-              : t('employee.next.resultsGoToTitleAnyDepartment')
-          }
+          // One title, whatever department the reader is in. It used to name the
+          // department and promise the results would reach it; ruled 2026-10-13 that
+          // they do not — they are processed and analysed here and handed to the
+          // people the organisation designates. `resultsGoToTitleAnyDepartment` is
+          // left in both catalogues rather than removed, so nothing that still asks
+          // for it breaks, but nothing asks for it now.
+          title={t('employee.next.resultsGoToTitle')}
           body={
             floor === null
               ? t('employee.next.resultsGoToBodyNoFloor')

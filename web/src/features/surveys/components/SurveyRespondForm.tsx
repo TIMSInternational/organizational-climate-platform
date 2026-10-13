@@ -209,9 +209,11 @@ export default function SurveyRespondForm({
 
   /**
    * What the respondent has said about themselves, keyed by field, for the demographic
-   * prelude below. `DECLINED` (an empty string) is a real entry and not an absence: it
-   * is how an optional field records that the respondent chose not to say, which the
-   * server treats as clearing the answer so no row is written.
+   * prelude below. Every entry is a real option value. It used to be able to hold an
+   * empty string — `DECLINED`, the synthesised "prefiero no decir" — which the server
+   * treated as clearing the answer; that option was removed on 2026-10-13 (see
+   * `RespondDemographicField`), so a field is either answered with one of its own
+   * options or not present at all.
    *
    * Held here rather than merged into `answers` because these are not answers: they
    * have no question id, they are validated against the company's configuration rather
@@ -371,9 +373,15 @@ export default function SurveyRespondForm({
     return () => window.clearInterval(handle)
   }, [timeLimitMinutes])
 
+  // Seeded by the RESPONDENT'S SESSION, not by the survey id. `respondSession` mints
+  // the id once per survey per respondent, keeps it across a reload and a closed tab,
+  // and clears it the moment the response completes — so the order holds still for as
+  // long as someone is answering, and the next session gets a fresh one. Seeding by
+  // `view.id` gave every respondent of a survey the same order, forever, which is a
+  // randomisation that removes no bias between people. See `orderQuestions`.
   const questions = useMemo(
-    () => (view ? orderQuestions(view.questions, view.randomizeQuestions, view.id) : []),
-    [view],
+    () => (view ? orderQuestions(view.questions, view.randomizeQuestions, sessionId) : []),
+    [view, sessionId],
   )
 
   // Read out of `view` into a scalar first, so the memo below depends on a boolean

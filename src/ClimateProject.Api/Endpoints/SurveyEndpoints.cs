@@ -450,12 +450,14 @@ public static class SurveyEndpoints
         // because changing it would silently re-read every row materialised without the flag.
         survey.Settings.Anonymous = true;
 
-        // Who answered, asked unless the caller says otherwise (ruled 2026-10-12: "we need to
-        // know who has answered and who has not"). Set here and not as the entity default,
-        // for Anonymous's reason above: a default on the entity would start asking every live
-        // survey materialised without the column. It only ever reaches an unauthenticated
-        // respondent to an anonymous survey -- see SurveyResponseEndpoints.AsksParticipantIdentity.
-        survey.Settings.CollectParticipantIdentity = true;
+        // Who answered is NOT asked. The 2026-10-12 ruling that put a name and email step on
+        // every new survey was superseded on 2026-10-13: there are three ways to answer -- a
+        // mass invite with a generated username and password, a climate QR that asks
+        // demographics and nothing else, and a microclimate link that asks nothing -- and
+        // "name and email are NEVER collected directly" holds in all three. So nothing is set
+        // here: the entity default (false) is now also the product's answer, and
+        // SurveyResponseEndpoints.AsksParticipantIdentity refuses the step for the surveys
+        // already carrying the column true.
 
         if (request.Settings is not null)
         {

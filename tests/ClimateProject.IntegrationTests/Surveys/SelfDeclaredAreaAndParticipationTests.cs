@@ -289,7 +289,7 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
     // ------------------------------------------------------------------
 
     [Fact]
-    public async Task A_survey_created_without_a_word_about_it_collects_participant_identity()
+    public async Task A_survey_created_without_a_word_about_it_collects_no_participant_identity()
     {
         var admin = await AdminAsync();
         var survey = await SurveyTestHarness.CreateSurveyAsync(admin, SurveyTestHarness.MinimalRequest(_companyId) with
@@ -297,25 +297,53 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
             Settings = new SurveySettingsInput(Anonymous: true),
         });
 
-        Assert.True(survey.Settings.CollectParticipantIdentity);
-
-        var off = await SurveyTestHarness.CreateSurveyAsync(admin, SurveyTestHarness.MinimalRequest(_companyId) with
-        {
-            Settings = new SurveySettingsInput(Anonymous: true, CollectParticipantIdentity: false),
-        });
-        Assert.False(off.Settings.CollectParticipantIdentity);
+        // Ruled 2026-10-13: a name and an email are never collected directly, in any of the
+        // three ways a survey is answered. The create path used to turn this on.
+        Assert.False(survey.Settings.CollectParticipantIdentity);
     }
 
+    /// <summary>
+    /// The one that matters for the surveys already in the database. Every survey created
+    /// between the 10-12 and the 10-13 rulings carries the column TRUE, so a change only to
+    /// the create path would have left them all still asking. `collectIdentity: true` below
+    /// writes that column, and the view still refuses to ask.
+    /// </summary>
     [Fact]
-    public async Task The_respond_view_asks_a_visitor_and_never_a_signed_in_respondent()
+    public async Task The_respond_view_never_asks_who_is_answering()
     {
         var asking = await QrSurveyAsync(collectIdentity: true);
         var silent = await QrSurveyAsync(collectIdentity: false);
         var employee = await _harness.ClientAsync(Roles.Employee, _companyId, _operaciones);
 
-        Assert.True((await RespondViewAsync(_factory.CreateClient(), asking.Id)).AsksParticipantIdentity);
+        var stored = await _harness.WithDbAsync(db => db.Surveys.AsNoTracking().FirstAsync(s => s.Id == asking.Id));
+        Assert.True(stored.Settings.CollectParticipantIdentity, "the column is on, which is the point of this test");
+
+        Assert.False((await RespondViewAsync(_factory.CreateClient(), asking.Id)).AsksParticipantIdentity);
         Assert.False((await RespondViewAsync(_factory.CreateClient(), silent.Id)).AsksParticipantIdentity);
         Assert.False((await RespondViewAsync(employee, asking.Id)).AsksParticipantIdentity);
+    }
+
+    /// <summary>
+    /// And the write path: a client that asks anyway -- a stale bundle, or a script -- is
+    /// REFUSED rather than quietly obeyed, so no row can reach `survey_participations`.
+    /// </summary>
+    [Fact]
+    public async Task A_submit_that_carries_a_name_is_refused()
+    {
+        var survey = await QrSurveyAsync(collectIdentity: true);
+
+        var http = await SubmitAsync(
+            survey, Area(_operaciones), new SurveyParticipantInput("Persona", $"persona@{_mail}"));
+        Assert.Equal(HttpStatusCode.BadRequest, http.StatusCode);
+
+        var participations = await _harness.WithDbAsync(db => db.SurveyParticipations.AsNoTracking()
+            .Where(x => x.SurveyId == survey.Id).ToListAsync());
+        Assert.Empty(participations);
+
+        // The vacuity control: the same submit WITHOUT a name is accepted, so the 400 above is
+        // about the name and not about the survey, the área or the answer.
+        var clean = await SubmitAsync(survey, Area(_operaciones));
+        Assert.Equal(HttpStatusCode.Created, clean.StatusCode);
     }
 
     /// <summary>
@@ -549,30 +577,29 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
         var stored = await _harness.WithDbAsync(db => db.Surveys.AsNoTracking().FirstAsync(s => s.Id == survey.Id));
         Assert.False(stored.Settings.Anonymous);
 
-        // The respond view tells the visitor the truth about THEIR answer, and asks both steps.
+        // The respond view tells the visitor the truth about THEIR answer, and asks the área
+        // and nothing else: no name, no email (ruled 2026-10-13).
         var view = await RespondViewAsync(_factory.CreateClient(), survey.Id);
         Assert.True(view.Anonymous);
-        Assert.True(view.AsksParticipantIdentity);
+        Assert.False(view.AsksParticipantIdentity);
         Assert.Contains(view.Demographics, d => d.Field == SelfDeclaredDepartment.FieldKey);
 
         var responseIds = new List<Guid>();
         for (var i = 0; i < 5; i++)
         {
-            var http = await SubmitAsync(
-                survey, Area(_operaciones), new SurveyParticipantInput($"Persona {i}", $"persona{i}@{_mail}"));
+            var http = await SubmitAsync(survey, Area(_operaciones));
             Assert.Equal(HttpStatusCode.Created, http.StatusCode);
             responseIds.Add((await http.Content.ReadFromJsonAsync<SurveySubmissionResult>())!.ResponseId);
         }
         for (var i = 0; i < 4; i++)
         {
-            var http = await SubmitAsync(
-                survey, Area(_ventas), new SurveyParticipantInput($"Vendedor {i}", null));
+            var http = await SubmitAsync(survey, Area(_ventas));
             Assert.Equal(HttpStatusCode.Created, http.StatusCode);
             responseIds.Add((await http.Content.ReadFromJsonAsync<SurveySubmissionResult>())!.ResponseId);
         }
         // One more, elsewhere: withheld groups must total >= 5 or #543's complement rule
         // withholds Operaciones too (5 shown + 4 withheld would let a reader subtract to 4).
-        var finanzas = await SubmitAsync(survey, Area(_finanzas), new SurveyParticipantInput("Contadora", $"contadora@{_mail}"));
+        var finanzas = await SubmitAsync(survey, Area(_finanzas));
         Assert.Equal(HttpStatusCode.Created, finanzas.StatusCode);
         responseIds.Add((await finanzas.Content.ReadFromJsonAsync<SurveySubmissionResult>())!.ResponseId);
 
@@ -605,17 +632,17 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
         Assert.DoesNotContain(_ventas.ToString(), json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Ventas", json, StringComparison.Ordinal);
 
-        // Who answered: ten rows, none of which can be joined to an answer.
+        // Who answered: NOBODY was asked, so the table the 10-12 ruling built stays empty.
+        // Its shape is still asserted -- the table and the entity survive, so that restoring
+        // the step is one line rather than a migration -- but ten answers write nothing to it.
         var columns = await ScalarListAsync(
             "SELECT column_name AS \"Value\" FROM information_schema.columns WHERE table_name = 'survey_participations' ORDER BY column_name");
         Assert.Equal(["company_id", "email", "id", "name", "participated_on", "survey_id"], columns);
 
         var participations = await _harness.WithDbAsync(db => db.SurveyParticipations.AsNoTracking()
             .Where(p => p.SurveyId == survey.Id).ToListAsync());
-        Assert.Equal(10, participations.Count);
-        Assert.Contains(participations, p => p.Name == "Persona 0" && p.Email == $"persona0@{_mail}");
-        Assert.Equal(4, participations.Count(p => p.Email is null));
-        Assert.All(participations, p => Assert.DoesNotContain(p.Id, responseIds));
+        Assert.Empty(participations);
+        Assert.Equal(10, responseIds.Count);
     }
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
