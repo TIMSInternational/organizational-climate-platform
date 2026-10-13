@@ -4563,7 +4563,20 @@
         "valid": "Valid",
         "duplicate": "Duplicate",
         "error": "Error",
-        "invited": "Invited"
+        "invited": "Invited",
+        "created": "Account created"
+      },
+      "access": {
+        "legend": "How will these people reach the survey?",
+        "invitation": {
+          "label": "Email an invitation",
+          "help": "Each person gets a link and chooses their own password. Use this for staff who will sign in again."
+        },
+        "credentials": {
+          "label": "Mass invite with sign-in details",
+          "help": "The platform generates a username and password for each person and emails them with the link. The demographics in your file are already on the account, so the survey never asks for them."
+        },
+        "approveCredentials": "Create accounts and email sign-in details"
       },
       "validateFirst": "Validate the rows before creating invitations.",
       "fixBeforeApproving": "Fix the rows marked with an error, then validate again.",

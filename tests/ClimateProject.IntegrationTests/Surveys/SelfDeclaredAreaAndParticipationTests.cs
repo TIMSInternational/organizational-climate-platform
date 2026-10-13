@@ -648,6 +648,7 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
                 SelfDeclaredDemographics: true,
                 CollectParticipantIdentity: collectIdentity)));
         (await SurveyTestHarness.SetStatusAsync(admin, survey.Id, SurveyStatuses.Active)).EnsureSuccessStatusCode();
+        await SurveyTestHarness.OpenPublicLinkAsync(admin, survey.Id);
         return survey;
     }
 

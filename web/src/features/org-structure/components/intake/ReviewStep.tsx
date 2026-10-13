@@ -14,6 +14,8 @@ import { ROLE_TARGETS } from './intakeModel'
 const STATUS_TONE: Record<string, ChipTone> = {
   valid: 'good',
   invited: 'good',
+  // A mass invite reports `created`: an account exists and its password has been mailed.
+  created: 'good',
   duplicate: 'warning',
   error: 'critical',
 }
@@ -56,6 +58,8 @@ export function ReviewStep({
   demographicTargets,
   onPatch,
   onRemove,
+  accessMode,
+  onAccessModeChange,
   onValidate,
   onApprove,
   onBack,
@@ -70,6 +74,8 @@ export function ReviewStep({
   demographicTargets: IntakeDemographicTarget[]
   onPatch: (rowNumber: number, patch: Partial<IntakeRow>) => void
   onRemove: (rowNumber: number) => void
+  accessMode: 'invitation' | 'credentials'
+  onAccessModeChange: (mode: 'invitation' | 'credentials') => void
   onValidate: () => void
   onApprove: () => void
   onBack: () => void
@@ -236,6 +242,29 @@ export function ReviewStep({
         </p>
       )}
 
+      <fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0">
+        <legend className="mb-1 p-0 text-base font-semibold text-fg-primary">
+          {t('users.intake.access.legend')}
+        </legend>
+        {(['invitation', 'credentials'] as const).map((mode) => (
+          <label key={mode} className="flex min-w-0 items-start gap-2 text-base">
+            <input
+              type="radio"
+              name="intake-access-mode"
+              value={mode}
+              checked={accessMode === mode}
+              disabled={busy}
+              onChange={() => onAccessModeChange(mode)}
+              className="mt-1 shrink-0"
+            />
+            <span className="min-w-0">
+              <span className="font-medium text-fg-primary">{t(`users.intake.access.${mode}.label`)}</span>
+              <span className="block text-sm text-fg-secondary">{t(`users.intake.access.${mode}.help`)}</span>
+            </span>
+          </label>
+        ))}
+      </fieldset>
+
       <div className="flex flex-wrap gap-2">
         <Button type="button" variant="ghost" onClick={onBack} disabled={busy}>
           <ArrowLeft aria-hidden="true" className="size-4" />
@@ -245,7 +274,7 @@ export function ReviewStep({
           {t('users.intake.validate')}
         </Button>
         <Button type="button" variant="primary" onClick={onApprove} disabled={busy || blocking}>
-          {t('users.intake.approve')}
+          {accessMode === 'credentials' ? t('users.intake.access.approveCredentials') : t('users.intake.approve')}
         </Button>
       </div>
       {blocking && (

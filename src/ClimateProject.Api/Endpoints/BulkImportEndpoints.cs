@@ -111,7 +111,8 @@ public static class BulkImportEndpoints
         var parsedRows = CsvUserImportParser.Parse(csv);
 
         return Results.Ok(await ProcessRowsAsync(
-            parsedRows, [], companyId, isPreview, currentUser, db, emailSender, cancellationToken));
+            parsedRows, [], companyId, isPreview, withCredentials: false, currentUser, db, emailSender,
+            credentials: null, cancellationToken));
     }
 
     /// <summary>
@@ -128,11 +129,18 @@ public static class BulkImportEndpoints
         IReadOnlyCollection<string> approvedNewDepartments,
         Guid companyId,
         bool isPreview,
+        bool withCredentials,
         CurrentUser currentUser,
         ClimateProjectDbContext db,
         IInvitationEmailSender emailSender,
+        CredentialIssuer? credentials,
         CancellationToken cancellationToken)
     {
+        if (withCredentials && credentials is null)
+        {
+            throw new ArgumentNullException(nameof(credentials), "A mass invite with credentials needs a credential issuer.");
+        }
+
         // Active only, as the template's dropdown is: a department that has been retired is not
         // somewhere a new person can be placed, and matching it here would invite them into one.
         var departments = await db.Departments
@@ -190,6 +198,23 @@ public static class BulkImportEndpoints
 
         var results = new List<BulkImportRowResult>();
         var created = new List<UserInvitation>();
+
+        // Mass invite (ruled 2026-10-13): an account per row, with a generated username and
+        // password emailed after the save. Held here, never in a result row: the API does not
+        // return a password, so the email is the only place it ever appears.
+        var issued = new List<(int ResultIndex, string Email, string Username, string Password)>();
+        Company? company = null;
+        HashSet<string>? takenUsernames = null;
+        if (withCredentials && !isPreview)
+        {
+            company = await db.Companies.AsNoTracking().FirstOrDefaultAsync(c => c.Id == companyId, cancellationToken);
+            var prefix = MassInviteCredentials.PrefixFor(company?.Name ?? string.Empty) + "-";
+            takenUsernames = (await db.Users
+                    .Where(u => u.Username != null && u.Username.StartsWith(prefix))
+                    .Select(u => u.Username!)
+                    .ToListAsync(cancellationToken))
+                .ToHashSet(StringComparer.Ordinal);
+        }
 
         foreach (var row in parsedRows)
         {
@@ -330,6 +355,53 @@ public static class BulkImportEndpoints
                     createdDepartments[newDepartmentName] = department;
                 }
 
+                if (withCredentials)
+                {
+                    // An account, not an invitation: the person signs in with what the email
+                    // gives them, and their demographics are already on it, so the survey
+                    // never asks. The row's Name IS carried here, unlike the invitation branch
+                    // below, because nobody will be asked to type it.
+                    string username;
+                    do
+                    {
+                        username = MassInviteCredentials.Username(MassInviteCredentials.PrefixFor(company?.Name ?? string.Empty));
+                    }
+                    while (!takenUsernames!.Add(username));
+
+                    var password = MassInviteCredentials.Password();
+                    var user = new User
+                    {
+                        Id = Guid.NewGuid(),
+                        CompanyId = companyId,
+                        Email = email,
+                        Name = row.Name.Trim(),
+                        Username = username,
+                        PasswordHash = credentials!.Hasher.Hash(password),
+                        Role = row.Role,
+                        DepartmentId = department?.Id,
+                        IsActive = true,
+                        CreatedAt = now,
+                        UpdatedAt = now,
+                    };
+                    db.Users.Add(user);
+                    foreach (var value in demographicValues)
+                    {
+                        db.UserDemographics.Add(new UserDemographic
+                        {
+                            UserId = user.Id,
+                            DemographicFieldId = value.FieldId,
+                            Value = value.Value,
+                            CreatedAt = now,
+                            UpdatedAt = now,
+                        });
+                    }
+
+                    existingEmails.Add(email);
+                    issued.Add((results.Count, email, username, password));
+                    results.Add(new BulkImportRowResult(row.RowNumber, row.Name, email, row.Role, row.Department, "created", errors, issues));
+                    continue;
+                }
+
                 var invitation = new UserInvitation
                 {
                     Id = Guid.NewGuid(),
@@ -371,9 +443,25 @@ public static class BulkImportEndpoints
             {
                 await InvitationEndpoints.RecordDeliveryAsync(db, emailSender, invitation, now, cancellationToken);
             }
+
+            // The accounts are committed; now the emails. A failed one is named on its row, and
+            // POST /admin/users/{id}/credentials sends a fresh pair -- the password generated
+            // here is gone the moment this method returns.
+            foreach (var (resultIndex, toEmail, username, password) in issued)
+            {
+                var outcome = await credentials!.Sender.SendAsync(toEmail, username, password, company?.Settings.Language, cancellationToken);
+                if (!outcome.Delivered)
+                {
+                    var row = results[resultIndex];
+                    results[resultIndex] = row with
+                    {
+                        Issues = [.. row.Issues, new BulkImportIssue("credentials_not_sent")],
+                    };
+                }
+            }
         }
 
-        var successCount = results.Count(r => r.Status is "valid" or "invited");
+        var successCount = results.Count(r => r.Status is "valid" or "invited" or "created");
         var errorCount = results.Count - successCount;
 
         return new BulkImportResponse(results, successCount, errorCount);
@@ -482,6 +570,8 @@ public static class BulkImportEndpoints
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
         IInvitationEmailSender emailSender,
+        IPasswordHasher passwordHasher,
+        ICredentialsEmailSender credentialsSender,
         CancellationToken cancellationToken)
     {
         var currentUser = principal.GetCurrentUser();
@@ -511,8 +601,12 @@ public static class BulkImportEndpoints
             .ToList();
 
         return Results.Ok(await ProcessRowsAsync(
-            rows, request.NewDepartments ?? [], request.CompanyId, request.Preview, currentUser, db, emailSender, cancellationToken));
+            rows, request.NewDepartments ?? [], request.CompanyId, request.Preview, request.WithCredentials, currentUser, db, emailSender,
+            new CredentialIssuer(passwordHasher, credentialsSender), cancellationToken));
     }
+
+    /// <summary>What a mass invite needs beyond an ordinary import: a hasher for the generated password and a way to email it.</summary>
+    private sealed record CredentialIssuer(IPasswordHasher Hasher, ICredentialsEmailSender Sender);
 
     private static readonly JsonSerializerOptions IntakeJson = new(JsonSerializerDefaults.Web);
 

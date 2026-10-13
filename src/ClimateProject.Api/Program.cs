@@ -397,6 +397,12 @@ builder.Services.AddScoped<IInvitationEmailSender>(sp => sp.GetRequiredService<E
     ? ActivatorUtilities.CreateInstance<EmailInvitationEmailSender>(sp)
     : ActivatorUtilities.CreateInstance<LoggingInvitationEmailSender>(sp));
 
+// A mass invite's generated username and password (ruled 2026-10-13). Same selection rule as
+// the invitation sender above: unconfigured mail reports a permanent failure, never a send.
+builder.Services.AddScoped<ICredentialsEmailSender>(sp => sp.GetRequiredService<EmailOptions>().IsConfigured
+    ? ActivatorUtilities.CreateInstance<EmailCredentialsEmailSender>(sp)
+    : ActivatorUtilities.CreateInstance<LoggingCredentialsEmailSender>(sp));
+
 // What turns a queued survey invitation into a link the recipient can follow. Registered
 // unconditionally rather than inside the selection rule below: it reads a token, it does not
 // send anything, and a registration that exists only on the configured branch is a
@@ -646,6 +652,7 @@ app.MapInvitationAcceptEndpoints();
 app.MapSystemSettingsEndpoints();
 app.MapDemographicFieldEndpoints();
 app.MapBulkImportEndpoints();
+app.MapMassInviteEndpoints();
 app.MapActionPlanEndpoints();
 app.MapActionPlanTemplateEndpoints();
 app.MapNotificationTemplateEndpoints();

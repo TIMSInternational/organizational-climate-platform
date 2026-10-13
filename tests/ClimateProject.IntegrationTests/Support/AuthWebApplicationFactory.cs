@@ -57,7 +57,7 @@ public class AuthWebApplicationFactory(string connectionString) : WebApplication
     /// its own work cannot give, because it only ever measures its own window.
     /// </para>
     /// <para>
-    /// The eight, and why each is allowed:
+    /// The ten, and why each is allowed:
     /// <list type="number">
     ///   <item><description>
     ///     <see cref="PostgresContainerFixture"/> -- the one host the whole collection shares.
@@ -113,6 +113,19 @@ public class AuthWebApplicationFactory(string connectionString) : WebApplication
     ///     <c>CrossServiceTokenTests</c> passing -- the rotation window would ship silently
     ///     absent, and this host is the only thing that notices.
     ///   </description></item>
+    ///   <item><description>
+    ///     <c>MassInviteTests</c> -- ONE host for the whole run, held in a static class fixture
+    ///     (<see cref="CapturingCredentialsHostFixture"/>), and the same reason as 4-7: a host
+    ///     whose <c>ICredentialsEmailSender</c> RECORDS is the test. A mass invite puts the
+    ///     generated password in exactly one place, the email, so a test that signs in as an
+    ///     imported person must read it from there; the shared host configures no mail provider
+    ///     and so selects the logging stub, which composes nothing, making that assertion not
+    ///     merely unproven but unobservable.
+    ///     Proved rather than assumed: this class first arrived building its host in
+    ///     <c>InitializeAsync</c>, which xUnit runs once per <c>[Fact]</c>. That is one host per
+    ///     test CASE -- it took the run to 18 and failed 20 tests across six classes, including
+    ///     <c>SharedHostTests</c>, which is this budget's own regression test.
+    ///   </description></item>
     /// </list>
     /// </para>
     /// <para>
@@ -121,7 +134,7 @@ public class AuthWebApplicationFactory(string connectionString) : WebApplication
     /// another. If you need one more host, say which of the reasons above yours is like.
     /// </para>
     /// </summary>
-    public const int HostBudget = 9;
+    public const int HostBudget = 10;
 
     /// <summary>
     /// Counts the database commands this application sends. Reset it immediately before the

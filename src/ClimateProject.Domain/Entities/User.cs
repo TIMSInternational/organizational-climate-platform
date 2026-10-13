@@ -16,6 +16,15 @@ public class User
     public required string Email { get; set; }
     public required string Name { get; set; }
     public string? PasswordHash { get; set; }
+
+    /// <summary>
+    /// The sign-in name a mass invite generates (<c>esph-k7m2q9xa</c>), emailed with a generated
+    /// password so a respondent never has to choose either. Null for every account that signs
+    /// in by email, which is every account not created by a mass invite. Stored lower-case and
+    /// unique across the platform, because login looks it up with no company to scope by.
+    /// </summary>
+    public string? Username { get; set; }
+
     public required string Role { get; set; }
 
     // There is deliberately no NodoId here. The dropped nodo_id column (#151) was written by

@@ -8,7 +8,10 @@ public sealed record UserListItem(
     Guid? DepartmentId,
     bool IsActive,
     DateTimeOffset? LastLoginAt,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    // A mass invite's generated sign-in name, or null for an account that signs in by email.
+    // Non-null is what offers "send new sign-in details" on the users screen.
+    string? Username = null);
 
 public sealed record UserListResponse(IReadOnlyList<UserListItem> Users);
 
