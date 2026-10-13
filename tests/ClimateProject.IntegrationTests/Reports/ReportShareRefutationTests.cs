@@ -1044,11 +1044,15 @@ public class ReportShareRefutationTests : IAsyncLifetime
 
         // The result bands, exactly: two boundaries the shipped client checks as numbers and
         // three names it reads as strings or null (`web/src/features/reports/api/sharedReports.ts`,
-        // `parseResultBands`). Nothing else rides along — no company id, no settings.
+        // `parseResultBands`), plus the reading scale, "mean" or "percent" -- how the page prints
+        // a score, ruled 2026-10-13 so a 0–100 company's link reads 0–100 like its screens. It
+        // is a display choice, not a number about anyone. Nothing else rides along — no
+        // company id, no other settings.
         var bands = root.GetProperty("resultBands");
         Assert.Equal(
-            new[] { "criticalName", "opportunityMin", "opportunityName", "strengthMin", "strengthName" },
+            new[] { "criticalName", "opportunityMin", "opportunityName", "scale", "strengthMin", "strengthName" },
             bands.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal).ToArray());
+        Assert.Contains(bands.GetProperty("scale").GetString(), new[] { "mean", "percent" });
         Assert.Equal(JsonValueKind.Number, bands.GetProperty("opportunityMin").ValueKind);
         Assert.Equal(JsonValueKind.Number, bands.GetProperty("strengthMin").ValueKind);
 
