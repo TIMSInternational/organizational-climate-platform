@@ -1,9 +1,9 @@
 # Decision: the production database has no restorable backup, and that is a choice nobody has made
 
 **DECIDED 2026-10-12: option B, a nightly logical dump to S3. Owner: Federico.**
-**Status: BUILT, NOT YET PROVEN IN PRODUCTION.** No production dump exists yet and none has
-been restored. This file is not "done" until the two outputs under
-[Remaining](#remaining--not-done-until-pasted) are pasted into it.
+**Status: PROVEN IN PRODUCTION 2026-10-13** — first production dump taken (run 38331346883) and
+restored into a scratch database with 0 errors; see [Proven](#proven-in-production--2026-10-13).
+One item open: the alarm's first `OK` (it was `INSUFFICIENT_DATA`, "Initial alarm creation").
 
 Raised OPEN 2026-09-28 against `5e95df7b`. The sections from "The measurement" to "What is not in
 question" are the record that led to the decision and are kept unedited; the decision and what
@@ -217,19 +217,45 @@ Source `climate_project` at the same moment: companies 9, users 266, surveys 35,
 survey_invitations 15, responses 503, question_responses 3392 — identical. The scratch
 database was dropped afterwards.
 
-## Remaining — not done until pasted
+## Proven in production — 2026-10-13
 
-These close #512's second and third acceptance criteria. Neither has happened.
+**The first two runs failed on the workflow's own check, not the dump.** Runs 38329425939 and
+38329687185 connected (`Server: 17.6`) and dumped, then reported a present table as missing:
+`printf: write error: Broken pipe` / "no TABLE DATA entry for public.users" (then
+`__EFMigrationsHistory`). `printf | grep -q` under pipefail: grep exits at its first match, printf
+dies of SIGPIPE once the table of contents exceeds the 64 KB pipe buffer — production's does, the
+local rehearsal's (48.5 KB) did not. Fixed in #550 (here-strings).
 
-- [ ] **The first production dump.** Federico runs `scripts/backup-setup/1-deploy-stack.sh`,
-  `2-set-github-vars.sh`, then `3-first-run.sh` — **after** this change is merged to `main`
-  (`workflow_dispatch` only finds a workflow that exists on the default branch). Paste the run
-  URL, the `aws s3 ls` line and the alarm state here.
-- [ ] **A production-dump restore rehearsal** into a scratch database:
-  `scripts/db-restore-rehearsal.sh <that dump> climate_restore_prod_rehearsal`. Paste the
-  output here, compare the counts against production's own, then `dropdb` it.
+**First production dump** — run 38331346883, 2026-10-13 01:16 UTC, success:
+
+```
+Dump: 435111 bytes, 71 TABLE DATA entries.
+s3://climate-project-db-backups-795965600143-us-east-2/climate/2026/10/13/climate-20261013T011652Z.dump: 435111 bytes (local 435111).
+Published ClimateProject/Backup/DumpSucceeded=1.
+alarm climate-project-db-backup-stopped: INSUFFICIENT_DATA ("Unchecked: Initial alarm creation")
+```
+
+**Restore rehearsal** — Federico, `bash ~/climate-restore-test.sh` (downloads the newest dump,
+runs `scripts/db-restore-rehearsal.sh` into a new local database, then deletes the file and drops
+the database):
+
+```
+pg_restore 17.10; Dumped from database version: 17.6; Dumped by pg_dump version: 17.11
+pg_restore: exit 0 in 0s, 0 error(s)
+companies 4 | users 153 | surveys 13 | survey_invitations 34 | responses 288 | question_responses 1961
+public tables 71 | __EFMigrationsHistory rows 63 | last migration 20261012191846_AddSurveyParticipations
+```
+
+Compared against production without querying it: 71 tables restored = the 71 TABLE DATA entries
+the dump reported; the last migration is #545's, the code production was running at 01:16 UTC
+(`/version` 223c1fe7). The scratch database and the downloaded file were removed.
+
+## Remaining
+
+- [x] The first production dump (above).
+- [x] A production-dump restore rehearsal (above).
 - [ ] Check the alarm went `OK` after the first successful run, and confirm it reaches the
   critical topic's subscriber.
 
-Until both outputs are here, the honest durability guarantee is: **a mechanism exists that has
-never produced a production backup.**
+The durability guarantee now: **one nightly dump, verified and restorable, kept 35 days; up to
+a day of data can be lost.**
