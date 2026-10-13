@@ -4324,7 +4324,7 @@
         "linkTitle": "Enlace público",
         "createLink": "Crear enlace",
         "linkHelpLogin": "Cada invitación lleva su propio enlace personal. Este se puede pegar en el canal interno y pide iniciar sesión antes de responder.",
-        "linkHelpOpen": "Cada invitación lleva su propio enlace personal. Este también se puede pegar en el canal interno.",
+        "linkHelpOpen": "El enlace de la encuesta: péguelo en el canal interno o compártalo con el código QR. Quien lo abra no necesita cuenta.",
         "noLink": "Sin enlace público: la encuesta llega solo por invitación.",
         "invitationsTitle": "Invitaciones",
         "sendInvitations": "Enviar invitaciones",

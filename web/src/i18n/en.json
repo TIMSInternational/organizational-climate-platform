@@ -4324,7 +4324,7 @@
         "linkTitle": "Public link",
         "createLink": "Create link",
         "linkHelpLogin": "Each invitation carries its own personal link. This one can be pasted in the internal channel and asks respondents to sign in first.",
-        "linkHelpOpen": "Each invitation carries its own personal link. This one can also be pasted in the internal channel.",
+        "linkHelpOpen": "The survey's link: paste it in the internal channel or share it with the QR code. Whoever opens it needs no account.",
         "noLink": "No public link: the survey arrives by invitation only.",
         "invitationsTitle": "Invitations",
         "sendInvitations": "Send invitations",

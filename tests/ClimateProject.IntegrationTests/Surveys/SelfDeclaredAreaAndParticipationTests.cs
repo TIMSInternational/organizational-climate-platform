@@ -442,6 +442,16 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
     // ------------------------------------------------------------------
 
     [Fact]
+    public void Names_are_listed_as_a_person_reads_them_whatever_the_database_collation()
+    {
+        string[] names = ["Zoe", "Persona 10", "álvaro", "Persona 2", "Ana", "Óscar"];
+
+        var ordered = names.OrderBy(n => n, ClimateProject.Api.Endpoints.SurveyParticipationEndpoints.NameOrder).ToList();
+
+        Assert.Equal(["álvaro", "Ana", "Óscar", "Persona 2", "Persona 10", "Zoe"], ordered);
+    }
+
+    [Fact]
     public async Task An_admin_sees_who_answered_and_who_is_pending_and_nothing_else()
     {
         var survey = await QrSurveyAsync(collectIdentity: true);
