@@ -84,7 +84,7 @@ public class MicroclimateLiveResultsTests : IAsyncLifetime
             new Dictionary<Guid, string> { [questionId] = "good stressed" }));
         Assert.Equal(HttpStatusCode.Created, response2.StatusCode);
 
-        // Three more, so the session reaches the floor of five and its words are readable at all.
+        // Enough more that the session reaches its floor and its words are readable at all.
         await SubmitFillersAsync(anonymousClient, microclimateId, questionId, 3);
 
         anonymousClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
@@ -117,12 +117,12 @@ public class MicroclimateLiveResultsTests : IAsyncLifetime
 
     /// <summary>
     /// The session floor the export already applied, now applied to the screen's own payload:
-    /// under five responses a word two people shared is most of who answered, so no word is
+    /// under the floor a word two people shared is most of who answered, so no word is
     /// returned at all -- and the response says so, rather than returning an empty cloud that
     /// reads as "nobody wrote anything". Sentiment is null, never a 0 nothing measured.
     /// </summary>
     [Fact]
-    public async Task A_session_under_five_responses_returns_no_words_and_no_invented_sentiment()
+    public async Task A_session_under_the_floor_returns_no_words_and_no_invented_sentiment()
     {
         var client = _factory.CreateClient();
         var adminToken = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin);
@@ -140,7 +140,7 @@ public class MicroclimateLiveResultsTests : IAsyncLifetime
         var raw = await client.GetStringAsync($"/microclimates/{microclimateId}/live-results");
         var live = System.Text.Json.JsonSerializer.Deserialize<LiveResultsDetail>(raw, System.Text.Json.JsonSerializerOptions.Web)!;
 
-        // Four people all wrote both words: well over the word floor, and still withheld.
+        // Everyone below the floor wrote both words: well over the word floor, still withheld.
         Assert.Equal(SurveyResultsPrivacy.MinimumRespondents - 1, live.ResponseCount);
         Assert.Empty(live.WordCloud);
         Assert.DoesNotContain("planificar", raw, StringComparison.Ordinal);
@@ -155,7 +155,7 @@ public class MicroclimateLiveResultsTests : IAsyncLifetime
         var lifted = await (await client.GetAsync($"/microclimates/{microclimateId}/live-results"))
             .Content.ReadFromJsonAsync<LiveResultsDetail>();
         Assert.False(lifted!.IsSuppressed);
-        Assert.Contains(lifted.WordCloud, w => w.Text == "planificar" && w.Value == 5);
+        Assert.Contains(lifted.WordCloud, w => w.Text == "planificar" && w.Value == SurveyResultsPrivacy.MinimumRespondents);
         Assert.Null(lifted.SentimentScore);
     }
 
@@ -196,10 +196,10 @@ public class MicroclimateLiveResultsTests : IAsyncLifetime
         var ratingQuestionId = created.Questions.Single(q => q.Type == "rating").Id;
         var yesNoQuestionId = created.Questions.Single(q => q.Type == "yes_no").Id;
 
-        // FIVE respondents, saying the same things. Fewer would leave the session under its
+        // Exactly the floor in respondents, saying the same things. Fewer would leave it under its
         // floor, where every word is withheld -- and an EMPTY cloud satisfies the two
         // DoesNotContain assertions below without proving anything, which is the shape this
-        // test exists to catch. With five, "5" and "yes" would be on 5 and visible if they ever
+        // test exists to catch. At the floor, "5" and "yes" would be visible if they ever
         // leaked, so the negatives have teeth.
         var anonymousClient = _factory.CreateClient();
         foreach (var _ in Enumerable.Range(0, SurveyResultsPrivacy.MinimumRespondents))
@@ -222,8 +222,8 @@ public class MicroclimateLiveResultsTests : IAsyncLifetime
         // only the open_ended answer's words should be counted.
         Assert.DoesNotContain(live!.WordCloud, w => w.Text == "5");
         Assert.DoesNotContain(live.WordCloud, w => w.Text == "yes");
-        Assert.Contains(live.WordCloud, w => w.Text == "great" && w.Value == 5);
-        Assert.Contains(live.WordCloud, w => w.Text == "amazing" && w.Value == 5);
+        Assert.Contains(live.WordCloud, w => w.Text == "great" && w.Value == SurveyResultsPrivacy.MinimumRespondents);
+        Assert.Contains(live.WordCloud, w => w.Text == "amazing" && w.Value == SurveyResultsPrivacy.MinimumRespondents);
     }
 
     [Fact]
@@ -355,15 +355,15 @@ public class MicroclimateLiveResultsTests : IAsyncLifetime
         var live = await (await client.GetAsync($"/microclimates/{microclimateId}/live-results"))
             .Content.ReadFromJsonAsync<LiveResultsDetail>();
 
-        // Both respondents said every one of these, so the floor is not what removes them.
+        // Every respondent said every one of these, so the floor is not what removes them.
         foreach (var functionWord in new[] { "la", "las", "y", "el", "entre" })
         {
             Assert.DoesNotContain(live!.WordCloud, w => w.Text == functionWord);
         }
 
         // ...and the words they actually chose survive.
-        Assert.Contains(live!.WordCloud, w => w.Text == "comunicacion" && w.Value == 5);
-        Assert.Contains(live.WordCloud, w => w.Text == "equipo" && w.Value == 5);
+        Assert.Contains(live!.WordCloud, w => w.Text == "comunicacion" && w.Value == SurveyResultsPrivacy.MinimumRespondents);
+        Assert.Contains(live.WordCloud, w => w.Text == "equipo" && w.Value == SurveyResultsPrivacy.MinimumRespondents);
     }
 
     /// <summary>

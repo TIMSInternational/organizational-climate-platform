@@ -83,18 +83,19 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
 
     /// <summary>
     /// (a) and (b) in one cohort, sized so the complement rule cannot hide the answer: 5 in
-    /// Operaciones, 4 in Ventas, 1 in Finanzas. The undisclosed remainder is 5, so Operaciones
-    /// is published; Ventas and Finanzas are under the floor and carry no number at all.
+    /// Operaciones and one short of the floor in each of Ventas and Finanzas. Their combined
+    /// remainder clears the floor, so Operaciones is published; Ventas and Finanzas are each
+    /// under it and carry no number at all.
     /// Mutate <c>SelfDeclaredDepartment.Effective</c> to return only the stored department and
     /// the Operaciones row disappears.
     /// </summary>
     [Fact]
-    public async Task Five_self_declared_respondents_fill_their_departments_row_and_four_do_not()
+    public async Task A_published_area_fills_its_departments_row_and_areas_under_the_floor_do_not()
     {
         var survey = await QrSurveyAsync(collectIdentity: false);
         await AnswerAsAreaAsync(survey, _operaciones, 5);
-        await AnswerAsAreaAsync(survey, _ventas, 4);
-        await AnswerAsAreaAsync(survey, _finanzas, 1);
+        await AnswerAsAreaAsync(survey, _ventas, SurveyResultsPrivacy.MinimumRespondents - 1);
+        await AnswerAsAreaAsync(survey, _finanzas, SurveyResultsPrivacy.MinimumRespondents - 1);
 
         var admin = await AdminAsync();
         var statistics = (await admin.GetFromJsonAsync<SurveyStatisticsResponse>($"/surveys/{survey.Id}/statistics"))!;
@@ -105,8 +106,8 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
         Assert.Equal(5, operaciones.RespondentCount);
         Assert.NotEmpty(operaciones.Questions);
 
-        // Since #543 a withheld group is counted, never named: Ventas (4) and Finanzas (1)
-        // are absent from the rows and present only in the counter.
+        // Since #543 a withheld group is counted, never named: Ventas and Finanzas are both
+        // under the floor, absent from the rows and present only in the counter.
         Assert.Single(departments.Segments);
         Assert.DoesNotContain(departments.Segments, s => s.Key == _ventas.ToString() || s.Key == _finanzas.ToString());
         Assert.Equal(2, departments.SuppressedSegmentCount);
