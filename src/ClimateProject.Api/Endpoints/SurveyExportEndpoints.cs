@@ -4,6 +4,7 @@ using ClimateProject.Application.Auditing;
 using ClimateProject.Application.Exports;
 using ClimateProject.Application.Surveys;
 using ClimateProject.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 
 namespace ClimateProject.Api.Endpoints;
 
@@ -189,6 +190,7 @@ public static class SurveyExportEndpoints
         }
 
         var results = loaded.Context!;
+        var labels = await LoadLabelsAsync(results.Survey.CompanyId, results.ResolvedLocale, db, cancellationToken);
         return (
             new SurveyExportContext(
                 results.Survey.Id,
@@ -198,7 +200,51 @@ public static class SurveyExportEndpoints
                 results.ResolvedLocale,
                 results.FallbackFields,
                 results.Aggregate,
-                DateTimeOffset.UtcNow),
+                DateTimeOffset.UtcNow,
+                labels),
             null);
+    }
+
+    /// <summary>
+    /// The company's field and option labels in the reader's language, so a breakdown prints
+    /// "Antigüedad" and "Femenino" rather than the keys the aggregation works in. Inactive
+    /// fields too: a response keeps the value it was given after a field is retired.
+    /// </summary>
+    private static async Task<SurveyExportLabels> LoadLabelsAsync(
+        Guid companyId,
+        string locale,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var spanish = locale.StartsWith("es", StringComparison.OrdinalIgnoreCase);
+        string Pick(string? es, string? en, string fallback)
+            => (spanish ? es ?? en : en ?? es) is { Length: > 0 } label ? label : fallback;
+
+        var fields = await db.DemographicFields
+            .AsNoTracking()
+            .Where(f => f.CompanyId == companyId)
+            .Select(f => new { f.Id, f.Field, f.LabelEs, f.LabelEn })
+            .ToListAsync(cancellationToken);
+        var fieldIds = fields.Select(f => f.Id).ToList();
+        var options = await db.DemographicFieldOptions
+            .AsNoTracking()
+            .Where(o => fieldIds.Contains(o.DemographicFieldId))
+            .Select(o => new { o.DemographicFieldId, o.Value, o.LabelEs, o.LabelEn })
+            .ToListAsync(cancellationToken);
+
+        var keyById = fields.ToDictionary(f => f.Id, f => f.Field);
+        var dimensions = fields
+            .GroupBy(f => f.Field, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => Pick(g.First().LabelEs, g.First().LabelEn, g.Key), StringComparer.Ordinal);
+        // The área a respondent declares is a breakdown of its own, keyed "department".
+        dimensions[SelfDeclaredDepartment.FieldKey] = spanish ? "Área" : "Area";
+
+        var optionLabels = new Dictionary<(string Field, string Value), string>();
+        foreach (var option in options)
+        {
+            optionLabels.TryAdd((keyById[option.DemographicFieldId], option.Value), Pick(option.LabelEs, option.LabelEn, option.Value));
+        }
+
+        return new SurveyExportLabels(dimensions, optionLabels);
     }
 }

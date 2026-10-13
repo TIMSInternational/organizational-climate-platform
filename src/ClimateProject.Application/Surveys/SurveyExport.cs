@@ -31,7 +31,29 @@ public sealed record SurveyExportContext(
     string ResolvedLocale,
     IReadOnlyList<string> FallbackFields,
     SurveyAggregate Aggregate,
-    DateTimeOffset GeneratedAt);
+    DateTimeOffset GeneratedAt,
+    SurveyExportLabels? Labels = null)
+{
+    /// <summary>A breakdown's name for a reader: the field's label, or its key when none is known.</summary>
+    public string DimensionLabel(string dimension)
+        => Labels?.Dimensions.GetValueOrDefault(dimension) ?? dimension;
+
+    /// <summary>A group's name for a reader: its own label, the field option's label, or its key.</summary>
+    public string SegmentLabel(SurveySegmentResult segment)
+        => segment.Label
+            ?? Labels?.Options.GetValueOrDefault((segment.Dimension, segment.Key))
+            ?? segment.Key;
+}
+
+/// <summary>
+/// The words a breakdown is printed with, in the reader's language: the company's own field
+/// labels ("Antigüedad", not <c>antiguedad</c>) and option labels ("Femenino", not
+/// <c>femenino</c>). The aggregation works in keys; before 2026-10-12 the PDF printed them
+/// ("Desglose por department"). Keys stay the CSV's machine-readable columns.
+/// </summary>
+public sealed record SurveyExportLabels(
+    IReadOnlyDictionary<string, string> Dimensions,
+    IReadOnlyDictionary<(string Field, string Value), string> Options);
 
 /// <summary>
 /// One survey's results as a file: the CSV rows and the PDF document, from one projection.
@@ -277,6 +299,7 @@ public static class SurveyExport
 
         foreach (var breakdown in aggregate.Breakdowns)
         {
+            await Row(BreakdownSection, null, breakdown.Dimension, locale, "label", context.DimensionLabel(breakdown.Dimension)).ConfigureAwait(false);
             await Row(BreakdownSection, null, breakdown.Dimension, null, "suppressed_segment_count", Number(breakdown.SuppressedSegmentCount)).ConfigureAwait(false);
             await Row(BreakdownSection, null, breakdown.Dimension, null, "suppressed_respondent_count", Number(breakdown.SuppressedRespondentCount)).ConfigureAwait(false);
             await Row(BreakdownSection, null, breakdown.Dimension, null, "unsegmented_respondent_count", Number(breakdown.UnsegmentedRespondentCount)).ConfigureAwait(false);
@@ -297,7 +320,7 @@ public static class SurveyExport
             {
                 var key = $"{breakdown.Dimension}:{segment.Key}";
 
-                await Row(SegmentSection, null, key, locale, "label", segment.Label).ConfigureAwait(false);
+                await Row(SegmentSection, null, key, locale, "label", context.SegmentLabel(segment)).ConfigureAwait(false);
                 await Row(SegmentSection, null, key, null, "respondent_count", Number(segment.RespondentCount)).ConfigureAwait(false);
                 await Row(SegmentSection, null, key, null, "participation_rate", Optional(segment.ParticipationRate)).ConfigureAwait(false);
                 await Row(SegmentSection, null, key, null, "headcount", Optional(segment.Headcount)).ConfigureAwait(false);
@@ -461,7 +484,7 @@ public static class SurveyExport
 
         foreach (var breakdown in aggregate.Breakdowns)
         {
-            document.Heading(copy.BreakdownHeading(breakdown.Dimension));
+            document.Heading(copy.BreakdownHeading(context.DimensionLabel(breakdown.Dimension)));
 
             var visible = breakdown.Segments.Where(s => !s.IsSuppressed).ToList();
             if (visible.Count > 0)
@@ -475,7 +498,7 @@ public static class SurveyExport
                     ],
                     [.. visible.Select(s => new string?[]
                     {
-                        s.Label ?? s.Key,
+                        context.SegmentLabel(s),
                         copy.Format(s.RespondentCount),
                         copy.Format(s.Headcount),
                         copy.Percent(s.ParticipationRate),

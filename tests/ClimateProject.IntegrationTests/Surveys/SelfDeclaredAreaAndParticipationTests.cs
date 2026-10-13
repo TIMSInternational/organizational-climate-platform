@@ -261,6 +261,28 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
         Assert.Equal(0, counts[_operaciones]);
     }
 
+    [Fact]
+    public async Task The_export_names_the_area_and_each_field_and_option_with_the_companys_labels()
+    {
+        var admin = await AdminAsync();
+        (await admin.PostAsJsonAsync("/admin/demographic-fields", new CreateDemographicFieldRequest(
+            _companyId, "turno", LocalizedInput.FromBare("Turno"), "select",
+            [new DemographicFieldOptionInput("manana", LocalizedInput.FromBare("Mañana"))], Required: false, Order: 1)))
+            .EnsureSuccessStatusCode();
+        var survey = await QrSurveyAsync(collectIdentity: false);
+        for (var i = 0; i < 6; i++)
+        {
+            var http = await SubmitAsync(survey, new Dictionary<string, string?>(Area(_ventas)) { ["turno"] = "manana" });
+            Assert.Equal(HttpStatusCode.Created, http.StatusCode);
+        }
+
+        var csv = await admin.GetStringAsync($"/surveys/{survey.Id}/export/csv?lang=es");
+
+        Assert.Contains("\"breakdown\",\"\",\"department\",\"es\",\"label\",\"Área\"", csv);
+        Assert.Contains("\"breakdown\",\"\",\"turno\",\"es\",\"label\",\"Turno\"", csv);
+        Assert.Contains("\"segment\",\"\",\"turno:manana\",\"es\",\"label\",\"Mañana\"", csv);
+    }
+
     // ------------------------------------------------------------------
     // Part 2: who answered, never linked to what they said
     // ------------------------------------------------------------------

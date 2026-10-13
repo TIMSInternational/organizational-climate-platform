@@ -5,6 +5,7 @@ using ClimateProject.Application.Exports;
 using ClimateProject.Application.Localization;
 using ClimateProject.Application.Questions;
 using ClimateProject.Application.Surveys;
+using ClimateProject.UnitTests.Exports;
 
 namespace ClimateProject.UnitTests.Surveys;
 
@@ -448,6 +449,43 @@ public class SurveyExportTests
     /// <param name="respondentCount">Complete responses. Everyone answers "remote".</param>
     /// <param name="departments">(id, name, headcount, respondents) -- respondents must sum to at most <paramref name="respondentCount"/>.</param>
     /// <param name="openText">Adds a second, open-ended question so the word sections are reached.</param>
+    /// <summary>
+    /// EAGLE, 2026-10-12: the PDF printed "Desglose por antiguedad" and groups as option keys
+    /// ("femenino"), because the aggregation works in keys and nothing named them.
+    /// </summary>
+    [Fact]
+    public async Task A_breakdown_is_printed_with_the_companys_labels_not_its_keys()
+    {
+        var aggregate = Aggregate(12, demographics: [("antiguedad", "de_1_ano_a_3_anos", 6), ("antiguedad", "mas_de_20_anos", 6)]);
+        var labels = new SurveyExportLabels(
+            new Dictionary<string, string> { ["antiguedad"] = "Antigüedad" },
+            new Dictionary<(string Field, string Value), string>
+            {
+                [("antiguedad", "de_1_ano_a_3_anos")] = "De 1 año a 3 años",
+                [("antiguedad", "mas_de_20_anos")] = "Más de 20 años",
+            });
+        var context = Context(aggregate, locale: "es") with { Labels = labels };
+
+        var pdf = PdfText.Prose(SurveyExport.BuildPdf(context));
+        Assert.Contains("Desglose por Antigüedad", pdf);
+        Assert.Contains("De 1 año a 3 años", pdf);
+        Assert.DoesNotContain("Desglose por antiguedad", pdf);
+        Assert.DoesNotContain("de_1_ano_a_3_anos", pdf);
+
+        var rows = await CsvRowsAsync(context);
+        Assert.Equal("Antigüedad", rows.Single(r => r.Section == SurveyExport.BreakdownSection && r.Group == "antiguedad" && r.Metric == "label").Value);
+        Assert.Equal("De 1 año a 3 años", SegmentMetric(rows, "antiguedad:de_1_ano_a_3_anos", "label"));
+    }
+
+    [Fact]
+    public async Task With_no_labels_a_breakdown_falls_back_to_its_keys_rather_than_to_nothing()
+    {
+        var context = Context(Aggregate(12, demographics: [("sexo", "femenino", 6), ("sexo", "masculino", 6)]), locale: "es");
+
+        Assert.Contains("Desglose por sexo", PdfText.Prose(SurveyExport.BuildPdf(context)));
+        Assert.Equal("femenino", SegmentMetric(await CsvRowsAsync(context), "sexo:femenino", "label"));
+    }
+
     private static SurveyAggregate Aggregate(
         int respondentCount,
         IReadOnlyList<(Guid Id, string Name, int Headcount, int Respondents)>? departments = null,
