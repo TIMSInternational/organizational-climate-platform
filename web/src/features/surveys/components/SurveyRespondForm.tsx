@@ -394,8 +394,8 @@ export default function SurveyRespondForm({
   // the headings the analysis will report under. It returns the whole form either
   // way — `sectioned: false` means "print no headings", not "here is half of it".
   const dimensions = useMemo(
-    () => respondDimensions(questions, randomizeQuestions),
-    [questions, randomizeQuestions],
+    () => respondDimensions(questions, randomizeQuestions, sessionId),
+    [questions, randomizeQuestions, sessionId],
   )
 
   const announce = useCallback((message: string) => setAnnouncement(message), [])

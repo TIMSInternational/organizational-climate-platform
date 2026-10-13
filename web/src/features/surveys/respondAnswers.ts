@@ -310,12 +310,30 @@ export function orderQuestions(
   const ordered = [...questions].sort((left, right) => left.order - right.order)
   if (!randomize || ordered.length < 2) return ordered
 
-  const next = randomFrom(seedFrom(seed))
-  for (let index = ordered.length - 1; index > 0; index -= 1) {
-    const swap = Math.floor(next() * (index + 1))
-    ;[ordered[index], ordered[swap]] = [ordered[swap], ordered[index]]
-  }
+  seededShuffle(ordered, seed)
   return ordered
+}
+
+/**
+ * A seeded Fisher-Yates, in place.
+ *
+ * Exported because `respondDimensions` shuffles the SECTION order from the same seed, and two
+ * Fisher-Yates written out twice are two things that can drift apart. The seed is a string
+ * rather than a number so that a caller can derive an independent stream by naming it --
+ * `respondDimensions` passes `<sessionId>:sections` precisely so the section order is not a
+ * function of the same PRNG draws that ordered the questions.
+ *
+ * Deterministic for a given seed, which is what lets a respondent reload without the form
+ * rearranging itself under them, and what makes the order assertable in a test rather than
+ * merely "different sometimes".
+ */
+export function seededShuffle<T>(items: T[], seed: string): void {
+  if (items.length < 2) return
+  const next = randomFrom(seedFrom(seed))
+  for (let index = items.length - 1; index > 0; index -= 1) {
+    const swap = Math.floor(next() * (index + 1))
+    ;[items[index], items[swap]] = [items[swap], items[index]]
+  }
 }
 
 /** Moves one entry of a ranking, clamped at the ends. Returns a new array. */
