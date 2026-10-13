@@ -1,4 +1,8 @@
-import type { SurveyInvitationDetail, SurveyInvitationSummary } from '../../api/surveyDistribution'
+import {
+  invitationIsFinished,
+  type SurveyInvitationDetail,
+  type SurveyInvitationSummary,
+} from '../../api/surveyDistribution'
 import type { Department } from '../../../org-structure/api/departments'
 
 /**
@@ -145,7 +149,7 @@ export function nextReminder(input: {
   const days = Math.max(MIN_FREQUENCY_DAYS, input.frequencyDays)
   let earliest: number | null = null
   for (const invitation of input.invitations) {
-    if (invitation.completedAt !== null || !OUTSTANDING.has(invitation.status) || invitation.sentAt === null) continue
+    if (invitationIsFinished(invitation) || !OUTSTANDING.has(invitation.status) || invitation.sentAt === null) continue
     if (invitation.reminderCount >= MAX_REMINDERS) continue
     const since = Date.parse(invitation.lastReminderSent ?? invitation.sentAt)
     if (Number.isNaN(since)) continue

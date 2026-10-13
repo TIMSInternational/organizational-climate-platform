@@ -109,9 +109,12 @@ public static class InvitationReminderJob
         var surveysById = openSurveys.ToDictionary(survey => survey.Id);
         var openSurveyIds = surveysById.Keys.ToList();
 
+        // Completion is the status plus the day (`completed_on`); a survey invitation no longer
+        // records a completion instant, so `completed_at` is not consulted here (ruled 2026-10-12).
         var candidates = (await db.SurveyInvitations
             .Where(invitation =>
-                invitation.CompletedAt == null
+                invitation.CompletedOn == null
+                && invitation.Status != SurveyInvitationStatuses.Completed
                 && invitation.ExpiresAt > nowUtc
                 && openSurveyIds.Contains(invitation.SurveyId))
             .OrderBy(invitation => invitation.CreatedAt)
@@ -136,7 +139,9 @@ public static class InvitationReminderJob
                     row.Invitation.Id,
                     row.Invitation.Status,
                     row.Invitation.SentAt,
-                    row.Invitation.CompletedAt,
+                    // No instant exists to pass. A completed invitee was already excluded by the
+                    // query above, and ReminderSchedule refuses the `completed` status regardless.
+                    CompletedAt: null,
                     row.Invitation.LastReminderSent,
                     row.Invitation.ReminderCount,
                     row.Invitation.ExpiresAt,

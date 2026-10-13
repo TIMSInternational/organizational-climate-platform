@@ -40,7 +40,7 @@ public interface ISurveyInvitationTokens
     /// <b>What a stolen token actually buys, stated precisely.</b> Not impersonation. It reads
     /// the survey's title and description through <c>GET /survey-invitations/{token}</c>, and
     /// on a non-anonymous survey it can <c>POST .../completed</c> -- which sets
-    /// <c>CompletedAt</c>, cannot be undone because
+    /// the status and <c>CompletedOn</c>, cannot be undone because
     /// <c>SurveyInvitationStatuses.Advances</c> is strictly monotonic, makes the real invitee's
     /// own link answer 409 <c>already_completed</c>, and corrupts the response rate. Answering
     /// is a different surface entirely: <c>SurveyResponseEndpoints.ResolveRespondentAsync</c>

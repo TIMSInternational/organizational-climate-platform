@@ -173,6 +173,10 @@ describe('nextReminder (ReminderSchedule.Evaluate over the invitation list)', ()
   it('stops at the cap, skips the answered and the revoked, and never schedules past the close or the expiry', () => {
     expect(outlook([row({ reminderCount: MAX_REMINDERS })])).toEqual({ kind: 'none' })
     expect(outlook([row({ completedAt: '2026-09-11T09:00:00Z' })])).toEqual({ kind: 'none' })
+    // The current API records only the day a named invitee finished, never the time; an API
+    // older than that sent the time. Either marks the invitee answered, as does the status.
+    expect(outlook([row({ completedOn: '2026-09-11' })])).toEqual({ kind: 'none' })
+    expect(outlook([row({ status: 'completed', completedAt: null, completedOn: null })])).toEqual({ kind: 'none' })
     expect(outlook([row({ status: 'revoked' })])).toEqual({ kind: 'none' })
     expect(outlook([row()], { endDate: '2026-09-12T00:00:00Z' })).toEqual({ kind: 'none' })
     expect(outlook([row({ expiresAt: '2026-09-12T00:00:00Z' })])).toEqual({ kind: 'none' })

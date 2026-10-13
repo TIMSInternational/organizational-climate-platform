@@ -11,6 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from '../ui'
+import { formatParticipationDay } from '../../features/surveys/next/authoring/participationDay'
 import {
   isKnownInvitationStatus,
   type SurveyAnonymityGuarantee,
@@ -30,11 +31,12 @@ import {
  * the DOM, a screenshot, or a copied table. `InvitationTable.test.tsx` proves that by
  * rendering a row that *does* carry one.
  *
- * **2. Columns that cannot hold data are not rendered.** For an anonymous survey the
- * `started` and `completed` timestamps are never written, so those columns would be
- * permanently empty — and an empty cell reads as "this person has not started", which is
- * a claim about a person the survey has promised not to make. The columns are dropped and
- * the promise is stated instead.
+ * **2. Columns that cannot hold data are not rendered.** No survey records when anyone
+ * started (ruled 2026-10-12), so there is no Started column at all. A named survey records
+ * only the DAY an invitee finished (`completedOn`), shown as a day. For an anonymous survey
+ * even that is never written, so the column would be permanently empty — and an empty cell
+ * reads as "this person has not finished", which is a claim about a person the survey has
+ * promised not to make. The column is dropped and the promise is stated instead.
  *
  * Status uses the `secondary` and `outline` badge variants only. Measured against
  * `tokens.css`, they are the two that clear WCAG AA 4.5:1 in **both** themes — the four
@@ -51,6 +53,16 @@ export interface InvitationTableProps {
   busyInvitationId?: string | null
 }
 
+/**
+ * The day an invitee finished. `completedOn` is a calendar day and is printed as one, never
+ * through `Date` (which would shift it a day west of UTC); `completedAt` is read only from an
+ * API older than `completedOn`.
+ */
+function formatCompletion(invitation: SurveyInvitationDetail, locale: string): string {
+  if (invitation.completedOn) return formatParticipationDay(invitation.completedOn, locale)
+  return formatMoment(invitation.completedAt, locale)
+}
+
 function formatMoment(value: string | null, locale: string): string {
   if (value === null) return '—'
   const parsed = new Date(value)
@@ -65,8 +77,8 @@ export default function InvitationTable({
   busyInvitationId = null,
 }: InvitationTableProps) {
   const { t, locale } = useTranslation()
-  const tracksProgress = !anonymity.suppressedStates.includes('started')
-  const columnCount = tracksProgress ? 8 : 6
+  const tracksCompletion = !anonymity.suppressedStates.includes('completed')
+  const columnCount = tracksCompletion ? 7 : 6
 
   return (
     // The `<Table>` primitive, never a bare `<table>`: it owns `w-full` and the
@@ -77,8 +89,7 @@ export default function InvitationTable({
           <TableHead>{t('surveys.distribution.recipient')}</TableHead>
           <TableHead>{t('common.status')}</TableHead>
           <TableHead>{t('surveys.distribution.sentAt')}</TableHead>
-          {tracksProgress && <TableHead>{t('surveys.distribution.startedAt')}</TableHead>}
-          {tracksProgress && <TableHead>{t('surveys.distribution.completedAt')}</TableHead>}
+          {tracksCompletion && <TableHead>{t('surveys.distribution.completedAt')}</TableHead>}
           {/* The derived "Expired" badge says THAT an invitation lapsed and never
               when, which is the fact an admin needs to decide whether to re-invite. */}
           <TableHead>{t('surveys.distribution.expiresAt')}</TableHead>
@@ -114,11 +125,8 @@ export default function InvitationTable({
                   </span>
                 </TableCell>
                 <TableCell>{formatMoment(invitation.sentAt, locale)}</TableCell>
-                {tracksProgress && (
-                  <TableCell>{formatMoment(invitation.startedAt, locale)}</TableCell>
-                )}
-                {tracksProgress && (
-                  <TableCell>{formatMoment(invitation.completedAt, locale)}</TableCell>
+                {tracksCompletion && (
+                  <TableCell>{formatCompletion(invitation, locale)}</TableCell>
                 )}
                 <TableCell>{formatMoment(invitation.expiresAt, locale)}</TableCell>
                 <TableCell>{invitation.reminderCount}</TableCell>

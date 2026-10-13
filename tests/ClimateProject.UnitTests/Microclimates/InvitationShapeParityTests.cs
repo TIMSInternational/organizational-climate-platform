@@ -84,20 +84,26 @@ public class InvitationShapeParityTests
             ShapeOf(typeof(MicroclimateInvitationSummaryDto), Normalise));
 
     /// <summary>
-    /// The invitation detail differs in exactly one member and the difference is named here so
-    /// it cannot grow quietly: the survey row points at a <c>surveyId</c> and the microclimate
-    /// row at a <c>microclimateId</c>. Everything else -- the five timestamps, the derived
-    /// <c>isExpired</c>, the reminder counters -- is identical, which is what lets one table
-    /// component draw both.
+    /// The invitation detail differs in exactly two members and both are named here so the
+    /// difference cannot grow quietly: the survey row points at a <c>surveyId</c> and the
+    /// microclimate row at a <c>microclimateId</c>; and the survey row carries
+    /// <c>completedOn</c>, the DAY a named invitee finished (ruled 2026-10-12 for surveys only --
+    /// the survey's <c>startedAt</c>/<c>completedAt</c> are kept in the shape but always null).
+    /// Everything else -- the timestamps, the derived <c>isExpired</c>, the reminder counters --
+    /// is identical.
     /// </summary>
     [Fact]
-    public void The_two_invitation_details_differ_only_in_which_parent_they_name()
+    public void The_two_invitation_details_differ_only_in_which_parent_they_name_and_the_survey_day()
     {
+        const string SurveyOnly = "CompletedOn:Nullable<DateOnly>";
         var survey = ShapeOf(typeof(SurveyInvitationDetail), Normalise);
         var microclimate = ShapeOf(typeof(MicroclimateInvitationDetail), Normalise);
 
+        Assert.Contains(SurveyOnly, survey);
+        Assert.DoesNotContain(SurveyOnly, microclimate);
+
         Assert.Equal(
-            survey.Select(m => m.Replace("SurveyId:", "ParentId:", StringComparison.Ordinal)),
+            survey.Where(m => m != SurveyOnly).Select(m => m.Replace("SurveyId:", "ParentId:", StringComparison.Ordinal)),
             microclimate.Select(m => m.Replace("MicroclimateId:", "ParentId:", StringComparison.Ordinal)));
 
         // Guard the guard: the substitution above really did fire on both sides, so a future

@@ -100,7 +100,39 @@ public class SurveyCompletionTrackingTests : IAsyncLifetime
 
         var invitation = await InvitationAsync(survey.Id, userId);
         Assert.Equal(SurveyInvitationStatuses.Completed, invitation.Status);
-        Assert.NotNull(invitation.CompletedAt);
+        Assert.NotNull(invitation.CompletedOn);
+    }
+
+    /// <summary>
+    /// Ruled 2026-10-12: the in-app writer records the DAY, in the company's time zone, and no
+    /// instant -- not <c>completed_at</c>, and not an <c>updated_at</c> moved at the moment of
+    /// submission, which would be the completion time under another name.
+    /// </summary>
+    [Fact]
+    public async Task An_in_app_completion_records_the_company_day_and_no_time()
+    {
+        var zone = await _harness.SetCompanyTimezoneOffUtcDayAsync(_companyId);
+        var survey = await ActiveSurveyAsync(anonymous: false);
+        var (employee, userId) = await _harness.IdentifiedClientAsync(Roles.Employee, _companyId);
+        await InviteAsync(survey.Id, userId);
+        var updatedAtBefore = (await InvitationAsync(survey.Id, userId)).UpdatedAt;
+
+        var before = DateTimeOffset.UtcNow;
+        var submitted = await employee.PostAsJsonAsync($"/surveys/{survey.Id}/responses", Answer(survey, complete: true));
+        var after = DateTimeOffset.UtcNow;
+        Assert.Equal(HttpStatusCode.Created, submitted.StatusCode);
+
+        var invitation = await InvitationAsync(survey.Id, userId);
+        Assert.Equal(SurveyInvitationStatuses.Completed, invitation.Status);
+        Assert.Null(invitation.StartedAt);
+        Assert.Null(invitation.CompletedAt);
+        Assert.Equal(updatedAtBefore, invitation.UpdatedAt);
+
+        var localBefore = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(before, zone).DateTime);
+        var localAfter = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(after, zone).DateTime);
+        Assert.NotEqual(DateOnly.FromDateTime(before.UtcDateTime), localBefore);
+        Assert.NotNull(invitation.CompletedOn);
+        Assert.Contains(invitation.CompletedOn!.Value, new[] { localBefore, localAfter });
     }
 
     [Fact]
@@ -117,12 +149,12 @@ public class SurveyCompletionTrackingTests : IAsyncLifetime
         // they started and did not finish.
         var invitation = await InvitationAsync(survey.Id, userId);
         Assert.Equal(SurveyInvitationStatuses.Sent, invitation.Status);
-        Assert.Null(invitation.CompletedAt);
+        Assert.Null(invitation.CompletedOn);
     }
 
     /// <summary>
     /// The anonymity ceiling, enforced on the new writer exactly as it is on the token route.
-    /// A per-person completion timestamp taken at the same instant as
+    /// A per-person completion record taken at the same instant as
     /// <c>responses.completion_time</c> is the join that un-anonymises the response.
     /// </summary>
     [Fact]
@@ -138,6 +170,7 @@ public class SurveyCompletionTrackingTests : IAsyncLifetime
         var invitation = await InvitationAsync(survey.Id, userId);
         Assert.Equal(SurveyInvitationStatuses.Sent, invitation.Status);
         Assert.Null(invitation.CompletedAt);
+        Assert.Null(invitation.CompletedOn);
         Assert.Equal(SurveyInvitationStatuses.Opened, SurveyInvitationStatuses.AnonymityCeiling);
     }
 

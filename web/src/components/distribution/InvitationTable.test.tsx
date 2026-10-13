@@ -110,11 +110,14 @@ describe('InvitationTable', () => {
     )
   })
 
-  it('shows the progress columns for a survey that records them', () => {
-    renderTable([invitation({ status: 'completed', completedAt: '2026-08-05T10:00:00Z' })], NAMED)
+  it('shows the day a named invitee finished, and no Started column for any survey', () => {
+    // Ruled 2026-10-12: a named survey records only the DAY its invitee finished, never a
+    // start or completion time. The API sends that day as `completedOn`.
+    renderTable([invitation({ status: 'completed', completedOn: '2026-08-05' })], NAMED)
 
-    expect(screen.getByRole('columnheader', { name: 'Started' })).toBeTruthy()
+    expect(screen.queryByRole('columnheader', { name: 'Started' })).toBeNull()
     expect(screen.getByRole('columnheader', { name: 'Completed' })).toBeTruthy()
+    expect(screen.getByText('Aug 5, 2026')).toBeTruthy()
   })
 
   /**
@@ -122,7 +125,7 @@ describe('InvitationTable', () => {
    * as "this person has not started", which is a claim about a person the survey has
    * promised not to make — so the columns are dropped rather than left permanently blank.
    */
-  it('drops the progress columns entirely for an anonymous survey', () => {
+  it('drops the completion column entirely for an anonymous survey', () => {
     renderTable([invitation()], ANONYMOUS)
 
     expect(screen.queryByRole('columnheader', { name: 'Started' })).toBeNull()
