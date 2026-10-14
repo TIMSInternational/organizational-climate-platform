@@ -449,6 +449,8 @@
       "signInDetail": "Use the work email the invitation arrived at.",
       "emailLabel": "Email address",
       "emailPlaceholder": "name@company.com",
+      "identifierLabel": "Email address or username",
+      "identifierPlaceholder": "name@company.com or your username",
       "passwordLabel": "Password",
       "passwordPlaceholder": "Your password",
       "passwordHelp": "Forgot your password? Ask whoever administers the platform at your organization to reset it.",

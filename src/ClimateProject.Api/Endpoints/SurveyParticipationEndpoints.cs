@@ -74,6 +74,57 @@ public static class SurveyParticipationEndpoints
             .ToListAsync(cancellationToken);
         answered = [.. answered.OrderBy(p => p.Name, NameOrder).ThenBy(p => p.Email, StringComparer.OrdinalIgnoreCase)];
 
+        // The OTHER half of "who answered", and the half this screen never read.
+        //
+        // `survey_participations` is written only for a respondent with NO account
+        // (`participation-is-not-linked-to-answers.md`), and the 2026-10-13 identity ruling
+        // then switched off the step that fed it -- so on a mass invite, where every
+        // respondent HAS an account, the table is empty and this screen reported 0 answered
+        // and the whole roster pending, for ever, however many people had answered.
+        //
+        // For an account holder the answer was never missing: an identified response carries
+        // `responses.user_id` by design, which is the same column that enforces
+        // one-response-per-person. Reading it creates no linkage that the response row did
+        // not already hold, which is exactly why the ruling's unlinkability machinery -- the
+        // random id, the separate transaction, the day instead of a timestamp -- exists for
+        // the accountless case and not for this one.
+        //
+        // An ANONYMOUS survey writes no user id at all, so this fails closed on its own: the
+        // query returns nothing rather than being guarded by a flag that could drift.
+        var fromAccounts = await db.Responses
+            .AsNoTracking()
+            .Where(r => r.SurveyId == survey.Id && r.IsComplete && r.UserId != null)
+            .Join(
+                db.Users.AsNoTracking(),
+                response => response.UserId!.Value,
+                user => user.Id,
+                (response, user) => new { user.Name, user.Email, response.CompletionTime })
+            .ToListAsync(cancellationToken);
+
+        // A day, never a time, so this list stays the shape the surface promises. The stored
+        // rows carry a day in the COMPANY's zone and these are UTC, so the two can differ by
+        // one at a boundary; neither this screen nor its question ("has this person answered")
+        // turns on which day it was, and inventing a zone neither the survey nor the company
+        // stores would be worse than saying so.
+        answered =
+        [
+            .. answered,
+            .. fromAccounts
+                .Where(row => !string.IsNullOrWhiteSpace(row.Name))
+                .Select(row => new SurveyParticipantRow(
+                    row.Name,
+                    string.IsNullOrWhiteSpace(row.Email) ? null : row.Email,
+                    DateOnly.FromDateTime((row.CompletionTime ?? DateTimeOffset.UtcNow).UtcDateTime))),
+        ];
+
+        // One row per person even if both sources somehow name them: the question is whether
+        // they answered, and counting them twice would also inflate AnsweredCount.
+        answered = [.. answered
+            .GroupBy(p => p.Email is null ? $"name:{p.Name}" : $"mail:{p.Email.Trim().ToLowerInvariant()}", StringComparer.Ordinal)
+            .Select(group => group.First())
+            .OrderBy(p => p.Name, NameOrder)
+            .ThenBy(p => p.Email, StringComparer.OrdinalIgnoreCase)];
+
         var answeredEmails = answered
             .Where(p => p.Email is not null)
             .Select(p => p.Email!)

@@ -449,6 +449,8 @@
       "signInDetail": "Use el correo corporativo al que le llegó la invitación.",
       "emailLabel": "Correo electrónico",
       "emailPlaceholder": "nombre@empresa.com",
+      "identifierLabel": "Correo electrónico o usuario",
+      "identifierPlaceholder": "nombre@empresa.com o su usuario",
       "passwordLabel": "Contraseña",
       "passwordPlaceholder": "Su contraseña",
       "passwordHelp": "¿Olvidó su contraseña? Pida a quien administra la plataforma en su organización que la restablezca.",
