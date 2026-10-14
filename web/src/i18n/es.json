@@ -4587,6 +4587,8 @@
       "fixBeforeApproving": "Corrija las filas marcadas con error y valide de nuevo.",
       "doneBody": "Se creó una invitación para cada persona. Al aceptarla, cada una define su propio nombre y contraseña.",
       "doneBodyCredentials": "Se creó una cuenta para cada persona y se le enviaron su usuario y su contraseña por correo, junto con el enlace a la encuesta. Nadie tiene que aceptar nada.",
+      "doneCredentialsNotSentOne": "1 persona no recibió sus datos de acceso: su cuenta quedó creada, pero el correo no salió. Búsquela en la lista de personas y use «Reenviar datos de acceso».",
+      "doneCredentialsNotSentMany": "{count} personas no recibieron sus datos de acceso: sus cuentas quedaron creadas, pero el correo no salió. Búsquelas en la lista de personas y use «Reenviar datos de acceso».",
       "startOver": "Importar otro archivo",
       "noDepartment": "(sin departamento)",
       "reason": {
@@ -4940,7 +4942,11 @@
         "accountHelper": "Desactivarla cierra sus sesiones abiertas de inmediato.",
         "accountLocked": "Solo un super administrador desactiva a un administrador.",
         "save": "Guardar cambios",
-        "saveFailed": "No se pudieron guardar los cambios"
+        "saveFailed": "No se pudieron guardar los cambios",
+        "resendCredentials": "Reenviar datos de acceso",
+        "resendCredentialsHelper": "Genera un usuario y una contraseña nuevos y los envía por correo. Los anteriores dejan de servir.",
+        "resendCredentialsDone": "Datos de acceso enviados",
+        "resendCredentialsFailed": "No se pudieron enviar los datos de acceso"
       },
       "roster": {
         "sub": "ordenadas por rol y nombre · {never} nunca han entrado",

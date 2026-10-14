@@ -4587,6 +4587,8 @@
       "fixBeforeApproving": "Fix the rows marked with an error, then validate again.",
       "doneBody": "An invitation was created for each person. On accepting it, each one sets their own name and password.",
       "doneBodyCredentials": "An account was created for each person, and their username and password were emailed to them along with the link to the survey. Nobody has to accept anything.",
+      "doneCredentialsNotSentOne": "1 person did not get their sign-in details: their account was created, but the email did not go out. Find them in the people list and use \u201cResend sign-in details\u201d.",
+      "doneCredentialsNotSentMany": "{count} people did not get their sign-in details: their accounts were created, but the email did not go out. Find them in the people list and use \u201cResend sign-in details\u201d.",
       "startOver": "Import another file",
       "noDepartment": "(no department)",
       "reason": {
@@ -4940,7 +4942,11 @@
         "accountHelper": "Deactivating it ends their open sessions at once.",
         "accountLocked": "Only a super administrator deactivates an administrator.",
         "save": "Save changes",
-        "saveFailed": "The changes could not be saved"
+        "saveFailed": "The changes could not be saved",
+        "resendCredentials": "Resend sign-in details",
+        "resendCredentialsHelper": "Generates a new username and password and emails them. The previous pair stops working.",
+        "resendCredentialsDone": "Sign-in details sent",
+        "resendCredentialsFailed": "The sign-in details could not be sent"
       },
       "roster": {
         "sub": "ordered by role and name · {never} never signed in",

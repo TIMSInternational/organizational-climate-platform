@@ -671,6 +671,67 @@ describe('IntakeWizard — how the people reach the survey', () => {
     expect(screen.getByText('Departamentos creados: Logística.')).toBeTruthy()
   })
 
+  /**
+   * The gap a browser pass found and every green suite missed: the API flags a row whose
+   * credentials email failed (`credentials_not_sent`), and this screen used to render a summary
+   * and a sentence and nothing else -- so a mass invite whose mail never left said
+   * "N correctas, 0 errores" under a promise that the credentials had been emailed.
+   */
+  it('says who did not get their sign-in details, instead of promising they were emailed', async () => {
+    const onImported = vi.fn()
+    const user = await uploadAndUnderstand(aiUnderstanding(), 'es', onImported)
+    await continueToReview(user)
+    await user.click(screen.getByRole('radio', { name: new RegExp(MASS_INVITE) }))
+
+    submitIntakeRows.mockImplementation(async (...args: unknown[]) => allValid(args[2] as IntakeRow[]))
+    await user.click(screen.getByRole('button', { name: 'Validar' }))
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: APPROVE_CREDENTIALS }).hasAttribute('disabled')).toBe(false),
+    )
+
+    submitIntakeRows.mockImplementation(async (...args: unknown[]) => {
+      const sent = args[2] as IntakeRow[]
+      return {
+        ...allValid(sent),
+        rows: sent.map((row, index) => ({
+          ...row,
+          status: 'created',
+          errors: [],
+          issues: index === 0 ? [{ code: 'credentials_not_sent' }] : [],
+        })),
+      }
+    })
+    await user.click(screen.getByRole('button', { name: APPROVE_CREDENTIALS }))
+    await waitFor(() => expect(onImported).toHaveBeenCalled())
+
+    expect(screen.getByText(/1 persona no recibió sus datos de acceso/)).toBeTruthy()
+    // Never beside it: for that row the promise is false.
+    expect(screen.queryByText(/se le enviaron su usuario y su contraseña por correo/)).toBeNull()
+  })
+
+  it('keeps the plain confirmation when every credentials email did go out', async () => {
+    const onImported = vi.fn()
+    const user = await uploadAndUnderstand(aiUnderstanding(), 'es', onImported)
+    await continueToReview(user)
+    await user.click(screen.getByRole('radio', { name: new RegExp(MASS_INVITE) }))
+
+    submitIntakeRows.mockImplementation(async (...args: unknown[]) => allValid(args[2] as IntakeRow[]))
+    await user.click(screen.getByRole('button', { name: 'Validar' }))
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: APPROVE_CREDENTIALS }).hasAttribute('disabled')).toBe(false),
+    )
+
+    submitIntakeRows.mockImplementation(async (...args: unknown[]) => {
+      const sent = args[2] as IntakeRow[]
+      return { ...allValid(sent), rows: sent.map((row) => ({ ...row, status: 'created', errors: [], issues: [] })) }
+    })
+    await user.click(screen.getByRole('button', { name: APPROVE_CREDENTIALS }))
+    await waitFor(() => expect(onImported).toHaveBeenCalled())
+
+    expect(screen.getByText(/se le enviaron su usuario y su contraseña por correo/)).toBeTruthy()
+    expect(screen.queryByText(/no recibió sus datos de acceso/)).toBeNull()
+  })
+
   it('reads a created account back as its own status, not as an unknown one', async () => {
     const user = await uploadAndUnderstand()
     await continueToReview(user)

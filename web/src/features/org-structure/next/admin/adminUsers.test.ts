@@ -14,6 +14,7 @@ function person(id: string, over: Partial<User> = {}): User {
     isActive: true,
     lastLoginAt: '2026-09-10T02:00:00Z',
     createdAt: '2026-09-10T01:00:00Z',
+    username: null,
     ...over,
   }
 }

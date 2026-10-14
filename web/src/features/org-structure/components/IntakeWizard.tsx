@@ -19,7 +19,7 @@ import { UploadStep } from './intake/UploadStep'
 import { UnderstandingProgress } from './intake/UnderstandingProgress'
 import { UnderstandStep } from './intake/UnderstandStep'
 import { ReviewStep } from './intake/ReviewStep'
-import { REQUEST_ERROR_CODES, applyDomainFixes, createdDepartments } from './intake/intakeModel'
+import { REQUEST_ERROR_CODES, applyDomainFixes, createdDepartments, credentialsNotSent } from './intake/intakeModel'
 
 /**
  * The people intake: upload any spreadsheet → see how it was understood → review → done.
@@ -259,6 +259,9 @@ export default function IntakeWizard({ baseUrl, companyId, onImported, revealDel
   }
 
   const created = result ? createdDepartments(approvedNew, result) : []
+  // Who was given an account but never told. Only a real import can produce this, so it is
+  // read here and not on the preview.
+  const notSent = result ? credentialsNotSent(result) : []
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
@@ -337,13 +340,28 @@ export default function IntakeWizard({ baseUrl, companyId, onImported, revealDel
               total: result.rows.length,
             })}
           </p>
-          <p className="m-0">
-            {t(
-              accessMode === 'credentials'
-                ? 'users.intake.doneBodyCredentials'
-                : 'users.intake.doneBody',
-            )}
-          </p>
+          {accessMode === 'credentials' && notSent.length > 0 ? (
+            // Never beside the sentence that promises the credentials were emailed: for these
+            // rows that promise is false, so this replaces it rather than contradicting it.
+            <Alert variant="destructive">
+              <AlertDescription>
+                {t(
+                  notSent.length === 1
+                    ? 'users.intake.doneCredentialsNotSentOne'
+                    : 'users.intake.doneCredentialsNotSentMany',
+                  { count: notSent.length },
+                )}
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <p className="m-0">
+              {t(
+                accessMode === 'credentials'
+                  ? 'users.intake.doneBodyCredentials'
+                  : 'users.intake.doneBody',
+              )}
+            </p>
+          )}
           {created.length > 0 && (
             <p className="m-0 text-sm text-fg-secondary">
               {t('users.intake.done.departmentsCreated', { names: created.join(', ') })}

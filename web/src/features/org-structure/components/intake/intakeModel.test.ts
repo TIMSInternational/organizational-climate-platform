@@ -3,6 +3,7 @@ import {
   applyDomainFixes,
   columnLetter,
   createdDepartments,
+  credentialsNotSent,
   formatModelName,
   parseColumnChoice,
   parseDepartmentChoice,
@@ -115,5 +116,32 @@ describe('createdDepartments', () => {
       errorCount: 1,
     }
     expect(createdDepartments(['Logística', 'Ventas'], result)).toEqual(['Logística'])
+  })
+})
+
+describe('credentialsNotSent', () => {
+  const row = (rowNumber: number, issues: { code: string }[]) => ({
+    rowNumber, name: 'A', email: `a${rowNumber}@x.test`, role: 'employee', department: null,
+    status: 'created', errors: [], issues,
+  })
+
+  // The API says so and the client used to throw it away, so a mass invite whose mail never
+  // left read as "N correctas, 0 errores".
+  it('names the rows whose sign-in details did not go out', () => {
+    const result = {
+      rows: [row(2, [{ code: 'credentials_not_sent' }]), row(3, []), row(4, [{ code: 'credentials_not_sent' }])],
+      successCount: 3,
+      errorCount: 0,
+    }
+    expect(credentialsNotSent(result)).toEqual([2, 4])
+  })
+
+  it('is empty when every mail went, and survives a row with no issues array at all', () => {
+    const result = {
+      rows: [row(2, []), { ...row(3, []), issues: undefined }],
+      successCount: 2,
+      errorCount: 0,
+    }
+    expect(credentialsNotSent(result)).toEqual([])
   })
 })

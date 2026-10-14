@@ -167,6 +167,24 @@ export function createdDepartments(approved: string[], result: BulkImportRespons
   )
 }
 
+/**
+ * The rows whose account was created but whose sign-in details did not get out.
+ *
+ * The API has always said so -- a failed send adds the issue `credentials_not_sent`
+ * (`BulkImportEndpoints.cs`) and `MassInviteTests` asserts it -- and this client discarded it:
+ * the done step renders a summary, a sentence and nothing else, and `successCount` counts a
+ * `created` row whether or not its mail went. So a mass invite whose every email failed read
+ * as "N correctas, 0 errores" under a sentence promising the credentials had been emailed.
+ *
+ * Returns the row numbers, because the emails are the one thing on this screen that must not
+ * become a wall of text for a 400-person roster.
+ */
+export function credentialsNotSent(result: BulkImportResponse): number[] {
+  return result.rows
+    .filter((row) => row.issues?.some((issue) => issue.code === 'credentials_not_sent'))
+    .map((row) => row.rowNumber)
+}
+
 /** The rows an insight names, capped so a 300-row typo does not become a 300-number sentence. */
 export function rowList(rows: number[], max = 8): { shown: string; more: number } {
   return { shown: rows.slice(0, max).join(', '), more: Math.max(0, rows.length - max) }

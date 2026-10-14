@@ -67,6 +67,7 @@ describe('peopleReading', () => {
       isActive,
       lastLoginAt: null,
       createdAt: '2026-09-10T00:00:00Z',
+      username: null,
     })
     expect(peopleReading([user('leader', true), user('leader', false), user('employee', true)])).toEqual({
       total: 3,

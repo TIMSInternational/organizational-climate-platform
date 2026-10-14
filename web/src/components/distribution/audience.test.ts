@@ -12,6 +12,7 @@ function user(id: string, departmentId: string | null, isActive = true): User {
     isActive,
     lastLoginAt: null,
     createdAt: '2026-01-01T00:00:00Z',
+    username: null,
   }
 }
 

@@ -2798,7 +2798,8 @@
         "departmentId": null,
         "isActive": true,
         "createdAt": "2025-03-14T09:20:00Z",
-        "lastLoginAt": "2026-08-30T07:41:00Z"
+        "lastLoginAt": "2026-08-30T07:41:00Z",
+        "username": null
       },
       {
         "id": "99999999-0000-0000-0000-000000000002",
@@ -2809,7 +2810,8 @@
         "departmentId": "d0000000-0000-0000-0000-000000000001",
         "isActive": true,
         "createdAt": "2025-04-02T11:00:00Z",
-        "lastLoginAt": "2026-08-29T16:12:00Z"
+        "lastLoginAt": "2026-08-29T16:12:00Z",
+        "username": null
       },
       {
         "id": "99999999-0000-0000-0000-000000000003",
@@ -2820,7 +2822,8 @@
         "departmentId": "d0000000-0000-0000-0000-000000000002",
         "isActive": true,
         "createdAt": "2025-05-19T08:30:00Z",
-        "lastLoginAt": "2026-08-28T09:03:00Z"
+        "lastLoginAt": "2026-08-28T09:03:00Z",
+        "username": null
       },
       {
         "id": "99999999-0000-0000-0000-000000000004",
@@ -2831,7 +2834,8 @@
         "departmentId": "d0000000-0000-0000-0000-000000000004",
         "isActive": true,
         "createdAt": "2025-09-08T13:45:00Z",
-        "lastLoginAt": "2026-08-25T18:55:00Z"
+        "lastLoginAt": "2026-08-25T18:55:00Z",
+        "username": "tomas.iglesias"
       },
       {
         "id": "99999999-0000-0000-0000-000000000005",
@@ -2842,7 +2846,8 @@
         "departmentId": "d0000000-0000-0000-0000-000000000003",
         "isActive": false,
         "createdAt": "2025-10-30T10:05:00Z",
-        "lastLoginAt": "2026-02-11T12:20:00Z"
+        "lastLoginAt": "2026-02-11T12:20:00Z",
+        "username": "lucia.bravo"
       }
     ]
   },
