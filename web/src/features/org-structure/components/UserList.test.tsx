@@ -19,6 +19,7 @@ function user(overrides: Partial<User> = {}): User {
     isActive: true,
     lastLoginAt: '2026-08-10T18:04:00Z',
     createdAt: '2025-03-14T09:12:00Z',
+    username: null,
     ...overrides,
   }
 }

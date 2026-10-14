@@ -26,6 +26,7 @@ import { calendarDay } from '../../../../lib/calendarDay'
 import { cn } from '../../../../lib/cn'
 import { createInvitation, createShareableLink, resendInvitation, type Invitation } from '../../api/invitations'
 import { updateUser, updateUserRole, type User } from '../../api/users'
+import { ResendCredentials } from '../../components/ResendCredentials'
 import type { Department } from '../../api/departments'
 import IntakeWizard from '../../components/IntakeWizard'
 import InvitationForm, { type InvitationFormValues } from '../../components/InvitationForm'
@@ -578,6 +579,7 @@ function EditPerson({
           </CanvasSelect>
         </Field>
       </div>
+      <ResendCredentials user={user} baseUrl={baseUrl} />
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-light pt-2.5">
         <label htmlFor={ids.active} className="m-0 inline-flex items-center gap-2 text-xs text-fg-secondary">
           <Switch id={ids.active} checked={isActive} onCheckedChange={setIsActive} className="data-[state=checked]:bg-accent-green" />

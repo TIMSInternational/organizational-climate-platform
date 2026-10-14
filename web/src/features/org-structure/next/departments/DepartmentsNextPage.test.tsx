@@ -46,7 +46,7 @@ const dept = (id: string, name: string, employeeCount: number, isActive = true):
   id, companyId: 'c1', name, description: null, parentDepartmentId: null, isActive, employeeCount,
 })
 const user = (name: string, role: string, departmentId: string): User => ({
-  id: name, email: `${name}@x.test`, name, role, departmentId, isActive: true, lastLoginAt: null, createdAt: '2026-01-01T00:00:00Z',
+  id: name, email: `${name}@x.test`, name, role, departmentId, isActive: true, lastLoginAt: null, createdAt: '2026-01-01T00:00:00Z', username: null,
 })
 const plan = (departmentId: string, status: string, dueDate: string): ActionPlan => ({
   id: `${departmentId}-${status}`, title: 'P', companyId: 'c1', departmentId, dueDate, status, priority: 'high', createdAt: '2026-01-01T00:00:00Z',

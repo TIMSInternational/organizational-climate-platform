@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setToken } from '../../../auth/token'
-import { listUsers, getUser, updateUser, updateUserRole } from './users'
+import { listUsers, getUser, updateUser, updateUserRole, resendCredentials } from './users'
 
 const baseUrl = 'http://api.test'
 
@@ -48,5 +48,35 @@ describe('users api client', () => {
 
     expect(fetch).toHaveBeenCalledWith(`${baseUrl}/admin/users/1/role`, expect.objectContaining({ method: 'PUT' }))
     expect(result.role).toBe('supervisor')
+  })
+
+  // The endpoint shipped with the mass invite and nothing called it, which is why an account
+  // whose credentials email failed could not be recovered from inside the product.
+  it('resends a mass-invite account its sign-in details', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ delivered: true, failureReason: null }), { status: 200 }),
+    )
+
+    const result = await resendCredentials(baseUrl, 'u-7')
+
+    expect(fetch).toHaveBeenCalledWith(
+      `${baseUrl}/admin/users/u-7/credentials`,
+      expect.objectContaining({ method: 'POST' }),
+    )
+    expect(result).toEqual({ delivered: true, failureReason: null })
+  })
+
+  // The endpoint replaces the password BEFORE mailing, so it reports a failed send as a 200
+  // body rather than an error status. A client that only watches for a thrown response would
+  // announce a delivery the server just denied.
+  it('carries back a 200 that says the mail did not go', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ delivered: false, failureReason: 'no email provider' }), { status: 200 }),
+    )
+
+    const result = await resendCredentials(baseUrl, 'u-7')
+
+    expect(result.delivered).toBe(false)
+    expect(result.failureReason).toBe('no email provider')
   })
 })

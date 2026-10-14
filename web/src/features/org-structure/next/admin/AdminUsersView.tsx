@@ -27,6 +27,7 @@ import { cn } from '../../../../lib/cn'
 import { countWord } from '../../../../lib/countWord'
 import { createInvitation, createShareableLink, resendInvitation, type Invitation } from '../../api/invitations'
 import { updateUser, type User } from '../../api/users'
+import { ResendCredentials } from '../../components/ResendCredentials'
 import type { Department } from '../../api/departments'
 import IntakeWizard from '../../components/IntakeWizard'
 import InvitationForm, { type InvitationFormValues } from '../../components/InvitationForm'
@@ -798,6 +799,7 @@ function EditPerson({
           </span>
         </Field>
       </div>
+      <ResendCredentials user={user} baseUrl={baseUrl} />
       <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line-light pt-3">
         <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
           {t('common.cancel')}
