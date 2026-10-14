@@ -30,9 +30,16 @@ namespace ClimateProject.Infrastructure.Migrations
             //  - only draft, scheduled and active are updated. A closed or archived survey
             //    keeps the value it ran with, because its record must not claim it asked
             //    something it never asked.
-            //  - TIMS's survey 1d8b7e54 is left alone until it closes on 2026-10-24. Eagle is
-            //    live on it, it has been answered without demographics throughout, and
-            //    switching it mid-flight would segment only its late respondents.
+            //  - TIMS's OWN survey 1d8b7e54 is left alone until it closes on 2026-10-24. It
+            //    has been answered without demographics throughout, and switching it mid-flight
+            //    would segment only its late respondents.
+            //
+            //    It is the only survey carved out, and that is the ruling, which exempted it by
+            //    name and said "all other open surveys get them". Eagle in particular -- the
+            //    other climate open as this shipped, closing 2026-10-20 -- is a DIFFERENT survey
+            //    and is deliberately not excluded. It needs no carve-out: it was created by
+            //    scripts/import-climate-workbook.mjs, which sets selfDeclaredDemographics true,
+            //    so this UPDATE cannot change what it asks.
             //
             // Down() restores the column default but deliberately does NOT reverse this: once a
             // survey's flag is true there is no record of whether it was false before, so a

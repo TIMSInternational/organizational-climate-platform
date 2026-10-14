@@ -337,7 +337,13 @@ export default function IntakeWizard({ baseUrl, companyId, onImported, revealDel
               total: result.rows.length,
             })}
           </p>
-          <p className="m-0">{t('users.intake.doneBody')}</p>
+          <p className="m-0">
+            {t(
+              accessMode === 'credentials'
+                ? 'users.intake.doneBodyCredentials'
+                : 'users.intake.doneBody',
+            )}
+          </p>
           {created.length > 0 && (
             <p className="m-0 text-sm text-fg-secondary">
               {t('users.intake.done.departmentsCreated', { names: created.join(', ') })}

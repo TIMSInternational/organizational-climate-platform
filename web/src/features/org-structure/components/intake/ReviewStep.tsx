@@ -279,7 +279,13 @@ export function ReviewStep({
       </div>
       {blocking && (
         <p className="m-0 text-sm text-fg-tertiary">
-          {verdict ? t('users.intake.fixBeforeApproving') : t('users.intake.validateFirst')}
+          {verdict
+            ? t('users.intake.fixBeforeApproving')
+            : t(
+                accessMode === 'credentials'
+                  ? 'users.intake.validateFirstCredentials'
+                  : 'users.intake.validateFirst',
+              )}
         </p>
       )}
     </div>

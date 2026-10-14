@@ -4583,8 +4583,10 @@
         "approveCredentials": "Crear cuentas y enviar los datos de acceso"
       },
       "validateFirst": "Valide las filas antes de crear las invitaciones.",
+      "validateFirstCredentials": "Valide las filas antes de crear las cuentas.",
       "fixBeforeApproving": "Corrija las filas marcadas con error y valide de nuevo.",
       "doneBody": "Se creó una invitación para cada persona. Al aceptarla, cada una define su propio nombre y contraseña.",
+      "doneBodyCredentials": "Se creó una cuenta para cada persona y se le enviaron su usuario y su contraseña por correo, junto con el enlace a la encuesta. Nadie tiene que aceptar nada.",
       "startOver": "Importar otro archivo",
       "noDepartment": "(sin departamento)",
       "reason": {
