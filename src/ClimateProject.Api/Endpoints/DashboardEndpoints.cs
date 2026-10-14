@@ -553,7 +553,7 @@ public static class DashboardEndpoints
             .FirstOrDefaultAsync(cancellationToken) ?? DashboardUserCounts.Empty;
 
         // Every response count on this page is held to the floor here, at read time: the
-        // 10 Sep artboards hatch the team's count under 5, and a count the screen hatches
+        // 10 Sep artboards hatch the team's count under the floor, and a count the screen hatches
         // must not travel for the browser to hide. The running total sums only the surveys
         // this department answered at or over the floor -- a total that included one under
         // it would move by exactly that survey's hidden count between two reads.

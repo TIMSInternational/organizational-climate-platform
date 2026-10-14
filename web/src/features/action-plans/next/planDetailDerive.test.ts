@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ClimateTrendsResponse } from '../../surveys/api/climateTrends'
 import { daysToDue, dueDay, elapsedShare, planFinding, planMove } from './planDetailDerive'
+import { ANONYMITY_FLOOR } from '../../../components/charts'
 
 /** The tenant's plan: due 2026-10-15T02:05Z, which the list prints as the 15th. */
 const DUE = '2026-10-15T02:05:50.278+00:00'
@@ -117,7 +118,11 @@ describe('the originating finding', () => {
   })
 
   it('protects a row under the floor even when the server sent its scores', () => {
-    const finding = planFinding(trends({ respondentCount: 4, isSuppressed: false, scores: [3.2, 2.4] }), 'q3', OPS)
+    const finding = planFinding(
+      trends({ respondentCount: ANONYMITY_FLOOR - 1, isSuppressed: false, scores: [3.2, 2.4] }),
+      'q3',
+      OPS,
+    )
     expect(finding.status).toBe('protected')
   })
 
@@ -178,7 +183,7 @@ describe('did the plan move the number', () => {
   it('refuses a number when the later wave is under the floor but the payload still carries its scores', () => {
     const map = trends({ respondentCount: 6, isSuppressed: false, scores: [3.2, 2.4] })
     const ops = map.groups.find((group) => group.key === OPS)!
-    ops.points[1] = { surveyId: 'q3', respondentCount: 4, isSuppressed: false, scores: [3.2, 2.4] }
+    ops.points[1] = { surveyId: 'q3', respondentCount: ANONYMITY_FLOOR - 1, isSuppressed: false, scores: [3.2, 2.4] }
     const finding = planFinding(map, 'q3', OPS, raisedInQ2)
     expect(planMove(map, finding, OPS)).toEqual({ status: 'protected', code: 'Q2' })
   })

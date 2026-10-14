@@ -42,13 +42,13 @@ import type { WordCloudEntry } from './api/microclimates'
 /**
  * Responses a session needs before any wording is shown.
  *
- * The literal 5 mirrors `SurveyResultsPrivacy.MinimumRespondents`. There is no
+ * The literal 3 mirrors `SurveyResultsPrivacy.MinimumRespondents`. There is no
  * build-time link between the two — this is a client-side control over a surface the
  * server does not gate at all — so it is a deliberate copy rather than an
  * accidental one, and it is stated here so a future backend floor can be reconciled
  * against it.
  */
-export const MINIMUM_RESPONDENTS = 5
+export const MINIMUM_RESPONDENTS = 3
 
 /** Occurrences a word needs before it is shown. See the caveat above. */
 export const MINIMUM_WORD_OCCURRENCES = 2

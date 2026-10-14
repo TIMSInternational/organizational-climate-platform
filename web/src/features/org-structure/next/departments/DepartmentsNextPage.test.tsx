@@ -15,6 +15,7 @@ import { getClimateTrends, type ClimateTrendsResponse } from '../../../surveys/a
 import { getProfile, type Profile } from '../../../profile/api/profile'
 import DepartmentsNextPage from './DepartmentsNextPage'
 import en from '../../../../i18n/en.json'
+import { ANONYMITY_FLOOR } from '../../../../components/charts'
 
 const copy = en.departments.next
 
@@ -62,7 +63,7 @@ const trends: ClimateTrendsResponse = {
     { key: 'fin', label: 'Finanzas', points: [point(0, true, [null, null])] },
     { key: 'ops', label: 'Operaciones', points: [point(5, false, [3.2, 2.4])] },
     { key: 'ing', label: 'Ingeniería', points: [point(7, true, [4.4, 4.4])] },
-    { key: 'ven', label: 'Ventas', points: [point(3, false, [4.1, 4.1])] },
+    { key: 'ven', label: 'Ventas', points: [point(ANONYMITY_FLOOR - 1, false, [4.1, 4.1])] },
   ],
   suppressedGroupCount: 2,
   minimumGroupSize: 5,
@@ -130,7 +131,7 @@ describe('DepartmentsNextPage (/departments)', () => {
     expect(cardOf('Ingeniería').textContent).not.toMatch(/4[.,]4/)
   })
 
-  it('re-applies the floor itself: a group under 5 the server did not flag is protected too', async () => {
+  it('re-applies the floor itself: a group under the floor the server did not flag is protected too', async () => {
     renderAs({ role: 'company_admin', companyId: 'c1' })
     await screen.findByText('Ventas', { selector: 'td' })
     expect(rowOf('Ventas')!.querySelectorAll('td')[4].textContent).toBe(copy.protected)

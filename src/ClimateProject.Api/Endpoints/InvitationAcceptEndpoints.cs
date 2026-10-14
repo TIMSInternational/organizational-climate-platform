@@ -156,6 +156,10 @@ public static class InvitationAcceptEndpoints
         return await AuthEndpoints.IssueTokenForAsync(
             user, db, jwtTokenService,
             Results.Json(new { message = "Account is not active" }, statusCode: 401),
+            // Accepting an invitation IS this account's first sign-in -- the endpoint is
+            // unauthenticated and there is no earlier session to carry a start instant from
+            // -- so the absolute ceiling starts here.
+            sessionStartedAt: now,
             cancellationToken,
             successStatusCode: 201);
     }

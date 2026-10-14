@@ -29,11 +29,30 @@ public class JwtTokenServiceTests
         IsActive: true,
         SecurityStamp: Guid.NewGuid());
 
+    /// <summary>
+    /// A window around the present, truncated to whole seconds.
+    /// </summary>
+    /// <remarks>
+    /// Truncated because `exp` is an epoch-second claim, so `jwt.ValidTo` read back from a
+    /// `DateTimeOffset.UtcNow` carrying milliseconds would never compare equal to it.
+    /// Around the PRESENT because two tests here validate the token under
+    /// `ValidateLifetime = true`, which a fixed calendar date would fail the moment it went
+    /// past — a test that passes because of the calendar is worse than no test. The two
+    /// offsets are unequal and not round, so a test asserting on one instant cannot pass by
+    /// accidentally reading the other, `iat`, or `now`.
+    /// </remarks>
+    private static readonly DateTimeOffset WholeSecond =
+        DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+
+    private static readonly SessionWindow SampleWindow = new(
+        StartedAt: WholeSecond.AddMinutes(-37),
+        ExpiresAt: WholeSecond.AddMinutes(43));
+
     [Fact]
     public void IssueToken_produces_exact_claim_shape_with_no_iss_or_aud()
     {
         var service = CreateService();
-        var token = service.IssueToken(SampleClaims);
+        var token = service.IssueToken(SampleClaims, SampleWindow);
 
         var jwt = new JwtSecurityTokenHandler().ReadJwtToken(token);
 
@@ -55,31 +74,60 @@ public class JwtTokenServiceTests
 
         Assert.Contains(jwt.Claims, c => c.Type == "iat");
 
+        // The absolute ceiling's anchor. Asserted as the exact epoch seconds of the window's
+        // StartedAt rather than "present", because SessionWindows.StartedAt parses this value
+        // back on the next refresh: a token carrying `iat` here instead would re-base the
+        // ceiling on every refresh and the ceiling would never arrive.
+        Assert.Equal(
+            SampleWindow.StartedAt.ToUnixTimeSeconds().ToString(),
+            jwt.Claims.Single(c => c.Type == TokenClaimNames.SessionStart).Value);
+
         Assert.DoesNotContain(jwt.Claims, c => c.Type == "iss");
         Assert.DoesNotContain(jwt.Claims, c => c.Type == "aud");
         Assert.DoesNotContain(jwt.Claims, c => c.Type == "nbf");
     }
 
     [Fact]
-    public void IssueToken_sets_24_hour_expiry()
+    public void IssueToken_expires_exactly_when_the_window_says()
     {
-        // NOTE: measured via exp - iat (both are epoch-second claims embedded
-        // in the token) rather than jwt.ValidTo - jwt.ValidFrom.
-        // JwtSecurityToken.ValidFrom is derived solely from an "nbf" claim in
-        // the payload; since this token intentionally omits nbf (see
-        // IssueToken_produces_exact_claim_shape_with_no_iss_or_aud), ValidFrom
-        // always reads back as DateTime.MinValue and can't be used to measure
-        // lifetime. Adding notBefore to populate it would add an "nbf" claim,
-        // which the claim-shape test explicitly forbids. Comparing exp - iat
-        // is also immune to wall-clock/second-truncation flakiness.
+        // NOTE: `exp` is read off jwt.ValidTo rather than measured as exp - iat, which is how
+        // the superseded `IssueToken_sets_24_hour_expiry` had to do it: that test asserted a
+        // DURATION (24 hours, then hardcoded in this service), and a duration can only be
+        // measured against iat because the token omits `nbf` and ValidFrom therefore reads
+        // back as DateTime.MinValue. This asserts an INSTANT instead -- the one
+        // SessionWindows computed from SystemSettings.SessionTimeoutMinutes -- so iat is not
+        // involved and the assertion is immune to second-truncation flakiness either way.
+        //
+        // The duration is deliberately no longer asserted here. It is not this service's to
+        // decide any more: it belongs to SessionWindows, where SessionWindowsTests measures
+        // it against the configured timeout and the 24-hour ceiling.
         var service = CreateService();
-        var token = service.IssueToken(SampleClaims);
+        var token = service.IssueToken(SampleClaims, SampleWindow);
         var jwt = new JwtSecurityTokenHandler().ReadJwtToken(token);
 
-        var iat = long.Parse(jwt.Claims.Single(c => c.Type == "iat").Value);
-        var exp = new DateTimeOffset(jwt.ValidTo, TimeSpan.Zero).ToUnixTimeSeconds();
+        var exp = new DateTimeOffset(jwt.ValidTo, TimeSpan.Zero);
 
-        Assert.Equal(TimeSpan.FromHours(24).TotalSeconds, exp - iat);
+        Assert.Equal(SampleWindow.ExpiresAt, exp);
+    }
+
+    [Fact]
+    public void IssueToken_no_longer_mints_a_24_hour_lifetime_of_its_own()
+    {
+        // The regression this feature exists to prevent coming back, stated as its own test:
+        // the lifetime used to be `TimeSpan.FromHours(24)` inside this class, so
+        // SessionTimeoutMinutes -- editable by a super admin, shipped at 60 -- enforced
+        // nothing at all. A sixty-minute window must produce a sixty-minute token.
+        var service = CreateService();
+        var startedAt = DateTimeOffset.UtcNow;
+        var window = new SessionWindow(startedAt, startedAt.AddMinutes(60));
+
+        var jwt = new JwtSecurityTokenHandler().ReadJwtToken(service.IssueToken(SampleClaims, window));
+        var iat = DateTimeOffset.FromUnixTimeSeconds(long.Parse(jwt.Claims.Single(c => c.Type == "iat").Value));
+        var exp = new DateTimeOffset(jwt.ValidTo, TimeSpan.Zero);
+
+        Assert.True(
+            exp - iat < TimeSpan.FromHours(1) + TimeSpan.FromSeconds(2),
+            $"token lived {exp - iat} on a 60-minute window");
     }
 
     [Fact]
@@ -87,7 +135,7 @@ public class JwtTokenServiceTests
     {
         var service = CreateService();
         var claimsWithoutNodo = SampleClaims with { NodoId = null };
-        var token = service.IssueToken(claimsWithoutNodo);
+        var token = service.IssueToken(claimsWithoutNodo, SampleWindow);
         var jwt = new JwtSecurityTokenHandler().ReadJwtToken(token);
 
         Assert.Equal(string.Empty, jwt.Claims.Single(c => c.Type == "nodoId").Value);
@@ -97,7 +145,7 @@ public class JwtTokenServiceTests
     public void Issued_token_validates_under_climate_tracking_exact_TokenValidationParameters()
     {
         var service = CreateService();
-        var token = service.IssueToken(SampleClaims);
+        var token = service.IssueToken(SampleClaims, SampleWindow);
 
         // These TokenValidationParameters are copied verbatim from
         // climate-tracking/services/api/src/ClimateTracking.Api/Program.cs
@@ -135,7 +183,7 @@ public class JwtTokenServiceTests
         // string.Empty that GetCurrentUser already defaults a missing claim to. That
         // equivalence is what lets every existing guard keep working untouched.
         var service = CreateService();
-        var token = service.IssueToken(SampleClaims with { Role = Roles.SuperAdmin, CompanyId = string.Empty });
+        var token = service.IssueToken(SampleClaims with { Role = Roles.SuperAdmin, CompanyId = string.Empty }, SampleWindow);
 
         var handler = new JwtSecurityTokenHandler { MapInboundClaims = false };
         var principal = handler.ValidateToken(

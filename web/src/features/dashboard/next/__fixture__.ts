@@ -1,4 +1,4 @@
-import { DEFAULT_RESULT_BANDS } from '../../../components/charts'
+import { ANONYMITY_FLOOR, DEFAULT_RESULT_BANDS } from '../../../components/charts'
 import type { AdminDashboardModel } from './model'
 
 /**
@@ -66,7 +66,7 @@ export const fullModel: AdminDashboardModel = {
   map: {
     dimensionKeys: ['seguridad', 'carga', 'confianza', 'reconocimiento', 'desarrollo', 'pertenencia'],
     rows: [
-      { departmentId: 'd-fin', name: 'Finanzas', responses: 3, scores: [3.1, 2.9, 3.4, 3.0, 3.3, 3.5] },
+      { departmentId: 'd-fin', name: 'Finanzas', responses: ANONYMITY_FLOOR - 1, scores: [3.1, 2.9, 3.4, 3.0, 3.3, 3.5] },
       { departmentId: 'd-ing', name: 'Ingeniería', responses: 7, scores: [4.0, 3.7, 4.0, 3.5, 4.2, 4.3] },
       { departmentId: 'd-ops', name: 'Operaciones', responses: 5, scores: [2.6, 2.4, 3.0, 2.8, 3.0, 3.2] },
       { departmentId: 'd-per', name: 'Personas', responses: 5, scores: [4.4, 4.0, 4.0, 3.6, 4.2, 4.4] },

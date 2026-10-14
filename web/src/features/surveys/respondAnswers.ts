@@ -271,17 +271,36 @@ function randomFrom(seed: number): () => number {
 /**
  * The order the questions are asked in, honouring `Survey.Settings.RandomizeQuestions`.
  *
- * The shuffle is **seeded by the survey id**, not by `Math.random`. A respondent who
- * saves progress and comes back a day later, or simply reloads, must see the same
- * order they left — a re-shuffle on every mount would move the question they were
- * halfway through and make a partially answered survey feel corrupted. Deterministic
- * also means the order is assertable in a test rather than merely "different
- * sometimes".
+ * The shuffle is **seeded**, never `Math.random`. A respondent who saves progress and
+ * comes back a day later, or simply reloads, must see the same order they left — a
+ * re-shuffle on every mount would move the question they were halfway through and make
+ * a partially answered survey feel corrupted. Deterministic also means the order is
+ * assertable in a test rather than merely "different sometimes".
  *
- * The order is per-survey rather than per-respondent, which is the honest limit of
- * doing this client-side: it removes the ordering bias between *questions* that
- * randomisation exists for, and does not vary between people. Varying per respondent
- * would need the order recorded server-side, since it must survive a reload.
+ * ## What the seed is now, and what it was
+ *
+ * It is whatever the caller passes. `SurveyRespondForm` passes the **respondent's
+ * session id** (`respondSession.ts`).
+ *
+ * It used to pass `view.id`, the survey id, and the note here defended that as the
+ * honest limit of doing this client-side: "varying per respondent would need the order
+ * recorded server-side, since it must survive a reload." That objection was answered by
+ * a module this one does not import and the old note had not accounted for.
+ * `respondSession` mints an id per respondent per survey, keeps it in `localStorage` so
+ * it survives a reload and a closed tab, and clears it the moment the response
+ * completes. Seeding from it gives exactly the two properties wanted at once: one fixed
+ * order for as long as a session lasts, and a fresh order for the next session. Ruled
+ * 2026-10-13 — every session must ask in a different order; a per-survey seed gave every
+ * respondent one order forever, which removes the ordering bias between *questions* but
+ * none between *people*.
+ *
+ * The limits that come with the session id come with it here too: storage blocked
+ * outright (private browsing) mints a fresh id per mount, so such a respondent is
+ * reshuffled on reload — the same respondent already cannot resume at all, which is the
+ * larger of the two problems and is recorded in `respondSession.ts`.
+ *
+ * This function itself is seed-agnostic and makes no claim about respondents. It sorts
+ * by `order` and, when asked, shuffles that list with a seeded Fisher-Yates.
  */
 export function orderQuestions(
   questions: readonly SurveyRespondQuestion[],
@@ -291,12 +310,30 @@ export function orderQuestions(
   const ordered = [...questions].sort((left, right) => left.order - right.order)
   if (!randomize || ordered.length < 2) return ordered
 
-  const next = randomFrom(seedFrom(seed))
-  for (let index = ordered.length - 1; index > 0; index -= 1) {
-    const swap = Math.floor(next() * (index + 1))
-    ;[ordered[index], ordered[swap]] = [ordered[swap], ordered[index]]
-  }
+  seededShuffle(ordered, seed)
   return ordered
+}
+
+/**
+ * A seeded Fisher-Yates, in place.
+ *
+ * Exported because `respondDimensions` shuffles the SECTION order from the same seed, and two
+ * Fisher-Yates written out twice are two things that can drift apart. The seed is a string
+ * rather than a number so that a caller can derive an independent stream by naming it --
+ * `respondDimensions` passes `<sessionId>:sections` precisely so the section order is not a
+ * function of the same PRNG draws that ordered the questions.
+ *
+ * Deterministic for a given seed, which is what lets a respondent reload without the form
+ * rearranging itself under them, and what makes the order assertable in a test rather than
+ * merely "different sometimes".
+ */
+export function seededShuffle<T>(items: T[], seed: string): void {
+  if (items.length < 2) return
+  const next = randomFrom(seedFrom(seed))
+  for (let index = items.length - 1; index > 0; index -= 1) {
+    const swap = Math.floor(next() * (index + 1))
+    ;[items[index], items[swap]] = [items[swap], items[index]]
+  }
 }
 
 /** Moves one entry of a ranking, clamped at the ends. Returns a new array. */

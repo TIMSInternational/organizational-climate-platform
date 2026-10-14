@@ -385,10 +385,10 @@ public class ReportShareRefutationTests : IAsyncLifetime
     /// <para>
     /// <b>This test has found its bug once already and the fixture is built to keep finding
     /// it.</b> The sentinel is written by all three members of the sub-floor department and by
-    /// nobody else, which is the case neither floor catches on its own: the segment floor of 5
-    /// suppresses that department everywhere else in the same document but does not govern
-    /// words, and the word floor of 2 counts distinct responses without knowing which segment
-    /// they came from -- so three people in a suppressed team clear it. The word separators do
+    /// nobody else, which is the case neither floor catches on its own: the department is
+    /// suppressed everywhere else in the same document but suppression does not govern words,
+    /// and the word floor of 2 counts distinct responses without knowing which segment they
+    /// came from -- so three people in a suppressed team clear it. The word separators do
     /// not include <c>-</c>, so the sentinel survives tokenisation as one word and lands in the
     /// cloud intact. When the resolve handler returned <c>report_output</c> verbatim it
     /// published exactly that.
@@ -429,6 +429,13 @@ public class ReportShareRefutationTests : IAsyncLifetime
 
         // Three in the tiny department, all scoring 1 and all writing the sentinel; five in
         // the large one scoring 5. Eight in total, above the survey floor.
+        //
+        // Three CLEARS the segment floor since it became 3 (ruled 2026-10-13), and Tiny Team is
+        // withheld anyway -- by `WithholdComplement`, because the two silent respondents below
+        // leave `completedCount - published` at 2, under the floor, so the smallest published
+        // segment is withheld until the remainder clears it. The assertions here are unchanged
+        // and still hold; what changed is WHICH rule withholds the department, and a reader who
+        // expects the segment floor to be doing it will not find it there.
         for (var i = 0; i < 3; i++) await SeedResponseAsync(survey.Id, smallDept, likertId, "1", openId, sentinel);
         for (var i = 0; i < 5; i++) await SeedResponseAsync(survey.Id, bigDept, likertId, "5", openId, "fine as it is");
         // Two who answered nothing and carry no department, so the people outside Large Team

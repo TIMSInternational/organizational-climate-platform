@@ -157,7 +157,7 @@ public class SecurityStampRevocationTests : IAsyncLifetime
     /// <summary>
     /// <c>POST /auth/refresh</c> mints a new token from a presented one. If revocation were
     /// enforced in the authorization policy instead of during authentication, or if refresh
-    /// were exempt, a stolen token could be laundered into a fresh 24-hour one and the whole
+    /// were exempt, a stolen token could be laundered into a fresh full-lifetime one and the whole
     /// mechanism would be decorative.
     /// </summary>
     [Fact]
@@ -269,7 +269,8 @@ public class SecurityStampRevocationTests : IAsyncLifetime
             Name: _employee.Name,
             CompanyId: _employee.CompanyId?.ToString() ?? string.Empty,
             IsActive: true,
-            SecurityStamp: _admin.SecurityStamp));
+            SecurityStamp: _admin.SecurityStamp),
+            new SessionWindow(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1)));
 
         Assert.Equal(
             HttpStatusCode.Unauthorized,
@@ -282,7 +283,7 @@ public class SecurityStampRevocationTests : IAsyncLifetime
     /// rather than waved through.
     /// </summary>
     /// <remarks>
-    /// This is a real state, not a hypothetical one — a token lives 24 hours, so any account
+    /// This is a real state, not a hypothetical one — a token lives for an idle window, so any account
     /// deletion inside that window leaves live tokens behind it.
     ///
     /// It is also the assertion that stops the check collapsing into "reject only when the

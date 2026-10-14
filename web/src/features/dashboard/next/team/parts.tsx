@@ -46,7 +46,7 @@ export function TeamCard({
 
 /**
  * A count withheld under the floor: the canvas's `.cell.hatched` — 34px, the hatch, the
- * light ink — carrying the sentence that stands in for the number ("menos de 5
+ * light ink — carrying the sentence that stands in for the number ("menos de {floor}
  * respuestas"). `role="img"` with a full sentence as its name, so a screen reader hears why
  * there is no number, never an empty cell. The hatch is `PROTECTED_HATCH`, the one copy
  * `protectedHatch.test.ts` allows.

@@ -24,6 +24,7 @@ import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { RailAnalyticsIcon, RailMicroclimatesIcon } from '../../../../navigation/railIcons'
 import type { MicroclimateDetail } from '../../api/microclimates'
 import type { MicroclimateInvitationList } from '../../api/microclimateInvitations'
+import { MICROCLIMATE_INVITATIONS_OFFERED } from '../../invitationsOffered'
 import { JourneyRail } from '../JourneyRail'
 import { MicroclimateGate } from '../MicroclimateGate'
 import { FLOOR, invitationLadder, journeyStates, type JourneyKey, type JourneyState } from '../derive'
@@ -121,6 +122,7 @@ function DetailView({ state, detail }: { state: MicroclimateDetailState; detail:
   const [copied, setCopied] = useState<'idle' | 'copied' | 'failed'>('idle')
   const [confirmClose, setConfirmClose] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
+
   const title = detail.title ?? t('microclimates.untitled')
   const isDraft = detail.status === 'draft'
   const isLive = detail.status === 'active'
@@ -254,7 +256,11 @@ function DetailView({ state, detail }: { state: MicroclimateDetailState; detail:
 
             <InvitationsCard
               invitations={state.invitations}
-              canInvite={manages && !isClosed}
+              // Mode 3, ruled 2026-10-13: a microclimate is answered from its QR or its
+              // link, so the board no longer offers to invite anybody. The card itself
+              // stays -- it still lists the invitations a microclimate already has, and an
+              // invitation already sent still resolves. Only the action is withdrawn.
+              canInvite={MICROCLIMATE_INVITATIONS_OFFERED && manages && !isClosed}
               onInvite={() => setInviteOpen(true)}
             />
           </div>

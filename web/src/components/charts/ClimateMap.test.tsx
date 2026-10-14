@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TranslationProvider } from '../../i18n'
 import ClimateMap, { type ClimateMapDimension, type ClimateMapRow, type ClimateMapStep } from './ClimateMap'
 import en from '../../i18n/en.json'
+import { ANONYMITY_FLOOR } from './suppression'
 
 afterEach(cleanup)
 
@@ -80,7 +81,7 @@ describe('ClimateMap', () => {
   })
 
   describe('a group under the anonymity floor', () => {
-    const suppressed = [{ id: 'fin', label: 'Finance', responses: 4, scores: [79, 81] }]
+    const suppressed = [{ id: 'fin', label: 'Finance', responses: ANONYMITY_FLOOR - 1, scores: [79, 81] }]
 
     it('keeps its row rather than disappearing from the map', () => {
       // Dropping the row would misreport the shape of the organisation: the
@@ -144,7 +145,7 @@ describe('ClimateMap', () => {
     })
 
     it('suppresses a row the default floor would have published', () => {
-      // 7 responses clears the platform minimum of 5 and is withheld anyway,
+      // 7 responses clears the platform minimum and is withheld anyway,
       // because this company is held to 10.
       const { container } = render(
         <ClimateMap dimensions={DIMENSIONS} rows={belowRaisedFloor} target={70} threshold={10} />,
@@ -283,7 +284,9 @@ describe('ClimateMap', () => {
     it('drops the colour scale from the legend and keeps the protected key', () => {
       const { container } = render(<ClimateMap dimensions={DIMENSIONS} rows={rows} target={null} />)
       expect(container.textContent).not.toContain('Below target')
-      expect(container.textContent).toContain('under 5 responses')
+      expect(container.textContent).toContain(
+        en.charts.protectedLegend.replace('{threshold}', String(ANONYMITY_FLOOR)),
+      )
     })
 
     it('keeps every row, so the groups are still visible', () => {
@@ -306,7 +309,7 @@ describe('ClimateMap', () => {
     // expressed as an affordance rather than as a colour.
     const mixed: ClimateMapRow[] = [
       { id: 'ops', label: 'Operations', responses: 20, scores: [79, 61] },
-      { id: 'fin', label: 'Finance', responses: 4, scores: [] },
+      { id: 'fin', label: 'Finance', responses: ANONYMITY_FLOOR - 1, scores: [] },
     ]
 
     it('leaves the grid inert when no handler is given', () => {

@@ -9,6 +9,20 @@ import { setToken, clearToken } from '../../../../auth/token'
 import { tokenFor } from '../../../../test/jwtFixture'
 import type { DemographicField } from '../../api/demographicFields'
 import en from '../../../../i18n/en.json'
+import { ANONYMITY_FLOOR } from '../../../../components/charts'
+import { tippingPoint } from './demographics'
+
+/** The tenant's size, as the fetch stub below serves it. */
+const PEOPLE = 42
+/**
+ * The value count at which this tenant stops clearing the floor, computed the way
+ * `demographics.ts` computes it rather than typed. A literal here would stop
+ * straddling the boundary the moment the floor moved — which is exactly what a
+ * hard-coded 9 did when the floor went from 5 to 3.
+ */
+const TIPPING = tippingPoint(PEOPLE, 1, ANONYMITY_FLOOR)!
+/** The mean at that point, as the screen prints it. */
+const TIPPING_MEAN = (PEOPLE / TIPPING).toFixed(1)
 
 /**
  * `/admin/companies/:companyId/demographic-fields` for a super administrator — the
@@ -109,7 +123,7 @@ describe('SuperDemographicFieldsView', () => {
     expect(screen.getByText(copy.tiles.fieldsNone)).toBeTruthy()
   })
 
-  it('opens an empty catalogue on the canvas’s first field, its verdict on screen before anything is typed: 42 people across 4 values is 10.5 each, and 9 values would tip it', async () => {
+  it('opens an empty catalogue on the canvas’s first field, its verdict on screen before anything is typed: 42 people across 4 values is 10.5 each, and the floor’s own tipping point would tip it', async () => {
     serve()
     const { container } = renderPage()
     const label = (await screen.findByLabelText(new RegExp(`^${copy.form.label}`))) as HTMLInputElement
@@ -120,18 +134,18 @@ describe('SuperDemographicFieldsView', () => {
     }
     expect(container.querySelector('[data-verdict]')?.getAttribute('data-verdict')).toBe('usable')
     expect(container.querySelector('[data-verdict]')?.textContent).toContain('10.5')
-    expect(screen.getByText(/With/).textContent).toMatch(/9\D+4\.7/)
+    expect(screen.getByText(/With/).textContent).toMatch(new RegExp(`${TIPPING}\\D+${TIPPING_MEAN.replace('.', '\\.')}`))
     // The key still follows a label the operator types.
     await userEvent.clear(label)
     await userEvent.type(label, 'Antigüedad')
     expect((screen.getByLabelText(new RegExp(`^${copy.form.key}`)) as HTMLInputElement).value).toBe('antiguedad')
   })
 
-  it('calls nine values too narrow, and offers no tipping point past it', async () => {
+  it('calls a list past the tipping point too narrow, and offers no tipping point past it', async () => {
     serve()
     const { container } = renderPage()
     await screen.findByLabelText(new RegExp(`^${copy.form.label}`))
-    await addValues(9)
+    await addValues(TIPPING)
     expect(container.querySelector('[data-verdict]')?.getAttribute('data-verdict')).toBe('narrow')
     expect(screen.getByText(copy.form.narrowLead)).toBeTruthy()
     // The numbers sit in their own mono spans, so the sentence is read off the page's text.

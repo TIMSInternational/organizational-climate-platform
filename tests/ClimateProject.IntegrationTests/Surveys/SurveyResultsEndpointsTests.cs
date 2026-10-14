@@ -392,7 +392,7 @@ public class SurveyResultsEndpointsTests : IAsyncLifetime
 
     /// <summary>
     /// Below the survey floor no per-question result is returned at all -- but the
-    /// participation counters are, because "4 of 40 so far" identifies nobody and is the
+    /// participation counters are, because "a few of 40 so far" identifies nobody and is the
     /// number that tells an admin whether to keep chasing.
     /// </summary>
     [Fact]
@@ -411,7 +411,7 @@ public class SurveyResultsEndpointsTests : IAsyncLifetime
         Assert.True(results!.IsSuppressed);
         Assert.Equal(SurveyResultsPrivacy.BelowMinimumRespondents, results.SuppressionReason);
         Assert.Empty(results.Questions);
-        Assert.Equal(4, results.Summary.CompletedCount);
+        Assert.Equal(SurveyResultsPrivacy.MinimumRespondents - 1, results.Summary.CompletedCount);
     }
 
     /// <summary>

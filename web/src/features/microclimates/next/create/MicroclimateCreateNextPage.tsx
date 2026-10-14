@@ -142,7 +142,10 @@ function CreateScreen() {
             create: t('microclimates.next.journey.createNote'),
             share: t('microclimates.next.journey.shareNote'),
             live: t('microclimates.next.journey.liveNote'),
-            read: t('microclimates.next.journey.readNote'),
+            // The floor is interpolated, never spelled: every other floor sentence in this
+            // feature already passes `{ floor: FLOOR }`, and this one hardcoded 5 — so it
+            // went on telling an administrator "from 5" after the floor became 3.
+            read: t('microclimates.next.journey.readNote', { floor: FLOOR }),
           }}
         />
 

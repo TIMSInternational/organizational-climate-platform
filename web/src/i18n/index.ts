@@ -13,4 +13,5 @@ export {
   detectLocale,
   isLocale,
   persistLocale,
+  storedLocale,
 } from './locale'

@@ -13,7 +13,7 @@ import {
   Lock,
   ShieldCheck,
 } from 'lucide-react'
-import { useTranslation } from '../../../i18n'
+import { isLocale, useTranslation } from '../../../i18n'
 import {
   Alert,
   AlertDescription,
@@ -199,7 +199,7 @@ export default function SurveyRespondForm({
   publicEntry = false,
   onSubmitted,
 }: SurveyRespondFormProps) {
-  const { t, locale } = useTranslation('surveyRespond')
+  const { t, locale, adoptContentLocale } = useTranslation('surveyRespond')
   const { t: tRoot } = useTranslation()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
 
@@ -209,9 +209,11 @@ export default function SurveyRespondForm({
 
   /**
    * What the respondent has said about themselves, keyed by field, for the demographic
-   * prelude below. `DECLINED` (an empty string) is a real entry and not an absence: it
-   * is how an optional field records that the respondent chose not to say, which the
-   * server treats as clearing the answer so no row is written.
+   * prelude below. Every entry is a real option value. It used to be able to hold an
+   * empty string — `DECLINED`, the synthesised "prefiero no decir" — which the server
+   * treated as clearing the answer; that option was removed on 2026-10-13 (see
+   * `RespondDemographicField`), so a field is either answered with one of its own
+   * options or not present at all.
    *
    * Held here rather than merged into `answers` because these are not answers: they
    * have no question id, they are validated against the company's configuration rather
@@ -363,6 +365,23 @@ export default function SurveyRespondForm({
   const view = state.status === 'ready' ? state.view : null
   const timeLimitMinutes = view?.timeLimitMinutes ?? null
 
+  // The frame follows the content. `resolvedLocale` is the language the payload actually
+  // came back in, which for a survey authored only in Spanish is Spanish however the
+  // device is configured -- so until this existed a respondent on an English laptop read
+  // Spanish questions inside English chrome, and there is no `?lang` in the link to fix it
+  // with. `adoptContentLocale` does not persist and is a no-op once the respondent has
+  // used the picker on `RespondShell`, so this cannot fight an explicit choice; when the
+  // two still disagree `ContentLanguageNotice` below says which language the content is in.
+  //
+  // Guarded on inequality because `locale` is a dependency of the read above: adopting
+  // re-issues it once, in the adopted language, and must then settle rather than loop.
+  useEffect(() => {
+    if (!view) return
+    if (!isLocale(view.resolvedLocale)) return
+    if (view.resolvedLocale === locale) return
+    adoptContentLocale(view.resolvedLocale)
+  }, [view, locale, adoptContentLocale])
+
   // Only ticks for a survey that actually sets a limit, so every other survey costs
   // no timer at all.
   useEffect(() => {
@@ -371,9 +390,15 @@ export default function SurveyRespondForm({
     return () => window.clearInterval(handle)
   }, [timeLimitMinutes])
 
-  const questions = useMemo(
-    () => (view ? orderQuestions(view.questions, view.randomizeQuestions, view.id) : []),
-    [view],
+  // Seeded by the RESPONDENT'S SESSION, not by the survey id. `respondSession` mints
+  // the id once per survey per respondent, keeps it across a reload and a closed tab,
+  // and clears it the moment the response completes — so the order holds still for as
+  // long as someone is answering, and the next session gets a fresh one. Seeding by
+  // `view.id` gave every respondent of a survey the same order, forever, which is a
+  // randomisation that removes no bias between people. See `orderQuestions`.
+  const orderedQuestions = useMemo(
+    () => (view ? orderQuestions(view.questions, view.randomizeQuestions, sessionId) : []),
+    [view, sessionId],
   )
 
   // Read out of `view` into a scalar first, so the memo below depends on a boolean
@@ -386,8 +411,30 @@ export default function SurveyRespondForm({
   // the headings the analysis will report under. It returns the whole form either
   // way — `sectioned: false` means "print no headings", not "here is half of it".
   const dimensions = useMemo(
-    () => respondDimensions(questions, randomizeQuestions),
-    [questions, randomizeQuestions],
+    () => respondDimensions(orderedQuestions, randomizeQuestions, sessionId),
+    [orderedQuestions, randomizeQuestions, sessionId],
+  )
+
+  /**
+   * The order the questions are actually ASKED in, which is the sections laid end to
+   * end — not the flat list they were grouped from.
+   *
+   * `respondDimensions` already defines reading order this way: its `firstIndex` and
+   * `lastIndex` are a running position over the sections, and its own note says that
+   * when an author interleaves categories (A, B, A) the grouping pulls the third
+   * question up under the first heading. Paging through the flat list instead asked
+   * them in arrival order while printing a heading looked up per question, so a
+   * randomised survey was asked PSYCHOLOGICAL SAFETY, WORKLOAD, PSYCHOLOGICAL SAFETY
+   * — the interleaving the 2026-10-13 ruling forbids, since keeping the headings is
+   * the whole reason a randomised 80-item instrument stays navigable — and the
+   * "1–2 of 12" beside each heading did not describe the questions under it.
+   *
+   * Flattening is identity whenever there is nothing to regroup: `unsectioned` holds
+   * the whole form in one section, and an empty form has no sections at all.
+   */
+  const questions = useMemo(
+    () => dimensions.sections.flatMap((section) => section.questions),
+    [dimensions],
   )
 
   const announce = useCallback((message: string) => setAnnouncement(message), [])
@@ -1043,7 +1090,7 @@ export default function SurveyRespondForm({
             field it would push the field itself down the phone, which is the same
             reasoning the author's description follows on the question pages. */}
         {demographicStep === 0 ? (
-          <p className="m-0 max-w-prose text-respond text-fg-secondary">{t('demographics.intro')}</p>
+          <p className="m-0 max-w-prose text-respond text-fg-secondary">{t('demographics.intro', { floor: ANONYMITY_FLOOR })}</p>
         ) : null}
 
         <div className="flex flex-col gap-4">
@@ -1808,7 +1855,7 @@ function Submitted({
         //
         // Deliberately not `charts/ProtectedCell`: that primitive decides
         // suppression itself from a response count against the anonymity floor, and
-        // its label states the floor ("withheld below 5 responses"). Neither number
+        // its label states the floor ("withheld below {threshold} responses"). Neither number
         // reaches this page — `SurveySubmissionResult` carries the suppressed field
         // names and neither a cohort count nor the company's floor — so rendering it
         // here would mean inventing a count to force the suppressed branch and

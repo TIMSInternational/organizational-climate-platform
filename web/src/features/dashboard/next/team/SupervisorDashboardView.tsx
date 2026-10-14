@@ -27,7 +27,7 @@ import { CoverageBox, HatchedCount, TeamCard, TeamPlanRow } from './parts'
  *
  * ## What it never prints
  *
- * - **A count under the floor.** "Ya respondieron" is `null` in the model under 5 and is
+ * - **A count under the floor.** "Ya respondieron" is `null` in the model under the floor and is
  *   hatched; "Faltan por responder" is `null` for exactly as long, because the team's size
  *   minus it would give the hidden count back.
  * - **A control the server would refuse.** No export and no reminder: the artboard draws

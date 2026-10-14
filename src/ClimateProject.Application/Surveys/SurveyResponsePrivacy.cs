@@ -74,6 +74,44 @@ public static class SurveyResponsePrivacy
     public const int MinimumCohortSize = DemographicSnapshotPrivacy.MinimumGroupSize;
 
     /// <summary>
+    /// Whether a respondent is ever asked who they are. <b>They are not.</b>
+    /// </summary>
+    /// <param name="authoredToCollect">
+    /// The survey's stored <c>Settings.CollectParticipantIdentity</c>, taken and DISCARDED.
+    /// It is a parameter so that the signature still says what the question used to be, and
+    /// so that every caller has to hand over the column it is no longer allowed to believe.
+    /// </param>
+    /// <remarks>
+    /// <para>
+    /// Ruled 2026-10-13, superseding 2026-10-12. There are three ways to answer -- a mass
+    /// invite, where the platform mints a username and password per person and the
+    /// demographics arrive pre-linked from the import; a climate QR, which asks the área and
+    /// the company's own demographic fields; and a microclimate link, which asks nothing --
+    /// and none of them collects a name or an email directly.
+    /// </para>
+    /// <para>
+    /// It lives here, in one place, because the ruling has two readers and they were
+    /// disagreeing. The respond GET and the submit POST stopped asking, while
+    /// <c>GET /surveys/{id}/participation</c> went on reporting the stored column, so an
+    /// administrator read "this survey collects who answered" beside a list of who answered
+    /// that could never be anything but empty. A flag nothing can act on is not a record of
+    /// intent, it is a false claim about the product.
+    /// </para>
+    /// <para>
+    /// A method rather than a <c>const</c> so that <c>if</c> over it cannot fold: a constant
+    /// <c>false</c> makes every guarded block unreachable, and <c>CS0162</c> is an error in
+    /// this repository. The column, the table, the DTO flag and the authoring switch all
+    /// still survive on purpose -- returning <paramref name="authoredToCollect"/> from here
+    /// is the whole revert, and it moves both readers at once.
+    /// </para>
+    /// </remarks>
+    public static bool CollectsParticipantIdentity(bool authoredToCollect)
+    {
+        _ = authoredToCollect;
+        return false;
+    }
+
+    /// <summary>
     /// True when a group of <paramref name="cohortSize"/> people is large enough to hide
     /// one respondent in. A non-positive size means the cohort could not be measured,
     /// which is treated as too small rather than as unknown.

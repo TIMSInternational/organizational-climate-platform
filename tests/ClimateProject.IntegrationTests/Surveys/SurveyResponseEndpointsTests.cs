@@ -703,7 +703,10 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
     [Fact]
     public async Task An_anonymous_retry_with_the_same_session_does_not_duplicate()
     {
-        var survey = await ActiveSurveyAsync(settings: new SurveySettingsInput(Anonymous: true));
+        var survey = // SelfDeclaredDemographics: false — this test is about the retry guard, not about demographics.
+        // The setting defaults TRUE since 2026-10-13 and the área alone makes the prelude
+        // mandatory in any company with a department, so saying so keeps this test about one thing.
+        await ActiveSurveyAsync(settings: new SurveySettingsInput(Anonymous: true, SelfDeclaredDemographics: false));
         var visitor = _factory.CreateClient();
         var request = new SubmitSurveyResponseRequest(
             Answers: [new SurveyAnswerInput(survey.Questions[0].Id, "remote")],
@@ -738,7 +741,10 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
     [Fact]
     public async Task An_anonymous_visitor_may_respond_without_authenticating()
     {
-        var survey = await ActiveSurveyAsync(settings: new SurveySettingsInput(Anonymous: true));
+        var survey = // SelfDeclaredDemographics: false — this test is about answering without an account, not about demographics.
+        // The setting defaults TRUE since 2026-10-13 and the área alone makes the prelude
+        // mandatory in any company with a department, so saying so keeps this test about one thing.
+        await ActiveSurveyAsync(settings: new SurveySettingsInput(Anonymous: true, SelfDeclaredDemographics: false));
         var visitor = _factory.CreateClient();
 
         var http = await SubmitAsync(visitor, survey.Id, new SubmitSurveyResponseRequest(
@@ -752,7 +758,10 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
     [Fact]
     public async Task An_anonymous_response_carries_no_attributable_identifier()
     {
-        var survey = await ActiveSurveyAsync(settings: new SurveySettingsInput(Anonymous: true));
+        var survey = // SelfDeclaredDemographics: false — this test is about what an anonymous row stores, not about demographics.
+        // The setting defaults TRUE since 2026-10-13 and the área alone makes the prelude
+        // mandatory in any company with a department, so saying so keeps this test about one thing.
+        await ActiveSurveyAsync(settings: new SurveySettingsInput(Anonymous: true, SelfDeclaredDemographics: false));
         var visitor = _factory.CreateClient();
         visitor.DefaultRequestHeaders.Add("User-Agent", "IntegrationTest/1.0");
 
@@ -975,6 +984,99 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
         Assert.Equal(1, await _harness.WithDbAsync(db => db.Responses.CountAsync(r => r.SurveyId == survey.Id)));
     }
 
+    /// <summary>
+    /// "One session only", ruled 2026-10-13 as a per-survey flag defaulting OFF — so nothing
+    /// changes for a live survey until somebody ticks it, and an Eagle respondent sixty items into
+    /// eighty does not lose the lot the day it ships.
+    /// </summary>
+    /// <remarks>
+    /// Both halves matter. The flag withholds the ANSWERS; it must NOT stop the session being
+    /// matched, because on an anonymous survey the session id is the only thing that can tell a
+    /// retried request from a second respondent. Remove the `resumes` guard and the first
+    /// assertion fails; widen it to skip the lookup as well and the last two do.
+    /// </remarks>
+    [Fact]
+    public async Task A_one_session_only_survey_hands_a_visitor_no_answers_back_but_still_knows_the_session()
+    {
+        var survey = await ActiveSurveyAsync(
+            [WorkModeQuestion(bilingual: false)],
+            new SurveySettingsInput(Anonymous: true, SelfDeclaredDemographics: false, OneSessionOnly: true));
+        var visitor = _factory.CreateClient();
+        var sessionId = Guid.NewGuid().ToString("N");
+        var choice = survey.Questions.Single(q => q.Type == QuestionTypes.MultipleChoice).Id;
+
+        var partial = await SubmitAsync(visitor, survey.Id, new SubmitSurveyResponseRequest(
+            Answers: [new SurveyAnswerInput(choice, "hybrid")],
+            SessionId: sessionId,
+            IsComplete: false));
+        Assert.Equal(HttpStatusCode.Created, partial.StatusCode);
+        var responseId = (await partial.Content.ReadFromJsonAsync<SurveySubmissionResult>())!.ResponseId;
+
+        // The reload is served the form, not the half they left.
+        var view = (await visitor.GetFromJsonAsync<SurveyRespondView>(
+            $"/surveys/{survey.Id}/respond?sessionId={sessionId}"))!;
+        Assert.Null(view.InProgress);
+
+        // ...and the retry guard is untouched: the same session still resolves to the SAME row, so
+        // a second save is one respondent saving twice rather than two respondents.
+        var again = await SubmitAsync(visitor, survey.Id, new SubmitSurveyResponseRequest(
+            Answers: [new SurveyAnswerInput(choice, "remote")],
+            SessionId: sessionId,
+            IsComplete: false));
+        Assert.Equal(responseId, (await again.Content.ReadFromJsonAsync<SurveySubmissionResult>())!.ResponseId);
+        Assert.Equal(1, await _harness.WithDbAsync(db => db.Responses.CountAsync(r => r.SurveyId == survey.Id)));
+    }
+
+    /// <summary>
+    /// The control. Identical but for the flag, so the test above is about the flag and not about
+    /// being anonymous, or about the session id, or about a partial save.
+    /// </summary>
+    [Fact]
+    public async Task The_same_visitor_resumes_when_the_survey_does_not_say_one_session_only()
+    {
+        var survey = await ActiveSurveyAsync(
+            [WorkModeQuestion(bilingual: false)],
+            new SurveySettingsInput(Anonymous: true, SelfDeclaredDemographics: false, OneSessionOnly: false));
+        var visitor = _factory.CreateClient();
+        var sessionId = Guid.NewGuid().ToString("N");
+        var choice = survey.Questions.Single(q => q.Type == QuestionTypes.MultipleChoice).Id;
+
+        await SubmitAsync(visitor, survey.Id, new SubmitSurveyResponseRequest(
+            Answers: [new SurveyAnswerInput(choice, "hybrid")],
+            SessionId: sessionId,
+            IsComplete: false));
+
+        var view = (await visitor.GetFromJsonAsync<SurveyRespondView>(
+            $"/surveys/{survey.Id}/respond?sessionId={sessionId}"))!;
+        Assert.Equal("hybrid", view.InProgress!.Answers.Single(a => a.QuestionId == choice).Value);
+    }
+
+    /// <summary>
+    /// The arm the ruling insisted on: a respondent WITH an account keeps resume whatever the
+    /// survey says, because a mass-invite respondent signs in and an eighty-item instrument is not
+    /// something to make them start over. The flag reads `ActingUserId is null`, not the survey's
+    /// anonymity, for the reason `AsksSelfDeclaredDemographics` gives.
+    /// </summary>
+    [Fact]
+    public async Task A_signed_in_respondent_resumes_even_when_the_survey_says_one_session_only()
+    {
+        var survey = await ActiveSurveyAsync(
+            [WorkModeQuestion(bilingual: false)],
+            new SurveySettingsInput(SelfDeclaredDemographics: false, OneSessionOnly: true));
+        var employee = await EmployeeAsync(_departmentId);
+        var sessionId = Guid.NewGuid().ToString("N");
+        var choice = survey.Questions.Single(q => q.Type == QuestionTypes.MultipleChoice).Id;
+
+        await SubmitAsync(employee, survey.Id, new SubmitSurveyResponseRequest(
+            Answers: [new SurveyAnswerInput(choice, "hybrid")],
+            SessionId: sessionId,
+            IsComplete: false));
+
+        var view = (await employee.GetFromJsonAsync<SurveyRespondView>(
+            $"/surveys/{survey.Id}/respond?sessionId={sessionId}"))!;
+        Assert.Equal("hybrid", view.InProgress!.Answers.Single(a => a.QuestionId == choice).Value);
+    }
+
     [Fact]
     public async Task Revisiting_a_question_updates_the_answer_rather_than_conflicting()
     {
@@ -1076,7 +1178,10 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
         // ActiveSurveyAsync is identified unless told otherwise. The visitor has no account, so
         // there is nobody to identify: the row must hold exactly what an anonymous survey's
         // visitor's row holds -- no user, no IP, no user agent, no department.
-        var survey = await ActiveSurveyAsync();
+        var survey = // SelfDeclaredDemographics: false — this test is about an identified survey answered by a stranger, not about demographics.
+        // The setting defaults TRUE since 2026-10-13 and the área alone makes the prelude
+        // mandatory in any company with a department, so saying so keeps this test about one thing.
+        await ActiveSurveyAsync(settings: new SurveySettingsInput(SelfDeclaredDemographics: false));
         Assert.False(survey.Settings.Anonymous);
         var visitor = _factory.CreateClient();
         visitor.DefaultRequestHeaders.Add("User-Agent", "IntegrationTest/1.0");
@@ -1343,22 +1448,56 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
         var area = AdminFields(view)[0];
         Assert.True(area.Required);
         Assert.Equal(["operaciones", "ventas"], area.Options.Select(o => o.Value));
-        // The admin's own Required flag, not a policy invented here: a field the admin left
-        // optional is one the respondent may decline.
-        Assert.False(AdminFields(view)[1].Required);
+        // Ruled 2026-10-13: this flow forces Required on every field it offers, so the one
+        // the admin left optional arrives required here too. The admin's own
+        // DemographicField.Required still governs every other surface -- nothing is written to
+        // the company's definitions -- but a respondent with no account must end with a value,
+        // because these demographics are the whole segmentation basis for their response.
+        Assert.True(AdminFields(view)[1].Required);
     }
 
     [Fact]
     public async Task The_respond_view_offers_nothing_when_the_survey_did_not_ask()
     {
-        // Opt-in. The setting defaults false precisely so that surveys already collecting
-        // responses do not start asking three questions nobody turned on.
-        var survey = await ActiveSurveyAsync(settings: new SurveySettingsInput(Anonymous: true));
+        // Opt-OUT since 2026-10-13: the setting now defaults TRUE, because a climate QR asks
+        // the área and the company's fields. So "did not ask" has to be said explicitly here --
+        // the guarantee under test is still that a survey with the setting off offers nothing,
+        // and the fixture moves rather than the expectation.
+        var survey = await ActiveSurveyAsync(
+            settings: new SurveySettingsInput(Anonymous: true, SelfDeclaredDemographics: false));
         await SeedSelectFieldAsync("area", ["operaciones"], required: true, order: 0);
 
         var view = await RespondViewAsync(_factory.CreateClient(), survey.Id);
 
         Assert.Empty(view.Demographics);
+    }
+
+    /// <summary>
+    /// The inverse, and the one that gives the 2026-10-13 default its teeth: a survey created
+    /// without a word about demographics ASKS them, because a climate QR asks the área and the
+    /// company's own fields and an opt-in default meant a QR survey segmented nothing unless an
+    /// admin remembered a checkbox.
+    /// </summary>
+    /// <remarks>
+    /// `SurveySettingsInput.SelfDeclaredDemographics` is left null here on purpose, so what is
+    /// under test is the entity initialiser rather than anything this test passes. Set
+    /// `Survey.Settings.SelfDeclaredDemographics` back to `false` and only this fails -- the
+    /// test above keeps passing, because it now says `false` explicitly.
+    /// </remarks>
+    [Fact]
+    public async Task A_survey_created_without_a_word_about_it_asks_the_demographics()
+    {
+        var survey = await ActiveSurveyAsync(settings: new SurveySettingsInput(Anonymous: true));
+        await SeedSelectFieldAsync("antiguedad", ["menos_1", "mas_3"], required: false, order: 0);
+
+        var view = await RespondViewAsync(_factory.CreateClient(), survey.Id);
+
+        Assert.NotEmpty(view.Demographics);
+        Assert.Contains(view.Demographics, d => d.Field == "antiguedad");
+
+        // And the stored row says so, so this is the default and not a read-time substitution.
+        var stored = await _harness.WithDbAsync(db => db.Surveys.AsNoTracking().FirstAsync(x => x.Id == survey.Id));
+        Assert.True(stored.Settings.SelfDeclaredDemographics);
     }
 
     /// <summary>
@@ -1528,26 +1667,28 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
             (await SubmitSelfDeclaredAsync(survey, demographics: null)).StatusCode);
     }
 
+    /// <summary>
+    /// The blank used to clear the answer, which is how "prefiero no decir" was expressed on a
+    /// field the admin had left optional. Ruled 2026-10-13 -- "si el Excel no dice 'prefiero no
+    /// decir', no hay que ponerlo", and the respondent must end with a specific value -- so the
+    /// blank is refused instead. Forced at `ToDefinitions`, the validator the POST runs, by the
+    /// same line that offers the field as Required to the form, so the form cannot ask what the
+    /// submit then accepts blank.
+    /// </summary>
     [Fact]
-    public async Task An_optional_field_may_be_declined()
+    public async Task A_field_the_admin_left_optional_may_still_not_be_declined()
     {
         var survey = await SelfDeclaringSurveyAsync();
         await SeedSelectFieldAsync("area", ["operaciones"], required: true, order: 0);
         await SeedSelectFieldAsync("sexo", ["hombre", "mujer"], required: false, order: 1);
 
-        // A blank clears the answer rather than storing an empty string, so "prefiero no
-        // decir" is a real choice the respondent makes and not a skipped screen.
-        var result = await SelfDeclareAsync(survey, new Dictionary<string, string?>
+        var http = await SubmitSelfDeclaredAsync(survey, new Dictionary<string, string?>
         {
             ["area"] = "operaciones",
             ["sexo"] = "",
         });
 
-        var stored = await _harness.WithDbAsync(db => db.ResponseDemographics
-            .AsNoTracking()
-            .Where(rd => rd.ResponseId == result.ResponseId && rd.Field != SelfDeclaredDepartment.FieldKey)
-            .ToListAsync());
-        Assert.Equal(["area"], stored.Select(s => s.Field));
+        Assert.Equal(HttpStatusCode.BadRequest, http.StatusCode);
     }
 
     [Fact]
@@ -1594,7 +1735,10 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
     [Fact]
     public async Task A_survey_that_did_not_ask_refuses_submitted_demographics()
     {
-        var survey = await ActiveSurveyAsync(settings: new SurveySettingsInput(Anonymous: true));
+        var survey = // SelfDeclaredDemographics: false — this test is about a survey that did NOT ask, not about demographics.
+        // The setting defaults TRUE since 2026-10-13 and the área alone makes the prelude
+        // mandatory in any company with a department, so saying so keeps this test about one thing.
+        await ActiveSurveyAsync(settings: new SurveySettingsInput(Anonymous: true, SelfDeclaredDemographics: false));
         await SeedSelectFieldAsync("area", ["operaciones"], required: false, order: 0);
 
         var http = await SubmitSelfDeclaredAsync(survey, new Dictionary<string, string?> { ["area"] = "operaciones" });

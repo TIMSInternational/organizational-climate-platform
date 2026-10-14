@@ -419,6 +419,23 @@ public class CrossServiceTokenTests : IAsyncLifetime
     /// record publishes. If the mint's lifetime changes, this fails and that record is wrong
     /// until someone updates it.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// It read 24 hours until the idle session timeout landed, and this test is the reason
+    /// `cross-service-session-revocation.md` was rewritten instead of left to rot. The mint's
+    /// lifetime is now the idle window -- <c>SystemSettings.SessionTimeoutMinutes</c>, shipped
+    /// at <c>SessionWindows.DefaultIdleMinutes</c> minutes -- beneath the 24-hour
+    /// <c>SessionWindows.AbsoluteCeiling</c>. So 24 hours survives as the upper bound a
+    /// super admin can widen this window to, and is no longer the typical case.
+    /// </para>
+    /// <para>
+    /// The expectation stays a hand-written literal rather than
+    /// <c>TimeSpan.FromMinutes(SessionWindows.DefaultIdleMinutes)</c>, deliberately. Reading the
+    /// constant would make this test agree with any future change to the shipped default and let
+    /// the decision record go quietly stale -- which is the one thing this test exists to
+    /// prevent. It is meant to be edited by hand, by someone who then fixes the record.
+    /// </para>
+    /// </remarks>
     [Fact]
     public async Task The_window_a_revoked_token_stays_live_over_there_for_is_the_token_lifetime()
     {
@@ -434,7 +451,7 @@ public class CrossServiceTokenTests : IAsyncLifetime
         var issuedAt = DateTimeOffset.FromUnixTimeSeconds(long.Parse(jwt.GetClaim("iat").Value));
         var expires = new DateTimeOffset(jwt.ValidTo, TimeSpan.Zero);
 
-        Assert.Equal(TimeSpan.FromHours(24), expires - issuedAt);
+        Assert.Equal(TimeSpan.FromHours(1), expires - issuedAt);
     }
 
     /// <summary>

@@ -34,6 +34,20 @@ vi.mock('../../../org-structure/api/departments', async (importOriginal) => ({
   listDepartments: vi.fn(),
 }))
 
+/**
+ * Mode 3 (ruled 2026-10-13) withdraws the invite action, and `MICROCLIMATE_INVITATIONS_OFFERED`
+ * is the one line that reverts it. A getter rather than a literal so a test can set it: the
+ * invitation flow, the dialog's single-selector contract and the re-read of the list are all
+ * still in the product, one flag from being offered again, and deleting their tests along with
+ * the button would leave the revert unverified.
+ */
+let invitationsOffered = false
+vi.mock('../../invitationsOffered', () => ({
+  get MICROCLIMATE_INVITATIONS_OFFERED() {
+    return invitationsOffered
+  },
+}))
+
 const COMPANY = 'c1'
 
 const detail: MicroclimateDetail = {
@@ -87,6 +101,9 @@ function renderAs(claims: Record<string, unknown>, state?: unknown) {
 
 describe('MicroclimateDetailNextPage', () => {
   beforeEach(() => {
+    // The shipped value. A test that wants the reverted behaviour opts in explicitly, so
+    // nothing leaks into the test that follows it.
+    invitationsOffered = false
     window.localStorage.clear()
     window.localStorage.setItem('preferredLocale', 'es')
     vi.mocked(getMicroclimate).mockReset().mockResolvedValue(detail)
@@ -147,7 +164,8 @@ describe('MicroclimateDetailNextPage', () => {
     expect(live).toHaveLength(1)
     expect(live[0]!.className.split(' ')).toContain('h-control-canvas')
     expect(screen.getByRole('button', { name: copy.detail.moreActions }).className.split(' ')).toContain('size-control-canvas')
-    for (const name of [copy.detail.copyLink, copy.detail.downloadQr, copy.detail.invite, copy.detail.closeNow]) {
+    // `invite` is deliberately absent: mode 3 withdrew it, so it is no longer a board button.
+    for (const name of [copy.detail.copyLink, copy.detail.downloadQr, copy.detail.closeNow]) {
       expect(screen.getByRole('button', { name }).className.split(' ')).toContain('h-control-canvas')
     }
   })
@@ -165,7 +183,8 @@ describe('MicroclimateDetailNextPage', () => {
     expect(sentences[0]!.textContent).not.toContain('·')
   })
 
-  it('offers more invitations at the canvas’s 34px once the list holds one', async () => {
+  it('offers more invitations at the canvas’s 34px once the list holds one, when they are offered at all', async () => {
+    invitationsOffered = true
     vi.mocked(listMicroclimateInvitations).mockResolvedValue({
       ...invitations,
       invitations: [
@@ -228,7 +247,8 @@ describe('MicroclimateDetailNextPage', () => {
     await waitFor(() => expect(vi.mocked(updateMicroclimate).mock.calls[0]?.slice(1)).toEqual(['m1', { status: 'active' }]))
   })
 
-  it('invites the whole company with exactly one selector', async () => {
+  it('invites the whole company with exactly one selector, when invitations are offered at all', async () => {
+    invitationsOffered = true
     vi.mocked(createMicroclimateInvitations).mockResolvedValue({
       requested: 12,
       created: 12,
@@ -256,7 +276,25 @@ describe('MicroclimateDetailNextPage', () => {
 
   it('offers a super administrator every action with no company chosen', async () => {
     renderAs({ role: 'super_admin' })
-    expect(await screen.findByRole('button', { name: copy.detail.invite })).toBeTruthy()
+    // `invite` used to be the first assertion here; mode 3 withdrew it for every role, so
+    // the write this proves is `closeNow` -- and the test below holds that the withdrawal is
+    // the RULING and not an authorisation failure, which is what asserting absence alone
+    // here would have quietly become.
+    expect((await screen.findAllByRole('button', { name: copy.detail.closeNow })).length).toBeGreaterThan(0)
+  })
+
+  /**
+   * Mode 3, ruled 2026-10-13: a microclimate is answered from its QR or its link, so nobody
+   * is invited to one. Asserted for a company administrator of the session's OWN company,
+   * who manages it and would be offered every other write — otherwise "no invite button"
+   * would also pass for a viewer who was simply refused, and the ruling would be untested.
+   */
+  it('offers no one the invite action, however much they administer the session', async () => {
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    await screen.findByText(copy.detail.ladderTitle)
+    expect(screen.queryByRole('button', { name: copy.detail.invite })).toBeNull()
+    expect(screen.queryByRole('button', { name: copy.detail.inviteMore })).toBeNull()
+    // The same administrator still gets the writes mode 3 did not touch.
     expect(screen.getAllByRole('button', { name: copy.detail.closeNow }).length).toBeGreaterThan(0)
   })
 

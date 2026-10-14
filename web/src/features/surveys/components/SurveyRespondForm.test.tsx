@@ -15,6 +15,7 @@ import { RADIO_CEILING } from './RespondDemographicField'
 import { hasAnswered, markAnswered } from '../respondReceipt'
 import { readSessionId } from '../respondSession'
 import { STALE_MS, heldElsewhere } from '../respondLock'
+import { ANONYMITY_FLOOR } from '../../../components/charts'
 
 /**
  * The shipped wording, read from the catalogue the component reads.
@@ -297,17 +298,84 @@ describe('SurveyRespondForm dimension labels', () => {
   })
 
   /**
-   * `respondDimensions` switches grouping off for a randomised survey, because naming a
-   * shuffled list by dimension gathers each dimension back together in the reader's head
-   * and undoes the randomisation the author asked for. The page honours that rather than
-   * re-deriving its own answer — and every question is still asked.
+   * This asserted three nulls until 2026-10-13, because `respondDimensions` switched grouping
+   * off entirely for a randomised survey. Ruled that day: the headings stay, and randomisation
+   * means the SECTION order is shuffled and so is the order within each section. The page
+   * honours that rather than re-deriving its own answer, and every question is still asked —
+   * now under a name.
    */
-  it('prints no dimension at all when the survey randomises its questions', async () => {
+  it('still prints a dimension for every question when the survey randomises them', async () => {
     respondWith(view({ ...sectioned, randomizeQuestions: true }))
     renderForm()
 
     await screen.findByRole('radio', { name: 'Muy de acuerdo' })
-    expect(await dimensionsAcrossPages()).toEqual([null, null, null])
+    const dimensions = await dimensionsAcrossPages()
+
+    expect(dimensions).toHaveLength(3)
+    expect(dimensions.filter((dimension) => dimension === null)).toEqual([])
+
+    // Two CONTIGUOUS runs over the three pages, in whichever order the shuffle put the two
+    // sections. Contiguity is what sectioning means: the two psychological-safety questions are
+    // asked together under one heading rather than interleaved with workload. A flat run would
+    // give three nulls, and a regrouping that lost the sections would give three runs.
+    const runs = dimensions.filter((dimension, index) => index === 0 || dimension !== dimensions[index - 1])
+    expect(runs).toHaveLength(2)
+  })
+
+  /**
+   * The order the questions are ASKED in is the sections laid end to end, not the order
+   * they arrived in.
+   *
+   * `respondDimensions` already defines reading order that way — `firstIndex` and
+   * `lastIndex` are a running position over the sections, and its own note says an
+   * interleaved author (A, B, A) has their third question pulled up under the first
+   * heading. This page used to page through the FLAT list while looking the heading up
+   * per question, so the respondent was asked A, B, A under PSYCHOLOGICAL SAFETY,
+   * WORKLOAD, PSYCHOLOGICAL SAFETY, and the "1–2 of 3" beside the first heading
+   * described two questions that were not the two under it.
+   *
+   * Deliberately NOT randomised. The randomised case above asks the same thing but can
+   * only ask it of whichever seed the session happened to mint — it passed for roughly
+   * half of them and was the flake that found this. This one holds for every seed.
+   */
+  it('asks an interleaved author’s questions grouped, not in the order they arrived', async () => {
+    respondWith(
+      view({
+        questions: [
+          question({ id: 'a', text: 'Pregunta A', category: 'psychological_safety' }),
+          question({ id: 'b', text: 'Pregunta B', category: 'workload' }),
+          question({ id: 'c', text: 'Pregunta C', category: 'psychological_safety' }),
+        ],
+      }),
+    )
+    renderForm()
+
+    await screen.findByText('Pregunta A')
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+
+    // The author's THIRD question, gathered under the first heading — not their second.
+    expect(screen.getByText('Pregunta C')).toBeTruthy()
+    expect(screen.queryByText('Pregunta B')).toBeNull()
+  })
+
+  it('prints two contiguous headings for an interleaved author, not three', async () => {
+    respondWith(
+      view({
+        questions: [
+          question({ id: 'a', text: 'Pregunta A', category: 'psychological_safety' }),
+          question({ id: 'b', text: 'Pregunta B', category: 'workload' }),
+          question({ id: 'c', text: 'Pregunta C', category: 'psychological_safety' }),
+        ],
+      }),
+    )
+    renderForm()
+
+    await screen.findByText('Pregunta A')
+    expect(await dimensionsAcrossPages()).toEqual([
+      copy.es('surveyRespond.dimensions.psychological_safety').toUpperCase(),
+      copy.es('surveyRespond.dimensions.psychological_safety').toUpperCase(),
+      copy.es('surveyRespond.dimensions.workload').toUpperCase(),
+    ])
   })
 
   /**
@@ -944,10 +1012,14 @@ describe('SurveyRespondForm confirmation', () => {
 
     expect(screen.getByText('Sus respuestas se agrupan de inmediato')).toBeTruthy()
     // The floor is the platform constant, not a number typed into the copy.
-    expect(screen.getByText(/menos de 5 personas/)).toBeTruthy()
+    expect(screen.getByText(new RegExp(`menos de ${ANONYMITY_FLOOR} personas`))).toBeTruthy()
     // The close date is `view.endDate`, spelled out rather than abbreviated.
     expect(screen.getByText('La encuesta cierra el 12 de septiembre de 2026')).toBeTruthy()
-    expect(screen.getByText('Los resultados llegan a su departamento')).toBeTruthy()
+    // Ruled 2026-10-13: the card may not promise the results reach the respondent's
+    // department, nor that they will be emailed when results publish.
+    expect(screen.getByText('Nosotros procesamos y analizamos los resultados')).toBeTruthy()
+    expect(screen.queryByText(/llegan a su departamento/)).toBeNull()
+    expect(screen.queryByText(/avisaremos por correo/)).toBeNull()
   })
 
   it('says plainly that it cannot show the answers again', async () => {
@@ -1386,19 +1458,50 @@ describe('SurveyRespondForm — the demographic prelude', () => {
     expect(screen.queryByText('¿Qué tan satisfecho estás?')).toBeNull()
   })
 
-  it('offers "prefiero no decir" on an OPTIONAL field and not on a required one', async () => {
+  it('offers no "prefiero no decir", on an optional field either', async () => {
+    // `sexo` is the OPTIONAL field — the one that used to be given a synthesised decline
+    // choice. Ruled 2026-10-13: the options are exactly the field definition's.
     respondWith(view({ demographics: [area(), sexo] }))
     renderForm({ publicEntry: true })
     await screen.findByText('¿En qué área trabaja?')
 
-    // Whether a field may be declined is the admin's call, taken on the field.
-    expect(screen.queryByLabelText(copy.es('surveyRespond.demographics.preferNotToSay'))).toBeNull()
+    expect(screen.queryByLabelText('Prefiero no decir')).toBeNull()
+    expect(screen.getAllByRole('radio')).toHaveLength(2)
 
     await userEvent.click(screen.getByLabelText('Operaciones'))
     await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
 
     await screen.findByText('Sexo')
-    expect(screen.getByLabelText(copy.es('surveyRespond.demographics.preferNotToSay'))).toBeTruthy()
+    expect(screen.queryByLabelText('Prefiero no decir')).toBeNull()
+    // The field's own two options and no third one.
+    expect(screen.getAllByRole('radio')).toHaveLength(2)
+  })
+
+  it('does not let a blank hide in the dropdown either', async () => {
+    // Over RADIO_CEILING options the field renders a native `<select>`, whose blank
+    // placeholder used to be SELECTABLE and labelled "Prefiero no decir" on a field that
+    // was not required — the second surface, and the one that would have survived fixing
+    // only the radio list above.
+    const muchas = area({
+      field: 'antiguedad',
+      label: 'Antigüedad',
+      required: false,
+      options: Array.from({ length: 7 }, (_, index) => ({
+        value: `a${index}`,
+        label: `Tramo ${index}`,
+      })),
+    })
+    respondWith(view({ demographics: [muchas] }))
+    renderForm({ publicEntry: true })
+    await screen.findByText('Antigüedad')
+
+    const placeholder = screen.getByRole('option', {
+      name: copy.es('surveyRespond.demographics.choose'),
+    }) as HTMLOptionElement
+    expect(placeholder.disabled).toBe(true)
+    expect(screen.queryByRole('option', { name: 'Prefiero no decir' })).toBeNull()
+    // Seven real options plus the one disabled placeholder.
+    expect(screen.getAllByRole('option')).toHaveLength(8)
   })
 
   it('sends what was declared on the COMPLETING post, keyed by field and valued by option', async () => {
@@ -1422,15 +1525,29 @@ describe('SurveyRespondForm — the demographic prelude', () => {
     expect(lastSubmission().demographics).toEqual({ area: 'operaciones', sexo: 'mujer' })
   })
 
-  it('records a DECLINED optional field as an empty value rather than omitting it', async () => {
-    respondWith(view({ demographics: [area(), sexo] }))
+  it('ends with a specific value for every field it asked, and no blank', async () => {
+    // Every self-declared field now arrives `required: true` — the server forces it, for
+    // the reason it already forced the área: this respondent has no roster row, so these
+    // answers ARE the segmentation and a blank one is a response no breakdown can place
+    // (SurveyResponseEndpoints.LoadSelfDeclaredFieldsAsync).
+    respondWith(view({ demographics: [area(), area({ field: 'sexo', label: 'Sexo', order: 1, options: [
+      { value: 'hombre', label: 'Hombre' },
+      { value: 'mujer', label: 'Mujer' },
+    ] })] }))
     renderForm({ publicEntry: true })
     await screen.findByText('¿En qué área trabaja?')
 
     await userEvent.click(screen.getByLabelText('Operaciones'))
     await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
     await screen.findByText('Sexo')
-    await userEvent.click(screen.getByLabelText(copy.es('surveyRespond.demographics.preferNotToSay')))
+
+    // Untouched, the way on refuses — there is no longer any control that would have let
+    // the respondent past this screen without saying something.
+    await userEvent.click(screen.getByRole('button', { name: copy.es('surveyRespond.demographics.start') }))
+    expect(screen.getByText(copy.es('surveyRespond.demographics.missing'))).toBeTruthy()
+    expect(screen.queryByText('¿Qué tan satisfecho estás?')).toBeNull()
+
+    await userEvent.click(screen.getByLabelText('Mujer'))
     await userEvent.click(screen.getByRole('button', { name: copy.es('surveyRespond.demographics.start') }))
 
     await screen.findByText('¿Qué tan satisfecho estás?')
@@ -1438,10 +1555,8 @@ describe('SurveyRespondForm — the demographic prelude', () => {
     await userEvent.click(screen.getByRole('button', { name: copy.es('surveyRespond.submitResponse') }))
 
     await screen.findByText(copy.es('surveyRespond.thankYouTitle'))
-    // An empty string is a deliberate declination, which the server treats as clearing
-    // the answer so no row is written. Omitting the key entirely would be the shape of
-    // a screen the respondent never reached.
-    expect(lastSubmission().demographics).toEqual({ area: 'operaciones', sexo: '' })
+    expect(lastSubmission().demographics).toEqual({ area: 'operaciones', sexo: 'mujer' })
+    expect(Object.values(lastSubmission().demographics ?? {})).not.toContain('')
   })
 
   it('never puts a demographic on a PARTIAL save', async () => {

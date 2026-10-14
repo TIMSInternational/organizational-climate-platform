@@ -1,5 +1,10 @@
 # Decision: a self-declared demographic is floored at READ time, and cross-tabs stay unavailable
 
+> **Superseded on the number, 2026-10-13:** the privacy floor is **3**, not 5 — ruled by
+> Federico, platform-wide. The reasoning below stands as written; only the threshold moved.
+> See [`privacy-floor-is-three.md`](privacy-floor-is-three.md).
+
+
 Recorded 2026-10-07 against `c8d5cbcc`, with the code that implements it. Owner: Federico.
 
 A respondent who opens a public survey link has no account and no user row. Igoal — a client

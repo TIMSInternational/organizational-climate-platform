@@ -30,12 +30,21 @@ import {
   wordBars,
 } from './derive'
 import type { Microclimate, Question, WordCloudEntry } from '../api/microclimates'
+import { MINIMUM_RESPONDENTS } from '../microclimatePrivacy'
+
+/**
+ * The floor, and the count one under it. Written against the constant rather than as literals:
+ * these cases said 4 and 5 until the floor moved to 3 on 2026-10-13, at which point "4 is
+ * withheld" is false and "5 opens" no longer touches the boundary.
+ */
+const AT_THE_FLOOR = MINIMUM_RESPONDENTS
+const BELOW_THE_FLOOR = MINIMUM_RESPONDENTS - 1
 
 describe('the floor', () => {
-  it('withholds under 5 and opens at 5 — the platform floor, not a local number', () => {
+  it('withholds under the floor and opens at it — the platform floor, not a local number', () => {
     expect(belowFloor(0)).toBe(true)
-    expect(belowFloor(4)).toBe(true)
-    expect(belowFloor(5)).toBe(false)
+    expect(belowFloor(BELOW_THE_FLOOR)).toBe(true)
+    expect(belowFloor(AT_THE_FLOOR)).toBe(false)
   })
 })
 
@@ -105,14 +114,15 @@ describe('the words', () => {
   ]
 
   it('shows nothing of a session under the floor, and says how much it withheld', () => {
-    const bars = wordBars(words, 4)
+    const bars = wordBars(words, BELOW_THE_FLOOR)
     expect(bars.suppressed).toBe(true)
     expect(bars.words).toEqual([])
+    // Every one of the four words is held back, not a count derived from the floor.
     expect(bars.withheld).toBe(4)
   })
 
   it('at the floor drops a word said once, most frequent first and alphabetical among equals', () => {
-    const bars = wordBars(words, 5)
+    const bars = wordBars(words, AT_THE_FLOOR)
     expect(bars.suppressed).toBe(false)
     expect(bars.words.map((word) => word.text)).toEqual(['apoyo', 'carga', 'tiempo'])
     expect(bars.withheld).toBe(1)
@@ -336,14 +346,14 @@ describe('questionKinds', () => {
 describe('liveWordBars', () => {
   const words = [word('carga', 4), word('apoyo', 7), word('visa', 1), word('equipo', 7), word('turnos', 2)]
 
-  it('draws no bar at all under the floor of 5, however many words there are', () => {
-    const bars = liveWordBars(words, 4)
+  it('draws no bar at all under the floor, however many words there are', () => {
+    const bars = liveWordBars(words, BELOW_THE_FLOOR)
     expect(bars.isSuppressed).toBe(true)
     expect(bars.bars).toEqual([])
   })
 
   it('above the floor, drops the rare words and reports them, and sorts by frequency', () => {
-    const bars = liveWordBars(words, 5)
+    const bars = liveWordBars(words, AT_THE_FLOOR)
     expect(bars.isSuppressed).toBe(false)
     // "visa" was written once: held back, and counted so the total reconciles.
     expect(bars.bars.map((b) => b.text)).toEqual(['apoyo', 'equipo', 'carga', 'turnos'])

@@ -67,7 +67,7 @@ meets the page's own error state, never another tenant's data. `navigation/navSe
 what keeps the row out of their sidebar, and `navigation/roleCapabilities.ts` is the table that
 must gain any new destination or the suite goes red.
 
-## The invariant: a floor of five
+## The invariant: a floor of three
 
 `Application/Surveys/SurveyResultsPrivacy.cs:61` — `MinimumRespondents = 5`.
 

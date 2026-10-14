@@ -66,7 +66,7 @@ const CARD = 'rounded-xl border border-line-default bg-surface-card shadow-sm'
  *
  * Privacy: the counts are shown at every size — "0 de 20" identifies nobody and is the
  * number that says whether to keep chasing (`microclimatePrivacy.ts`); what is held
- * back is what people wrote. A past session under the floor of 5 offers no results
+ * back is what people wrote. A past session under the floor offers no results
  * link: `ProtectedCell` draws the hatch in its place.
  */
 export default function MicroclimatesListNextPage() {
@@ -470,7 +470,7 @@ function SessionMeta({ session, locale }: { session: InProgressSession; locale: 
 }
 
 /**
- * A closed session. Its results link sits behind the floor: under 5 responses the
+ * A closed session. Its results link sits behind the floor: under it the
  * results page could only say that the words are withheld, so the hatch stands where
  * the link would be — the same predicate and arguments `ProtectedCell` consults, so the
  * link and the hatch can never both appear.

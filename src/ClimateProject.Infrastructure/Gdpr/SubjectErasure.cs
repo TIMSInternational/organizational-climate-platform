@@ -306,10 +306,12 @@ public static class SubjectErasure
         + "refuse an inactive account -- and the account's security stamp is rotated, so a token carrying a "
         + "stamp claim is refused by this API on its next request rather than working until it expires. A token "
         + "with no stamp claim at all bypasses that check (SecurityStampValidation returns early on a missing "
-        + "claim); every token this API has minted since #284 carries one, so within the 24h lifetime that is "
+        + "claim); every token this API has minted since #284 carries one, so within the token lifetime that is "
         + "the empty set unless some other minter shares the signing secret. The "
         + "tracking service validates the same shared signing secret and does not consult the stamp, so that same "
-        + "token keeps authorising requests there until it expires, at most 24 hours after the erasure.",
+        + "token keeps authorising requests there until it expires -- at most one idle window after the "
+        + "erasure, which is 60 minutes as shipped and at most the 24-hour ceiling where a super admin "
+        + "has raised SessionTimeoutMinutes.",
 
         "Rows matched by email address are erased only inside the tenant the caller has authority over. An "
         + "address is not unique across tenants, and an invitation held by another company is that company's "

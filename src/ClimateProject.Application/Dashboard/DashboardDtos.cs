@@ -40,8 +40,8 @@ public sealed record DashboardSurveySummary(
 /// <param name="ResponseCount">
 /// Completed responses from this department alone, counted in SQL against the response
 /// rows rather than read off the survey -- and <b>null under the floor</b>
-/// (<c>DashboardEndpoints.DepartmentCountFloor</c>, 5). The leader's and the supervisor's
-/// panels hatch this count below 5 ("menos de 5 respuestas": the canvas's LeaderDashboard
+/// (<c>DashboardEndpoints.DepartmentCountFloor</c>). The leader's and the supervisor's
+/// panels hatch this count below that floor ("menos de {floor} respuestas": the canvas's LeaderDashboard
 /// and SupervisorDashboard, 10 Sep), so it is withheld here, at read time, rather than sent
 /// for the browser to hide. Null is never zero: a zero would read "nobody in this team has
 /// answered".
@@ -50,8 +50,8 @@ public sealed record DashboardSurveySummary(
 /// The WHOLE COMPANY's completed responses to the same survey -- <c>Survey.ResponseCount</c>,
 /// the column the company dashboard prints -- carried under a name that says its scope, so
 /// it cannot be read as this department's. Null under the same floor: beside a hatched team
-/// count, a company total under 5 bounds the hidden number ("the whole company: 3" means
-/// the team has at most 3).
+/// count, a company total that IS shown bounds the hidden one, because a team cannot have
+/// answered more times than its whole company did.
 /// </param>
 /// <param name="CompanyTargetAudienceCount">
 /// The tenant's invited headcount as the author entered it (<c>Survey.TargetAudienceCount</c>),
@@ -178,8 +178,9 @@ public sealed record DashboardDimensionScore(string Dimension, double? AverageSc
 /// looking at their own team already knows its size. The HEADCOUNT
 /// (<see cref="DepartmentAdminDashboard.MemberCount"/>) still is. The RESPONSE counts are
 /// not any more: the 10 Sep LeaderDashboard and SupervisorDashboard artboards hatch the
-/// open survey's team count under 5 ("El conteo del equipo se muestra al llegar a 5
-/// respuestas"), and a count a screen hatches must not travel in the payload that feeds it
+/// open survey's team count under the floor (`dashboard.next.leader.participationNote`: "El
+/// conteo del equipo se muestra al llegar a {floor} respuestas"), and a count a screen hatches
+/// must not travel in the payload that feeds it
 /// (<see cref="DashboardDepartmentSurveySummary.ResponseCount"/>,
 /// <see cref="DepartmentAdminDashboard.CompletedResponseCount"/>).
 /// </summary>

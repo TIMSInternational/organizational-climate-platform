@@ -15,6 +15,7 @@ import {
 } from '../../api/microclimates'
 import MicroclimateAnalyticsNextPage from './MicroclimateAnalyticsNextPage'
 import es from '../../../../i18n/es.json'
+import { MINIMUM_RESPONDENTS } from '../../microclimatePrivacy'
 
 const copy = es.microclimates.next.analytics
 
@@ -104,12 +105,12 @@ describe('MicroclimateAnalyticsNextPage', () => {
 
   it('shows the tenant’s pulse as the board does: its count under the floor, its figures hatched, its words never read', async () => {
     renderAs({ role: 'company_admin', companyId: COMPANY })
-    expect(await screen.findByText(copy.underFloor.replace('{floor}', '5'))).toBeTruthy()
+    expect(await screen.findByText(copy.underFloor.replace('{floor}', String(MINIMUM_RESPONDENTS)))).toBeTruthy()
     const row = rowOf('Pulso semanal — ¿cómo fue la semana?')
     expect(within(row).getByText(copy.protectedOne)).toBeTruthy()
     expect(within(row).getByText(copy.protectedMany)).toBeTruthy()
     expect(await within(row).findByText('2 preguntas · anónimo')).toBeTruthy()
-    expect(screen.getByText(copy.pulseOne.replace('{floor}', '5'))).toBeTruthy()
+    expect(screen.getByText(copy.pulseOne.replace('{floor}', String(MINIMUM_RESPONDENTS)))).toBeTruthy()
     // A protected session's words are not even fetched.
     expect(getLiveResults).not.toHaveBeenCalled()
   })

@@ -258,7 +258,7 @@ describe('AdminDashboardNextView', () => {
    *
    * "Quién respondió" draws one dot per respondent. For a group UNDER the floor that would
    * BE the count — a reader counts the dots and knows the headcount, which is exactly what
-   * the floor of 5 exists to prevent — and it would slip past every assertion that only
+   * the floor exists to prevent — and it would slip past every assertion that only
    * checks no NUMBER is rendered, because the disclosure is in the geometry.
    *
    * So a withheld band draws a constant number of marks unrelated to its own count, and
@@ -432,7 +432,7 @@ describe('AdminDashboardNextView', () => {
     try {
       const live = fullModel.liveMicroclimate!
       renderView({ ...fullModel, liveMicroclimate: { ...live, closesAt: '2026-09-12T02:06:08.992+00:00' } })
-      const sentence = (date: string) => copy.liveSub.replace('{date}', date).replace('{floor}', '5')
+      const sentence = (date: string) => copy.liveSub.replace('{date}', date).replace('{floor}', String(ANONYMITY_FLOOR))
       expect(document.body.textContent).toContain(sentence('Sep 11'))
       expect(document.body.textContent).not.toContain(sentence('Sep 12'))
     } finally {
@@ -492,7 +492,7 @@ describe('AdminDashboardNextView', () => {
       'critical',
     ])
     expect(legend.textContent).toContain('4.00 to 5.00')
-    expect(legend.textContent).toContain(en.charts.next.legendProtected.replace('{threshold}', '5'))
+    expect(legend.textContent).toContain(en.charts.next.legendProtected.replace('{threshold}', String(ANONYMITY_FLOOR)))
   })
 
   it('heads the map with whole dimension names in the model’s column order, the whole name on hover', () => {

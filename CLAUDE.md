@@ -72,7 +72,7 @@ the runner and the result is meaningless — kill it, rebuild, re-run.
 - **No new dependencies without a reason that survives procurement.** The PDF writer and the CSV
   writers in `src/ClimateProject.Application/Exports/` are hand-rolled for that reason —
   `docs/decisions/pdf-rendering.md`. Prefer consuming them over adding a package.
-- **The privacy floor is 5 respondents** and it is applied at read time. A suppressed segment
+- **The privacy floor is 3 respondents** (ruled 2026-10-13; it was 5) and it is applied at read time. A suppressed segment
   must never yield a number anywhere — not in a screen, an export, a report or a public link.
   The classic leak is treating an absent count as `0`, which reads as "nobody answered".
 - **Verbatim open-text response content is never returned.** Word frequencies only.
@@ -105,7 +105,7 @@ for anything a client will see (`docs/runbooks/uat-script.md` §8.4). Local deve
 **Production CloudWatch Logs are readable** — ruled 2026-09-05, logs only, and it is the one
 carve-out from the line above. Filter for the literal you are testing
 (`aws logs filter-log-events --filter-pattern '"…"'`); do not dump a log group, because
-application logs carry request paths, ids and exception text that obey neither the floor of 5
+application logs carry request paths, ids and exception text that obey neither the floor of 3
 nor the never-return-verbatim-text rule.
 
 **The read-only rule above is a convention, not a permission.** The agent's IAM user on the

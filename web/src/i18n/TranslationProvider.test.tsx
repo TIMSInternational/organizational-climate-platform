@@ -16,6 +16,20 @@ function Probe() {
   )
 }
 
+/** Lets a test play the part of the respond form, which adopts the content's language. */
+function AdoptProbe({ content }: { content: 'en' | 'es' }) {
+  const { locale, t, adoptContentLocale } = useTranslation()
+  return (
+    <div>
+      <span data-testid="locale">{locale}</span>
+      <span data-testid="save">{t('common.save')}</span>
+      <button type="button" onClick={() => adoptContentLocale(content)}>
+        adopt
+      </button>
+    </div>
+  )
+}
+
 function ScopedProbe() {
   const { t } = useTranslation('common')
   return <span data-testid="scoped">{t('save')}</span>
@@ -79,6 +93,61 @@ describe('TranslationProvider', () => {
   it('throws when used outside a provider', () => {
     // React logs the thrown error; the assertion is that it throws at all.
     expect(() => render(<Probe />)).toThrow(/must be used inside a TranslationProvider/)
+  })
+
+  describe('adopting the language the content came back in', () => {
+    it('re-languages the chrome for a reader who has expressed no preference', async () => {
+      const user = userEvent.setup()
+      // The situation this exists for: an English-configured device, so detection says
+      // `en`, opening a survey that is written only in Spanish.
+      render(
+        <TranslationProvider initialLocale="en">
+          <AdoptProbe content="es" />
+        </TranslationProvider>,
+      )
+
+      expect(screen.getByTestId('save').textContent).toBe('Save')
+
+      await user.click(screen.getByRole('button', { name: 'adopt' }))
+
+      expect(screen.getByTestId('locale').textContent).toBe('es')
+      // The chrome, not just the content: `common.save` is a catalogue string the
+      // survey payload has no say in.
+      expect(screen.getByTestId('save').textContent).toBe('Guardar')
+      expect(document.documentElement.lang).toBe('es')
+    })
+
+    it('does not persist it, because it is a fact about the survey and not a preference', async () => {
+      const user = userEvent.setup()
+      render(
+        <TranslationProvider initialLocale="en">
+          <AdoptProbe content="es" />
+        </TranslationProvider>,
+      )
+
+      await user.click(screen.getByRole('button', { name: 'adopt' }))
+
+      // Answering one Spanish survey must not re-language the whole app on every later
+      // visit, so nothing is written to storage.
+      expect(localStorage.getItem(LOCALE_STORAGE_KEY)).toBe(null)
+    })
+
+    it('leaves a reader who has chosen for themselves alone', async () => {
+      const user = userEvent.setup()
+      // Somebody on a Spanish machine who deliberately picked English: the picker on
+      // RespondShell exists for exactly this, so the content language must not undo it.
+      localStorage.setItem(LOCALE_STORAGE_KEY, 'en')
+      render(
+        <TranslationProvider>
+          <AdoptProbe content="es" />
+        </TranslationProvider>,
+      )
+
+      await user.click(screen.getByRole('button', { name: 'adopt' }))
+
+      expect(screen.getByTestId('locale').textContent).toBe('en')
+      expect(screen.getByTestId('save').textContent).toBe('Save')
+    })
   })
 
   describe('switching language', () => {

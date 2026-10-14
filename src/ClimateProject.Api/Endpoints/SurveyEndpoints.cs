@@ -450,12 +450,14 @@ public static class SurveyEndpoints
         // because changing it would silently re-read every row materialised without the flag.
         survey.Settings.Anonymous = true;
 
-        // Who answered, asked unless the caller says otherwise (ruled 2026-10-12: "we need to
-        // know who has answered and who has not"). Set here and not as the entity default,
-        // for Anonymous's reason above: a default on the entity would start asking every live
-        // survey materialised without the column. It only ever reaches an unauthenticated
-        // respondent to an anonymous survey -- see SurveyResponseEndpoints.AsksParticipantIdentity.
-        survey.Settings.CollectParticipantIdentity = true;
+        // Who answered is NOT asked. The 2026-10-12 ruling that put a name and email step on
+        // every new survey was superseded on 2026-10-13: there are three ways to answer -- a
+        // mass invite with a generated username and password, a climate QR that asks
+        // demographics and nothing else, and a microclimate link that asks nothing -- and
+        // "name and email are NEVER collected directly" holds in all three. So nothing is set
+        // here: the entity default (false) is now also the product's answer, and
+        // SurveyResponseEndpoints.AsksParticipantIdentity refuses the step for the surveys
+        // already carrying the column true.
 
         if (request.Settings is not null)
         {
@@ -1437,6 +1439,7 @@ public static class SurveyEndpoints
         if (input.InvitationIncludeCredentials.HasValue) settings.InvitationIncludeCredentials = input.InvitationIncludeCredentials.Value;
         if (input.InvitationSendImmediately.HasValue) settings.InvitationSendImmediately = input.InvitationSendImmediately.Value;
         if (input.InvitationBrandingEnabled.HasValue) settings.InvitationBrandingEnabled = input.InvitationBrandingEnabled.Value;
+        if (input.OneSessionOnly.HasValue) settings.OneSessionOnly = input.OneSessionOnly.Value;
 
         if (input.InvitationCustomMessage is not null)
         {
@@ -1526,7 +1529,8 @@ public static class SurveyEndpoints
                 locale, survey.Language, "settings.invitationCustomSubject", fallbackFields),
             survey.Settings.InvitationIncludeCredentials,
             survey.Settings.InvitationSendImmediately,
-            survey.Settings.InvitationBrandingEnabled);
+            survey.Settings.InvitationBrandingEnabled,
+            survey.Settings.OneSessionOnly);
 
         // ResolvedLocale names the language the caller is actually READING, not the one
         // they asked for. A Spanish-only survey fetched with ?lang=en comes back in

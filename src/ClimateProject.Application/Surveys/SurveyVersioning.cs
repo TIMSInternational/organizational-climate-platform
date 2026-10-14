@@ -90,7 +90,8 @@ public sealed record SurveyVersionSettingsSnapshot(
     string? InvitationCustomSubjectEs,
     bool InvitationIncludeCredentials,
     bool InvitationSendImmediately,
-    bool InvitationBrandingEnabled);
+    bool InvitationBrandingEnabled,
+    bool OneSessionOnly);
 
 /// <summary>
 /// A whole survey's content at one instant: the two column pairs SurveyVersion carries
@@ -222,7 +223,8 @@ public static class SurveyVersioning
             survey.Settings.InvitationCustomSubjectEs,
             survey.Settings.InvitationIncludeCredentials,
             survey.Settings.InvitationSendImmediately,
-            survey.Settings.InvitationBrandingEnabled);
+            survey.Settings.InvitationBrandingEnabled,
+            survey.Settings.OneSessionOnly);
 
         return new SurveyVersionContent(
             survey.TitleEn, survey.TitleEs, survey.DescriptionEn, survey.DescriptionEs,
@@ -282,7 +284,8 @@ public static class SurveyVersioning
         InvitationCustomSubjectEs: null,
         InvitationIncludeCredentials: false,
         InvitationSendImmediately: false,
-        InvitationBrandingEnabled: false);
+        InvitationBrandingEnabled: false,
+        OneSessionOnly: false);
 
     private static T? Deserialize<T>(string? json)
     {
@@ -335,6 +338,7 @@ public static class SurveyVersioning
         ("settings.invitationIncludeCredentials", s => s.InvitationIncludeCredentials),
         ("settings.invitationSendImmediately", s => s.InvitationSendImmediately),
         ("settings.invitationBrandingEnabled", s => s.InvitationBrandingEnabled),
+        ("settings.oneSessionOnly", s => s.OneSessionOnly),
     ];
 
     /// <summary>

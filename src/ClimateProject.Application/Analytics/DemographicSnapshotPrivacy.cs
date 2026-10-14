@@ -40,18 +40,28 @@ public sealed record DemographicDistribution(
 ///    "tenure = 10+ years" tells a whole department who the single response belongs to.
 ///    Those are suppressed below <see cref="MinimumGroupSize"/>.
 ///
-/// **Why 5 and not the 3 used by <c>Microclimate.ParticipationThreshold</c>.** That
-/// threshold gates showing *aggregate sentiment* for one question across a whole audience,
-/// where the only quasi-identifier is audience membership. These are demographic group
-/// counts, and demographic quasi-identifiers combine: department x role x tenure narrows
-/// a workforce far faster than any single one of them does, and a snapshot is explicitly
-/// designed to be cross-referenced against the next one. A higher floor is the standard
-/// answer for HR cross-tabs, and the two numbers being different is deliberate rather
-/// than an oversight -- they are protecting different things.
+/// **Why 3, and what it costs.** Ruled by Federico 2026-10-13: the privacy floor
+/// ("umbral de privacidad") is 3 respondents, platform-wide, and that explicitly includes
+/// segments, the dashboard, exports, microclimates and the whole-survey minimum. This
+/// constant was 5 until that ruling, and the paragraph here argued for the difference: a
+/// microclimate's <c>ParticipationThreshold</c> of 3 gates *aggregate sentiment* for one
+/// question across a whole audience, where the only quasi-identifier is audience
+/// membership, whereas these are demographic group counts and demographic
+/// quasi-identifiers COMBINE -- department x role x tenure narrows a workforce far faster
+/// than any one of them, and a snapshot is designed to be cross-referenced against the
+/// next one.
+///
+/// That argument was not wrong and is not deleted: it is the price of the ruling, recorded
+/// so nobody re-derives it as a discovery. At 3, a cell of exactly 3 in
+/// "department x tenure" is disclosed where it used to be withheld, and on a roster like
+/// EAGLE's (12 departments x 6 tenure bands) materially more cells become readable. That
+/// is the intended effect -- the client wants the segments visible -- and it is the client's
+/// decision to take. Raising it back is a one-line change here, because everything
+/// downstream binds to this constant rather than repeating the number.
 /// </summary>
 public static class DemographicSnapshotPrivacy
 {
-    public const int MinimumGroupSize = 5;
+    public const int MinimumGroupSize = 3;
 
     /// <summary>
     /// Buckets <paramref name="values"/> by value, drops every bucket smaller than

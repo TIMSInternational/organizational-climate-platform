@@ -260,7 +260,7 @@
         "failed": "No se pudo leer el mapa de clima.",
         "none": "Todavía no hay una encuesta cerrada con datos para este plan.",
         "protected": "protegido",
-        "protectedNote": "{survey} · menos de 5 respuestas en {scope}: sin cifra",
+        "protectedNote": "{survey} · menos de {floor} respuestas en {scope}: sin cifra",
         "lowestOfMap": "la celda más baja del mapa",
         "lowestOfRow": "la más baja de {scope}",
         "target": "meta {target}",
@@ -272,7 +272,7 @@
         "moveReading": "{fromCode} {from} → {toCode} {to}",
         "moveFlat": "sin cambio",
         "moveAwaiting": "Aún no cierra una encuesta posterior a {code}: se comparará con la siguiente.",
-        "moveProtected": "Las encuestas posteriores a {code} no revelan este grupo: menos de 5 respuestas.",
+        "moveProtected": "Las encuestas posteriores a {code} no revelan este grupo: menos de {floor} respuestas.",
         "adminOnly": "El hallazgo que originó este plan lo consulta la administración, en los resultados de la encuesta."
       },
       "measures": {
@@ -526,7 +526,7 @@
         "accountExistsBody": "Inicie sesión con esa dirección. Si no recuerda la contraseña, pida a un administrador que la restablezca."
       },
       "stageHeadline": "Escuchar a toda una organización sin exponer a nadie.",
-      "stageBody": "Cada respuesta cuenta en el conjunto y ninguna queda ligada a quien la escribió. Los grupos con menos de cinco respuestas nunca muestran una cifra.",
+      "stageBody": "Cada respuesta cuenta en el conjunto y ninguna queda ligada a quien la escribió. Los grupos con menos de tres respuestas nunca muestran una cifra.",
       "skipToForm": "Ir al formulario",
       "noAccount": "¿No tiene cuenta?",
       "createOne": "Crear una"
@@ -2041,7 +2041,7 @@
         "createNote": "dos preguntas, un equipo, una fecha",
         "shareNote": "enlace o QR, sin iniciar sesión",
         "liveNote": "un conteo que sube",
-        "readNote": "al cerrar: el conteo y las palabras desde 5",
+        "readNote": "al cerrar: el conteo y las palabras desde {floor}",
         "createdAt": "{date}, {time}",
         "createDraft": "borrador: falta lanzar",
         "shareNow": "en curso",
@@ -2902,7 +2902,7 @@
     "maxLoginAttempts": "Intentos Máximos de Inicio de Sesión",
     "sessionTimeoutMinutes": "Tiempo de Espera de Sesión (minutos)",
     "enforcedOnEveryLoginNote": "Inicio de Sesión Habilitado y Modo de Mantenimiento se aplican en cada intento de inicio de sesión (una cuenta SuperAdmin siempre puede iniciar sesión).",
-    "notYetEnforcedNote": "Intentos Máximos de Inicio de Sesión y Tiempo de Espera de Sesión se guardan pero la API aún no los aplica: actualmente no bloquean cuentas ni expiran sesiones antes de tiempo.",
+    "notYetEnforcedNote": "El Tiempo de Espera de Sesión sí se aplica: una sesión que permanezca inactiva ese tiempo se cierra, para todas las personas con sesión iniciada. Los Intentos Máximos de Inicio de Sesión se guardan pero la API aún no los aplica: actualmente no bloquean cuentas.",
     "availabilityTitle": "Disponibilidad de la plataforma",
     "loginEnabledDescription": "Cuando está desactivado, nadie puede iniciar sesión salvo una cuenta SuperAdmin.",
     "maintenanceModeDescription": "Muestra el mensaje de mantenimiento en lugar de la aplicación para todos, salvo una cuenta SuperAdmin.",
@@ -2942,7 +2942,7 @@
       "maxAttempts": "Intentos máximos de inicio de sesión",
       "timeout": "Tiempo de espera de sesión",
       "minutesUnit": "minutos",
-      "notEnforced": "Estos dos valores se guardan, pero la API todavía no los aplica: hoy no bloquean cuentas ni cierran sesiones antes de tiempo.",
+      "notEnforced": "El tiempo de espera de sesión se aplica a todas las personas con sesión iniciada: una sesión que permanezca inactiva ese tiempo se cierra, y antes se avisa a la persona. El máximo de intentos de inicio de sesión se guarda pero todavía no se aplica: hoy no bloquea ninguna cuenta.",
       "passwordHeading": "Política de contraseñas",
       "readOnly": "solo lectura",
       "minLength": "Longitud mínima",
@@ -4458,7 +4458,11 @@
         "participantIdentityLabel": "Preguntar el nombre de quien responde",
         "participantIdentityHelp": "Quien responda por el enlace o el código QR escribirá su nombre y, si quiere, su correo antes de la primera pregunta. Se registra que respondió y el día, aparte de sus respuestas y sin vincularse a ellas. Sirve para saber quién falta por responder.",
         "participantIdentityOn": "El enlace público ahora pregunta el nombre de quien responde.",
-        "participantIdentityOff": "El enlace público ya no pregunta el nombre de quien responde."
+        "participantIdentityOff": "El enlace público ya no pregunta el nombre de quien responde.",
+        "oneSessionOnlyLabel": "Una sola sesión en el enlace público",
+        "oneSessionOnlyHelp": "Quien responde sin cuenta empieza de nuevo si vuelve. No se le devuelven sus respuestas.",
+        "oneSessionOnlyOn": "El enlace público ya no devuelve las respuestas.",
+        "oneSessionOnlyOff": "El enlace público vuelve a devolver las respuestas."
       },
       "participation": {
         "title": "Participación",
@@ -5275,7 +5279,7 @@
       "emptyTitle": "Aún no hay hallazgos",
       "emptyReason": "El análisis de IA aún no está configurado: por eso {company} no tiene hallazgos.",
       "emptyNext": "Cuando lo esté, cada hallazgo dirá su prioridad, su tipo y la encuesta de la que proviene, y aquí se marcará como revisado.",
-      "privacy": "Un hallazgo nunca cita respuestas abiertas ni describe un grupo con menos de 5 respuestas.",
+      "privacy": "Un hallazgo nunca cita respuestas abiertas ni describe un grupo con menos de {floor} respuestas.",
       "acknowledge": "Marcar como revisado",
       "acknowledged": "Revisado",
       "loadFailed": "No se pudieron cargar los hallazgos",
@@ -5419,8 +5423,7 @@
     },
     "demographics": {
       "eyebrow": "Sobre usted",
-      "intro": "Antes de las preguntas, cuéntenos un poco sobre usted. Así los resultados se pueden comparar entre grupos. Nada se informa sobre un grupo de menos de 5 personas.",
-      "preferNotToSay": "Prefiero no decir",
+      "intro": "Antes de las preguntas, cuéntenos un poco sobre usted. Así los resultados se pueden comparar entre grupos. Nada se informa sobre un grupo de menos de {floor} personas.",
       "choose": "Elija una opción",
       "missing": "Elija una opción para continuar.",
       "start": "Empezar la encuesta"
@@ -5468,8 +5471,8 @@
     "happensPooledBody": "Se informan como promedios por departamento. Un grupo de menos de {floor} personas nunca se informa.",
     "happensClosesTitle": "La encuesta cierra el {date}",
     "happensClosesBody": "Nada se analiza antes de esa fecha, así que nadie puede ver llegar las respuestas una por una.",
-    "happensResultsTitle": "Los resultados llegan a su departamento",
-    "happensResultsBody": "Le avisaremos por correo cuando se publiquen, y en Inicio verá qué se hizo con ellos.",
+    "happensResultsTitle": "Nosotros procesamos y analizamos los resultados",
+    "happensResultsBody": "Los entregamos a las personas designadas dentro de la organización, no de forma general.",
     "noCopyNote": "Puede cerrar esta pestaña. No podemos volver a mostrarle sus respuestas: guardar una copia que usted pudiera abrir significaría mantener un vínculo entre usted y ellas.",
     "backToHome": "Volver al inicio",
     "noSeatsBody": "Esta encuesta no puede aceptar nuevas respuestas en este momento, así que no se registró nada de lo que acaba de enviar. Sus respuestas siguen en esta página: déjela abierta y contacte a quien le envió la encuesta.",
@@ -5859,10 +5862,10 @@
       "whatHappensNow": "Qué pasa ahora",
       "nextSurveyTitle": "La siguiente encuesta aparecerá aquí",
       "nextSurveyBody": "En «Para responder», con sus preguntas y su fecha de cierre.",
-      "resultsGoToTitle": "Los resultados llegan a {department}",
-      "resultsGoToTitleAnyDepartment": "Los resultados llegan a su departamento",
-      "resultsGoToBody": "Como promedios por departamento; un grupo de menos de {floor} personas no se informa. Lo que se haga con ellos aparecerá aquí.",
-      "resultsGoToBodyNoFloor": "Como promedios por departamento; un grupo demasiado pequeño para mantener la confidencialidad no se informa. Lo que se haga con ellos aparecerá aquí.",
+      "resultsGoToTitle": "Nosotros procesamos y analizamos los resultados",
+      "resultsGoToTitleAnyDepartment": "Nosotros procesamos y analizamos los resultados",
+      "resultsGoToBody": "Los entregamos a las personas designadas dentro de la organización, no de forma general; un grupo de menos de {floor} personas nunca se informa.",
+      "resultsGoToBodyNoFloor": "Los entregamos a las personas designadas dentro de la organización, no de forma general; un grupo demasiado pequeño para mantener la confidencialidad nunca se informa.",
       "anonymousNoReceiptTitle": "Una encuesta anónima no deja recibo",
       "anonymousNoReceiptBody": "La plataforma no sabe si usted la respondió, así que sigue en «Para responder» hasta que cierra.",
       "mySurveysDescription": "Lo que le toca responder, primero lo que cierra antes. Sus respuestas no se muestran nunca.",
@@ -6939,7 +6942,7 @@
       "lede": "Un instrumento de clima que se responde en anonimato y se lee por dimensión, con un piso mínimo por segmento que decide qué puede mostrarse y qué no.",
       "cta": "Ver un informe de ejemplo",
       "chipDimensions": "4 dimensiones",
-      "chipFloor": "Piso mínimo 5"
+      "chipFloor": "Piso mínimo {floor}"
     },
     "dimensions": {
       "title": "Cuatro lecturas, no un promedio.",
@@ -7259,5 +7262,11 @@
     "scale": {
       "unitPercent": "de 100"
     }
+  },
+  "session": {
+    "idleWarningTitle": "¿Sigue ahí?",
+    "idleWarningBody": "Ha estado inactivo, así que esta sesión terminará en {seconds} segundos para proteger su cuenta.",
+    "staySignedIn": "Seguir conectado",
+    "signOutNow": "Cerrar sesión ahora"
   }
 }

@@ -9,6 +9,7 @@ import { setToken, clearToken } from '../../../auth/token'
 import { CompanyContextProvider } from '../../../company-context'
 import { SURVEY_DRAFT_CONTENT_VERSION } from '../draftContent'
 import { tokenFor } from '../../../test/jwtFixture'
+import { ANONYMITY_FLOOR } from '../../../components/charts'
 
 /**
  * The survey wizard's autosave and recovery (#266).
@@ -1261,11 +1262,12 @@ describe('SurveyCreatePage audience step', () => {
     expect(screen.getByText(/raised, never lowered/)).toBeTruthy()
 
     // The number is ANONYMITY_FLOOR — the same constant ProtectedCell enforces —
-    // rendered as a reading. A hand-written 5 here would be a promise nothing keeps.
+    // rendered as a reading. A hand-written number here, in the page or in this
+    // assertion, would be a promise nothing keeps.
     const alert = screen
       .getByText('The anonymity floor applies to what comes back, not to who is asked.')
       .closest('[data-slot="alert"]') as HTMLElement
-    const floor = within(alert).getByText('5')
+    const floor = within(alert).getByText(String(ANONYMITY_FLOOR))
     expect(floor.className).toContain('font-mono')
   })
 })

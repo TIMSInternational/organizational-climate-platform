@@ -25,7 +25,11 @@ import { authStateCopy } from './derive'
  * - **google-signin** — the Google round trip's own failures: a cancelled consent screen,
  *   a `state`/`nonce` this browser did not issue, or `POST /auth/google` refusing the
  *   token.
- * - **session-expired** — a session that outlived `SessionTimeoutMinutes`.
+ * - **session-expired** — a session that outlived `SessionTimeoutMinutes`. Produced by
+ *   `IdleSessionGuard`, which is the only producer: a reader who idles past the deadline,
+ *   who presses "sign out now" on the warning, or whose refresh is refused because the
+ *   session hit its absolute 24-hour ceiling. This reason was declared here with no
+ *   producer anywhere in the codebase until the timeout was enforced.
  *
  * `unknown` is the floor, for a direct visit with no reason or an unrecognised one.
  *

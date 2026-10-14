@@ -32,10 +32,15 @@ import { useSystemSettingsModel } from './useSystemSettingsModel'
  * - The mail block is what the settings row stores; the transport reads the deployment's
  *   `Email:Provider` (`Program.cs:338-346`, `EmailOptions.cs`) and nothing reads
  *   `SystemEmailSettings` to send. So the page does not say "nothing goes out by email".
- * - The privacy floor is `SurveyResultsPrivacy.MinimumRespondents` (5) for every company;
- *   no company setting raises it (`CompanySettingsDtos.cs` has none).
- * - Attempts and timeout are stored and not applied — nothing outside the settings
- *   endpoints reads `MaxLoginAttempts` or `SessionTimeoutMinutes`.
+ * - The privacy floor is `SurveyResultsPrivacy.MinimumRespondents` for every company, and
+ *   this page reads it from `ANONYMITY_FLOOR` rather than naming the number, because the
+ *   number has moved once (5 → 3, ruled 2026-10-13). No company setting raises it
+ *   (`CompanySettingsDtos.cs` has none).
+ * - `SessionTimeoutMinutes` IS applied, and this note used to say it was not: it is the
+ *   lifetime of every token the API mints (`SessionWindows.Next` →
+ *   `AuthEndpoints.IssueTokenForAsync` → `JwtTokenService`), so an idle session ends after
+ *   it, and `IdleSessionGuard` warns the reader first. `MaxLoginAttempts` is still stored
+ *   and not applied — nothing outside the settings endpoints reads it.
  *
  * `super_admin` only on the server; a platform page no company scopes, so the header's
  * company switcher stands down while it is mounted.

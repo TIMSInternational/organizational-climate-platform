@@ -10,6 +10,7 @@ import { setToken } from '../../../../auth/token'
 import { tokenFor } from '../../../../test/jwtFixture'
 import type { DashboardPendingSurvey, EmployeeDashboard, EmployeeLastOutcome } from '../../api/dashboard'
 import { markAnswered } from '../../../surveys/respondReceipt'
+import { ANONYMITY_FLOOR } from '../../../../components/charts'
 
 /**
  * The redesigned employee Home, rendered against the payload shapes the local API returned
@@ -476,10 +477,13 @@ describe('EmployeeHomeView', () => {
     renderHome()
 
     expect(await screen.findByText(es('employee.next.resultsGoToBody', { floor: 8 }))).toBeTruthy()
-    expect(screen.queryByText(es('employee.next.resultsGoToBody', { floor: 5 }))).toBeNull()
-    expect(
-      screen.getByText(es('employee.next.resultsGoToTitle', { department: 'Ingeniería' })),
-    ).toBeTruthy()
+    expect(screen.queryByText(es('employee.next.resultsGoToBody', { floor: ANONYMITY_FLOOR }))).toBeNull()
+    // The title no longer names the department, because the results no longer go to
+    // it (ruled 2026-10-13). The absence of the old promise is the half of this that
+    // can fail if it comes back — the department name itself is NOT asserted absent,
+    // because the reader's own identity line prints it, legitimately.
+    expect(screen.getByText(es('employee.next.resultsGoToTitle'))).toBeTruthy()
+    expect(screen.queryByText(/resultados llegan a/)).toBeNull()
   })
 
   it('states the rule without a number when no outcome has told it the floor', async () => {
@@ -490,7 +494,7 @@ describe('EmployeeHomeView', () => {
     renderHome()
 
     expect(await screen.findByText(es('employee.next.resultsGoToBodyNoFloor'))).toBeTruthy()
-    expect(screen.queryByText(es('employee.next.resultsGoToBody', { floor: 5 }))).toBeNull()
+    expect(screen.queryByText(es('employee.next.resultsGoToBody', { floor: ANONYMITY_FLOOR }))).toBeNull()
   })
 
   it('keeps the standing note off the answered page, where the column beside it says the same', async () => {

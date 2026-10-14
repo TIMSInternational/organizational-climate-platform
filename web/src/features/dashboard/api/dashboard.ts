@@ -44,7 +44,7 @@ export interface DashboardDepartmentSurveySummary {
   startDate: string
   endDate: string
   /**
-   * Completed responses from this department alone — `null` under the floor of 5. The server
+   * Completed responses from this department alone — `null` under the floor. The server
    * withholds it at read time (`DashboardEndpoints.DepartmentCountFloor`) because both team
    * panels hatch it; `null` is never 0.
    */
@@ -138,7 +138,7 @@ export interface DashboardDimensionScore {
  *
  * The counts beside it: `memberCount`, the headcount, is NOT floored — the 27 Aug ruling, a
  * leader already knows their own team's size. The RESPONSE counts are, since the 10 Sep
- * artboards hatch them: `activeSurveys[].responseCount` is `null` under 5, and
+ * artboards hatch them: `activeSurveys[].responseCount` is `null` under the floor, and
  * `completedResponseCount` counts only the surveys the team answered at or over 5, so it
  * never moves by a hidden step.
  */

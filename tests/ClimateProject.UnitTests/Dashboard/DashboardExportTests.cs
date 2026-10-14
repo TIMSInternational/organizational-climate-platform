@@ -2,6 +2,7 @@ using System.Text;
 using ClimateProject.Application.Dashboard;
 using ClimateProject.Application.Dashboard.Rendering;
 using ClimateProject.Application.Localization;
+using ClimateProject.Application.Surveys;
 using ClimateProject.UnitTests.Exports;
 
 namespace ClimateProject.UnitTests.Dashboard;
@@ -131,21 +132,29 @@ public class DashboardExportTests
         Assert.Equal("20", Cell(rows, "Departments", "Ingeniería - Members"));
         Assert.Equal("14", Cell(rows, "Departments", "Ingeniería - Completed responses"));
 
-        // Finanzas has 3, below the floor of 5. Named, sized — and its participation withheld.
+        // Finanzas has 2, below the floor. Named, sized — and its participation withheld.
+        // Its count moved from 3 to 2 when the floor became 3 (ruled 2026-10-13): at a floor
+        // of 3 a department of 3 is disclosed, so the old fixture tested the opposite rule.
         Assert.Equal("4", Cell(rows, "Departments", "Finanzas - Members"));
         Assert.Equal("Withheld", Cell(rows, "Departments", "Finanzas - Completed responses"));
 
-        // Never the count, anywhere in the section — including as a cell that happens to read 3.
+        // Never the count, anywhere in the section — including as a cell that happens to read it.
         var departmentRows = rows.Where(r => r.Section == "Departments").ToList();
-        Assert.DoesNotContain(departmentRows, r => r.Label == "Finanzas - Completed responses" && r.Value == "3");
+        Assert.DoesNotContain(departmentRows, r => r.Label == "Finanzas - Completed responses" && r.Value == "2");
 
         // And the file says why, rather than leaving a reader to guess that "Withheld" is a bug.
-        Assert.Contains(departmentRows, r => r.Value.Contains("fewer than 5 respondents", StringComparison.Ordinal));
+        // The number comes from the constant: a literal here is what let the sentence and the
+        // rule drift apart in the first place.
+        Assert.Contains(
+            departmentRows,
+            r => r.Value.Contains(
+                $"fewer than {SurveyResultsPrivacy.MinimumSegmentRespondents} respondents",
+                StringComparison.Ordinal));
     }
 
     /// <summary>
     /// The team's count to a survey still OPEN -- the figure the leader's Panel de Control
-    /// hatches under the floor ("menos de 5 respuestas").
+    /// hatches under the floor ("menos de 3 respuestas").
     /// </summary>
     /// <remarks>
     /// <c>DashboardDepartmentSurveySummary.ResponseCount</c> arrives unfloored and the screen
@@ -156,7 +165,7 @@ public class DashboardExportTests
     [Fact]
     public void An_open_surveys_team_count_under_the_floor_prints_the_word_never_the_count()
     {
-        // The endpoint no longer sends a sub-floor count (null under 5); a payload built any
+        // The endpoint no longer sends a sub-floor count (null under the floor); a payload built any
         // other way still must not print one, which is what the raw 3 and 0 below stand for.
         var dashboard = DepartmentDashboard(SuppressedClimate()) with
         {
@@ -201,15 +210,23 @@ public class DashboardExportTests
 
     /// <summary>
     /// The floor an open survey's team count is held to is the screen's: the server's own
-    /// <c>minimumGroupSize</c> when the payload carries one, and never lower than 5 -- including
-    /// when no closed survey has sent a floor at all.
+    /// <c>minimumGroupSize</c> when the payload carries one, and never lower than the platform
+    /// floor -- including when no closed survey has sent a floor at all.
+    ///
+    /// <para>
+    /// The first half's count moved from 4 to 2 when the floor became 3 (ruled 2026-10-13): at
+    /// a floor of 3 a count of 4 is disclosed, so leaving it at 4 would have turned "withheld
+    /// with no server floor" into an assertion that fails, and raising the expectation instead
+    /// would have made the test agree with whatever the code did. The second half names its own
+    /// floor of 8 and is independent of the platform number.
+    /// </para>
     /// </summary>
     [Fact]
-    public void An_open_surveys_team_count_is_held_to_the_servers_floor_and_never_below_five()
+    public void An_open_surveys_team_count_is_held_to_the_servers_floor_and_never_below_the_platform_floor()
     {
         var noClosedSurvey = DepartmentDashboard(null) with
         {
-            ActiveSurveys = [OpenSurvey("Clima Q4", responseCount: 4)],
+            ActiveSurveys = [OpenSurvey("Clima Q4", responseCount: 2)],
         };
         var unclimated = CsvRows(DashboardExport.BuildCsv(
             DashboardExport.ForDepartmentAdmin(noClosedSurvey, ContentLanguages.English, GeneratedAt)));
@@ -348,7 +365,7 @@ public class DashboardExportTests
                 // carries this count UNFLOORED -- the screen floors it itself and hatches the
                 // department on the map -- so the export has to floor it or it republishes
                 // exactly what the screen withholds.
-                new DashboardDepartmentSummary(SmallDepartmentId, "Finanzas", MemberCount: 4, CompletedResponseCount: 3),
+                new DashboardDepartmentSummary(SmallDepartmentId, "Finanzas", MemberCount: 4, CompletedResponseCount: 2),
             ]);
 
     /// <summary>

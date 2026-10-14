@@ -9,6 +9,7 @@ import { setToken, clearToken } from '../../../../auth/token'
 import { safeReturnPath } from '../../../../auth/returnPath'
 import type { PublicMicroclimateDetail } from '../../api/microclimates'
 import type { MicroclimateInvitationTokenDetail } from '../../api/microclimateLinks'
+import { MINIMUM_RESPONDENTS } from '../../microclimatePrivacy'
 
 const TOKEN = 'fixture-token-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 
@@ -163,7 +164,7 @@ describe('MicroclimateInvitationNextPage — the landing card', () => {
     renderPage()
     expect(
       await screen.findByText(
-        'Las palabras se muestran como frecuencias, nunca su texto, y solo cuando 5 personas hayan respondido.',
+        `Las palabras se muestran como frecuencias, nunca su texto, y solo cuando ${MINIMUM_RESPONDENTS} personas hayan respondido.`,
       ),
     ).toBeTruthy()
   })

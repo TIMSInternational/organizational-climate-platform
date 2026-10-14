@@ -175,9 +175,13 @@ public class SurveyResultsFilterTests
     // ==================================================================
 
     /// <summary>
-    /// The attack the cohort's own size does not stop. A=10, B=7, C=3 over 20 people: A and B
+    /// The attack the cohort's own size does not stop. A=10, B=7, C=2 over 19 people: A and B
     /// each clear the floor, so a naive rule discloses both -- and then whole minus A minus B
-    /// is C, three people, means and all.
+    /// is C, two people, means and all.
+    ///
+    /// C was 3 until the floor became 3 (ruled 2026-10-13), at which point a C of 3 is
+    /// disclosed on its own merits and there is no subtraction to demonstrate. The attack is
+    /// unchanged; only the number that is too small to stand alone moved.
     /// </summary>
     [Fact]
     public void A_cohort_is_refused_when_what_is_left_over_could_be_subtracted_out()
@@ -186,13 +190,13 @@ public class SurveyResultsFilterTests
         [
             .. Cohort(1, 10, null, ("puesto", "a")),
             .. Cohort(100, 7, null, ("puesto", "b")),
-            .. Cohort(200, 3, null, ("puesto", "c")),
+            .. Cohort(200, 2, null, ("puesto", "c")),
         ];
 
         Assert.True(SurveyResultsFilter.For(new SurveySegmentSelector("puesto", "a")).MayDisclose(completed, Floor));
 
         // b is large enough on its own and is still refused: disclosing it would leave a
-        // remainder of three, which is c.
+        // remainder of two, which is c.
         Assert.False(SurveyResultsFilter.For(new SurveySegmentSelector("puesto", "b")).MayDisclose(completed, Floor));
         Assert.False(SurveyResultsFilter.For(new SurveySegmentSelector("puesto", "c")).MayDisclose(completed, Floor));
 
@@ -260,13 +264,15 @@ public class SurveyResultsFilterTests
         [
             .. Cohort(1, 5, null, ("grupo", "aaa")),
             .. Cohort(100, 5, null, ("grupo", "bbb")),
-            .. Cohort(200, 3, null),
+            .. Cohort(200, 2, null),
         ];
         List<AggregationResponse> stored =
         [
             .. StoredCohort(1, 5, null, ("grupo", "aaa")),
             .. StoredCohort(100, 5, null, ("grupo", "bbb")),
-            .. StoredCohort(200, 3, null),
+            // Two, not three: at a floor of 3 an unsegmented remainder of three stands on its
+            // own and nothing is withheld, so there would be no tie left to break.
+            .. StoredCohort(200, 2, null),
         ];
         var answers = Answers(stored, "4");
 
@@ -303,11 +309,11 @@ public class SurveyResultsFilterTests
         ];
         Assert.True(SurveyResultsFilter.For(new SurveySegmentSelector("puesto", "a")).MayDisclose(completed, Floor));
 
-        // Drop the unsegmented group to three and the same cohort becomes subtractable.
+        // Drop the unsegmented group under the floor and the same cohort becomes subtractable.
         List<AggregationResponse> tight =
         [
             .. Cohort(1, 10, null, ("puesto", "a")),
-            .. Cohort(100, 3, null),
+            .. Cohort(100, 2, null),
         ];
         Assert.False(SurveyResultsFilter.For(new SurveySegmentSelector("puesto", "a")).MayDisclose(tight, Floor));
     }

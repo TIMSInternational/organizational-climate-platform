@@ -109,6 +109,25 @@ public static class SystemSettingsEndpoints
             return Results.Forbid();
         }
 
+        // Before the row is read or created, so a refusal writes nothing at all.
+        //
+        // SessionTimeoutMinutes is the lifetime of every token this API mints
+        // (`SessionWindows.IdleWindow`), so 0 or a negative is not a short policy -- it is an
+        // expired one, and honouring it literally would lock every account out of the product
+        // including this caller's, with no way back in through the UI. `IdleWindow` already
+        // refuses to honour it, reading the shipped default instead; that keeps the platform
+        // alive but leaves the nonsense stored, where this screen reads it back as though it
+        // were the policy. Refusing the write is the half that keeps the two agreeing.
+        //
+        // No upper bound here: `IdleWindow` clamps anything past the 24-hour absolute ceiling
+        // to it, so a larger number is reached sooner than asked rather than broken.
+        if (request.SessionTimeoutMinutes is <= 0)
+        {
+            return Results.Json(
+                new { message = "sessionTimeoutMinutes must be a positive number of minutes" },
+                statusCode: 400);
+        }
+
         var settings = await GetOrCreateAsync(db, cancellationToken);
 
         if (request.LoginEnabled.HasValue) settings.LoginEnabled = request.LoginEnabled.Value;

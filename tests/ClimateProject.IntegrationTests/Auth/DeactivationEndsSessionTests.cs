@@ -78,7 +78,7 @@ public class DeactivationEndsSessionTests : IAsyncLifetime
 
     /// <summary>
     /// The property the issue was filed for: the token the offboarded employee is holding
-    /// right now stops working, rather than outliving their access by up to 24 hours.
+    /// right now stops working, rather than outliving their access by up to a whole token lifetime.
     /// </summary>
     [Fact]
     public async Task A_token_minted_before_a_deactivation_is_refused_after_it()
@@ -97,7 +97,7 @@ public class DeactivationEndsSessionTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// <c>POST /auth/refresh</c> mints a fresh 24-hour token from a presented one, so a
+    /// <c>POST /auth/refresh</c> mints a fresh full-lifetime token from a presented one, so a
     /// revocation that did not reach it would be undone by the client's next refresh.
     /// </summary>
     /// <remarks>

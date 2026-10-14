@@ -466,7 +466,7 @@ function CatalogueRow({ row, people, onEdit }: { row: Row; people: number | unde
 /**
  * The board's protected mark: a 14px square of the recessed surface under `PROTECTED_HATCH`, the
  * stripe every protected cell in the product wears (`ResultsClimateGrid`, `ClimateMap`'s key).
- * Decorative and figure-free — the words beside it («menos de 5») say what it means, and no
+ * Decorative and figure-free — the words beside it («menos de {floor}») say what it means, and no
  * count is ever drawn in or near it.
  */
 function HatchSwatch() {

@@ -260,7 +260,7 @@
         "failed": "The climate map could not be read.",
         "none": "There is no closed survey with data for this plan yet.",
         "protected": "protected",
-        "protectedNote": "{survey} · fewer than 5 responses in {scope}: no figure",
+        "protectedNote": "{survey} · fewer than {floor} responses in {scope}: no figure",
         "lowestOfMap": "the lowest cell on the map",
         "lowestOfRow": "the lowest in {scope}",
         "target": "target {target}",
@@ -272,7 +272,7 @@
         "moveReading": "{fromCode} {from} → {toCode} {to}",
         "moveFlat": "no change",
         "moveAwaiting": "No survey has closed since {code} yet: it will be compared against the next one.",
-        "moveProtected": "The surveys after {code} do not disclose this group: fewer than 5 responses.",
+        "moveProtected": "The surveys after {code} do not disclose this group: fewer than {floor} responses.",
         "adminOnly": "The finding behind this plan is read by the administration, in the survey results."
       },
       "measures": {
@@ -526,7 +526,7 @@
         "accountExistsBody": "Sign in with that address. If you do not remember the password, ask an administrator to reset it."
       },
       "stageHeadline": "Hear a whole organisation without exposing anyone.",
-      "stageBody": "Every answer counts in the aggregate and none is tied back to the person who wrote it. A group of fewer than five never yields a figure.",
+      "stageBody": "Every answer counts in the aggregate and none is tied back to the person who wrote it. A group of fewer than three never yields a figure.",
       "skipToForm": "Skip to the form",
       "noAccount": "Don't have an account?",
       "createOne": "Create one"
@@ -2041,7 +2041,7 @@
         "createNote": "two questions, a team, a date",
         "shareNote": "link or QR, no sign-in",
         "liveNote": "a count that climbs",
-        "readNote": "at close: the count and the words from 5",
+        "readNote": "at close: the count and the words from {floor}",
         "createdAt": "{date}, {time}",
         "createDraft": "draft: not launched yet",
         "shareNow": "in progress",
@@ -2902,7 +2902,7 @@
     "maxLoginAttempts": "Max login attempts",
     "sessionTimeoutMinutes": "Session timeout (minutes)",
     "enforcedOnEveryLoginNote": "Login enabled and Maintenance mode are enforced on every login attempt (a SuperAdmin account can always still sign in).",
-    "notYetEnforcedNote": "Max login attempts and Session timeout are saved but not yet enforced by the API — they do not currently lock out accounts or expire sessions early.",
+    "notYetEnforcedNote": "Session timeout is enforced: a session left unused for that long ends, for everyone signed in. Max login attempts is saved but not yet enforced by the API — it does not currently lock out accounts.",
     "availabilityTitle": "Platform availability",
     "loginEnabledDescription": "When off, nobody can sign in except a SuperAdmin account.",
     "maintenanceModeDescription": "Shows the maintenance message instead of the app for everyone except a SuperAdmin account.",
@@ -2942,7 +2942,7 @@
       "maxAttempts": "Maximum sign-in attempts",
       "timeout": "Session timeout",
       "minutesUnit": "minutes",
-      "notEnforced": "Both values are saved, but the API does not apply them yet: today they neither lock accounts nor end sessions early.",
+      "notEnforced": "Session timeout applies to everyone signed in: a session left unused for that long ends, and the reader is warned before it does. Max login attempts is saved but not applied yet — today it locks no accounts.",
       "passwordHeading": "Password policy",
       "readOnly": "read only",
       "minLength": "Minimum length",
@@ -4458,7 +4458,11 @@
         "participantIdentityLabel": "Ask respondents for their name",
         "participantIdentityHelp": "Whoever answers through the link or QR code will give their name and, optionally, their email before the first question. That they answered, and the day, are recorded apart from their answers and never linked to them. It tells you who has yet to answer.",
         "participantIdentityOn": "The public link now asks respondents for their name.",
-        "participantIdentityOff": "The public link no longer asks respondents for their name."
+        "participantIdentityOff": "The public link no longer asks respondents for their name.",
+        "oneSessionOnlyLabel": "One session only on the public link",
+        "oneSessionOnlyHelp": "Someone answering without an account starts again if they come back. Their answers are not handed back to them.",
+        "oneSessionOnlyOn": "The public link no longer hands answers back.",
+        "oneSessionOnlyOff": "The public link hands answers back again."
       },
       "participation": {
         "title": "Participation",
@@ -5275,7 +5279,7 @@
       "emptyTitle": "No findings yet",
       "emptyReason": "AI analysis is not configured yet: that is why {company} has no findings.",
       "emptyNext": "Once it is, each finding will state its priority, its type and the survey it comes from, and it will be marked as reviewed here.",
-      "privacy": "A finding never quotes open answers or describes a group with fewer than 5 responses.",
+      "privacy": "A finding never quotes open answers or describes a group with fewer than {floor} responses.",
       "acknowledge": "Mark as reviewed",
       "acknowledged": "Reviewed",
       "loadFailed": "The findings could not be loaded",
@@ -5419,8 +5423,7 @@
     },
     "demographics": {
       "eyebrow": "About you",
-      "intro": "Before the questions, tell us a little about yourself. That is what lets the results be compared between groups. Nothing is reported about a group of fewer than 5 people.",
-      "preferNotToSay": "Prefer not to say",
+      "intro": "Before the questions, tell us a little about yourself. That is what lets the results be compared between groups. Nothing is reported about a group of fewer than {floor} people.",
       "choose": "Choose an option",
       "missing": "Choose an option to continue.",
       "start": "Start the survey"
@@ -5468,8 +5471,8 @@
     "happensPooledBody": "They are reported as departmental averages. A group of fewer than {floor} is never reported at all.",
     "happensClosesTitle": "The survey closes on {date}",
     "happensClosesBody": "Nothing is analysed before then, so no one can watch answers arrive one at a time.",
-    "happensResultsTitle": "Results reach your department",
-    "happensResultsBody": "You will be emailed when they are published, and Home will show what was done about them.",
+    "happensResultsTitle": "We process and analyse the results",
+    "happensResultsBody": "We deliver them to the people the organisation designates, not to everyone in general.",
     "noCopyNote": "You can close this tab. We cannot show you your answers again — keeping a copy you could open would mean keeping a link between you and them.",
     "backToHome": "Back to Home",
     "noSeatsBody": "This survey cannot accept new answers at the moment, so nothing you just sent has been recorded. Your answers are still on this page — leave it open and contact whoever sent you the survey.",
@@ -5859,10 +5862,10 @@
       "whatHappensNow": "What happens now",
       "nextSurveyTitle": "The next survey will appear here",
       "nextSurveyBody": "Under “To answer”, with its questions and its closing date.",
-      "resultsGoToTitle": "The results go to {department}",
-      "resultsGoToTitleAnyDepartment": "The results go to your department",
-      "resultsGoToBody": "As averages per department; a group of fewer than {floor} people is not reported. What is done with them appears here.",
-      "resultsGoToBodyNoFloor": "As averages per department; a group too small to stay confidential is not reported. What is done with them appears here.",
+      "resultsGoToTitle": "We process and analyse the results",
+      "resultsGoToTitleAnyDepartment": "We process and analyse the results",
+      "resultsGoToBody": "We deliver them to the people the organisation designates, not to everyone in general; a group of fewer than {floor} people is never reported.",
+      "resultsGoToBodyNoFloor": "We deliver them to the people the organisation designates, not to everyone in general; a group too small to stay confidential is never reported.",
       "anonymousNoReceiptTitle": "An anonymous survey leaves no receipt",
       "anonymousNoReceiptBody": "The platform does not know whether you answered one, so it stays under “To answer” until it closes.",
       "mySurveysDescription": "What you have been asked to answer, soonest to close first. Your answers are never shown.",
@@ -6939,7 +6942,7 @@
       "lede": "A climate instrument answered anonymously and read dimension by dimension, with a per-segment minimum that decides what may be shown and what may not.",
       "cta": "See a sample report",
       "chipDimensions": "4 dimensions",
-      "chipFloor": "Minimum of 5"
+      "chipFloor": "Minimum of {floor}"
     },
     "dimensions": {
       "title": "Four readings, not one average.",
@@ -7259,5 +7262,11 @@
     "scale": {
       "unitPercent": "of 100"
     }
+  },
+  "session": {
+    "idleWarningTitle": "Are you still there?",
+    "idleWarningBody": "You have been inactive, so this session will end in {seconds} seconds to keep your account safe.",
+    "staySignedIn": "Stay signed in",
+    "signOutNow": "Sign out now"
   }
 }

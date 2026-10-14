@@ -1463,7 +1463,11 @@ public static class SurveyDistributionEndpoints
             anonymous,
             SurveyInvitationStatuses.HighestRecordableState(anonymous),
             anonymous ? SurveyInvitationStatuses.SuppressedWhenAnonymous : [],
-            InvitationGuaranteeCopy.Survey(anonymous, locale, anonymous && survey.Settings.CollectParticipantIdentity));
+            // `recordsParticipation: false`, always. The setting is still on every survey
+            // created between the 10-12 and the 10-13 rulings, but nothing reads it any more
+            // (SurveyResponseEndpoints.AsksParticipantIdentity), so a guarantee built from it
+            // would promise an invitee that we record who answered when no row is written.
+            InvitationGuaranteeCopy.Survey(anonymous, locale, recordsParticipation: false));
     }
 
     /// <summary>

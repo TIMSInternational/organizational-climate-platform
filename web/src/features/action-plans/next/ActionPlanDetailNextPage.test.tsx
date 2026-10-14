@@ -20,6 +20,7 @@ import { listDepartments } from '../../org-structure/api/departments'
 import { getUser, listUsers } from '../../org-structure/api/users'
 import { listSurveys, type SurveyListItem } from '../../surveys/api/surveys'
 import { getClimateTrends, type ClimateTrendsResponse } from '../../surveys/api/climateTrends'
+import { ANONYMITY_FLOOR } from '../../../components/charts'
 import ActionPlanDetailNextPage from './ActionPlanDetailNextPage'
 import es from '../../../i18n/es.json'
 
@@ -302,7 +303,7 @@ describe('ActionPlanDetailNextPage', () => {
     })
     vi.mocked(getClimateTrends).mockResolvedValue(twoWaves({ q2: [2.6, 2.4], q3: null }))
     renderAs({ role: 'company_admin', companyId: COMPANY })
-    expect(await screen.findByText(copy.finding.moveProtected.replace('{code}', 'Q2'))).toBeTruthy()
+    expect(await screen.findByText(copy.finding.moveProtected.replace('{code}', 'Q2').replace('{floor}', String(ANONYMITY_FLOOR)))).toBeTruthy()
     expect(screen.queryByText(copy.finding.moveLabel)).toBeNull()
     // The Q2 baseline still prints; what is withheld is the later reading, and only it.
     expect(screen.getByText('2,6')).toBeTruthy()
@@ -321,7 +322,7 @@ describe('ActionPlanDetailNextPage', () => {
   })
 
   it('prints no number for a department under the floor, even when the payload carries its scores', async () => {
-    vi.mocked(getClimateTrends).mockResolvedValue(trendsWith({ respondentCount: 3, isSuppressed: false, scores: [3.2, 2.4] }))
+    vi.mocked(getClimateTrends).mockResolvedValue(trendsWith({ respondentCount: ANONYMITY_FLOOR - 1, isSuppressed: false, scores: [3.2, 2.4] }))
     renderAs({ role: 'company_admin', companyId: COMPANY })
     expect(await screen.findByText(copy.finding.protected)).toBeTruthy()
     expect(screen.queryByText('2,4')).toBeNull()

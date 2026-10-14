@@ -24,6 +24,16 @@ import type {
   SurveySegmentSelector,
 } from '../api/surveyResults'
 import en from '../../../i18n/en.json'
+/**
+ * The floor the SERVER says it applied, deliberately NOT `ANONYMITY_FLOOR`.
+ *
+ * `SurveyCrossPanel` prints `payload.minimumGroupSize` and falls back to the platform
+ * constant only when the payload carries none, so a fixture equal to that constant
+ * cannot tell the two apart: the assertion would pass for a panel that ignored the
+ * payload entirely. A company held to a higher floor is the realistic payload that
+ * distinguishes them.
+ */
+const SERVER_FLOOR = 5
 
 vi.mock('../api/surveyResults', async (importOriginal) => ({
   ...(await importOriginal<typeof resultsApi>()),
@@ -92,7 +102,7 @@ function payload(overrides: Partial<SurveyAnalyticsResponse> = {}): SurveyAnalyt
     ],
     isSuppressed: false,
     suppressionReason: null,
-    minimumGroupSize: 5,
+    minimumGroupSize: SERVER_FLOOR,
     filter: [],
     generatedAt: '2026-10-08T00:00:00Z',
     ...overrides,
@@ -318,7 +328,7 @@ describe('SurveyCrossPanel — comparing', () => {
 
     // ONE row-level statement, not one "Protegido" per category: the cohort is withheld as a
     // unit, and six cells saying so implied six separate decisions.
-    const refusal = copy.protectedRow.replace('{floor}', '5')
+    const refusal = copy.protectedRow.replace('{floor}', String(SERVER_FLOOR))
     await waitFor(() => expect(screen.getByText(refusal, { exact: false })).toBeTruthy())
     expect(screen.getAllByText(refusal, { exact: false })).toHaveLength(1)
     // For a cross the size IS the disclosure, so the cohort's own count never appears.
@@ -416,7 +426,7 @@ describe('SurveyCrossPanel — the follow-up', () => {
     await choose('puesto', 'gerencia')
     await userEvent.click(screen.getByRole('button', { name: copy.compare }))
     await waitFor(() =>
-      expect(screen.getByText(copy.protectedRow.replace('{floor}', '5'), { exact: false })).toBeTruthy(),
+      expect(screen.getByText(copy.protectedRow.replace('{floor}', String(SERVER_FLOOR)), { exact: false })).toBeTruthy(),
     )
 
     // A group that cannot be read is still a group that can be helped; the floor must not

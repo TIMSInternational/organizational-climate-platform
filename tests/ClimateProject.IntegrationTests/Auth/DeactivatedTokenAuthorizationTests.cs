@@ -75,7 +75,10 @@ public class DeactivatedTokenAuthorizationTests : IAsyncLifetime
             IsActive: isActive,
             // The seeded row's real stamp, so #284's revocation check passes and the only
             // thing that can refuse these tokens is the isActive claim this class is about.
-            SecurityStamp: _user.SecurityStamp));
+            SecurityStamp: _user.SecurityStamp),
+            // A window wide open, so the only thing that can refuse these tokens is the
+            // isActive claim this class is about.
+            new SessionWindow(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1)));
     }
 
     private HttpClient ClientWith(string token)

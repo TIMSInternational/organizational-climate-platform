@@ -8,6 +8,7 @@ import {
   getSurvey,
   setSurveyCollectParticipantIdentity,
   setSurveySelfDeclaredDemographics,
+  setSurveyOneSessionOnly,
   type SurveyDetail,
 } from '../../api/surveys'
 import {
@@ -69,6 +70,7 @@ export interface DistributionActions {
   setSelfDeclaredDemographics: (next: boolean) => void
   /** Turns "ask who is answering" on the public link on or off. */
   setCollectParticipantIdentity: (next: boolean) => void
+  setOneSessionOnly: (next: boolean) => void
   openCopy: () => void
   editCopy: (locale: Locale, field: InvitationCopyField, text: string) => void
   /** Resolves true once saved, so the dialog closes on success and stays open on a failure. */
@@ -216,6 +218,15 @@ export function useDistributionModel(surveyId: string) {
         async () => {
           await setSurveySelfDeclaredDemographics(baseUrl, surveyId, next)
           return t(next ? 'surveys.next.share.demographicsOn' : 'surveys.next.share.demographicsOff')
+        },
+        { refreshSurvey: true },
+      ),
+    /** The same narrow `PUT` again. Ends resume for respondents with no account. */
+    setOneSessionOnly: (next) =>
+      void run(
+        async () => {
+          await setSurveyOneSessionOnly(baseUrl, surveyId, next)
+          return t(next ? 'surveys.next.share.oneSessionOnlyOn' : 'surveys.next.share.oneSessionOnlyOff')
         },
         { refreshSurvey: true },
       ),

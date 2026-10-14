@@ -5,6 +5,12 @@ export interface TranslationContextValue {
   locale: Locale
   t: TranslateFn
   setLocale: (locale: Locale) => void
+  /**
+   * Follow the language the CONTENT came back in, without persisting it and without
+   * overriding a choice the reader has made. See the implementation in
+   * `TranslationProvider` for why both of those are load-bearing.
+   */
+  adoptContentLocale: (locale: Locale) => void
 }
 
 /**

@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '../../../components/ui'
-import { ProtectedCell, formatMetric, isSuppressed } from '../../../components/charts'
+import { ANONYMITY_FLOOR, ProtectedCell, formatMetric, isSuppressed } from '../../../components/charts'
 
 /**
  * The department table, shared by `DepartmentsPage` (#142) and the departments
@@ -110,7 +110,7 @@ export default function DepartmentList({
   departments,
   parentLookup,
   readings,
-  threshold = 5,
+  threshold = ANONYMITY_FLOOR,
   onEdit,
 }: {
   departments: Department[]

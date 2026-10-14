@@ -11,6 +11,7 @@ import { CompanyContextProvider } from '../../../../company-context'
 import { setToken } from '../../../../auth/token'
 import { tokenFor } from '../../../../test/jwtFixture'
 import en from '../../../../i18n/en.json'
+import { ANONYMITY_FLOOR } from '../../../../components/charts'
 
 /**
  * The supervisor's Panel de Control — a proposal — drawn from a model composed the way the
@@ -24,7 +25,7 @@ import en from '../../../../i18n/en.json'
 const copy = en.dashboard.next.supervisor
 const DEPARTMENT = '5bfdb04e-8847-4baa-89c8-d4411654a129'
 
-function department(responseCount = 3): DepartmentAdminDashboard {
+function department(responseCount = ANONYMITY_FLOOR - 1): DepartmentAdminDashboard {
   return {
     departmentId: DEPARTMENT,
     departmentName: 'Ingeniería',
@@ -88,7 +89,7 @@ interface Options {
   role?: string
 }
 
-function renderSupervisor({ responseCount = 3, misTareas = { status: 'ok', value: [plan] }, mySurveys = [owed], role = 'supervisor' }: Options = {}) {
+function renderSupervisor({ responseCount = ANONYMITY_FLOOR - 1, misTareas = { status: 'ok', value: [plan] }, mySurveys = [owed], role = 'supervisor' }: Options = {}) {
   setToken(tokenFor({ sub: 'sofia', name: 'Sofía Vargas', role, companyId: 'c1', nodoId: DEPARTMENT }))
   // The one seam: the capability the page reads is the one the model is composed with.
   const mayRecord = (target: { nodoExternalId: string }) => role === 'leader' && target.nodoExternalId === DEPARTMENT
@@ -131,20 +132,23 @@ describe('SupervisorDashboardView', () => {
     expect(screen.getByText(`${copy.proposal} · Ingeniería · ${en.users.supervisor}`)).toBeTruthy()
     const note = screen.getByRole('note')
     expect(note.textContent).toContain(copy.proposalLead)
-    expect(note.textContent).toContain(copy.proposalBody.replace('{floor}', '5'))
+    expect(note.textContent).toContain(copy.proposalBody.replace('{floor}', String(ANONYMITY_FLOOR)))
   })
 
   /**
-   * Three people have answered, of fourteen. The artboard hatches both boxes: "who has not"
-   * is eleven, and eleven beside the team's fourteen gives the three back by subtraction.
+   * One response short of the floor, of fourteen people. The artboard hatches both boxes:
+   * "who has not" is the complement, and the complement beside the team's fourteen gives
+   * the withheld count back by subtraction. Both counts are derived from the floor so the
+   * pair keeps straddling it when the floor moves.
    */
   it('hatches who answered under the floor, and who has not with it, printing neither', () => {
     renderSupervisor()
 
     const coverage = card(copy.coverageHeading)
-    expect(within(coverage).getByRole('img', { name: copy.respondedHiddenLabel.replace('{floor}', '5') })).toBeTruthy()
-    expect(within(coverage).getByRole('img', { name: copy.remainingHiddenLabel.replace('{floor}', '5') })).toBeTruthy()
-    expect(coverage.textContent).not.toMatch(/(^|\D)(3|11)(\D|$)/)
+    expect(within(coverage).getByRole('img', { name: copy.respondedHiddenLabel.replace('{floor}', String(ANONYMITY_FLOOR)) })).toBeTruthy()
+    expect(within(coverage).getByRole('img', { name: copy.remainingHiddenLabel.replace('{floor}', String(ANONYMITY_FLOOR)) })).toBeTruthy()
+    const answered = ANONYMITY_FLOOR - 1
+    expect(coverage.textContent).not.toMatch(new RegExp(`(^|\\D)(${answered}|${14 - answered})(\\D|$)`))
     expect(within(coverage).getByText('14')).toBeTruthy()
     expect(within(coverage).getByText(/^Encuesta de Clima Q4 · closes Oct 10$/)).toBeTruthy()
   })

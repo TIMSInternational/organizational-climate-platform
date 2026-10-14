@@ -55,7 +55,7 @@ without them the draft opens a week after the run, for three weeks — a placeho
 
 **For TIMS, skip Edad and Tiempo** (`--skip-demographic Edad --skip-demographic "Tiempo de
 laborar en TIMS (años)"`, or their field keys). They are numbers, a number field is never split
-into groups, and with 15 people no group reaches the floor of 5 — so those answers can never be
+into groups, and with 15 people no group reaches the floor of 3 — so those answers can never be
 shown, while every respondent is told they were not recorded. The company domain is
 `timsint.com` (ruled 2026-10-02): staff addresses span timshr.com, timsinternational.net and
 timsla.com, personal invitations accept any of them, and the domain only gates shared links
@@ -89,7 +89,7 @@ invitation text in the dry run first.
   workbook must hold exactly three. (This line used to say the product had no band setting;
   it has had one since #515.)
 
-## The floor of 5, measured on TIMS
+## The floor of 3, measured on TIMS
 
 15 people, so no department ever shows a number (the largest, Gerencia, has 4). The product's
 own Campos demográficos screen reports **0 of 5 usable cuts**: Región, País and Género are

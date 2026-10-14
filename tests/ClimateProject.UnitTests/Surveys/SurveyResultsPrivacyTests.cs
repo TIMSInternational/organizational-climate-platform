@@ -21,31 +21,40 @@ public class SurveyResultsPrivacyTests
         Assert.Equal(DemographicSnapshotPrivacy.MinimumGroupSize, SurveyResultsPrivacy.MinimumSegmentRespondents);
     }
 
+    /// <summary>
+    /// The floor is 3 (ruled 2026-10-13; it was 5). The cases straddle it: the one below and
+    /// the floor itself are what make this a boundary test rather than a smoke test, so they
+    /// move with the number instead of staying at 4 and 5 -- where "4 is refused" would now be
+    /// false and "5 is admitted" would no longer touch the boundary at all.
+    /// </summary>
     [Theory]
     [InlineData(0, false)]
     [InlineData(1, false)]
-    [InlineData(4, false)]
-    [InlineData(5, true)]
+    [InlineData(2, false)]
+    [InlineData(3, true)]
     [InlineData(50, true)]
-    public void The_survey_floor_admits_exactly_five_and_above(int completed, bool expected)
+    public void The_survey_floor_admits_exactly_three_and_above(int completed, bool expected)
     {
         Assert.Equal(expected, SurveyResultsPrivacy.MeetsSurveyFloor(completed));
     }
 
+    /// <inheritdoc cref="The_survey_floor_admits_exactly_three_and_above"/>
     [Theory]
     [InlineData(1, false)]
-    [InlineData(4, false)]
-    [InlineData(5, true)]
-    public void The_segment_floor_admits_exactly_five_and_above(int respondents, bool expected)
+    [InlineData(2, false)]
+    [InlineData(3, true)]
+    public void The_segment_floor_admits_exactly_three_and_above(int respondents, bool expected)
     {
         Assert.Equal(expected, SurveyResultsPrivacy.MeetsSegmentFloor(respondents));
     }
 
     /// <summary>
     /// A word cloud leaks by distinctiveness rather than by group size, so its floor is 2
-    /// rather than 5. Raising it to 5 was considered and rejected: it empties the cloud at
-    /// the survey sizes this product runs at, which deletes a feature rather than removing
-    /// a risk.
+    /// rather than the segment floor. Raising it to the segment floor was considered and
+    /// rejected: it empties the cloud at the survey sizes this product runs at, which deletes
+    /// a feature rather than removing a risk. The two are now one apart (2 against 3, ruled
+    /// 2026-10-13), which <see cref="The_word_floor_is_deliberately_lower_than_the_segment_floor"/>
+    /// still holds but only just -- a further cut to the segment floor would collide with it.
     /// </summary>
     [Theory]
     [InlineData(1, false)]

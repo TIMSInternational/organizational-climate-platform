@@ -1,5 +1,10 @@
 # Decision needed: what are `leader` and `supervisor`?
 
+> **Superseded on the number, 2026-10-13:** the privacy floor is **3**, not 5 — ruled by
+> Federico, platform-wide. The reasoning below stands as written; only the threshold moved.
+> See [`privacy-floor-is-three.md`](privacy-floor-is-three.md).
+
+
 Written 2026-08-17 against main `cd4ced9`, from a code walk of every guard and every
 role-conditional render. This is the product decision the redesign has been waiting on.
 Nothing here is an engineering judgement call — `docs/requirements/README.md:18-21` says

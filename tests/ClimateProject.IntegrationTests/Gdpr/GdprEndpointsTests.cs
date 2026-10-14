@@ -1046,7 +1046,7 @@ public class GdprEndpointsTests : IAsyncLifetime
 
     /// <summary>
     /// #286: the access token the subject was holding when they exercised their right to
-    /// erasure stops working, instead of outliving the erasure by up to the token's 24 hours.
+    /// erasure stops working, instead of outliving the erasure by up to the token's remaining lifetime.
     /// </summary>
     /// <remarks>
     /// <c>GET /profile</c> and not <c>/auth/refresh</c>, and the difference is the whole fact.
