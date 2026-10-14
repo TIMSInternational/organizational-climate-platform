@@ -25,8 +25,10 @@ namespace ClimateProject.Application.Surveys;
 ///    disclosure surface, and it is the one #87 already ruled on for demographic
 ///    snapshots. Department x role x tenure narrows a workforce far faster than any
 ///    one of them does, and a segment of one means every answer in that segment is
-///    one named person's answers. The floor is deliberately **the same 5** as
-///    <c>DemographicSnapshotPrivacy.MinimumGroupSize</c>: these are the same
+///    one named person's answers. The floor is deliberately **the same number** as
+///    <c>DemographicSnapshotPrivacy.MinimumGroupSize</c> -- 3 since the ruling of
+///    2026-10-13, and the number is not restated here precisely so that this
+///    paragraph cannot drift from it again: these are the same
 ///    quasi-identifiers over the same workforce, and two different floors on two
 ///    surfaces that can be differenced against each other is how a suppression rule
 ///    gets defeated without anyone breaking it.
