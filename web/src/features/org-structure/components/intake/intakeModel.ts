@@ -149,13 +149,20 @@ export const demographicKey = (field: string, source: string) => `demographic:${
 
 /**
  * The departments an approval actually created: an approved new name is only created when a row
- * that was really invited uses it (`BulkImportEndpoints.ProcessRowsAsync`), so a name every row
+ * that really landed uses it (`BulkImportEndpoints.ProcessRowsAsync`), so a name every row
  * using it failed for must not be announced as created.
+ *
+ * BOTH success statuses count. An invitation-mode row comes back `invited`, a credentials-mode
+ * row `created` (`BulkImportEndpoints.cs`). Reading only `invited` meant a mass invite created a
+ * department and then said nothing about it, which is how this was found.
  */
 export function createdDepartments(approved: string[], result: BulkImportResponse): string[] {
   return approved.filter((name) =>
     result.rows.some(
-      (row) => row.status === 'invited' && row.department !== null && row.department.toLowerCase() === name.toLowerCase(),
+      (row) =>
+        (row.status === 'invited' || row.status === 'created') &&
+        row.department !== null &&
+        row.department.toLowerCase() === name.toLowerCase(),
     ),
   )
 }

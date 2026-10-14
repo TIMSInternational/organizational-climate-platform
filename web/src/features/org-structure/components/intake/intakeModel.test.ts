@@ -102,4 +102,18 @@ describe('createdDepartments', () => {
     }
     expect(createdDepartments(['Logística', 'Ventas'], result)).toEqual(['Logística'])
   })
+
+  // A mass invite returns `created`, not `invited`. Reading only `invited` meant the done step
+  // stayed silent about a department the import had really created.
+  it('counts a created account, which is what a mass invite returns', () => {
+    const result = {
+      rows: [
+        { rowNumber: 2, name: 'A', email: 'a@x.test', role: 'employee', department: 'logística', status: 'created', errors: [] },
+        { rowNumber: 3, name: 'B', email: 'b@x.test', role: 'employee', department: 'Ventas', status: 'error', errors: [] },
+      ],
+      successCount: 1,
+      errorCount: 1,
+    }
+    expect(createdDepartments(['Logística', 'Ventas'], result)).toEqual(['Logística'])
+  })
 })

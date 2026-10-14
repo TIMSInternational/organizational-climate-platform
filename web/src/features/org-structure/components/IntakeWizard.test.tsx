@@ -609,7 +609,66 @@ describe('IntakeWizard — how the people reach the survey', () => {
     await user.click(screen.getByRole('radio', { name: new RegExp(MASS_INVITE) }))
 
     expect(screen.getByRole('button', { name: APPROVE_CREDENTIALS }).hasAttribute('disabled')).toBe(true)
-    expect(screen.getByText('Valide las filas antes de crear las invitaciones.')).toBeTruthy()
+    expect(screen.getByText('Valide las filas antes de crear las cuentas.')).toBeTruthy()
+  })
+
+  /**
+   * Found by clicking the wizard through in a browser, which is the only instrument that reads
+   * this sentence: the done step was written for the invitation and never extended when the mass
+   * invite arrived, so a credentials import finished by promising an invitation that does not
+   * exist, for a password the platform had already chosen and mailed.
+   */
+  it('tells the admin what a mass invite actually did, not what an invitation would have done', async () => {
+    const onImported = vi.fn()
+    const user = await uploadAndUnderstand(aiUnderstanding(), 'es', onImported)
+    await continueToReview(user)
+    await user.click(screen.getByRole('radio', { name: new RegExp(MASS_INVITE) }))
+
+    submitIntakeRows.mockImplementation(async (...args: unknown[]) => allValid(args[2] as IntakeRow[]))
+    await user.click(screen.getByRole('button', { name: 'Validar' }))
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: APPROVE_CREDENTIALS }).hasAttribute('disabled')).toBe(false),
+    )
+
+    submitIntakeRows.mockImplementation(async (...args: unknown[]) => {
+      const sent = args[2] as IntakeRow[]
+      return { ...allValid(sent), rows: sent.map((row) => ({ ...row, status: 'created', errors: [], issues: [] })) }
+    })
+    await user.click(screen.getByRole('button', { name: APPROVE_CREDENTIALS }))
+    await waitFor(() => expect(onImported).toHaveBeenCalled())
+
+    expect(
+      screen.getByText(
+        'Se creó una cuenta para cada persona y se le enviaron su usuario y su contraseña por correo, junto con el enlace a la encuesta. Nadie tiene que aceptar nada.',
+      ),
+    ).toBeTruthy()
+    expect(screen.queryByText(/Se creó una invitación para cada persona/)).toBeNull()
+  })
+
+  /**
+   * The same omission, one layer down: `createdDepartments` read only `invited`, so a mass invite
+   * created the department and then said nothing about it.
+   */
+  it('names the department a mass invite created', async () => {
+    const onImported = vi.fn()
+    const user = await uploadAndUnderstand(aiUnderstanding(), 'es', onImported)
+    await continueToReview(user)
+    await user.click(screen.getByRole('radio', { name: new RegExp(MASS_INVITE) }))
+
+    submitIntakeRows.mockImplementation(async (...args: unknown[]) => allValid(args[2] as IntakeRow[]))
+    await user.click(screen.getByRole('button', { name: 'Validar' }))
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: APPROVE_CREDENTIALS }).hasAttribute('disabled')).toBe(false),
+    )
+
+    submitIntakeRows.mockImplementation(async (...args: unknown[]) => {
+      const sent = args[2] as IntakeRow[]
+      return { ...allValid(sent), rows: sent.map((row) => ({ ...row, status: 'created', errors: [], issues: [] })) }
+    })
+    await user.click(screen.getByRole('button', { name: APPROVE_CREDENTIALS }))
+    await waitFor(() => expect(onImported).toHaveBeenCalled())
+
+    expect(screen.getByText('Departamentos creados: Logística.')).toBeTruthy()
   })
 
   it('reads a created account back as its own status, not as an unknown one', async () => {

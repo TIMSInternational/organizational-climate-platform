@@ -4583,8 +4583,10 @@
         "approveCredentials": "Create accounts and email sign-in details"
       },
       "validateFirst": "Validate the rows before creating invitations.",
+      "validateFirstCredentials": "Validate the rows before creating the accounts.",
       "fixBeforeApproving": "Fix the rows marked with an error, then validate again.",
       "doneBody": "An invitation was created for each person. On accepting it, each one sets their own name and password.",
+      "doneBodyCredentials": "An account was created for each person, and their username and password were emailed to them along with the link to the survey. Nobody has to accept anything.",
       "startOver": "Import another file",
       "noDepartment": "(no department)",
       "reason": {
