@@ -81,7 +81,7 @@ public class TrackingCiclosHallazgosEndpointsTests : IAsyncLifetime
         _closedSurvey = await SeedClosedSurveyAsync(adminA, _companyA, new Dictionary<Guid, (int Count, int Answer)>
         {
             [_engineering] = (6, 4),
-            [_sales] = (4, 2),
+            [_sales] = (SurveyResultsPrivacy.MinimumSegmentRespondents - 1, 2),
             [Guid.Empty] = (1, 3),
         });
 
@@ -308,7 +308,7 @@ public class TrackingCiclosHallazgosEndpointsTests : IAsyncLifetime
     // ==================================================================
 
     /// <summary>
-    /// Sales answered with four people, one below the segment floor. Its findings must be
+    /// Sales answered with two people, one below the tracking segment floor. Its findings must be
     /// PRESENT (a small team still gets an action plan) and its numbers must be ABSENT.
     ///
     /// This attack passes if the ruling is inverted either way: drop the segment and the

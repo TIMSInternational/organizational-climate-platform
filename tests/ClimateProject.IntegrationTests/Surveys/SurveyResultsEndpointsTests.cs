@@ -415,14 +415,17 @@ public class SurveyResultsEndpointsTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// A department below the segment floor is withheld, and its headcount is reported so
-    /// the breakdown still reconciles against the completed count rather than appearing
-    /// to lose people -- and it is NOT named: beside the withheld headcount, a named row is
-    /// that department's size whenever it is the only one withheld (the CSV export's rule,
-    /// applied to /statistics and /analytics on 2026-10-12).
+    /// A two-person department is named on /statistics and on /analytics, with its own figures,
+    /// and the breakdown still reconciles against the completed count.
+    ///
+    /// <para>Both endpoints are asserted because they carry the same breakdowns from the same
+    /// aggregation, and a rule applied to one and not the other is how the two come to
+    /// disagree in front of a client. The reconciliation is the assertion that outlives the
+    /// ruling: disclosed + withheld + unsegmented = completed, whatever the floor makes of
+    /// the middle term.</para>
     /// </summary>
     [Fact]
-    public async Task A_department_below_the_segment_floor_is_withheld_counted_and_never_named()
+    public async Task A_small_department_is_named_with_its_figures_on_statistics_and_analytics()
     {
         var survey = await SeedBilingualSurveyAsync();
         var questionId = QuestionIdOf(survey);
@@ -437,9 +440,8 @@ public class SurveyResultsEndpointsTests : IAsyncLifetime
             await SeedAnswerAsync(survey.Id, questionId, "office", "en", departmentId: _engineeringId);
         }
 
-        // Three with no department, so the people outside Sales are five and Sales is not
-        // withheld for what a subtraction from the survey's total would reveal
-        // (SurveyAggregation.WithholdComplement).
+        // Three with no department: the sizes this test was written with, kept so the
+        // assertions below are a reversal rather than a new fixture.
         for (var i = 0; i < 3; i++)
         {
             await SeedAnswerAsync(survey.Id, questionId, "remote", "en");
@@ -451,15 +453,17 @@ public class SurveyResultsEndpointsTests : IAsyncLifetime
 
         var breakdown = stats!.Breakdowns.Single(b => b.Dimension == "department");
         Assert.False(breakdown.Segments.Single(s => s.Key == _salesId.ToString()).IsSuppressed);
-        Assert.DoesNotContain(breakdown.Segments, s => s.Key == _engineeringId.ToString());
-        Assert.DoesNotContain(_engineeringId.ToString(), raw, StringComparison.OrdinalIgnoreCase);
+        var engineering = Assert.Single(breakdown.Segments, s => s.Key == _engineeringId.ToString());
+        Assert.False(engineering.IsSuppressed);
+        Assert.Equal(2, engineering.RespondentCount);
+        Assert.Contains(_engineeringId.ToString(), raw, StringComparison.OrdinalIgnoreCase);
 
         // /analytics carries the same breakdowns and the same rule.
         var analyticsRaw = await client.GetStringAsync($"/surveys/{survey.Id}/analytics");
-        Assert.DoesNotContain(_engineeringId.ToString(), analyticsRaw, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(_engineeringId.ToString(), analyticsRaw, StringComparison.OrdinalIgnoreCase);
 
-        Assert.Equal(1, breakdown.SuppressedSegmentCount);
-        Assert.Equal(2, breakdown.SuppressedRespondentCount);
+        Assert.Equal(0, breakdown.SuppressedSegmentCount);
+        Assert.Equal(0, breakdown.SuppressedRespondentCount);
 
         var kept = breakdown.Segments.Where(s => !s.IsSuppressed).Sum(s => s.RespondentCount);
         Assert.Equal(
@@ -468,11 +472,15 @@ public class SurveyResultsEndpointsTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Demographic cross-tabs are the surface that actually leaks: "Engineering + 10+
-    /// years" is one person in most companies. The lone band must not be rendered.
+    /// A demographic band of one is rendered, end to end, through the endpoint the results
+    /// screen actually calls -- ruled 2026-10-15.
+    ///
+    /// <para>"Engineering + 10+ years" is one person in most companies, and that CROSS is
+    /// still refused; what the client ruled on is the single field, which is this. The band's
+    /// key is still the value the person gave, which is the cost he was told about.</para>
     /// </summary>
     [Fact]
-    public async Task A_demographic_segment_of_one_is_never_rendered()
+    public async Task A_demographic_segment_of_one_is_rendered()
     {
         var survey = await SeedBilingualSurveyAsync();
         var questionId = QuestionIdOf(survey);
@@ -492,9 +500,10 @@ public class SurveyResultsEndpointsTests : IAsyncLifetime
         var stats = await client.GetFromJsonAsync<SurveyStatisticsResponse>($"/surveys/{survey.Id}/statistics");
 
         var breakdown = stats!.Breakdowns.Single(b => b.Dimension == "tenure");
-        // Not even its name: the key IS the value the one person gave.
-        Assert.DoesNotContain(breakdown.Segments, s => s.Key == "10+");
-        Assert.True(breakdown.SuppressedSegmentCount >= 1);
+        var lone = Assert.Single(breakdown.Segments, s => s.Key == "10+");
+        Assert.False(lone.IsSuppressed);
+        Assert.Equal(1, lone.RespondentCount);
+        Assert.Equal(0, breakdown.SuppressedSegmentCount);
 
         // Decoded from jsonb: the key is the stable value, not a quoted payload.
         Assert.DoesNotContain(breakdown.Segments, s => s.Key.Contains('"'));
@@ -573,9 +582,10 @@ public class SurveyResultsEndpointsTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// A live dashboard is a WIDER audience than a report, not a narrower one.
-    /// Suppressing a two-person department on <c>/statistics</c> and not here would
-    /// defeat both.
+    /// A live dashboard is a WIDER audience than a report, not a narrower one, so it applies
+    /// the same rule -- which since 2026-10-15 means it reports the two-person department
+    /// rather than withholding it. Diverging from <c>/statistics</c> in either direction is
+    /// what this test exists to catch.
     /// </summary>
     [Fact]
     public async Task Real_time_stats_applies_the_same_segment_floor()
@@ -590,9 +600,10 @@ public class SurveyResultsEndpointsTests : IAsyncLifetime
         var client = await AdminAAsync();
         var live = await client.GetFromJsonAsync<SurveyRealTimeStatsResponse>($"/surveys/{survey.Id}/real-time-stats");
 
-        Assert.Empty(live!.ByDepartment);
-        Assert.Equal(1, live.SuppressedDepartmentCount);
-        Assert.Equal(2, live.SuppressedRespondentCount);
+        var department = Assert.Single(live!.ByDepartment);
+        Assert.Equal(2, department.CompletedCount);
+        Assert.Equal(0, live.SuppressedDepartmentCount);
+        Assert.Equal(0, live.SuppressedRespondentCount);
         Assert.Equal(2, live.CompletedCount);
     }
 

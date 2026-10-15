@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Threading.RateLimiting;
 using ClimateProject.Api.Infrastructure;
@@ -251,6 +253,7 @@ public static class SurveyResponseEndpoints
         string? sessionId,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
+        IConfiguration configuration,
         CancellationToken cancellationToken)
     {
         var survey = await db.Surveys.AsNoTracking().FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
@@ -275,7 +278,8 @@ public static class SurveyResponseEndpoints
         var fallbackFields = new List<string>();
         var questions = await LoadQuestionDtosAsync(survey, db, locale, fallbackFields, cancellationToken);
 
-        var existing = await FindExistingResponseAsync(survey, respondent, sessionId, db, cancellationToken);
+        var existing = await FindExistingResponseAsync(
+            survey, respondent, sessionId, ResumeSessionIdFor(survey, respondent, configuration), db, cancellationToken);
 
         // `OneSessionOnly` withholds the ANSWERS, never the lookup. The row above is still needed
         // by the POST as the retry and duplicate guard -- on an anonymous survey the session id is
@@ -401,7 +405,10 @@ public static class SurveyResponseEndpoints
                 statusCode: 400);
         }
 
-        var existing = await FindExistingResponseAsync(survey, respondent, sessionId, db, cancellationToken);
+        var resumeSessionId = ResumeSessionIdFor(
+            survey, respondent, httpContext.RequestServices.GetRequiredService<IConfiguration>());
+        var existing = await FindExistingResponseAsync(
+            survey, respondent, sessionId, resumeSessionId, db, cancellationToken);
 
         // Idempotency. A response that is already complete is never rewritten and never
         // duplicated: the caller gets 200 and the same response id. Returning 409 instead
@@ -519,7 +526,10 @@ public static class SurveyResponseEndpoints
                 SurveyId = survey.Id,
                 CompanyId = survey.CompanyId,
                 UserId = respondent.StoredUserId,
-                SessionId = string.IsNullOrEmpty(sessionId) ? Guid.NewGuid().ToString("N") : sessionId,
+                // The derived id when there is one, so this row is findable from any device
+                // the same person signs in on. Otherwise the client's own, or a fresh one.
+                SessionId = resumeSessionId
+                    ?? (string.IsNullOrEmpty(sessionId) ? Guid.NewGuid().ToString("N") : sessionId),
                 DepartmentId = null,
                 Language = language,
                 IsAnonymous = respondent.IsAnonymous,
@@ -612,6 +622,23 @@ public static class SurveyResponseEndpoints
         {
             await RecordParticipationAsync(survey, participant, now, db, loggerFactory, cancellationToken);
         }
+        else if (request.IsComplete && respondent.ActingUserId is { } finisherId)
+        {
+            // A signed-in respondent finished, so record THAT -- and only that.
+            //
+            // Nothing is asked of them and nothing new is collected: the name and the email
+            // written here are the ones the import already put on their account. What this
+            // buys is the question the client asked for by name -- "ya respondió sí o no" --
+            // on a survey that is ANONYMOUS and stays anonymous. `StoredUserId` still returns
+            // null for one (see ResolveRespondentAsync), so the answers carry no user id now
+            // and cannot acquire one later; this row carries no answers and cannot acquire
+            // any. There is no column on either side to join them by.
+            //
+            // The 2026-10-13 ruling retired the TYPED name-and-email step, not the goal it
+            // served. For a mass invite the step was never needed: the person is signed in,
+            // so who they are is already known without asking.
+            await RecordAccountParticipationAsync(survey, finisherId, now, db, loggerFactory, cancellationToken);
+        }
 
         var result = await ToResultAsync(response, db, alreadySubmitted: false, suppressed, cancellationToken);
         return existing is null ? Results.Json(result, statusCode: 201) : Results.Ok(result);
@@ -652,28 +679,97 @@ public static class SurveyResponseEndpoints
     /// snapshot. Tracked for the migration lane; the window is a few milliseconds wide
     /// and needs a client to fire a retry before its first request has committed.
     /// </summary>
-    private static Task<Response?> FindExistingResponseAsync(
+    /// <summary>
+    /// A session id the same signed-in person reproduces on ANY device, for an anonymous
+    /// survey. Null when it does not apply or cannot be keyed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Asked for in these words: *"puede ser que alguna persona la deje a mitad de camino.
+    /// Después podría volver a entrar con ese usuario y contraseña para completar la
+    /// encuesta… si yo lo dejo a la mitad, no debería perder la información."* On an
+    /// IDENTIFIED survey the response carries a <c>user_id</c> and the branch below finds it
+    /// anywhere. On an ANONYMOUS one it deliberately does not, so the only handle was a random
+    /// id in that browser's local storage: the same person on a second device got a blank form
+    /// and their half was orphaned.
+    /// </para>
+    /// <para>
+    /// <b>Why keyed, and not a <c>user_id</c>.</b> Resuming at all means the server must find a
+    /// person's own response, which is a link however it is built. Keyed, only something
+    /// holding the key can compute it: a reader with the database alone sees an opaque token
+    /// indistinguishable from the random ones beside it, where a <c>user_id</c> column hands
+    /// them the join outright. A weaker promise than before, a stronger one than an identified
+    /// survey, and the trade the 2026-10-15 ruling took knowingly.
+    /// </para>
+    /// <para>
+    /// Keyed on <c>SurveyResumeKey</c>, falling back to <c>TrackingJwtSecret</c> so a
+    /// deployment gets this with no new configuration; with neither it returns null and the
+    /// behaviour is exactly what it was. <b>Rotating the key orphans nothing</b>: the lookup
+    /// still falls back to the browser's own id, so a partial already in flight stays
+    /// answerable on the device that started it.
+    /// </para>
+    /// </remarks>
+    private static string? ResumeSessionIdFor(Survey survey, Respondent respondent, IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(survey);
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        if (!respondent.IsAnonymous || respondent.ActingUserId is not Guid userId)
+        {
+            return null;
+        }
+
+        var key = configuration["SurveyResumeKey"] ?? configuration["TrackingJwtSecret"];
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            return null;
+        }
+
+        using var mac = new HMACSHA256(Encoding.UTF8.GetBytes(key));
+        var digest = mac.ComputeHash(Encoding.UTF8.GetBytes($"survey-resume-v1:{survey.Id:N}:{userId:N}"));
+
+        // 32 lower-case hex characters: the shape and length of the random ids this sits
+        // beside, so nothing downstream can tell a derived id from a generated one.
+        return Convert.ToHexString(digest)[..32].ToLowerInvariant();
+    }
+
+    private static async Task<Response?> FindExistingResponseAsync(
         Survey survey,
         Respondent respondent,
         string? sessionId,
+        string? resumeSessionId,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
     {
         if (!respondent.IsAnonymous && respondent.ActingUserId is Guid userId)
         {
-            return db.Responses.FirstOrDefaultAsync(
+            return await db.Responses.FirstOrDefaultAsync(
                 r => r.SurveyId == survey.Id && r.UserId == userId,
-                cancellationToken);
+                cancellationToken).ConfigureAwait(false);
         }
 
+        // The derived id first, so the same person is recognised on a second device.
+        if (resumeSessionId is not null)
+        {
+            var carried = await db.Responses.FirstOrDefaultAsync(
+                r => r.SurveyId == survey.Id && r.SessionId == resumeSessionId,
+                cancellationToken).ConfigureAwait(false);
+            if (carried is not null)
+            {
+                return carried;
+            }
+        }
+
+        // Then the browser's own, which every response written before this carries: a partial
+        // already in flight must not be orphaned by a deploy.
         if (string.IsNullOrEmpty(sessionId))
         {
-            return Task.FromResult<Response?>(null);
+            return null;
         }
 
-        return db.Responses.FirstOrDefaultAsync(
+        return await db.Responses.FirstOrDefaultAsync(
             r => r.SurveyId == survey.Id && r.SessionId == sessionId,
-            cancellationToken);
+            cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -1032,6 +1128,47 @@ public static class SurveyResponseEndpoints
     /// a constraint violation quotes the offending key (the email).
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// Records that the signed-in holder of an account finished this survey, from what the
+    /// account already holds.
+    /// </summary>
+    /// <remarks>
+    /// Scoped to the survey's own company, so a cross-tenant id cannot write a row. A missing
+    /// or foreign user is simply not recorded rather than an error: the response is already
+    /// committed and refusing here would fail a submission that succeeded.
+    /// </remarks>
+    private static async Task RecordAccountParticipationAsync(
+        Survey survey,
+        Guid userId,
+        DateTimeOffset now,
+        ClimateProjectDbContext db,
+        ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken)
+    {
+        var person = await db.Users
+            .AsNoTracking()
+            .Where(u => u.Id == userId && u.CompanyId == survey.CompanyId)
+            .Select(u => new { u.Name, u.Email })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (person is null || string.IsNullOrWhiteSpace(person.Name))
+        {
+            return;
+        }
+
+        // Lower-cased to match the column and its unique index, so a second completion is the
+        // ON CONFLICT DO NOTHING the single path already relies on.
+        var email = string.IsNullOrWhiteSpace(person.Email) ? null : person.Email.Trim().ToLowerInvariant();
+
+        await RecordParticipationAsync(
+            survey,
+            new ValidatedParticipant(person.Name.Trim(), email),
+            now,
+            db,
+            loggerFactory,
+            cancellationToken);
+    }
+
     private static async Task RecordParticipationAsync(
         Survey survey,
         ValidatedParticipant participant,

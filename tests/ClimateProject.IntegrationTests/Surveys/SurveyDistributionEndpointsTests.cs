@@ -1602,6 +1602,8 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
         var english = await client.GetFromJsonAsync<SurveyInvitationListResponse>(
             $"/surveys/{anonymousSurvey.Id}/invitations?lang=en");
         Assert.Contains("This survey is anonymous", english!.Anonymity.Guarantee);
+        Assert.Contains("finished from unfinished", english.Anonymity.Guarantee);
+        Assert.DoesNotContain("only ever available as an aggregate", english.Anonymity.Guarantee);
 
         // The respondent-facing token surface follows the same `lang`.
         var byToken = await Anonymous().GetFromJsonAsync<SurveyInvitationTokenDetail>($"/survey-invitations/{token}?lang=es");

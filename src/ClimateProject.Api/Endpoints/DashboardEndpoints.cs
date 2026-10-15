@@ -96,11 +96,17 @@ public static class DashboardEndpoints
     private const string DepartmentDimension = "department";
 
     /// <summary>
-    /// The floor every response count on the department dashboard is held to: the segment
-    /// floor every results surface applies (<c>SurveyResultsPrivacy.MinimumSegmentRespondents</c>,
-    /// 5), which is also the <c>MinimumGroupSize</c> the team's climate block reports.
+    /// The floor every response count on the department dashboard is held to. A department is
+    /// ONE dimension, so since the 2026-10-15 ruling this is
+    /// <see cref="SurveyResultsPrivacy.MinimumSingleSegmentRespondents"/> -- a team's count is
+    /// carried whenever anybody on it answered at all -- and it is still the
+    /// <c>MinimumGroupSize</c> the team's climate block reports, so a client renders the
+    /// promise the server actually kept rather than a constant of its own.
+    ///
+    /// <para>Withholding a zero is the one thing this floor still does, and it matters:
+    /// see <see cref="AtTheFloor"/>.</para>
     /// </summary>
-    internal const int DepartmentCountFloor = SurveyResultsPrivacy.MinimumSegmentRespondents;
+    internal const int DepartmentCountFloor = SurveyResultsPrivacy.MinimumSingleSegmentRespondents;
 
     public static void MapDashboardEndpoints(this WebApplication app)
     {
@@ -823,10 +829,22 @@ public static class DashboardEndpoints
 
         // The withheld ids never leave this method. They exist only to decide which names
         // may -- see the plan projection below.
+        //
+        // THE FLOOR HERE IS THIS ENDPOINT'S OWN SINCE 2026-10-15, and it is still
+        // MinimumSegmentRespondents. It used to read `segment.IsSuppressed` and inherit the
+        // results floor; the ruling of 2026-10-15 publishes every department's climate at any
+        // size, which is a decision about what an ADMINISTRATOR of the tenant reads on the
+        // results page. This payload goes to every employee in the company and carries no
+        // score whatever -- the one thing it discloses is a department NAME beside an action
+        // plan, and naming the one-person department whose plan it is, to the whole company,
+        // is exactly the disclosure this set exists to prevent. Inheriting the ruling here
+        // would have done that silently, so the floor is applied here instead and the
+        // endpoint reports the floor it actually applied.
         var protectedDepartmentIds = new HashSet<Guid>();
         foreach (var segment in segments)
         {
-            if (segment.IsSuppressed && Guid.TryParse(segment.Key, out var withheldId))
+            if ((segment.IsSuppressed || !SurveyResultsPrivacy.MeetsSegmentFloor(segment.RespondentCount))
+                && Guid.TryParse(segment.Key, out var withheldId))
             {
                 protectedDepartmentIds.Add(withheldId);
             }
@@ -844,7 +862,7 @@ public static class DashboardEndpoints
             survey.EndDate,
             aggregate.Summary.CompletedCount,
             segments.Count,
-            segments.Count(s => s.IsSuppressed),
+            protectedDepartmentIds.Count,
             SurveyResultsPrivacy.MinimumSegmentRespondents,
             [.. planRows.Select(p => new DashboardPlanOpened(
                 p.DepartmentId is Guid departmentId && !protectedDepartmentIds.Contains(departmentId)
@@ -966,7 +984,7 @@ public static class DashboardEndpoints
         {
             return new DashboardTeamClimate(
                 survey.Id, title, survey.EndDate, 0, IsSuppressed: true,
-                SurveyResultsPrivacy.MinimumSegmentRespondents, []);
+                SurveyResultsPrivacy.MinimumSingleSegmentRespondents, []);
         }
 
         // A withheld SEGMENT still names the dimensions, with null scores.
@@ -979,7 +997,7 @@ public static class DashboardEndpoints
         // prevent. Found by writing the test for it: the grid drew nothing at all.
         var withheld = new DashboardTeamClimate(
             survey.Id, title, survey.EndDate, 0, IsSuppressed: true,
-            SurveyResultsPrivacy.MinimumSegmentRespondents,
+            SurveyResultsPrivacy.MinimumSingleSegmentRespondents,
             aggregate.Dimensions
                 .Select(d => new DashboardDimensionScore(d.Dimension, null))
                 .ToList());
@@ -1002,7 +1020,7 @@ public static class DashboardEndpoints
             survey.EndDate,
             segment.RespondentCount,
             IsSuppressed: false,
-            SurveyResultsPrivacy.MinimumSegmentRespondents,
+            SurveyResultsPrivacy.MinimumSingleSegmentRespondents,
             scores
                 .OrderBy(pair => pair.Key, StringComparer.Ordinal)
                 .Select(pair => new DashboardDimensionScore(pair.Key, pair.Value))
@@ -1022,12 +1040,22 @@ public static class DashboardEndpoints
     /// withheld one -- and withheld itself when everyone who answered outside the team is
     /// fewer than the floor: the company's mean and the team's, with both counts, give the
     /// rest's mean by subtraction. A team that IS the whole company leaves no rest to disclose.
+    /// <para>
+    /// <b>Since 2026-10-15 the subtraction this defends against reveals nothing new, so the
+    /// floor here is the single-dimension one.</b> It existed to stop a remainder of one or two
+    /// people being differenced out of the two means. The department breakdown on the same
+    /// aggregate now discloses EVERY department at any size, so what the subtraction yields is
+    /// already printed beside it, and withholding the org side would cost a leader the
+    /// comparison this block exists for while protecting nothing. The guard is kept rather than
+    /// deleted because a ruling that moves the floor back wants this one line, not a rewrite --
+    /// at the single-dimension floor it simply cannot fire.
+    /// </para>
     /// </remarks>
     private static DashboardOrganizationClimate? OrganizationClimate(SurveyAggregate aggregate, int teamRespondents)
     {
         var company = aggregate.Summary.CompletedCount;
         var rest = company - teamRespondents;
-        if (rest > 0 && rest < SurveyResultsPrivacy.MinimumSegmentRespondents)
+        if (rest > 0 && rest < SurveyResultsPrivacy.MinimumSingleSegmentRespondents)
         {
             return null;
         }

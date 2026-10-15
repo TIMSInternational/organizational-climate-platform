@@ -20,7 +20,7 @@ import { formatParticipationDay } from './participationDay'
 export const PARTICIPATION_PREVIEW_ROWS = 8
 
 /**
- * "Participación": who has said they answered, and who has not — never what anybody answered.
+ * "Participación": who has FINISHED, and who has not — never what anybody answered.
  *
  * Reads `GET /surveys/{id}/participation`, which is built from `survey_participations` and the
  * company's user list and nothing else: there is no answer, área or time of day in the payload

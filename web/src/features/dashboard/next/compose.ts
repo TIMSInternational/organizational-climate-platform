@@ -427,7 +427,8 @@ export function composeModel(parts: ModelParts, options: ComposeOptions): Compos
   // is a named claim about this tenant ("nobody covers this cell", "this plan is late"),
   // so a region with no data contributes no item and its section says why instead.
   const attention: AttentionItem[] = []
-  const cell = lowestCell({ map: mapOrNothing }, floor)
+  const mapFloor = grouped?.minimumGroupSize ?? floor
+  const cell = lowestCell({ map: mapOrNothing }, mapFloor)
   // `plan: null` means "no plan covers this cell", so it may only be said when the
   // action plans were actually read; otherwise the item is not drawn at all.
   if (cell && parts.actionPlans.status === 'live') {
@@ -489,6 +490,7 @@ export function composeModel(parts: ModelParts, options: ComposeOptions): Compos
   return {
     model: {
       isPartial,
+      minimumGroupSize: mapFloor,
       asOf,
       companyName,
       latestClosedWave,

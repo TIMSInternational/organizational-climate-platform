@@ -75,19 +75,31 @@ public class SelfDeclaredAreaAndParticipantTests
     }
 
     /// <summary>
-    /// The floor is the department floor, at read time. Four declared Ventas are withheld --
-    /// no count, no rate, no questions -- exactly as four stored ones would be.
+    /// The floor is the department floor, at read time, and since 2026-10-15 a declared
+    /// department clears it at any size -- exactly as a stored one does, which is the property
+    /// this test has always been about.
     /// </summary>
+    /// <remarks>
+    /// The four declared Ventas used to be withheld, and not for their own size: 4 is over the
+    /// old floor of 3, and it was the complement pass that took them, because withholding
+    /// Finanzas' single respondent left a remainder of one. Both rules are gone from this path,
+    /// so Ventas reports its four and Finanzas reports its one.
+    /// </remarks>
     [Fact]
-    public void Four_declared_respondents_are_withheld_like_any_department_under_the_floor()
+    public void Declared_respondents_are_reported_like_any_department_whatever_their_size()
     {
         var aggregate = Aggregate(Cohort((Operaciones, 5), (Ventas, 4), (Finanzas, 1)));
+        var segments = Assert.Single(aggregate.Breakdowns).Segments;
 
-        var ventas = Assert.Single(Assert.Single(aggregate.Breakdowns).Segments, s => s.Key == Ventas.ToString());
-        Assert.True(ventas.IsSuppressed);
-        Assert.Equal(0, ventas.RespondentCount);
-        Assert.Null(ventas.ParticipationRate);
-        Assert.Empty(ventas.Questions);
+        var ventas = Assert.Single(segments, s => s.Key == Ventas.ToString());
+        Assert.False(ventas.IsSuppressed);
+        Assert.Equal(4, ventas.RespondentCount);
+        Assert.NotEmpty(ventas.Questions);
+
+        // The one-person department too, which is the case the client named outright.
+        var finanzas = Assert.Single(segments, s => s.Key == Finanzas.ToString());
+        Assert.False(finanzas.IsSuppressed);
+        Assert.Equal(1, finanzas.RespondentCount);
     }
 
     [Fact]

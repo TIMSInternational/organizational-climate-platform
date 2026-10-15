@@ -68,7 +68,7 @@ public static class SurveyParticipationEndpoints
             return Results.Forbid();
         }
 
-        var roster = await BuildRosterAsync(survey.Id, survey.CompanyId, db, cancellationToken);
+        var roster = await BuildRosterAsync(survey.Id, survey.CompanyId, survey.Anonymous, db, cancellationToken);
 
         // Respondents with NO account. `survey_participations` is written only for them
         // (`participation-is-not-linked-to-answers.md`), and the 2026-10-13 identity ruling
@@ -122,10 +122,14 @@ public static class SurveyParticipationEndpoints
             roster.Count(row => row.Status == SurveyParticipantStatuses.Started),
             roster.Count(row => row.Status == SurveyParticipantStatuses.NotStarted),
             roster,
-            // An anonymous survey writes no user id, so every row is `not_started` whatever
-            // anybody did. Saying so is the difference between "nobody answered" and "nobody
-            // is counted"; the screen reads this to stop presenting the state as a fact.
-            !survey.Anonymous));
+            // An anonymous survey writes no user id, so a HALF-finished response belongs to
+            // nobody and `started` is unknowable. Saying so is the difference between "nobody
+            // answered" and "nobody is counted".
+            !survey.Anonymous,
+            // COMPLETION is a different question, and the answer is yes even there: it is
+            // recorded in survey_participations, apart from the answers, with nothing to join
+            // them by. So the screen still shows who has finished and who has not.
+            survey.Anonymous));
     }
 
     /// <summary>
@@ -150,6 +154,7 @@ public static class SurveyParticipationEndpoints
     private static async Task<List<SurveyRosterRow>> BuildRosterAsync(
         Guid surveyId,
         Guid companyId,
+        bool anonymous,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
     {
@@ -190,6 +195,34 @@ public static class SurveyParticipationEndpoints
                     return (Status: SurveyParticipantStatuses.Started, Day: (DateOnly?)DayOf(group.Max(r => r.UpdatedAt)));
                 });
 
+        // Completion recorded APART from the answers.
+        //
+        // `survey_participations` holds a name, an email and a calendar day -- no response id,
+        // no session id, no timestamp -- so there is nothing to join it to an answer by. That
+        // is what lets an ANONYMOUS survey still say who finished: the answers carry no user
+        // id and never will, and this table carries no answers and never will. It is the
+        // storage shape the 2026-10-12 ruling asked for in so many words -- "we need to know
+        // who has answered and who has not, but DON'T link them to their answers" -- and the
+        // respondent copy promises exactly it: *registramos que usted respondió, nunca qué
+        // respondió*.
+        //
+        // Matched by email because that is the key the table carries and the one its unique
+        // index is built on; a resend cannot change it, while a username can be regenerated.
+        var participations = await db.SurveyParticipations
+            .AsNoTracking()
+            .Where(p => p.SurveyId == surveyId && p.Email != null)
+            .Select(p => new { Email = p.Email!, p.ParticipatedOn })
+            .ToListAsync(cancellationToken);
+
+        var completedOn = participations
+            .GroupBy(p => p.Email, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                // The earliest day stands, the same rule the response path applies: the first
+                // completion is the one that happened.
+                group => group.Min(p => p.ParticipatedOn),
+                StringComparer.OrdinalIgnoreCase);
+
         var demographics = await db.UserDemographics
             .AsNoTracking()
             .Where(d => db.Users.Any(u => u.Id == d.UserId && u.CompanyId == companyId))
@@ -214,9 +247,19 @@ public static class SurveyParticipationEndpoints
             .. users
                 .Select(u =>
                 {
+                    // A user id on an answer is the richest source -- it separates "stopped
+                    // halfway" from "never opened". Failing that, a participation row still
+                    // settles the question the administrator actually asks on launch day.
                     var state = stateByUser.TryGetValue(u.Id, out var found)
                         ? found
-                        : (Status: SurveyParticipantStatuses.NotStarted, Day: (DateOnly?)null);
+                        : completedOn.TryGetValue(u.Email, out var participatedOn)
+                            ? (Status: SurveyParticipantStatuses.Completed, Day: (DateOnly?)participatedOn)
+                            // `not_started` would be a claim this survey cannot support: with
+                            // no user id on the answers, somebody halfway through is
+                            // indistinguishable from somebody who never opened it.
+                            : anonymous
+                                ? (Status: SurveyParticipantStatuses.NotCompleted, Day: (DateOnly?)null)
+                                : (Status: SurveyParticipantStatuses.NotStarted, Day: (DateOnly?)null);
                     return new SurveyRosterRow(
                         u.Id,
                         u.Name,

@@ -214,11 +214,13 @@ public class DashboardExportTests
     /// floor -- including when no closed survey has sent a floor at all.
     ///
     /// <para>
-    /// The first half's count moved from 4 to 2 when the floor became 3 (ruled 2026-10-13): at
-    /// a floor of 3 a count of 4 is disclosed, so leaving it at 4 would have turned "withheld
-    /// with no server floor" into an assertion that fails, and raising the expectation instead
-    /// would have made the test agree with whatever the code did. The second half names its own
-    /// floor of 8 and is independent of the platform number.
+    /// The first half's count has moved twice with the platform floor, each time DOWN to the
+    /// largest count the floor still withholds: 4 to 2 when the floor became 3 (ruled
+    /// 2026-10-13), and 2 to 0 when a single dimension's floor became 1 (ruled 2026-10-15).
+    /// Raising the expectation instead would have made the test agree with whatever the code
+    /// did; 0 is now the only count a team's own floor withholds, which is the point -- a
+    /// printed 0 reads as "nobody here answered". The second half names its own floor of 8 and
+    /// is independent of the platform number.
     /// </para>
     /// </summary>
     [Fact]
@@ -226,7 +228,7 @@ public class DashboardExportTests
     {
         var noClosedSurvey = DepartmentDashboard(null) with
         {
-            ActiveSurveys = [OpenSurvey("Clima Q4", responseCount: 2)],
+            ActiveSurveys = [OpenSurvey("Clima Q4", responseCount: 0)],
         };
         var unclimated = CsvRows(DashboardExport.BuildCsv(
             DashboardExport.ForDepartmentAdmin(noClosedSurvey, ContentLanguages.English, GeneratedAt)));

@@ -497,8 +497,9 @@ public static class PublicReportProjection
     /// count IS the withheld headcount, and with one withheld group named on the page that was
     /// its exact size. The document now publishes only the completed total and the disclosed
     /// rows, so the one subtraction a reader can do yields <c>withheld + unsegmented</c> -- a
-    /// remainder <c>SurveyAggregation.WithholdComplement</c> already guarantees is 0 or at least
-    /// the floor -- attributed to no named group. A stored document whose remainder is under the
+    /// remainder <see cref="Disclosable"/> guarantees is 0 or at least this surface's own floor
+    /// (<see cref="PublicSegmentFloor"/>, which since 2026-10-15 is the only thing guaranteeing
+    /// it) -- attributed to no named group. A stored document whose remainder is under the
     /// floor anyway (one written before complement withholding) publishes no rows for that
     /// breakdown at all; see <see cref="Disclosable"/>.
     /// </description></item>
@@ -651,11 +652,17 @@ public static class PublicReportProjection
     private static PublicSurveySection ToPublicSection(ReportSurveySection section)
     {
         var completed = section.Participation?.CompletedCount ?? 0;
-        var floor = section.MinimumGroupSize;
+        var floor = PublicSegmentFloor(section.MinimumGroupSize);
 
         var stored = section.Departments ?? [];
-        var disclosed = stored.Where(d => !d.IsSuppressed).ToList();
-        var withheld = section.SuppressedDepartmentCount;
+        var disclosed = stored.Where(d => !d.IsSuppressed && d.RespondentCount >= floor).ToList();
+
+        // Rows the stored document discloses and THIS surface may not: counted, never named,
+        // so the page still balances against the completed total.
+        var droppedHere = stored.Count(d => !d.IsSuppressed && d.RespondentCount < floor);
+        var withheld = droppedHere > 0
+            ? (section.SuppressedDepartmentCount ?? 0) + droppedHere
+            : section.SuppressedDepartmentCount;
         if (!Disclosable(completed, disclosed.Sum(d => d.RespondentCount), floor))
         {
             // Every row goes, and is counted as withheld: the remainder a reader can subtract
@@ -677,7 +684,7 @@ public static class PublicReportProjection
             Map(section.Demographics, breakdown => ToPublicBreakdown(breakdown, completed, floor)),
             section.IsSuppressed,
             section.SuppressionReason,
-            section.MinimumGroupSize);
+            floor);
     }
 
     /// <summary>
@@ -686,10 +693,46 @@ public static class PublicReportProjection
     /// <remarks>
     /// The one subtraction this document leaves a reader is <c>completed - sum(disclosed)</c>.
     /// That remainder is the people in no published row, and it must itself be 0 or at least
-    /// the floor -- the same test <c>SurveyAggregation.WithholdComplement</c> applies when the
-    /// aggregate is computed. Restated here because a stored document is JSON some other
-    /// version of the generator wrote, and this is the most exposed surface in the product.
+    /// the floor.
+    /// <para>
+    /// This was a restatement of the complement pass the aggregate ran when the document was
+    /// generated. Since 2026-10-15 the aggregate runs no such pass -- a single dimension is
+    /// disclosed at any size -- so on this surface the test is not a restatement of anything:
+    /// it is the guarantee, and the rows it withholds are rows the stored document discloses.
+    /// It was already written to stand alone, because a stored document is JSON some other
+    /// version of the generator wrote and this is the most exposed surface in the product.
+    /// </para>
     /// </remarks>
+    /// <summary>
+    /// The floor a PUBLIC link holds a single department or demographic group to, which since
+    /// 2026-10-15 is no longer the floor the authenticated product holds it to.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The ruling of 2026-10-15 reports a single dimension at any size -- *"siempre deberían
+    /// enseñar los resultados de los climas de los departamentos, aunque sea una persona"* --
+    /// and <see cref="SurveyResultsPrivacy.MinimumSingleSegmentRespondents"/> is 1 because of
+    /// it. That ruling is about what an ORGANISATION reads on its own screens, where the reader
+    /// is a named administrator of that tenant who could ask the person directly.
+    /// </para>
+    /// <para>
+    /// <b>A URL is not that reader.</b> It is unauthenticated, forwardable, and the most
+    /// exposed surface in the product -- the same argument this file already makes for
+    /// stripping every respondent-written word. So a public document keeps
+    /// <see cref="SurveyResultsPrivacy.MinimumSegmentRespondents"/>, and a one-person
+    /// department's climate stays off the page: decided 2026-10-15, with the alternative in
+    /// front of the client. <c>Math.Max</c> rather than the constant alone, because a stored
+    /// document that was floored HIGHER was floored for a reason this projection cannot see.
+    /// </para>
+    /// <para>
+    /// This is why <see cref="Disclosable"/> still earns its keep, and with it the complement
+    /// rule the authenticated aggregate dropped: re-flooring rows here re-creates exactly the
+    /// withheld remainder that subtraction could recover.
+    /// </para>
+    /// </remarks>
+    internal static int PublicSegmentFloor(int storedFloor)
+        => Math.Max(SurveyResultsPrivacy.MinimumSegmentRespondents, storedFloor);
+
     internal static bool Disclosable(int completed, int disclosedRespondents, int floor)
     {
         var remainder = completed - disclosedRespondents;
@@ -713,8 +756,10 @@ public static class PublicReportProjection
 
     private static PublicDemographicBreakdown ToPublicBreakdown(ReportDemographicBreakdown breakdown, int completed, int floor)
     {
-        var disclosed = (breakdown.Segments ?? []).Where(s => !s.IsSuppressed).ToList();
-        var withheld = breakdown.SuppressedSegmentCount;
+        var stored = breakdown.Segments ?? [];
+        var disclosed = stored.Where(s => !s.IsSuppressed && s.RespondentCount >= floor).ToList();
+        var withheld = breakdown.SuppressedSegmentCount
+            + stored.Count(s => !s.IsSuppressed && s.RespondentCount < floor);
         if (!Disclosable(completed, disclosed.Sum(s => s.RespondentCount), floor))
         {
             withheld += disclosed.Count;

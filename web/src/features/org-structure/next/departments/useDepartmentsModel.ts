@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from '../../../../i18n'
-import { ANONYMITY_FLOOR } from '../../../../components/charts'
+import { SINGLE_SEGMENT_FLOOR } from '../../../../components/charts'
 import { todayCalendarDay } from '../../../../lib/calendarDay'
 import { listDepartments, type Department } from '../../api/departments'
 import { listUsers, type User } from '../../api/users'
@@ -70,7 +70,10 @@ export function useDepartmentsModel(companyId: string | null, scopeCompanyId?: s
       plans: planList,
       trends: climate,
       today,
-      floor: ANONYMITY_FLOOR,
+      // The floor the SERVER applied to this very payload, not a constant of our own: since
+      // 2026-10-15 a department is a single dimension and reported at any size, and a page
+      // that kept hatching at 3 would be withholding a number the API had already sent.
+      floor: climate?.minimumGroupSize ?? SINGLE_SEGMENT_FLOOR,
       locale,
     })
     setState({

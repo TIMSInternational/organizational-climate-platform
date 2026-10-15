@@ -167,17 +167,17 @@ public class SurveyExportEndpointsTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// A survey that clears its own floor while one department does not. The department is the
-    /// re-identification surface, and an export is where it gets sliced below the floor by
-    /// accident.
+    /// Every department contributes its answers to the file, whatever its size -- ruled
+    /// 2026-10-15. The department is still the re-identification surface, and an export is
+    /// still where it leaves the product, which is why the names are asserted over the bytes
+    /// of both files rather than over a parsed row.
     /// </summary>
     [Fact]
-    public async Task A_department_below_the_segment_floor_contributes_no_answers_to_the_file()
+    public async Task Every_department_contributes_its_answers_to_the_file()
     {
-        // Six in Ingeniería, three in Dirección: the survey is well above its own floor and one
-        // segment is below the segment floor. Two more with no department, so the people
-        // outside Ingeniería are five and it is not withheld for what a subtraction from the
-        // survey's total would reveal (SurveyAggregation.WithholdComplement).
+        // Six in Ingeniería, three in Dirección, two more with no department. Dirección's three
+        // was never under the segment floor of 3; it was the complement pass that withheld it,
+        // because disclosing both left a remainder of two. The sizes are unchanged.
         var survey = await SeedSurveyAsync(
             completedResponses: 2,
             byDepartment: [(_engineeringId, 6), (_directionId, 3)]);
@@ -194,25 +194,27 @@ public class SurveyExportEndpointsTests : IAsyncLifetime
         Assert.Equal("6", SegmentMetric(rows, engineering, "respondent_count"));
         Assert.Contains(rows, r => r.Section == SurveyExport.SegmentQuestionSection && r.Group == engineering);
 
-        // The withheld department contributes no row, in either section.
-        Assert.DoesNotContain(rows, r => r.Section == SurveyExport.SegmentSection && r.Group == direction);
-        Assert.DoesNotContain(rows, r => r.Section == SurveyExport.SegmentQuestionSection && r.Group == direction);
+        // The smaller department contributes its rows in both sections.
+        Assert.Equal("false", SegmentMetric(rows, direction, "is_suppressed"));
+        Assert.Equal("3", SegmentMetric(rows, direction, "respondent_count"));
+        Assert.Contains(rows, r => r.Section == SurveyExport.SegmentQuestionSection && r.Group == direction);
 
-        // Counted, so a reader can tell a withheld group from an absent one.
+        // Nothing withheld, so the counters read zero and the unsegmented two carry the whole
+        // remainder a reader cannot see in the rows.
         var breakdown = rows.Where(r => r.Section == SurveyExport.BreakdownSection && r.Group == "department").ToList();
-        Assert.Equal("1", breakdown.Single(r => r.Metric == "suppressed_segment_count").Value);
-        Assert.Equal("3", breakdown.Single(r => r.Metric == "suppressed_respondent_count").Value);
+        Assert.Equal("0", breakdown.Single(r => r.Metric == "suppressed_segment_count").Value);
+        Assert.Equal("0", breakdown.Single(r => r.Metric == "suppressed_respondent_count").Value);
+        Assert.Equal("2", breakdown.Single(r => r.Metric == "unsegmented_respondent_count").Value);
 
-        // And its NAME is in neither file. The department name reaches the aggregate on a
-        // suppressed segment -- SurveyAggregation keeps it -- so this is a property of the
-        // exporters, not of the data they are handed.
+        // And both NAMES are in both files, asserted over the bytes: if a floor is ever
+        // restored, these are the lines that catch a name an exporter still prints.
         var csv = Encoding.UTF8.GetString(await client.GetByteArrayAsync($"/surveys/{survey.Id}/export/csv"));
         Assert.Contains("Ingeniería", csv, StringComparison.Ordinal);
-        Assert.DoesNotContain("Dirección", csv, StringComparison.Ordinal);
+        Assert.Contains("Dirección", csv, StringComparison.Ordinal);
 
         var pdf = Encoding.Latin1.GetString(await client.GetByteArrayAsync($"/surveys/{survey.Id}/export/pdf"));
         Assert.Contains(@"Ingenier\355a", pdf, StringComparison.Ordinal);
-        Assert.DoesNotContain(@"Direcci\363n", pdf, StringComparison.Ordinal);
+        Assert.Contains(@"Direcci\363n", pdf, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -221,9 +223,10 @@ public class SurveyExportEndpointsTests : IAsyncLifetime
     /// <remarks>
     /// <see cref="SurveyResultsPrivacy"/> calls this the real disclosure surface, and it behaves
     /// unlike the department path in the way that matters here: a demographic segment carries no
-    /// label, so its KEY is the value the respondent supplied. A withheld group would be named
-    /// by the group column itself -- <c>nationality:Venezolana</c> -- rather than by a field an
-    /// exporter could choose not to print.
+    /// label, so its KEY is the value the respondent supplied. The group column names the group
+    /// itself -- <c>nationality:Venezolana</c> -- rather than a field an exporter could choose
+    /// not to print, which is what made this the path worth withholding and is now exactly what
+    /// the 2026-10-15 ruling publishes.
     ///
     /// <para>
     /// Neither export test file reached this branch before: both seeded departments only, so
@@ -231,9 +234,9 @@ public class SurveyExportEndpointsTests : IAsyncLifetime
     /// </para>
     /// </remarks>
     [Fact]
-    public async Task A_demographic_group_below_the_floor_is_named_in_neither_file()
+    public async Task A_small_demographic_group_is_named_in_both_files()
     {
-        // Three who gave no nationality, so the people outside Costarricense are five.
+        // Three who gave no nationality. Unchanged sizes: the reversal below is the ruling.
         var survey = await SeedSurveyAsync(
             completedResponses: 3,
             byDemographic: [("nationality", "Costarricense", 6), ("nationality", "Venezolana", 2)]);
@@ -244,19 +247,21 @@ public class SurveyExportEndpointsTests : IAsyncLifetime
         Assert.Equal("false", Summary(rows, "is_suppressed"));
         Assert.Equal("6", SegmentMetric(rows, "nationality:Costarricense", "respondent_count"));
 
-        Assert.DoesNotContain(rows, r => r.Group.Contains("Venezolana", StringComparison.Ordinal));
+        Assert.Equal("2", SegmentMetric(rows, "nationality:Venezolana", "respondent_count"));
+        Assert.Equal("false", SegmentMetric(rows, "nationality:Venezolana", "is_suppressed"));
 
         var breakdown = rows.Where(r => r.Section == SurveyExport.BreakdownSection && r.Group == "nationality").ToList();
-        Assert.Equal("1", breakdown.Single(r => r.Metric == "suppressed_segment_count").Value);
-        Assert.Equal("2", breakdown.Single(r => r.Metric == "suppressed_respondent_count").Value);
+        Assert.Equal("0", breakdown.Single(r => r.Metric == "suppressed_segment_count").Value);
+        Assert.Equal("0", breakdown.Single(r => r.Metric == "suppressed_respondent_count").Value);
+        Assert.Equal("3", breakdown.Single(r => r.Metric == "unsegmented_respondent_count").Value);
 
         var csv = Encoding.UTF8.GetString(await client.GetByteArrayAsync($"/surveys/{survey.Id}/export/csv"));
         Assert.Contains("Costarricense", csv, StringComparison.Ordinal);
-        Assert.DoesNotContain("Venezolana", csv, StringComparison.Ordinal);
+        Assert.Contains("Venezolana", csv, StringComparison.Ordinal);
 
         var pdf = Encoding.Latin1.GetString(await client.GetByteArrayAsync($"/surveys/{survey.Id}/export/pdf"));
         Assert.Contains("Costarricense", pdf, StringComparison.Ordinal);
-        Assert.DoesNotContain("Venezolana", pdf, StringComparison.Ordinal);
+        Assert.Contains("Venezolana", pdf, StringComparison.Ordinal);
     }
 
     // ==================================================================

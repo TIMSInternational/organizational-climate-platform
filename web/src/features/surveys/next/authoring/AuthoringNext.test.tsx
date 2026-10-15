@@ -759,7 +759,7 @@ describe('Distribución — the self-declared demographics switch', () => {
     expect(toggle().hasAttribute('disabled')).toBe(true)
     // The help text is still drawn: the control is disabled because the survey closed,
     // and says what it would ask, rather than vanishing.
-    expect(screen.getByText(/elegirá su área y su antigüedad/)).toBeTruthy()
+    expect(screen.getByText(/elige entre los campos de lista activos/)).toBeTruthy()
   })
 
   it('is not offered to a leader, who does not administer the survey', async () => {
@@ -769,7 +769,7 @@ describe('Distribución — the self-declared demographics switch', () => {
     renderAs('leader', <SurveyDistributionNextPage />, 'c1', '/surveys/s1/distribution', '/surveys/:surveyId/distribution')
     await settled()
     expect(toggle().hasAttribute('disabled')).toBe(true)
-    expect(screen.getByText(/elegirá su área y su antigüedad/)).toBeTruthy()
+    expect(screen.getByText(/elige entre los campos de lista activos/)).toBeTruthy()
   })
 })
 
@@ -787,22 +787,11 @@ describe('Distribución — who has answered (ruled 2026-10-12)', () => {
   const settings = (over: Partial<SurveyDetail['settings']> = {}) =>
     ({ settings: { anonymous: true, selfDeclaredDemographics: true, collectParticipantIdentity: true, notificationSendReminders: true, notificationReminderFrequencyDays: 3, ...over } } as Partial<SurveyDetail>)
 
-  it('sits beside the demographics switch and writes only its own setting', async () => {
-    open(settings({ collectParticipantIdentity: false }))
+  it('does not offer a name-collection toggle the server ignores', async () => {
+    open(settings({ collectParticipantIdentity: true }))
     await screen.findByTestId('step-audience')
-    const toggle = () => screen.getByRole('switch', { name: LABEL })
-    await waitFor(() => expect(toggle().hasAttribute('disabled')).toBe(false))
-    expect(toggle().getAttribute('aria-checked')).toBe('false')
-
-    vi.mocked(surveysApi.getSurvey).mockResolvedValue(survey(settings({ collectParticipantIdentity: true })))
-    await userEvent.click(toggle())
-
-    await waitFor(() => {
-      const calls = vi.mocked(surveysApi.setSurveyCollectParticipantIdentity).mock.calls
-      expect(calls.some(([, id, enabled]) => id === 's1' && enabled === true)).toBe(true)
-    })
-    expect(vi.mocked(surveysApi.setSurveySelfDeclaredDemographics)).not.toHaveBeenCalled()
-    await waitFor(() => expect(screen.getByRole('switch', { name: LABEL }).getAttribute('aria-checked')).toBe('true'))
+    expect(screen.queryByRole('switch', { name: LABEL })).toBeNull()
+    expect(vi.mocked(surveysApi.setSurveyCollectParticipantIdentity)).not.toHaveBeenCalled()
   })
 
   it('lists who answered and who is pending, with a day and never an answer', async () => {
@@ -822,6 +811,7 @@ describe('Distribución — who has answered (ruled 2026-10-12)', () => {
       notStartedCount: 1,
       roster: [],
       tracksIndividuals: true,
+      tracksCompletionOnly: false,
     })
     open(settings())
 
@@ -836,21 +826,21 @@ describe('Distribución — who has answered (ruled 2026-10-12)', () => {
     expect(within(pending).getByText(es.surveys.next.participation.pendingNote)).toBeTruthy()
   })
 
-  it('says why it is empty when the survey does not ask', async () => {
+  it('says nobody has finished yet rather than naming a setting that does nothing', async () => {
     vi.mocked(surveysApi.getSurveyParticipation).mockResolvedValueOnce({
       surveyId: 's1', collectsParticipantIdentity: false, answeredCount: 0, pendingCount: 3, answered: [], pending: [],
-      startedCount: 0, notStartedCount: 3, roster: [], tracksIndividuals: true,
+      startedCount: 0, notStartedCount: 3, roster: [], tracksIndividuals: true, tracksCompletionOnly: false,
     })
     open(settings({ collectParticipantIdentity: false }))
 
     expect(await screen.findByText(es.surveys.next.participation.off)).toBeTruthy()
   })
 
-  it('is offered on an IDENTIFIED survey too, because every survey has a link (ruled 2026-10-12)', async () => {
+  it('shows participation on identified surveys without the obsolete name-collection toggle', async () => {
     open(settings({ anonymous: false }))
     await screen.findByTestId('step-audience')
 
-    await waitFor(() => expect(screen.getByRole('switch', { name: LABEL }).hasAttribute('disabled')).toBe(false))
+    expect(screen.queryByRole('switch', { name: LABEL })).toBeNull()
     expect(await screen.findByTestId('participation-panel')).toBeTruthy()
   })
 

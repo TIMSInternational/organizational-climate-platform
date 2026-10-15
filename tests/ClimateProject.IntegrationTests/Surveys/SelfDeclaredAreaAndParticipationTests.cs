@@ -82,15 +82,21 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// (a) and (b) in one cohort, sized so the complement rule cannot hide the answer: 5 in
-    /// Operaciones and one short of the floor in each of Ventas and Finanzas. Their combined
-    /// remainder clears the floor, so Operaciones is published; Ventas and Finanzas are each
-    /// under it and carry no number at all.
-    /// Mutate <c>SelfDeclaredDepartment.Effective</c> to return only the stored department and
-    /// the Operaciones row disappears.
+    /// (a) and (b) in one cohort: 5 in Operaciones and two each in Ventas and Finanzas, every
+    /// one of them a self-declared área rather than a stored department, and since 2026-10-15
+    /// every one of them published with its own number.
+    ///
+    /// <para>The sizes are unchanged from when this test proved the opposite -- two was one
+    /// short of the old floor -- so what it now asserts is the ruling and not a new fixture.
+    /// The four surfaces are asserted together on purpose: /statistics, the live panel and
+    /// climate-over-time all read the same aggregation, and a floor applied to one of them and
+    /// not the others is how a client comes to see two different numbers for one team.</para>
+    ///
+    /// <para>Mutate <c>SelfDeclaredDepartment.Effective</c> to return only the stored
+    /// department and the Operaciones row disappears.</para>
     /// </summary>
     [Fact]
-    public async Task A_published_area_fills_its_departments_row_and_areas_under_the_floor_do_not()
+    public async Task Every_declared_area_fills_its_departments_row_whatever_its_size()
     {
         var survey = await QrSurveyAsync(collectIdentity: false);
         await AnswerAsAreaAsync(survey, _operaciones, 5);
@@ -106,11 +112,17 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
         Assert.Equal(5, operaciones.RespondentCount);
         Assert.NotEmpty(operaciones.Questions);
 
-        // Since #543 a withheld group is counted, never named: Ventas and Finanzas are both
-        // under the floor, absent from the rows and present only in the counter.
-        Assert.Single(departments.Segments);
-        Assert.DoesNotContain(departments.Segments, s => s.Key == _ventas.ToString() || s.Key == _finanzas.ToString());
-        Assert.Equal(2, departments.SuppressedSegmentCount);
+        // Ventas and Finanzas carry their two each, named, with answers of their own.
+        Assert.Equal(3, departments.Segments.Count);
+        foreach (var key in new[] { _ventas, _finanzas })
+        {
+            var small = Assert.Single(departments.Segments, s => s.Key == key.ToString());
+            Assert.False(small.IsSuppressed);
+            Assert.Equal(2, small.RespondentCount);
+            Assert.NotEmpty(small.Questions);
+        }
+
+        Assert.Equal(0, departments.SuppressedSegmentCount);
         Assert.Equal(0, departments.UnsegmentedRespondentCount);
 
         // The reserved key is lifted into the department, never ALSO published as a
@@ -119,10 +131,11 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
 
         // The live panel counts the same population under the same floor.
         var live = (await admin.GetFromJsonAsync<SurveyRealTimeStatsResponse>($"/surveys/{survey.Id}/real-time-stats"))!;
-        var liveRow = Assert.Single(live.ByDepartment);
-        Assert.Equal(_operaciones, liveRow.DepartmentId);
+        Assert.Equal(3, live.ByDepartment.Count);
+        var liveRow = Assert.Single(live.ByDepartment, r => r.DepartmentId == _operaciones);
         Assert.Equal(5, liveRow.CompletedCount);
-        Assert.Equal(2, live.SuppressedDepartmentCount);
+        Assert.Equal(2, Assert.Single(live.ByDepartment, r => r.DepartmentId == _ventas).CompletedCount);
+        Assert.Equal(0, live.SuppressedDepartmentCount);
         Assert.Equal(0, live.UnsegmentedRespondentCount);
 
         // And climate over time, once the survey has closed.
@@ -136,15 +149,24 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
         Assert.Equal(5, operacionesPoint.RespondentCount);
         Assert.Contains(operacionesPoint.Scores, score => score is not null);
 
+        // And the matrix, which is the surface a client reads a team's history on: the two in
+        // Ventas get a point of their own rather than a hatched cell.
         var ventasPoint = Assert.Single(trends.Groups, g => g.Key == _ventas.ToString()).Points[column];
-        Assert.True(ventasPoint.IsSuppressed);
-        Assert.Equal(0, ventasPoint.RespondentCount);
-        Assert.All(ventasPoint.Scores, score => Assert.Null(score));
+        Assert.False(ventasPoint.IsSuppressed);
+        Assert.Equal(2, ventasPoint.RespondentCount);
+        Assert.Contains(ventasPoint.Scores, score => score is not null);
     }
 
-    /// <summary>(b) on its own: four respondents in one área, alone, publish nothing about it.</summary>
+    /// <summary>
+    /// (b) on its own: four respondents in one área publish a number for it -- and so does the
+    /// one respondent in Finanzas, which is the case the client named in the ruling.
+    ///
+    /// <para>Four was never under the floor of 3. It was withheld by the complement pass,
+    /// because publishing it beside Operaciones' five left a remainder of one. Both rules are
+    /// gone from this path, so the fixture is unchanged and every row is published.</para>
+    /// </summary>
     [Fact]
-    public async Task Four_self_declared_respondents_never_produce_a_number_for_their_area()
+    public async Task Self_declared_areas_produce_a_number_however_few_declared_them()
     {
         var survey = await QrSurveyAsync(collectIdentity: false);
         await AnswerAsAreaAsync(survey, _ventas, 4);
@@ -156,11 +178,19 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
         var statistics = JsonSerializer.Deserialize<SurveyStatisticsResponse>(json, JsonOptions)!;
         var departments = Assert.Single(statistics.Breakdowns, b => b.Dimension == "department");
 
-        // Withheld, counted, and never named (#543): no row, no key, no label anywhere.
-        Assert.DoesNotContain(departments.Segments, s => s.Key == _ventas.ToString());
-        Assert.Equal(2, departments.SuppressedSegmentCount);
-        Assert.DoesNotContain(_ventas.ToString(), json, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("Ventas", json, StringComparison.Ordinal);
+        // Named, with its number: the row, the key and the label are all on the payload.
+        var ventas = Assert.Single(departments.Segments, s => s.Key == _ventas.ToString());
+        Assert.False(ventas.IsSuppressed);
+        Assert.Equal(4, ventas.RespondentCount);
+
+        // The one-person área too, which is what the client asked for in those words.
+        var finanzas = Assert.Single(departments.Segments, s => s.Key == _finanzas.ToString());
+        Assert.False(finanzas.IsSuppressed);
+        Assert.Equal(1, finanzas.RespondentCount);
+
+        Assert.Equal(0, departments.SuppressedSegmentCount);
+        Assert.Contains(_ventas.ToString(), json, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Ventas", json, StringComparison.Ordinal);
     }
 
     /// <summary>(d) Ruling 4 holds: the self-declared área is an ANSWER, the FK column stays null.</summary>
@@ -355,7 +385,7 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
     /// last assertion fails.
     /// </summary>
     [Fact]
-    public async Task No_path_fills_the_participation_table_and_it_still_keeps_no_join_key()
+    public async Task No_link_path_fills_the_participation_table_and_it_still_keeps_no_join_key()
     {
         var survey = await QrSurveyAsync(collectIdentity: true);
 
@@ -407,7 +437,7 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
     /// Every one of these is refused because it carries an identity AT ALL, not because the
     /// identity is malformed -- which is why the `(null, null)` case that used to head this list
     /// is gone: a post with no identity is now the accepted shape, and
-    /// <c>No_path_fills_the_participation_table_and_it_still_keeps_no_join_key</c> pins it.
+    /// <c>No_link_path_fills_the_participation_table_and_it_still_keeps_no_join_key</c> pins it.
     /// Refusing writes nothing, not even the response.
     /// </summary>
     [Theory]
@@ -521,11 +551,16 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
         Assert.Equal(view.Pending.Count, view.PendingCount);
 
         // Two people DID answer this survey, and the roster still names nobody. A QR response
-        // carries no user id, so every row falls to `not_started` on the absence of data
-        // rather than on a flag -- which is the property that makes it safe to put a named
-        // roster on a screen about an anonymous survey at all.
+        // carries no user id AND no participation row -- nobody signed in to be recorded -- so
+        // every row falls through on the absence of data rather than on a flag, which is the
+        // property that makes it safe to put a named roster on a screen about an anonymous
+        // survey at all.
+        //
+        // It falls to `not_completed` and not `not_started`: these people may have answered
+        // through the link for all this survey can tell, so saying they never opened it would
+        // be inventing the one fact an anonymous survey cannot have.
         Assert.NotEmpty(view.Roster);
-        Assert.All(view.Roster, r => Assert.Equal(SurveyParticipantStatuses.NotStarted, r.Status));
+        Assert.All(view.Roster, r => Assert.Equal(SurveyParticipantStatuses.NotCompleted, r.Status));
         Assert.Equal(0, view.StartedCount);
 
         // And the view SAYS so, rather than leaving the screen to present a roster of false
@@ -542,7 +577,7 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
         // eventually ride along. Extend these lists deliberately or not at all.
         using var document = JsonDocument.Parse(json);
         Assert.Equal(
-            ["answered", "answeredCount", "collectsParticipantIdentity", "notStartedCount", "pending", "pendingCount", "roster", "startedCount", "surveyId", "tracksIndividuals"],
+            ["answered", "answeredCount", "collectsParticipantIdentity", "notStartedCount", "pending", "pendingCount", "roster", "startedCount", "surveyId", "tracksCompletionOnly", "tracksIndividuals"],
             document.RootElement.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
         Assert.Equal(
             ["demographics", "email", "lastActivityOn", "name", "role", "status", "userId", "username"],
@@ -599,10 +634,9 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
     /// End to end, the case neither ruling could reach before every survey had a link: a
     /// visitor with NO account answers an IDENTIFIED survey through its link, declaring an
     /// área and a name/email. They are served anonymously -- no user id, no IP, no user agent,
-    /// no department FK -- their área feeds the department breakdown under the segment floor
-    /// (an área at the floor publishes its number, one under it publishes none), and who
-    /// answered lands in a
-    /// participation row that has no column that could point at the response.
+    /// no department FK -- their área feeds the department breakdown, which since 2026-10-15
+    /// publishes every área whatever its size, and who answered lands in a participation row
+    /// that has no column that could point at the response.
     /// </summary>
     [Fact]
     public async Task A_visitor_answers_an_identified_survey_by_link_anonymously_and_their_area_and_attendance_are_counted_apart()
@@ -631,8 +665,9 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
             Assert.Equal(HttpStatusCode.Created, http.StatusCode);
             responseIds.Add((await http.Content.ReadFromJsonAsync<SurveySubmissionResult>())!.ResponseId);
         }
-        // One more, elsewhere: withheld groups must total >= 5 or #543's complement rule
-        // withholds Operaciones too (5 shown + 4 withheld would let a reader subtract to 4).
+        // One more, elsewhere. It was here because the complement rule needed the withheld
+        // groups to total at least the floor; that rule is gone from this path, and the
+        // response is kept so the fixture and its counts are unchanged.
         var finanzas = await SubmitAsync(survey, Area(_finanzas));
         Assert.Equal(HttpStatusCode.Created, finanzas.StatusCode);
         responseIds.Add((await finanzas.Content.ReadFromJsonAsync<SurveySubmissionResult>())!.ResponseId);
@@ -660,11 +695,13 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
         Assert.Equal(5, operaciones.RespondentCount);
         Assert.NotEmpty(operaciones.Questions);
 
-        // Ventas (and Finanzas) are withheld: counted, never named, no number of their own (#543).
-        Assert.Single(departments.Segments);
-        Assert.Equal(2, departments.SuppressedSegmentCount);
-        Assert.DoesNotContain(_ventas.ToString(), json, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("Ventas", json, StringComparison.Ordinal);
+        // Ventas and Finanzas are published too, named, with their own numbers.
+        Assert.Equal(3, departments.Segments.Count);
+        Assert.Equal(4, Assert.Single(departments.Segments, s => s.Key == _ventas.ToString()).RespondentCount);
+        Assert.Equal(1, Assert.Single(departments.Segments, s => s.Key == _finanzas.ToString()).RespondentCount);
+        Assert.Equal(0, departments.SuppressedSegmentCount);
+        Assert.Contains(_ventas.ToString(), json, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Ventas", json, StringComparison.Ordinal);
 
         // Who answered: NOBODY was asked, so the table the 10-12 ruling built stays empty.
         // Its shape is still asserted -- the table and the entity survive, so that restoring

@@ -19,6 +19,30 @@ public class SurveyResultsFilterTests
 
     private const int Floor = SurveyResultsPrivacy.MinimumSegmentRespondents;
 
+    /// <summary>
+    /// A field every fixture row in the disclosure section carries, so a query can name TWO
+    /// selectors and still describe exactly the cohort its first selector describes.
+    /// </summary>
+    private static readonly (string Field, string Value) Sede = ("sede", "central");
+
+    /// <summary>
+    /// A CROSS over one demographic value, which since 2026-10-15 is the only shape
+    /// <c>MayDisclose</c> decides anything about.
+    /// </summary>
+    /// <remarks>
+    /// One selector is a single dimension, and the ruling of 2026-10-15 reports a single
+    /// dimension at any size -- <c>MayDisclose</c> now answers a one-selector query
+    /// unconditionally, so a one-selector fixture proves nothing whatever about the
+    /// differencing rule. <see cref="Sede"/> is carried by every row of these fixtures, so the
+    /// cohort and the leftover are arithmetically identical to what they were when these tests
+    /// were written against a single selector: the counts in them did not have to move, and
+    /// deliberately did not.
+    /// </remarks>
+    private static SurveyResultsFilter Cross(string field, string value)
+        => SurveyResultsFilter.For(
+            new SurveySegmentSelector(field, value),
+            new SurveySegmentSelector(Sede.Field, Sede.Value));
+
     private static string Stored(string value) => JsonSerializer.Serialize(value);
 
     private static AggregationQuestion Scale() =>
@@ -182,28 +206,55 @@ public class SurveyResultsFilterTests
     /// C was 3 until the floor became 3 (ruled 2026-10-13), at which point a C of 3 is
     /// disclosed on its own merits and there is no subtraction to demonstrate. The attack is
     /// unchanged; only the number that is too small to stand alone moved.
+    ///
+    /// Asked as a CROSS since 2026-10-15, for the reason <see cref="Cross"/> gives. The attack
+    /// is unchanged again, and so are the counts.
     /// </summary>
     [Fact]
     public void A_cohort_is_refused_when_what_is_left_over_could_be_subtracted_out()
     {
         List<AggregationResponse> completed =
         [
-            .. Cohort(1, 10, null, ("puesto", "a")),
-            .. Cohort(100, 7, null, ("puesto", "b")),
-            .. Cohort(200, 2, null, ("puesto", "c")),
+            .. Cohort(1, 10, null, ("puesto", "a"), Sede),
+            .. Cohort(100, 7, null, ("puesto", "b"), Sede),
+            .. Cohort(200, 2, null, ("puesto", "c"), Sede),
         ];
 
-        Assert.True(SurveyResultsFilter.For(new SurveySegmentSelector("puesto", "a")).MayDisclose(completed, Floor));
+        Assert.True(Cross("puesto", "a").MayDisclose(completed, Floor));
 
         // b is large enough on its own and is still refused: disclosing it would leave a
         // remainder of two, which is c.
-        Assert.False(SurveyResultsFilter.For(new SurveySegmentSelector("puesto", "b")).MayDisclose(completed, Floor));
-        Assert.False(SurveyResultsFilter.For(new SurveySegmentSelector("puesto", "c")).MayDisclose(completed, Floor));
+        Assert.False(Cross("puesto", "b").MayDisclose(completed, Floor));
+        Assert.False(Cross("puesto", "c").MayDisclose(completed, Floor));
 
         // The mutation that proves the rule has teeth: make the leftover large enough and b
         // becomes disclosable without anything about b itself changing.
-        List<AggregationResponse> roomier = [.. completed, .. Cohort(300, 2, null, ("puesto", "c"))];
-        Assert.True(SurveyResultsFilter.For(new SurveySegmentSelector("puesto", "b")).MayDisclose(roomier, Floor));
+        List<AggregationResponse> roomier = [.. completed, .. Cohort(300, 2, null, ("puesto", "c"), Sede)];
+        Assert.True(Cross("puesto", "b").MayDisclose(roomier, Floor));
+    }
+
+    /// <summary>
+    /// The 2026-10-15 ruling, at this level: ONE selector is answered at any size.
+    ///
+    /// Two people are refused as a cross and disclosed as a single dimension, in the same
+    /// fixture, in the same test -- because the breakdown beside it publishes that same
+    /// two-person group in full, so refusing the one-selector query would withhold a number
+    /// the screen already shows. It is also the only test here that fails if the
+    /// <c>Selectors.Count &lt; 2</c> short-circuit is removed.
+    /// </summary>
+    [Fact]
+    public void A_single_selector_is_disclosed_at_any_size_and_the_same_cohort_crossed_is_not()
+    {
+        List<AggregationResponse> completed =
+        [
+            .. Cohort(1, 12, null, ("puesto", "operativo"), Sede),
+            .. Cohort(100, 2, null, ("puesto", "gerencia"), Sede),
+        ];
+
+        Assert.True(
+            SurveyResultsFilter.For(new SurveySegmentSelector("puesto", "gerencia"))
+                .MayDisclose(completed, Floor));
+        Assert.False(Cross("puesto", "gerencia").MayDisclose(completed, Floor));
     }
 
     [Fact]
@@ -211,12 +262,11 @@ public class SurveyResultsFilterTests
     {
         List<AggregationResponse> completed =
         [
-            .. Cohort(1, 12, null, ("puesto", "operativo")),
-            .. Cohort(100, 2, null, ("puesto", "gerencia")),
+            .. Cohort(1, 12, null, ("puesto", "operativo"), Sede),
+            .. Cohort(100, 2, null, ("puesto", "gerencia"), Sede),
         ];
 
-        Assert.False(
-            SurveyResultsFilter.For(new SurveySegmentSelector("puesto", "gerencia")).MayDisclose(completed, Floor));
+        Assert.False(Cross("puesto", "gerencia").MayDisclose(completed, Floor));
     }
 
     /// <summary>
@@ -240,53 +290,64 @@ public class SurveyResultsFilterTests
             new SurveySegmentSelector("puesto", "gerencia"));
         Assert.False(cross.MayDisclose(completed, Floor));
 
-        // The department on its own is fine -- nine plus one is ten, and the other department
-        // leaves nine behind.
+        // The department on its own is fine. It was the arithmetic that said so -- nine plus
+        // one is ten, and the other department leaves nine behind -- and since 2026-10-15 it is
+        // the ruling: one selector is one dimension, answered at any size, so this holds now
+        // even where the arithmetic would not.
         var department = SurveyResultsFilter.For(
             new SurveySegmentSelector(SurveySegmentSelector.DepartmentField, Finance.ToString()));
         Assert.True(department.MayDisclose(completed, Floor));
     }
 
     /// <summary>
-    /// The two surfaces must break a tie the SAME way.
+    /// The tie-break, and the surface that no longer has to agree with it.
     ///
-    /// With two equal cohorts and a subtractable remainder, one of them has to be withheld.
-    /// If the breakdown withheld one and a filtered query withheld the other, a reader who
-    /// opened both would hold both — which is exactly the "two rules over the same
+    /// With two equal cohorts and a subtractable remainder a cross has to withhold one, and
+    /// WHICH one must be the same every time it is asked: two refusals naming different
+    /// cohorts would between them disclose both — the "two rules over the same
     /// quasi-identifiers, differenced against each other" failure `SurveyResultsPrivacy`
-    /// warns about. So this asserts they agree, not merely that each is deterministic.
+    /// warns about. On equal counts the smaller key goes, so "aaa" is refused and "bbb" is not.
+    ///
+    /// The breakdown beside it used to have to break the same tie the same way, because it
+    /// withheld from the same sibling set. Since 2026-10-15 it withholds NEITHER. That is
+    /// asserted here rather than deleted, because "the breakdown withholds nothing" is the
+    /// premise that makes every remaining refusal in this file coherent: a cross is refused
+    /// while the single dimensions it is built from are published.
     /// </summary>
     [Fact]
-    public void A_tie_is_broken_the_same_way_here_and_in_the_breakdown()
+    public void The_cross_breaks_a_tie_the_same_way_every_time_and_the_breakdown_breaks_none()
     {
         // Decoded, for the direct call; stored, for the one that goes through Compute. Same rows.
         List<AggregationResponse> decoded =
         [
-            .. Cohort(1, 5, null, ("grupo", "aaa")),
-            .. Cohort(100, 5, null, ("grupo", "bbb")),
-            .. Cohort(200, 2, null),
+            .. Cohort(1, 5, null, ("grupo", "aaa"), Sede),
+            .. Cohort(100, 5, null, ("grupo", "bbb"), Sede),
+            .. Cohort(200, 2, null, Sede),
         ];
         List<AggregationResponse> stored =
         [
-            .. StoredCohort(1, 5, null, ("grupo", "aaa")),
-            .. StoredCohort(100, 5, null, ("grupo", "bbb")),
+            .. StoredCohort(1, 5, null, ("grupo", "aaa"), Sede),
+            .. StoredCohort(100, 5, null, ("grupo", "bbb"), Sede),
             // Two, not three: at a floor of 3 an unsegmented remainder of three stands on its
-            // own and nothing is withheld, so there would be no tie left to break.
-            .. StoredCohort(200, 2, null),
+            // own and nothing is withheld, so there would be no tie left for the cross to break.
+            .. StoredCohort(200, 2, null, Sede),
         ];
         var answers = Answers(stored, "4");
 
-        // The filter: "aaa" is the one withheld, because on equal counts the smaller key goes.
-        Assert.False(SurveyResultsFilter.For(new SurveySegmentSelector("grupo", "aaa")).MayDisclose(decoded, Floor));
-        Assert.True(SurveyResultsFilter.For(new SurveySegmentSelector("grupo", "bbb")).MayDisclose(decoded, Floor));
+        // The cross: "aaa" is the one refused, because on equal counts the smaller key goes.
+        Assert.False(Cross("grupo", "aaa").MayDisclose(decoded, Floor));
+        Assert.True(Cross("grupo", "bbb").MayDisclose(decoded, Floor));
 
-        // The breakdown, over the very same rows, must withhold the very same one.
+        // The breakdown, over the very same rows, withholds neither -- and publishes the full
+        // five of the group the cross just refused.
         var aggregate = SurveyAggregation.Compute([Scale()], stored, answers, [], targetAudienceCount: 20);
         var breakdown = Assert.Single(aggregate.Breakdowns, b => b.Dimension == "grupo");
         var aaa = Assert.Single(breakdown.Segments, x => x.Key == "aaa");
         var bbb = Assert.Single(breakdown.Segments, x => x.Key == "bbb");
-        Assert.True(aaa.IsSuppressed);
+        Assert.False(aaa.IsSuppressed);
         Assert.False(bbb.IsSuppressed);
+        Assert.Equal(5, aaa.RespondentCount);
+        Assert.Equal(0, breakdown.SuppressedSegmentCount);
     }
 
     [Fact]
@@ -304,18 +365,18 @@ public class SurveyResultsFilterTests
         // like anybody else, exactly as UnsegmentedRespondentCount treats them.
         List<AggregationResponse> completed =
         [
-            .. Cohort(1, 10, null, ("puesto", "a")),
-            .. Cohort(100, 6, null),
+            .. Cohort(1, 10, null, ("puesto", "a"), Sede),
+            .. Cohort(100, 6, null, Sede),
         ];
-        Assert.True(SurveyResultsFilter.For(new SurveySegmentSelector("puesto", "a")).MayDisclose(completed, Floor));
+        Assert.True(Cross("puesto", "a").MayDisclose(completed, Floor));
 
         // Drop the unsegmented group under the floor and the same cohort becomes subtractable.
         List<AggregationResponse> tight =
         [
-            .. Cohort(1, 10, null, ("puesto", "a")),
-            .. Cohort(100, 2, null),
+            .. Cohort(1, 10, null, ("puesto", "a"), Sede),
+            .. Cohort(100, 2, null, Sede),
         ];
-        Assert.False(SurveyResultsFilter.For(new SurveySegmentSelector("puesto", "a")).MayDisclose(tight, Floor));
+        Assert.False(Cross("puesto", "a").MayDisclose(tight, Floor));
     }
 
     // ==================================================================
@@ -352,10 +413,35 @@ public class SurveyResultsFilterTests
     }
 
     [Fact]
+    public void A_single_department_of_one_agrees_with_its_disclosed_breakdown()
+    {
+        var inside = Cohort(1, 1, Finance);
+        var outside = Cohort(100, 4, Sales);
+        var aggregate = SurveyAggregation.Compute(
+            [Scale()], [.. inside, .. outside], [.. Answers(inside, "5"), .. Answers(outside, "1")], [],
+            targetAudienceCount: null, filter: SurveyResultsFilter.For(new SurveySegmentSelector("department", Finance.ToString())));
+        Assert.False(aggregate.IsSuppressed);
+        Assert.Equal(1, aggregate.Summary.CompletedCount);
+        Assert.Equal(5d, Assert.Single(aggregate.Questions).Average);
+        Assert.Equal(1, aggregate.MinimumGroupSize);
+    }
+
+    [Fact]
+    public void A_single_department_cannot_bypass_the_whole_survey_floor()
+    {
+        var inside = Cohort(1, 1, Finance);
+        var aggregate = SurveyAggregation.Compute(
+            [Scale()], inside, Answers(inside, "5").ToList(), [],
+            targetAudienceCount: null, filter: SurveyResultsFilter.For(new SurveySegmentSelector("department", Finance.ToString())));
+        Assert.True(aggregate.IsSuppressed);
+        Assert.Empty(aggregate.Questions);
+    }
+
+    [Fact]
     public void A_refused_cross_says_nothing_whatever_about_its_cohort()
     {
-        var gerencia = StoredCohort(1, 1, Finance, ("puesto", "gerencia"));
-        var rest = StoredCohort(100, 14, Finance, ("puesto", "operativo"));
+        var gerencia = StoredCohort(1, 1, Finance, ("puesto", "gerencia"), Sede);
+        var rest = StoredCohort(100, 14, Finance, ("puesto", "operativo"), Sede);
         List<AggregationResponse> completed = [.. gerencia, .. rest];
         List<AggregationAnswer> answers = [.. Answers(gerencia, "1"), .. Answers(rest, "4")];
 
@@ -365,7 +451,9 @@ public class SurveyResultsFilterTests
             answers,
             [],
             targetAudienceCount: 20,
-            SurveyResultsFilter.For(new SurveySegmentSelector("puesto", "gerencia")));
+            // A cross, because that is what is refused now: one gerente in finanzas, asked for
+            // by the two selectors that single them out.
+            Cross("puesto", "gerencia"));
 
         Assert.True(aggregate.IsSuppressed);
         Assert.Equal(SurveyResultsPrivacy.BelowMinimumSegmentRespondents, aggregate.SuppressionReason);

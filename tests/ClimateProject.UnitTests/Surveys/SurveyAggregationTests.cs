@@ -405,18 +405,24 @@ public class SurveyAggregationTests
     }
 
     /// <summary>
-    /// The disclosure surface that matters. A department of one means every answer
-    /// attributed to it is one named person's answers.
+    /// The disclosure surface that matters, and since 2026-10-15 it is disclosed.
+    ///
+    /// A department of two means every answer attributed to it is one of two people's
+    /// answers, and the client ruled that it is shown anyway: *"siempre deberían enseñar los
+    /// resultados de los climas de los departamentos, aunque sea una persona"*. So this test
+    /// now pins the opposite of what it pinned before, deliberately and with the cost in view
+    /// -- the headcount travels with the rate, exactly as it does for a large department,
+    /// because that pair is what the results page prints.
     /// </summary>
     [Fact]
-    public void A_department_below_the_segment_floor_is_suppressed_and_its_headcount_reported()
+    public void A_department_of_two_is_reported_with_its_headcount_rather_than_withheld()
     {
         var question = Choice(options: [new AggregationOption(0, "remote", "Remote")]);
 
-        // Five in Sales (at the floor), two in Engineering (below it), and three with no
-        // department -- so the people outside Sales number five and Sales can be shown
-        // without its complement falling under the floor (see
-        // A_segment_whose_complement_is_under_the_floor_is_withheld_with_it).
+        // Five in Sales, two in Engineering, three with no department. The sizes are the ones
+        // this test was written with: at the old floor they made Engineering the withheld
+        // segment and Sales a safely disclosable one, and they are kept so that the assertions
+        // below are a straight reversal rather than a new fixture that happens to agree.
         var responses = new List<AggregationResponse>
         {
             Response(ResponseId(1), departmentId: Sales),
@@ -445,13 +451,14 @@ public class SurveyAggregationTests
         var breakdown = aggregate.Breakdowns.Single(b => b.Dimension == "department");
 
         var engineering = breakdown.Segments.Single(s => s.Key == Engineering.ToString());
-        Assert.True(engineering.IsSuppressed);
-        Assert.Equal(0, engineering.RespondentCount);
-        Assert.Empty(engineering.Questions);
-        // Participation of a withheld group is withheld WITH it, and the denominator is
-        // half of that division: a suppressed segment must not carry its headcount, or a
-        // client can print the pair the floor exists to keep apart.
-        Assert.Null(engineering.Headcount);
+        Assert.False(engineering.IsSuppressed);
+        Assert.Equal(2, engineering.RespondentCount);
+        Assert.NotEmpty(engineering.Questions);
+        // The pair the old floor existed to keep apart. A disclosed segment carries both, so
+        // the page can print "50% of 4 people" for a department of two the same way it prints
+        // it for a department of ten.
+        Assert.Equal(50d, engineering.ParticipationRate);
+        Assert.Equal(4, engineering.Headcount);
 
         var sales = breakdown.Segments.Single(s => s.Key == Sales.ToString());
         Assert.False(sales.IsSuppressed);
@@ -461,8 +468,11 @@ public class SurveyAggregationTests
         // results page prints "50% of 10 people" from these two fields.
         Assert.Equal(10, sales.Headcount);
 
-        Assert.Equal(1, breakdown.SuppressedSegmentCount);
-        Assert.Equal(2, breakdown.SuppressedRespondentCount);
+        Assert.Equal(0, breakdown.SuppressedSegmentCount);
+        Assert.Equal(0, breakdown.SuppressedRespondentCount);
+        // The three with no department are still counted apart, and are now the only
+        // remainder a reader of this breakdown can subtract.
+        Assert.Equal(3, breakdown.UnsegmentedRespondentCount);
     }
 
     /// <summary>
@@ -528,11 +538,17 @@ public class SurveyAggregationTests
     }
 
     /// <summary>
-    /// The cross-tab that actually leaks. "Engineering + 10+ years" is one person in most
-    /// companies, and unlike a user id nothing about it looks like an identifier.
+    /// One value of one demographic field, at a size of one, reported -- ruled 2026-10-15:
+    /// *"El demográfico en general le tiene que entregar un resultado, así sea una persona…
+    /// Esa condicionante de 3 es para los cruces"*.
+    ///
+    /// "Engineering + 10+ years" is still one person in most companies and still looks nothing
+    /// like an identifier, and that CROSS is still refused --
+    /// <c>SurveyResultsFilterTests</c> owns it. What changed is the single field on its own,
+    /// which is this test.
     /// </summary>
     [Fact]
-    public void A_demographic_segment_below_the_floor_is_suppressed()
+    public void A_demographic_segment_of_one_is_reported_and_nothing_is_withheld_with_it()
     {
         static Dictionary<string, string> Tenure(string value)
             => new(StringComparer.Ordinal) { ["tenure"] = JsonSerializer.Serialize(value) };
@@ -556,32 +572,36 @@ public class SurveyAggregationTests
         var breakdown = aggregate.Breakdowns.Single(b => b.Dimension == "tenure");
 
         var lone = breakdown.Segments.Single(s => s.Key == "10+");
-        Assert.True(lone.IsSuppressed);
-        Assert.Equal(0, lone.RespondentCount);
+        Assert.False(lone.IsSuppressed);
+        Assert.Equal(1, lone.RespondentCount);
 
         var band = breakdown.Segments.Single(s => s.Key == "1-2");
         Assert.False(band.IsSuppressed);
         Assert.Equal(5, band.RespondentCount);
 
-        Assert.Equal(1, breakdown.SuppressedSegmentCount);
-        Assert.Equal(1, breakdown.SuppressedRespondentCount);
+        Assert.Equal(0, breakdown.SuppressedSegmentCount);
+        Assert.Equal(0, breakdown.SuppressedRespondentCount);
+        Assert.Equal(4, breakdown.UnsegmentedRespondentCount);
     }
 
     /// <summary>
-    /// The TIMS dry run's shape, scaled to the floor of 3 (ruled 2026-10-13). As originally
-    /// measured it was femenino 6 beside masculino 3 in a survey of 9, which at a floor of 5
-    /// put the 3 under it; at a floor of 3 that same 3 is disclosed on its own merits and there
-    /// is nothing to demonstrate, so the withheld segment is 2 and the survey is 8. The defect
-    /// is identical and so is the arithmetic that exposes it: the survey's own means sit beside
-    /// the breakdown, so the two men's per-question mean is (2,50 x 8 - 2,00 x 6) / 2 = 4,00 --
-    /// exactly their true 4,00, a withheld segment yielding a number by subtraction. Both go:
-    /// with femenino withheld too, nothing is left to subtract from.
+    /// <b>The record of what the 2026-10-15 ruling costs, kept as a test so nobody has to
+    /// rediscover it.</b>
     ///
-    /// Mutation-proved: dropping the <c>WithholdComplement</c> pass fails this with
-    /// femenino disclosed.
+    /// The TIMS dry run's shape: femenino 6 beside masculino 2 in a survey of 8. The survey's
+    /// own means sit beside the breakdown, so the two men's per-question mean falls out as
+    /// (2,50 x 8 - 2,00 x 6) / 2 = 4,00 -- exactly their true 4,00. Until 2026-10-15 both
+    /// segments were therefore withheld, the small one by the floor and the large one because
+    /// subtracting it yielded the small one.
+    ///
+    /// Now BOTH are disclosed, which makes the subtraction moot rather than defended: the two
+    /// men's mean is printed outright, so deriving it reveals nothing. That is the trade the
+    /// ruling took knowingly, and this test asserts it in the shape that was actually measured
+    /// -- if a later ruling restores the floor, this is the test that will fail first and the
+    /// arithmetic above is why.
     /// </summary>
     [Fact]
-    public void A_segment_whose_complement_is_under_the_floor_is_withheld_with_it()
+    public void A_segment_whose_complement_is_under_the_floor_is_disclosed_with_it_too()
     {
         static Dictionary<string, string> Gender(string value)
             => new(StringComparer.Ordinal) { ["genero"] = JsonSerializer.Serialize(value) };
@@ -599,25 +619,32 @@ public class SurveyAggregationTests
 
         Assert.All(breakdown.Segments, segment =>
         {
-            Assert.True(segment.IsSuppressed);
-            Assert.Equal(0, segment.RespondentCount);
-            Assert.Empty(segment.Questions);
+            Assert.False(segment.IsSuppressed);
+            Assert.NotEmpty(segment.Questions);
         });
-        Assert.Equal(2, breakdown.SuppressedSegmentCount);
-        Assert.Equal(8, breakdown.SuppressedRespondentCount);
+        Assert.Equal(6, breakdown.Segments.Single(s => s.Key == "femenino").RespondentCount);
+        Assert.Equal(2, breakdown.Segments.Single(s => s.Key == "masculino").RespondentCount);
+        Assert.Equal(0, breakdown.SuppressedSegmentCount);
+        Assert.Equal(0, breakdown.SuppressedRespondentCount);
         Assert.Equal(0, breakdown.UnsegmentedRespondentCount);
         // The survey-level reading is not touched: it is a group of 8.
         Assert.Equal(8, aggregate.Questions.Single().AnsweredCount);
     }
 
     /// <summary>
-    /// The secondary withholding takes the SMALLEST disclosed segment and stops as soon as
-    /// the people outside the disclosed segments reach the floor: one withheld segment of
-    /// 2 takes the 5 with it (2 + 5 = 7) and leaves the 6 and the 7 standing. Withholding
-    /// more than that deletes results nobody could have subtracted.
+    /// No secondary withholding runs over a breakdown at all any more.
+    ///
+    /// It used to take the SMALLEST disclosed segment and stop once the people outside the
+    /// disclosed ones reached the floor -- a withheld 2 took the 5 with it and left the 6 and
+    /// the 7 standing. With every single dimension disclosed there is no withheld segment to
+    /// recover by subtraction, so the pass was deleted rather than left as a no-op; the rule
+    /// survives where there is still a remainder to protect, in
+    /// <c>SurveyResultsFilter.MayDisclose</c> for a cross and <c>PublicReportDocument</c> for a
+    /// public link. The four sizes are unchanged, so this is the same fixture reporting the
+    /// other answer.
     /// </summary>
     [Fact]
-    public void The_secondary_withholding_stops_once_the_complement_reaches_the_floor()
+    public void No_secondary_withholding_runs_over_a_breakdown_any_more()
     {
         static Dictionary<string, string> Site(string value)
             => new(StringComparer.Ordinal) { ["site"] = JsonSerializer.Serialize(value) };
@@ -631,12 +658,13 @@ public class SurveyAggregationTests
         var aggregate = SurveyAggregation.Compute([], responses, [], [], null);
         var breakdown = aggregate.Breakdowns.Single(b => b.Dimension == "site");
 
-        Assert.True(breakdown.Segments.Single(s => s.Key == "d").IsSuppressed);
-        Assert.True(breakdown.Segments.Single(s => s.Key == "a").IsSuppressed);
+        Assert.Equal(2, breakdown.Segments.Single(s => s.Key == "d").RespondentCount);
+        Assert.Equal(5, breakdown.Segments.Single(s => s.Key == "a").RespondentCount);
         Assert.Equal(6, breakdown.Segments.Single(s => s.Key == "b").RespondentCount);
         Assert.Equal(7, breakdown.Segments.Single(s => s.Key == "c").RespondentCount);
-        Assert.Equal(2, breakdown.SuppressedSegmentCount);
-        Assert.Equal(7, breakdown.SuppressedRespondentCount);
+        Assert.All(breakdown.Segments, segment => Assert.False(segment.IsSuppressed));
+        Assert.Equal(0, breakdown.SuppressedSegmentCount);
+        Assert.Equal(0, breakdown.SuppressedRespondentCount);
     }
 
     /// <summary>

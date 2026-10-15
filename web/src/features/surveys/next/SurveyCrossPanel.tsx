@@ -443,7 +443,7 @@ export default function SurveyCrossPanel({
       <CardHeader>
         <CardTitle>{t('surveyResults.cross.title')}</CardTitle>
         <CardDescription>
-          {t('surveyResults.cross.description', { floor: payload?.minimumGroupSize ?? ANONYMITY_FLOOR })}{' '}
+          {t('surveyResults.cross.description', { floor: ANONYMITY_FLOOR })}{' '}
           {t('surveyResults.cross.addHint', { max: MAX_COHORTS })}
         </CardDescription>
       </CardHeader>
@@ -630,7 +630,7 @@ export default function SurveyCrossPanel({
                           className={cn(CROSS_CELL, PROTECTED_HATCH, 'rounded px-3 py-2 text-left')}
                         >
                           <span className="text-sm text-fg-secondary">
-                            {t('surveyResults.cross.protectedRow', { floor: payload?.minimumGroupSize ?? ANONYMITY_FLOOR })}
+                            {t('surveyResults.cross.protectedRow', { floor: result?.minimumGroupSize ?? ANONYMITY_FLOOR })}
                             {cohort.length > 1 ? ` ${t('surveyResults.cross.protectedHint')}` : ''}
                           </span>
                         </td>

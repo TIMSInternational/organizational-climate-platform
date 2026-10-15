@@ -39,15 +39,15 @@ public sealed record SurveySegmentSelector(string Field, string Value)
 ///
 /// ## Why disclosure needs more than the cohort's own size
 ///
-/// A floor on the selected cohort alone is not enough, and the hole is the one
-/// <c>SurveyAggregation.WithholdComplement</c> already closes for a one-dimensional breakdown.
-/// Suppose a field has values A=10, B=7, C=3 over 20 people. Ask for A and it is disclosed; ask
+/// A floor on the selected cohort alone is not enough, and the hole is the one the complement
+/// rule in <c>SurveyResultsPrivacy</c> closes. Suppose a field has values A=10, B=7, C=3 over
+/// 20 people. Ask for A and it is disclosed; ask
 /// for B and it is disclosed; C is refused for being under the floor — and then
 /// <c>whole − A − B</c> is C's cohort, means and all. The suppression is defeated without
 /// anyone breaking it.
 ///
-/// So <see cref="MayDisclose"/> runs the same withholding the breakdown does, per selector,
-/// against the scope the OTHER selectors define: a value is disclosable only once enough of its
+/// So <see cref="MayDisclose"/> runs that withholding per selector, against the scope the
+/// OTHER selectors define: a value is disclosable only once enough of its
 /// siblings are disclosed that the undisclosed remainder is itself at or above the floor. A
 /// filtered query is answered only when every one of its selectors survives that test.
 /// Deliberately conservative — it refuses some cohorts that are individually large enough,
@@ -200,7 +200,13 @@ public sealed class SurveyResultsFilter
     public bool MayDisclose(IReadOnlyList<AggregationResponse> completed, int floor)
     {
         ArgumentNullException.ThrowIfNull(completed);
-        if (IsEmpty)
+
+        // A query naming ONE dimension is not a cross, and since 2026-10-15 it is disclosed at
+        // any size: "esa condicionante de 3 es para los cruces de variables de demográficos, no
+        // para los resultados individuales". It reads the same cohort the breakdown beside it
+        // already publishes in full, so refusing it here would refuse what the screen already
+        // shows. Two or more selectors keep the whole test below, unchanged.
+        if (Selectors.Count < 2)
         {
             return true;
         }
@@ -210,14 +216,17 @@ public sealed class SurveyResultsFilter
             var selector = Selectors[i];
             var scope = completed.Where(r => Matches(r, skipIndex: i)).ToList();
 
-            // Sibling cohorts within that scope, smallest first and then by key --
-            // **byte for byte the order `SurveyAggregation.WithholdComplement` withholds in**,
-            // and that is not a style choice. The two surfaces withhold from the same sibling
-            // set, so if they broke a tie differently the breakdown would hide one of two
-            // equal cohorts and this would hide the other, and a reader who opened both would
-            // have them both. `SurveyResultsPrivacy` names that failure directly: two rules
-            // over the same quasi-identifiers that can be differenced against each other is
-            // how suppression gets defeated without anyone breaking it.
+            // Sibling cohorts within that scope, smallest first and then by key. The order is
+            // not a style choice: it decides WHICH of two equally sized cohorts is withheld,
+            // and a reader who asks about both must be refused the same one every time. Asked
+            // twice in a different order, two refusals that named different cohorts would
+            // between them disclose both -- the "two rules over the same quasi-identifiers,
+            // differenced against each other" failure `SurveyResultsPrivacy` names.
+            //
+            // It used to have to agree byte for byte with the breakdown's own complement pass,
+            // which withheld from this same sibling set. Since 2026-10-15 the breakdown
+            // withholds no single dimension at all, so there is no second surface left to
+            // disagree with -- and this ordering is now load-bearing on its own account.
             var cohorts = scope
                 .Select(r => ValueOf(r, selector))
                 .Where(v => v is not null)

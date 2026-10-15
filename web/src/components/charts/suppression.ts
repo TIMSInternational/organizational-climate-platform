@@ -28,6 +28,27 @@
  */
 export const ANONYMITY_FLOOR = 3
 
+/**
+ * The floor a SINGLE dimension is held to — one department, or one value of one demographic
+ * field. **One**, which is to say it is reported whenever anybody answered at all.
+ *
+ * Ruled 2026-10-15 by the client, in these words: *"siempre deberían enseñar los resultados
+ * de los climas de los departamentos, aunque sea una persona… Esa condicionante de 3 es para
+ * los cruces de variables de demográficos, no para los resultados individuales."*
+ *
+ * `ANONYMITY_FLOOR` did not go away and is not deprecated — it is still the floor for a CROSS
+ * of two or more demographic fields, for the whole survey, for a microclimate, and for the
+ * advice the demographic-field screens give about whether a cut is worth making. What changed
+ * is the single dimension, and this is the number for it.
+ *
+ * **Prefer the server's own `minimumGroupSize` wherever a payload carries one.** It is the
+ * floor the API actually applied to THAT payload, and the two carve-outs mean it is not always
+ * either of these constants: a public report link and the Procomer tracking module hold 3 while
+ * the screens beside them hold 1. This constant is the floor for a surface with no payload to
+ * read it from, and the fallback when one is missing.
+ */
+export const SINGLE_SEGMENT_FLOOR = 1
+
 /** Whether a reading is below the anonymity floor and must be withheld. */
 export function isSuppressed(responses: number, threshold = ANONYMITY_FLOOR): boolean {
   return responses < threshold

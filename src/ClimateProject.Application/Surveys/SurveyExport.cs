@@ -696,10 +696,19 @@ internal sealed record SurveyExportCopy(
 
     public string Seconds(double? value) => value is null ? NotAvailable : $"{Decimal(value)} s";
 
+    /// <summary>
+    /// The file's own promise, which since 2026-10-15 depends on the floor it is handed: at 1
+    /// there is no group-level suppression to promise, and saying "no group with fewer than 1
+    /// respondents is shown separately" would be a true sentence that reads as a false one.
+    /// </summary>
     public string PrivacyNotice(int surveyFloor, int segmentFloor)
-        => DecimalComma
-            ? $"Confidencialidad: no se calcula ningún resultado por pregunta con menos de {surveyFloor} respuestas completas, y ningún grupo con menos de {segmentFloor} personas que respondieron se muestra por separado. Este archivo no contiene respuestas individuales ni texto libre textual."
-            : $"Confidentiality: no per-question result is computed below {surveyFloor} complete responses, and no group with fewer than {segmentFloor} respondents is shown separately. This file contains no individual responses and no verbatim free text.";
+        => segmentFloor <= 1
+            ? DecimalComma
+                ? $"Confidencialidad: no se calcula ningún resultado por pregunta con menos de {surveyFloor} respuestas completas, y cada departamento y cada grupo demográfico se informa por separado sea cual sea su tamaño. Este archivo no contiene respuestas individuales ni texto libre textual."
+                : $"Confidentiality: no per-question result is computed below {surveyFloor} complete responses, and every department and demographic group is reported separately whatever its size. This file contains no individual responses and no verbatim free text."
+            : DecimalComma
+                ? $"Confidencialidad: no se calcula ningún resultado por pregunta con menos de {surveyFloor} respuestas completas, y ningún grupo con menos de {segmentFloor} personas que respondieron se muestra por separado. Este archivo no contiene respuestas individuales ni texto libre textual."
+                : $"Confidentiality: no per-question result is computed below {surveyFloor} complete responses, and no group with fewer than {segmentFloor} respondents is shown separately. This file contains no individual responses and no verbatim free text.";
 
     public string UntranslatedNotice(int count, string locale)
         => DecimalComma
@@ -719,10 +728,19 @@ internal sealed record SurveyExportCopy(
     public string BreakdownHeading(string dimension)
         => DecimalComma ? $"Desglose por {dimension}" : $"Breakdown by {dimension}";
 
+    /// <summary>
+    /// The withheld clause is dropped when nothing is withheld, for the reason
+    /// <c>ReportRenderCopy.DepartmentsWithheldCounts</c> gives at length: since 2026-10-15 that
+    /// is every file, and "0 groups for having fewer than 1 respondents" has no reader.
+    /// </summary>
     public string SegmentsWithheld(int segments, int respondents, int unsegmented, int floor)
-        => DecimalComma
-            ? $"Grupos reservados: {Format(segments)} (con {Format(respondents)} personas en total) por tener menos de {floor} personas que respondieron. Respuestas sin este dato: {Format(unsegmented)}."
-            : $"Withheld groups: {Format(segments)} (covering {Format(respondents)} people) for having fewer than {floor} respondents. Responses carrying no value for this: {Format(unsegmented)}.";
+        => segments == 0
+            ? DecimalComma
+                ? $"Respuestas sin este dato: {Format(unsegmented)}."
+                : $"Responses carrying no value for this: {Format(unsegmented)}."
+            : DecimalComma
+                ? $"Grupos reservados: {Format(segments)} (con {Format(respondents)} personas en total) por tener menos de {floor} personas que respondieron. Respuestas sin este dato: {Format(unsegmented)}."
+                : $"Withheld groups: {Format(segments)} (covering {Format(respondents)} people) for having fewer than {floor} respondents. Responses carrying no value for this: {Format(unsegmented)}.";
 
     private string Localise(string invariant)
         => DecimalComma ? invariant.Replace('.', ',') : invariant;

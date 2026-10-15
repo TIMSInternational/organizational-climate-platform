@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react'
-import { ANONYMITY_FLOOR } from '../../../components/charts'
+import { SINGLE_SEGMENT_FLOOR } from '../../../components/charts'
 import { createTranslator, useTranslation } from '../../../i18n'
 import { todayCalendarDay } from '../../../lib/calendarDay'
 import { CATALOGUES, FALLBACK_LOCALE } from '../../../i18n/locale'
@@ -58,7 +58,7 @@ export function useAdminDashboardModel(companyId?: string): AdminDashboardModelS
         companyId,
         lang: locale,
         asOf: todayCalendarDay(),
-        floor: ANONYMITY_FLOOR,
+        floor: SINGLE_SEGMENT_FLOOR,
         dimensionName,
       }),
     [baseUrl, companyId, locale, dimensionName],

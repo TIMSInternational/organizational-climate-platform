@@ -267,16 +267,15 @@ public class ScheduledReportRunnerTests(PostgresContainerFixture postgres)
     }
 
     /// <summary>
-    /// The privacy half (#320), through the scheduled path specifically: the stored document
-    /// a scheduled report will mail a link to must carry the aggregation's own suppression
-    /// decisions. Sales has 2 completed responses, below
-    /// <see cref="SurveyResultsPrivacy.MinimumSegmentRespondents"/>; its row must say
-    /// suppressed-and-zero, with the withheld headcount surviving only as the breakdown's
-    /// reconciliation counter -- exactly what the results screens and POST /admin/reports
-    /// serve, because it is exactly the same code.
+    /// The privacy half (#320), through the scheduled path specifically: the stored document a
+    /// scheduled report will mail a link to must carry the aggregation's own decisions, whatever
+    /// they are. Sales has 2 completed responses, and since 2026-10-15 the aggregation publishes
+    /// them -- so the stored document carries Sales' row, exactly as the results screens and
+    /// POST /admin/reports do, because it is exactly the same code. That agreement is the
+    /// property; the direction of the floor is not.
     /// </summary>
     [Fact]
-    public async Task A_scheduled_report_keeps_a_small_department_suppressed_in_the_stored_document()
+    public async Task A_scheduled_report_stores_the_same_departments_the_results_screens_serve()
     {
         await using var db = await FreshAsync();
         var seeded = await SeedAsync(db);
@@ -296,12 +295,12 @@ public class ScheduledReportRunnerTests(PostgresContainerFixture postgres)
         Assert.False(engineering.IsSuppressed);
         Assert.Equal(5, engineering.RespondentCount);
 
-        // Counted, never named (2026-10-12): a named withheld row beside the withheld headcount
-        // is that department's size when it is the only one withheld.
-        Assert.DoesNotContain(section.Departments, d => d.DepartmentId == seeded.SalesId.ToString());
-        Assert.Equal(1, section.SuppressedDepartmentCount);
-        Assert.Equal(2, section.SuppressedRespondentCount);
-        Assert.Equal(SurveyResultsPrivacy.MinimumSegmentRespondents, section.MinimumGroupSize);
+        var sales = Assert.Single(section.Departments, d => d.DepartmentId == seeded.SalesId.ToString());
+        Assert.False(sales.IsSuppressed);
+        Assert.Equal(2, sales.RespondentCount);
+        Assert.Equal(0, section.SuppressedDepartmentCount);
+        Assert.Equal(0, section.SuppressedRespondentCount);
+        Assert.Equal(SurveyResultsPrivacy.MinimumSingleSegmentRespondents, section.MinimumGroupSize);
     }
 
     /// <summary>

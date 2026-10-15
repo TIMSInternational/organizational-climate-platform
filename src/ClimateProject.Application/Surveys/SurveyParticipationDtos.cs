@@ -31,13 +31,28 @@ namespace ClimateProject.Application.Surveys;
 /// because they are the ones worth chasing: they are not refusing, they were interrupted.
 /// </param>
 /// <param name="TracksIndividuals">
-/// Whether a person's state on this survey can be known at all. False for an ANONYMOUS
-/// survey, which writes no <c>user_id</c>: every roster row then falls to
-/// <c>not_started</c> on absent data, and presenting that as participation would tell an
-/// administrator that 800 people had not answered when the truth is that nobody is counted
-/// individually. The roster is still returned -- who was invited, their username and their
-/// demographics are all still the administrator's to see, and a resend still works -- but the
-/// screen must not render the state as a fact.
+/// Whether the FULL three states can be known: finished, started-and-stopped, never opened.
+/// True only for a survey that stores a <c>user_id</c> on its answers, i.e. a non-anonymous
+/// one. On an anonymous survey a half-finished response belongs to nobody, so
+/// started-and-stopped is unknowable and the screen must not render it as a fact.
+/// </param>
+/// <param name="TracksCompletionOnly">
+/// Whether COMPLETION alone can be known, which is a different question and on an anonymous
+/// survey the answer is yes.
+///
+/// <para>
+/// Completion is recorded in <c>survey_participations</c> -- a name, an email and a calendar
+/// day, with no response id, no session id and no timestamp -- which is a separate table from
+/// the answers with nothing to join them by. So an anonymous survey can tell an administrator
+/// who has finished and who has not, which is the whole of what the client asked for ("ya
+/// respondió sí o no"), while still keeping the promise the respondent was given:
+/// *registramos que usted respondió, nunca qué respondió*.
+/// </para>
+/// <para>
+/// When this is true and <see cref="SurveyParticipationView.TracksIndividuals"/> is false, the
+/// roster carries two states and not three: <c>completed</c> and
+/// <see cref="SurveyParticipantStatuses.NotCompleted"/>.
+/// </para>
 /// </param>
 public sealed record SurveyParticipationView(
     Guid SurveyId,
@@ -49,7 +64,8 @@ public sealed record SurveyParticipationView(
     int StartedCount,
     int NotStartedCount,
     IReadOnlyList<SurveyRosterRow> Roster,
-    bool TracksIndividuals);
+    bool TracksIndividuals,
+    bool TracksCompletionOnly);
 
 /// <param name="ParticipatedOn">A calendar day, never a time: the row holds no more.</param>
 public sealed record SurveyParticipantRow(string Name, string? Email, DateOnly ParticipatedOn);
@@ -80,6 +96,20 @@ public static class SurveyParticipantStatuses
 
     /// <summary>Has no response row at all for this survey.</summary>
     public const string NotStarted = "not_started";
+
+    /// <summary>
+    /// Has not finished, and whether they started is <b>not known</b>. The state an ANONYMOUS
+    /// survey can honestly report about somebody it has no completion record for.
+    ///
+    /// <para>
+    /// It exists because <see cref="NotStarted"/> would be a lie there. An anonymous survey
+    /// puts no <c>user_id</c> on its answers, so a half-finished response cannot be attributed
+    /// to anyone -- but a COMPLETION can, because it is recorded in <c>survey_participations</c>
+    /// apart from the answers. So "finished" and "did not finish" are both knowable while
+    /// "opened it and stopped" is not, and this is the second of those two.
+    /// </para>
+    /// </summary>
+    public const string NotCompleted = "not_completed";
 }
 
 /// <param name="Field">The stable key, e.g. <c>department</c>; the labels are for display.</param>

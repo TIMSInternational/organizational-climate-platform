@@ -82,30 +82,30 @@ public class SurveyExportTests
     }
 
     /// <summary>
-    /// A department below <see cref="SurveyResultsPrivacy.MinimumSegmentRespondents"/> is
-    /// neither answered for NOR named.
+    /// A department of two is named and answered for, like any other -- ruled 2026-10-15.
     /// </summary>
     /// <remarks>
-    /// A segment is the real disclosure surface: a survey can clear its own floor while a slice
-    /// of it does not, and the slice is what identifies people. Engineering has six respondents
-    /// here and Direction has two.
+    /// A segment is still the real disclosure surface: a survey can clear its own floor while a
+    /// slice of it does not, and the slice is what identifies people. Engineering has six
+    /// respondents here and Dirección has two, and the client ruled that Dirección is shown
+    /// anyway: *"siempre deberían enseñar los resultados de los climas de los departamentos,
+    /// aunque sea una persona"*.
     ///
     /// <para>
-    /// The CSV used to emit a full row for Direction -- name, a zeroed count, is_suppressed=true
-    /// -- on the argument that a machine surface has to reconcile. It does not need the name to
-    /// do that: the breakdown's own counters below carry the reconciliation, and with exactly
-    /// one withheld segment in a breakdown a named row makes that group's size a subtraction.
-    /// The PDF has always refused to name one. Now both do.
+    /// What the file must still never do is NAME a group it withheld, and that rule is
+    /// unchanged -- it simply has nothing to withhold here. The whole-file byte assertion is
+    /// kept and inverted rather than dropped, because it is the one that would catch a column
+    /// no test thought to check.
     /// </para>
     /// </remarks>
     [Fact]
-    public async Task A_segment_below_the_floor_is_neither_answered_for_nor_named()
+    public async Task A_department_of_two_is_named_and_answered_for_like_any_other()
     {
         var context = Context(Aggregate(
-            // 6 + 2 + 3 with no department: Dirección is under the floor on its own, and the
-            // 5 outside Engineering keep Engineering disclosable
-            // (SurveyAggregation.WithholdComplement) rather than the complement pass being
-            // what withholds Dirección.
+            // 6 + 2 + 3 with no department: the sizes these tests were written with, when
+            // Dirección was under the floor and the 5 outside Engineering kept Engineering
+            // clear of the complement pass. Both rules are gone from this path since
+            // 2026-10-15; the sizes stay so the assertions are a reversal, not a new fixture.
             respondentCount: 11,
             departments: [(Engineering, "Ingeniería", 20, 6), (Direction, "Dirección", 4, 2)]));
 
@@ -120,42 +120,45 @@ public class SurveyExportTests
         Assert.Equal("false", SegmentMetric(rows, engineering, "is_suppressed"));
         Assert.Contains(rows, r => r.Section == SurveyExport.SegmentQuestionSection && r.Group == engineering);
 
-        // The withheld one contributes no row at all, under any metric.
-        Assert.DoesNotContain(rows, r => r.Section == SurveyExport.SegmentSection && r.Group == direction);
-        Assert.DoesNotContain(rows, r => r.Section == SurveyExport.SegmentQuestionSection && r.Group == direction);
+        // The department of two carries the same rows, label included.
+        Assert.Equal("Dirección", SegmentMetric(rows, direction, "label"));
+        Assert.Equal("2", SegmentMetric(rows, direction, "respondent_count"));
+        Assert.Equal("false", SegmentMetric(rows, direction, "is_suppressed"));
+        Assert.Contains(rows, r => r.Section == SurveyExport.SegmentQuestionSection && r.Group == direction);
 
-        // And its name is nowhere in the bytes -- not in a label, not in a key, not in a
-        // column this test did not think to check. Asserted over the whole file rather than
-        // over parsed rows, because the parse is what a future column could escape.
+        // Both names are in the bytes. Asserted over the whole file rather than over parsed
+        // rows, because the parse is what a future column could escape -- and if a floor is
+        // ever restored, this is the line that catches a name the parse missed.
         var text = Encoding.UTF8.GetString((await CsvBytesAsync(context)).AsSpan(3));
-        Assert.DoesNotContain("Dirección", text, StringComparison.Ordinal);
+        Assert.Contains("Dirección", text, StringComparison.Ordinal);
         Assert.Contains("Ingeniería", text, StringComparison.Ordinal);
 
-        // Withheld visibly, so a reader can tell a suppressed group from an absent one and the
-        // totals still reconcile against completed_count.
+        // Nothing withheld, and the three with no department still counted apart, so the
+        // totals reconcile against completed_count exactly as they did before.
         var breakdown = rows.Where(r => r.Section == SurveyExport.BreakdownSection && r.Group == "department").ToList();
-        Assert.Equal("1", breakdown.Single(r => r.Metric == "suppressed_segment_count").Value);
-        Assert.Equal("2", breakdown.Single(r => r.Metric == "suppressed_respondent_count").Value);
+        Assert.Equal("0", breakdown.Single(r => r.Metric == "suppressed_segment_count").Value);
+        Assert.Equal("0", breakdown.Single(r => r.Metric == "suppressed_respondent_count").Value);
+        Assert.Equal("3", breakdown.Single(r => r.Metric == "unsegmented_respondent_count").Value);
     }
 
     /// <summary>
-    /// The demographic path, which is the one <see cref="SurveyResultsPrivacy"/> singles out as
-    /// the real disclosure surface -- and the one where a withheld segment's KEY is the value
-    /// the respondent typed.
+    /// The demographic path, which <see cref="SurveyResultsPrivacy"/> singles out as the real
+    /// disclosure surface -- and which since 2026-10-15 is exported whatever its size.
     /// </summary>
     /// <remarks>
-    /// A department segment is keyed by a GUID and names itself only in its label. A demographic
-    /// segment has no label at all: its key IS the raw value, so the group column would read
-    /// <c>nationality:Venezolana</c> for the two people who wrote it. Nothing reached this
-    /// branch before -- both export fixtures seeded departments only -- so every proof of the
-    /// anonymity criterion landed on the path where the name is a GUID.
+    /// A demographic segment has no label at all: its key IS the raw value, so the group column
+    /// reads <c>nationality:Venezolana</c> for the two people who wrote it. That is exactly what
+    /// made this the path worth withholding, and it is now what the client asked to see: *"El
+    /// demográfico en general le tiene que entregar un resultado, así sea una persona"*. The
+    /// assertions are reversed in place rather than deleted, because a spreadsheet leaving the
+    /// product is the most durable copy of that decision anybody will hold.
     /// </remarks>
     [Fact]
-    public async Task A_demographic_value_below_the_floor_never_reaches_the_file()
+    public async Task A_demographic_value_of_two_is_exported_like_any_other()
     {
         var context = Context(Aggregate(
-            // Three who gave no nationality, so the 5 outside Costarricense keep it
-            // disclosable (SurveyAggregation.WithholdComplement).
+            // Three who gave no nationality. The sizes are the ones this test was written
+            // with, so the reversal below is a reversal and not a new fixture.
             respondentCount: 15,
             demographics:
             [
@@ -171,17 +174,23 @@ public class SurveyExportTests
             rows,
             r => r.Section == SurveyExport.SegmentQuestionSection && r.Group == "nationality:Costarricense");
 
-        // The one below it contributes nothing, and the value itself is absent from the bytes.
-        Assert.DoesNotContain(rows, r => r.Group.Contains("Venezolana", StringComparison.Ordinal));
+        // The group of two is exported the same way, answers and all.
+        Assert.Equal("2", SegmentMetric(rows, "nationality:Venezolana", "respondent_count"));
+        Assert.Equal("false", SegmentMetric(rows, "nationality:Venezolana", "is_suppressed"));
+        Assert.Contains(
+            rows,
+            r => r.Section == SurveyExport.SegmentQuestionSection && r.Group == "nationality:Venezolana");
 
         var text = Encoding.UTF8.GetString((await CsvBytesAsync(context)).AsSpan(3));
-        Assert.DoesNotContain("Venezolana", text, StringComparison.Ordinal);
+        Assert.Contains("Venezolana", text, StringComparison.Ordinal);
         Assert.Contains("Costarricense", text, StringComparison.Ordinal);
 
-        // Counted, though -- two people are accounted for without being described.
+        // Nothing withheld, and the three who gave no nationality still counted apart -- the
+        // one remainder left in this breakdown.
         var breakdown = rows.Where(r => r.Section == SurveyExport.BreakdownSection && r.Group == "nationality").ToList();
-        Assert.Equal("1", breakdown.Single(r => r.Metric == "suppressed_segment_count").Value);
-        Assert.Equal("2", breakdown.Single(r => r.Metric == "suppressed_respondent_count").Value);
+        Assert.Equal("0", breakdown.Single(r => r.Metric == "suppressed_segment_count").Value);
+        Assert.Equal("0", breakdown.Single(r => r.Metric == "suppressed_respondent_count").Value);
+        Assert.Equal("3", breakdown.Single(r => r.Metric == "unsegmented_respondent_count").Value);
     }
 
     /// <summary>
@@ -190,9 +199,10 @@ public class SurveyExportTests
     /// whole of the reconciliation.
     /// </summary>
     /// <remarks>
-    /// Twelve respondents: six in Engineering, two in Direction, and four in no department
-    /// at all. 6 disclosed + 2 withheld + 4 unsegmented = 12, and each of those three numbers
-    /// comes from a different line of the exporter.
+    /// Twelve respondents: six in Engineering, two in Direction, and four in no department at
+    /// all. Since 2026-10-15 both departments are disclosed, so it reconciles as
+    /// 6 + 2 disclosed + 0 withheld + 4 unsegmented = 12 -- the same property, with the
+    /// withheld term now zero and the unsegmented one carrying the whole remainder.
     /// </remarks>
     [Fact]
     public async Task A_breakdown_accounts_for_every_respondent_including_the_unsegmented_ones()
@@ -203,12 +213,15 @@ public class SurveyExportTests
 
         var breakdown = rows.Where(r => r.Section == SurveyExport.BreakdownSection && r.Group == "department").ToList();
 
-        var disclosed = int.Parse(SegmentMetric(rows, $"department:{Engineering}", "respondent_count"), CultureInfo.InvariantCulture);
+        var disclosed = rows
+            .Where(r => r.Section == SurveyExport.SegmentSection && r.Metric == "respondent_count"
+                && r.Group.StartsWith("department:", StringComparison.Ordinal))
+            .Sum(r => int.Parse(r.Value, CultureInfo.InvariantCulture));
         var withheld = int.Parse(breakdown.Single(r => r.Metric == "suppressed_respondent_count").Value, CultureInfo.InvariantCulture);
         var unsegmented = int.Parse(breakdown.Single(r => r.Metric == "unsegmented_respondent_count").Value, CultureInfo.InvariantCulture);
 
-        Assert.Equal(6, disclosed);
-        Assert.Equal(2, withheld);
+        Assert.Equal(8, disclosed);
+        Assert.Equal(0, withheld);
         Assert.Equal(4, unsegmented);
 
         // The property, not the three literals: the file has to account for everyone.
@@ -249,10 +262,10 @@ public class SurveyExportTests
     public async Task A_segments_per_question_rows_name_which_question_they_are_about()
     {
         var rows = await CsvRowsAsync(Context(Aggregate(
-            // 6 + 2 + 3 with no department: Dirección is under the floor on its own, and the
-            // 5 outside Engineering keep Engineering disclosable
-            // (SurveyAggregation.WithholdComplement) rather than the complement pass being
-            // what withholds Dirección.
+            // 6 + 2 + 3 with no department: the sizes these tests were written with, when
+            // Dirección was under the floor and the 5 outside Engineering kept Engineering
+            // clear of the complement pass. Both rules are gone from this path since
+            // 2026-10-15; the sizes stay so the assertions are a reversal, not a new fixture.
             respondentCount: 11,
             departments: [(Engineering, "Ingeniería", 20, 6), (Direction, "Dirección", 4, 2)],
             openText: true)));
@@ -287,8 +300,11 @@ public class SurveyExportTests
         Assert.Equal(
             SurveyResultsPrivacy.MinimumRespondents.ToString(CultureInfo.InvariantCulture),
             Summary(rows, "minimum_respondents"));
+        // The floor these breakdowns were actually held to, which since 2026-10-15 is the
+        // single-dimension one: the file says 1 because nothing in it is withheld by a segment
+        // floor, and a reader who saw 3 here would go looking for rows that were never dropped.
         Assert.Equal(
-            SurveyResultsPrivacy.MinimumSegmentRespondents.ToString(CultureInfo.InvariantCulture),
+            SurveyResultsPrivacy.MinimumSingleSegmentRespondents.ToString(CultureInfo.InvariantCulture),
             Summary(rows, "minimum_segment_respondents"));
         Assert.Equal(
             SurveyResultsPrivacy.MinimumWordRespondents.ToString(CultureInfo.InvariantCulture),
@@ -326,10 +342,10 @@ public class SurveyExportTests
         // exporter never trips it -- across every section, including the ones a small fixture
         // would not reach.
         var bytes = await CsvBytesAsync(Context(Aggregate(
-            // 6 + 2 + 3 with no department: Dirección is under the floor on its own, and the
-            // 5 outside Engineering keep Engineering disclosable
-            // (SurveyAggregation.WithholdComplement) rather than the complement pass being
-            // what withholds Dirección.
+            // 6 + 2 + 3 with no department: the sizes these tests were written with, when
+            // Dirección was under the floor and the 5 outside Engineering kept Engineering
+            // clear of the complement pass. Both rules are gone from this path since
+            // 2026-10-15; the sizes stay so the assertions are a reversal, not a new fixture.
             respondentCount: 11,
             departments: [(Engineering, "Ingeniería", 20, 6), (Direction, "Dirección", 4, 2)],
             openText: true)));
@@ -366,27 +382,32 @@ public class SurveyExportTests
         Assert.DoesNotContain("remote", drawn, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// The same rule the CSV applies, in the other format -- and since 2026-10-15 that rule
+    /// names the small group. The withheld sentence goes with it: with nothing withheld it
+    /// would have read "Withheld groups: 0 ... fewer than 1 respondents".
+    /// </summary>
     [Fact]
-    public void The_pdf_never_names_a_withheld_group()
+    public void The_pdf_names_a_small_group_and_says_nothing_about_withheld_ones()
     {
         // The same rule the CSV applies, in the other format: one flag, one filter, two
         // documents. Held separately from the CSV's test because a filter dropped from either
         // projection has to fail on its own.
         var document = SurveyExport.BuildPdf(Context(Aggregate(
-            // 6 + 2 + 3 with no department: Dirección is under the floor on its own, and the
-            // 5 outside Engineering keep Engineering disclosable
-            // (SurveyAggregation.WithholdComplement) rather than the complement pass being
-            // what withholds Dirección.
+            // 6 + 2 + 3 with no department: the sizes these tests were written with, when
+            // Dirección was under the floor and the 5 outside Engineering kept Engineering
+            // clear of the complement pass. Both rules are gone from this path since
+            // 2026-10-15; the sizes stay so the assertions are a reversal, not a new fixture.
             respondentCount: 11,
             departments: [(Engineering, "Ingeniería", 20, 6), (Direction, "Dirección", 4, 2)])));
 
         var drawn = DrawnText(document);
 
         Assert.Contains("Ingenier", drawn, StringComparison.Ordinal);
-        Assert.DoesNotContain("Direcci\\363n", drawn, StringComparison.Ordinal);
+        Assert.Contains("Direcci\\363n", drawn, StringComparison.Ordinal);
 
-        // Counted, though, so the reader knows a group exists and was withheld.
-        Assert.Contains("Withheld groups: 1", drawn, StringComparison.Ordinal);
+        // No withheld sentence at all, because nothing was withheld.
+        Assert.DoesNotContain("Withheld groups:", drawn, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -428,10 +449,10 @@ public class SurveyExportTests
         // the failure that makes an export untrustworthy, and it is only impossible if
         // something asserts it.
         var context = Context(Aggregate(
-            // 6 + 2 + 3 with no department: Dirección is under the floor on its own, and the
-            // 5 outside Engineering keep Engineering disclosable
-            // (SurveyAggregation.WithholdComplement) rather than the complement pass being
-            // what withholds Dirección.
+            // 6 + 2 + 3 with no department: the sizes these tests were written with, when
+            // Dirección was under the floor and the 5 outside Engineering kept Engineering
+            // clear of the complement pass. Both rules are gone from this path since
+            // 2026-10-15; the sizes stay so the assertions are a reversal, not a new fixture.
             respondentCount: 11,
             departments: [(Engineering, "Ingeniería", 20, 6), (Direction, "Dirección", 4, 2)]));
 

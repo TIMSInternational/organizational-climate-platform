@@ -123,7 +123,9 @@ public static class SurveyClimateTrends
             dimensions,
             groups,
             suppressedGroupCount,
-            SurveyResultsPrivacy.MinimumSegmentRespondents,
+            // One department, or one value of one demographic field, per group: a single
+            // dimension, held to the single-dimension floor since 2026-10-15.
+            SurveyResultsPrivacy.MinimumSingleSegmentRespondents,
             generatedAt);
     }
 

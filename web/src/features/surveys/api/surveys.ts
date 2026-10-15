@@ -437,6 +437,17 @@ export interface SurveyParticipationView {
    * not answered when the truth is that nobody is counted individually.
    */
   tracksIndividuals: boolean
+  /**
+   * Whether COMPLETION alone can be known, which on an anonymous survey it can.
+   *
+   * Completion lives in `survey_participations` — a name, an email and a calendar day, with
+   * no response id, no session id and no timestamp — a separate table from the answers with
+   * nothing to join them by. So an anonymous survey still answers "ya respondió sí o no"
+   * while keeping the promise the respondent was given: we record THAT you answered, never
+   * WHAT you answered. When this is true and `tracksIndividuals` is false the roster carries
+   * two states, `completed` and `not_completed`, and not three.
+   */
+  tracksCompletionOnly: boolean
 }
 
 /**
@@ -446,7 +457,7 @@ export interface SurveyParticipationView {
  * half and was interrupted", and those call for opposite actions -- the first person needs
  * their sign-in details again, the second already has them.
  */
-export type SurveyParticipantStatus = 'completed' | 'started' | 'not_started'
+export type SurveyParticipantStatus = 'completed' | 'started' | 'not_started' | 'not_completed'
 
 /** One demographic as the import uploaded it. */
 export interface SurveyRosterDemographic {

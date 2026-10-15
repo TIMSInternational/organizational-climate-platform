@@ -282,16 +282,38 @@ internal sealed record ReportRenderCopy(
             : $"This survey has {Count(completedCount)} complete responses. Below {floor} no per-question, per-dimension or per-department result is computed, because with that few responses the result amounts to reading what each person answered. Recorded reason: {reason ?? "-"}. The participation counters above are still shown, because a count identifies nobody.";
 
     /// <summary>The floor a suppressed department row was withheld under.</summary>
+    /// <remarks>
+    /// At a floor of 1 the only withheld count is 0, and "fewer than 1 respondents" is not a
+    /// sentence anybody should be shown, so that case says what it means. The reasoning for
+    /// "{Withheld}" over "0" is unchanged and is the whole point of the row: a printed zero is
+    /// a claim about those people, where the withheld marker is a claim about the report.
+    /// </remarks>
     public string DepartmentWithheldNotice(int floor)
-        => DecimalComma
-            ? $"Los departamentos marcados «{Withheld}» tienen menos de {floor} personas que respondieron, así que no se muestra ninguna cifra propia. La celda dice «{Withheld}» y no «0»: cero sería una afirmación sobre esas personas que este informe no puede hacer."
-            : $"Departments marked \"{Withheld}\" have fewer than {floor} respondents, so no figure of their own is shown. The cell reads \"{Withheld}\" and not \"0\": zero would be a claim about those people this report cannot make.";
+        => floor <= 1
+            ? DecimalComma
+                ? $"Los departamentos marcados «{Withheld}» no tienen ninguna respuesta todavía, así que no se muestra ninguna cifra propia. La celda dice «{Withheld}» y no «0»: cero sería una afirmación sobre esas personas que este informe no puede hacer."
+                : $"Departments marked \"{Withheld}\" have no responses yet, so no figure of their own is shown. The cell reads \"{Withheld}\" and not \"0\": zero would be a claim about those people this report cannot make."
+            : DecimalComma
+                ? $"Los departamentos marcados «{Withheld}» tienen menos de {floor} personas que respondieron, así que no se muestra ninguna cifra propia. La celda dice «{Withheld}» y no «0»: cero sería una afirmación sobre esas personas que este informe no puede hacer."
+                : $"Departments marked \"{Withheld}\" have fewer than {floor} respondents, so no figure of their own is shown. The cell reads \"{Withheld}\" and not \"0\": zero would be a claim about those people this report cannot make.";
 
     /// <summary>The counters that let a reader balance the department table without naming a withheld group.</summary>
+    /// <remarks>
+    /// With nothing withheld the withheld clause is dropped rather than printed as a zero.
+    /// Since 2026-10-15 that is the normal case -- every department is reported -- and the
+    /// sentence would otherwise read "Withheld departments: 0 (covering 0 people) for having
+    /// fewer than 1 respondents" on every report in the product. The responses-carrying-no-
+    /// department count stays either way: it is the one remainder a reader still cannot see in
+    /// the table, and the only thing that makes the table balance.
+    /// </remarks>
     public string DepartmentsWithheldCounts(int departments, int respondents, int unsegmented, int floor)
-        => DecimalComma
-            ? $"Departamentos reservados: {Count(departments)} (con {Count(respondents)} personas en total) por tener menos de {floor} personas que respondieron. Respuestas sin departamento: {Count(unsegmented)}."
-            : $"Withheld departments: {Count(departments)} (covering {Count(respondents)} people) for having fewer than {floor} respondents. Responses carrying no department: {Count(unsegmented)}.";
+        => departments == 0
+            ? DecimalComma
+                ? $"Respuestas sin departamento: {Count(unsegmented)}."
+                : $"Responses carrying no department: {Count(unsegmented)}."
+            : DecimalComma
+                ? $"Departamentos reservados: {Count(departments)} (con {Count(respondents)} personas en total) por tener menos de {floor} personas que respondieron. Respuestas sin departamento: {Count(unsegmented)}."
+                : $"Withheld departments: {Count(departments)} (covering {Count(respondents)} people) for having fewer than {floor} respondents. Responses carrying no department: {Count(unsegmented)}.";
 
     /// <summary>
     /// The same counters for a demographic breakdown, which is NOT a department table.
@@ -305,15 +327,27 @@ internal sealed record ReportRenderCopy(
     /// than a catalogue's.
     /// </remarks>
     public string SegmentsWithheldCounts(string dimension, int segments, int respondents, int unsegmented, int floor)
-        => DecimalComma
-            ? $"Grupos reservados en «{dimension}»: {Count(segments)} (con {Count(respondents)} personas en total) por tener menos de {floor} personas que respondieron. Respuestas sin este dato: {Count(unsegmented)}."
-            : $"Withheld groups in \"{dimension}\": {Count(segments)} (covering {Count(respondents)} people) for having fewer than {floor} respondents. Responses carrying no value for this: {Count(unsegmented)}.";
+        => segments == 0
+            ? DecimalComma
+                ? $"Respuestas sin este dato: {Count(unsegmented)}."
+                : $"Responses carrying no value for this: {Count(unsegmented)}."
+            : DecimalComma
+                ? $"Grupos reservados en «{dimension}»: {Count(segments)} (con {Count(respondents)} personas en total) por tener menos de {floor} personas que respondieron. Respuestas sin este dato: {Count(unsegmented)}."
+                : $"Withheld groups in \"{dimension}\": {Count(segments)} (covering {Count(respondents)} people) for having fewer than {floor} respondents. Responses carrying no value for this: {Count(unsegmented)}.";
 
     /// <summary>Said once, at the top, so a reader of the file knows what floors produced it.</summary>
+    /// <remarks>
+    /// <b>It stopped saying "no group below the minimum is shown separately" on 2026-10-15.</b>
+    /// That sentence was the file's own promise, and the ruling that reports every single
+    /// department and demographic group at any size made it false -- a client reading a
+    /// promise of suppression in a document that is not suppressing is worse than no promise
+    /// at all. It now says what the document does, and keeps the two guarantees that did not
+    /// change: no individual responses, and no verbatim free text.
+    /// </remarks>
     public string PrivacyNotice(int surveyFloor)
         => DecimalComma
-            ? $"Confidencialidad: no se calcula ningún resultado por pregunta con menos de {surveyFloor} respuestas completas, y ningún grupo por debajo del mínimo se muestra por separado. Este archivo no contiene respuestas individuales ni texto libre textual."
-            : $"Confidentiality: no per-question result is computed below {surveyFloor} complete responses, and no group below the minimum is shown separately. This file contains no individual responses and no verbatim free text.";
+            ? $"Confidencialidad: no se calcula ningún resultado por pregunta con menos de {surveyFloor} respuestas completas, y cada departamento y cada grupo demográfico se informa por separado sea cual sea su tamaño. Este archivo no contiene respuestas individuales ni texto libre textual."
+            : $"Confidentiality: no per-question result is computed below {surveyFloor} complete responses, and every department and demographic group is reported separately whatever its size. This file contains no individual responses and no verbatim free text.";
 
     private string Localise(string invariant) => DecimalComma ? invariant.Replace('.', ',') : invariant;
 }

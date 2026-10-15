@@ -328,19 +328,8 @@ export function DistributionView({
             />
           </div>
 
-          {/* Beside the demographics switch, for its reason: it changes what the PUBLIC LINK
-              asks. NOT gated on anonymity (ruled 2026-10-12): every survey has a link, nobody
-              who opens one logs in, and the server asks every link visitor
-              (`AsksParticipantIdentity`). */}
-          <div className="mt-4 border-t border-line-default pt-4">
-            <SwitchField
-              label={t('surveys.next.share.participantIdentityLabel')}
-              description={t('surveys.next.share.participantIdentityHelp')}
-              checked={survey.settings.collectParticipantIdentity === true}
-              disabled={!actionable || busy}
-              onChange={actions.setCollectParticipantIdentity}
-            />
-          </div>
+          {/* The server never asks public-link respondents for a name. Completion is
+              recorded separately when the respondent signs in; no authoring toggle is needed. */}
         </Card>
       </section>
 
