@@ -456,7 +456,7 @@
       "passwordHelp": "¿Olvidó su contraseña? Pida a quien administra la plataforma en su organización que la restablezca.",
       "signInAssurance": "En las encuestas anónimas, iniciar sesión solo comprueba que usted fue invitado; no se vincula con sus respuestas.",
       "busyTitle": "Demasiadas personas están ingresando a la vez",
-      "busyBody": "Espere un minuto y vuelva a intentarlo. Su usuario y su contraseña están bien: es la plataforma la que está recibiendo muchos ingresos al mismo tiempo.",
+      "busyBody": "Espere un minuto y vuelva a intentarlo. La plataforma está recibiendo muchos intentos de ingreso y todavía no ha comprobado sus credenciales.",
       "credentialsTitle": "El correo o la contraseña no coinciden",
       "credentialsBody": "Revise los dos y vuelva a intentarlo. No decimos cuál falló: así nadie averigua qué correos tienen cuenta.",
       "createAccount": "Crear una cuenta",

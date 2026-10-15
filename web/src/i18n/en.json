@@ -456,7 +456,7 @@
       "passwordHelp": "Forgot your password? Ask whoever administers the platform at your organization to reset it.",
       "signInAssurance": "On anonymous surveys, signing in only checks that you were invited; it is never linked to your answers.",
       "busyTitle": "Too many people are signing in at once",
-      "busyBody": "Wait a minute and try again. Your username and password are fine — the platform is receiving a lot of sign-ins at the same time.",
+      "busyBody": "Wait a minute and try again. The platform is receiving many sign-in attempts and has not checked your credentials yet.",
       "credentialsTitle": "That email and password do not match",
       "credentialsBody": "Check both and try again. We do not say which one was wrong: that way nobody can find out which addresses have an account.",
       "createAccount": "Create an account",
