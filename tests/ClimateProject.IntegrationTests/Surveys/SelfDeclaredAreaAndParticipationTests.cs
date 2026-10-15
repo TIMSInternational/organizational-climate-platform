@@ -520,11 +520,28 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
         Assert.DoesNotContain(view.Pending, p => p.Email == $"carla@{_mail}");
         Assert.Equal(view.Pending.Count, view.PendingCount);
 
+        // Two people DID answer this survey, and the roster still names nobody. A QR response
+        // carries no user id, so every row falls to `not_started` on the absence of data
+        // rather than on a flag -- which is the property that makes it safe to put a named
+        // roster on a screen about an anonymous survey at all.
+        Assert.NotEmpty(view.Roster);
+        Assert.All(view.Roster, r => Assert.Equal(SurveyParticipantStatuses.NotStarted, r.Status));
+        Assert.Equal(0, view.StartedCount);
+
         // Nothing about answers, areas or timing travels: the shape has no such member.
+        //
+        // The roster added 2026-10-14 is pinned member by member, one level down, for exactly
+        // the reason the top level is: it carries participation STATE, the username an
+        // administrator reads back on the phone, and the demographics that same administrator
+        // uploaded -- and a field arriving in it without a decision is how an answer would
+        // eventually ride along. Extend these lists deliberately or not at all.
         using var document = JsonDocument.Parse(json);
         Assert.Equal(
-            ["answered", "answeredCount", "collectsParticipantIdentity", "pending", "pendingCount", "surveyId"],
+            ["answered", "answeredCount", "collectsParticipantIdentity", "notStartedCount", "pending", "pendingCount", "roster", "startedCount", "surveyId"],
             document.RootElement.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
+        Assert.Equal(
+            ["demographics", "email", "lastActivityOn", "name", "role", "status", "userId", "username"],
+            document.RootElement.GetProperty("roster").EnumerateArray().First().EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
         Assert.DoesNotContain(_operaciones.ToString(), json, StringComparison.OrdinalIgnoreCase);
     }
 
