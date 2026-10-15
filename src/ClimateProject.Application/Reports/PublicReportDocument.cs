@@ -684,7 +684,7 @@ public static class PublicReportProjection
             Map(section.Demographics, breakdown => ToPublicBreakdown(breakdown, completed, floor)),
             section.IsSuppressed,
             section.SuppressionReason,
-            section.MinimumGroupSize);
+            floor);
     }
 
     /// <summary>

@@ -1012,7 +1012,8 @@ describe('SurveyRespondForm confirmation', () => {
 
     expect(screen.getByText('Sus respuestas se agrupan de inmediato')).toBeTruthy()
     // The floor is the platform constant, not a number typed into the copy.
-    expect(screen.getByText(new RegExp(`menos de ${ANONYMITY_FLOOR} personas`))).toBeTruthy()
+    expect(screen.getByText(new RegExp(`cruces de variables demográficas requieren al menos ${ANONYMITY_FLOOR}`))).toBeTruthy()
+    expect(screen.getByText(/puede mostrarse con una respuesta/)).toBeTruthy()
     // The close date is `view.endDate`, spelled out rather than abbreviated.
     expect(screen.getByText('La encuesta cierra el 12 de septiembre de 2026')).toBeTruthy()
     // Ruled 2026-10-13: the card may not promise the results reach the respondent's

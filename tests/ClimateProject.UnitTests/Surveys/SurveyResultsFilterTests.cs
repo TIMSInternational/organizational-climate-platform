@@ -413,6 +413,31 @@ public class SurveyResultsFilterTests
     }
 
     [Fact]
+    public void A_single_department_of_one_agrees_with_its_disclosed_breakdown()
+    {
+        var inside = Cohort(1, 1, Finance);
+        var outside = Cohort(100, 4, Sales);
+        var aggregate = SurveyAggregation.Compute(
+            [Scale()], [.. inside, .. outside], [.. Answers(inside, "5"), .. Answers(outside, "1")], [],
+            targetAudienceCount: null, filter: SurveyResultsFilter.For(new SurveySegmentSelector("department", Finance.ToString())));
+        Assert.False(aggregate.IsSuppressed);
+        Assert.Equal(1, aggregate.Summary.CompletedCount);
+        Assert.Equal(5d, Assert.Single(aggregate.Questions).Average);
+        Assert.Equal(1, aggregate.MinimumGroupSize);
+    }
+
+    [Fact]
+    public void A_single_department_cannot_bypass_the_whole_survey_floor()
+    {
+        var inside = Cohort(1, 1, Finance);
+        var aggregate = SurveyAggregation.Compute(
+            [Scale()], inside, Answers(inside, "5").ToList(), [],
+            targetAudienceCount: null, filter: SurveyResultsFilter.For(new SurveySegmentSelector("department", Finance.ToString())));
+        Assert.True(aggregate.IsSuppressed);
+        Assert.Empty(aggregate.Questions);
+    }
+
+    [Fact]
     public void A_refused_cross_says_nothing_whatever_about_its_cohort()
     {
         var gerencia = StoredCohort(1, 1, Finance, ("puesto", "gerencia"), Sede);

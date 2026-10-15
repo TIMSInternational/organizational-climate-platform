@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { ANONYMITY_FLOOR } from './suppression'
+import { ANONYMITY_FLOOR, SINGLE_SEGMENT_FLOOR } from './suppression'
 import { MINIMUM_RESPONDENTS } from '../../features/microclimates/microclimatePrivacy'
 
 /**
@@ -40,6 +40,12 @@ function csharpConst(relativePath: string, name: string): string {
 }
 
 describe('the privacy floor', () => {
+  it('pins the single-dimension ruling in both stacks', () => {
+    expect(SINGLE_SEGMENT_FLOOR).toBe(1)
+    expect(csharpConst('src/ClimateProject.Application/Surveys/SurveyResultsPrivacy.cs', 'MinimumSingleSegmentRespondents'))
+      .toBe(String(SINGLE_SEGMENT_FLOOR))
+  })
+
   it('is the number the 2026-10-13 ruling published', () => {
     expect(ANONYMITY_FLOOR).toBe(FLOOR)
   })

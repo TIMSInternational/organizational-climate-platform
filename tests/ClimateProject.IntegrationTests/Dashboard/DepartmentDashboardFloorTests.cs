@@ -74,7 +74,7 @@ public class DepartmentDashboardFloorTests : IAsyncLifetime
     // ------------------------------------------------------------------
 
     [Fact]
-    public async Task An_open_surveys_team_count_under_the_floor_travels_as_null_and_so_does_a_company_total_under_it()
+    public async Task An_open_surveys_small_team_and_company_counts_are_reported()
     {
         var survey = await SeedSurveyAsync(
             "Q4 open", SurveyStatuses.Active, DateTimeOffset.UtcNow.AddDays(30), companyResponseCount: SurveyResultsPrivacy.MinimumRespondents - 1, targetAudienceCount: 24);
@@ -83,16 +83,14 @@ public class DepartmentDashboardFloorTests : IAsyncLifetime
         var raw = await ReadRawAsync(await LeaderAsync());
         var row = SurveyRow(raw, survey);
 
-        // Null -- not the seeded count, and not 0, which would read "nobody in this team has
-        // answered".
-        Assert.Equal(JsonValueKind.Null, row.GetProperty("responseCount").ValueKind);
-        // The whole company's count is under the floor as well: beside a hatched team count it
-        // would bound the team from above.
-        Assert.Equal(JsonValueKind.Null, row.GetProperty("companyResponseCount").ValueKind);
+        // A single department reports its count from one respondent onward.
+        Assert.Equal(2, row.GetProperty("responseCount").GetInt32());
+        // Participation counts are disclosed; the whole-survey floor still governs scores.
+        Assert.Equal(2, row.GetProperty("companyResponseCount").GetInt32());
         // The invited headcount is not a response count, and travels as the author entered it.
         Assert.Equal(24, row.GetProperty("companyTargetAudienceCount").GetInt32());
-        // And the running total leaves out the one survey the team answered under the floor.
-        Assert.Equal(0, raw.GetProperty("completedResponseCount").GetInt32());
+        // The running total agrees with the disclosed department count.
+        Assert.Equal(2, raw.GetProperty("completedResponseCount").GetInt32());
     }
 
     [Fact]
@@ -120,7 +118,7 @@ public class DepartmentDashboardFloorTests : IAsyncLifetime
     /// survey, it moved by exactly the open survey's hatched count between the two reads.
     /// </summary>
     [Fact]
-    public async Task The_running_total_never_moves_by_a_count_under_the_floor()
+    public async Task The_running_total_includes_every_disclosed_single_department_count()
     {
         var closed = await SeedSurveyAsync("Q3", SurveyStatuses.Closed, DateTimeOffset.UtcNow.AddDays(-10));
         await SeedResponsesAsync(closed, _engineeringId, 6);
@@ -128,12 +126,11 @@ public class DepartmentDashboardFloorTests : IAsyncLifetime
         await SeedResponsesAsync(open, _engineeringId, SurveyResultsPrivacy.MinimumRespondents - 2);
 
         var leader = await LeaderAsync();
-        Assert.Equal(6, (await ReadAsync(leader)).CompletedResponseCount);
+        Assert.Equal(6 + SurveyResultsPrivacy.MinimumRespondents - 2, (await ReadAsync(leader)).CompletedResponseCount);
 
-        // One more answer, still under the floor: the total must not move, or the two reads
-        // give the hatched count back by subtraction.
+        // One more answer changes the total, just as it changes the disclosed team row.
         await SeedResponsesAsync(open, _engineeringId, 1);
-        Assert.Equal(6, (await ReadAsync(leader)).CompletedResponseCount);
+        Assert.Equal(6 + SurveyResultsPrivacy.MinimumRespondents - 1, (await ReadAsync(leader)).CompletedResponseCount);
 
         // At the floor the open survey's count is printed anyway, so the total may carry it.
         await SeedResponsesAsync(open, _engineeringId, 1);

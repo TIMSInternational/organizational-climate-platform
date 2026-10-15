@@ -215,6 +215,12 @@ describe('crossOptions', () => {
 })
 
 describe('SurveyCrossPanel — comparing', () => {
+  it('does not use the single-dimension floor to describe demographic crosses', () => {
+    renderPanel(payload({ minimumGroupSize: 1 }))
+    expect(screen.getByText(copy.description.replace('{floor}', '3'), { exact: false })).toBeTruthy()
+    expect(screen.queryByText(copy.description.replace('{floor}', '1'), { exact: false })).toBeNull()
+  })
+
   it('does not render at all when the survey offers nothing to cross', () => {
     renderPanel(null)
     expect(screen.queryByText(copy.title)).toBeNull()

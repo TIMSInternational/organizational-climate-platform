@@ -21,6 +21,7 @@ import type { AdminDashboardModel } from './model'
  * `isPartial` is false: every region of it is present, which is the whole point.
  */
 export const fullModel: AdminDashboardModel = {
+  minimumGroupSize: ANONYMITY_FLOOR,
   isPartial: false,
   asOf: '2026-09-10',
   companyName: 'Grupo Meridiano S.A.',

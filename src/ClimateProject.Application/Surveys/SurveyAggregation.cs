@@ -89,6 +89,7 @@ public static class SurveyAggregation
         var companyDepartmentIds = departments.Select(d => d.DepartmentId).ToHashSet();
         responses = [.. responses.Select(r => WithSelfDeclaredDepartment(r, companyDepartmentIds))];
 
+        var wholeSurveyMeetsFloor = SurveyResultsPrivacy.MeetsSurveyFloor(responses.Count(r => r.IsComplete));
         var narrowing = filter ?? SurveyResultsFilter.None;
         if (!narrowing.IsEmpty)
         {
@@ -123,7 +124,12 @@ public static class SurveyAggregation
         var completed = responses.Where(r => r.IsComplete).ToList();
         var summary = Summarise(responses, completed, targetAudienceCount);
 
-        if (!SurveyResultsPrivacy.MeetsSurveyFloor(completed.Count))
+        // A single selected dimension follows the same rule as its breakdown row. The
+        // original survey must still clear its own floor; selecting a cohort cannot bypass it.
+        var resultFloor = narrowing.Selectors.Count == 1 && wholeSurveyMeetsFloor
+            ? SurveyResultsPrivacy.MinimumSingleSegmentRespondents
+            : SurveyResultsPrivacy.MinimumRespondents;
+        if (!wholeSurveyMeetsFloor || completed.Count < resultFloor)
         {
             // Counters only. See SurveyResultsPrivacy for why the participation numbers
             // survive the floor and everything per-question does not. Dimensions are

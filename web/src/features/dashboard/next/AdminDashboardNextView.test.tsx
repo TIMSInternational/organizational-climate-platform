@@ -264,6 +264,14 @@ describe('AdminDashboardNextView', () => {
    * So a withheld band draws a constant number of marks unrelated to its own count, and
    * the row still appears under its name: absent and withheld are different statements.
    */
+  it('shows a small department when the server applies the single-dimension floor', () => {
+    renderView({ ...fullModel, minimumGroupSize: 1 })
+    expect(document.querySelector('[data-slot="population-withheld"]')).toBeNull()
+    const small = fullModel.map.rows.find((row) => row.responses > 0 && row.responses < 3)!
+    const dots = [...document.querySelectorAll('[data-slot="population-dots"]')]
+    expect(dots.some((node) => node.children.length === small.responses)).toBe(true)
+  })
+
   it('draws a withheld group a fixed band, never one mark per respondent, and never a count', () => {
     renderView()
     const withheld = document.querySelector('[data-slot="population-withheld"]')

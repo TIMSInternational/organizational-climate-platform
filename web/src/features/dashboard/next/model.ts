@@ -105,6 +105,8 @@ export type AttentionItem =
  * absence looks like. `dimensions`, `waves` and `map` say it by being empty.
  */
 export interface AdminDashboardModel {
+  /** The floor applied to the department map by the server. */
+  minimumGroupSize?: number
   /**
    * True while any region of the model is missing — its read failed, or the tenant has
    * nothing in it yet (`RegionState`). The page shows a chip saying the screen is

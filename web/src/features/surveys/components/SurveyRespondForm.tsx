@@ -1433,6 +1433,7 @@ export default function SurveyRespondForm({
               {busy === 'saving' ? t('savingProgress') : t('saveAndFinishLater')}
             </Button>
             <SaveState state={saveState} locale={locale} />
+            {!publicEntry && <p className="m-0 text-center text-respond-sm text-fg-secondary">{t('resumeSignedIn')}</p>}
           </div>
         )}
       </form>

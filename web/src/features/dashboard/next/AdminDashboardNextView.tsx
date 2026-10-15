@@ -5,6 +5,7 @@ import { useTranslation, type TranslateFn } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
 import {
   ANONYMITY_FLOOR,
+  SINGLE_SEGMENT_FLOOR,
   BandChip,
   ClimateMap,
   KpiTile,
@@ -82,12 +83,13 @@ export default function AdminDashboardNextView({
   // (`DashboardEndpoints.cs:124`) and whose dashboard is not this one.
   const showExport = capabilities.canExport && capabilities.seesWholeCompany
   const { bands } = model
+  const floor = model.minimumGroupSize ?? SINGLE_SEGMENT_FLOOR
   const latest = latestAverage(model)
   const previous = previousAverage(model)
   // The move between the two averages AS the tile prints them, at two decimals.
   const move = latest !== null && previous !== null ? printedMove(latest, previous, 2, model.bands.scale) : null
   const rises = risesInARow(model)
-  const withheld = protectedRows(model, ANONYMITY_FLOOR)
+  const withheld = protectedRows(model, floor)
   // The two halves come from different regions (trends and surveys), so a completion
   // needs both; with either absent the tile prints a dash rather than a rate.
   const completion =
@@ -206,7 +208,7 @@ export default function AdminDashboardNextView({
                   <span className="flex flex-col">
                     {withheld.map((row) => (
                       <span key={row.departmentId}>
-                        {t('dashboard.next.participationProtected', { group: row.name, floor: ANONYMITY_FLOOR })}
+                        {t('dashboard.next.participationProtected', { group: row.name, floor })}
                       </span>
                     ))}
                   </span>
@@ -369,7 +371,7 @@ export default function AdminDashboardNextView({
                 bands={bands}
                 decimals={1}
                 // The floor, and never lower: a row under it is hatched and prints nothing.
-                threshold={ANONYMITY_FLOOR}
+                threshold={floor}
               />
             </div>
             )}
@@ -383,12 +385,12 @@ export default function AdminDashboardNextView({
                   bands={model.map.rows.map((row) => ({
                     name: row.name,
                     responses: row.responses,
-                    isProtected: isSuppressed(row.responses, ANONYMITY_FLOOR),
+                    isProtected: isSuppressed(row.responses, floor),
                   }))}
                   protectedLabel={t('dashboard.next.protectedWord')}
                 />
                 <p className="m-0 text-xs text-fg-tertiary">
-                  {t('dashboard.next.whoAnsweredNote', { floor: ANONYMITY_FLOOR })}
+                  {t('dashboard.next.whoAnsweredNote', { floor })}
                 </p>
               </div>
             )}
@@ -683,7 +685,7 @@ function AttentionRow({
     progress === 0 ? t('dashboard.next.noProgress') : percentReading(progress, locale)
 
   if (item.kind === 'lowest-cell') {
-    const cell = lowestCell(model, ANONYMITY_FLOOR)
+    const cell = lowestCell(model, model.minimumGroupSize ?? SINGLE_SEGMENT_FLOOR)
     if (!cell) return null
     const dimension = model.dimensions.find((d) => d.key === cell.dimensionKey)?.name ?? cell.dimensionKey
     return (

@@ -17,37 +17,21 @@ namespace ClimateProject.Api.Endpoints;
 /// </summary>
 internal static class InvitationGuaranteeCopy
 {
-    /// <param name="recordsParticipation">
-    /// <c>Survey.Settings.CollectParticipantIdentity</c> on an anonymous survey. The plain
-    /// anonymous sentence ends "completion is only ever available as an aggregate count", which
-    /// stops being true the moment respondents give their name: so that sentence is replaced,
-    /// not appended to, and says what is recorded instead -- that the person answered and the
-    /// day, apart from the answers.
-    /// </param>
-    public static string Survey(bool anonymous, string? locale, bool recordsParticipation = false)
+    public static string Survey(bool anonymous, string? locale)
         => ContentLanguages.NormaliseLocale(locale) == ContentLanguages.Spanish
             ? (anonymous
-                ? "Esta encuesta es anónima. El seguimiento de invitaciones registra que una persona fue invitada "
-                  + "y abrió la invitación, y se detiene ahí. Ni «iniciada» ni «completada» se guardan contra una "
-                  + "persona, porque una marca de tiempo individual que afirme que existe una respuesta puede "
-                  + "cruzarse por hora con las propias respuestas y reidentificar a quien respondió. "
-                  + (recordsParticipation
-                      ? "Quien responde por el enlace o el código QR indica su nombre y, si quiere, su correo: se "
-                        + "registra que respondió y el día, sin hora, en una tabla aparte que no guarda ninguna "
-                        + "referencia a sus respuestas."
-                      : "La finalización solo está disponible como un recuento agregado.")
-                : "Esta encuesta no es anónima. El ciclo completo de la invitación se registra por cada persona "
-                  + "invitada.")
+                ? "Esta encuesta es anónima. El seguimiento de invitaciones registra la invitación y su apertura, "
+                  + "sin guardar horas individuales de inicio o finalización. Cuando una persona responde con su "
+                  + "cuenta, se registra por separado que terminó y el día, sin hora ni referencia a sus respuestas. "
+                  + "El listado distingue quién terminó y quién falta; no distingue quién empezó y quién no entró. "
+                  + "Una respuesta por enlace público sin cuenta no identifica quién terminó."
+                : "Esta encuesta no es anónima. El ciclo completo de la invitación se registra por cada persona invitada.")
             : (anonymous
-                ? "This survey is anonymous. Invitation tracking records that a person was invited and opened "
-                  + "the invitation, and stops there. Neither 'started' nor 'completed' is stored against an "
-                  + "individual, because a per-person timestamp asserting a response exists can be joined on "
-                  + "time against the responses themselves and re-identifies the respondent. "
-                  + (recordsParticipation
-                      ? "Whoever answers through the link or QR code gives their name and, optionally, their "
-                        + "email: that they answered, and the day without a time, is recorded in a separate table "
-                        + "that holds no reference to their answers."
-                      : "Completion is only ever available as an aggregate count.")
+                ? "This survey is anonymous. Invitation tracking records the invitation and its opening, "
+                  + "without individual start or completion timestamps. When someone answers while signed in, "
+                  + "their completion and calendar day are recorded separately, without a time or reference to "
+                  + "their answers. The roster distinguishes finished from unfinished, not started from never opened. "
+                  + "An answer through a public link without an account does not identify who finished."
                 : "This survey is not anonymous. The full invitation lifecycle is recorded per invitee.");
 
     public static string Microclimate(bool anonymous, string? locale)

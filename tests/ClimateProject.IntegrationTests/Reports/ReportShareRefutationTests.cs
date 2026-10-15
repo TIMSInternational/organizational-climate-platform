@@ -504,7 +504,7 @@ public class ReportShareRefutationTests : IAsyncLifetime
         // total and the other published counts, its size was one subtraction away.
         var departments = section.GetProperty("departments").EnumerateArray().ToList();
         Assert.DoesNotContain(departments, d => d.GetProperty("name").GetString() == "Tiny Team");
-        Assert.Equal(1, section.GetProperty("suppressedDepartmentCount").GetInt32());
+        Assert.Equal(2, section.GetProperty("suppressedDepartmentCount").GetInt32());
         Assert.False(section.TryGetProperty("unsegmentedRespondentCount", out _));
 
         // The differencing attack on the live public payload: what is left after subtracting
@@ -513,9 +513,10 @@ public class ReportShareRefutationTests : IAsyncLifetime
             - departments.Sum(d => d.GetProperty("respondentCount").GetInt32());
         Assert.True(remainder == 0 || remainder >= SurveyResultsPrivacy.MinimumSegmentRespondents, $"remainder {remainder}");
 
-        var largeTeam = departments.Single(d => d.GetProperty("name").GetString() == "Large Team");
-        Assert.False(largeTeam.GetProperty("isSuppressed").GetBoolean());
-        Assert.Equal(5, largeTeam.GetProperty("respondentCount").GetInt32());
+        // The authenticated document now includes both departments. The public projection
+        // refuses the entire breakdown when their unsegmented remainder is below three.
+        Assert.Empty(departments);
+        Assert.Equal(SurveyResultsPrivacy.MinimumSegmentRespondents, section.GetProperty("minimumGroupSize").GetInt32());
 
         // Respondent-WRITTEN content: never, in any shape. The word list is the only place in
         // this document a respondent's own characters could appear, so the assertion is on the

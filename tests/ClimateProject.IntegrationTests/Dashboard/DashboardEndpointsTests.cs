@@ -650,10 +650,8 @@ public class DashboardEndpointsTests : IAsyncLifetime
         Assert.Equal(_engineeringId, body.DepartmentId);
         Assert.Equal("Engineering", body.DepartmentName);
         Assert.Equal(_companyAId, body.CompanyId);
-        // Engineering's two completed responses are to one survey it answered under the
-        // floor, so the running total leaves them out; DepartmentDashboardFloorTests pins the
-        // floor, and that the total is the department's own once the floor is met.
-        Assert.Equal(0, body.CompletedResponseCount);
+        // Only Engineering's two completed responses contribute to its disclosed count.
+        Assert.Equal(2, body.CompletedResponseCount);
         Assert.Equal(2, body.OpenActionPlanCount);
         Assert.Equal(1, body.OverdueActionPlanCount);
 
