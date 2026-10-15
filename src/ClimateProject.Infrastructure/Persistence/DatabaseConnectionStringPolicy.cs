@@ -69,14 +69,29 @@ public enum TransactionPoolerAction
 /// </para>
 /// <para>
 /// <strong>Problem one: the pool was unbounded.</strong> Npgsql's default
-/// <c>Maximum Pool Size</c> is 100 and nothing overrode it. The App Runner service template
-/// (<c>infra/aws/climate-project-api-prod-service.yml</c>) sets no
-/// <c>AutoScalingConfigurationArn</c>, so the service runs on App Runner's *default*
-/// autoscaling configuration — <c>MaxSize</c> 25. Each instance owns its own pool, so the
-/// worst case was 25 x 100 = 2500 server connections against a Supabase pooler that permits
-/// far fewer. <see cref="DefaultMaxPoolSize"/> brings the worst case to 25 x 10 = 250, which
-/// the arithmetic table in <c>infra/aws/README.md</c> works through against Supabase's
-/// ceiling.
+/// <c>Maximum Pool Size</c> is 100 and nothing overrode it. Each instance owns its own pool,
+/// so worst-case demand is instances x pool size and nothing else in the system bounds it.
+/// <see cref="DefaultMaxPoolSize"/> bounds it.
+/// </para>
+/// <para>
+/// <strong>The budget that bound was measured against was wrong, and a load test proved it on
+/// 2026-10-15.</strong> This type and the arithmetic table in <c>infra/aws/README.md</c> were
+/// written against a worst case of 25 instances x 10 connections = 250, with 250 chosen as
+/// "under the smallest plausible configured limit". The project's actual Supavisor pool size
+/// was <strong>15</strong>, a Nano compute default. Raising <c>MinSize</c> from 1 to 2 that
+/// morning therefore took demand from 10 connections to 20, and a burst of 300 concurrent
+/// sign-ins returned seven HTTP 500s, every one of them
+/// <c>XX000: (EMAXCONNSESSION) max clients reached in session mode - max clients are limited
+/// to pool_size: 15</c>. In session mode each client holds a dedicated backend for the life of
+/// the session, so the pool size IS the concurrent-client ceiling.
+/// </para>
+/// <para>
+/// The pool size has since been raised to 30 — half of Nano's 60 <c>max_connections</c>,
+/// leaving the rest for Supabase's own Auth, Storage, PostgREST and health checker, and for
+/// migrations, which reach the database through this same session pooler. The same test then
+/// returned zero errors and 67% more throughput. Both numbers in the budget are now read from
+/// somewhere real rather than assumed: the instance ceiling from the autoscaling configuration
+/// in the service template, and the pooler ceiling from the project's dashboard.
 /// </para>
 /// <para>
 /// The default is applied <em>only</em> when the incoming string is silent on the subject.
@@ -106,27 +121,35 @@ public enum TransactionPoolerAction
 /// not be one in the environments that do not.
 /// </para>
 /// <para>
-/// The flag defaults to <see langword="false"/>, which is a deliberate and temporary
-/// concession rather than the intended end state. Production's Secrets Manager value still
-/// says <see cref="SupavisorTransactionPoolerPort"/>, and a deploy of this commit that
-/// refused to start would take a service that is intermittently slow and make it entirely
-/// down — in order to complain about a value the deploy itself cannot change. The intended
-/// end state is <c>Database:RequireSessionPooler=true</c> on production, set <em>after</em>
-/// the secret has been flipped and that deploy verified, so the port cannot silently regress
-/// afterwards. The two cannot move together: a deploy of this repository cannot write a
-/// Secrets Manager value, so arming the flag first is exactly the failed health check the flag
-/// exists to avoid. See <c>infra/aws/README.md</c> ("Arming the guard") for the ordered
-/// sequence.
+/// The flag defaults to <see langword="false"/> for the environments that do not depend on it.
+/// <strong>On production it is armed and the sequence is complete:</strong> the live service
+/// carries <c>Database__RequireSessionPooler=true</c> and starts, which is only possible
+/// against the session pooler, and the <c>EMAXCONNSESSION</c> error above names session mode
+/// in so many words. Earlier revisions of this paragraph said the secret still pointed at
+/// <see cref="SupavisorTransactionPoolerPort"/>; that is no longer true, and the guard now
+/// stops the port regressing. See <c>infra/aws/README.md</c> ("Arming the guard").
 /// </para>
 /// </remarks>
 public static class DatabaseConnectionStringPolicy
 {
     /// <summary>
     /// The maximum pool size applied when the connection string does not specify one.
-    /// Chosen against App Runner's default <c>MaxSize</c> of 25 instances — see the
-    /// arithmetic in <c>infra/aws/README.md</c>.
+    ///
+    /// <para>
+    /// Six, because the service's own ceiling is four instances and the pooler's is thirty
+    /// connections: 4 x 6 = 24 leaves room for a deploy's migration and for Supabase's own
+    /// services. It was 10, which fitted the budget this repository had assumed and not the
+    /// one the database actually had — see the remarks on the enclosing type.
+    /// </para>
+    /// <para>
+    /// Six is not a constraint on throughput. A sign-in holds a connection for the user
+    /// lookup, on the order of twenty milliseconds, and spends the rest of its time in bcrypt
+    /// holding nothing; measured throughput is 6.5 sign-ins a second across two instances, so
+    /// six connections per instance is some two orders of magnitude more than the work needs.
+    /// The CPU is the binding constraint, which is the right shape for this service.
+    /// </para>
     /// </summary>
-    public const int DefaultMaxPoolSize = 10;
+    public const int DefaultMaxPoolSize = 6;
 
     /// <summary>
     /// Supabase Supavisor's <em>transaction</em> pooler port. Correct for short-lived

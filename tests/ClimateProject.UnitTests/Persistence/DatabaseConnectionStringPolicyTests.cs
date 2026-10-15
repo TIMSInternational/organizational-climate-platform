@@ -254,31 +254,60 @@ public class DatabaseConnectionStringPolicyTests
         Assert.Equal(DatabaseConnectionStringPolicy.DefaultMaxPoolSize, result.MaxPoolSize);
     }
 
+    /// <summary>
+    /// Worst-case connection demand against the budget the DATABASE actually has.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This test existed before 2026-10-15 and passed throughout the incident it was meant to
+    /// prevent, because both of its numbers were invented. It compared 25 instances -- App
+    /// Runner's implicit default, which this service stopped using when it got an explicit
+    /// autoscaling configuration -- against a budget of 250, described in its own comment as
+    /// "this repository's deliberately conservative choice, not a vendor-published number".
+    /// The project's real Supavisor pool size was <b>15</b>. So the guard compared a ceiling
+    /// the service no longer had with a limit the database never had, and a burst of 300
+    /// concurrent sign-ins returned HTTP 500s with
+    /// <c>(EMAXCONNSESSION) max clients ... limited to pool_size: 15</c>.
+    /// </para>
+    /// <para>
+    /// A test over two assumed constants cannot catch a real ceiling. Both numbers below are
+    /// now read from somewhere: <see cref="ServiceMaxInstances"/> from <c>MaxSize</c> in
+    /// <c>infra/aws/climate-project-api-prod-service.yml</c>, and
+    /// <see cref="PoolerConnectionBudget"/> from the project's own dashboard (Database ->
+    /// Connection pooling), where it was read on 2026-10-15. Either moving means re-reading the
+    /// other; the arithmetic is in <c>infra/aws/README.md</c>.
+    /// </para>
+    /// </remarks>
     [Fact]
-    public void Default_maximum_pool_size_stays_within_the_connection_budget_at_full_app_runner_scale()
+    public void Default_maximum_pool_size_stays_within_the_budget_the_pooler_actually_has()
     {
-        // Guards the constant itself against being raised casually. App Runner's default
-        // autoscaling configuration caps the service at 25 instances, and each instance owns
-        // its own independent pool, so worst-case demand is instances x pool size -- it is
-        // not bounded by anything else in the system.
-        //
-        // The budget below is this repository's deliberately conservative choice, not a
-        // vendor-published number: Supabase's pooler client limit varies by compute size and
-        // must be read from the project's dashboard. 250 is picked to stay under the smallest
-        // plausible configured limit. The arithmetic is written out in infra/aws/README.md,
-        // and this test exists so that raising DefaultMaxPoolSize forces that document to be
-        // revisited rather than quietly invalidated.
-        const int AppRunnerDefaultMaxInstances = 25;
-        const int WorstCaseConnectionBudget = 250;
+        // MaxSize in the service's own autoscaling configuration, not App Runner's default.
+        const int ServiceMaxInstances = 4;
 
-        var worstCase = AppRunnerDefaultMaxInstances * DatabaseConnectionStringPolicy.DefaultMaxPoolSize;
+        // Read from the Supabase dashboard on 2026-10-15, after it was raised from the Nano
+        // default of 15. In SESSION mode a client holds a dedicated backend for the life of
+        // the session, so this is the concurrent-client ceiling and not merely a hint.
+        const int PoolerConnectionBudget = 30;
+
+        var worstCase = ServiceMaxInstances * DatabaseConnectionStringPolicy.DefaultMaxPoolSize;
 
         Assert.True(
-            worstCase <= WorstCaseConnectionBudget,
-            $"Worst-case connection demand is {worstCase}, above the agreed budget of " +
-            $"{WorstCaseConnectionBudget}. Raising DefaultMaxPoolSize requires either a smaller " +
-            "App Runner MaxSize or a confirmed higher Supabase pooler limit -- and an update to " +
-            "the arithmetic table in infra/aws/README.md.");
+            worstCase <= PoolerConnectionBudget,
+            $"Worst-case connection demand is {worstCase} ({ServiceMaxInstances} instances x "
+            + $"{DatabaseConnectionStringPolicy.DefaultMaxPoolSize} connections), above the "
+            + $"pooler's {PoolerConnectionBudget}. Every connection past it is refused as "
+            + "EMAXCONNSESSION and reaches the respondent as HTTP 500. Lower the pool size, "
+            + "lower MaxSize, or raise the pooler -- and re-read the dashboard rather than "
+            + "assuming, which is how this guard came to pass while production failed.");
+
+        // Headroom for the things that share the pooler and are not instances: a deploy's EF
+        // migration, which connects through this same session pooler, and a psql session.
+        Assert.True(
+            worstCase <= PoolerConnectionBudget - 4,
+            $"Worst-case demand {worstCase} leaves fewer than four spare connections of "
+            + $"{PoolerConnectionBudget}. A deploy runs migrations through this same pooler "
+            + "while the old instances are still serving, so a budget with no slack turns a "
+            + "deploy into an outage.");
     }
 
     [Fact]

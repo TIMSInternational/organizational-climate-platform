@@ -214,9 +214,11 @@ Resources:
   # MAXCONCURRENCY 100 -> 12 AND MINSIZE 1 -> 2, both on 2026-10-15 for the ESPH launch.
   #
   # 100 was never a number this service could honour. Each instance holds
-  # DatabaseConnectionStringPolicy.DefaultMaxPoolSize = 10 Npgsql connections, so the
-  # hundredth concurrent request was the ninetieth waiting on a pool of ten -- and Npgsql
-  # throws when that wait expires rather than queueing politely. Worse, App Runner reads
+  # DatabaseConnectionStringPolicy.DefaultMaxPoolSize Npgsql connections -- 6 since
+  # 2026-10-15, 10 before it -- so the hundredth concurrent request was the ninety-something
+  # waiting on a pool of ten, and Npgsql throws when that wait expires rather than queueing
+  # politely. (The pool size itself then turned out to be the smaller problem: see "Cause 2"
+  # in infra/aws/README.md for the pooler ceiling of 15 that MinSize 2 over-subscribed.) Worse, App Runner reads
   # concurrency as its scale-out signal: at 100 it piles a burst onto ONE instance and never
   # asks for a second, so the MaxSize of 4 did nothing on the one shape of load that needs
   # it. 12 sits just above the pool, so an instance saturates at about the point it runs out

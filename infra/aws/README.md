@@ -305,40 +305,67 @@ of the runtime port, which is why it should not be skipped once steps 1–2 are 
 ### Cause 2 — the pool was unbounded (**fixed in this repository**)
 
 Nothing set Npgsql's `Maximum Pool Size`, so it took the driver default of **100 per
-instance**. Pools are per-process, and `climate-project-api-prod-service.yml` sets no
-`AutoScalingConfigurationArn`, so the service runs on App Runner's **default autoscaling
-configuration**: `MinSize` 1, `MaxSize` **25**. Worst-case demand is therefore
-`instances x pool size` with nothing else bounding it:
+instance**. Pools are per-process, so worst-case demand is `instances x pool size` with nothing
+else in the system bounding it.
 
-| Instances (App Runner) | Max pool size (Npgsql) | Worst-case server connections |
-|---|---|---|
-| 1 (`MinSize`, idle) | 100 (old default) | 100 |
-| 25 (`MaxSize`, peak) | 100 (old default) | **2500** |
-| 1 (`MinSize`, idle) | **10 (current)** | 10 |
-| 25 (`MaxSize`, peak) | **10 (current)** | **250** |
+> **This section told its reader to confirm the real ceiling, nobody did, and on 2026-10-15 it
+> cost a production incident.** The numbers below are now measured. The paragraph that used to
+> stand here reasoned from a budget of 250, chosen as "under the smallest plausible configured
+> limit", against App Runner's implicit `MaxSize` of 25 — a ceiling this service stopped using
+> when it got an explicit autoscaling configuration. The project's actual Supavisor pool size
+> was **15**, the Nano compute default. Raising `MinSize` from 1 to 2 that morning took demand
+> from 10 connections to 20, and a burst of 300 concurrent sign-ins returned seven HTTP 500s,
+> each one `XX000: (EMAXCONNSESSION) max clients reached in session mode - max clients are
+> limited to pool_size: 15`. **In session mode a client holds a dedicated backend for the life
+> of the session, so the pool size is the concurrent-client ceiling, not a hint.**
 
-2500 is far past what a Supabase pooler will accept on any small plan, so at even moderate
-scale-out the service would exhaust the pooler and new connections would queue until they timed
-out — the same symptom as cause 1, from an unrelated direction. `DatabaseConnectionStringPolicy`
-now applies a `Maximum Pool Size` of **10**, bringing peak demand to **250**.
+The service's own ceiling is now explicit — `MinSize` 2, `MaxSize` 4 in
+`climate-project-api-prod-service.yml` — and the pooler's was read from the dashboard:
 
-**Confirm the actual ceiling before trusting the bottom row.** Supabase's pooler client limit
-varies by compute size and is not a fixed published constant; read it from the project's
-dashboard (Database → Connection pooling) or `SHOW max_connections`. 250 is chosen to sit under
-the smallest plausible configured limit with headroom for migrations, `psql` sessions and the
-Supabase dashboard's own connections, which also draw on the same budget.
+| Instances | Max pool size (Npgsql) | Connections wanted | Pooler allows | |
+|---|---|---|---|---|
+| 1 | 100 (driver default) | 100 | 15 | refused |
+| 25 (App Runner's old implicit max) | 100 | 2500 | 15 | refused |
+| 2 (`MinSize`) | 10 (old constant) | 20 | 15 | **the incident** |
+| 4 (`MaxSize`) | 10 (old constant) | 40 | 15 | refused |
+| 2 (`MinSize`) | **6 (current)** | 12 | **30 (current)** | fits |
+| 4 (`MaxSize`) | **6 (current)** | 24 | **30 (current)** | fits, 6 spare |
+
+Two things moved. The pooler's pool size was raised from 15 to **30** — half of Nano's 60
+`max_connections`, leaving the rest for Supabase's own Auth, Storage, PostgREST and health
+checker, and for migrations, which reach the database through this same session pooler.
+`DatabaseConnectionStringPolicy.DefaultMaxPoolSize` dropped from 10 to **6**, so a scale-out to
+four instances still fits with slack. Re-running the identical burst after both changes returned
+**zero errors and 67% more throughput** (234 → 390 full sign-ins a minute), because requests no
+longer stall acquiring a connection.
+
+Six per instance does not constrain throughput: a sign-in holds a connection for the user
+lookup, around twenty milliseconds, and spends the rest of its time in bcrypt holding nothing.
+Measured throughput is 6.5 sign-ins a second across two instances, so the CPU binds long before
+the pool does — which is the right shape for this service.
+
+**Re-read the dashboard whenever either number moves, and do not reason from a plausible-looking
+one.** `Database → Connection pooling` gives the pool size; the compute size sets both it and
+`max_connections` (Nano: 15 by default, 60 respectively). The unit test
+`Default_maximum_pool_size_stays_within_the_budget_the_pooler_actually_has` pins this table, and
+its predecessor passed throughout the incident precisely because both of its numbers were
+assumed rather than read.
 
 Three knobs move these numbers, and changing any one requires rechecking the others:
 
 - **Pool size** — `DatabaseConnectionStringPolicy.DefaultMaxPoolSize`
-  (`src/ClimateProject.Infrastructure/Persistence/DatabaseConnectionStringPolicy.cs`). A unit
-  test asserts the `25 x DefaultMaxPoolSize <= 250` budget, so raising it fails the build until
-  this section is revisited.
-- **Instance ceiling** — currently App Runner's implicit default of 25. Adding an explicit
-  `AWS::AppRunner::AutoScalingConfiguration` with a smaller `MaxSize` would buy room for a
-  larger pool, and would make the ceiling visible in the template instead of implied by an
-  AWS default.
-- **Supabase plan** — a larger compute size raises the ceiling itself.
+  (`src/ClimateProject.Infrastructure/Persistence/DatabaseConnectionStringPolicy.cs`), now **6**.
+  A unit test asserts `MaxSize x DefaultMaxPoolSize <= pooler pool size - 4`, so raising it
+  fails the build until this section is revisited.
+- **Instance ceiling** — `MaxSize` **4**, in the explicit
+  `AWS::AppRunner::AutoScalingConfiguration` in `climate-project-api-prod-service.yml`. It used
+  to be App Runner's implicit default of 25, and making it explicit is what lets the budget
+  above be arithmetic rather than a guess.
+- **Pooler pool size** — **30**, in the Supabase dashboard under Database → Connection pooling.
+  This is the one that is easy to assume and must be read. It is per user+db combination and,
+  in session mode, is the concurrent-client ceiling.
+- **Supabase compute size** — Nano gives 15 as the pool-size default and 60 `max_connections`;
+  a larger compute raises both, and is the only way to raise the 200 max-client limit.
 
 The pool size can also be overridden **without a code change**: if the Secrets Manager
 connection string specifies `Maximum Pool Size` itself, that value is honoured and the default
