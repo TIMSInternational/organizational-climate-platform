@@ -302,7 +302,7 @@ export function groupCountOf(section: ReportSurveySection): SharedGroupCount {
   let total = 0
 
   // A survey below the whole-survey floor has no readable group, by definition: with
-  // fewer than five complete responses every group inside it is smaller still. The
+  // fewer complete responses than the floor, every group inside it is smaller still. The
   // aggregation produces no breakdowns at all for such a survey, so this branch is
   // unreachable from this server — and it is here because the branch that is NOT taken
   // would report "2 of 3 readable" for a survey whose per-question results are withheld

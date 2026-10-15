@@ -6,7 +6,7 @@ import { TranslationProvider } from '../../../i18n'
 
 /**
  * The ongoing-surveys table the company and department dashboards share. The department
- * payload sends a team count under the floor of 5 as `null` (`DashboardEndpoints.DepartmentCountFloor`),
+ * payload sends a team count under the floor as `null` (`DashboardEndpoints.DepartmentCountFloor`,
  * and the table must draw that as protected — a 0 would read "nobody in this team answered".
  */
 describe('DashboardSurveyTable', () => {
