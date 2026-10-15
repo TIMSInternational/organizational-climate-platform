@@ -57,7 +57,7 @@ export interface ProtectedCellProps {
    */
   responses: number
   /**
-   * The anonymity floor. Defaults to `ANONYMITY_FLOOR` (5).
+   * The anonymity floor. Defaults to `ANONYMITY_FLOOR`, which is 3 (ruled 2026-10-13).
    *
    * Passed in rather than read from a constant because it is a per-company
    * setting: Company Settings can raise it, and the redesign shows it there as
