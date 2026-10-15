@@ -1,3 +1,4 @@
+import ClimateWorkbookPage from '../features/surveys/ClimateWorkbookPage'
 import { createBrowserRouter, Navigate, type RouteObject } from 'react-router'
 import LoginNextPage from '../auth/next/LoginNextPage'
 import RegisterNextPage from '../auth/next/RegisterNextPage'
@@ -452,6 +453,7 @@ export const router = createBrowserRouter([
               // be read as a survey id, so the order is readability only.
               // The redesigned builder replaced the step-by-step wizard here (ruled 10 Sep); the old
               // `pages/SurveyCreatePage.tsx` stays unrouted as the wiring reference.
+              { path: '/surveys/import', element: <ClimateWorkbookPage /> },
               { path: '/surveys/new', element: <SurveyBuilderNextPage /> },
               // Before `/surveys/:id` for readability only -- react-router ranks a
               // static segment above a dynamic one regardless of declaration order,

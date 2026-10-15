@@ -23,7 +23,7 @@ import {
   type ChipTone,
 } from '../../../../components/ui'
 import { useCompanyContext, useCompanyScope } from '../../../../company-context'
-import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
+import { readViewerClaims, useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { formatMetric } from '../../../../components/charts/formatMetric'
 import { calendarDay, calendarDayLong } from '../../../../lib/calendarDay'
 import { cn } from '../../../../lib/cn'
@@ -125,13 +125,14 @@ export default function SuperSurveysListView() {
         title={t('navigation.surveys')}
         description={t('surveys.next.super.description')}
         actions={
-          capabilities.canAuthorSurveys ? (
-            <Button asChild variant="primary">
+          capabilities.canAuthorSurveys || readViewerClaims().role === 'super_admin' ? (
+            <div className="flex flex-wrap gap-2"><Button asChild variant="outline"><Link to="/surveys/import">{t('climateWorkbook.title')}</Link></Button>
+            {capabilities.canAuthorSurveys && <Button asChild variant="primary">
               <Link to="/surveys/new">
                 <Plus aria-hidden="true" />
                 {t('surveys.newSurvey')}
               </Link>
-            </Button>
+            </Button>}</div>
           ) : undefined
         }
       />

@@ -81,6 +81,12 @@ export interface CreateSurveySettingsInput {
   anonymous?: boolean
   allowPartialResponses?: boolean
   showProgress?: boolean
+  autoSave?: boolean
+  notificationSendInvitations?: boolean
+  notificationSendReminders?: boolean
+  invitationSendImmediately?: boolean
+  invitationCustomSubject?: LocalizedInput | null
+  invitationCustomMessage?: LocalizedInput | null
 }
 
 export interface CreateSurveyInput {

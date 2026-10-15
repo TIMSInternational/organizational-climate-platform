@@ -84,4 +84,7 @@
     <AssemblyMetadata Include="BuildTimestamp" Value="$(BuildTimestamp)" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="Assets/TIMS_NEXA_Clima_Integral.xlsx" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

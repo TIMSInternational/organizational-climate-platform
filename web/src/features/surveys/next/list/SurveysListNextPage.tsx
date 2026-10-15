@@ -117,12 +117,13 @@ function SurveysListForCompany() {
         description={t('surveys.next.list.description')}
         actions={
           capabilities.canAuthorSurveys ? (
+            <div className="flex flex-wrap gap-2"><Button asChild variant="outline"><Link to="/surveys/import">{t('climateWorkbook.title')}</Link></Button>
             <Button asChild variant="primary">
               <Link to="/surveys/new">
                 <Plus aria-hidden="true" />
                 {t('surveys.newSurvey')}
               </Link>
-            </Button>
+            </Button></div>
           ) : undefined
         }
       />

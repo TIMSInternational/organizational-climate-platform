@@ -652,6 +652,7 @@ app.MapInvitationAcceptEndpoints();
 app.MapSystemSettingsEndpoints();
 app.MapDemographicFieldEndpoints();
 app.MapBulkImportEndpoints();
+app.MapClimateWorkbookEndpoints();
 app.MapMassInviteEndpoints();
 app.MapActionPlanEndpoints();
 app.MapActionPlanTemplateEndpoints();
