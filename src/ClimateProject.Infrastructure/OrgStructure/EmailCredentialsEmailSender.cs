@@ -15,7 +15,8 @@ public sealed class EmailCredentialsEmailSender(
     ILogger<EmailCredentialsEmailSender> logger) : ICredentialsEmailSender
 {
     public async Task<EmailSendOutcome> SendAsync(
-        string toEmail, string username, string password, string? companyLanguage, CancellationToken cancellationToken)
+        string toEmail, string? recipientName, string username, string password, string? companyLanguage,
+        CredentialsEmailPurpose purpose, CancellationToken cancellationToken)
     {
         // Refused before composing, for InvitationEmailComposer's reason: a reserved domain can
         // only hard-bounce, and the bounce rate is scored against a shared sending account.
@@ -28,7 +29,8 @@ public sealed class EmailCredentialsEmailSender(
         }
 
         var message = CredentialsEmailComposer.Compose(
-            toEmail, username, password, options.LinkTo(CredentialsEmailComposer.LoginPath), companyLanguage);
+            toEmail, recipientName, username, password, options.LinkTo(CredentialsEmailComposer.LoginPath),
+            companyLanguage, purpose);
         var outcome = await transport.SendAsync(message, cancellationToken).ConfigureAwait(false);
 
         if (!outcome.Delivered)

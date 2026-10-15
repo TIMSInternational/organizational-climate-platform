@@ -521,6 +521,43 @@ public class MassInviteTests(PostgresContainerFixture postgres, CapturingCredent
         Assert.Equal(before, _factory.Sent.Count(s => s.ToEmail == email));
     }
 
+    /// <summary>
+    /// WHICH message each route sends, which is the one thing the two routes do differently.
+    ///
+    /// <para>
+    /// The bulk route re-sent the invitation -- *"Tu organización te invita a responder una
+    /// encuesta"* -- to people who had already read exactly that, while the client had asked for
+    /// *"un correo solicitándoles que por favor ingresen y lo hagan"*. Nothing failed, because
+    /// both messages carry the same username and the same freshly generated password: the
+    /// difference is only in the words, so only a test that reads the purpose can see it.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task The_batch_sends_a_reminder_while_a_single_resend_repeats_the_invitation()
+    {
+        var client = await AdminClientAsync(_companyId);
+        var email = $"purpose-{Guid.NewGuid():N}@example.com";
+        await ImportAsync(client, preview: false, new BulkImportRowInput(2, "Purpose Person", email, "Colaborador", null));
+
+        // The import is first contact: its reader has never heard of the account.
+        var invited = Assert.Single(_factory.Sent, s => s.ToEmail == email);
+        Assert.Equal(CredentialsEmailPurpose.Invitation, invited.Purpose);
+
+        var ids = await IdsOfAsync(email);
+
+        // The bulk route is the roster's "Enviar recordatorio": everyone in the batch was picked
+        // for NOT having finished, so it asks them to go in and finish.
+        var batch = await client.PostAsJsonAsync("/admin/users/credentials", new { userIds = ids });
+        Assert.Equal(HttpStatusCode.OK, batch.StatusCode);
+        Assert.Equal(CredentialsEmailPurpose.Reminder, _factory.Sent.Where(s => s.ToEmail == email).Last().Purpose);
+
+        // The single route stays an invitation: one administrator fixing one person, who most
+        // often never received the first message or has lost it.
+        var single = await client.PostAsync($"/admin/users/{ids[0]}/credentials", null);
+        Assert.Equal(HttpStatusCode.OK, single.StatusCode);
+        Assert.Equal(CredentialsEmailPurpose.Invitation, _factory.Sent.Where(s => s.ToEmail == email).Last().Purpose);
+    }
+
     private async Task<Guid[]> IdsOfAsync(params string[] emails)
     {
         using var scope = _factory.Services.CreateScope();
