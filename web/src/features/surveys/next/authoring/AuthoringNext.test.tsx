@@ -837,7 +837,7 @@ describe('Distribución — who has answered (ruled 2026-10-12)', () => {
     expect(within(pending).getByText(es.surveys.next.participation.pendingNote)).toBeTruthy()
   })
 
-  it('says why it is empty when the survey does not ask', async () => {
+  it('says nobody has finished yet rather than naming a setting that does nothing', async () => {
     vi.mocked(surveysApi.getSurveyParticipation).mockResolvedValueOnce({
       surveyId: 's1', collectsParticipantIdentity: false, answeredCount: 0, pendingCount: 3, answered: [], pending: [],
       startedCount: 0, notStartedCount: 3, roster: [], tracksIndividuals: true, tracksCompletionOnly: false,

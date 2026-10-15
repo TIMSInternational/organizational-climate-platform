@@ -521,11 +521,16 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
         Assert.Equal(view.Pending.Count, view.PendingCount);
 
         // Two people DID answer this survey, and the roster still names nobody. A QR response
-        // carries no user id, so every row falls to `not_started` on the absence of data
-        // rather than on a flag -- which is the property that makes it safe to put a named
-        // roster on a screen about an anonymous survey at all.
+        // carries no user id AND no participation row -- nobody signed in to be recorded -- so
+        // every row falls through on the absence of data rather than on a flag, which is the
+        // property that makes it safe to put a named roster on a screen about an anonymous
+        // survey at all.
+        //
+        // It falls to `not_completed` and not `not_started`: these people may have answered
+        // through the link for all this survey can tell, so saying they never opened it would
+        // be inventing the one fact an anonymous survey cannot have.
         Assert.NotEmpty(view.Roster);
-        Assert.All(view.Roster, r => Assert.Equal(SurveyParticipantStatuses.NotStarted, r.Status));
+        Assert.All(view.Roster, r => Assert.Equal(SurveyParticipantStatuses.NotCompleted, r.Status));
         Assert.Equal(0, view.StartedCount);
 
         // And the view SAYS so, rather than leaving the screen to present a roster of false

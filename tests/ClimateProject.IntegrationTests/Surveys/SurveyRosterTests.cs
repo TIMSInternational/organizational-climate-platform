@@ -136,9 +136,18 @@ public class SurveyRosterTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// The guarantee this must not break. An anonymous survey writes no <c>user_id</c>, so the
-    /// roster can name nobody as having answered -- it fails CLOSED on the absence of data
-    /// rather than on a flag that could be read from the wrong column.
+    /// The guarantee this must not break. An anonymous survey writes no <c>user_id</c>, so a
+    /// response alone can name nobody as having answered -- the roster fails CLOSED on the
+    /// absence of data rather than on a flag that could be read from the wrong column.
+    ///
+    /// <para>
+    /// The response here is seeded directly and therefore has no <c>survey_participations</c>
+    /// row beside it, which is exactly the shape this guards: a completed answer that nothing
+    /// attributes to anybody must still credit nobody. What changed with completion tracking
+    /// is only the NAME of the negative state -- <c>not_completed</c>, not
+    /// <c>not_started</c> -- because on an anonymous survey "never opened it" is a claim the
+    /// data cannot support, while "has not finished" is one it can.
+    /// </para>
     /// </summary>
     [Fact]
     public async Task An_anonymous_survey_reports_nobody_as_having_answered()
@@ -151,7 +160,7 @@ public class SurveyRosterTests : IAsyncLifetime
 
         Assert.Equal(0, view.AnsweredCount);
         Assert.Equal(0, view.StartedCount);
-        Assert.All(view.Roster, row => Assert.Equal(SurveyParticipantStatuses.NotStarted, row.Status));
+        Assert.All(view.Roster, row => Assert.Equal(SurveyParticipantStatuses.NotCompleted, row.Status));
 
         // The roster still lists her -- who was invited, her username and her demographics are
         // the administrator's to see, and a resend still works. What the screen must not do is

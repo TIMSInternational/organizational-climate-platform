@@ -254,10 +254,13 @@ describe('SurveyRosterPanel', () => {
 
     expect(await screen.findByText(T.completionOnlyNote)).toBeTruthy()
 
-    // The state column is drawn, because here it carries something true.
-    expect(screen.getByText(T.colStatus)).toBeTruthy()
-    expect(screen.getByText(T.statusCompleted)).toBeTruthy()
-    expect(screen.getByText(T.statusNotCompleted)).toBeTruthy()
+    // The state column is drawn, because here it carries something true. Scoped to the table:
+    // "Sin terminar" is deliberately BOTH the filter chip and the row's state, so an unscoped
+    // query matches two elements and proves neither.
+    const table = screen.getByRole('table')
+    expect(within(table).getByText(T.colStatus)).toBeTruthy()
+    expect(within(table).getByText(T.statusCompleted)).toBeTruthy()
+    expect(within(table).getByText(T.statusNotCompleted)).toBeTruthy()
 
     // The claim it cannot support.
     expect(screen.queryByText(T.statusNotStarted)).toBeNull()
