@@ -398,4 +398,135 @@ public class MassInviteTests(PostgresContainerFixture postgres, CapturingCredent
                                          && !u.Email.StartsWith("bounce-") && !u.Email.StartsWith("tenant-")),
             u => Assert.Null(u.Username));
     }
+    /// <summary>
+    /// The launch-day batch: pick the people who have not finished and send them all their
+    /// sign-in details again. Ruled 2026-10-14 -- the reminder carries the username AND a
+    /// password, which can only be a NEW one, because the first was discarded after hashing.
+    /// </summary>
+    [Fact]
+    public async Task A_batch_gives_every_person_a_new_password_and_invalidates_the_old_one()
+    {
+        var client = await AdminClientAsync(_companyId);
+        var one = $"batch-one-{Guid.NewGuid():N}@example.com";
+        var two = $"batch-two-{Guid.NewGuid():N}@example.com";
+        await ImportAsync(
+            client,
+            preview: false,
+            new BulkImportRowInput(2, "Batch One", one, "Colaborador", null),
+            new BulkImportRowInput(3, "Batch Two", two, "Colaborador", null));
+
+        var firstOne = Assert.Single(_factory.Sent, s => s.ToEmail == one);
+        var firstTwo = Assert.Single(_factory.Sent, s => s.ToEmail == two);
+        var ids = await IdsOfAsync(one, two);
+
+        var response = await client.PostAsJsonAsync("/admin/users/credentials", new { userIds = ids });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var result = (await response.Content.ReadFromJsonAsync<CredentialsResendBatchResult>())!;
+        Assert.Equal(2, result.Requested);
+        Assert.Equal(2, result.Sent);
+        Assert.Equal(0, result.Failed);
+        Assert.All(result.Outcomes, o => Assert.True(o.Delivered));
+
+        // The password is never in the response body: its owner reads it in their inbox.
+        var body = await response.Content.ReadAsStringAsync();
+        var secondOne = _factory.Sent.Where(s => s.ToEmail == one).Last();
+        Assert.DoesNotContain(secondOne.Password, body, StringComparison.Ordinal);
+
+        // The username is kept and the old password is dead -- for every person in the batch.
+        Assert.Equal(firstOne.Username, secondOne.Username);
+        var anonymous = _factory.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, await LoginStatusAsync(anonymous, firstOne.Username, firstOne.Password));
+        Assert.Equal(HttpStatusCode.OK, await LoginStatusAsync(anonymous, secondOne.Username, secondOne.Password));
+
+        var secondTwo = _factory.Sent.Where(s => s.ToEmail == two).Last();
+        Assert.Equal(HttpStatusCode.Unauthorized, await LoginStatusAsync(anonymous, firstTwo.Username, firstTwo.Password));
+        Assert.Equal(HttpStatusCode.OK, await LoginStatusAsync(anonymous, secondTwo.Username, secondTwo.Password));
+    }
+
+    /// <summary>
+    /// Every person is accounted for, including the ones who got nothing -- the #558 defect one
+    /// layer up, where a count that silently shrank read as "all sent".
+    /// </summary>
+    [Fact]
+    public async Task A_batch_names_the_people_it_could_not_send_to_and_still_sends_the_rest()
+    {
+        var client = await AdminClientAsync(_companyId);
+        var good = $"batch-good-{Guid.NewGuid():N}@example.com";
+        await ImportAsync(client, preview: false, new BulkImportRowInput(2, "Batch Good", good, "Colaborador", null));
+        var goodId = (await IdsOfAsync(good)).Single();
+
+        Guid adminId;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            adminId = await scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>().Users
+                .Where(u => u.CompanyId == _companyId && u.Role == Roles.CompanyAdmin).Select(u => u.Id).FirstAsync();
+        }
+        var ghost = Guid.NewGuid();
+        var before = _factory.Sent.Count(s => s.ToEmail == good);
+
+        var response = await client.PostAsJsonAsync(
+            "/admin/users/credentials", new { userIds = new[] { goodId, adminId, ghost } });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var result = (await response.Content.ReadFromJsonAsync<CredentialsResendBatchResult>())!;
+        Assert.Equal(3, result.Requested);
+        Assert.Equal(1, result.Sent);
+        Assert.Equal(2, result.Failed);
+        Assert.Equal("not_mass_invite", result.Outcomes.Single(o => o.UserId == adminId).Code);
+        Assert.Equal("not_found", result.Outcomes.Single(o => o.UserId == ghost).Code);
+        Assert.True(result.Outcomes.Single(o => o.UserId == goodId).Delivered);
+        Assert.Equal(before + 1, _factory.Sent.Count(s => s.ToEmail == good));
+    }
+
+    /// <summary>
+    /// The cap exists because the send is inline and holds a database connection; a request
+    /// over it must change nothing at all rather than send part of a roster.
+    /// </summary>
+    [Fact]
+    public async Task A_batch_over_the_cap_is_refused_before_anything_is_sent()
+    {
+        var client = await AdminClientAsync(_companyId);
+        var email = $"batch-cap-{Guid.NewGuid():N}@example.com";
+        await ImportAsync(client, preview: false, new BulkImportRowInput(2, "Batch Cap", email, "Colaborador", null));
+        var id = (await IdsOfAsync(email)).Single();
+        var before = _factory.Sent.Count(s => s.ToEmail == email);
+
+        var tooMany = Enumerable.Range(0, MassInviteEndpoints.MaxBatch).Select(_ => Guid.NewGuid()).Append(id).ToArray();
+        var response = await client.PostAsJsonAsync("/admin/users/credentials", new { userIds = tooMany });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("batch_too_large", await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        Assert.Equal(before, _factory.Sent.Count(s => s.ToEmail == email));
+    }
+
+    [Fact]
+    public async Task Another_companys_admin_cannot_batch_send_and_no_mail_leaves()
+    {
+        var owner = await AdminClientAsync(_companyId);
+        var email = $"batch-tenant-{Guid.NewGuid():N}@example.com";
+        await ImportAsync(owner, preview: false, new BulkImportRowInput(2, "Batch Tenant", email, "Colaborador", null));
+        var id = (await IdsOfAsync(email)).Single();
+        var before = _factory.Sent.Count(s => s.ToEmail == email);
+
+        var stranger = await AdminClientAsync(_otherCompanyId);
+        var response = await stranger.PostAsJsonAsync("/admin/users/credentials", new { userIds = new[] { id } });
+
+        // 200 with a per-row "not_found": the batch reports each id without confirming which
+        // ones exist in another tenant, and nothing is mailed.
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var result = (await response.Content.ReadFromJsonAsync<CredentialsResendBatchResult>())!;
+        Assert.Equal(0, result.Sent);
+        Assert.Equal("not_found", Assert.Single(result.Outcomes).Code);
+        Assert.Equal(before, _factory.Sent.Count(s => s.ToEmail == email));
+    }
+
+    private async Task<Guid[]> IdsOfAsync(params string[] emails)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        var found = await db.Users.Where(u => emails.Contains(u.Email))
+            .Select(u => new { u.Id, u.Email }).ToListAsync();
+        return [.. emails.Select(e => found.Single(f => f.Email == e).Id)];
+    }
 }
