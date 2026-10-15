@@ -286,4 +286,32 @@ describe('AdminUsersView (company administrator)', () => {
     expect(leader.textContent).toBe(es.superadmin.next.users.roles.leader)
     expect(leader.hasAttribute('title')).toBe(false)
   })
+  /**
+   * The launch-day phone call. A mass invite mails an account a generated `usuario` and a
+   * password the platform discards after hashing, so when that person rings the administrator
+   * the username is the only half of their credentials anyone can read back. The API has always
+   * sent it (`UserEndpoints.cs:96`); until now no screen showed it.
+   *
+   * The count assertion is the one with teeth: in this capture the `username` field is ABSENT
+   * on 40 of the 42 users, and `undefined !== null` is true -- so a guard written against null
+   * alone prints the label with nothing after it on every one of those rows.
+   */
+  it('prints the usuario on the rows a mass invite created, and on no others', async () => {
+    vi.stubGlobal('fetch', fetchWith())
+    renderAt(ROUTE)
+    await waitFor(() => expect(rows().length).toBe(USERS.length))
+
+    const mass = USERS.filter((person) => person.username)
+    expect(mass.length).toBeGreaterThan(0)
+
+    for (const person of mass) {
+      const row = document.querySelector(`tr[data-user-id="${person.id}"]`) as HTMLElement
+      // The label is the line's own text and the username the mono span inside it, so they are
+      // two queries rather than one: `getByText` reads an element's direct text nodes only.
+      expect(within(row).getByText(T.roster.username)).toBeTruthy()
+      expect(within(row).getByText(person.username as string)).toBeTruthy()
+    }
+
+    expect(screen.getAllByText(T.roster.username)).toHaveLength(mass.length)
+  })
 })

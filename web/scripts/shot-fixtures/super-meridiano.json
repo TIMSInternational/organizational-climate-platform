@@ -754,7 +754,8 @@
         "departmentId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
         "isActive": true,
         "lastLoginAt": null,
-        "createdAt": "2026-09-10T01:59:32.306999+00:00"
+        "createdAt": "2026-09-10T01:59:32.306999+00:00",
+        "username": "grupomer-p3n8w2ft"
       },
       {
         "id": "395b00b6-48e9-466b-80bf-6042ad9e0c5f",
@@ -1084,7 +1085,8 @@
         "departmentId": "aac7e1b9-5af4-4e04-872b-c11df8f1d4bd",
         "isActive": true,
         "lastLoginAt": "2026-09-10T02:05:01.913695+00:00",
-        "createdAt": "2026-09-10T02:00:32.909029+00:00"
+        "createdAt": "2026-09-10T02:00:32.909029+00:00",
+        "username": "grupomer-k7m2q9xa"
       }
     ]
   },
