@@ -4636,6 +4636,8 @@
       "doneBodyCredentials": "An account was created for each person, and their username and password were emailed to them along with the link to the survey. Nobody has to accept anything.",
       "doneCredentialsNotSentOne": "1 person did not get their sign-in details: their account was created, but the email did not go out. Find them in the people list and use \u201cResend sign-in details\u201d.",
       "doneCredentialsNotSentMany": "{count} people did not get their sign-in details: their accounts were created, but the email did not go out. Find them in the people list and use \u201cResend sign-in details\u201d.",
+      "importingProgress": "Importing… {done} of {total} people. Keep this page open.",
+      "stoppedPartWay": "{done} of {total} people were imported, and then it stopped. Those {done} accounts exist — do not load the file again, or they would be created twice. Import the rest in a new file, and use the people list to resend sign-in details to anyone who did not receive them.",
       "startOver": "Import another file",
       "noDepartment": "(no department)",
       "reason": {

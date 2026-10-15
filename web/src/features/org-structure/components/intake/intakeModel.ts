@@ -1,4 +1,5 @@
 import type { BulkImportResponse } from '../../api/bulkImport'
+import { IMPORT_CHUNK_ROWS } from '../../api/intake'
 import type {
   IntakeColumnMapping,
   IntakeColumnTarget,
@@ -235,4 +236,44 @@ export function stageStates(
     }
   }
   return states
+}
+
+
+/**
+ * The reviewed rows split into the batches the approval sends, one request each.
+ *
+ * `IMPORT_CHUNK_ROWS` carries the reasoning; this is only the split, and it keeps the file's
+ * order so the batches' results concatenate back into one list aligned with the rows the admin
+ * reviewed. An empty file yields one empty batch rather than none: approving nothing still asks
+ * the server, which is what it did before there were batches, and the verdict comes from the
+ * server rather than from this function's arithmetic.
+ */
+export function chunkForImport(rows: IntakeRow[], size = IMPORT_CHUNK_ROWS): IntakeRow[][] {
+  if (rows.length <= size) {
+    return [rows]
+  }
+  const batches: IntakeRow[][] = []
+  for (let start = 0; start < rows.length; start += size) {
+    batches.push(rows.slice(start, start + size))
+  }
+  return batches
+}
+
+/**
+ * The batches' answers read as the one answer the screen was written for.
+ *
+ * Counts are summed rather than recomputed from `rows`: `successCount` and `errorCount` are the
+ * server's own verdict on each batch, and a status string this function decided to count itself
+ * would be a second opinion that drifts from the first the next time a status is added.
+ *
+ * Called with the batches that FINISHED, which after a failure part-way through is fewer than
+ * were sent. That is the point — `IntakeWizard` shows this rather than nothing, because the
+ * accounts in those batches exist whether or not the request after them arrived.
+ */
+export function mergeImportResponses(parts: readonly BulkImportResponse[]): BulkImportResponse {
+  return {
+    rows: parts.flatMap((part) => part.rows),
+    successCount: parts.reduce((total, part) => total + part.successCount, 0),
+    errorCount: parts.reduce((total, part) => total + part.errorCount, 0),
+  }
 }

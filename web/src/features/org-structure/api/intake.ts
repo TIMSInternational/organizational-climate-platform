@@ -125,6 +125,24 @@ export async function parseIntakeWorkbook(
 /**
  * The reviewed rows. `preview` is the same flag the CSV upload carries and reaches the same
  * server-side body, so what the review step shows is what approving it will do.
+ *
+ * ## One request, and why the approval is not
+ *
+ * This sends whatever it is given in a single request. A PREVIEW is called with the whole file
+ * and must stay that way: the server's duplicate-within-this-file check lives in a set built per
+ * request (`seenInThisFile`), so the only place an email repeated at rows 50 and 150 can be seen
+ * as a repeat is a request holding both. The preview is also cheap — it hashes nothing and mails
+ * nothing (`BulkImportEndpoints.cs` short-circuits every preview row before the credentials
+ * branch) — so file size does not threaten it.
+ *
+ * An APPROVAL is called once per `IMPORT_CHUNK_ROWS` rows instead, by `IntakeWizard`, for the
+ * request-budget reason set out on that constant. Chunking the approval is safe because every
+ * set the server decides with is reloaded from the database on each request — the departments,
+ * the existing emails (platform-wide), the live invitations, the usernames already taken — so a
+ * later chunk sees what an earlier one committed: an approved new department is matched rather
+ * than created twice, and a row repeating an earlier chunk's email comes back `already_user`
+ * rather than creating a second account. The one thing that does change is the label on that
+ * last case, and the preview over the whole file is where the admin sees it as `repeated_in_file`.
  */
 export async function submitIntakeRows(
   baseUrl: string,
@@ -159,6 +177,36 @@ export async function submitIntakeRows(
 
   return (await response.json()) as BulkImportResponse
 }
+
+/**
+ * Rows per commit request, and the reason the number is small.
+ *
+ * App Runner ends every HTTP request at 120 seconds and the limit is not configurable: *"There
+ * is a total of 120 seconds request timeout limit on the HTTP requests. The 120 seconds include
+ * the time the application takes to read the request, including the body, and complete writing
+ * the HTTP response"* (AWS, *Developing application code for App Runner*).
+ *
+ * A credentialed import spends, inside that one request and sequentially by design
+ * (`BulkImportEndpoints.cs`), a bcrypt hash per row at work factor 12
+ * (`BcryptPasswordHasher.cs`) and then one email per row from a loop paced at ten a second
+ * (`EmailOptions.DefaultMaxSendsPerSecond`). A bcrypt-12 verify was measured at 1.09s on the
+ * 0.25 vCPU instance production ran before 2026-10-15, so about 0.27 vCPU-seconds of work; the
+ * instance is 1 vCPU now. That puts the whole file in one request at roughly
+ * `rows x 0.27 + rows / 10` seconds:
+ *
+ *     100 rows ~  37s        300 rows ~ 111s        800 rows ~ 296s
+ *     200 rows ~  74s        400 rows ~ 148s
+ *
+ * So anything past about 300 rows is a request that cannot finish — and the band around 400 is
+ * worse than the obvious disaster at 800, not better. The accounts are committed before the
+ * first mail goes out, so a request killed in the mailing loop leaves real accounts behind and
+ * takes down with it the response that would have named the people who were never mailed. The
+ * admin cannot tell which, and re-running the file is the natural thing to try.
+ *
+ * 100 is the batch the credentials resend already sends (`MassInviteEndpoints.MaxBatch`), lands
+ * inside a third of the budget, and leaves room for a cold instance or a retried send.
+ */
+export const IMPORT_CHUNK_ROWS = 100
 
 /* ---------------------------------------------------------------------------------------------
  * `/understand`: any spreadsheet the client already has, read and mapped by the server.
