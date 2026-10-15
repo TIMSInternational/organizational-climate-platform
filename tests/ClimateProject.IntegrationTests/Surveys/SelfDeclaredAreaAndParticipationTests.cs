@@ -547,7 +547,7 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
         // eventually ride along. Extend these lists deliberately or not at all.
         using var document = JsonDocument.Parse(json);
         Assert.Equal(
-            ["answered", "answeredCount", "collectsParticipantIdentity", "notStartedCount", "pending", "pendingCount", "roster", "startedCount", "surveyId", "tracksIndividuals"],
+            ["answered", "answeredCount", "collectsParticipantIdentity", "notStartedCount", "pending", "pendingCount", "roster", "startedCount", "surveyId", "tracksCompletionOnly", "tracksIndividuals"],
             document.RootElement.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
         Assert.Equal(
             ["demographics", "email", "lastActivityOn", "name", "role", "status", "userId", "username"],
