@@ -202,7 +202,7 @@ public static class BulkImportEndpoints
         // Mass invite (ruled 2026-10-13): an account per row, with a generated username and
         // password emailed after the save. Held here, never in a result row: the API does not
         // return a password, so the email is the only place it ever appears.
-        var issued = new List<(int ResultIndex, string Email, string Username, string Password)>();
+        var issued = new List<(int ResultIndex, string Email, string? Name, string Username, string Password)>();
         Company? company = null;
         HashSet<string>? takenUsernames = null;
         if (withCredentials && !isPreview)
@@ -397,7 +397,7 @@ public static class BulkImportEndpoints
                     }
 
                     existingEmails.Add(email);
-                    issued.Add((results.Count, email, username, password));
+                    issued.Add((results.Count, email, row.Name, username, password));
                     results.Add(new BulkImportRowResult(row.RowNumber, row.Name, email, row.Role, row.Department, "created", errors, issues));
                     continue;
                 }
@@ -447,10 +447,10 @@ public static class BulkImportEndpoints
             // The accounts are committed; now the emails. A failed one is named on its row, and
             // POST /admin/users/{id}/credentials sends a fresh pair -- the password generated
             // here is gone the moment this method returns.
-            foreach (var (resultIndex, toEmail, username, password) in issued)
+            foreach (var (resultIndex, toEmail, name, username, password) in issued)
             {
                 var outcome = await credentials!.Sender.SendAsync(
-                    toEmail, username, password, company?.Settings.Language,
+                    toEmail, name, username, password, company?.Settings.Language,
                     CredentialsEmailPurpose.Invitation, cancellationToken);
                 if (!outcome.Delivered)
                 {

@@ -14,7 +14,8 @@ namespace ClimateProject.IntegrationTests.Support;
 /// pair is identical, so a test that did not read it could not tell which message went out.
 /// </summary>
 public sealed record SentCredentials(
-    string ToEmail, string Username, string Password, string? Language, CredentialsEmailPurpose Purpose);
+    string ToEmail, string Username, string Password, string? Language, CredentialsEmailPurpose Purpose,
+    string? RecipientName);
 
 /// <summary>
 /// A host whose <see cref="ICredentialsEmailSender"/> records instead of sending.
@@ -50,7 +51,7 @@ internal sealed class CapturingCredentialsSender(ConcurrentQueue<SentCredentials
     : ICredentialsEmailSender
 {
     public Task<EmailSendOutcome> SendAsync(
-        string toEmail, string username, string password, string? companyLanguage,
+        string toEmail, string? recipientName, string username, string password, string? companyLanguage,
         CredentialsEmailPurpose purpose, CancellationToken cancellationToken)
     {
         if (failFor.Contains(toEmail))
@@ -58,7 +59,7 @@ internal sealed class CapturingCredentialsSender(ConcurrentQueue<SentCredentials
             return Task.FromResult(EmailSendOutcome.PermanentFailure("refused for the test"));
         }
 
-        sent.Enqueue(new SentCredentials(toEmail, username, password, companyLanguage, purpose));
+        sent.Enqueue(new SentCredentials(toEmail, username, password, companyLanguage, purpose, recipientName));
         return Task.FromResult(EmailSendOutcome.Success());
     }
 }

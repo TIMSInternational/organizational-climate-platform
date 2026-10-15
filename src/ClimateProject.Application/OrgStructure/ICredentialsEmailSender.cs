@@ -15,7 +15,11 @@ public interface ICredentialsEmailSender
     /// <see cref="CredentialsEmailPurpose.Invitation"/>, and a caller that did not have to choose
     /// would quietly send the wrong one -- which is precisely the defect this parameter fixes.
     /// </param>
+    /// <param name="recipientName">
+    /// Who to greet, as the roster spells it, or null for an account carrying no name. Already
+    /// on the account, so nothing is asked of anybody to obtain it.
+    /// </param>
     Task<EmailSendOutcome> SendAsync(
-        string toEmail, string username, string password, string? companyLanguage,
+        string toEmail, string? recipientName, string username, string password, string? companyLanguage,
         CredentialsEmailPurpose purpose, CancellationToken cancellationToken);
 }
