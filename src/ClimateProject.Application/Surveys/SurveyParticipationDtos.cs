@@ -30,6 +30,15 @@ namespace ClimateProject.Application.Surveys;
 /// People who opened the survey, answered something and did not finish. Counted separately
 /// because they are the ones worth chasing: they are not refusing, they were interrupted.
 /// </param>
+/// <param name="TracksIndividuals">
+/// Whether a person's state on this survey can be known at all. False for an ANONYMOUS
+/// survey, which writes no <c>user_id</c>: every roster row then falls to
+/// <c>not_started</c> on absent data, and presenting that as participation would tell an
+/// administrator that 800 people had not answered when the truth is that nobody is counted
+/// individually. The roster is still returned -- who was invited, their username and their
+/// demographics are all still the administrator's to see, and a resend still works -- but the
+/// screen must not render the state as a fact.
+/// </param>
 public sealed record SurveyParticipationView(
     Guid SurveyId,
     bool CollectsParticipantIdentity,
@@ -39,7 +48,8 @@ public sealed record SurveyParticipationView(
     IReadOnlyList<SurveyPendingParticipantRow> Pending,
     int StartedCount,
     int NotStartedCount,
-    IReadOnlyList<SurveyRosterRow> Roster);
+    IReadOnlyList<SurveyRosterRow> Roster,
+    bool TracksIndividuals);
 
 /// <param name="ParticipatedOn">A calendar day, never a time: the row holds no more.</param>
 public sealed record SurveyParticipantRow(string Name, string? Email, DateOnly ParticipatedOn);

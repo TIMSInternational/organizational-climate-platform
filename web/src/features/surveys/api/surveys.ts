@@ -430,6 +430,13 @@ export interface SurveyParticipationView {
   /** People with no response row at all for this survey. */
   notStartedCount: number
   roster: SurveyRosterRow[]
+  /**
+   * Whether a person's state on this survey can be known at all. False for an ANONYMOUS
+   * survey, which writes no user id: every roster row then falls to `not_started` on absent
+   * data, and showing that as participation would tell an administrator that 800 people had
+   * not answered when the truth is that nobody is counted individually.
+   */
+  tracksIndividuals: boolean
 }
 
 /**

@@ -50,6 +50,7 @@ function view(over: Partial<SurveyParticipationView> = {}): SurveyParticipationV
     startedCount: roster.filter((r) => r.status === 'started').length,
     notStartedCount: roster.filter((r) => r.status === 'not_started').length,
     roster,
+    tracksIndividuals: true,
     ...over,
   }
 }
@@ -86,10 +87,14 @@ function fetchWith(participation: SurveyParticipationView, onPost?: (ids: string
   return { mock, sent }
 }
 
-function renderPanel() {
+/**
+ * The panel takes the payload rather than fetching it: the page fetches once and hands it to
+ * both panels that read it. `fetch` is still stubbed because the RESEND posts through it.
+ */
+function renderPanel(payload: SurveyParticipationView) {
   return render(
     <TranslationProvider>
-      <SurveyRosterPanel surveyId={SURVEY} />
+      <SurveyRosterPanel state={{ status: 'ready', view: payload }} />
     </TranslationProvider>,
   )
 }
@@ -112,8 +117,9 @@ describe('SurveyRosterPanel', () => {
   })
 
   it('separates the person who stopped halfway from the person who never opened it', async () => {
-    vi.stubGlobal('fetch', fetchWith(view()).mock)
-    renderPanel()
+    const payload = view()
+    vi.stubGlobal('fetch', fetchWith(payload).mock)
+    renderPanel(payload)
 
     expect(await screen.findByText('Marta Villalobos')).toBeTruthy()
     expect(within(rowOf('marta')).getByText(T.statusCompleted)).toBeTruthy()
@@ -126,9 +132,10 @@ describe('SurveyRosterPanel', () => {
   })
 
   it('filters to just the people who started and did not finish', async () => {
-    vi.stubGlobal('fetch', fetchWith(view()).mock)
+    const payload = view()
+    vi.stubGlobal('fetch', fetchWith(payload).mock)
     const user = userEvent.setup()
-    renderPanel()
+    renderPanel(payload)
     await screen.findByText('Marta Villalobos')
 
     await user.click(screen.getByRole('button', { name: new RegExp(`^${T.filterStarted}`) }))
@@ -139,8 +146,9 @@ describe('SurveyRosterPanel', () => {
   })
 
   it('shows the usuario, and offers no resend to an account that signs in by email', async () => {
-    vi.stubGlobal('fetch', fetchWith(view()).mock)
-    renderPanel()
+    const payload = view()
+    vi.stubGlobal('fetch', fetchWith(payload).mock)
+    renderPanel(payload)
     await screen.findByText('Marta Villalobos')
 
     expect(within(rowOf('marta')).getByText('esph-marta')).toBeTruthy()
@@ -152,9 +160,10 @@ describe('SurveyRosterPanel', () => {
   })
 
   it('opens a row to the demographics the import uploaded', async () => {
-    vi.stubGlobal('fetch', fetchWith(view()).mock)
+    const payload = view()
+    vi.stubGlobal('fetch', fetchWith(payload).mock)
     const user = userEvent.setup()
-    renderPanel()
+    renderPanel(payload)
     await screen.findByText('Marta Villalobos')
 
     expect(screen.queryByText('Gerente')).toBeNull()
@@ -166,7 +175,8 @@ describe('SurveyRosterPanel', () => {
   })
 
   it('sends the chosen people their details again and reports every one', async () => {
-    const { mock, sent } = fetchWith(view(), (ids) =>
+    const payload = view()
+    const { mock, sent } = fetchWith(payload, (ids) =>
       ids.map((userId, index) => ({
         userId,
         email: `${userId}@esph.test`,
@@ -177,7 +187,7 @@ describe('SurveyRosterPanel', () => {
     )
     vi.stubGlobal('fetch', mock)
     const user = userEvent.setup()
-    renderPanel()
+    renderPanel(payload)
     await screen.findByText('Marta Villalobos')
 
     await user.click(within(rowOf('hugo')).getByRole('checkbox'))
@@ -198,10 +208,11 @@ describe('SurveyRosterPanel', () => {
     const many = Array.from({ length: 140 }, (_, index) =>
       row({ userId: `p${index}`, name: `Persona ${index}`, status: 'not_started' }),
     )
-    const { mock, sent } = fetchWith(view({ roster: many }))
+    const payload = view({ roster: many })
+    const { mock, sent } = fetchWith(payload)
     vi.stubGlobal('fetch', mock)
     const user = userEvent.setup()
-    renderPanel()
+    renderPanel(payload)
     await screen.findByText('Persona 0')
 
     await user.click(screen.getByRole('checkbox', { name: T.selectAll }))
@@ -213,6 +224,26 @@ describe('SurveyRosterPanel', () => {
     const sizes = sent.map((s) => (s.body as { userIds: string[] }).userIds.length)
     expect(sizes).toEqual([100, 40])
     expect(await screen.findByText(T.sentAll.replace('{sent}', '140').replace('{requested}', '140'))).toBeTruthy()
+  })
+  /**
+   * The defect reading the screenshot caught. On an ANONYMOUS survey no response carries a
+   * user id, so every row comes back `not_started` whatever anybody did. Rendering that as
+   * participation tells an administrator that 800 people have not answered, beside a notice on
+   * the same page saying completion is never recorded against a person — two contradictory
+   * claims, one of them false.
+   */
+  it('never presents state as a fact on a survey that records none', async () => {
+    const payload = view({ tracksIndividuals: false })
+    vi.stubGlobal('fetch', fetchWith(payload).mock)
+    renderPanel(payload)
+
+    expect(await screen.findByText(T.notTracked)).toBeTruthy()
+    // The people, their usernames and the resend all stay — only the claim goes.
+    expect(screen.getByText('Marta Villalobos')).toBeTruthy()
+    expect(screen.getByText('esph-marta')).toBeTruthy()
+    expect(screen.queryByText(T.statusNotStarted)).toBeNull()
+    expect(screen.queryByText(T.colStatus)).toBeNull()
+    expect(screen.queryByRole('button', { name: new RegExp(`^${T.filterCompleted}`) })).toBeNull()
   })
 })
 

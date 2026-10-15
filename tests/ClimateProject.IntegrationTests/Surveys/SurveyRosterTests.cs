@@ -151,6 +151,23 @@ public class SurveyRosterTests : IAsyncLifetime
         Assert.Equal(0, view.AnsweredCount);
         Assert.Equal(0, view.StartedCount);
         Assert.All(view.Roster, row => Assert.Equal(SurveyParticipantStatuses.NotStarted, row.Status));
+
+        // The roster still lists her -- who was invited, her username and her demographics are
+        // the administrator's to see, and a resend still works. What the screen must not do is
+        // call that `not_started` a fact about whether she answered.
+        Assert.False(view.TracksIndividuals);
+        Assert.Contains(view.Roster, row => row.Name == "Ana Lucía Mora");
+    }
+
+    [Fact]
+    public async Task An_identified_survey_says_the_state_can_be_trusted()
+    {
+        await SeedPersonAsync("Marta Villalobos", Roles.Employee, username: Username("marta"));
+        var survey = await SeedSurveyAsync(anonymous: false);
+
+        var view = await ParticipationAsync(survey);
+
+        Assert.True(view.TracksIndividuals);
     }
 
     private static string StatusOf(SurveyParticipationView view, string name) => RowOf(view, name).Status;

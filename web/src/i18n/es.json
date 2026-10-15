@@ -4505,6 +4505,7 @@
         "noDemographics": "Esta persona no trae demográficos cargados.",
         "empty": "Nadie coincide con este filtro.",
         "emptyRoster": "Todavía no hay personas con cuenta y correo en esta empresa.",
+        "notTracked": "Esta encuesta es anónima: no se registra quién respondió, así que no se muestra el estado de cada persona. Abajo está a quién se invitó, con su usuario, por si hay que reenviarle sus datos de acceso.",
         "loadFailed": "No se pudo cargar la lista."
       },
       "participation": {

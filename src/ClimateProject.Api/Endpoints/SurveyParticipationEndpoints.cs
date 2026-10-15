@@ -56,7 +56,7 @@ public static class SurveyParticipationEndpoints
         var survey = await db.Surveys
             .AsNoTracking()
             .Where(s => s.Id == surveyId)
-            .Select(s => new { s.Id, s.CompanyId, s.Settings.CollectParticipantIdentity })
+            .Select(s => new { s.Id, s.CompanyId, s.Settings.CollectParticipantIdentity, s.Settings.Anonymous })
             .FirstOrDefaultAsync(cancellationToken);
         if (survey is null)
         {
@@ -121,7 +121,11 @@ public static class SurveyParticipationEndpoints
             pending,
             roster.Count(row => row.Status == SurveyParticipantStatuses.Started),
             roster.Count(row => row.Status == SurveyParticipantStatuses.NotStarted),
-            roster));
+            roster,
+            // An anonymous survey writes no user id, so every row is `not_started` whatever
+            // anybody did. Saying so is the difference between "nobody answered" and "nobody
+            // is counted"; the screen reads this to stop presenting the state as a fact.
+            !survey.Anonymous));
     }
 
     /// <summary>

@@ -30,7 +30,7 @@
     "settings": {
       "invitationCustomSubject": "Your invitation",
       "invitationCustomMessage": "Please answer.",
-      "anonymous": true,
+      "anonymous": false,
       "selfDeclaredDemographics": true,
       "collectParticipantIdentity": true
     }
@@ -178,13 +178,10 @@
       "expired": 0
     },
     "anonymity": {
-      "anonymous": true,
-      "highestRecordableState": "opened",
-      "suppressedStates": [
-        "started",
-        "completed"
-      ],
-      "guarantee": "Esta encuesta es anónima. El seguimiento de invitaciones registra que una persona fue invitada y abrió la invitación, y se detiene ahí. Ni «iniciada» ni «completada» se guardan contra una persona, porque una marca de tiempo individual que afirme que existe una respuesta puede cruzarse por hora con las propias respuestas y reidentificar a quien respondió. Quien responde por el enlace o el código QR indica su nombre y, si quiere, su correo: se registra que respondió y el día, sin hora, en una tabla aparte que no guarda ninguna referencia a sus respuestas."
+      "anonymous": false,
+      "highestRecordableState": "completed",
+      "suppressedStates": [],
+      "guarantee": "El seguimiento llega hasta el final: de cada invitación se registra cuándo se abrió, cuándo se empezó y el día en que se completó. Nunca se guarda qué respondió nadie."
     }
   },
   "GET /admin/departments": {
@@ -285,7 +282,7 @@
   "GET /surveys/*/participation": {
     "surveyId": "x",
     "collectsParticipantIdentity": true,
-    "answeredCount": 3,
+    "answeredCount": 2,
     "pendingCount": 2,
     "answered": [
       {
@@ -313,6 +310,109 @@
         "name": "María Solano",
         "email": "maria.solano@meridiano.test"
       }
-    ]
+    ],
+    "roster": [
+      {
+        "userId": "u-ana",
+        "name": "Ana Pérez",
+        "email": "ana.perez@meridiano.test",
+        "username": "grupomer-k7m2q9xa",
+        "role": "employee",
+        "status": "completed",
+        "lastActivityOn": "2026-10-12",
+        "demographics": [
+          {
+            "field": "puesto",
+            "labelEs": "Puesto",
+            "labelEn": "Position",
+            "value": "Gerente"
+          },
+          {
+            "field": "antiguedad",
+            "labelEs": "Antigüedad",
+            "labelEn": "Tenure",
+            "value": "Más de 10 años"
+          },
+          {
+            "field": "macroproceso",
+            "labelEs": "Macroproceso",
+            "labelEn": "Macroprocess",
+            "value": "Comercial"
+          },
+          {
+            "field": "edad",
+            "labelEs": "Edad",
+            "labelEn": "Age",
+            "value": "40 a 49"
+          }
+        ]
+      },
+      {
+        "userId": "u-lucia",
+        "name": "Lucía Vargas",
+        "email": "lucia.vargas@meridiano.test",
+        "username": "grupomer-p3n8w2ft",
+        "role": "employee",
+        "status": "completed",
+        "lastActivityOn": "2026-10-11",
+        "demographics": []
+      },
+      {
+        "userId": "u-carlos",
+        "name": "Carlos Rojas",
+        "email": "carlos.rojas@meridiano.test",
+        "username": "grupomer-w4r6t8yu",
+        "role": "leader",
+        "status": "started",
+        "lastActivityOn": "2026-10-13",
+        "demographics": [
+          {
+            "field": "puesto",
+            "labelEs": "Puesto",
+            "labelEn": "Position",
+            "value": "Jefatura"
+          },
+          {
+            "field": "antiguedad",
+            "labelEs": "Antigüedad",
+            "labelEn": "Tenure",
+            "value": "3 a 5 años"
+          }
+        ]
+      },
+      {
+        "userId": "u-maria",
+        "name": "María Solano",
+        "email": "maria.solano@meridiano.test",
+        "username": "grupomer-d5h2j8kq",
+        "role": "employee",
+        "status": "not_started",
+        "lastActivityOn": null,
+        "demographics": []
+      },
+      {
+        "userId": "u-jose",
+        "name": "José Mora",
+        "email": "jose.mora@meridiano.test",
+        "username": "grupomer-z3b6n9mc",
+        "role": "employee",
+        "status": "not_started",
+        "lastActivityOn": null,
+        "demographics": []
+      },
+      {
+        "userId": "u-admin",
+        "name": "Ana Rojas",
+        "email": "ana.rojas@meridiano.test",
+        "username": null,
+        "role": "company_admin",
+        "status": "not_started",
+        "lastActivityOn": null,
+        "demographics": []
+      }
+    ],
+    "startedCount": 1,
+    "notStartedCount": 3,
+    "tracksIndividuals": true
   }
 }

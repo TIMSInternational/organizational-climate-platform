@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   Button,
   Checkbox,
@@ -21,19 +21,10 @@ import {
   resendCredentialsBatch,
   type CredentialsResendOutcome,
 } from '../../../org-structure/api/users'
-import {
-  getSurveyParticipation,
-  type SurveyParticipantStatus,
-  type SurveyParticipationView,
-  type SurveyRosterRow,
-} from '../../api/surveys'
+import type { SurveyParticipantStatus, SurveyRosterRow } from '../../api/surveys'
+import type { ParticipationState } from './useSurveyParticipation'
 import { Card, CardHeading } from './parts'
 import { formatParticipationDay } from './participationDay'
-
-type PanelState =
-  | { status: 'loading' }
-  | { status: 'error' }
-  | { status: 'ready'; view: SurveyParticipationView }
 
 type Filter = 'all' | SurveyParticipantStatus
 
@@ -80,33 +71,27 @@ const OUTCOME_KEY: Record<string, string> = {
  * anything.
  * </p>
  */
-export default function SurveyRosterPanel({ surveyId }: { surveyId: string }) {
+export default function SurveyRosterPanel({ state }: { state: ParticipationState }) {
   const { t, locale } = useTranslation()
   const copy = (key: string, vars?: Record<string, string | number>) => t(`surveys.next.roster.${key}`, vars)
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
 
-  const [state, setState] = useState<PanelState>({ status: 'loading' })
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
   const [send, setSend] = useState<SendState>({ phase: 'idle' })
 
-  useEffect(() => {
-    let live = true
-    getSurveyParticipation(baseUrl, surveyId)
-      .then((view) => {
-        if (live) setState({ status: 'ready', view })
-      })
-      .catch(() => {
-        if (live) setState({ status: 'error' })
-      })
-    return () => {
-      live = false
-    }
-  }, [baseUrl, surveyId])
-
   const roster = state.status === 'ready' ? state.view.roster : []
+
+  /**
+   * Whether a person's state on this survey means anything. An anonymous survey writes no user
+   * id, so every row comes back `not_started` whatever anybody did — rendering that as
+   * participation would tell an administrator that 800 people had not answered when the truth
+   * is that nobody is counted individually. The people, their usernames and the resend still
+   * belong on screen; the state does not.
+   */
+  const tracked = state.status === 'ready' ? state.view.tracksIndividuals : true
 
   const visible = useMemo(() => {
     const needle = search.trim().toLocaleLowerCase()
@@ -204,7 +189,7 @@ export default function SurveyRosterPanel({ surveyId }: { surveyId: string }) {
   }
 
   const filters: { value: Filter; key: string; count: number }[] =
-    state.status === 'ready'
+    state.status === 'ready' && tracked
       ? [
           { value: 'all', key: 'filterAll', count: state.view.roster.length },
           { value: 'completed', key: 'filterCompleted', count: state.view.answeredCount },
@@ -219,7 +204,7 @@ export default function SurveyRosterPanel({ surveyId }: { surveyId: string }) {
         <CardHeading title={copy('title')} />
         <p className="m-0 text-sm text-fg-secondary">{copy('intro')}</p>
 
-        {state.status === 'loading' ? (
+        {state.status === 'idle' ? null : state.status === 'loading' ? (
           <LoadingRegion loading label={t('common.loading')}>
             <SkeletonText lines={3} />
           </LoadingRegion>
@@ -231,6 +216,12 @@ export default function SurveyRosterPanel({ surveyId }: { surveyId: string }) {
           <p className="m-0 text-sm text-fg-secondary">{copy('emptyRoster')}</p>
         ) : (
           <>
+            {!tracked ? (
+              <p className="m-0 rounded-md border border-line-light bg-surface-icon-box px-3 py-2 text-sm text-fg-secondary">
+                {copy('notTracked')}
+              </p>
+            ) : null}
+
             <div className="flex flex-wrap items-center gap-2">
               {filters.map((option) => (
                 <Button
@@ -312,8 +303,12 @@ export default function SurveyRosterPanel({ surveyId }: { surveyId: string }) {
                       </TableHead>
                       <TableHead scope="col" className={TH_CLASS}>{copy('colPerson')}</TableHead>
                       <TableHead scope="col" className={TH_CLASS}>{copy('colUsuario')}</TableHead>
-                      <TableHead scope="col" className={TH_CLASS}>{copy('colStatus')}</TableHead>
-                      <TableHead scope="col" className={TH_CLASS}>{copy('colLast')}</TableHead>
+                      {tracked ? (
+                        <>
+                          <TableHead scope="col" className={TH_CLASS}>{copy('colStatus')}</TableHead>
+                          <TableHead scope="col" className={TH_CLASS}>{copy('colLast')}</TableHead>
+                        </>
+                      ) : null}
                       <TableHead scope="col" className={TH_CLASS} />
                     </TableRow>
                   </TableHeader>
@@ -322,6 +317,7 @@ export default function SurveyRosterPanel({ surveyId }: { surveyId: string }) {
                       <RosterRows
                         key={row.userId}
                         row={row}
+                        tracked={tracked}
                         locale={locale}
                         copy={copy}
                         selected={selected.has(row.userId)}
@@ -343,6 +339,7 @@ export default function SurveyRosterPanel({ surveyId }: { surveyId: string }) {
 
 function RosterRows({
   row,
+  tracked,
   locale,
   copy,
   selected,
@@ -351,6 +348,7 @@ function RosterRows({
   onToggleDetails,
 }: {
   row: SurveyRosterRow
+  tracked: boolean
   locale: string
   copy: (key: string, vars?: Record<string, string | number>) => string
   selected: boolean
@@ -387,16 +385,20 @@ function RosterRows({
             <span className="font-mono text-xs text-fg-secondary">{row.username}</span>
           )}
         </TableCell>
-        <TableCell className="px-3 py-2">
-          <Chip tone={STATUS_TONE[row.status]} label={copy(STATUS_KEY[row.status])} />
-        </TableCell>
-        <TableCell className="whitespace-nowrap px-3 py-2 text-fg-secondary">
-          {row.lastActivityOn === null ? (
-            <span className="text-fg-tertiary">{copy('noActivity')}</span>
-          ) : (
-            formatParticipationDay(row.lastActivityOn, locale)
-          )}
-        </TableCell>
+        {tracked ? (
+          <>
+            <TableCell className="px-3 py-2">
+              <Chip tone={STATUS_TONE[row.status]} label={copy(STATUS_KEY[row.status])} />
+            </TableCell>
+            <TableCell className="whitespace-nowrap px-3 py-2 text-fg-secondary">
+              {row.lastActivityOn === null ? (
+                <span className="text-fg-tertiary">{copy('noActivity')}</span>
+              ) : (
+                formatParticipationDay(row.lastActivityOn, locale)
+              )}
+            </TableCell>
+          </>
+        ) : null}
         <TableCell className="px-3 py-2 text-right">
           <Button
             type="button"
@@ -411,7 +413,7 @@ function RosterRows({
       </TableRow>
       {expanded ? (
         <TableRow data-details-for={row.userId}>
-          <TableCell colSpan={6} className="px-3 py-3">
+          <TableCell colSpan={tracked ? 6 : 4} className="px-3 py-3">
             {row.demographics.length === 0 ? (
               <p className="m-0 text-sm text-fg-secondary">{copy('noDemographics')}</p>
             ) : (

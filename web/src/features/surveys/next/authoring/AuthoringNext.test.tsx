@@ -81,6 +81,10 @@ vi.mock('../../api/surveys', async (importOriginal) => ({
     pendingCount: 0,
     answered: [],
     pending: [],
+    startedCount: 0,
+    notStartedCount: 0,
+    roster: [],
+    tracksIndividuals: true,
   })),
 }))
 
@@ -817,6 +821,7 @@ describe('Distribución — who has answered (ruled 2026-10-12)', () => {
       startedCount: 0,
       notStartedCount: 1,
       roster: [],
+      tracksIndividuals: true,
     })
     open(settings())
 
@@ -834,7 +839,7 @@ describe('Distribución — who has answered (ruled 2026-10-12)', () => {
   it('says why it is empty when the survey does not ask', async () => {
     vi.mocked(surveysApi.getSurveyParticipation).mockResolvedValueOnce({
       surveyId: 's1', collectsParticipantIdentity: false, answeredCount: 0, pendingCount: 3, answered: [], pending: [],
-      startedCount: 0, notStartedCount: 3, roster: [],
+      startedCount: 0, notStartedCount: 3, roster: [], tracksIndividuals: true,
     })
     open(settings({ collectParticipantIdentity: false }))
 

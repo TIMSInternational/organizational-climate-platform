@@ -4505,6 +4505,7 @@
         "noDemographics": "This person has no demographics loaded.",
         "empty": "Nobody matches this filter.",
         "emptyRoster": "No one in this company has an account with an email yet.",
+        "notTracked": "This survey is anonymous: who answered is never recorded, so no one's state is shown. Below is who was invited, with their username, in case their sign-in details need sending again.",
         "loadFailed": "The list could not be loaded."
       },
       "participation": {

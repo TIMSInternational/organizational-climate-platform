@@ -44,6 +44,7 @@ import { Card, Meter, ReadingTile, WithReading, type ShareLinkAction } from './p
 import SharePanel from './SharePanel'
 import ParticipationPanel from './ParticipationPanel'
 import SurveyRosterPanel from './SurveyRosterPanel'
+import { useSurveyParticipation } from './useSurveyParticipation'
 import {
   INVITATION_COLUMNS,
   MAX_REMINDERS,
@@ -150,6 +151,11 @@ export function DistributionView({
   const [linkConfirm, setLinkConfirm] = useState<'regenerate' | 'revoke' | null>(null)
   const [copyOpen, setCopyOpen] = useState(false)
   const [showAll, setShowAll] = useState(false)
+
+  // ONE request for the two panels that read it. Each fetching for itself meant two identical
+  // calls per load -- on 800 people, two rosters carrying every person's demographics and two
+  // passes of the same join, on a deployment with one vCPU in total.
+  const participation = useSurveyParticipation(survey.id, scoped)
 
   const actionable = scoped && canDistribute(survey.status)
   // The audience the server would resolve for the survey as targeted — `ResolveAudienceAsync`,
@@ -344,9 +350,7 @@ export function DistributionView({
           five, and a list of names has no business beside it. Offered to the scoped admin only
           (`scoped`): the endpoint answers super_admin and the survey's own company_admin. Not
           gated on anonymity: every survey has a link (ruled 2026-10-12). */}
-      {scoped ? (
-        <ParticipationPanel surveyId={survey.id} enabled={survey.settings.collectParticipantIdentity === true} />
-      ) : null}
+      {scoped ? <ParticipationPanel state={participation} /> : null}
 
       {/* The roster, for the administrator chasing a mass invite. Deliberately NOT gated on
           `collectParticipantIdentity`, unlike the panel above: that setting decides whether a
@@ -354,7 +358,7 @@ export function DistributionView({
           their response carries their user id. So this is answerable for a mass invite whether
           or not the survey asks anybody anything, and gating it would have blanked the one
           screen the launch is watched from. */}
-      {scoped ? <SurveyRosterPanel surveyId={survey.id} /> : null}
+      {scoped ? <SurveyRosterPanel state={participation} /> : null}
 
       <section aria-labelledby="launch-checklist" className="mt-6 flex flex-col gap-3">
         <div className="flex flex-wrap items-baseline justify-between gap-3">

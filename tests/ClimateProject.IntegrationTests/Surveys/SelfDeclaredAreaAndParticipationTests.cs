@@ -528,6 +528,11 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
         Assert.All(view.Roster, r => Assert.Equal(SurveyParticipantStatuses.NotStarted, r.Status));
         Assert.Equal(0, view.StartedCount);
 
+        // And the view SAYS so, rather than leaving the screen to present a roster of false
+        // negatives as participation. "Nobody answered" and "nobody is counted individually"
+        // are different claims, and on 800 people only one of them is true here.
+        Assert.False(view.TracksIndividuals);
+
         // Nothing about answers, areas or timing travels: the shape has no such member.
         //
         // The roster added 2026-10-14 is pinned member by member, one level down, for exactly
@@ -537,7 +542,7 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
         // eventually ride along. Extend these lists deliberately or not at all.
         using var document = JsonDocument.Parse(json);
         Assert.Equal(
-            ["answered", "answeredCount", "collectsParticipantIdentity", "notStartedCount", "pending", "pendingCount", "roster", "startedCount", "surveyId"],
+            ["answered", "answeredCount", "collectsParticipantIdentity", "notStartedCount", "pending", "pendingCount", "roster", "startedCount", "surveyId", "tracksIndividuals"],
             document.RootElement.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
         Assert.Equal(
             ["demographics", "email", "lastActivityOn", "name", "role", "status", "userId", "username"],
