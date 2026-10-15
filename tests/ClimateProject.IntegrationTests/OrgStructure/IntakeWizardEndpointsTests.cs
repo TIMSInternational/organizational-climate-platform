@@ -364,4 +364,105 @@ public class IntakeWizardEndpointsTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
+
+    [Fact]
+    public async Task Complete_workbook_preview_reads_800_people_and_40_questions_without_writing()
+    {
+        using var client=await AdminClientAsync();
+        var template=await client.GetAsync("/admin/climate-workbooks/template");
+        Assert.Equal(HttpStatusCode.OK,template.StatusCode);
+        using var input=new MemoryStream(await template.Content.ReadAsByteArrayAsync());
+        using var book=new XLWorkbook(input);
+        var company=book.Worksheet("EMPRESA");
+        company.Cell("B7").Value="Intake Co";company.Cell("B8").Value=_companyDomain;
+        company.Cell("B9").Value="Costa Rica";company.Cell("B10").Value="Servicios";
+        company.Cell("B13").Value="Clima completo";company.Cell("B15").Value=DateTime.UtcNow.AddDays(1).ToString("yyyy-MM-dd HH:mm");
+        company.Cell("B16").Value=DateTime.UtcNow.AddDays(30).ToString("yyyy-MM-dd HH:mm");company.Cell("B17").Value="UTC";
+        var people=book.Worksheet("DEMOGRAFICOS");
+        for(var i=0;i<800;i++)
+        {
+            var r=i+6;people.Cell(r,2).Value=$"Persona {i}";people.Cell(r,3).Value="Prueba";
+            people.Cell(r,4).Value=$"persona{i}@example.test";people.Cell(r,5).Value="Analista";
+            people.Cell(r,6).Value="Norte";people.Cell(r,11).Value="Ingeniería";people.Cell(r,12).Value="Colaborador";
+        }
+        using var output=new MemoryStream();book.SaveAs(output);
+        using var form=FileForm(output.ToArray(),_companyId,"clima.xlsx");
+        var response=await client.PostAsync("/admin/climate-workbooks/preview",form);
+        Assert.Equal(HttpStatusCode.OK,response.StatusCode);
+        var plan=(await response.Content.ReadFromJsonAsync<ClimateWorkbookPreview>())!;
+        Assert.Empty(plan.Errors);Assert.Equal(_companyId,plan.CompanyId);Assert.Null(plan.SurveyId);
+        Assert.Equal(800,plan.Content.People.Count);Assert.Equal(40,plan.Content.Questions.Count);
+        Assert.Contains(plan.Fields,f=>f.Field=="puesto");
+        using var scope=_factory.Services.CreateScope();var db=scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        Assert.False(await db.Surveys.AnyAsync(v=>v.CompanyId==_companyId));
+        Assert.False(await db.Users.AnyAsync(u=>u.CompanyId==_companyId&&u.Email.StartsWith("persona")));
+    }
+
+    [Fact]
+    public async Task Complete_workbook_preview_refuses_a_company_admin_creating_or_reading_another_company()
+    {
+        using var client=await AdminClientAsync();
+        var template=await client.GetByteArrayAsync("/admin/climate-workbooks/template");
+        using var input=new MemoryStream(template);using var book=new XLWorkbook(input);
+        var sheet=book.Worksheet("EMPRESA");sheet.Cell("B7").Value="Otra empresa";
+        sheet.Cell("B8").Value=$"foreign-{Guid.NewGuid():N}.test";sheet.Cell("B9").Value="Costa Rica";
+        sheet.Cell("B10").Value="Servicios";sheet.Cell("B13").Value="Clima ajeno";
+        sheet.Cell("B15").Value=DateTime.UtcNow.AddDays(1).ToString("yyyy-MM-dd");sheet.Cell("B16").Value=DateTime.UtcNow.AddDays(30).ToString("yyyy-MM-dd");sheet.Cell("B17").Value="UTC";
+        var people=book.Worksheet("DEMOGRAFICOS");people.Cell("B6").Value="Persona";people.Cell("D6").Value="p@example.test";people.Cell("K6").Value="Operaciones";
+        using var output=new MemoryStream();book.SaveAs(output);using var form=FileForm(output.ToArray(),_companyId,"clima.xlsx");
+        var response=await client.PostAsync("/admin/climate-workbooks/preview",form);
+        Assert.Equal(HttpStatusCode.Forbidden,response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Complete_workbook_resource_calls_create_access_demographics_and_invitation_then_reuse_on_preview()
+    {
+        using var client=await AdminClientAsync();
+        using var input=new MemoryStream(await client.GetByteArrayAsync("/admin/climate-workbooks/template"));
+        using var book=new XLWorkbook(input);var company=book.Worksheet("EMPRESA");
+        company.Cell("B7").Value="Intake Co";company.Cell("B8").Value=_companyDomain;
+        company.Cell("B9").Value="Costa Rica";company.Cell("B10").Value="Servicios";company.Cell("B13").Value="Clima integrado";
+        company.Cell("B15").Value=DateTime.UtcNow.AddDays(1).ToString("yyyy-MM-dd HH:mm");
+        company.Cell("B16").Value=DateTime.UtcNow.AddDays(30).ToString("yyyy-MM-dd HH:mm");company.Cell("B17").Value="UTC";
+        var email=$"workbook-{Guid.NewGuid():N}@example.test";var people=book.Worksheet("DEMOGRAFICOS");
+        people.Cell("B6").Value="Persona";people.Cell("C6").Value="Integrada";people.Cell("D6").Value=email;
+        people.Cell("E6").Value="Analista";people.Cell("F6").Value="Norte";people.Cell("K6").Value="Ingeniería";people.Cell("L6").Value="Colaborador";
+        using var output=new MemoryStream();book.SaveAs(output);var bytes=output.ToArray();
+        using var file=FileForm(bytes,_companyId,"clima.xlsx");var preview=await client.PostAsync("/admin/climate-workbooks/preview",file);
+        preview.EnsureSuccessStatusCode();var plan=(await preview.Content.ReadFromJsonAsync<ClimateWorkbookPreview>())!;Assert.Empty(plan.Errors);
+        var content=plan.Content;
+        var settings=await client.PutAsJsonAsync($"/admin/companies/{_companyId}/settings",new {language="es",timezone="UTC",anonymousSurveys=true,resultBands=content.Company.ResultBands});
+        settings.EnsureSuccessStatusCode();
+        foreach(var field in plan.Fields)
+        {
+            var response=await client.PostAsJsonAsync("/admin/demographic-fields",new {
+                companyId=_companyId,field=field.Field,label=new {es=field.Label,en=field.Label},type="select",required=false,order=1,
+                options=field.Options.Select(o=>new {value=o.Value,label=new {es=o.Label,en=o.Label}})});
+            response.EnsureSuccessStatusCode();
+        }
+        var create=await client.PostAsJsonAsync("/surveys",new {companyId=_companyId,title=new {es=content.Title},description=new {es=content.Description},type="periodic",language="es",
+            startDate=content.StartDate,endDate=content.EndDate,questions=content.Questions,targetAudienceCount=1,
+            settings=new {anonymous=true,allowPartialResponses=true,showProgress=true,autoSave=true,notificationSendInvitations=true,notificationSendReminders=false,invitationSendImmediately=true,
+                invitationCustomSubject=content.InvitationSubject,invitationCustomMessage=content.InvitationMessage}});
+        create.EnsureSuccessStatusCode();var survey=(await create.Content.ReadFromJsonAsync<ClimateProject.Application.Surveys.SurveyDetail>())!;
+        var distribution=await client.PutAsJsonAsync($"/surveys/{survey.Id}/distribution",new {accessType="tokenized",accessRules=new {requireLogin=true,allowAnonymous=false,singleResponse=true}});
+        distribution.EnsureSuccessStatusCode();
+        var publish=await client.PutAsJsonAsync($"/surveys/{survey.Id}/status",new {status="scheduled"});publish.EnsureSuccessStatusCode();
+        var rows=content.People.Select(p=>new BulkImportRowInput(p.RowNumber,p.Name,p.Email,p.Role,p.Department,p.Demographics?.ToDictionary(kv=>kv.Key,kv=>kv.Value))).ToArray();
+        var check=await client.PostAsJsonAsync("/admin/users/bulk-import/rows",new BulkImportRowsRequest(_companyId,true,rows,WithCredentials:true));
+        check.EnsureSuccessStatusCode();Assert.Equal(0,(await check.Content.ReadFromJsonAsync<BulkImportResponse>())!.ErrorCount);
+        var import=await client.PostAsJsonAsync("/admin/users/bulk-import/rows",new BulkImportRowsRequest(_companyId,false,rows,WithCredentials:true));
+        import.EnsureSuccessStatusCode();var imported=(await import.Content.ReadFromJsonAsync<BulkImportResponse>())!;Assert.Equal(1,imported.SuccessCount);Assert.Equal(0,imported.ErrorCount);
+        Guid userId;
+        using(var scope=_factory.Services.CreateScope())
+        {
+            var db=scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();var user=await db.Users.SingleAsync(u=>u.Email==email);
+            Assert.False(string.IsNullOrWhiteSpace(user.Username));Assert.False(string.IsNullOrWhiteSpace(user.PasswordHash));userId=user.Id;
+            Assert.Equal(2,await db.UserDemographics.CountAsync(d=>d.UserId==userId));
+        }
+        var invite=await client.PostAsJsonAsync($"/surveys/{survey.Id}/invitations",new {userIds=new[]{userId}});invite.EnsureSuccessStatusCode();
+        using var repeatedFile=FileForm(bytes,_companyId,"clima.xlsx");var repeat=await client.PostAsync("/admin/climate-workbooks/preview",repeatedFile);
+        repeat.EnsureSuccessStatusCode();var resumed=(await repeat.Content.ReadFromJsonAsync<ClimateWorkbookPreview>())!;
+        Assert.Empty(resumed.Errors);Assert.Equal(survey.Id,resumed.SurveyId);Assert.Equal(userId,Assert.Single(resumed.ExistingPeople).Id);
+    }
 }
