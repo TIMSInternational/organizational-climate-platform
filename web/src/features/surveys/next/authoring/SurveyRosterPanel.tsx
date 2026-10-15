@@ -44,12 +44,14 @@ const STATUS_TONE: Record<SurveyParticipantStatus, ChipTone> = {
   completed: 'good',
   started: 'warning',
   not_started: 'neutral',
+  not_completed: 'neutral',
 }
 
 const STATUS_KEY: Record<SurveyParticipantStatus, string> = {
   completed: 'statusCompleted',
   started: 'statusStarted',
   not_started: 'statusNotStarted',
+  not_completed: 'statusNotCompleted',
 }
 
 const OUTCOME_KEY: Record<string, string> = {
@@ -99,6 +101,14 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
    * belong on screen; the state does not.
    */
   const tracked = state.status === 'ready' ? state.view.tracksIndividuals : true
+
+  /**
+   * Completion is knowable even when the three states are not. An anonymous survey records a
+   * completion in `survey_participations`, apart from the answers, so "finished" and "has not
+   * finished" are both facts here while "opened it and stopped" is not.
+   */
+  const completionOnly = state.status === 'ready' ? state.view.tracksCompletionOnly : false
+  const showState = tracked || completionOnly
 
   const visible = useMemo(() => {
     const needle = search.trim().toLocaleLowerCase()
@@ -195,15 +205,31 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
     setSelected(new Set())
   }
 
+  // Counts come off the roster rather than the payload's own counters, so a chip can never
+  // disagree with the rows under it.
   const filters: { value: Filter; key: string; count: number }[] =
-    state.status === 'ready' && tracked
-      ? [
-          { value: 'all', key: 'filterAll', count: state.view.roster.length },
-          { value: 'completed', key: 'filterCompleted', count: state.view.answeredCount },
-          { value: 'started', key: 'filterStarted', count: state.view.startedCount },
-          { value: 'not_started', key: 'filterNotStarted', count: state.view.notStartedCount },
-        ]
-      : []
+    state.status !== 'ready' || !showState
+      ? []
+      : tracked
+        ? [
+            { value: 'all', key: 'filterAll', count: state.view.roster.length },
+            { value: 'completed', key: 'filterCompleted', count: state.view.answeredCount },
+            { value: 'started', key: 'filterStarted', count: state.view.startedCount },
+            { value: 'not_started', key: 'filterNotStarted', count: state.view.notStartedCount },
+          ]
+        : [
+            { value: 'all', key: 'filterAll', count: state.view.roster.length },
+            {
+              value: 'completed',
+              key: 'filterCompleted',
+              count: state.view.roster.filter((row) => row.status === 'completed').length,
+            },
+            {
+              value: 'not_completed',
+              key: 'filterNotCompleted',
+              count: state.view.roster.filter((row) => row.status === 'not_completed').length,
+            },
+          ]
 
   return (
     <section aria-label={copy('title')} className="mt-6" data-testid="survey-roster-panel">
@@ -223,9 +249,13 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
           <p className="m-0 text-sm text-fg-secondary">{copy('emptyRoster')}</p>
         ) : (
           <>
-            {!tracked ? (
+            {!showState ? (
               <p className="m-0 rounded-md border border-line-light bg-surface-icon-box px-3 py-2 text-sm text-fg-secondary">
                 {copy('notTracked')}
+              </p>
+            ) : completionOnly ? (
+              <p className="m-0 rounded-md border border-line-light bg-surface-icon-box px-3 py-2 text-sm text-fg-secondary">
+                {copy('completionOnlyNote')}
               </p>
             ) : null}
 
@@ -311,7 +341,7 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
                       <TableHead scope="col" className={TH_CLASS}>{copy('colPerson')}</TableHead>
                       <TableHead scope="col" className={TH_CLASS}>{copy('colRole')}</TableHead>
                       <TableHead scope="col" className={TH_CLASS}>{copy('colUsuario')}</TableHead>
-                      {tracked ? (
+                      {showState ? (
                         <>
                           <TableHead scope="col" className={TH_CLASS}>{copy('colStatus')}</TableHead>
                           <TableHead scope="col" className={TH_CLASS}>{copy('colLast')}</TableHead>
@@ -326,7 +356,7 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
                         key={row.userId}
                         row={row}
                         roleLabel={t(`superadmin.next.users.roles.${row.role}`)}
-                        tracked={tracked}
+                        tracked={showState}
                         locale={locale}
                         copy={copy}
                         selected={selected.has(row.userId)}

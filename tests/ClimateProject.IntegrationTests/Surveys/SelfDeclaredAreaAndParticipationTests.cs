@@ -355,7 +355,7 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
     /// last assertion fails.
     /// </summary>
     [Fact]
-    public async Task No_path_fills_the_participation_table_and_it_still_keeps_no_join_key()
+    public async Task No_link_path_fills_the_participation_table_and_it_still_keeps_no_join_key()
     {
         var survey = await QrSurveyAsync(collectIdentity: true);
 
@@ -407,7 +407,7 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
     /// Every one of these is refused because it carries an identity AT ALL, not because the
     /// identity is malformed -- which is why the `(null, null)` case that used to head this list
     /// is gone: a post with no identity is now the accepted shape, and
-    /// <c>No_path_fills_the_participation_table_and_it_still_keeps_no_join_key</c> pins it.
+    /// <c>No_link_path_fills_the_participation_table_and_it_still_keeps_no_join_key</c> pins it.
     /// Refusing writes nothing, not even the response.
     /// </summary>
     [Theory]

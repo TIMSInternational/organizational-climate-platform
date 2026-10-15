@@ -3,6 +3,7 @@ using ClimateProject.Application.Auth;
 using ClimateProject.Application.Surveys;
 using ClimateProject.Domain.Entities;
 using ClimateProject.IntegrationTests.Support;
+using Microsoft.EntityFrameworkCore;
 
 namespace ClimateProject.IntegrationTests.Surveys;
 
@@ -234,6 +235,94 @@ public class SurveyRosterTests : IAsyncLifetime
             });
             await db.SaveChangesAsync();
             return 0;
+        });
+
+    /// <summary>
+    /// An anonymous survey still says who FINISHED, because a completion is recorded apart
+    /// from the answers.
+    ///
+    /// <para>
+    /// This is the distinction the client drew and the one the screen used to collapse: an
+    /// anonymous survey puts no <c>user_id</c> on an answer, so "opened it and stopped" cannot
+    /// be attributed to anybody -- but a completion can, from <c>survey_participations</c>,
+    /// which holds a name, an email and a calendar day and nothing that joins to an answer.
+    /// So the roster reports two states here and not three, and the one it must NOT report is
+    /// <c>not_started</c>: with no user id on the answers, somebody halfway through is
+    /// indistinguishable from somebody who never opened it.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task An_anonymous_survey_reports_who_finished_and_refuses_to_guess_at_the_rest()
+    {
+        var surveyId = await SeedSurveyAsync(anonymous: true);
+        var finisher = await SeedPersonAsync("Ana Finisher", Roles.Employee, "esph-aaaa1111");
+        var other = await SeedPersonAsync("Hugo Other", Roles.Employee, "esph-bbbb2222");
+
+        // Written the way the respond flow writes it: from the account, with no answer in it.
+        await SeedParticipationAsync(surveyId, finisher);
+
+        var view = await ParticipationAsync(surveyId);
+
+        // Three states are genuinely unknowable here; completion is not.
+        Assert.False(view.TracksIndividuals);
+        Assert.True(view.TracksCompletionOnly);
+
+        var ana = Assert.Single(view.Roster, row => row.UserId == finisher);
+        var hugo = Assert.Single(view.Roster, row => row.UserId == other);
+        Assert.Equal(SurveyParticipantStatuses.Completed, ana.Status);
+        Assert.Equal(SurveyParticipantStatuses.NotCompleted, hugo.Status);
+
+        // The claim the old screen made about all 800 of them.
+        Assert.DoesNotContain(view.Roster, row => row.Status == SurveyParticipantStatuses.NotStarted);
+
+        // And the guarantee the whole design rests on: the answers still carry no user id.
+        Assert.Equal(
+            0,
+            await _harness.WithDbAsync(db => db.Responses.CountAsync(r => r.SurveyId == surveyId && r.UserId != null)));
+    }
+
+    /// <summary>
+    /// A non-anonymous survey is unchanged: it keeps all three states, because its answers do
+    /// carry a user id and "stopped halfway" is therefore a fact about a person.
+    /// </summary>
+    [Fact]
+    public async Task A_survey_that_stores_a_user_id_still_reports_all_three_states()
+    {
+        var surveyId = await SeedSurveyAsync(anonymous: false);
+        var stopped = await SeedPersonAsync("Marta Halfway", Roles.Employee, "esph-cccc3333");
+        await SeedResponseAsync(surveyId, stopped, complete: false);
+
+        var view = await ParticipationAsync(surveyId);
+
+        Assert.True(view.TracksIndividuals);
+        Assert.False(view.TracksCompletionOnly);
+        Assert.Equal(
+            SurveyParticipantStatuses.Started,
+            Assert.Single(view.Roster, row => row.UserId == stopped).Status);
+    }
+
+    /// <summary>
+    /// Mirrors <c>SurveyResponseEndpoints.RecordAccountParticipationAsync</c>: the row is built
+    /// from the account, lower-cased email, a calendar day, and nothing else.
+    /// </summary>
+    private Task SeedParticipationAsync(Guid surveyId, Guid userId)
+        => _harness.WithDbAsync(async db =>
+        {
+            var person = await db.Users
+                .Where(u => u.Id == userId)
+                .Select(u => new { u.Name, u.Email })
+                .SingleAsync();
+
+            db.SurveyParticipations.Add(new SurveyParticipation
+            {
+                Id = Guid.NewGuid(),
+                SurveyId = surveyId,
+                CompanyId = _companyId,
+                Name = person.Name,
+                Email = person.Email.Trim().ToLowerInvariant(),
+                ParticipatedOn = DateOnly.FromDateTime(DateTime.UtcNow),
+            });
+            await db.SaveChangesAsync();
         });
 
     private Task<Guid> SeedSurveyAsync(bool anonymous)

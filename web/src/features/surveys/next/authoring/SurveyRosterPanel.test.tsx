@@ -42,6 +42,7 @@ function view(over: Partial<SurveyParticipationView> = {}): SurveyParticipationV
   const roster = over.roster ?? [ADMIN, ANA, HUGO, MARTA]
   return {
     surveyId: SURVEY,
+    tracksCompletionOnly: false,
     collectsParticipantIdentity: false,
     answeredCount: roster.filter((r) => r.status === 'completed').length,
     pendingCount: roster.filter((r) => r.status !== 'completed').length,
@@ -230,6 +231,45 @@ describe('SurveyRosterPanel', () => {
     expect(sizes).toEqual([100, 40])
     expect(await screen.findByText(T.sentAll.replace('{sent}', '140').replace('{requested}', '140'))).toBeTruthy()
   })
+  /**
+   * An anonymous survey DOES know who finished, and the screen says so.
+   *
+   * Completion is recorded in `survey_participations`, apart from the answers, with nothing
+   * that joins the two. So "terminó" and "sin terminar" are both facts here, while "empezó sin
+   * terminar" is not — and the state the screen must never show is "no ha entrado", because
+   * with no user id on the answers somebody halfway through looks exactly like somebody who
+   * never opened it.
+   */
+  it('shows who finished on an anonymous survey, and offers only the two states it can know', async () => {
+    const payload = view({
+      tracksIndividuals: false,
+      tracksCompletionOnly: true,
+      roster: [
+        { ...ANA, status: 'completed' as const },
+        { ...MARTA, status: 'not_completed' as const },
+      ],
+    })
+    vi.stubGlobal('fetch', fetchWith(payload).mock)
+    renderPanel(payload)
+
+    expect(await screen.findByText(T.completionOnlyNote)).toBeTruthy()
+
+    // The state column is drawn, because here it carries something true.
+    expect(screen.getByText(T.colStatus)).toBeTruthy()
+    expect(screen.getByText(T.statusCompleted)).toBeTruthy()
+    expect(screen.getByText(T.statusNotCompleted)).toBeTruthy()
+
+    // The claim it cannot support.
+    expect(screen.queryByText(T.statusNotStarted)).toBeNull()
+    expect(screen.queryByText(T.notTracked)).toBeNull()
+
+    // Two filters, not three: there is no "empezó sin terminar" to filter by.
+    expect(screen.getByRole('button', { name: new RegExp(`^${T.filterCompleted}`) })).toBeTruthy()
+    expect(screen.getByRole('button', { name: new RegExp(`^${T.filterNotCompleted}`) })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: new RegExp(`^${T.filterStarted}`) })).toBeNull()
+    expect(screen.queryByRole('button', { name: new RegExp(`^${T.filterNotStarted}`) })).toBeNull()
+  })
+
   /**
    * The defect reading the screenshot caught. On an ANONYMOUS survey no response carries a
    * user id, so every row comes back `not_started` whatever anybody did. Rendering that as

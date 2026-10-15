@@ -822,6 +822,7 @@ describe('Distribución — who has answered (ruled 2026-10-12)', () => {
       notStartedCount: 1,
       roster: [],
       tracksIndividuals: true,
+      tracksCompletionOnly: false,
     })
     open(settings())
 
@@ -839,7 +840,7 @@ describe('Distribución — who has answered (ruled 2026-10-12)', () => {
   it('says why it is empty when the survey does not ask', async () => {
     vi.mocked(surveysApi.getSurveyParticipation).mockResolvedValueOnce({
       surveyId: 's1', collectsParticipantIdentity: false, answeredCount: 0, pendingCount: 3, answered: [], pending: [],
-      startedCount: 0, notStartedCount: 3, roster: [], tracksIndividuals: true,
+      startedCount: 0, notStartedCount: 3, roster: [], tracksIndividuals: true, tracksCompletionOnly: false,
     })
     open(settings({ collectParticipantIdentity: false }))
 
