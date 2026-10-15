@@ -152,6 +152,11 @@ describe('SurveyRosterPanel', () => {
     await screen.findByText('Marta Villalobos')
 
     expect(within(rowOf('marta')).getByText('esph-marta')).toBeTruthy()
+    // El rol, which the client asked for by name alongside la persona, el usuario y el correo.
+    // Read from the catalogue the rest of the product already uses rather than a second copy
+    // of the role names under this screen's own keys.
+    expect(within(rowOf('marta')).getByText(es.superadmin.next.users.roles.employee)).toBeTruthy()
+    expect(within(rowOf('admin')).getByText(es.superadmin.next.users.roles.company_admin)).toBeTruthy()
     expect(within(rowOf('admin')).getByText(T.noUsuario)).toBeTruthy()
     // Nothing a resend could send, so the row cannot be chosen for one.
     expect(

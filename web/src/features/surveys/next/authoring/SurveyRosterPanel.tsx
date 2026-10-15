@@ -309,6 +309,7 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
                         />
                       </TableHead>
                       <TableHead scope="col" className={TH_CLASS}>{copy('colPerson')}</TableHead>
+                      <TableHead scope="col" className={TH_CLASS}>{copy('colRole')}</TableHead>
                       <TableHead scope="col" className={TH_CLASS}>{copy('colUsuario')}</TableHead>
                       {tracked ? (
                         <>
@@ -324,6 +325,7 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
                       <RosterRows
                         key={row.userId}
                         row={row}
+                        roleLabel={t(`superadmin.next.users.roles.${row.role}`)}
                         tracked={tracked}
                         locale={locale}
                         copy={copy}
@@ -346,6 +348,7 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
 
 function RosterRows({
   row,
+  roleLabel,
   tracked,
   locale,
   copy,
@@ -355,6 +358,7 @@ function RosterRows({
   onToggleDetails,
 }: {
   row: SurveyRosterRow
+  roleLabel: string
   tracked: boolean
   locale: string
   copy: (key: string, vars?: Record<string, string | number>) => string
@@ -385,6 +389,7 @@ function RosterRows({
             <span className="truncate font-mono text-xs text-fg-secondary">{row.email}</span>
           </span>
         </TableCell>
+        <TableCell className="px-3 py-2 text-fg-secondary">{roleLabel}</TableCell>
         <TableCell className="px-3 py-2">
           {row.username === null ? (
             <span className="text-xs text-fg-secondary">{copy('noUsuario')}</span>
@@ -420,7 +425,7 @@ function RosterRows({
       </TableRow>
       {expanded ? (
         <TableRow data-details-for={row.userId}>
-          <TableCell colSpan={tracked ? 6 : 4} className="px-3 py-3">
+          <TableCell colSpan={tracked ? 7 : 5} className="px-3 py-3">
             {row.demographics.length === 0 ? (
               <p className="m-0 text-sm text-fg-secondary">{copy('noDemographics')}</p>
             ) : (
