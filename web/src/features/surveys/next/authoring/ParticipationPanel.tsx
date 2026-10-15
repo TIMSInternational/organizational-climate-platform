@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import {
   Button,
   LoadingRegion,
@@ -12,17 +12,12 @@ import {
 } from '../../../../components/ui'
 import { useTranslation } from '../../../../i18n'
 import { TH_CLASS } from '../../../shared-next/parts'
-import { getSurveyParticipation, type SurveyParticipationView } from '../../api/surveys'
+import type { ParticipationState } from './useSurveyParticipation'
 import { Card, CardHeading } from './parts'
 import { formatParticipationDay } from './participationDay'
 
 /** Rows drawn before "Y N más": a list of names is read top-down, and a long one scrolls the page away. */
 export const PARTICIPATION_PREVIEW_ROWS = 8
-
-type PanelState =
-  | { status: 'loading' }
-  | { status: 'error' }
-  | { status: 'ready'; view: SurveyParticipationView }
 
 /**
  * "Participación": who has said they answered, and who has not — never what anybody answered.
@@ -35,27 +30,11 @@ type PanelState =
  * respondent who answered without an email cannot be matched to anybody, so the panel says so
  * rather than letting a pending list that never shrinks read as people not answering.
  */
-export default function ParticipationPanel({ surveyId, enabled }: { surveyId: string; enabled: boolean }) {
+export default function ParticipationPanel({ state }: { state: ParticipationState }) {
   const { t, locale } = useTranslation()
   const copy = (key: string, vars?: Record<string, string | number>) => t(`surveys.next.participation.${key}`, vars)
-  const baseUrl = import.meta.env.VITE_API_BASE_URL as string
-  const [state, setState] = useState<PanelState>({ status: 'loading' })
   const [showAllAnswered, setShowAllAnswered] = useState(false)
   const [showAllPending, setShowAllPending] = useState(false)
-
-  useEffect(() => {
-    let live = true
-    getSurveyParticipation(baseUrl, surveyId)
-      .then((view) => {
-        if (live) setState({ status: 'ready', view })
-      })
-      .catch(() => {
-        if (live) setState({ status: 'error' })
-      })
-    return () => {
-      live = false
-    }
-  }, [baseUrl, surveyId, enabled])
 
   return (
     <section aria-label={copy('title')} className="mt-6" data-testid="participation-panel">
@@ -63,7 +42,7 @@ export default function ParticipationPanel({ surveyId, enabled }: { surveyId: st
         <CardHeading title={copy('title')} />
         <p className="m-0 text-sm text-fg-secondary">{copy('intro')}</p>
 
-        {state.status === 'loading' ? (
+        {state.status === 'idle' ? null : state.status === 'loading' ? (
           <LoadingRegion loading label={t('common.loading')}>
             <SkeletonText lines={3} />
           </LoadingRegion>
