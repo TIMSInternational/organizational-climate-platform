@@ -68,15 +68,13 @@ public enum TransactionPoolerAction
 /// problems produced that, and this type addresses the half that lives in the repository.
 /// </para>
 /// <para>
-/// <strong>Problem one: the pool was unbounded.</strong> Npgsql's default
-/// <c>Maximum Pool Size</c> is 100 and nothing overrode it. The App Runner service template
-/// (<c>infra/aws/climate-project-api-prod-service.yml</c>) sets no
-/// <c>AutoScalingConfigurationArn</c>, so the service runs on App Runner's *default*
-/// autoscaling configuration — <c>MaxSize</c> 25. Each instance owns its own pool, so the
-/// worst case was 25 x 100 = 2500 server connections against a Supabase pooler that permits
-/// far fewer. <see cref="DefaultMaxPoolSize"/> brings the worst case to 25 x 10 = 250, which
-/// the arithmetic table in <c>infra/aws/README.md</c> works through against Supabase's
-/// ceiling.
+/// <strong>Problem one: the pool must fit the session pooler.</strong> Npgsql defaults to
+/// 100 connections per process. Production caps App Runner at four instances and the
+/// Supabase session pool was raised from 15 to 30 on 2026-10-15 after a burst produced
+/// EMAXCONNSESSION failures. Six connections per instance permits 24 at full scale,
+/// leaving six pooler slots for deployments, migrations and operational access. A rolling
+/// deployment may temporarily overlap old and new processes; verify its demand separately.
+/// See <c>infra/aws/README.md</c> for the budget and override caveat.
 /// </para>
 /// <para>
 /// The default is applied <em>only</em> when the incoming string is silent on the subject.
@@ -123,10 +121,10 @@ public static class DatabaseConnectionStringPolicy
 {
     /// <summary>
     /// The maximum pool size applied when the connection string does not specify one.
-    /// Chosen against App Runner's default <c>MaxSize</c> of 25 instances — see the
-    /// arithmetic in <c>infra/aws/README.md</c>.
+    /// Four production instances use at most 24 of the configured 30 session-pool slots.
+    /// See the arithmetic in <c>infra/aws/README.md</c>.
     /// </summary>
-    public const int DefaultMaxPoolSize = 10;
+    public const int DefaultMaxPoolSize = 6;
 
     /// <summary>
     /// Supabase Supavisor's <em>transaction</em> pooler port. Correct for short-lived

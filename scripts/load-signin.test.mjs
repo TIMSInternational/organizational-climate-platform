@@ -14,6 +14,8 @@ import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 
 const REPO = fileURLToPath(new URL('..', import.meta.url));
 const SCRIPT = join(REPO, 'scripts/load-signin.mjs');
@@ -84,7 +86,7 @@ test('counts the split between the attempts let through and the ones refused', a
     // "50 reached" would hide the launch-morning problem it exists to find.
     assert.match(result.stdout, /reached the check\s+20\b/);
     assert.match(result.stdout, /rate limited\s+30\b/);
-    assert.match(result.stdout, /60% of these attempts were refused/);
+    assert.match(result.stdout, /60% of these attempts were throttled/);
   });
 });
 
@@ -165,7 +167,41 @@ test('reports throughput only in capacity mode', async () => {
     const result = await run(['--api', url, '--people', '5', '--email', 'real@example.com']);
     assert.equal(result.code, 0);
     assert.match(result.stdout, /as real@example\.com with a wrong password/);
-    assert.match(result.stdout, /throughput\s+[\d.]+ full sign-ins\/second/);
-    assert.match(result.stdout, /the same work a successful sign-in does/);
+    assert.match(result.stdout, /throughput\s+[\d.]+ password checks\/second/);
+    assert.match(result.stdout, /no successful login or survey write is tested/);
+  });
+});
+
+
+test('paced mode exports all results and separate check/throttle latency distributions', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'climate-load-'));
+  try {
+    await withStub(2, async (url, hits) => {
+      const output = join(dir, 'results.json');
+      const start = Date.now();
+      const result = await run(['--api', url, '--people', '4', '--rate', '10', '--output', output]);
+      assert.equal(result.code, 0, result.stderr);
+      assert.equal(hits.length, 4);
+      assert.ok(Date.now() - start >= 290, 'paced arrivals must not be a burst');
+      const data = JSON.parse(await readFile(output, 'utf8'));
+      assert.equal(data.people, 4);
+      assert.equal(data.results.length, 4);
+      assert.deepEqual(data.byStatus, {401: 2, 429: 2});
+      assert.equal(data.passwordCheckLatency.count, 2);
+      assert.equal(data.throttledLatency.count, 2);
+      assert.equal(data.ratePerSecond, 10);
+    });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('rejects fractional people and invalid pacing before sending requests', async () => {
+  await withStub(10, async (url, hits) => {
+    for (const args of [['--people', '1.5'], ['--rate=-1'], ['--rate', 'nope']]) {
+      const result = await run(['--api', url, ...args]);
+      assert.equal(result.code, 2);
+    }
+    assert.equal(hits.length, 0);
   });
 });

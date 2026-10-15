@@ -47,6 +47,8 @@
  */
 
 import { parseArgs } from 'node:util'
+import { writeFile } from 'node:fs/promises'
+import { setTimeout as sleep } from 'node:timers/promises'
 
 const { values } = parseArgs({
   options: {
@@ -56,6 +58,8 @@ const { values } = parseArgs({
     // An address that really exists, so every attempt pays a full bcrypt verify. See the
     // header: without it the unknown-user short-circuit means no hash is ever computed.
     email: { type: 'string' },
+    rate: { type: 'string', default: '0' },
+    output: { type: 'string' },
     'confirm-production-load-test': { type: 'boolean', default: false },
     help: { type: 'boolean', default: false },
   },
@@ -64,7 +68,7 @@ const { values } = parseArgs({
 if (values.help) {
   process.stdout.write(
     'usage: node scripts/load-signin.mjs [--api URL] [--people 300] [--email ADDRESS]\n'
-      + '                                   [--confirm-production-load-test]\n'
+      + '                                   [--confirm-production-load-test] [--rate requests/sec] [--output results.json]\n'
       + '\n'
       + '  Fires N concurrent POST /auth/login and tallies the answers. No valid credentials\n'
       + '  are used and nothing is written: 401 means the limiter let the request through to\n'
@@ -98,9 +102,15 @@ if (!local && !values['confirm-production-load-test']) {
   process.exit(2)
 }
 
-const people = Number.parseInt(values.people, 10)
-if (!Number.isFinite(people) || people < 1) {
+const people = Number(values.people)
+const rate = Number(values.rate)
+if (!Number.isSafeInteger(people) || people < 1 || people > 10000) {
   process.stderr.write(`load-signin: --people must be a positive number, got ${values.people}\n`)
+  process.exit(2)
+}
+
+if (!Number.isFinite(rate) || rate < 0 || rate > 1000) {
+  process.stderr.write('load-signin: --rate must be requests/second between 0 (burst) and 1000\n')
   process.exit(2)
 }
 
@@ -110,6 +120,8 @@ async function attempt(index) {
   try {
     const response = await fetch(`${api}/auth/login`, {
       method: 'POST',
+      signal: AbortSignal.timeout(30000),
+      redirect: 'error',
       headers: { 'Content-Type': 'application/json' },
       // The password is deliberately wrong in both modes: a real one would create a session
       // and prove nothing extra. What `--email` changes is whether the IDENTIFIER is one the
@@ -119,7 +131,8 @@ async function attempt(index) {
         password: 'not-a-password',
       }),
     })
-    return { status: response.status, ms: performance.now() - started }
+    await response.arrayBuffer()
+    return { status: response.status, ms: performance.now() - started, retryAfter: response.headers.get('retry-after'), offsetMs: Date.now() - startedAt }
   } catch (error) {
     return { status: 0, ms: performance.now() - started, error: String(error?.message ?? error) }
   }
@@ -133,8 +146,9 @@ function percentile(sorted, p) {
 
 const measuresCapacity = values.email !== undefined
 
-const started = Date.now()
-process.stdout.write(`load-signin: ${people} concurrent sign-in attempts at ${api}\n`)
+const startedAt = Date.now()
+const started = startedAt
+process.stdout.write(`load-signin: ${people} sign-in attempts (${rate > 0 ? `${rate}/second` : 'burst'}) at ${api}\n`)
 process.stdout.write(
   measuresCapacity
     ? `load-signin: as ${values.email} with a wrong password — each attempt pays a full bcrypt verify\n`
@@ -146,7 +160,16 @@ if (!local) {
 
 // All at once, from one address, which is the case being measured: an email blast lands and
 // everyone opens it together.
-const results = await Promise.all(Array.from({ length: people }, (_, index) => attempt(index)))
+const pending = []
+for (let index = 0; index < people; index++) {
+  if (rate > 0) {
+    const delay = startedAt + index * 1000 / rate - Date.now()
+    if (delay > 0) await sleep(delay)
+  }
+  pending.push(attempt(index))
+  if (rate > 0 && index > 0 && index % 100 === 0) process.stdout.write(`  dispatched ${index}/${people}\n`)
+}
+const results = await Promise.all(pending)
 const elapsed = (Date.now() - started) / 1000
 
 const byStatus = new Map()
@@ -159,8 +182,8 @@ const failed = results.length - allowed - limited
 
 process.stdout.write('\n')
 process.stdout.write(`  elapsed            ${elapsed.toFixed(1)}s\n`)
-process.stdout.write(`  reached the check  ${allowed}   (401/200 — the limiter let them through)\n`)
-process.stdout.write(`  rate limited       ${limited}   (429 — rejected before any password was read)\n`)
+process.stdout.write(`  reached the check  ${allowed}   (401/200 responses; no successful-login assertion)\n`)
+process.stdout.write(`  rate limited       ${limited}   (429 — throttled; source requires server evidence)\n`)
 if (failed > 0) process.stdout.write(`  other              ${failed}\n`)
 for (const [status, count] of [...byStatus].sort((a, b) => b[1] - a[1])) {
   process.stdout.write(`      status ${status || 'network error'}: ${count}\n`)
@@ -179,10 +202,10 @@ if (measuresCapacity && allowed > 0) {
   // p95 is what the slowest person in the burst waited.
   const perSecond = elapsed > 0 ? allowed / elapsed : 0
   process.stdout.write(
-    `  throughput         ${perSecond.toFixed(1)} full sign-ins/second (${(perSecond * 60).toFixed(0)}/minute)\n`,
+    `  throughput         ${perSecond.toFixed(1)} password checks/second (${(perSecond * 60).toFixed(0)}/minute)\n`,
   )
   process.stdout.write(
-    '  Each of those paid a bcrypt verify, which is the same work a successful sign-in does.\n',
+    '  A known account exercises password verification; no successful login or survey write is tested.\n',
   )
   process.stdout.write('\n')
 }
@@ -190,11 +213,16 @@ if (measuresCapacity && allowed > 0) {
 if (limited > 0) {
   const share = ((limited / results.length) * 100).toFixed(0)
   process.stdout.write(
-    `  ${share}% of these attempts were refused before their password was read.\n`
-      + '  Everyone behind one public address shares that bucket, so a workforce answering\n'
-      + '  from the corporate network is throttled together regardless of how much capacity\n'
-      + '  the service has. Nothing downstream of sign-in was reached by those requests.\n',
+    `  ${share}% of these attempts were throttled.\n`
+      + '  These requests did not complete sign-in. Correlate response headers, application\n'
+      + '  rejection logs, and App Runner metrics before attributing the throttles.\n',
   )
 } else {
   process.stdout.write(`  No request was rate limited at ${people} from one address.\n`)
+}
+
+if (values.output) {
+  const group = (status) => results.filter(r => r.status === status).map(r => r.ms).sort((a,b) => a-b)
+  const summary = (samples) => ({ count: samples.length, p50Ms: percentile(samples,50), p95Ms: percentile(samples,95), maxMs: samples.at(-1) ?? 0 })
+  await writeFile(values.output, JSON.stringify({ startedAt: new Date(startedAt).toISOString(), api, people, ratePerSecond: rate, mode: measuresCapacity ? 'known-account-wrong-password' : 'unknown-account', elapsedSeconds: elapsed, byStatus: Object.fromEntries(byStatus), allLatency: summary(latencies), passwordCheckLatency: summary([...group(401), ...group(200)].sort((a,b)=>a-b)), throttledLatency: summary(group(429)), results }, null, 2) + '\n')
 }
