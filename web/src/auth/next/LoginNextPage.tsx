@@ -98,14 +98,30 @@ export default function LoginNextPage() {
             </Alert>
           )}
 
-          <AuthField htmlFor="auth-email" fieldLabel={t('auth.next.emailLabel')}>
+          {/*
+            NOT type="email", and the reason is the whole mass invite. `AuthEndpoints` signs
+            a person in by EMAIL OR USERNAME -- it branches on whether the identifier holds an
+            "@" -- and a mass invite mails a generated username like `esph-k7m2q9xa`. With
+            type="email" and no noValidate on the form, the browser refused that value before
+            any request was made ("Please include an '@' in the email address"), so every
+            account a mass invite created could be signed in to over HTTP and not through this
+            screen. Measured on production, 2026-10-14.
+
+            No test caught it: the integration test signs in over HTTP with no form at all, and
+            happy-dom does not enforce native constraint validation, so a web test typing a
+            username here passed while Chrome refused it.
+
+            autoComplete="username" rather than "email" for the same reason -- it is what a
+            password manager should store for an account whose identifier may not be an email.
+          */}
+          <AuthField htmlFor="auth-email" fieldLabel={t('auth.next.identifierLabel')}>
             <Input
               id="auth-email"
-              type="email"
-              autoComplete="email"
+              type="text"
+              autoComplete="username"
               required
               value={model.email}
-              placeholder={t('auth.next.emailPlaceholder')}
+              placeholder={t('auth.next.identifierPlaceholder')}
               onChange={(event) => model.setEmail(event.target.value)}
             />
           </AuthField>

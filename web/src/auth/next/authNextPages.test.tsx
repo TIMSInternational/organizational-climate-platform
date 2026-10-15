@@ -239,6 +239,29 @@ describe('LoginNextPage', () => {
     expect(screen.getByText('Use el correo corporativo al que le llegó la invitación.')).toBeTruthy()
     expect(screen.getByLabelText(/Correo electrónico/)).toBeTruthy()
   })
+
+  /**
+   * The attribute, not a typed value, because the attribute is what refuses.
+   *
+   * `AuthEndpoints` signs a person in by email OR username, and a mass invite mails a
+   * generated username like `esph-k7m2q9xa`. While this input was `type="email"` inside a
+   * form with no `noValidate`, Chrome refused that value before any request left the page
+   * ("Please include an '@' in the email address"), so every mass-invite account could be
+   * signed in to over HTTP and not through this screen. Measured on production 2026-10-14.
+   *
+   * A test that types a username and submits would NOT catch it: happy-dom does not enforce
+   * native constraint validation, so it passes on the broken markup. What the browser acts
+   * on is `type`, so that is what this asserts.
+   */
+  it('does not make the browser demand an @, because a username has none', () => {
+    renderAuthRoutes('/login', 'es')
+
+    const field = screen.getByLabelText(/Correo electrónico/) as HTMLInputElement
+    expect(field.type).not.toBe('email')
+    // A password manager should store this as the account's identifier, which it may not be
+    // an email address.
+    expect(field.getAttribute('autocomplete')).toBe('username')
+  })
 })
 
 describe('RegisterNextPage', () => {
