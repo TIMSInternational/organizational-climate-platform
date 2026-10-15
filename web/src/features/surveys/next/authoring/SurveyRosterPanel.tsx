@@ -33,6 +33,13 @@ type SendState =
   | { phase: 'sending'; done: number; total: number }
   | { phase: 'done'; requested: number; sent: number; failed: number; outcomes: CredentialsResendOutcome[] }
 
+/**
+ * A stable empty roster. A fresh `[]` on every render is a new reference, which makes the
+ * `useMemo` below recompute every time and costs a lint warning against a budget with two
+ * slots left in it.
+ */
+const NO_ROWS: readonly SurveyRosterRow[] = []
+
 const STATUS_TONE: Record<SurveyParticipantStatus, ChipTone> = {
   completed: 'good',
   started: 'warning',
@@ -82,7 +89,7 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
   const [send, setSend] = useState<SendState>({ phase: 'idle' })
 
-  const roster = state.status === 'ready' ? state.view.roster : []
+  const roster = state.status === 'ready' ? state.view.roster : NO_ROWS
 
   /**
    * Whether a person's state on this survey means anything. An anonymous survey writes no user
