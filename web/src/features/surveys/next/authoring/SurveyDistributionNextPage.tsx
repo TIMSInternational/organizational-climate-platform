@@ -43,6 +43,7 @@ import { IconBox, TH_CLASS } from '../../../shared-next/parts'
 import { Card, Meter, ReadingTile, WithReading, type ShareLinkAction } from './parts'
 import SharePanel from './SharePanel'
 import ParticipationPanel from './ParticipationPanel'
+import SurveyRosterPanel from './SurveyRosterPanel'
 import {
   INVITATION_COLUMNS,
   MAX_REMINDERS,
@@ -346,6 +347,14 @@ export function DistributionView({
       {scoped ? (
         <ParticipationPanel surveyId={survey.id} enabled={survey.settings.collectParticipantIdentity === true} />
       ) : null}
+
+      {/* The roster, for the administrator chasing a mass invite. Deliberately NOT gated on
+          `collectParticipantIdentity`, unlike the panel above: that setting decides whether a
+          LINK visitor is asked their name, while an account holder's state is known because
+          their response carries their user id. So this is answerable for a mass invite whether
+          or not the survey asks anybody anything, and gating it would have blanked the one
+          screen the launch is watched from. */}
+      {scoped ? <SurveyRosterPanel surveyId={survey.id} /> : null}
 
       <section aria-labelledby="launch-checklist" className="mt-6 flex flex-col gap-3">
         <div className="flex flex-wrap items-baseline justify-between gap-3">

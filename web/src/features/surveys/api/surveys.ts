@@ -425,6 +425,45 @@ export interface SurveyParticipationView {
   pendingCount: number
   answered: SurveyParticipant[]
   pending: SurveyPendingParticipant[]
+  /** People who answered something and did not finish. */
+  startedCount: number
+  /** People with no response row at all for this survey. */
+  notStartedCount: number
+  roster: SurveyRosterRow[]
+}
+
+/**
+ * Where ONE invited person stands on this survey.
+ *
+ * Three states and not two. "Pendiente" used to mean both "never opened it" and "answered
+ * half and was interrupted", and those call for opposite actions -- the first person needs
+ * their sign-in details again, the second already has them.
+ */
+export type SurveyParticipantStatus = 'completed' | 'started' | 'not_started'
+
+/** One demographic as the import uploaded it. */
+export interface SurveyRosterDemographic {
+  field: string
+  labelEn: string | null
+  labelEs: string | null
+  value: string
+}
+
+export interface SurveyRosterRow {
+  userId: string
+  name: string
+  email: string
+  /**
+   * The generated sign-in name a mass invite gave this account, null for anyone who chose
+   * their own password. The password is discarded after hashing, so this is the only half of
+   * their credentials an administrator can read back on the phone.
+   */
+  username: string | null
+  role: string
+  status: SurveyParticipantStatus
+  /** A calendar day, never an instant (ruled 2026-10-12). */
+  lastActivityOn: string | null
+  demographics: SurveyRosterDemographic[]
 }
 
 export async function getSurveyParticipation(baseUrl: string, id: string): Promise<SurveyParticipationView> {

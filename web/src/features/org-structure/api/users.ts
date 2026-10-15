@@ -87,3 +87,49 @@ export async function resendCredentials(baseUrl: string, id: string): Promise<Cr
   const response = await authFetch(`${baseUrl}/admin/users/${id}/credentials`, { method: 'POST' })
   return response.json() as Promise<CredentialsResendResult>
 }
+
+/**
+ * Sends a BATCH of people their sign-in details again -- the launch-day reminder.
+ *
+ * Every person sent gets a NEW password and their previous one stops working, exactly as the
+ * single resend does (ruled 2026-10-14). Someone who kept the first password and was halfway
+ * through the survey is signed out until they read the new mail, which is why the copy says
+ * the details replace the previous ones.
+ *
+ * `MAX_CREDENTIALS_BATCH` is the API's cap, and it is a real one: the send is inline rather
+ * than queued, because queueing would mean writing a plaintext password into a row and
+ * leaving it there until a worker ran. Callers chunk and report progress.
+ *
+ * As with the single resend, A FAILED SEND IS A 200: the response names every id with its own
+ * outcome, so a caller that treats "did not throw" as success reports delivery the server
+ * denied.
+ */
+export const MAX_CREDENTIALS_BATCH = 100
+
+export interface CredentialsResendOutcome {
+  userId: string
+  email: string | null
+  delivered: boolean
+  failureReason: string | null
+  /** `not_found`, `not_mass_invite`, `inactive` or `send_failed`; null when it went out. */
+  code: string | null
+}
+
+export interface CredentialsResendBatchResult {
+  requested: number
+  sent: number
+  failed: number
+  outcomes: CredentialsResendOutcome[]
+}
+
+export async function resendCredentialsBatch(
+  baseUrl: string,
+  userIds: readonly string[],
+): Promise<CredentialsResendBatchResult> {
+  const response = await authFetch(`${baseUrl}/admin/users/credentials`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userIds }),
+  })
+  return response.json() as Promise<CredentialsResendBatchResult>
+}
