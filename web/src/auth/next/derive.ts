@@ -131,6 +131,20 @@ export function domainOf(email: string): string | null {
  * so the page must not echo the server's "Invalid email or password" as though it had
  * diagnosed one of the two. `messageKey` is the catalogue's own pair of sentences, which
  * say that the response is deliberately ambiguous.
+ *
+ * ## 429, and why it stays on the form
+ *
+ * `RateLimitPolicies` answers 429 with an EMPTY body, so without a branch here a refused
+ * sign-in fell through to `form-server` and printed the generic "an error occurred" — true,
+ * useless, and indistinguishable from a server fault. It matters at a scale this product now
+ * has: sign-in is bucketed per caller ADDRESS, and several hundred staff behind one corporate
+ * NAT are one address, so a mass invite that lands in everybody's inbox at once can refuse
+ * real people with correct credentials.
+ *
+ * So the sentence says the two things that person needs: wait, and your password is fine. It
+ * is a `form` and not a `page` because the refusal is transient and they are about to retry —
+ * handing them a full error screen would make them navigate back to the form they were already
+ * on.
  */
 export type LoginOutcome =
   | { kind: 'form'; titleKey: string; bodyKey: string }
@@ -140,6 +154,9 @@ export type LoginOutcome =
 export function loginOutcome(status: number, message: string): LoginOutcome {
   const reason = pageWorthyReason(status)
   if (reason) return { kind: 'page', reason }
+  if (status === 429) {
+    return { kind: 'form', titleKey: `${K}.busyTitle`, bodyKey: `${K}.busyBody` }
+  }
   if (status === 401) {
     return { kind: 'form', titleKey: `${K}.credentialsTitle`, bodyKey: `${K}.credentialsBody` }
   }

@@ -144,3 +144,33 @@ describe('domainOf', () => {
     expect(domainOf('ana@ @')).toBeNull()
   })
 })
+
+/**
+ * The refusal a mass invite can produce on real people with correct credentials. Sign-in is
+ * bucketed per caller ADDRESS (`RateLimitPolicies.PartitionAuthentication`), and several hundred
+ * staff behind one corporate NAT are one address, so 800 invitations landing at once can exhaust
+ * the bucket. The limiter answers with an EMPTY body, so before this branch the page printed the
+ * generic "an error occurred" and left the person guessing at their own password.
+ */
+describe('loginOutcome on a rate limit', () => {
+  it('keeps a 429 on the form, with its own sentence rather than the generic one', () => {
+    const outcome = loginOutcome(429, '')
+    expect(outcome).toEqual({
+      kind: 'form',
+      titleKey: 'auth.next.busyTitle',
+      bodyKey: 'auth.next.busyBody',
+    })
+  })
+
+  it('does not reuse the credentials sentence, which would blame the password', () => {
+    const busy = loginOutcome(429, '')
+    const wrong = loginOutcome(401, 'Invalid email or password')
+    expect(busy).not.toEqual(wrong)
+  })
+
+  it('leaves every other status where it was', () => {
+    expect(loginOutcome(503, '')).toEqual({ kind: 'page', reason: 'maintenance' })
+    expect(loginOutcome(403, '')).toEqual({ kind: 'page', reason: 'login-disabled' })
+    expect(loginOutcome(500, 'Boom')).toEqual({ kind: 'form-server', message: 'Boom' })
+  })
+})
