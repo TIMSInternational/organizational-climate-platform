@@ -32,9 +32,19 @@ namespace ClimateProject.Application.Surveys;
 /// </param>
 /// <param name="TracksIndividuals">
 /// Whether the FULL three states can be known: finished, started-and-stopped, never opened.
-/// True only for a survey that stores a <c>user_id</c> on its answers, i.e. a non-anonymous
-/// one. On an anonymous survey a half-finished response belongs to nobody, so
-/// started-and-stopped is unknowable and the screen must not render it as a fact.
+///
+/// <para>
+/// True for a survey that stores a <c>user_id</c> on its answers, and -- since 2026-10-15 --
+/// for an ANONYMOUS one too, by a different route. This used to say started-and-stopped was
+/// unknowable there, on the grounds that a half-finished anonymous response belongs to nobody.
+/// That was wrong: it carries the DERIVED session id, because that is what lets the person
+/// resume it on another device, and computing the same id per account finds the row again. See
+/// <see cref="SurveyResumeSession"/>, including why this costs no more privacy than resume.
+/// </para>
+/// <para>
+/// False only when no resume key is configured, when there is no derived id to compute and the
+/// two states really are one observation.
+/// </para>
 /// </param>
 /// <param name="TracksCompletionOnly">
 /// Whether COMPLETION alone can be known, which is a different question and on an anonymous
@@ -51,7 +61,9 @@ namespace ClimateProject.Application.Surveys;
 /// <para>
 /// When this is true and <see cref="SurveyParticipationView.TracksIndividuals"/> is false, the
 /// roster carries two states and not three: <c>completed</c> and
-/// <see cref="SurveyParticipantStatuses.NotCompleted"/>.
+/// <see cref="SurveyParticipantStatuses.NotCompleted"/>. Since 2026-10-15 that pairing means
+/// one specific thing -- an anonymous survey with no resume key configured -- rather than every
+/// anonymous survey.
 /// </para>
 /// </param>
 public sealed record SurveyParticipationView(

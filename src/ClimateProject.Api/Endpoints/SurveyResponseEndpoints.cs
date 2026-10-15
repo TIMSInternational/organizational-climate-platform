@@ -719,18 +719,9 @@ public static class SurveyResponseEndpoints
             return null;
         }
 
-        var key = configuration["SurveyResumeKey"] ?? configuration["TrackingJwtSecret"];
-        if (string.IsNullOrWhiteSpace(key))
-        {
-            return null;
-        }
-
-        using var mac = new HMACSHA256(Encoding.UTF8.GetBytes(key));
-        var digest = mac.ComputeHash(Encoding.UTF8.GetBytes($"survey-resume-v1:{survey.Id:N}:{userId:N}"));
-
-        // 32 lower-case hex characters: the shape and length of the random ids this sits
-        // beside, so nothing downstream can tell a derived id from a generated one.
-        return Convert.ToHexString(digest)[..32].ToLowerInvariant();
+        // The derivation itself is `SurveyResumeSession`, shared with the roster, which asks
+        // the same question about the same id and must get the same answer to the byte.
+        return SurveyResumeSession.IdFor(survey.Id, userId, SurveyResumeSessionConfiguration.KeyFrom(configuration));
     }
 
     private static async Task<Response?> FindExistingResponseAsync(
