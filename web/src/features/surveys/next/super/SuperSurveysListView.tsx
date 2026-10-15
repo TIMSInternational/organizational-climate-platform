@@ -127,12 +127,12 @@ export default function SuperSurveysListView() {
         actions={
           capabilities.canAuthorSurveys || readViewerClaims().role === 'super_admin' ? (
             <div className="flex flex-wrap gap-2"><Button asChild variant="outline"><Link to="/surveys/import">{t('climateWorkbook.title')}</Link></Button>
-            <Button asChild variant="primary">
+            {capabilities.canAuthorSurveys && <Button asChild variant="primary">
               <Link to="/surveys/new">
                 <Plus aria-hidden="true" />
                 {t('surveys.newSurvey')}
               </Link>
-            </Button></div>
+            </Button>}</div>
           ) : undefined
         }
       />

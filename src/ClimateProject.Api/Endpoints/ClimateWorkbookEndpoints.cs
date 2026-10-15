@@ -10,7 +10,7 @@ namespace ClimateProject.Api.Endpoints;
 
 public sealed record WorkbookExistingPerson(Guid Id,string Email,string Role);
 public sealed record WorkbookFieldPlan(Guid? Id,string Field,string Label,IReadOnlyList<WorkbookOptionPlan> Options);
-public sealed record WorkbookOptionPlan(string Value,string Label,string? LabelEn=null,string? LabelEs=null);
+public sealed record WorkbookOptionPlan(string Value,string Label,IReadOnlyDictionary<string,string>? LabelInput=null);
 public sealed record ClimateWorkbookPreview(ClimateWorkbookContent Content,Guid? CompanyId,Guid? SurveyId,string? SurveyStatus,
     IReadOnlyList<WorkbookFieldPlan> Fields,IReadOnlyList<WorkbookExistingPerson> ExistingPeople,IReadOnlyList<string> Errors);
 
@@ -25,8 +25,8 @@ public static class ClimateWorkbookEndpoints
 
     private static bool Matches(WorkbookOptionPlan option,string label,string value)
         =>option.Value==value||ClimateWorkbook.Key(option.Label)==ClimateWorkbook.Key(label)
-            ||ClimateWorkbook.Key(option.LabelEn??"")==ClimateWorkbook.Key(label)
-            ||ClimateWorkbook.Key(option.LabelEs??"")==ClimateWorkbook.Key(label);
+            ||ClimateWorkbook.Key(option.LabelInput?.GetValueOrDefault("en")??"")==ClimateWorkbook.Key(label)
+            ||ClimateWorkbook.Key(option.LabelInput?.GetValueOrDefault("es")??"")==ClimateWorkbook.Key(label);
 
     private static IResult Template(ClaimsPrincipal principal)
     {
@@ -77,7 +77,7 @@ public static class ClimateWorkbookEndpoints
             var existing=exact??candidates.FirstOrDefault();
             if(existing is not null&&(!existing.IsActive||existing.Type!="select"))
                 errors.Add($"DEMOGRAFICOS: {field.Label} ya existe con un tipo incompatible o está inactivo.");
-            var choices=options.Where(o=>o.DemographicFieldId==existing?.Id).Select(o=>new WorkbookOptionPlan(o.Value,o.LabelEs??o.LabelEn??o.Value,o.LabelEn,o.LabelEs)).ToList();
+            var choices=options.Where(o=>o.DemographicFieldId==existing?.Id).Select(o=>new WorkbookOptionPlan(o.Value,o.LabelEs??o.LabelEn??o.Value,new Dictionary<string,string?>{{"en",o.LabelEn},{"es",o.LabelEs}}.Where(kv=>kv.Value is not null).ToDictionary(kv=>kv.Key,kv=>kv.Value!))).ToList();
             foreach(var label in field.Options)
             {
                 var key=ClimateWorkbook.Slug(label);

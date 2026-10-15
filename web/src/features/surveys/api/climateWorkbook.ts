@@ -17,7 +17,7 @@ export interface ClimateWorkbookPreview {
   surveyStatus: string | null
   errors: string[]
   existingPeople: { id: string; email: string; role: string }[]
-  fields: { id: string | null; field: string; label: string; options: { value: string; label: string; labelEn?: string | null; labelEs?: string | null }[] }[]
+  fields: { id: string | null; field: string; label: string; options: { value: string; label: string; labelInput?: Partial<Record<'en' | 'es', string>> | null }[] }[]
   content: {
     company: { name: string; emailDomain: string; industry: string; size: string; country: string; language: string; timezone: string; anonymous: boolean; resultBands: ResultBandsWire }
     title: string; description: string; startDate: string; endDate: string
@@ -60,7 +60,7 @@ export async function applyClimateWorkbook(baseUrl: string, plan: ClimateWorkboo
   }
   progress({ stage: 'fields', done: 0, total: plan.fields.length })
   for (const [i, field] of plan.fields.entries()) {
-    const options = field.options.map(o => ({ value: o.value, label: { en: o.labelEn ?? o.label, es: o.labelEs ?? o.label } }))
+    const options = field.options.map(o => ({ value: o.value, label: o.labelInput ?? { [content.company.language]: o.label } }))
     if (field.id) await updateDemographicField(baseUrl, field.id, { options })
     else await createDemographicField(baseUrl, { companyId, field: field.field, label: { en: field.label, es: field.label }, type: 'select', options, required: false, order: i + 1 })
     progress({ stage: 'fields', done: i + 1, total: plan.fields.length })
