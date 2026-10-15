@@ -35,20 +35,18 @@ public static class SurveyResponseEndpoints
     /// </summary>
     public const string ResponseSubmissionRateLimiterPolicy = "survey-response-submission";
 
-    /// <summary>Requests per IP per window on the public respond path.</summary>
+    /// <summary>Requests per authenticated user, or anonymous caller IP, per window.</summary>
     private const int RateLimitPermitsPerWindow = 60;
 
     private static readonly TimeSpan RateLimitWindow = TimeSpan.FromMinutes(1);
 
     /// <summary>
-    /// Partitions the respond path per client IP. Lives here rather than inline in
-    /// Program.cs so the limits sit beside the endpoints they defend.
-    ///
-    /// Generous enough for an office behind one NAT answering a survey together, bounded
-    /// against a scripted flood -- which on this surface is not a nuisance but a data
-    /// integrity attack: fabricated responses are indistinguishable from real ones once
-    /// stored, and on an anonymous survey there is deliberately nothing recorded that
-    /// could be used to unpick them afterwards.
+    /// Authenticated respondents have independent buckets, including when all employees
+    /// share one corporate NAT. The read, partial saves and final submission share this
+    /// budget. Keeping those on one IP-wide bucket would throttle an entire workplace
+    /// after only sixty combined operations per minute.
+    /// Anonymous callers remain bounded by address to limit fabricated response floods.
+    /// Authentication middleware validates the subject before this partition runs.
     ///
     /// <para>
     /// The address comes from <see cref="RateLimitPolicies.ClientIpFor"/> rather than
@@ -61,8 +59,15 @@ public static class SurveyResponseEndpoints
     {
         ArgumentNullException.ThrowIfNull(httpContext);
 
+        var subject = httpContext.User.Identity?.IsAuthenticated == true
+            ? httpContext.User.FindFirst("sub")?.Value
+            : null;
+        var caller = string.IsNullOrEmpty(subject)
+            ? "ip:" + RateLimitPolicies.ClientIpFor(httpContext)
+            : "user:" + subject;
+
         return RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: ResponseSubmissionRateLimiterPolicy + ":" + RateLimitPolicies.ClientIpFor(httpContext),
+            partitionKey: ResponseSubmissionRateLimiterPolicy + ":" + caller,
             factory: _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = RateLimitPermitsPerWindow,
