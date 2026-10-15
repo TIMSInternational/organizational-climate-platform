@@ -112,7 +112,15 @@ describe('MicroclimateRespondPage option values', () => {
     // A catalogue string the payload has no say in, so it is the chrome and not the content.
     expect(await screen.findByRole('link', { name: 'Ir a las preguntas' })).toBeTruthy()
     expect(screen.queryByRole('link', { name: 'Skip to the questions' })).toBeNull()
-    expect(document.documentElement.lang).toBe('es')
+    // `waitFor`, because `<html lang>` is NOT written in the commit this test just waited for.
+    // `adoptContentLocale` sets the locale, the chrome re-renders with it -- which is what the
+    // link assertion above observes -- and `TranslationProvider` writes the attribute from a
+    // `useEffect` keyed on the locale, which React flushes AFTER that commit. Asserting it
+    // synchronously reads whichever of the two landed first: green on node 22 and 24, and
+    // `expected 'en' to be 'es'` on node 25 (PR #560, job 116173928870), on a diff that touched
+    // neither this page nor i18n. The product was never wrong -- the Spanish link assertion
+    // above had already passed.
+    await waitFor(() => expect(document.documentElement.lang).toBe('es'))
     // Not remembered: answering one Spanish session is not a preference about this reader.
     expect(window.localStorage.getItem(LOCALE_STORAGE_KEY)).toBeNull()
   })
