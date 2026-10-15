@@ -747,3 +747,175 @@ describe('IntakeWizard — how the people reach the survey', () => {
   })
 })
 
+
+/**
+ * The approval is sent one batch at a time because App Runner ends every request at 120 seconds
+ * and a credentialed row costs a bcrypt hash plus a paced email inside that request — the
+ * arithmetic is on `IMPORT_CHUNK_ROWS`. Before this, an 800-person file was one request that
+ * could not finish, and the band around 400 rows committed the accounts and then died in the
+ * mailing loop, taking with it the only list of who was never mailed.
+ */
+describe('IntakeWizard — a file too big for one request', () => {
+  const MASS_INVITE = 'Invitación masiva con datos de acceso'
+  const APPROVE_CREDENTIALS = 'Crear cuentas y enviar los datos de acceso'
+
+  /** `rows` (Ana first, so `continueToReview` still finds her) padded out to `count` people. */
+  function manyPeople(count: number): IntakeRow[] {
+    const padded = Array.from({ length: count - rows.length }, (_, i) => ({
+      rowNumber: 7 + i,
+      name: `Persona ${i + 1}`,
+      email: `persona${i + 1}@meridiano.test`,
+      role: 'employee',
+      department: 'Ingeniería',
+      demographics: null,
+    }))
+    return [...rows, ...padded]
+  }
+
+  const created = (sent: IntakeRow[]): BulkImportResponse => ({
+    rows: sent.map((row) => ({ ...row, status: 'created', errors: [], issues: [] })),
+    successCount: sent.length,
+    errorCount: 0,
+  })
+
+  /** Upload, review, take a clean verdict, choose the mass invite — then forget those calls. */
+  async function readyToApprove(count: number) {
+    const onImported = vi.fn()
+    const user = await uploadAndUnderstand(aiUnderstanding({ rows: manyPeople(count) }), 'es', onImported)
+    await continueToReview(user)
+    await user.click(screen.getByRole('radio', { name: new RegExp(MASS_INVITE) }))
+
+    submitIntakeRows.mockImplementation(async (...args: unknown[]) => allValid(args[2] as IntakeRow[]))
+    await user.click(screen.getByRole('button', { name: 'Validar' }))
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: APPROVE_CREDENTIALS }).hasAttribute('disabled')).toBe(false),
+    )
+    return { user, onImported }
+  }
+
+  it('previews the WHOLE file in one request, which is the only place a repeated email is a repeat', async () => {
+    const { user } = await readyToApprove(250)
+    // The preview above is the last call before the approval; it carried every row.
+    const preview = submitIntakeRows.mock.calls.at(-1) as unknown[]
+    expect((preview[2] as IntakeRow[])).toHaveLength(250)
+    expect(preview[3]).toBe(true)
+    expect(user).toBeTruthy()
+  })
+
+  it('approves 250 people in three requests of 100, 100 and 50', async () => {
+    const { user, onImported } = await readyToApprove(250)
+
+    submitIntakeRows.mockReset()
+    submitIntakeRows.mockImplementation(async (...args: unknown[]) => created(args[2] as IntakeRow[]))
+    await user.click(screen.getByRole('button', { name: APPROVE_CREDENTIALS }))
+    await waitFor(() => expect(onImported).toHaveBeenCalled())
+
+    const batches = submitIntakeRows.mock.calls as unknown as unknown[][]
+    expect(batches.map((call) => (call[2] as IntakeRow[]).length)).toEqual([100, 100, 50])
+    // Every one of them a real commit, carrying the mode the admin chose.
+    for (const call of batches) {
+      expect(call[3]).toBe(false)
+      expect(call[5]).toBe(true)
+    }
+    // And no row is sent twice or skipped: the batches are the reviewed file, in order.
+    expect(batches.flatMap((call) => (call[2] as IntakeRow[]).map((row) => row.rowNumber)))
+      .toEqual(manyPeople(250).map((row) => row.rowNumber))
+  })
+
+  it('reports all 250 on the done step, not the last batch', async () => {
+    const { user, onImported } = await readyToApprove(250)
+
+    submitIntakeRows.mockReset()
+    submitIntakeRows.mockImplementation(async (...args: unknown[]) => created(args[2] as IntakeRow[]))
+    await user.click(screen.getByRole('button', { name: APPROVE_CREDENTIALS }))
+    await waitFor(() => expect(onImported).toHaveBeenCalled())
+
+    expect(screen.getByText('250 fila(s) correctas, 0 error(es), de 250 fila(s) leídas.')).toBeTruthy()
+  })
+
+  /**
+   * Every batch after the first is held open, because the count between two batches only exists
+   * while a request is in flight. The first version of this test let the last batch resolve on
+   * its own and asserted the middle count afterwards -- by which time the import had finished
+   * and the done step had replaced the line. A progress assertion needs the progress held still.
+   */
+  it('says how far it has got while the batches run, and stops saying it when they are done', async () => {
+    const { user, onImported } = await readyToApprove(250)
+    const people = manyPeople(250)
+
+    let releaseSecond: (value: BulkImportResponse) => void = () => {}
+    let releaseThird: (value: BulkImportResponse) => void = () => {}
+    submitIntakeRows.mockReset()
+    submitIntakeRows
+      .mockImplementationOnce(async (...args: unknown[]) => created(args[2] as IntakeRow[]))
+      .mockImplementationOnce(() => new Promise<BulkImportResponse>((resolve) => { releaseSecond = resolve }))
+      .mockImplementationOnce(() => new Promise<BulkImportResponse>((resolve) => { releaseThird = resolve }))
+
+    await user.click(screen.getByRole('button', { name: APPROVE_CREDENTIALS }))
+
+    // The first batch is in; the second is still in flight.
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent)
+        .toBe('Importando… 100 de 250 personas. Mantenga esta página abierta.'),
+    )
+
+    releaseSecond(created(people.slice(100, 200)))
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent)
+        .toBe('Importando… 200 de 250 personas. Mantenga esta página abierta.'),
+    )
+
+    releaseThird(created(people.slice(200)))
+    await waitFor(() => expect(onImported).toHaveBeenCalled())
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(screen.getByText('250 fila(s) correctas, 0 error(es), de 250 fila(s) leídas.')).toBeTruthy()
+  })
+
+  /**
+   * The failure mode the batching exists for. Everything before the batch that failed is
+   * committed — those people have accounts and have been mailed a password — so "it failed" is
+   * both false and the most dangerous thing to tell an admin, because loading the file again is
+   * the obvious response and would create them twice.
+   */
+  it('shows what landed when a batch part-way through fails, and says not to load the file again', async () => {
+    const { user, onImported } = await readyToApprove(250)
+
+    submitIntakeRows.mockReset()
+    submitIntakeRows
+      .mockImplementationOnce(async (...args: unknown[]) => created(args[2] as IntakeRow[]))
+      .mockImplementationOnce(async () => { throw new TypeError('Failed to fetch') })
+    await user.click(screen.getByRole('button', { name: APPROVE_CREDENTIALS }))
+
+    await waitFor(() => expect(onImported).toHaveBeenCalled())
+    // The done step, reporting the hundred that exist -- not a summary of all 250.
+    expect(screen.getByText('100 fila(s) correctas, 0 error(es), de 100 fila(s) leídas.')).toBeTruthy()
+    expect(screen.getByText(/Se importaron 100 de 250 personas y luego el proceso se detuvo/)).toBeTruthy()
+    expect(screen.getByText(/no vuelva a cargar el archivo/)).toBeTruthy()
+  })
+
+  it('reports a plain failure when the FIRST batch fails, because nothing was created', async () => {
+    const { user, onImported } = await readyToApprove(250)
+
+    submitIntakeRows.mockReset()
+    submitIntakeRows.mockImplementation(async () => { throw new TypeError('Failed to fetch') })
+    await user.click(screen.getByRole('button', { name: APPROVE_CREDENTIALS }))
+
+    await screen.findByText('Ocurrió un error. Por favor intenta nuevamente.')
+    expect(onImported).not.toHaveBeenCalled()
+    // Still on the review table, where approving again is the right thing to do.
+    expect(screen.getByRole('button', { name: APPROVE_CREDENTIALS })).toBeTruthy()
+    expect(screen.queryByText(/Se importaron/)).toBeNull()
+  })
+
+  it('leaves a file that fits in one request as one request, with no progress line', async () => {
+    const { user, onImported } = await readyToApprove(100)
+
+    submitIntakeRows.mockReset()
+    submitIntakeRows.mockImplementation(async (...args: unknown[]) => created(args[2] as IntakeRow[]))
+    await user.click(screen.getByRole('button', { name: APPROVE_CREDENTIALS }))
+    await waitFor(() => expect(onImported).toHaveBeenCalled())
+
+    expect(submitIntakeRows.mock.calls).toHaveLength(1)
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+})

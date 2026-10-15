@@ -4636,6 +4636,8 @@
       "doneBodyCredentials": "Se creó una cuenta para cada persona y se le enviaron su usuario y su contraseña por correo, junto con el enlace a la encuesta. Nadie tiene que aceptar nada.",
       "doneCredentialsNotSentOne": "1 persona no recibió sus datos de acceso: su cuenta quedó creada, pero el correo no salió. Búsquela en la lista de personas y use «Reenviar datos de acceso».",
       "doneCredentialsNotSentMany": "{count} personas no recibieron sus datos de acceso: sus cuentas quedaron creadas, pero el correo no salió. Búsquelas en la lista de personas y use «Reenviar datos de acceso».",
+      "importingProgress": "Importando… {done} de {total} personas. Mantenga esta página abierta.",
+      "stoppedPartWay": "Se importaron {done} de {total} personas y luego el proceso se detuvo. Esas {done} cuentas ya existen: no vuelva a cargar el archivo, porque se crearían dos veces. Importe el resto en un archivo nuevo y use la lista de personas para reenviar los datos de acceso a quienes no los recibieron.",
       "startOver": "Importar otro archivo",
       "noDepartment": "(sin departamento)",
       "reason": {

@@ -6,6 +6,7 @@ import { cn } from '../../../lib/cn'
 import { downloadBlobFile } from '../../../lib/downloadBlobFile'
 import {
   getIntakeTemplate,
+  IMPORT_CHUNK_ROWS,
   IntakeRequestError,
   submitIntakeRows,
   understandIntakeFile,
@@ -19,7 +20,14 @@ import { UploadStep } from './intake/UploadStep'
 import { UnderstandingProgress } from './intake/UnderstandingProgress'
 import { UnderstandStep } from './intake/UnderstandStep'
 import { ReviewStep } from './intake/ReviewStep'
-import { REQUEST_ERROR_CODES, applyDomainFixes, createdDepartments, credentialsNotSent } from './intake/intakeModel'
+import {
+  REQUEST_ERROR_CODES,
+  applyDomainFixes,
+  chunkForImport,
+  createdDepartments,
+  credentialsNotSent,
+  mergeImportResponses,
+} from './intake/intakeModel'
 
 /**
  * The people intake: upload any spreadsheet → see how it was understood → review → done.
@@ -97,6 +105,12 @@ export default function IntakeWizard({ baseUrl, companyId, onImported, revealDel
   const [result, setResult] = useState<BulkImportResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  /**
+   * How far the approval has got, in rows whose request has come back. Null while nothing is
+   * being committed. A file small enough for one request sets it too, and the screen simply
+   * does not draw a count of one batch.
+   */
+  const [committing, setCommitting] = useState<{ done: number; total: number } | null>(null)
 
   const fixedRows = useMemo(
     () => (understanding ? applyDomainFixes(understanding.rows, fixes) : []),
@@ -216,14 +230,51 @@ export default function IntakeWizard({ baseUrl, companyId, onImported, revealDel
       )
     })
 
+  /**
+   * Approves the reviewed rows, one request per `IMPORT_CHUNK_ROWS` of them.
+   *
+   * The constant says why the whole file cannot go in one request. What matters here is what
+   * happens when a batch part-way through fails: every batch before it is already committed, so
+   * those people have accounts and, on a mass invite, have been mailed their password. Reporting
+   * that as a failure would read as "nothing happened" and invite a second run over people who
+   * already exist — which is the one recovery that makes things worse. So the batches that
+   * landed are shown on the done step exactly as a clean import is, and the message above them
+   * says how far it got and what to do instead.
+   *
+   * The preview is deliberately NOT batched; `submitIntakeRows` carries that reasoning.
+   */
   const handleApprove = () =>
     run(async () => {
-      const committed = await submitIntakeRows(
-        baseUrl, companyId, rows, false, approvedNew, accessMode === 'credentials',
-      )
-      setResult(committed)
-      setStep('done')
-      onImported()
+      const batches = chunkForImport(rows)
+      const landed: BulkImportResponse[] = []
+      const finish = (committed: BulkImportResponse) => {
+        setResult(committed)
+        setStep('done')
+        onImported()
+      }
+
+      setCommitting({ done: 0, total: rows.length })
+      try {
+        for (const batch of batches) {
+          landed.push(
+            await submitIntakeRows(baseUrl, companyId, batch, false, approvedNew, accessMode === 'credentials'),
+          )
+          setCommitting({ done: landed.reduce((n, part) => n + part.rows.length, 0), total: rows.length })
+        }
+      } catch (err) {
+        if (landed.length === 0) {
+          throw err
+        }
+        const committed = mergeImportResponses(landed)
+        finish(committed)
+        // Set after `run` has already cleared it, so it survives into the done step.
+        setError(t('users.intake.stoppedPartWay', { done: committed.rows.length, total: rows.length }))
+        return
+      } finally {
+        setCommitting(null)
+      }
+
+      finish(mergeImportResponses(landed))
     })
 
   function chooseAccessMode(mode: 'invitation' | 'credentials') {
@@ -254,6 +305,7 @@ export default function IntakeWizard({ baseUrl, companyId, onImported, revealDel
     setReviewSource(null)
     setVerdict(null)
     setResult(null)
+    setCommitting(null)
     setAccessMode('invitation')
     setStep('upload')
   }
@@ -284,6 +336,14 @@ export default function IntakeWizard({ baseUrl, companyId, onImported, revealDel
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
         </Alert>
+      )}
+
+      {committing !== null && committing.total > IMPORT_CHUNK_ROWS && (
+        // A file that fits in one request says nothing: there is no progress to report, and a
+        // line that appears and vanishes reads as something having gone wrong.
+        <p role="status" className="m-0 text-sm text-fg-secondary">
+          {t('users.intake.importingProgress', { done: committing.done, total: committing.total })}
+        </p>
       )}
 
       {step === 'upload' && (

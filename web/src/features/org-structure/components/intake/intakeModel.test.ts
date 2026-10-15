@@ -1,10 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import {
   applyDomainFixes,
+  chunkForImport,
   columnLetter,
   createdDepartments,
   credentialsNotSent,
   formatModelName,
+  mergeImportResponses,
   parseColumnChoice,
   parseDepartmentChoice,
   departmentChoice,
@@ -13,6 +15,7 @@ import {
   stageStates,
   stagesFor,
 } from './intakeModel'
+import type { IntakeRow } from '../../api/intake'
 
 describe('formatModelName', () => {
   it('names a Claude id as a person would say it', () => {
@@ -143,5 +146,79 @@ describe('credentialsNotSent', () => {
       errorCount: 0,
     }
     expect(credentialsNotSent(result)).toEqual([])
+  })
+})
+
+/**
+ * The batching the 120-second request budget forces, and the merge that makes a batched import
+ * read as one. `IMPORT_CHUNK_ROWS` in `api/intake.ts` holds the arithmetic.
+ */
+describe('chunkForImport', () => {
+  const people = (count: number): IntakeRow[] =>
+    Array.from({ length: count }, (_, i) => ({
+      rowNumber: i + 2,
+      name: `Persona ${i + 1}`,
+      email: `persona${i + 1}@esph.test`,
+      role: 'employee',
+      department: null,
+    }))
+
+  it('sends a file that fits in one request as one request', () => {
+    expect(chunkForImport(people(100)).map((batch) => batch.length)).toEqual([100])
+    expect(chunkForImport(people(1)).map((batch) => batch.length)).toEqual([1])
+  })
+
+  it('splits 800 people into eight requests of a hundred', () => {
+    expect(chunkForImport(people(800)).map((batch) => batch.length)).toEqual([100, 100, 100, 100, 100, 100, 100, 100])
+  })
+
+  it('leaves the remainder in a last, shorter batch', () => {
+    expect(chunkForImport(people(250)).map((batch) => batch.length)).toEqual([100, 100, 50])
+  })
+
+  it('keeps the file order, so the batches concatenate back into the reviewed rows', () => {
+    const rows = people(250)
+    expect(chunkForImport(rows).flat()).toEqual(rows)
+  })
+
+  it('asks the server once for an empty file rather than deciding the verdict itself', () => {
+    expect(chunkForImport([])).toEqual([[]])
+  })
+})
+
+describe('mergeImportResponses', () => {
+  const part = (rowNumbers: number[], successCount: number, errorCount: number) => ({
+    rows: rowNumbers.map((rowNumber) => ({
+      rowNumber,
+      name: `Persona ${rowNumber}`,
+      email: `persona${rowNumber}@esph.test`,
+      role: 'employee',
+      department: null,
+      status: 'created',
+      errors: [],
+      issues: [],
+    })),
+    successCount,
+    errorCount,
+  })
+
+  it('reads as the one answer the done step was written for', () => {
+    const merged = mergeImportResponses([part([2, 3], 2, 0), part([4, 5, 6], 2, 1)])
+    expect(merged.rows.map((row) => row.rowNumber)).toEqual([2, 3, 4, 5, 6])
+    expect(merged.successCount).toBe(4)
+    expect(merged.errorCount).toBe(1)
+  })
+
+  it('sums the server\'s own counts rather than recounting the statuses', () => {
+    // Both rows say `created`, and the server still called one of them an error. Whatever
+    // reason it had, this function is not entitled to a second opinion about it.
+    const merged = mergeImportResponses([part([2, 3], 1, 1)])
+    expect(merged.successCount).toBe(1)
+    expect(merged.errorCount).toBe(1)
+  })
+
+  it('reports only what landed, which after a failure part-way is fewer batches than were sent', () => {
+    expect(mergeImportResponses([part([2, 3], 2, 0)]).rows).toHaveLength(2)
+    expect(mergeImportResponses([])).toEqual({ rows: [], successCount: 0, errorCount: 0 })
   })
 })
