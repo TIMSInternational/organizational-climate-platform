@@ -77,8 +77,13 @@ public static class SurveyParticipationEndpoints
         // configured, which no running environment is: `TrackingJwtSecret` is required for the
         // API to start.
         var resumeKey = SurveyResumeSessionConfiguration.KeyFrom(configuration);
-        var roster = await BuildRosterAsync(survey.Id, survey.CompanyId, survey.Anonymous, resumeKey, db, cancellationToken);
-        var distinguishesStarted = !survey.Anonymous || resumeKey is not null;
+        var (roster, signInOnly) = await BuildRosterAsync(
+            survey.Id, survey.CompanyId, survey.Anonymous, resumeKey, db, cancellationToken);
+
+        // Three states for a survey whose answers carry a user id, and for an anonymous one
+        // that can only be answered by signing in. `BuildRosterAsync` decides the second from
+        // the data rather than from a setting -- see the reasoning on `signInOnly` there.
+        var distinguishesStarted = !survey.Anonymous || signInOnly;
 
         // Respondents with NO account. `survey_participations` is written only for them
         // (`participation-is-not-linked-to-answers.md`), and the 2026-10-13 identity ruling
@@ -171,7 +176,7 @@ public static class SurveyParticipationEndpoints
     /// required for the API to start -- but a test can be, and the honest answer is cheap.
     /// </para>
     /// </remarks>
-    private static async Task<List<SurveyRosterRow>> BuildRosterAsync(
+    private static async Task<(List<SurveyRosterRow> Rows, bool SignInOnly)> BuildRosterAsync(
         Guid surveyId,
         Guid companyId,
         bool anonymous,
@@ -187,7 +192,7 @@ public static class SurveyParticipationEndpoints
 
         if (users.Count == 0)
         {
-            return [];
+            return ([], false);
         }
 
         var responses = await db.Responses
@@ -244,6 +249,16 @@ public static class SurveyParticipationEndpoints
                 group => group.Min(p => p.ParticipatedOn),
                 StringComparer.OrdinalIgnoreCase);
 
+        // Every account's derived id, computed once. 800 HMACs is microseconds, and the set is
+        // needed as a whole for the attributability test below, not just per person.
+        var derivedIdByUser = anonymous && resumeKey is not null
+            ? users
+                .Select(u => (u.Id, Derived: SurveyResumeSession.IdFor(surveyId, u.Id, resumeKey)))
+                .Where(pair => pair.Derived is not null)
+                .ToDictionary(pair => pair.Id, pair => pair.Derived!)
+            : [];
+        var derivedIds = derivedIdByUser.Values.ToHashSet(StringComparer.Ordinal);
+
         // The same question `stateByUser` answers, for a survey whose answers carry no user id.
         //
         // An anonymous partial is written with `session_id` = the DERIVED id
@@ -282,6 +297,27 @@ public static class SurveyParticipationEndpoints
                     StringComparer.Ordinal)
             : new Dictionary<string, (string Status, DateOnly? Day)>(StringComparer.Ordinal);
 
+        // WHETHER `not_started` MAY BE CLAIMED AT ALL, which is a different question from
+        // whether a partial can be found.
+        //
+        // A QR or public-link respondent signs in to nothing. Their response carries a random
+        // session id that matches no account's derived id, so an account with no row of its own
+        // might BE one of them -- and reporting "never opened it" would invent the one fact an
+        // anonymous survey cannot have. A row we cannot attribute is exactly the signal that
+        // this survey is answerable without signing in.
+        //
+        // So the three states are offered only when every anonymous row on the survey is one we
+        // can attribute. Otherwise the roster falls back whole to the two states it served
+        // before -- not a mixture, because a `started` row with no `not_started` beside it is a
+        // filter set the screen cannot render coherently.
+        //
+        // It is self-correcting rather than a setting: a mass invite with nobody answering yet
+        // has no unattributable rows and offers three states, and the moment somebody answers
+        // through a link the roster drops back to two.
+        var signInOnly = anonymous
+            && resumeKey is not null
+            && anonymousStateBySession.Keys.All(derivedIds.Contains);
+
         var demographics = await db.UserDemographics
             .AsNoTracking()
             .Where(d => db.Users.Any(u => u.Id == d.UserId && u.CompanyId == companyId))
@@ -301,7 +337,7 @@ public static class SurveyParticipationEndpoints
                     .ThenBy(d => d.Field, StringComparer.Ordinal)
                     .Select(d => new SurveyRosterDemographic(d.Field, d.LabelEn, d.LabelEs, d.Value))]);
 
-        return
+        return (Rows:
         [
             .. users
                 .Select(u =>
@@ -318,11 +354,10 @@ public static class SurveyParticipationEndpoints
                             ? (Status: SurveyParticipantStatuses.Completed, Day: (DateOnly?)participatedOn)
                             : AnonymousStateFor(u.Id) is { } derived
                                 ? derived
-                                // Reached either because the person has no row of any kind --
-                                // `not_started`, now a claim this survey CAN support -- or
-                                // because no resume key is configured, when it cannot and
-                                // `not_completed` is the honest answer.
-                                : anonymous && resumeKey is null
+                                // No row of any kind. On a sign-in-only survey that IS "never
+                                // opened it", because the only way in leaves a row we can find.
+                                // Anywhere else it is merely "has not finished".
+                                : anonymous && !signInOnly
                                     ? (Status: SurveyParticipantStatuses.NotCompleted, Day: (DateOnly?)null)
                                     : (Status: SurveyParticipantStatuses.NotStarted, Day: (DateOnly?)null);
                     return new SurveyRosterRow(
@@ -337,16 +372,17 @@ public static class SurveyParticipationEndpoints
                 })
                 .OrderBy(row => row.Name, NameOrder)
                 .ThenBy(row => row.Email, StringComparer.OrdinalIgnoreCase),
-        ];
+        ], SignInOnly: signInOnly);
 
-        /// <summary>This person's state on an anonymous survey, or null when they have no row.</summary>
+        // This person's state on an anonymous survey, or null when they have no row we can
+        // attribute. Returns null outright unless the survey is sign-in-only, so the fallback
+        // to the old two states is whole rather than a mixture.
         (string Status, DateOnly? Day)? AnonymousStateFor(Guid userId)
-        {
-            var derivedId = SurveyResumeSession.IdFor(surveyId, userId, resumeKey);
-            return derivedId is not null && anonymousStateBySession.TryGetValue(derivedId, out var state)
-                ? state
-                : null;
-        }
+            => signInOnly
+                && derivedIdByUser.TryGetValue(userId, out var derivedId)
+                && anonymousStateBySession.TryGetValue(derivedId, out var state)
+                    ? state
+                    : null;
     }
 
     /// <summary>

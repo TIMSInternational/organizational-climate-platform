@@ -42,8 +42,19 @@ namespace ClimateProject.Application.Surveys;
 /// <see cref="SurveyResumeSession"/>, including why this costs no more privacy than resume.
 /// </para>
 /// <para>
-/// False only when no resume key is configured, when there is no derived id to compute and the
-/// two states really are one observation.
+/// False when no resume key is configured, and false for an anonymous survey that is
+/// answerable WITHOUT signing in. The second is decided from the data: a QR or public-link
+/// respondent signs in to nothing, so their response carries a random session id matching no
+/// account's derived id -- and while any such row exists, an account with no row of its own
+/// might be one of them, so "never opened it" would invent the one fact an anonymous survey
+/// cannot have. The roster then falls back whole to two states rather than serving a
+/// <c>started</c> row with no <c>not_started</c> beside it, which is a filter set the screen
+/// cannot render coherently.
+/// </para>
+/// <para>
+/// It is self-correcting rather than a setting: a mass invite with nobody answering yet has no
+/// unattributable rows and reports three states, and the moment somebody answers through a link
+/// it drops back to two.
 /// </para>
 /// </param>
 /// <param name="TracksCompletionOnly">

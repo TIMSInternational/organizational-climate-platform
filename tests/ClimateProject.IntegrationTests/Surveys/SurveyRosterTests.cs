@@ -161,14 +161,17 @@ public class SurveyRosterTests : IAsyncLifetime
         Assert.Equal(0, view.AnsweredCount);
         Assert.Equal(0, view.StartedCount);
 
-        // A RANDOM session id, which is what a public link writes and what every anonymous
-        // partial carried before the derived id existed. It matches nobody's derived id, so it
-        // credits nobody -- the roster recognises the id it can COMPUTE, not any id at all,
-        // and that is the difference between attributing an answer and failing to.
-        Assert.All(view.Roster, row => Assert.Equal(SurveyParticipantStatuses.NotStarted, row.Status));
+        // A RANDOM session id -- what a public link writes, and what every anonymous partial
+        // carried before the derived id existed. It matches no account's derived id, so this
+        // survey is demonstrably answerable WITHOUT signing in, and the roster must not claim
+        // anybody never opened it: `not_completed`, not `not_started`. An earlier draft of this
+        // change had it the other way and this test is what caught it.
+        Assert.All(view.Roster, row => Assert.Equal(SurveyParticipantStatuses.NotCompleted, row.Status));
 
         // The roster still lists her -- who was invited, her username and her demographics are
-        // the administrator's to see, and a resend still works.
+        // the administrator's to see, and a resend still works. What the screen must not do is
+        // call that a fact about whether she answered.
+        Assert.False(view.TracksIndividuals);
         Assert.Contains(view.Roster, row => row.Name == "Ana Lucía Mora");
     }
 
@@ -275,7 +278,7 @@ public class SurveyRosterTests : IAsyncLifetime
 
         // And one who is halfway, found by the id the respond flow derives for her rather than
         // by a user id her answers do not carry.
-        var halfway = await SeedPersonAsync("Berta Halfway", Roles.Employee, "esph-cccc3333");
+        var halfway = await SeedPersonAsync("Berta Halfway", Roles.Employee, "esph-dddd4444");
         await SeedDerivedPartialAsync(surveyId, halfway);
 
         var view = await ParticipationAsync(surveyId);
