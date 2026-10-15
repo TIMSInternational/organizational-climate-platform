@@ -17,10 +17,33 @@
  *
  *   node scripts/load-signin.mjs --api http://localhost:5000 --people 300
  *
- * Against a LOCAL api only. `--api` must be a localhost or 127.0.0.1 origin; the script
- * refuses anything else, because pointing a few hundred sign-in attempts at a deployed
- * environment is a denial-of-service against real respondents, and production is collecting
- * for a live client.
+ * ## Two different measurements, and the flag that picks between them
+ *
+ * By default every attempt uses an address nobody holds. `/auth/login` answers an unknown
+ * identifier at `AuthEndpoints.cs:69` — **before** `passwordHasher.Verify` — so those
+ * requests never pay for a bcrypt and come back in milliseconds. That measures the LIMITER,
+ * which is what this tool was written for, and it is the right default.
+ *
+ * It does not measure capacity. To do that, pass `--email` with the address of an account
+ * that really exists: a wrong password for a KNOWN user runs the full work-factor-12 verify
+ * (~0.27 vCPU-seconds) and then returns 401, which is the same work a successful sign-in
+ * does. Nothing is written — `LastLoginAt` is set only after a verify succeeds — no session
+ * is created, and there is no account lockout to trip (`RateLimitPolicies`: *"It is a rate
+ * limit, not an account lockout"*), so the same address can be used as many times as the
+ * limiter allows.
+ *
+ *   node scripts/load-signin.mjs --people 300 --email you@example.com \
+ *     --api https://api.climate.timsint.com --confirm-production-load-test
+ *
+ * ## Why the target is refused by default
+ *
+ * `--api` must be a localhost origin unless `--confirm-production-load-test` is passed.
+ * A few hundred sign-in attempts at a deployed environment is a denial-of-service against
+ * real respondents. The flag exists because the measurement is sometimes genuinely needed
+ * and localhost cannot give it — a laptop is not a 1 vCPU App Runner instance — but it is
+ * deliberately long, it is never implied by anything else, and the tool prints what it is
+ * about to do before it does it. Check that nobody is answering first: App Runner's
+ * `Requests` metric in CloudWatch, which costs nothing and reads no one's data.
  */
 
 import { parseArgs } from 'node:util'
@@ -30,17 +53,28 @@ const { values } = parseArgs({
     api: { type: 'string', default: 'http://localhost:5000' },
     people: { type: 'string', default: '300' },
     identifier: { type: 'string', default: 'carga' },
+    // An address that really exists, so every attempt pays a full bcrypt verify. See the
+    // header: without it the unknown-user short-circuit means no hash is ever computed.
+    email: { type: 'string' },
+    'confirm-production-load-test': { type: 'boolean', default: false },
     help: { type: 'boolean', default: false },
   },
 })
 
 if (values.help) {
   process.stdout.write(
-    'usage: node scripts/load-signin.mjs [--api http://localhost:5000] [--people 300]\n'
+    'usage: node scripts/load-signin.mjs [--api URL] [--people 300] [--email ADDRESS]\n'
+      + '                                   [--confirm-production-load-test]\n'
       + '\n'
       + '  Fires N concurrent POST /auth/login and tallies the answers. No valid credentials\n'
       + '  are used and nothing is written: 401 means the limiter let the request through to\n'
-      + '  the password check, 429 means it did not.\n',
+      + '  the password check, 429 means it did not.\n'
+      + '\n'
+      + '  --email ADDRESS   use an account that EXISTS, so each attempt pays a full bcrypt\n'
+      + '                    verify. Without it an unknown identifier short-circuits before\n'
+      + '                    the hash, which measures the limiter but not capacity.\n'
+      + '  --confirm-production-load-test\n'
+      + '                    allow a non-localhost --api. Check nobody is answering first.\n',
   )
   process.exit(0)
 }
@@ -56,9 +90,11 @@ const host = (() => {
 
 // A few hundred sign-in attempts is a denial-of-service anywhere a real respondent is
 // answering. This tool is local-only, enforced here rather than written down in a comment.
-if (host !== 'localhost' && host !== '127.0.0.1' && host !== '::1') {
+const local = host === 'localhost' || host === '127.0.0.1' || host === '::1'
+if (!local && !values['confirm-production-load-test']) {
   process.stderr.write(`load-signin: refusing to point ${values.people} sign-in attempts at ${api}.\n`)
   process.stderr.write('load-signin: --api must be localhost. Production is collecting for a live client.\n')
+  process.stderr.write('load-signin: pass --confirm-production-load-test if you have checked that nobody is answering.\n')
   process.exit(2)
 }
 
@@ -75,9 +111,13 @@ async function attempt(index) {
     const response = await fetch(`${api}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      // Deliberately wrong. The limiter answers before the password is read, so a real
-      // credential would prove nothing extra and would create a session.
-      body: JSON.stringify({ email: `${values.identifier}-${index}@carga.test`, password: 'not-a-password' }),
+      // The password is deliberately wrong in both modes: a real one would create a session
+      // and prove nothing extra. What `--email` changes is whether the IDENTIFIER is one the
+      // server can find, and therefore whether it reaches the bcrypt verify at all.
+      body: JSON.stringify({
+        email: values.email ?? `${values.identifier}-${index}@carga.test`,
+        password: 'not-a-password',
+      }),
     })
     return { status: response.status, ms: performance.now() - started }
   } catch (error) {
@@ -91,8 +131,18 @@ function percentile(sorted, p) {
   return sorted[at]
 }
 
+const measuresCapacity = values.email !== undefined
+
 const started = Date.now()
 process.stdout.write(`load-signin: ${people} concurrent sign-in attempts at ${api}\n`)
+process.stdout.write(
+  measuresCapacity
+    ? `load-signin: as ${values.email} with a wrong password — each attempt pays a full bcrypt verify\n`
+    : 'load-signin: as addresses nobody holds — measures the limiter, NOT capacity (see --email)\n',
+)
+if (!local) {
+  process.stdout.write('load-signin: this target is NOT local. Nothing is written and no session is created.\n')
+}
 
 // All at once, from one address, which is the case being measured: an email blast lands and
 // everyone opens it together.
@@ -117,6 +167,25 @@ for (const [status, count] of [...byStatus].sort((a, b) => b[1] - a[1])) {
 }
 process.stdout.write(`  latency p50/p95    ${percentile(latencies, 50).toFixed(0)}ms / ${percentile(latencies, 95).toFixed(0)}ms\n`)
 process.stdout.write('\n')
+
+if (measuresCapacity && allowed > 0) {
+  // Only when something actually got through. A throughput line computed over zero verifies
+  // reads as "0 sign-ins a second", which is a capacity claim about a run that never reached
+  // the service -- the tally above already says the requests failed, and this would argue
+  // with it.
+  //
+  // The useful reading. Every 401 here cost a work-factor-12 verify, so the wall clock over
+  // the attempts that got through is the service's real throughput for a sign-in, and the
+  // p95 is what the slowest person in the burst waited.
+  const perSecond = elapsed > 0 ? allowed / elapsed : 0
+  process.stdout.write(
+    `  throughput         ${perSecond.toFixed(1)} full sign-ins/second (${(perSecond * 60).toFixed(0)}/minute)\n`,
+  )
+  process.stdout.write(
+    '  Each of those paid a bcrypt verify, which is the same work a successful sign-in does.\n',
+  )
+  process.stdout.write('\n')
+}
 
 if (limited > 0) {
   const share = ((limited / results.length) * 100).toFixed(0)

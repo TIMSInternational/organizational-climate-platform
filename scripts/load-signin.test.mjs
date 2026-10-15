@@ -35,10 +35,15 @@ function run(args) {
  * password check (401), every one after that is refused (429), exactly as a fixed window with
  * `QueueLimit = 0` behaves.
  */
-async function withStub(permits, fn) {
+async function withStub(permits, fn, bodies) {
   const hits = [];
   const server = createServer((request, response) => {
     hits.push(request.url);
+    if (bodies) {
+      let raw = '';
+      request.on('data', (chunk) => { raw += chunk; });
+      request.on('end', () => { try { bodies.push(JSON.parse(raw)); } catch { bodies.push(raw); } });
+    }
     const allowed = hits.length <= permits;
     response.writeHead(allowed ? 401 : 429, { 'Content-Type': 'application/json' });
     response.end(JSON.stringify({ message: allowed ? 'Invalid email or password' : 'Too many requests' }));
@@ -88,5 +93,79 @@ test('says plainly when nothing was refused', async () => {
     const result = await run(['--api', url, '--people', '25']);
     assert.equal(result.code, 0);
     assert.match(result.stdout, /No request was rate limited at 25 from one address/);
+  });
+});
+
+// The two things the production opt-in has to get right, because getting either wrong is how a
+// load tool becomes an outage: the target is refused without the flag (above), and WITH the flag
+// the attempts have to actually reach the password check or the number means nothing.
+//
+// `AuthEndpoints.cs:69` answers an unknown identifier before `passwordHasher.Verify`, so the
+// default mode -- an address per attempt, nobody's -- never computes a hash. That is correct for
+// measuring the limiter and useless for measuring capacity, and the tool now says which it did.
+
+test('still refuses a non-local target when the flag is absent, whatever else is passed', async () => {
+  await withStub(20, async (_url, hits) => {
+    const result = await run([
+      '--api', 'https://api.climate.timsint.com', '--people', '300', '--email', 'someone@example.com',
+    ]);
+    assert.equal(result.code, 2);
+    assert.match(result.stderr, /must be localhost/);
+    assert.match(result.stderr, /--confirm-production-load-test/);
+    assert.deepEqual(hits, [], 'not one request may leave the process');
+  });
+});
+
+test('the flag allows a non-local target, and says so before sending', async () => {
+  // `.invalid` is reserved by RFC 2606 and guaranteed never to resolve, so this is
+  // deterministic with no DNS and no listener: the attempts cannot connect. That they were
+  // ATTEMPTED is the whole assertion -- the refusal path exits 2 before sending anything, so
+  // a tally of network errors is proof the guard let them through.
+  const result = await run([
+    '--api', 'http://unreachable.invalid:1', '--people', '3',
+    '--email', 'real@example.com', '--confirm-production-load-test',
+  ]);
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /this target is NOT local/);
+  assert.match(result.stdout, /Nothing is written and no session is created/);
+  assert.match(result.stdout, /status network error: 3/);
+  // And no capacity claim about a run that reached nothing.
+  assert.doesNotMatch(result.stdout, /throughput/);
+});
+
+test('every attempt in capacity mode uses the SAME real address, with a wrong password', async () => {
+  const bodies = [];
+  await withStub(1000, async (url, hits) => {
+    const result = await run(['--api', url, '--people', '3', '--email', 'real@example.com']);
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(hits.length, 3);
+  }, bodies);
+  // One address, repeated -- that is what makes every attempt pay a bcrypt verify instead of
+  // short-circuiting at the unknown-identifier branch.
+  assert.equal(bodies.length, 3);
+  assert.ok(bodies.every((b) => b.email === 'real@example.com'), JSON.stringify(bodies));
+  assert.ok(bodies.every((b) => b.password === 'not-a-password'), 'the password must stay wrong');
+});
+
+test('without --email it uses an address per attempt, and warns that it is not measuring capacity', async () => {
+  const bodies = [];
+  await withStub(1000, async (url) => {
+    const result = await run(['--api', url, '--people', '4']);
+    assert.equal(result.code, 0);
+    assert.match(result.stdout, /measures the limiter, NOT capacity/);
+    // No throughput line: claiming sign-ins a second off requests that never hashed would be
+    // a number ten times too high.
+    assert.doesNotMatch(result.stdout, /throughput/);
+  }, bodies);
+  assert.equal(new Set(bodies.map((b) => b.email)).size, 4, 'a distinct address per attempt');
+});
+
+test('reports throughput only in capacity mode', async () => {
+  await withStub(1000, async (url) => {
+    const result = await run(['--api', url, '--people', '5', '--email', 'real@example.com']);
+    assert.equal(result.code, 0);
+    assert.match(result.stdout, /as real@example\.com with a wrong password/);
+    assert.match(result.stdout, /throughput\s+[\d.]+ full sign-ins\/second/);
+    assert.match(result.stdout, /the same work a successful sign-in does/);
   });
 });
