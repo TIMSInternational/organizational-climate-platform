@@ -612,6 +612,23 @@ public static class SurveyResponseEndpoints
         {
             await RecordParticipationAsync(survey, participant, now, db, loggerFactory, cancellationToken);
         }
+        else if (request.IsComplete && respondent.ActingUserId is { } finisherId)
+        {
+            // A signed-in respondent finished, so record THAT -- and only that.
+            //
+            // Nothing is asked of them and nothing new is collected: the name and the email
+            // written here are the ones the import already put on their account. What this
+            // buys is the question the client asked for by name -- "ya respondió sí o no" --
+            // on a survey that is ANONYMOUS and stays anonymous. `StoredUserId` still returns
+            // null for one (see ResolveRespondentAsync), so the answers carry no user id now
+            // and cannot acquire one later; this row carries no answers and cannot acquire
+            // any. There is no column on either side to join them by.
+            //
+            // The 2026-10-13 ruling retired the TYPED name-and-email step, not the goal it
+            // served. For a mass invite the step was never needed: the person is signed in,
+            // so who they are is already known without asking.
+            await RecordAccountParticipationAsync(survey, finisherId, now, db, loggerFactory, cancellationToken);
+        }
 
         var result = await ToResultAsync(response, db, alreadySubmitted: false, suppressed, cancellationToken);
         return existing is null ? Results.Json(result, statusCode: 201) : Results.Ok(result);
@@ -1032,6 +1049,47 @@ public static class SurveyResponseEndpoints
     /// a constraint violation quotes the offending key (the email).
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// Records that the signed-in holder of an account finished this survey, from what the
+    /// account already holds.
+    /// </summary>
+    /// <remarks>
+    /// Scoped to the survey's own company, so a cross-tenant id cannot write a row. A missing
+    /// or foreign user is simply not recorded rather than an error: the response is already
+    /// committed and refusing here would fail a submission that succeeded.
+    /// </remarks>
+    private static async Task RecordAccountParticipationAsync(
+        Survey survey,
+        Guid userId,
+        DateTimeOffset now,
+        ClimateProjectDbContext db,
+        ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken)
+    {
+        var person = await db.Users
+            .AsNoTracking()
+            .Where(u => u.Id == userId && u.CompanyId == survey.CompanyId)
+            .Select(u => new { u.Name, u.Email })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (person is null || string.IsNullOrWhiteSpace(person.Name))
+        {
+            return;
+        }
+
+        // Lower-cased to match the column and its unique index, so a second completion is the
+        // ON CONFLICT DO NOTHING the single path already relies on.
+        var email = string.IsNullOrWhiteSpace(person.Email) ? null : person.Email.Trim().ToLowerInvariant();
+
+        await RecordParticipationAsync(
+            survey,
+            new ValidatedParticipant(person.Name.Trim(), email),
+            now,
+            db,
+            loggerFactory,
+            cancellationToken);
+    }
+
     private static async Task RecordParticipationAsync(
         Survey survey,
         ValidatedParticipant participant,
