@@ -304,41 +304,33 @@ of the runtime port, which is why it should not be skipped once steps 1–2 are 
 
 ### Cause 2 — the pool was unbounded (**fixed in this repository**)
 
-Nothing set Npgsql's `Maximum Pool Size`, so it took the driver default of **100 per
-instance**. Pools are per-process, and `climate-project-api-prod-service.yml` sets no
-`AutoScalingConfigurationArn`, so the service runs on App Runner's **default autoscaling
-configuration**: `MinSize` 1, `MaxSize` **25**. Worst-case demand is therefore
-`instances x pool size` with nothing else bounding it:
+Production uses the **session pooler**. Its configured pool size, not the separate
+200-client allowance, bounds the application's persistent connections. On 2026-10-15,
+a 300-request sign-in burst produced seven HTTP 500s with `EMAXCONNSESSION` while the
+session pool size was 15. The operator raised it to **30**; the repeated burst had no
+HTTP 500s (48 password checks, 252 throttles). That result does not prove successful
+logins or sustained 800-user survey capacity.
 
-| Instances (App Runner) | Max pool size (Npgsql) | Worst-case server connections |
+The application default is now **6 connections per process**. The production template
+sets `MinSize: 2` and defaults `AutoScalingMaxSize` to **4**:
+
+| Processes | Maximum pool per process | Maximum connections |
 |---|---|---|
-| 1 (`MinSize`, idle) | 100 (old default) | 100 |
-| 25 (`MaxSize`, peak) | 100 (old default) | **2500** |
-| 1 (`MinSize`, idle) | **10 (current)** | 10 |
-| 25 (`MaxSize`, peak) | **10 (current)** | **250** |
+| 2 warm instances | 6 | 12 |
+| 4 maximum instances | 6 | 24 |
+| 5 overlapping processes | 6 | 30 |
 
-2500 is far past what a Supabase pooler will accept on any small plan, so at even moderate
-scale-out the service would exhaust the pooler and new connections would queue until they timed
-out — the same symptom as cause 1, from an unrelated direction. `DatabaseConnectionStringPolicy`
-now applies a `Maximum Pool Size` of **10**, bringing peak demand to **250**.
+The steady-state maximum leaves six of the configured 30 pooler slots for operational
+access and deployment overlap. This is an upper bound on connections, not an assertion
+that every instance opens its whole pool. Rolling replacements can overlap processes;
+do not assume the steady-state instance ceiling bounds rollout demand. Run migrations
+before deployment, avoid simultaneous operational connections, and inspect pool errors
+during rollout. More than five simultaneous full pools would exceed this budget.
 
-**Confirm the actual ceiling before trusting the bottom row.** Supabase's pooler client limit
-varies by compute size and is not a fixed published constant; read it from the project's
-dashboard (Database → Connection pooling) or `SHOW max_connections`. 250 is chosen to sit under
-the smallest plausible configured limit with headroom for migrations, `psql` sessions and the
-Supabase dashboard's own connections, which also draw on the same budget.
-
-Three knobs move these numbers, and changing any one requires rechecking the others:
-
-- **Pool size** — `DatabaseConnectionStringPolicy.DefaultMaxPoolSize`
-  (`src/ClimateProject.Infrastructure/Persistence/DatabaseConnectionStringPolicy.cs`). A unit
-  test asserts the `25 x DefaultMaxPoolSize <= 250` budget, so raising it fails the build until
-  this section is revisited.
-- **Instance ceiling** — currently App Runner's implicit default of 25. Adding an explicit
-  `AWS::AppRunner::AutoScalingConfiguration` with a smaller `MaxSize` would buy room for a
-  larger pool, and would make the ceiling visible in the template instead of implied by an
-  AWS default.
-- **Supabase plan** — a larger compute size raises the ceiling itself.
+The regression test asserts `4 x DefaultMaxPoolSize <= 24`. Changing the instance
+ceiling, application pool size, or Supabase pool size requires reviewing all three.
+Supabase's own services also consume database connections; 30 is the operator-configured
+session allocation, not a claim about spare database CPU or total Postgres capacity.
 
 The pool size can also be overridden **without a code change**: if the Secrets Manager
 connection string specifies `Maximum Pool Size` itself, that value is honoured and the default

@@ -1,5 +1,7 @@
 using System.Globalization;
 using System.Net;
+using System.Security.Claims;
+using System.Threading.RateLimiting;
 using ClimateProject.Api.Endpoints;
 using ClimateProject.Api.Infrastructure;
 using ClimateProject.IntegrationTests.Support;
@@ -381,6 +383,37 @@ public class RateLimitingTests : IClassFixture<WebApplicationFactory<Program>>
             Assert.Contains("203.0.113.7", key, StringComparison.Ordinal);
             Assert.DoesNotContain("198.51.100.9", key, StringComparison.Ordinal);
         }
+    }
+
+    [Fact]
+    public void Survey_respondents_behind_one_office_address_have_independent_budgets()
+    {
+        var first = ContextBehindOneProxy("203.0.113.7", "198.51.100.9");
+        var second = ContextBehindOneProxy("203.0.113.7", "198.51.100.9");
+        first.User = new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim("sub", "employee-one") }, "test"));
+        second.User = new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim("sub", "employee-two") }, "test"));
+        using var limiter = PartitionedRateLimiter.Create<HttpContext, string>(SurveyResponseEndpoints.PartitionResponseSubmission);
+
+        using var firstBudget = limiter.AttemptAcquire(first, 60);
+        using var exhaustedFirst = limiter.AttemptAcquire(first);
+        using var secondBudget = limiter.AttemptAcquire(second, 60);
+        Assert.True(firstBudget.IsAcquired);
+        Assert.False(exhaustedFirst.IsAcquired);
+        Assert.True(secondBudget.IsAcquired);
+    }
+
+    [Fact]
+    public void Anonymous_survey_callers_cannot_escape_the_address_budget_with_an_unvalidated_subject()
+    {
+        var first = ContextBehindOneProxy("203.0.113.7", "198.51.100.9");
+        var second = ContextBehindOneProxy("203.0.113.7", "198.51.100.9");
+        // Claims without an authenticated identity must not create a fresh bucket.
+        second.User = new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim("sub", "untrusted") }));
+        using var limiter = PartitionedRateLimiter.Create<HttpContext, string>(SurveyResponseEndpoints.PartitionResponseSubmission);
+        using var firstBudget = limiter.AttemptAcquire(first, 60);
+        using var secondRequest = limiter.AttemptAcquire(second);
+        Assert.True(firstBudget.IsAcquired);
+        Assert.False(secondRequest.IsAcquired);
     }
 
     /// <summary>

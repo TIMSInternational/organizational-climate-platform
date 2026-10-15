@@ -459,14 +459,14 @@ Resources:
           DefaultValue: 0
           Unit: Count
 
-  # Npgsql's own wording when MaxPoolSize is reached. Matched on the stable clause rather than
-  # the whole sentence, because the parenthetical carries the configured numbers and the exact
-  # punctuation has changed between driver majors.
+  # Match both Npgsql client-pool exhaustion and the observed Supavisor session-pool
+  # refusal. The latter caused HTTP 500s on 2026-10-15 and the old filter missed it.
+  # Optional terms implement OR for this unstructured CloudWatch filter.
   DbPoolExhaustedFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
       LogGroupName: !Sub /aws/apprunner/${ServiceName}/${ServiceId}/application
-      FilterPattern: '"connection pool has been exhausted"'
+      FilterPattern: '?"connection pool has been exhausted" ?EMAXCONNSESSION'
       MetricTransformations:
         - MetricNamespace: ClimateProject/Prod
           MetricName: DbPoolExhausted
@@ -924,15 +924,11 @@ Resources:
     Properties:
       AlarmName: !Sub ${ServiceName}-db-pool-exhausted
       AlarmDescription: >-
-        Npgsql exhausted its connection pool. Either a connection leak, a hung query holding
-        all ten slots, or genuine saturation. Check GET /admin/system/status for the effective
-        pool bound, and infra/aws/README.md for the 25 x 10 = 250 connection budget before
-        raising anything.
-      # Threshold 1. Max Pool Size is 10 per instance against an App Runner ceiling of 25
-      # instances, a bound chosen to sit UNDER the Supabase pooler limit with headroom -- so
-      # exhaustion is not a capacity signal that degrades gracefully, it is a request that has
-      # already failed and a bound that was supposed to be unreachable. There is no rate of
-      # this that is acceptable, so there is no rate to tune.
+        The application or Supavisor session pool refused a connection. Check the effective
+        application pool bound and deployment overlap. The default steady-state budget is
+        four instances times six connections = 24 of 30 session slots; explicit connection
+        string overrides require a separate budget review. See infra/aws/README.md.
+      # One matching log event is enough: this represents a request that already failed.
       Namespace: ClimateProject/Prod
       MetricName: DbPoolExhausted
       Statistic: Sum

@@ -257,19 +257,10 @@ public class DatabaseConnectionStringPolicyTests
     [Fact]
     public void Default_maximum_pool_size_stays_within_the_connection_budget_at_full_app_runner_scale()
     {
-        // Guards the constant itself against being raised casually. App Runner's default
-        // autoscaling configuration caps the service at 25 instances, and each instance owns
-        // its own independent pool, so worst-case demand is instances x pool size -- it is
-        // not bounded by anything else in the system.
-        //
-        // The budget below is this repository's deliberately conservative choice, not a
-        // vendor-published number: Supabase's pooler client limit varies by compute size and
-        // must be read from the project's dashboard. 250 is picked to stay under the smallest
-        // plausible configured limit. The arithmetic is written out in infra/aws/README.md,
-        // and this test exists so that raising DefaultMaxPoolSize forces that document to be
-        // revisited rather than quietly invalidated.
-        const int AppRunnerDefaultMaxInstances = 25;
-        const int WorstCaseConnectionBudget = 250;
+        // The actual session pool is 30, not the unrelated 200-client allowance.
+        // Reserve six slots for a migration and operational/deployment overlap.
+        const int AppRunnerDefaultMaxInstances = 4;
+        const int WorstCaseConnectionBudget = 24;
 
         var worstCase = AppRunnerDefaultMaxInstances * DatabaseConnectionStringPolicy.DefaultMaxPoolSize;
 
