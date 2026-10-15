@@ -66,6 +66,21 @@ public sealed class RateLimitingOptions
     /// </para>
     /// </summary>
     public int InternalPermitsPerMinute { get; set; } = RateLimitPolicies.DefaultInternalPermitsPerMinute;
+
+    /// <summary>
+    /// Sign-in attempts a minute from one caller address, on
+    /// <see cref="RateLimitPolicies.Authentication"/>.
+    ///
+    /// <para>
+    /// Configurable for the reason <see cref="GlobalPermitsPerMinute"/> is -- a test can prove
+    /// the limiter fires without issuing four hundred requests -- and for one more: this is the
+    /// number a launch morning can need changed at short notice, and a constant makes that a
+    /// code change, a build and a deploy. The integration suite's shared host pins it to
+    /// <c>AuthWebApplicationFactory.AuthenticationPermitsPerMinuteForTests</c> so the shipped
+    /// default can rise without making every auth test twenty times slower.
+    /// </para>
+    /// </summary>
+    public int AuthenticationPermitsPerMinute { get; set; } = RateLimitPolicies.DefaultAuthenticationPermitsPerMinute;
 }
 
 /// <summary>
@@ -148,8 +163,38 @@ public static class RateLimitPolicies
     /// </summary>
     public const string PublicLink = "public-link";
 
-    /// <summary>Requests per window per caller on <see cref="Authentication"/>.</summary>
-    public const int AuthenticationPermitsPerWindow = 20;
+    /// <summary>
+    /// Default for <see cref="RateLimitingOptions.AuthenticationPermitsPerMinute"/>: sign-in
+    /// attempts a minute from ONE caller address.
+    ///
+    /// <para>
+    /// <b>Why it is not twenty any more.</b> Twenty was chosen when the only question was how
+    /// fast one caller can guess. It answers that well and answers the other question -- how
+    /// many colleagues can sign in at once -- badly, because this bucket is keyed by ADDRESS
+    /// and several hundred staff behind one corporate NAT present one. ESPH is a utility whose
+    /// ~800 people were to be mailed their credentials on one morning; at twenty a minute the
+    /// twenty-first of them got a 429 instead of a sign-in page. The client asked, in those
+    /// words, that it be verified for 300.
+    /// </para>
+    /// <para>
+    /// <b>Why 400 and not 300.</b> 300 permits for 300 people is zero headroom: one mistyped
+    /// password from anybody takes the last permit from somebody else. 400 carries the stated
+    /// target with a third to spare, and still sits BELOW
+    /// <see cref="DefaultGlobalPermitsPerMinute"/> (600), which every one of these requests
+    /// also passes -- so the coarse flood ceiling remains the outer bound and this policy
+    /// remains the tighter of the two. Raising this above 600 would do nothing but move the
+    /// refusal to the other limiter.
+    /// </para>
+    /// <para>
+    /// <b>What did not change.</b> This is still a rate limit and still not an account
+    /// lockout, and the per-ACCOUNT counter described on <see cref="Authentication"/> is still
+    /// the #146 follow-up: all three reasons it was rejected -- per-instance across four App
+    /// Runner instances, reset by every deploy, and a lever for locking a known user out on
+    /// demand -- survive this change untouched. Raising a per-address ceiling does not make a
+    /// distributed guessing attack cheaper, because that attack never spends one address.
+    /// </para>
+    /// </summary>
+    public const int DefaultAuthenticationPermitsPerMinute = 400;
 
     /// <summary>Requests per window per token on <see cref="PublicToken"/>.</summary>
     public const int PublicTokenPermitsPerWindow = 20;
@@ -212,9 +257,11 @@ public static class RateLimitPolicies
             .Validate(
                 options => options.TrustedProxyHopCount >= 0
                     && options.GlobalPermitsPerMinute > 0
-                    && options.InternalPermitsPerMinute > 0,
-                "RateLimiting:TrustedProxyHopCount must be >= 0, and RateLimiting:GlobalPermitsPerMinute "
-                + "and RateLimiting:InternalPermitsPerMinute must be > 0.")
+                    && options.InternalPermitsPerMinute > 0
+                    && options.AuthenticationPermitsPerMinute > 0,
+                "RateLimiting:TrustedProxyHopCount must be >= 0, and RateLimiting:GlobalPermitsPerMinute, "
+                + "RateLimiting:InternalPermitsPerMinute and RateLimiting:AuthenticationPermitsPerMinute "
+                + "must be > 0.")
             .ValidateOnStart();
 
         // Singleton because the resolver is stateless and its hop count is fixed for the
@@ -239,15 +286,7 @@ public static class RateLimitPolicies
                 SurveyResponseEndpoints.ResponseSubmissionRateLimiterPolicy,
                 SurveyResponseEndpoints.PartitionResponseSubmission);
 
-            options.AddPolicy(Authentication, httpContext =>
-                RateLimitPartition.GetFixedWindowLimiter(
-                    partitionKey: "auth:" + ClientIpFor(httpContext),
-                    factory: _ => new FixedWindowRateLimiterOptions
-                    {
-                        PermitLimit = AuthenticationPermitsPerWindow,
-                        Window = AuthenticationWindow,
-                        QueueLimit = 0,
-                    }));
+            options.AddPolicy(Authentication, PartitionAuthentication);
 
             options.AddPolicy(PublicToken, PartitionPublicToken);
 
@@ -255,6 +294,25 @@ public static class RateLimitPolicies
 
             options.OnRejected = OnRejectedAsync;
         });
+    }
+
+    /// <summary>
+    /// Sign-in, bucketed by caller address and sized by configuration
+    /// (<see cref="RateLimitingOptions.AuthenticationPermitsPerMinute"/>).
+    ///
+    /// <para>
+    /// Keyed by ADDRESS and not by the submitted username, which is not an oversight: a rate
+    /// limiter runs before the endpoint and the identifier is in the unbuffered request body,
+    /// so it is not available here. That is also why the per-account counter has to live
+    /// somewhere else entirely -- see <see cref="Authentication"/>.
+    /// </para>
+    /// </summary>
+    private static RateLimitPartition<string> PartitionAuthentication(HttpContext httpContext)
+    {
+        var permits = httpContext.RequestServices
+            .GetRequiredService<IOptions<RateLimitingOptions>>().Value.AuthenticationPermitsPerMinute;
+
+        return FixedWindow("auth:" + ClientIpFor(httpContext), permits, AuthenticationWindow);
     }
 
     /// <summary>

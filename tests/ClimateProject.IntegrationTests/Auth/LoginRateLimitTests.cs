@@ -73,7 +73,7 @@ public class LoginRateLimitTests : IAsyncLifetime
     {
         var client = _factory.CreateClient();
 
-        for (var attempt = 0; attempt < RateLimitPolicies.AuthenticationPermitsPerWindow; attempt++)
+        for (var attempt = 0; attempt < AuthWebApplicationFactory.AuthenticationPermitsPerMinuteForTests; attempt++)
         {
             var permitted = await client.PostAsJsonAsync(
                 "/auth/login",
@@ -103,9 +103,18 @@ public class LoginRateLimitTests : IAsyncLifetime
         //
         // Say plainly what stands in its place, because it is less. Nothing asserts that
         // several people behind one office NAT all still get in: that is a property of the
-        // limit's VALUE (RateLimitPolicies.AuthenticationPermitsPerWindow, 20 a minute, shared
-        // by everyone who presents that one address), not of anything a test drives. What IS
-        // asserted is the partitioning the value is spent against --
+        // limit's VALUE, not of anything a test drives.
+        //
+        // That gap is now closed, and closing it is why the value moved. The shipped default is
+        // RateLimitPolicies.DefaultAuthenticationPermitsPerMinute (400, raised from 20 because
+        // ESPH's ~800 staff share a handful of office addresses), and
+        // RateLimitingTests.An_office_behind_one_address_is_not_refused_at_the_old_ceiling
+        // drives a default-configured host well past the old twenty from ONE caller and asserts
+        // none of them is refused. This test runs against the host this factory configures,
+        // whose limit is pinned to AuthenticationPermitsPerMinuteForTests so that exhausting it
+        // does not cost four hundred bcrypt verifications.
+        //
+        // What is also asserted is the partitioning the value is spent against --
         // RateLimitingTests.The_authentication_policy_buckets_by_the_forwarded_caller exhausts
         // one named caller and shows a second is still served -- and that a run of typos from
         // one caller ends in a successful login, which is this test.
