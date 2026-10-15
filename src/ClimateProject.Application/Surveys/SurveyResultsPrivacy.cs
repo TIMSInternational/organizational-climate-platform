@@ -57,13 +57,30 @@ namespace ClimateProject.Application.Surveys;
 /// tell "nobody else answered" from "a group was withheld" and so totals still
 /// reconcile against the participation counters.
 ///
-/// **The floor also applies to what can be subtracted.** A breakdown sits beside the
-/// whole survey's figures, so the people outside its disclosed segments are a readable
-/// group: their count and their means are the survey's minus the disclosed ones. When
-/// that remainder is 1 or 2 people, the smallest disclosed segments are withheld too
-/// (<c>SurveyAggregation.WithholdComplement</c>), until it reaches the floor or nothing
-/// is disclosed. Measured on the TIMS dry run, where femenino 6 beside a withheld
-/// masculino 3 gave away the three men's means.
+/// **Where a floor applies, it applies to what can be subtracted too.** A breakdown sits
+/// beside the whole survey's figures, so the people outside its disclosed segments are a
+/// readable group: their count and their means are the survey's minus the disclosed ones.
+/// When that remainder is 1 or 2 people it is a segment under the floor in all but name, so
+/// the smallest disclosed segments are withheld as well, until the remainder reaches the
+/// floor or nothing is disclosed at all. This is measured, not theoretical: on the TIMS dry
+/// run, femenino 6 beside a withheld masculino 3 at n = 9 gave the three men's mean on the
+/// first question as (3,22 x 9 - 3,00 x 6) / 3 = 3,66 against a true 3,67.
+///
+/// Since 2026-10-15 that rule lives in the two places that still have a withheld remainder
+/// to protect, and nowhere else:
+/// <list type="bullet">
+/// <item><description>a CROSS of two or more selectors -- <c>SurveyResultsFilter.MayDisclose</c>,
+/// which withholds the smallest disclosed siblings per selector until the remainder clears
+/// <see cref="MinimumSegmentRespondents"/>;</description></item>
+/// <item><description>a PUBLIC report link -- <c>PublicReportDocument.Disclosable</c>, which
+/// re-floors the rows a stored document discloses and so re-creates the remainder.</description></item>
+/// </list>
+/// A single dimension on an authenticated surface has no withheld segment to recover, because
+/// <see cref="MinimumSingleSegmentRespondents"/> discloses all of them; the only remainder left
+/// is the unsegmented people, and a ruling that publishes a segment of one accepts that
+/// knowingly. The pass that used to run over every breakdown
+/// (<c>SurveyAggregation.WithholdComplement</c>) is deleted rather than left in place as a
+/// no-op that reads like a control.
 /// </summary>
 public static class SurveyResultsPrivacy
 {

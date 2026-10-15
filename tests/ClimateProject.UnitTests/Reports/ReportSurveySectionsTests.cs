@@ -95,28 +95,37 @@ public class ReportSurveySectionsTests
         => JsonSerializer.Deserialize<ReportOutputDocument>(rendered, JsonSerializerOptions.Web)!;
 
     /// <summary>
-    /// THE privacy property of #88: a department the results screen suppresses stays
-    /// suppressed in the report. A report that prints a protected department's count is
-    /// a privacy defect, and the withheld headcount must appear only as the breakdown's
-    /// own reconciliation counters, never on the department's row.
+    /// THE privacy property of #88, as the 2026-10-15 ruling leaves it: the report agrees with
+    /// the results screen, whatever the screen shows.
+    ///
+    /// <para>
+    /// The property was never "the report suppresses"; it was "the report does not disagree
+    /// with the screen", because a report that prints what the screen hatches is a privacy
+    /// defect and a report that hides what the screen prints is a bug the client reports. The
+    /// screen now shows Sales' two, so the report carries Sales' two -- and
+    /// <c>Assert.All(... IsSuppressed == false)</c> still holds, now because nothing is
+    /// suppressed rather than because the suppressed ones were dropped.
+    /// </para>
     /// </summary>
     [Fact]
-    public void A_department_below_the_segment_floor_is_counted_and_never_named_in_the_report_section()
+    public void A_small_department_is_carried_into_the_report_section_like_the_screen_shows_it()
     {
         var section = Section(Aggregate());
 
-        // Withheld departments are not rows: a named row beside SuppressedRespondentCount is
-        // that department's size whenever it is the only one withheld (here: Sales, 2 people).
-        Assert.DoesNotContain(section.Departments, d => d.DepartmentId == Sales.ToString());
+        var sales = Assert.Single(section.Departments, d => d.DepartmentId == Sales.ToString());
+        Assert.False(sales.IsSuppressed);
+        Assert.Equal(2, sales.RespondentCount);
         Assert.All(section.Departments, d => Assert.False(d.IsSuppressed));
 
         var engineering = Assert.Single(section.Departments, d => d.DepartmentId == Engineering.ToString());
         Assert.False(engineering.IsSuppressed);
         Assert.Equal(5, engineering.RespondentCount);
 
-        Assert.Equal(1, section.SuppressedDepartmentCount);
-        Assert.Equal(2, section.SuppressedRespondentCount);
-        Assert.Equal(SurveyResultsPrivacy.MinimumSegmentRespondents, section.MinimumGroupSize);
+        Assert.Equal(0, section.SuppressedDepartmentCount);
+        Assert.Equal(0, section.SuppressedRespondentCount);
+        // The floor the section was actually held to, which a renderer reads to decide what to
+        // say about withheld rows.
+        Assert.Equal(SurveyResultsPrivacy.MinimumSingleSegmentRespondents, section.MinimumGroupSize);
     }
 
     /// <summary>
@@ -253,10 +262,11 @@ public class ReportSurveySectionsTests
     /// that printed the raw <see cref="SurveyBreakdown.Segments"/> collection, or that
     /// carried a suppressed group's score, fails here.
     ///
-    /// <para>The group's ROW survives, saying "withheld", exactly as a suppressed
-    /// department's does -- that is what lets a reader tell "nobody answered" from "a
-    /// group was withheld", and it is the aggregation's decision either way. What must
-    /// not survive is any NUMBER about the group.</para>
+    /// <para>The document-wide invariant below is the part that outlives the ruling: NO
+    /// segment flagged suppressed may carry a count or a score, whoever flagged it and
+    /// whenever. Since 2026-10-15 the aggregation flags none on a single dimension, so the
+    /// loop runs over an empty set here -- and it is kept because the loop is what catches a
+    /// future breakdown that honours the flag in the object graph and not in the bytes.</para>
     /// </summary>
     [Fact]
     public void A_demographic_group_below_the_segment_floor_carries_no_number_in_the_rendered_document()
@@ -265,13 +275,14 @@ public class ReportSurveySectionsTests
         var document = Reread(rendered);
 
         var tenure = Assert.Single(Assert.Single(document.Surveys).Demographics);
-        // Counted, never named: the group's key IS the value its members gave.
-        Assert.DoesNotContain(tenure.Segments, s => s.Key == "0-1");
+        // Named, with its number, since 2026-10-15 -- and the group's key IS the value its
+        // members gave, which is what the client was told when he ruled on it.
+        var small = Assert.Single(tenure.Segments, s => s.Key == "0-1");
+        Assert.False(small.IsSuppressed);
+        Assert.Equal(2, small.RespondentCount);
 
-        // The withheld total survives exactly once, on the breakdown, where it
-        // reconciles against the participation counters without naming a group.
-        Assert.Equal(1, tenure.SuppressedSegmentCount);
-        Assert.Equal(2, tenure.SuppressedRespondentCount);
+        Assert.Equal(0, tenure.SuppressedSegmentCount);
+        Assert.Equal(0, tenure.SuppressedRespondentCount);
 
         // Document-wide invariant rather than a check on one row: NO suppressed segment
         // anywhere in the document may carry a count or a score. A future breakdown that
@@ -291,15 +302,17 @@ public class ReportSurveySectionsTests
             }
         }
 
-        // The sub-floor group answered 1 to every question, so 1.0 is ITS reading and
-        // nobody else's. It must not be a score anywhere in the document.
+        // The small group answered 1 to every question, so 1.0 is ITS reading and nobody
+        // else's -- and it is now IN the document, which is the ruling in one number. The
+        // assertion is kept inverted rather than deleted because it is the sharpest statement
+        // of what was traded: if a floor is ever restored, this line is the one to flip back.
         var scores = document.Surveys
             .SelectMany(s => s.Demographics)
             .SelectMany(b => b.Segments)
             .SelectMany(s => s.Dimensions)
             .Select(d => d.AverageScore)
             .ToList();
-        Assert.DoesNotContain(1d, scores);
+        Assert.Contains(1d, scores);
     }
 
     // ------------------------------------------------------------------

@@ -497,8 +497,9 @@ public static class PublicReportProjection
     /// count IS the withheld headcount, and with one withheld group named on the page that was
     /// its exact size. The document now publishes only the completed total and the disclosed
     /// rows, so the one subtraction a reader can do yields <c>withheld + unsegmented</c> -- a
-    /// remainder <c>SurveyAggregation.WithholdComplement</c> already guarantees is 0 or at least
-    /// the floor -- attributed to no named group. A stored document whose remainder is under the
+    /// remainder <see cref="Disclosable"/> guarantees is 0 or at least this surface's own floor
+    /// (<see cref="PublicSegmentFloor"/>, which since 2026-10-15 is the only thing guaranteeing
+    /// it) -- attributed to no named group. A stored document whose remainder is under the
     /// floor anyway (one written before complement withholding) publishes no rows for that
     /// breakdown at all; see <see cref="Disclosable"/>.
     /// </description></item>
@@ -692,9 +693,15 @@ public static class PublicReportProjection
     /// <remarks>
     /// The one subtraction this document leaves a reader is <c>completed - sum(disclosed)</c>.
     /// That remainder is the people in no published row, and it must itself be 0 or at least
-    /// the floor -- the same test <c>SurveyAggregation.WithholdComplement</c> applies when the
-    /// aggregate is computed. Restated here because a stored document is JSON some other
-    /// version of the generator wrote, and this is the most exposed surface in the product.
+    /// the floor.
+    /// <para>
+    /// This was a restatement of the complement pass the aggregate ran when the document was
+    /// generated. Since 2026-10-15 the aggregate runs no such pass -- a single dimension is
+    /// disclosed at any size -- so on this surface the test is not a restatement of anything:
+    /// it is the guarantee, and the rows it withholds are rows the stored document discloses.
+    /// It was already written to stand alone, because a stored document is JSON some other
+    /// version of the generator wrote and this is the most exposed surface in the product.
+    /// </para>
     /// </remarks>
     /// <summary>
     /// The floor a PUBLIC link holds a single department or demographic group to, which since

@@ -43,6 +43,9 @@ public class ReportRendererTests
     private static readonly Guid QuestionId = Guid.Parse("11111111-1111-1111-1111-111111111111");
     private static readonly Guid Engineering = Guid.Parse("44444444-4444-4444-4444-444444444444");
     private static readonly Guid Direction = Guid.Parse("55555555-5555-5555-5555-555555555555");
+    /// <summary>A department that exists only as a withheld row in a stored document.</summary>
+    private static readonly Guid Audit = Guid.Parse("66666666-6666-6666-6666-666666666666");
+
     private static readonly Guid InsightId = Guid.Parse("6666666a-6666-6666-6666-666666666666");
     private static readonly Guid BenchmarkId = Guid.Parse("77777777-7777-7777-7777-777777777777");
 
@@ -122,18 +125,19 @@ public class ReportRendererTests
     // ==================================================================
 
     /// <summary>
-    /// Direction has two respondents, below
-    /// <see cref="SurveyResultsPrivacy.MinimumSegmentRespondents"/>. It used to be drawn as a
-    /// named row reading "Withheld" -- beside a paragraph printing the withheld headcount,
-    /// which with one withheld department IS Direction's size. Since 2026-10-12 it is counted
-    /// and never named, the rule SurveyExport applies to every breakdown.
+    /// Direction has two respondents, and since 2026-10-15 it is drawn with its figures.
     ///
-    /// The fixture's count moved from 3 to 2 when the floor became 3 (ruled 2026-10-13): at a
-    /// floor of 3 a department of 3 is disclosed on its own merits, so leaving it at 3 would
-    /// have made this a test about a department that is NOT withheld.
+    /// <para>
+    /// The history is worth keeping, because this row has been three different things. It was
+    /// a named row reading "Withheld" beside a paragraph printing the withheld headcount --
+    /// which, with one withheld department, WAS Direction's size. From 2026-10-12 it was
+    /// counted and never named. From 2026-10-15 it is named with its own numbers, because the
+    /// client ruled that a department is shown however small it is. The fixture's count has
+    /// stayed at 2 throughout.
+    /// </para>
     /// </summary>
     [Fact]
-    public void A_withheld_department_is_counted_and_never_named_in_the_pdf()
+    public void A_small_department_is_drawn_with_its_own_figures_in_the_pdf()
     {
         var drawn = DrawnStrings(ReportRenderer.BuildPdf(Context()));
 
@@ -143,21 +147,30 @@ public class ReportRendererTests
         Assert.Equal("6", drawn[engineering + 1]);
         Assert.Equal("30 %", drawn[engineering + 2]);
 
-        Assert.DoesNotContain(drawn, s => s.Contains("Dirección", StringComparison.Ordinal));
+        // And the small one prints its own two figures beside it.
+        var direction = IndexOfCell(drawn, "Dirección");
+        Assert.Equal("2", drawn[direction + 1]);
+        Assert.Equal("50 %", drawn[direction + 2]);
 
-        // Counted, with the floor that withheld it, so a reader can balance the table.
+        // Nothing is withheld, so the document says nothing about withheld departments: the
+        // sentence would have read "Withheld departments: 0 ... fewer than 1 respondents".
         var prose = Prose(ReportRenderer.BuildPdf(Context()));
-        Assert.Contains("Withheld departments: 1", prose, StringComparison.Ordinal);
-        Assert.Contains(
-            $"fewer than {SurveyResultsPrivacy.MinimumSegmentRespondents} respondents",
-            prose,
-            StringComparison.Ordinal);
+        Assert.DoesNotContain("Withheld departments", prose, StringComparison.Ordinal);
+        Assert.DoesNotContain("fewer than 1", prose, StringComparison.Ordinal);
     }
 
     /// <summary>
-    /// The same rule for a document stored before <c>ReportSurveySections</c> dropped the row:
-    /// a withheld department still sitting in <c>report_output</c> is filtered at render time.
+    /// A row a STORED document marked withheld is filtered at render time, whatever the
+    /// current floor is.
     /// </summary>
+    /// <remarks>
+    /// This is the guarantee that outlives every ruling, and 2026-10-15 is why it needs its own
+    /// department. The renderer decides by the stored <c>IsSuppressed</c> flag and never by
+    /// recomputing a floor, so a document written under an older, higher floor keeps the
+    /// promise it was generated under -- Auditoría stays off the page -- while the fixture's own
+    /// Dirección, disclosed by today's rule, is drawn. Asserting both in one test is what
+    /// distinguishes "honours the flag" from "withholds small numbers".
+    /// </remarks>
     [Fact]
     public void A_withheld_department_row_in_an_older_stored_document_is_not_drawn()
     {
@@ -169,15 +182,20 @@ public class ReportRendererTests
             [
                 healthy with
                 {
-                    Departments = [.. healthy.Departments, new ReportDepartmentParticipation(Direction.ToString(), "Dirección", 0, null, true)],
+                    Departments = [.. healthy.Departments, new ReportDepartmentParticipation(Audit.ToString(), "Auditoría", 0, null, true)],
                 },
                 .. document.Surveys.Skip(1),
             ],
         };
         var context = Context() with { Document = older };
 
-        Assert.DoesNotContain(DrawnStrings(ReportRenderer.BuildPdf(context)), s => s.Contains("Dirección", StringComparison.Ordinal));
-        Assert.DoesNotContain("Dirección", CsvText(context), StringComparison.Ordinal);
+        var drawn = DrawnStrings(ReportRenderer.BuildPdf(context));
+        Assert.DoesNotContain(drawn, s => s.Contains("Auditoría", StringComparison.Ordinal));
+        Assert.DoesNotContain("Auditoría", CsvText(context), StringComparison.Ordinal);
+
+        // The one today's rule discloses is still drawn, so this passes because the flag was
+        // honoured and not because small rows are dropped.
+        Assert.Contains(drawn, s => s.Contains("Dirección", StringComparison.Ordinal));
     }
 
     /// <summary>The position of a drawn cell, so the two cells after it can be read.</summary>
@@ -197,7 +215,7 @@ public class ReportRendererTests
 
     /// <summary>The same rule in the format that is actually forwarded to a spreadsheet.</summary>
     [Fact]
-    public void A_withheld_department_is_counted_and_never_named_in_the_csv()
+    public void A_small_department_carries_its_own_row_in_the_csv()
     {
         var context = Context();
         var rows = CsvRows(context);
@@ -205,10 +223,11 @@ public class ReportRendererTests
         Assert.Equal("6", Cell(rows, ReportRenderer.DepartmentSection, Engineering.ToString(), "respondent_count"));
         Assert.Equal("false", Cell(rows, ReportRenderer.DepartmentSection, Engineering.ToString(), "is_suppressed"));
 
-        // No row at all -- not an empty cell under a name -- and the counter says it exists.
-        Assert.DoesNotContain(Direction.ToString(), CsvText(context), StringComparison.OrdinalIgnoreCase);
+        // A row of its own, with its real count, and the withheld counter reads zero.
+        Assert.Equal("2", Cell(rows, ReportRenderer.DepartmentSection, Direction.ToString(), "respondent_count"));
+        Assert.Equal("false", Cell(rows, ReportRenderer.DepartmentSection, Direction.ToString(), "is_suppressed"));
         Assert.Equal(
-            "1",
+            "0",
             Cell(rows, ReportRenderer.SurveySection, "suppressed_department_count", "value", HealthySurvey.ToString()));
     }
 
@@ -228,13 +247,16 @@ public class ReportRendererTests
     }
 
     /// <summary>
-    /// A demographic group's key IS the value a respondent typed, which is why
-    /// <c>SurveyExport</c> refuses to name a withheld one -- with a single withheld segment in
-    /// a breakdown, a named row makes that group's exact size a subtraction, and the row prints
-    /// <c>nationality:Venezolana</c> for the one person who wrote it.
+    /// A demographic group's key IS the value a respondent typed, and since 2026-10-15 both
+    /// groups are named -- the two-person one included.
+    ///
+    /// <para>That the key is the typed value is exactly why this used to be withheld, and the
+    /// client ruled on it in those terms: a demographic has to return a result *"así sea una
+    /// persona"*. The CROSS of two fields is still refused, which is a different test in a
+    /// different class.</para>
     /// </summary>
     [Fact]
-    public void A_withheld_demographic_group_is_counted_and_never_named()
+    public void A_small_demographic_group_is_named_like_any_other()
     {
         var context = Context();
         var drawn = DrawnStrings(ReportRenderer.BuildPdf(context));
@@ -244,11 +266,11 @@ public class ReportRendererTests
         Assert.Contains(drawn, s => s.Contains("Costarricense", StringComparison.Ordinal));
         Assert.Contains("Costarricense", csv, StringComparison.Ordinal);
 
-        // The withheld one is in neither, in any casing, and the counter says it exists.
-        Assert.DoesNotContain(drawn, s => s.Contains("Venezolana", StringComparison.OrdinalIgnoreCase));
-        Assert.DoesNotContain("Venezolana", csv, StringComparison.OrdinalIgnoreCase);
+        // So is the group of two, in both documents, and the withheld counter reads zero.
+        Assert.Contains(drawn, s => s.Contains("Venezolana", StringComparison.Ordinal));
+        Assert.Contains("Venezolana", csv, StringComparison.Ordinal);
         Assert.Equal(
-            "1",
+            "0",
             Cell(CsvRows(context), ReportRenderer.DemographicSection, "nationality", "suppressed_segment_count"));
     }
 
@@ -260,22 +282,30 @@ public class ReportRendererTests
     /// "Dimension: nationality" read "Withheld departments: 1 (covering 2 people)" -- a
     /// sentence about a kind of group that is not in that table, and worse than an
     /// untranslated one because it reads as correct.
+    ///
+    /// <para>
+    /// Since 2026-10-15 nothing in this document is withheld, so the sentence that used to
+    /// carry the mistake is not printed at all. The guarantee is unchanged and is asserted on
+    /// the clause that IS printed: the people in no group. "Responses carrying no department"
+    /// under the department table and "Responses carrying no value for this" under the
+    /// dimension are still two sentences about two kinds of group, and reusing one for the
+    /// other would still read as correct.
+    /// </para>
     /// </remarks>
     [Fact]
-    public void The_withheld_counters_name_the_kind_of_group_they_are_about()
+    public void The_counters_name_the_kind_of_group_they_are_about()
     {
         var prose = Prose(ReportRenderer.BuildPdf(Context()));
 
-        Assert.Contains(
-            $"Withheld groups in \"nationality\": 1 (covering 2 people) for having fewer than {SurveyResultsPrivacy.MinimumSegmentRespondents} respondents.",
-            prose,
-            StringComparison.Ordinal);
+        // 12 respondents, 6 + 2 by department and 7 + 2 by nationality.
+        Assert.Contains("Responses carrying no department: 4.", prose, StringComparison.Ordinal);
+        Assert.Contains("Responses carrying no value for this: 3.", prose, StringComparison.Ordinal);
+        Assert.Equal(1, CountOccurrences(prose, "Responses carrying no department"));
+        Assert.Equal(1, CountOccurrences(prose, "Responses carrying no value for this"));
 
-        // The department table's own counters, which are a different sentence about a
-        // different table. Exactly one of each, so neither has silently replaced the other.
-        Assert.Contains("Withheld departments: 1", prose, StringComparison.Ordinal);
-        Assert.Equal(1, CountOccurrences(prose, "Withheld departments"));
-        Assert.Equal(1, CountOccurrences(prose, "Withheld groups in"));
+        // And not a word about withheld groups, in either sentence.
+        Assert.Equal(0, CountOccurrences(prose, "Withheld departments"));
+        Assert.Equal(0, CountOccurrences(prose, "Withheld groups in"));
     }
 
     /// <summary>
@@ -301,9 +331,13 @@ public class ReportRendererTests
         Assert.Empty(second.Departments);
         Assert.Equal(7, second.UnsegmentedRespondentCount);
 
-        // Exactly one department heading in the whole document -- the survey that has one.
+        // Exactly one department heading in the whole document -- the survey that has one --
+        // and exactly one of the counters paragraph that belongs to it. Asserted on the
+        // responses-carrying-no-department clause because since 2026-10-15 the withheld clause
+        // is not printed when nothing is withheld, which is every document the product now
+        // generates; this clause is the one that would reappear under a phantom heading.
         Assert.Equal(1, CountOccurrences(prose, "Participation by department"));
-        Assert.Equal(1, CountOccurrences(prose, "Withheld departments"));
+        Assert.Equal(1, CountOccurrences(prose, "Responses carrying no department"));
     }
 
     /// <summary>
@@ -505,8 +539,11 @@ public class ReportRendererTests
 
         Assert.Contains("Participación", spanish, StringComparison.Ordinal);
         Assert.Contains("Participation", english, StringComparison.Ordinal);
-        Assert.Contains("Departamentos reservados", spanish, StringComparison.Ordinal);
-        Assert.Contains("Withheld departments", english, StringComparison.Ordinal);
+        // The counters paragraph, in the clause that is actually printed: since 2026-10-15 the
+        // withheld clause only appears when something was withheld, and nothing in this
+        // document is. Same paragraph, same guarantee.
+        Assert.Contains("Respuestas sin departamento", spanish, StringComparison.Ordinal);
+        Assert.Contains("Responses carrying no department", english, StringComparison.Ordinal);
 
         // And the decimal separator with it: 12 of 17 invited is 70.59, a rate with decimals,
         // which is what makes the separator observable at all -- 12 of 16 is exactly 75 and

@@ -153,14 +153,19 @@ public static class SurveyAggregation
         };
         breakdowns.AddRange(DemographicBreakdowns(questions, completed, counted));
 
-        // `WithholdComplement` is NOT applied, and its absence is the ruling rather than an
-        // oversight. It existed to stop a withheld segment being recovered by subtracting the
-        // disclosed ones from the whole; with every single dimension disclosed there is no
-        // withheld segment left to recover, so the pass had become a no-op that only LOOKED
-        // like a control. Deleting the call says so, where leaving it would have let the next
-        // reader believe the differencing defence was still standing. The method itself stays:
-        // the cross path (`SurveyResultsFilter.MayDisclose`) still runs the same rule, byte for
-        // byte, and a ruling that moves the floor back would want this one line, not a rewrite.
+        // NO COMPLEMENT PASS, and its absence is the ruling rather than an oversight.
+        //
+        // `WithholdComplement` used to run here: it stopped a withheld segment being recovered
+        // by subtracting the disclosed ones from the whole. With every single dimension
+        // disclosed there is no withheld segment left to recover, so the pass became a no-op
+        // that only LOOKED like a control, and it is gone rather than left standing for the
+        // next reader to trust. What a reader can still subtract is the UNSEGMENTED people, and
+        // the ruling that publishes a segment of one accepts a remainder of one knowingly.
+        //
+        // The rule itself is not gone, it moved to the two surfaces that still floor at 3 and
+        // therefore still have a withheld remainder to protect: `SurveyResultsFilter.MayDisclose`
+        // for a cross, and `PublicReportDocument.Disclosable` for a public link. The reasoning
+        // and the measurement behind it are in `SurveyResultsPrivacy`.
 
         return new SurveyAggregate(
             summary,
@@ -766,67 +771,6 @@ public static class SurveyAggregation
                 suppressedRespondents,
                 completed.Count(r => !r.Demographics.ContainsKey(field)));
         }
-    }
-
-    /// <summary>
-    /// Secondary suppression: the floor applied to what a reader can SUBTRACT, not only to
-    /// what is printed.
-    /// </summary>
-    /// <remarks>
-    /// Every breakdown sits beside the whole survey's figures, so the people outside the
-    /// disclosed segments -- the withheld ones and the unsegmented ones together -- are
-    /// readable as a group: their count is the completed total minus the disclosed counts,
-    /// and their per-question means fall out of the survey's means the same way. When that
-    /// remainder is 1 to 4 people it is a segment under the floor in all but name. The TIMS
-    /// dry run measured it: femenino 6 disclosed, masculino 3 withheld, n = 9, and the
-    /// three men's mean on the first question came back as (3,22 x 9 - 3,00 x 6) / 3 =
-    /// 3,66 against a true 3,67. So the smallest disclosed segment is withheld too, and
-    /// again, until the remainder reaches the floor or nothing is disclosed. The team-vs-
-    /// company reading in <c>DashboardEndpoints.OrganizationClimate</c> already applies
-    /// this rule to its one subtraction; this applies it to every breakdown.
-    ///
-    /// A segment withheld here is indistinguishable from one withheld by the plain floor,
-    /// and its people are added to <see cref="SurveyBreakdown.SuppressedRespondentCount"/>,
-    /// so the totals still reconcile against the participation counters.
-    /// </remarks>
-    private static SurveyBreakdown WithholdComplement(SurveyBreakdown breakdown, int completedCount)
-    {
-        var segments = breakdown.Segments.ToList();
-        var suppressedSegments = breakdown.SuppressedSegmentCount;
-        var suppressedRespondents = breakdown.SuppressedRespondentCount;
-        var remainder = completedCount - segments.Where(s => !s.IsSuppressed).Sum(s => s.RespondentCount);
-
-        while (remainder > 0 && !SurveyResultsPrivacy.MeetsSegmentFloor(remainder))
-        {
-            var smallest = segments
-                .Select((segment, index) => (segment, index))
-                .Where(entry => !entry.segment.IsSuppressed)
-                .OrderBy(entry => entry.segment.RespondentCount)
-                .ThenBy(entry => entry.segment.Key, StringComparer.Ordinal)
-                .Select(entry => (int?)entry.index)
-                .FirstOrDefault();
-            if (smallest is not { } index) break;
-
-            var withheld = segments[index];
-            segments[index] = withheld with
-            {
-                RespondentCount = 0,
-                ParticipationRate = null,
-                Headcount = null,
-                IsSuppressed = true,
-                Questions = [],
-            };
-            suppressedSegments++;
-            suppressedRespondents += withheld.RespondentCount;
-            remainder += withheld.RespondentCount;
-        }
-
-        return breakdown with
-        {
-            Segments = segments,
-            SuppressedSegmentCount = suppressedSegments,
-            SuppressedRespondentCount = suppressedRespondents,
-        };
     }
 
     private static IReadOnlyList<SurveySegmentQuestionResult> SegmentQuestions(

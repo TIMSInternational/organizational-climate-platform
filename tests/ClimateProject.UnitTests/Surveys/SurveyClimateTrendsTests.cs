@@ -416,6 +416,8 @@ public class SurveyClimateTrendsTests
         var result = SurveyClimateTrends.Build(Company, null,
             [Input(EarlySurvey, Jan, Aggregate([Question(QuestionA, "trust", 10, 3.0)], 10))], Now);
 
-        Assert.Equal(SurveyResultsPrivacy.MinimumSegmentRespondents, result.MinimumGroupSize);
+        // A trend group is one department, or one value of one demographic field: a single
+        // dimension, so the floor reported is the single-dimension one (ruled 2026-10-15).
+        Assert.Equal(SurveyResultsPrivacy.MinimumSingleSegmentRespondents, result.MinimumGroupSize);
     }
 }
