@@ -60,8 +60,17 @@ env:
   HEALTH_CHECK_PATH: /ready
   # Passed explicitly rather than relying on the template defaults. See the comment
   # on the deploy step for why every parameter is now supplied.
-  SERVICE_CPU: 0.25 vCPU
-  SERVICE_MEMORY: 0.5 GB
+  # A SIGN-IN IS ONE BCRYPT AT WORK FACTOR 12, so this number is the sign-in ceiling.
+  # BcryptPasswordHasher costs 0.25-0.4 vCPU-seconds per verify, which at 0.25 vCPU is
+  # ~0.8 sign-ins a second -- about 50 a minute per instance, 200 across the MaxSize of 4.
+  # RateLimiting:AuthenticationPermitsPerMinute is 400 (#566), so the limiter was permitting
+  # twice what the compute could serve: nobody got a clean 429, requests queued instead, and a
+  # /ready probe queued behind them is how App Runner decides to replace an instance.
+  # At 1 vCPU it is ~200 a minute per instance and ~800 across four, which puts the limiter
+  # back in front of the hardware where a rate limit belongs. Raised 2026-10-15 for the ESPH
+  # launch: 800 people invited in one mail, arriving in the first few minutes.
+  SERVICE_CPU: 1 vCPU
+  SERVICE_MEMORY: 2 GB
 
 jobs:
   deploy:
