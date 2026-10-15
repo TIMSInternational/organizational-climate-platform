@@ -267,6 +267,128 @@ public class MassInviteTests(PostgresContainerFixture postgres, CapturingCredent
         }
     }
 
+    /// <summary>
+    /// A half-finished ANONYMOUS survey is still there when the same person signs in from a
+    /// second device.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The cross-device half of the 2026-10-15 ruling. On an anonymous survey nothing writes
+    /// <c>responses.user_id</c>, so the only handle on a partial was the session id the browser
+    /// invented -- which a second device has never seen, and the partial read as somebody
+    /// else's. <c>ResumeSessionIdFor</c> derives an id from (surveyId, userId) under the
+    /// application key and <c>FindExistingResponseAsync</c> tries it BEFORE the browser's own,
+    /// so the person is recognised on the second device while the row still names nobody.
+    /// </para>
+    /// <para>
+    /// Two independent <c>CreateClient()</c> instances are the two devices: each mints its own
+    /// token from the emailed credentials and carries a session id the other has never used,
+    /// which is what a phone and a desktop actually do. The existing
+    /// <c>Repeated_partial_saves_accumulate_into_one_response_rather_than_many</c> covers the
+    /// same-browser case and cannot see this one, because there one session id does both halves.
+    /// </para>
+    /// <para>
+    /// The last assertions are the guarantee that makes the trade acceptable: ONE response row
+    /// for the survey, its <c>user_id</c> still null, and a session id that is neither device's
+    /// -- so a reader holding the database alone sees an opaque token and no person.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_half_finished_anonymous_survey_resumes_on_a_second_device()
+    {
+        var admin = await AdminClientAsync(_companyId);
+
+        var email = $"marta-{Guid.NewGuid():N}@example.com";
+        var import = await ImportAsync(admin, preview: false,
+            new BulkImportRowInput(2, "Marta Rojas", email, "Colaborador", null, new() { ["sede"] = "belen" }));
+        Assert.Equal(HttpStatusCode.OK, import.StatusCode);
+        var sent = Assert.Single(_factory.Sent, s => s.ToEmail == email);
+
+        var survey = await SurveyTestHarness.CreateSurveyAsync(admin, new CreateSurveyRequest(
+            Title: LocalizedInput.FromBare("Clima 2026"),
+            CompanyId: _companyId,
+            Type: "periodic",
+            StartDate: DateTimeOffset.UtcNow.AddDays(-1),
+            EndDate: DateTimeOffset.UtcNow.AddDays(14),
+            Questions:
+            [
+                new CreateSurveyQuestionInput(
+                    LocalizedInput.FromBare("¿Dónde trabajas?"),
+                    QuestionTypes.MultipleChoice,
+                    Options:
+                    [
+                        new CreateSurveyQuestionOptionInput("remote", LocalizedInput.FromBare("Remoto")),
+                        new CreateSurveyQuestionOptionInput("hybrid", LocalizedInput.FromBare("Híbrido")),
+                    ],
+                    Order: 0),
+            ],
+            Settings: new SurveySettingsInput(
+                Anonymous: true, AllowPartialResponses: true, SelfDeclaredDemographics: true)));
+        (await SurveyTestHarness.SetStatusAsync(admin, survey.Id, SurveyStatuses.Active))
+            .EnsureSuccessStatusCode();
+
+        // A device is a client that has signed in with the emailed credentials and holds its own
+        // token -- never the admin's, and never the other device's.
+        async Task<HttpClient> DeviceAsync()
+        {
+            var device = _factory.CreateClient();
+            var login = await device.PostAsJsonAsync("/auth/login", new LoginRequest(sent.Username, sent.Password));
+            Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+            device.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+                "Bearer", (await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token);
+            return device;
+        }
+
+        // The first device leaves the survey half finished.
+        var first = await DeviceAsync();
+        var firstSessionId = Guid.NewGuid().ToString("N");
+        var firstView = (await first.GetFromJsonAsync<SurveyRespondView>(
+            $"/surveys/{survey.Id}/respond?sessionId={firstSessionId}"))!;
+        Assert.Null(firstView.InProgress);
+
+        var questionId = firstView.Questions.Single().Id;
+        var partial = await first.PostAsJsonAsync(
+            $"/surveys/{survey.Id}/responses",
+            new SubmitSurveyResponseRequest(
+                Answers: [new SurveyAnswerInput(questionId, "hybrid")],
+                SessionId: firstSessionId,
+                IsComplete: false));
+        Assert.Equal(HttpStatusCode.Created, partial.StatusCode);
+
+        // The second device: the same person, its own token, and a session id the first device
+        // never used.
+        var second = await DeviceAsync();
+        var secondSessionId = Guid.NewGuid().ToString("N");
+        Assert.NotEqual(firstSessionId, secondSessionId);
+        var secondView = (await second.GetFromJsonAsync<SurveyRespondView>(
+            $"/surveys/{survey.Id}/respond?sessionId={secondSessionId}"))!;
+
+        // What the ruling asked for: the half-finished answer comes back on the new device.
+        Assert.NotNull(secondView.InProgress);
+        Assert.False(secondView.InProgress!.IsComplete);
+        Assert.Equal("hybrid", secondView.InProgress.Answers.Single(a => a.QuestionId == questionId).Value);
+
+        // Finishing from the second device completes the SAME response rather than opening a
+        // second one: OK, not Created.
+        var finish = await second.PostAsJsonAsync(
+            $"/surveys/{survey.Id}/responses",
+            new SubmitSurveyResponseRequest(
+                Answers: [new SurveyAnswerInput(questionId, "remote")],
+                SessionId: secondSessionId,
+                IsComplete: true));
+        Assert.Equal(HttpStatusCode.OK, finish.StatusCode);
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            var stored = await db.Responses.SingleAsync(r => r.SurveyId == survey.Id);
+            Assert.True(stored.IsComplete);
+            Assert.Null(stored.UserId);
+            Assert.NotEqual(firstSessionId, stored.SessionId);
+            Assert.NotEqual(secondSessionId, stored.SessionId);
+        }
+    }
+
     [Fact]
     public async Task A_preview_creates_no_account_and_sends_nothing()
     {
