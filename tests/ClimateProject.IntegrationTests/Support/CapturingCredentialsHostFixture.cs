@@ -8,8 +8,13 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace ClimateProject.IntegrationTests.Support;
 
-/// <summary>What the product handed to the credentials email, for one person.</summary>
-public sealed record SentCredentials(string ToEmail, string Username, string Password, string? Language);
+/// <summary>
+/// What the product handed to the credentials email, for one person. <paramref name="Purpose"/> is
+/// recorded because it is the only observable difference between an invitation and a reminder: the
+/// pair is identical, so a test that did not read it could not tell which message went out.
+/// </summary>
+public sealed record SentCredentials(
+    string ToEmail, string Username, string Password, string? Language, CredentialsEmailPurpose Purpose);
 
 /// <summary>
 /// A host whose <see cref="ICredentialsEmailSender"/> records instead of sending.
@@ -45,14 +50,15 @@ internal sealed class CapturingCredentialsSender(ConcurrentQueue<SentCredentials
     : ICredentialsEmailSender
 {
     public Task<EmailSendOutcome> SendAsync(
-        string toEmail, string username, string password, string? companyLanguage, CancellationToken cancellationToken)
+        string toEmail, string username, string password, string? companyLanguage,
+        CredentialsEmailPurpose purpose, CancellationToken cancellationToken)
     {
         if (failFor.Contains(toEmail))
         {
             return Task.FromResult(EmailSendOutcome.PermanentFailure("refused for the test"));
         }
 
-        sent.Enqueue(new SentCredentials(toEmail, username, password, companyLanguage));
+        sent.Enqueue(new SentCredentials(toEmail, username, password, companyLanguage, purpose));
         return Task.FromResult(EmailSendOutcome.Success());
     }
 }

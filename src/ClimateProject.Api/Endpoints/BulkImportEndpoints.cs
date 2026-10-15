@@ -449,7 +449,9 @@ public static class BulkImportEndpoints
             // here is gone the moment this method returns.
             foreach (var (resultIndex, toEmail, username, password) in issued)
             {
-                var outcome = await credentials!.Sender.SendAsync(toEmail, username, password, company?.Settings.Language, cancellationToken);
+                var outcome = await credentials!.Sender.SendAsync(
+                    toEmail, username, password, company?.Settings.Language,
+                    CredentialsEmailPurpose.Invitation, cancellationToken);
                 if (!outcome.Delivered)
                 {
                     var row = results[resultIndex];

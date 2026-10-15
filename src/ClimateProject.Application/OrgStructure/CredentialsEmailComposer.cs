@@ -25,7 +25,9 @@ public static class CredentialsEmailComposer
     /// <summary>The web route the sign-in button opens. Must match <c>/login</c> in <c>web/src/app/router.tsx</c>.</summary>
     public const string LoginPath = "login";
 
-    public static EmailMessage Compose(string toEmail, string username, string password, string loginUrl, string? companyLanguage)
+    public static EmailMessage Compose(
+        string toEmail, string username, string password, string loginUrl, string? companyLanguage,
+        CredentialsEmailPurpose purpose)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(toEmail);
         ArgumentException.ThrowIfNullOrWhiteSpace(username);
@@ -33,7 +35,9 @@ public static class CredentialsEmailComposer
         ArgumentException.ThrowIfNullOrWhiteSpace(loginUrl);
 
         var spanishFirst = string.Equals(companyLanguage, "es", StringComparison.OrdinalIgnoreCase);
-        var (first, second) = spanishFirst ? (Spanish, English) : (English, Spanish);
+        var (first, second) = spanishFirst
+            ? (CopyFor(purpose, spanish: true), CopyFor(purpose, spanish: false))
+            : (CopyFor(purpose, spanish: false), CopyFor(purpose, spanish: true));
 
         var html = new StringBuilder();
         AppendHtml(html, first, username, password, loginUrl);
@@ -79,7 +83,7 @@ public static class CredentialsEmailComposer
         text.Append(copy.Ignore).Append('\n');
     }
 
-    private static readonly CredentialsCopy English = new(
+    private static readonly CredentialsCopy InvitationEnglish = new(
         Subject: $"Your access to {EmailBranding.ProductName}",
         Body: "Your organisation has invited you to answer a survey. Sign in with the username and password below; your organisational details are already on your account.",
         UsernameLabel: "Username",
@@ -88,7 +92,7 @@ public static class CredentialsEmailComposer
         Keep: "Keep this message: these are your sign-in details. If you lose them, ask your administrator to send new ones.",
         Ignore: "If you were not expecting this message you can ignore it.");
 
-    private static readonly CredentialsCopy Spanish = new(
+    private static readonly CredentialsCopy InvitationSpanish = new(
         Subject: $"Tu acceso a {EmailBranding.ProductName}",
         Body: "Tu organización te invita a responder una encuesta. Inicia sesión con el usuario y la contraseña de abajo; tus datos organizacionales ya están en tu cuenta.",
         UsernameLabel: "Usuario",
@@ -96,6 +100,42 @@ public static class CredentialsEmailComposer
         Cta: "Iniciar sesión",
         Keep: "Guarda este mensaje: son tus datos de acceso. Si los pierdes, pide a tu administrador que te envíe unos nuevos.",
         Ignore: "Si no esperabas este mensaje, puedes ignorarlo.");
+
+    /// <summary>
+    /// The reminder, for the people the roster shows as unfinished. It asks for the one thing
+    /// the invitation did not have to ask for -- that they go in and finish -- and it warns that
+    /// the password below replaces the one they may still be holding, because
+    /// <c>ResendManyAsync</c> regenerates it for everyone it mails.
+    /// </summary>
+    private static readonly CredentialsCopy ReminderEnglish = new(
+        Subject: $"Reminder: answer your survey on {EmailBranding.ProductName}",
+        Body: "Please sign in and answer the survey. Your username and a new password are below; the previous password stops working, so sign in with these details. If you had already started, you can carry on where you left off.",
+        UsernameLabel: "Username",
+        PasswordLabel: "Password",
+        Cta: "Sign in",
+        Keep: "Keep this message: these are your sign-in details. If you lose them, ask your administrator to send new ones.",
+        Ignore: "If you were not expecting this message you can ignore it.");
+
+    private static readonly CredentialsCopy ReminderSpanish = new(
+        Subject: $"Recordatorio: responde la encuesta en {EmailBranding.ProductName}",
+        Body: "Te pedimos que por favor ingreses y respondas la encuesta. Abajo están de nuevo tu usuario y una contraseña nueva: la anterior deja de funcionar, así que entra con estos datos. Si ya la habías empezado, puedes continuar donde la dejaste.",
+        UsernameLabel: "Usuario",
+        PasswordLabel: "Contraseña",
+        Cta: "Iniciar sesión",
+        Keep: "Guarda este mensaje: son tus datos de acceso. Si los pierdes, pide a tu administrador que te envíe unos nuevos.",
+        Ignore: "Si no esperabas este mensaje, puedes ignorarlo.");
+
+    /// <summary>
+    /// The copy one purpose reads in one language. A purpose this does not know throws rather
+    /// than falling back to the invitation: a reminder silently sent as an invitation is the
+    /// defect this type was changed to fix, and it would be invisible in a passing suite.
+    /// </summary>
+    private static CredentialsCopy CopyFor(CredentialsEmailPurpose purpose, bool spanish) => purpose switch
+    {
+        CredentialsEmailPurpose.Invitation => spanish ? InvitationSpanish : InvitationEnglish,
+        CredentialsEmailPurpose.Reminder => spanish ? ReminderSpanish : ReminderEnglish,
+        _ => throw new ArgumentOutOfRangeException(nameof(purpose), purpose, "Unknown credentials email purpose."),
+    };
 
     private sealed record CredentialsCopy(
         string Subject, string Body, string UsernameLabel, string PasswordLabel, string Cta, string Keep, string Ignore);
