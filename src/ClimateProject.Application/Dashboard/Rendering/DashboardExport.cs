@@ -295,7 +295,7 @@ public static class DashboardExport
     /// </para>
     /// </remarks>
     private static int TeamCountFloor(DashboardTeamClimate? climate)
-        => Math.Max(SurveyResultsPrivacy.MinimumSegmentRespondents, climate?.MinimumGroupSize ?? 0);
+        => Math.Max(SurveyResultsPrivacy.MinimumSingleSegmentRespondents, climate?.MinimumGroupSize ?? 0);
 
     /// <summary>
     /// The team-climate section -- the one place in this file where a suppression decision

@@ -94,14 +94,26 @@ public static class TrackingHallazgos
             // invisible in the tracking module, which reads as "nothing to work on" rather
             // than as "withheld".
             //
-            // The floor is applied upstream, by the aggregation, which is why this reads
-            // segment.IsSuppressed instead of comparing a count: SegmentDimensionScores
-            // does not floor anything, and a suppressed segment reaches it carrying no
-            // questions at all, so it would return an empty dictionary and every dimension
-            // would silently vanish from the response.
-            var scores = segment.IsSuppressed
-                ? new Dictionary<string, double?>(StringComparer.Ordinal)
-                : SurveyAggregation.SegmentDimensionScores(aggregate.Questions, segment);
+            // THE FLOOR IS THIS MODULE'S OWN SINCE 2026-10-15, and that is the whole point
+            // of the next two lines.
+            //
+            // It used to read `segment.IsSuppressed` alone and inherit whatever the climate
+            // aggregation had already applied. Then the 2026-10-15 ruling took the climate
+            // product's single-dimension floor to 1, so nothing arrives suppressed any more and
+            // inheriting it would have published a one-person department's score here --
+            // silently, in a different client's module, under a ruling that was not about it.
+            // Decided 2026-10-15: tracking keeps SurveyResultsPrivacy.MinimumSegmentRespondents
+            // and the 2026-08-27 ruling above stands unchanged.
+            //
+            // `IsSuppressed` is still honoured beside the count, because a segment suppressed
+            // for any other reason carries no questions at all and SegmentDimensionScores would
+            // return an empty dictionary -- every dimension would then silently vanish from the
+            // response instead of appearing with a null score, which is the failure the ruling
+            // above exists to prevent.
+            var scores = !segment.IsSuppressed
+                    && SurveyResultsPrivacy.MeetsSegmentFloor(segment.RespondentCount)
+                ? SurveyAggregation.SegmentDimensionScores(aggregate.Questions, segment)
+                : new Dictionary<string, double?>(StringComparer.Ordinal);
 
             foreach (var dimension in dimensions)
             {
