@@ -161,7 +161,7 @@ public class SharedHostTests(PostgresContainerFixture postgres)
         using var greedy = postgres.App.CreateClient();
 
         HttpStatusCode last = HttpStatusCode.OK;
-        for (var attempt = 0; attempt <= RateLimitPolicies.AuthenticationPermitsPerWindow; attempt++)
+        for (var attempt = 0; attempt <= AuthWebApplicationFactory.AuthenticationPermitsPerMinuteForTests; attempt++)
         {
             var response = await greedy.PostAsJsonAsync(
                 "/auth/login",

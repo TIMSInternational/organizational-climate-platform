@@ -137,6 +137,14 @@ public class AuthWebApplicationFactory(string connectionString) : WebApplication
     public const int HostBudget = 10;
 
     /// <summary>
+    /// The sign-in limit every host this factory builds is configured with. Deliberately the
+    /// old shipped value, so the two tests that drive this limit to exhaustion stay cheap while
+    /// <see cref="RateLimitPolicies.DefaultAuthenticationPermitsPerMinute"/> moves for ESPH.
+    /// See the override on <c>ConfigureWebHost</c> for the whole argument.
+    /// </summary>
+    public const int AuthenticationPermitsPerMinuteForTests = 20;
+
+    /// <summary>
     /// Counts the database commands this application sends. Reset it immediately before the
     /// request under measurement — signup, login and every other setup call go through the
     /// same counter. See <see cref="CommandCountingInterceptor"/> for why round trips are
@@ -182,9 +190,10 @@ public class AuthWebApplicationFactory(string connectionString) : WebApplication
     /// no socket, so <c>ClientIpResolver</c> resolves every request to the literal
     /// <c>"unknown"</c> and all of them land in ONE partition. That was harmless while each
     /// test case booted a host of its own -- a fresh host meant a fresh limiter -- and is fatal
-    /// the moment the host is shared: <c>RateLimitPolicies.AuthenticationPermitsPerWindow</c>
-    /// is 20 per minute, and a suite whose every class signs up and logs in would exhaust that
-    /// within the first handful of tests and then 429 for the rest of the run.
+    /// the moment the host is shared: the sign-in limit this factory configures is
+    /// <see cref="AuthenticationPermitsPerMinuteForTests"/> per minute, and a suite whose every
+    /// class signs up and logs in would exhaust that within the first handful of tests and then
+    /// 429 for the rest of the run.
     /// </para>
     /// <para>
     /// So each client presents a distinct caller address, restoring exactly the isolation a
@@ -306,6 +315,21 @@ public class AuthWebApplicationFactory(string connectionString) : WebApplication
                 // before #279. It is the production App Runner value, and what it costs is
                 // written down on ConfigureClient rather than left for a reader to discover.
                 ["RateLimiting:TrustedProxyHopCount"] = "1",
+
+                // The sign-in limit this collection runs against, pinned LOW on purpose.
+                //
+                // The shipped default is RateLimitPolicies.DefaultAuthenticationPermitsPerMinute
+                // (400), sized for several hundred colleagues behind one corporate NAT. Two
+                // tests here drive that limit to exhaustion, and one of them spends a real
+                // bcrypt verification per attempt -- so running them against the shipped value
+                // would cost four hundred hashes to prove a limiter fires. Pinning it to the
+                // value these tests were written against keeps them exactly as fast and exactly
+                // as meaningful as they were, and leaves the shipped number free to move.
+                //
+                // The shipped value is not left unasserted: RateLimitingTests names it
+                // directly, and drives a default-configured host past the old ceiling.
+                ["RateLimiting:AuthenticationPermitsPerMinute"] =
+                    AuthenticationPermitsPerMinuteForTests.ToString(CultureInfo.InvariantCulture),
 
                 // Scheduling stays OFF in every host this factory builds (#275). The API
                 // co-hosts the six scheduled jobs, and their Enabled switch defaults to true

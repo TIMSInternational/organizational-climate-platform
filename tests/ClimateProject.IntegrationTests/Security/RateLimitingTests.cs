@@ -276,9 +276,14 @@ public class RateLimitingTests : IClassFixture<WebApplicationFactory<Program>>
     [Fact]
     public async Task The_authentication_policy_buckets_by_the_forwarded_caller()
     {
-        var client = ClientOf(HostBehindOneProxy());
+        // A small configured limit, for the reason GlobalPermitsPerMinute is configured small
+        // two tests above: this asserts the PARTITIONING, and spending the shipped four hundred
+        // permits to do it would prove nothing extra. The shipped value has its own two tests
+        // below.
+        const int permits = 3;
+        var client = ClientOf(HostBehindOneProxy(("RateLimiting:AuthenticationPermitsPerMinute", "3")));
 
-        for (var i = 0; i < RateLimitPolicies.AuthenticationPermitsPerWindow; i++)
+        for (var i = 0; i < permits; i++)
         {
             Assert.Equal(
                 HttpStatusCode.BadRequest,
@@ -291,6 +296,66 @@ public class RateLimitingTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Equal(
             HttpStatusCode.BadRequest,
             await SendAsync(client, HttpMethod.Post, "/auth/login", CallerTwo, EmptyCredentials));
+    }
+
+    /// <summary>
+    /// The property the suite never had: several hundred colleagues behind ONE office address
+    /// all still get a sign-in page.
+    ///
+    /// <para>
+    /// This bucket is keyed by address, so a corporate NAT spends one bucket for everybody
+    /// behind it. At the old twenty a minute the twenty-first person to try was refused, and
+    /// <c>LoginRateLimitTests</c> said in a comment that nothing asserted otherwise. ESPH --
+    /// a utility mailing credentials to ~800 staff in one morning -- is exactly that case, and
+    /// the client asked that 300 be verified.
+    /// </para>
+    /// <para>
+    /// Driven on a DEFAULT-configured host, so it reads the shipped number and not a test
+    /// override, and with empty credentials, so each request is refused at model validation
+    /// without a database round trip or a bcrypt verification.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task An_office_behind_one_address_is_not_refused_at_the_old_ceiling()
+    {
+        const int oldCeiling = 20;
+        const int anOfficeWorth = oldCeiling * 5;
+        var client = ClientOf(HostBehindOneProxy());
+
+        for (var person = 0; person < anOfficeWorth; person++)
+        {
+            var status = await SendAsync(client, HttpMethod.Post, "/auth/login", CallerOne, EmptyCredentials);
+
+            Assert.Equal(HttpStatusCode.BadRequest, status);
+        }
+    }
+
+    /// <summary>
+    /// The shipped limit, named rather than assumed -- the device this file already uses for
+    /// <c>TrustedProxyHopCount</c>, whose default it asserts IS 0.
+    ///
+    /// <para>
+    /// A boundary test cannot see this: every loop above derives its count from whatever the
+    /// limit happens to be, so setting the default back to twenty would leave them all green
+    /// and put ESPH back where it started. This asserts the VALUE, and the relationship that
+    /// makes it meaningful -- above the 300 the client asked for, and below the coarse ceiling
+    /// every one of these requests also passes, since a sign-in limit above
+    /// <see cref="RateLimitPolicies.DefaultGlobalPermitsPerMinute"/> would only move the
+    /// refusal to the other limiter.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void The_shipped_sign_in_limit_carries_an_office_and_stays_under_the_global_ceiling()
+    {
+        Assert.True(
+            RateLimitPolicies.DefaultAuthenticationPermitsPerMinute >= 300,
+            $"ESPH asked for 300 concurrent sign-ins; the shipped limit is "
+            + $"{RateLimitPolicies.DefaultAuthenticationPermitsPerMinute} a minute per address.");
+
+        Assert.True(
+            RateLimitPolicies.DefaultAuthenticationPermitsPerMinute
+                <= RateLimitPolicies.DefaultGlobalPermitsPerMinute,
+            "A sign-in limit above the global ceiling cannot bind; the global limiter would refuse first.");
     }
 
     [Fact]
