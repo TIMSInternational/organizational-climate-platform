@@ -200,7 +200,13 @@ public sealed class SurveyResultsFilter
     public bool MayDisclose(IReadOnlyList<AggregationResponse> completed, int floor)
     {
         ArgumentNullException.ThrowIfNull(completed);
-        if (IsEmpty)
+
+        // A query naming ONE dimension is not a cross, and since 2026-10-15 it is disclosed at
+        // any size: "esa condicionante de 3 es para los cruces de variables de demográficos, no
+        // para los resultados individuales". It reads the same cohort the breakdown beside it
+        // already publishes in full, so refusing it here would refuse what the screen already
+        // shows. Two or more selectors keep the whole test below, unchanged.
+        if (Selectors.Count < 2)
         {
             return true;
         }

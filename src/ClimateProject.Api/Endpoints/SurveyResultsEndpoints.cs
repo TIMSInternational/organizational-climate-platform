@@ -332,7 +332,7 @@ public static class SurveyResultsEndpoints
             // The same segment floor the full aggregation applies. A live dashboard is a
             // wider audience than a report, not a narrower one -- suppressing on
             // /statistics and not here would defeat both.
-            if (!SurveyResultsPrivacy.MeetsSegmentFloor(row.Count))
+            if (!SurveyResultsPrivacy.MeetsSingleSegmentFloor(row.Count))
             {
                 suppressedDepartments++;
                 suppressedRespondents += row.Count;

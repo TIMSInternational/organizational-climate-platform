@@ -152,7 +152,15 @@ public static class SurveyAggregation
             DepartmentBreakdown(questions, completed, counted, departments),
         };
         breakdowns.AddRange(DemographicBreakdowns(questions, completed, counted));
-        breakdowns = [.. breakdowns.Select(breakdown => WithholdComplement(breakdown, completed.Count))];
+
+        // `WithholdComplement` is NOT applied, and its absence is the ruling rather than an
+        // oversight. It existed to stop a withheld segment being recovered by subtracting the
+        // disclosed ones from the whole; with every single dimension disclosed there is no
+        // withheld segment left to recover, so the pass had become a no-op that only LOOKED
+        // like a control. Deleting the call says so, where leaving it would have let the next
+        // reader believe the differencing defence was still standing. The method itself stays:
+        // the cross path (`SurveyResultsFilter.MayDisclose`) still runs the same rule, byte for
+        // byte, and a ruling that moves the floor back would want this one line, not a rewrite.
 
         return new SurveyAggregate(
             summary,
@@ -161,7 +169,10 @@ public static class SurveyAggregation
             breakdowns,
             IsSuppressed: false,
             SuppressionReason: null,
-            SurveyResultsPrivacy.MinimumSegmentRespondents);
+            // The floor these breakdowns were actually held to. They are single dimensions, so
+            // it is the single-dimension floor; a client reading this number to decide what to
+            // hatch must be told the rule that ran, not the one that governs crosses.
+            SurveyResultsPrivacy.MinimumSingleSegmentRespondents);
     }
 
     /// <summary>
@@ -659,7 +670,7 @@ public static class SurveyAggregation
             byId.TryGetValue(group.Key, out var department);
             var name = department?.Name;
 
-            if (!SurveyResultsPrivacy.MeetsSegmentFloor(members.Count))
+            if (!SurveyResultsPrivacy.MeetsSingleSegmentFloor(members.Count))
             {
                 suppressedSegments++;
                 suppressedRespondents += members.Count;
@@ -732,7 +743,7 @@ public static class SurveyAggregation
             foreach (var group in grouped)
             {
                 var members = group.ToList();
-                if (!SurveyResultsPrivacy.MeetsSegmentFloor(members.Count))
+                if (!SurveyResultsPrivacy.MeetsSingleSegmentFloor(members.Count))
                 {
                     suppressedSegments++;
                     suppressedRespondents += members.Count;

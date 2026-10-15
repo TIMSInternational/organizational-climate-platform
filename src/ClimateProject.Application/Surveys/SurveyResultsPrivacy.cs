@@ -97,6 +97,42 @@ public static class SurveyResultsPrivacy
 
     public static bool MeetsSegmentFloor(int respondentCount) => respondentCount >= MinimumSegmentRespondents;
 
+    /// <summary>
+    /// Complete responses a SINGLE dimension needs before it is reported: one department, or
+    /// one value of one demographic field. <b>One</b> -- which is to say, it is reported
+    /// whenever anybody answered at all.
+    ///
+    /// <para>
+    /// Ruled 2026-10-15 by the client, in these words: *"siempre deberían enseñar los
+    /// resultados de los climas de los departamentos, aunque sea una persona… El demográfico
+    /// en general le tiene que entregar un resultado, así sea una persona… Esa condicionante
+    /// de 3 es para los cruces de variables de demográficos, no para los resultados
+    /// individuales de los demográficos. No debería bloquearse nunca."*
+    /// </para>
+    /// <para>
+    /// <b>The floor did not go away; it moved to where he put it.</b> A CROSS of two or more
+    /// demographic fields is still held to <see cref="MinimumSegmentRespondents"/> -- see
+    /// <see cref="SurveyResultsFilter.MayDisclose"/>, which now answers a single-selector query
+    /// unconditionally and keeps the whole test for two or more. The whole-survey minimum
+    /// (<see cref="MinimumRespondents"/>) is untouched, so a survey with two answers still
+    /// reports nothing at all.
+    /// </para>
+    /// <para>
+    /// <b>What this costs, stated rather than discovered.</b> A department where one person of
+    /// twenty answered now prints that person's own answers as the department's climate. It is
+    /// not re-identifiable from the results alone -- the reader cannot tell WHICH of the twenty
+    /// answered -- but the launch-day roster names who finished, and the two screens together
+    /// do identify them. That is the client's decision, taken on 2026-10-15 with the
+    /// consequence in front of him, and it is why the copy a respondent reads before answering
+    /// had to change with it rather than after.
+    /// </para>
+    /// </summary>
+    public const int MinimumSingleSegmentRespondents = 1;
+
+    /// <summary>Whether a single department or demographic value has anybody in it to report.</summary>
+    public static bool MeetsSingleSegmentFloor(int respondentCount)
+        => respondentCount >= MinimumSingleSegmentRespondents;
+
     public static bool MeetsWordFloor(int respondentCount) => respondentCount >= MinimumWordRespondents;
 
     /// <summary>
