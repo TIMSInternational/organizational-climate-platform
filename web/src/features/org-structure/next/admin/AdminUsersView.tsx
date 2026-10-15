@@ -633,6 +633,26 @@ function Roster({
                             {!user.isActive && <CanvasChip tone="neutral" label={t('users.next.roster.deactivated')} />}
                           </span>
                           <span className="truncate font-mono text-2xs text-fg-tertiary">{user.email}</span>
+                          {/* The generated sign-in name, under the email, for the launch-day phone call: on
+                              a mass invite the person on the line knows their email and not the `usuario`
+                              the platform chose for them, and the password is unrecoverable by design -- so
+                              the username is the only half of their credentials anyone can read back to
+                              them. The API has always sent it (`UserEndpoints.cs:96`); no screen read it.
+
+                              A line in this cell and not a column: this roster's widths are pinned to the
+                              board, and a fifth column would move the labels the artboard fixes at x=1034
+                              and x=1166.
+
+                              A truthy check, not `!== null`: a payload that omits the field altogether
+                              gives `undefined`, which is not null, and the label would print with nothing
+                              after it. Null or absent, the row is unchanged -- which is every account
+                              whose holder chose their own password. */}
+                          {user.username ? (
+                            <span className="truncate text-2xs text-fg-tertiary">
+                              {t('users.next.roster.username')}{' '}
+                              <span className="font-mono text-fg-secondary">{user.username}</span>
+                            </span>
+                          ) : null}
                         </div>
                       </div>
                     </td>

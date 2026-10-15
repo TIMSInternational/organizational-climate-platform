@@ -385,6 +385,20 @@ function PersonRow({
           <div className="flex min-w-0 flex-col">
             <span className="truncate font-semibold text-fg-primary">{user.name}</span>
             <span className="truncate font-mono text-2xs text-fg-tertiary">{user.email}</span>
+            {/* The same line as the company administrator's roster, for the same reason: on a
+                mass invite the person phoning in knows their email and not the `usuario` the
+                platform chose for them, and the password is unrecoverable by design. A super
+                administrator reading a tenant's roster is answering the same question, so the
+                two views must not disagree -- one carrying it and the other not is the shape
+                three defects here have taken.
+
+                Truthy, not `!== null`, for the reason spelled out in `AdminUsersView`. */}
+            {user.username ? (
+              <span className="truncate text-2xs text-fg-tertiary">
+                {t('superadmin.next.users.username')}{' '}
+                <span className="font-mono text-fg-secondary">{user.username}</span>
+              </span>
+            ) : null}
           </div>
         </div>
       </td>
