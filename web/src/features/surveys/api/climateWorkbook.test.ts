@@ -6,6 +6,7 @@ import { listDepartments } from '../../org-structure/api/departments'
 import { submitIntakeRows } from '../../org-structure/api/intake'
 import { listUsers } from '../../org-structure/api/users'
 import { createSurvey } from './surveyCreate'
+import { updateSurveyStatus } from './surveys'
 import { createSurveyInvitations } from './surveyDistribution'
 import { authFetch } from '../../../api/authFetch'
 vi.mock('../../org-structure/api/companies',()=>({createCompany:vi.fn()}))
@@ -39,8 +40,19 @@ describe('complete climate workbook',()=>{
     expect(calls).toHaveLength(16);expect(calls.every(c=>c[2].length===100&&c[5]===true)).toBe(true)
     expect(calls.slice(0,8).every(c=>c[3]===true)).toBe(true);expect(calls.slice(8).every(c=>c[3]===false)).toBe(true)
     expect(createSurveyInvitations).toHaveBeenCalledTimes(8)
+    expect(vi.mocked(updateSurveyStatus).mock.invocationCallOrder[0]).toBeGreaterThan(vi.mocked(submitIntakeRows).mock.invocationCallOrder.at(-1)!)
+    expect(vi.mocked(createSurveyInvitations).mock.invocationCallOrder[0]).toBeGreaterThan(vi.mocked(updateSurveyStatus).mock.invocationCallOrder[0])
     expect(vi.mocked(createSurveyInvitations).mock.calls.flatMap(c=>'userIds' in c[2] ? c[2].userIds : [])).toEqual(Array.from({length:800},(_,i)=>`id${i}`))
     expect(createCompany).not.toHaveBeenCalled();expect(updateCompanySettings).toHaveBeenCalledTimes(1)
+  })
+  it('creates the workbook company and uses its returned id for all subsequent calls',async()=>{
+    const p=plan(1);p.companyId=null
+    vi.mocked(createCompany).mockResolvedValue({id:'new-company'} as Awaited<ReturnType<typeof createCompany>>)
+    const result=await applyClimateWorkbook('',p,vi.fn())
+    expect(result.companyId).toBe('new-company')
+    expect(createCompany).toHaveBeenCalledWith('',p.content.company)
+    expect(vi.mocked(submitIntakeRows).mock.calls.every(c=>c[1]==='new-company')).toBe(true)
+    expect(vi.mocked(createSurvey).mock.calls[0][1].companyId).toBe('new-company')
   })
   it('reuses existing accounts and survey without issuing credentials or resetting password or role',async()=>{
     const p=plan(1);p.surveyId='existing';p.surveyStatus='active';p.existingPeople=[{id:'id0',email:p.content.people[0].email,role:'leader'}]

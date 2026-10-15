@@ -5,6 +5,7 @@ import { createMemoryRouter, RouterProvider } from 'react-router'
 import { TranslationProvider } from '../../i18n'
 import { LOCALE_STORAGE_KEY } from '../../i18n/locale'
 import ClimateWorkbookPage from './ClimateWorkbookPage'
+import { COMPANY_CONTEXT_STORAGE_KEY } from '../../company-context'
 import { applyClimateWorkbook, previewClimateWorkbook, type ClimateWorkbookPreview } from './api/climateWorkbook'
 vi.mock('../../auth/viewerCapabilities',()=>({useViewerCapabilities:()=>({canAuthorSurveys:false}),readViewerClaims:()=>({role:'super_admin'})}))
 vi.mock('./api/climateWorkbook',()=>({applyClimateWorkbook:vi.fn(),previewClimateWorkbook:vi.fn(),downloadClimateWorkbook:vi.fn()}))
@@ -20,7 +21,11 @@ describe('complete Excel review',()=>{
    const apply=screen.getByRole('button',{name:'Crear clima y enviar accesos'});expect((apply as HTMLButtonElement).disabled).toBe(true)
    await user.click(screen.getByRole('checkbox'));await user.click(apply)
    await screen.findByRole('heading',{name:'Importación completada'});expect(previewClimateWorkbook).toHaveBeenCalledTimes(2);expect(applyClimateWorkbook).toHaveBeenCalledOnce()
-   expect(screen.getByRole('link',{name:/Abrir distribución/}).getAttribute('href')).toBe('/surveys/survey/distribution')
+   const link=screen.getByRole('link',{name:/Abrir distribución/})
+   expect(link.getAttribute('href')).toBe('/surveys/survey/distribution')
+   link.addEventListener('click',event=>event.preventDefault())
+   await user.click(link)
+   expect(localStorage.getItem(COMPANY_CONTEXT_STORAGE_KEY)).toBe('company')
  })
  it('blocks approval when validation finds an error',async()=>{
    vi.mocked(previewClimateWorkbook).mockResolvedValue({...plan,errors:['Correo duplicado en fila 106']});renderPage();await review()

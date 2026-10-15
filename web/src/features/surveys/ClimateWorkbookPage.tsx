@@ -5,6 +5,7 @@ import { Alert, AlertDescription, Button, Input, Table } from '../../components/
 import { readViewerClaims, useViewerCapabilities } from '../../auth/viewerCapabilities'
 import { useTranslation } from '../../i18n'
 import { roleLabelKey } from '../org-structure/labels'
+import { writeSelectedCompanyId } from '../../company-context'
 import { applyClimateWorkbook, downloadClimateWorkbook, previewClimateWorkbook, type ClimateWorkbookPreview, type WorkbookProgress, type WorkbookResult } from './api/climateWorkbook'
 
 const baseUrl = import.meta.env.VITE_API_BASE_URL
@@ -96,7 +97,7 @@ export default function ClimateWorkbookPage() {
       <p>{t('climateWorkbook.result', { total: result.total, created: result.created, reused: result.reused })}</p>
       <p>{t('climateWorkbook.delivery')}</p>
       {result.credentialsNotSent.length > 0 && <Alert variant="destructive"><AlertDescription>{t('climateWorkbook.emailFailures')}<ul>{result.credentialsNotSent.map(email => <li key={email}>{email}</li>)}</ul></AlertDescription></Alert>}
-      <Button asChild><Link to={`/surveys/${result.surveyId}/distribution`}>{t('climateWorkbook.openDistribution')}</Link></Button>
+      <Button asChild><Link reloadDocument to={`/surveys/${result.surveyId}/distribution`} onClick={() => { if (readViewerClaims().role === 'super_admin') writeSelectedCompanyId(result.companyId) }}>{t('climateWorkbook.openDistribution')}</Link></Button>
     </section>}
   </div>
 }

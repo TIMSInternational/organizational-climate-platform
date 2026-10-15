@@ -76,7 +76,6 @@ export async function applyClimateWorkbook(baseUrl: string, plan: ClimateWorkboo
       invitationCustomSubject: content.invitationSubject, invitationCustomMessage: content.invitationMessage },
   })).id
   await updateSurveyDistribution(baseUrl, surveyId, { accessType: 'tokenized', accessRules: { requireLogin: true, allowAnonymous: false, singleResponse: true } })
-  if (!plan.surveyStatus || plan.surveyStatus === 'draft') await updateSurveyStatus(baseUrl, surveyId, Date.parse(content.startDate) > Date.now() ? 'scheduled' : 'active')
   const existing = new Map(plan.existingPeople.map(p => [key(p.email), p]))
   const newRows = content.people.filter(p => !existing.has(key(p.email)))
   const credentialsNotSent: string[] = []
@@ -110,6 +109,9 @@ export async function applyClimateWorkbook(baseUrl: string, plan: ClimateWorkboo
   const ids = new Map(users.map(u => [key(u.email), u.id]))
   const targetIds = content.people.map(p => ids.get(key(p.email)))
   if (targetIds.some(id => !id)) throw new Error('climateWorkbook.incompleteParticipants')
+  // Keep a new survey in draft while account credentials are being sent. Otherwise
+  // early recipients can finish before the invitation roster has been created.
+  if (!plan.surveyStatus || plan.surveyStatus === 'draft') await updateSurveyStatus(baseUrl, surveyId, Date.parse(content.startDate) > Date.now() ? 'scheduled' : 'active')
   let invited = 0
   for (const batch of chunks(targetIds as string[], 100)) {
     progress({ stage: 'invitations', done: invited, total: targetIds.length })
