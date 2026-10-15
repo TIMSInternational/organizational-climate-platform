@@ -389,6 +389,122 @@ public class MassInviteTests(PostgresContainerFixture postgres, CapturingCredent
         }
     }
 
+    /// <summary>
+    /// The client's bitácora, on an ANONYMOUS survey, end to end: *"quiénes fueron invitados y
+    /// todavía no han ingresado. Quiénes lo han comenzado pero no lo han terminado."*
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Both halves run through the real endpoints on purpose. The respond flow writes the
+    /// derived session id and the roster recomputes it, and the only thing that makes those two
+    /// agree is that they share <c>SurveyResumeSession</c>. A test that seeded a hand-computed
+    /// id would pass against two implementations that had drifted apart, which is the failure
+    /// worth catching: a respondent whose answers cannot be found again.
+    /// </para>
+    /// <para>
+    /// The guarantee is asserted alongside the states, not instead of them: every answer on the
+    /// survey still carries a NULL <c>user_id</c> while the roster names who is halfway.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task An_anonymous_roster_tells_never_opened_from_started_and_stopped()
+    {
+        var admin = await AdminClientAsync(_companyId);
+
+        var startedEmail = $"empezo-{Guid.NewGuid():N}@example.com";
+        var absentEmail = $"nunca-{Guid.NewGuid():N}@example.com";
+        var import = await ImportAsync(admin, preview: false,
+            new BulkImportRowInput(2, "Empezo Sin Terminar", startedEmail, "Colaborador", null),
+            new BulkImportRowInput(3, "Nunca Ingreso", absentEmail, "Colaborador", null));
+        Assert.Equal(HttpStatusCode.OK, import.StatusCode);
+        var sent = Assert.Single(_factory.Sent, s => s.ToEmail == startedEmail);
+
+        var survey = await SurveyTestHarness.CreateSurveyAsync(admin, new CreateSurveyRequest(
+            Title: LocalizedInput.FromBare("Clima ESPH"),
+            CompanyId: _companyId,
+            Type: "periodic",
+            StartDate: DateTimeOffset.UtcNow.AddDays(-1),
+            EndDate: DateTimeOffset.UtcNow.AddDays(14),
+            Questions:
+            [
+                new CreateSurveyQuestionInput(
+                    LocalizedInput.FromBare("¿Cómo va?"),
+                    QuestionTypes.MultipleChoice,
+                    Options:
+                    [
+                        new CreateSurveyQuestionOptionInput("bien", LocalizedInput.FromBare("Bien")),
+                        new CreateSurveyQuestionOptionInput("mal", LocalizedInput.FromBare("Mal")),
+                    ],
+                    Order: 0),
+            ],
+            Settings: new SurveySettingsInput(
+                Anonymous: true, AllowPartialResponses: true, SelfDeclaredDemographics: true)));
+        (await SurveyTestHarness.SetStatusAsync(admin, survey.Id, SurveyStatuses.Active))
+            .EnsureSuccessStatusCode();
+
+        // Before anybody opens it, nobody has started -- and that is now a statement the survey
+        // can make, where it used to have to say only "has not finished".
+        var before = (await admin.GetFromJsonAsync<SurveyParticipationView>(
+            $"/surveys/{survey.Id}/participation"))!;
+        Assert.True(before.TracksIndividuals);
+        Assert.False(before.TracksCompletionOnly);
+        Assert.All(before.Roster, row =>
+            Assert.Equal(SurveyParticipantStatuses.NotStarted, row.Status));
+
+        // One of them signs in with the emailed credentials and stops halfway.
+        var person = _factory.CreateClient();
+        var login = await person.PostAsJsonAsync("/auth/login", new LoginRequest(sent.Username, sent.Password));
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        person.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer", (await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token);
+
+        var browserSessionId = Guid.NewGuid().ToString("N");
+        var view = (await person.GetFromJsonAsync<SurveyRespondView>(
+            $"/surveys/{survey.Id}/respond?sessionId={browserSessionId}"))!;
+        var partial = await person.PostAsJsonAsync(
+            $"/surveys/{survey.Id}/responses",
+            new SubmitSurveyResponseRequest(
+                Answers: [new SurveyAnswerInput(view.Questions.Single().Id, "bien")],
+                SessionId: browserSessionId,
+                IsComplete: false));
+        Assert.Equal(HttpStatusCode.Created, partial.StatusCode);
+
+        var midway = (await admin.GetFromJsonAsync<SurveyParticipationView>(
+            $"/surveys/{survey.Id}/participation"))!;
+
+        // The distinction the client asked for, and the one an administrator acts on: the first
+        // person needs a nudge, the second needs their sign-in details again.
+        var started = Assert.Single(midway.Roster, row => row.Email == startedEmail);
+        var absent = Assert.Single(midway.Roster, row => row.Email == absentEmail);
+        Assert.Equal(SurveyParticipantStatuses.Started, started.Status);
+        Assert.Equal(SurveyParticipantStatuses.NotStarted, absent.Status);
+        Assert.Equal(1, midway.StartedCount);
+        Assert.Equal(0, midway.AnsweredCount);
+
+        // Finishing moves that same person to completed without opening a second row.
+        var finish = await person.PostAsJsonAsync(
+            $"/surveys/{survey.Id}/responses",
+            new SubmitSurveyResponseRequest(
+                Answers: [new SurveyAnswerInput(view.Questions.Single().Id, "bien")],
+                SessionId: browserSessionId,
+                IsComplete: true));
+        Assert.Equal(HttpStatusCode.OK, finish.StatusCode);
+
+        var after = (await admin.GetFromJsonAsync<SurveyParticipationView>(
+            $"/surveys/{survey.Id}/participation"))!;
+        Assert.Equal(
+            SurveyParticipantStatuses.Completed,
+            Assert.Single(after.Roster, row => row.Email == startedEmail).Status);
+        Assert.Equal(0, after.StartedCount);
+        Assert.Equal(1, after.AnsweredCount);
+
+        // And the promise, unchanged by any of the above: not one answer carries a user id.
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        Assert.Equal(0, await db.Responses.CountAsync(r => r.SurveyId == survey.Id && r.UserId != null));
+        Assert.Equal(1, await db.Responses.CountAsync(r => r.SurveyId == survey.Id));
+    }
+
     [Fact]
     public async Task A_preview_creates_no_account_and_sends_nothing()
     {

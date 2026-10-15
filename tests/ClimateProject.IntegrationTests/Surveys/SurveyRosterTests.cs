@@ -160,11 +160,17 @@ public class SurveyRosterTests : IAsyncLifetime
 
         Assert.Equal(0, view.AnsweredCount);
         Assert.Equal(0, view.StartedCount);
+
+        // A RANDOM session id -- what a public link writes, and what every anonymous partial
+        // carried before the derived id existed. It matches no account's derived id, so this
+        // survey is demonstrably answerable WITHOUT signing in, and the roster must not claim
+        // anybody never opened it: `not_completed`, not `not_started`. An earlier draft of this
+        // change had it the other way and this test is what caught it.
         Assert.All(view.Roster, row => Assert.Equal(SurveyParticipantStatuses.NotCompleted, row.Status));
 
         // The roster still lists her -- who was invited, her username and her demographics are
         // the administrator's to see, and a resend still works. What the screen must not do is
-        // call that `not_started` a fact about whether she answered.
+        // call that a fact about whether she answered.
         Assert.False(view.TracksIndividuals);
         Assert.Contains(view.Roster, row => row.Name == "Ana Lucía Mora");
     }
@@ -270,21 +276,30 @@ public class SurveyRosterTests : IAsyncLifetime
         // Written the way the respond flow writes it: from the account, with no answer in it.
         await SeedParticipationAsync(surveyId, finisher);
 
+        // And one who is halfway, found by the id the respond flow derives for her rather than
+        // by a user id her answers do not carry.
+        var halfway = await SeedPersonAsync("Berta Halfway", Roles.Employee, "esph-dddd4444");
+        await SeedDerivedPartialAsync(surveyId, halfway);
+
         var view = await ParticipationAsync(surveyId);
 
-        // Three states are genuinely unknowable here; completion is not.
-        Assert.False(view.TracksIndividuals);
-        Assert.True(view.TracksCompletionOnly);
+        // All three states, on an anonymous survey. This test used to assert the opposite, on
+        // the grounds that a half-finished anonymous response belongs to nobody; the derived
+        // session id is why that was wrong. `SurveyResumeSession` carries the reasoning,
+        // including why reading it costs nothing that resume had not already spent.
+        Assert.True(view.TracksIndividuals);
+        Assert.False(view.TracksCompletionOnly);
 
         var ana = Assert.Single(view.Roster, row => row.UserId == finisher);
         var hugo = Assert.Single(view.Roster, row => row.UserId == other);
+        var berta = Assert.Single(view.Roster, row => row.UserId == halfway);
         Assert.Equal(SurveyParticipantStatuses.Completed, ana.Status);
-        Assert.Equal(SurveyParticipantStatuses.NotCompleted, hugo.Status);
+        Assert.Equal(SurveyParticipantStatuses.Started, berta.Status);
 
-        // The claim the old screen made about all 800 of them.
-        Assert.DoesNotContain(view.Roster, row => row.Status == SurveyParticipantStatuses.NotStarted);
+        // The one the client names last and acts on first: invited, never ingresó.
+        Assert.Equal(SurveyParticipantStatuses.NotStarted, hugo.Status);
 
-        // And the guarantee the whole design rests on: the answers still carry no user id.
+        // And the guarantee the whole design rests on, unchanged: the answers carry no user id.
         Assert.Equal(
             0,
             await _harness.WithDbAsync(db => db.Responses.CountAsync(r => r.SurveyId == surveyId && r.UserId != null)));
@@ -357,6 +372,44 @@ public class SurveyRosterTests : IAsyncLifetime
             db.Surveys.Add(survey);
             await db.SaveChangesAsync();
             return survey.Id;
+        });
+
+    /// <summary>
+    /// A half-finished ANONYMOUS response carrying the id the respond flow would derive for
+    /// this person -- computed with <see cref="SurveyResumeSession.IdFor"/> itself, never a
+    /// copy of the HMAC input, so a fixture cannot certify a derivation the application does
+    /// not use. The end-to-end proof that the two halves agree is
+    /// <c>MassInviteTests.An_anonymous_roster_tells_never_opened_from_started_and_stopped</c>,
+    /// which goes through the real endpoints; this is the cheap version for the state table.
+    /// </summary>
+    private Task SeedDerivedPartialAsync(Guid surveyId, Guid userId)
+        => _harness.WithDbAsync(async db =>
+        {
+            var now = DateTimeOffset.UtcNow;
+
+            // Asserted rather than null-forgiven: the suite's key is a non-empty constant, so a
+            // null here would mean the derivation itself had stopped working, and writing a
+            // null session id would turn that into a confusing status rather than a failure.
+            var derivedId = SurveyResumeSession.IdFor(surveyId, userId, AuthWebApplicationFactory.TestJwtSecret);
+            Assert.NotNull(derivedId);
+
+            db.Responses.Add(new Response
+            {
+                Id = Guid.NewGuid(),
+                SurveyId = surveyId,
+                CompanyId = _companyId,
+                UserId = null,
+                DepartmentId = null,
+                SessionId = derivedId,
+                Language = "es",
+                IsComplete = false,
+                IsAnonymous = true,
+                StartTime = now.AddMinutes(-5),
+                CreatedAt = now,
+                UpdatedAt = now,
+            });
+            await db.SaveChangesAsync();
+            return 0;
         });
 
     private Task SeedResponseAsync(Guid surveyId, Guid userId, bool complete, bool withUserId = true)
