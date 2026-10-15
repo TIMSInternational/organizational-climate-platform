@@ -382,12 +382,12 @@ function RosterRows({
         <TableCell className="px-3 py-2">
           <span className="flex min-w-0 flex-col">
             <span className="truncate font-medium">{row.name}</span>
-            <span className="truncate font-mono text-xs text-fg-tertiary">{row.email}</span>
+            <span className="truncate font-mono text-xs text-fg-secondary">{row.email}</span>
           </span>
         </TableCell>
         <TableCell className="px-3 py-2">
           {row.username === null ? (
-            <span className="text-xs text-fg-tertiary">{copy('noUsuario')}</span>
+            <span className="text-xs text-fg-secondary">{copy('noUsuario')}</span>
           ) : (
             <span className="font-mono text-xs text-fg-secondary">{row.username}</span>
           )}
@@ -399,7 +399,7 @@ function RosterRows({
             </TableCell>
             <TableCell className="whitespace-nowrap px-3 py-2 text-fg-secondary">
               {row.lastActivityOn === null ? (
-                <span className="text-fg-tertiary">{copy('noActivity')}</span>
+                <span className="text-fg-secondary">{copy('noActivity')}</span>
               ) : (
                 formatParticipationDay(row.lastActivityOn, locale)
               )}
@@ -427,7 +427,7 @@ function RosterRows({
               <dl className="m-0 grid gap-x-6 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
                 {row.demographics.map((demographic) => (
                   <div key={demographic.field} className="flex min-w-0 items-baseline gap-2">
-                    <dt className="text-xs text-fg-tertiary">{label(demographic)}</dt>
+                    <dt className="text-xs text-fg-secondary">{label(demographic)}</dt>
                     <dd className="m-0 truncate text-sm">{demographic.value}</dd>
                   </div>
                 ))}
