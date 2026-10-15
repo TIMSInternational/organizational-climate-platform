@@ -48,11 +48,19 @@ public class EmployeeLastOutcomeEndpointTests : IAsyncLifetime
     private readonly string _companyBDomain = $"lob-{Guid.NewGuid():N}.test";
     private readonly string _companyCDomain = $"loc-{Guid.NewGuid():N}.test";
 
-    /// <summary>Completed responses from the department that stays below the floor.</summary>
-    private const int ProtectedDepartmentRespondents = 4;
+    /// <summary>
+    /// Completed responses from the department that stays below the floor.
+    ///
+    /// <para>Four until 2026-10-15, when it stopped being under any floor: four was over the
+    /// segment floor of 3 all along, and what withheld it was the complement pass that the
+    /// ruling deleted. Two is under the floor this endpoint applies on its own account, so the
+    /// department is protected for its own size -- which is what this fixture was always
+    /// meant to be about.</para>
+    /// </summary>
+    private const int ProtectedDepartmentRespondents = 2;
 
-    /// <summary>Completed responses to the latest closed survey: 5 + 5 + 4 across three departments, and 1 with none.</summary>
-    private const int LatestClosedResponseCount = 15;
+    /// <summary>Completed responses to the latest closed survey: 5 + 5 + 2 across three departments, and 1 with none.</summary>
+    private const int LatestClosedResponseCount = 13;
 
     private string EngineeringName => $"Engineering-{_token}";
     private string OperationsName => $"Operations-{_token}";
@@ -134,18 +142,18 @@ public class EmployeeLastOutcomeEndpointTests : IAsyncLifetime
         // Company C has never closed anything.
         await SeedSurveyAsync(db, companyC.Id, authorC, $"C is still open-{_token}", SurveyStatuses.Active, now.AddDays(20));
 
-        // The latest closed survey: five from Engineering, five from Operations, four from
-        // Finance — one short of the floor, which is what makes it protected. Plus one
-        // INCOMPLETE Engineering response, which is not participation and must not count.
+        // The latest closed survey: five from Engineering, five from Operations, two from
+        // Finance — under the floor, which is what makes it protected. Plus one INCOMPLETE
+        // Engineering response, which is not participation and must not count.
         await SeedResponsesAsync(db, _latestClosedSurveyId, companyA.Id, engineering.Id, 5, isComplete: true);
         await SeedResponsesAsync(db, _latestClosedSurveyId, companyA.Id, operations.Id, 5, isComplete: true);
         await SeedResponsesAsync(
             db, _latestClosedSurveyId, companyA.Id, finance.Id, ProtectedDepartmentRespondents, isComplete: true);
         await SeedResponsesAsync(db, _latestClosedSurveyId, companyA.Id, engineering.Id, 1, isComplete: false);
         // And one complete response with no department (an anonymous one whose department was
-        // stripped at write time): with Finance's four it makes the people outside the two
-        // disclosed departments five, so neither is withheld for what a subtraction from the
-        // company's total would reveal (SurveyAggregation.WithholdComplement).
+        // stripped at write time). It was here to keep the people outside the two disclosed
+        // departments at or over the floor, for a complement pass that no longer runs; it
+        // stays because the unsegmented count is a figure this endpoint reports.
         await SeedResponsesAsync(db, _latestClosedSurveyId, companyA.Id, null, 1, isComplete: true);
 
         // Deliberately different profiles, so a wrong survey yields a wrong number.
@@ -342,8 +350,9 @@ public class EmployeeLastOutcomeEndpointTests : IAsyncLifetime
         Assert.Equal($"Q3 Climate-{_token}", body.SurveyTitle);
         Assert.Equal(_latestClosedOn, body.ClosedOn);
 
-        // 5 + 5 + 4 completed. The sixth Engineering response is incomplete and is not
-        // participation, so 15 here would mean partial responses are being counted.
+        // 5 + 5 + 2 completed, plus the one with no department. The sixth Engineering response
+        // is incomplete and is not participation, so 14 here would mean partial responses are
+        // being counted.
         Assert.Equal(LatestClosedResponseCount, body.ResponseCount);
 
         // Three departments answered, one of them below the floor.
@@ -437,8 +446,8 @@ public class EmployeeLastOutcomeEndpointTests : IAsyncLifetime
         Assert.DoesNotContain(ProtectedName, raw, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(_protectedDepartmentId.ToString(), raw, StringComparison.OrdinalIgnoreCase);
 
-        // Not its size either. 4 is the number that would single it out; the body's real
-        // figures are 15 / 3 / 1 / 5 / 3.
+        // Not its size either. 2 is the number that would single it out; the body's real
+        // figures are 13 / 3 / 1 / 3 / 3, so a 2 anywhere in the document came from Finance.
         var document = JsonDocument.Parse(raw);
         Assert.DoesNotContain(ProtectedDepartmentRespondents, Numbers(document.RootElement));
 

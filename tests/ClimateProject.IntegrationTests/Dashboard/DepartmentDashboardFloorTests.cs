@@ -182,25 +182,37 @@ public class DepartmentDashboardFloorTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Engineering at the floor, everyone else below it: the company's reading and the team's,
-    /// with both counts, give the rest's reading by subtraction. This surface used to keep the
-    /// team's reading and withhold only the organisation side, but an administrator reads the
-    /// company's means on the results page, so the team's reading beside them still yielded
-    /// the three. Ruled 2026-10-02 after the TIMS dry run: one rule everywhere -- a segment
-    /// whose complement is between 1 person and the floor is withheld on every surface
-    /// (<c>SurveyAggregation.WithholdComplement</c>), the leader's team included.
+    /// <b>The 2026-10-02 ruling, superseded on 2026-10-15, with the cost kept in writing.</b>
+    ///
+    /// <para>
+    /// Engineering at five, everyone else at two: the company's reading and the team's, with
+    /// both counts, give the rest's reading by subtraction. After the TIMS dry run that was
+    /// ruled a leak and the whole team reading was withheld -- one rule everywhere, the
+    /// leader's team included.
+    /// </para>
+    /// <para>
+    /// The 2026-10-15 ruling reports every department at any size, so the two-person
+    /// department whose reading the subtraction yields is published on the results page
+    /// outright. Defending it here would withhold a leader's own team to protect a number
+    /// printed on the screen next door, so the team reading and the organisation side are both
+    /// disclosed. This test now asserts that, and it is the test that fails first if the floor
+    /// is ever restored.
+    /// </para>
     /// </summary>
     [Fact]
-    public async Task A_team_is_withheld_whole_when_the_rest_of_the_company_is_under_the_floor()
+    public async Task A_team_reading_and_its_organisation_side_survive_a_small_remainder()
     {
         await SeedScoredSurveyAsync("Q3", SurveyStatuses.Closed, DateTimeOffset.UtcNow.AddDays(-30), engineering: 5, sales: SurveyResultsPrivacy.MinimumRespondents - 1);
 
         var climate = (await ReadAsync(await LeaderAsync())).Climate!;
 
-        Assert.True(climate.IsSuppressed);
-        Assert.Equal(0, climate.RespondentCount);
-        Assert.All(climate.Dimensions, d => Assert.Null(d.AverageScore));
-        Assert.Null(climate.Organization);
+        Assert.False(climate.IsSuppressed);
+        Assert.Equal(5, climate.RespondentCount);
+        Assert.Contains(climate.Dimensions, d => d.AverageScore is not null);
+
+        // The org side too: seven answered the survey, five of them this team.
+        Assert.NotNull(climate.Organization);
+        Assert.Equal(7, climate.Organization!.RespondentCount);
     }
 
     [Fact]
@@ -217,10 +229,22 @@ public class DepartmentDashboardFloorTests : IAsyncLifetime
         Assert.Equal<double?>(4.0, Score(organization.Dimensions, "trust"));
     }
 
+    /// <summary>
+    /// A withheld team reading still carries no organisation side -- the guarantee outlives the
+    /// floor that used to produce it.
+    /// </summary>
+    /// <remarks>
+    /// There were two ways to a withheld reading: the team was too small, or the team did not
+    /// answer. Since 2026-10-15 only the second is left, so the fixture gives Engineering NO
+    /// responses. The handler returns before it computes the organisation side, and that early
+    /// return is what this test pins: told apart, a reader could difference "we did not answer"
+    /// against "we were too few" and learn roughly how few -- which is why the two collapse to
+    /// one withheld answer on purpose, and still do.
+    /// </remarks>
     [Fact]
     public async Task A_withheld_team_reading_carries_no_organisation_side()
     {
-        await SeedScoredSurveyAsync("Q3", SurveyStatuses.Closed, DateTimeOffset.UtcNow.AddDays(-30), engineering: SurveyResultsPrivacy.MinimumRespondents - 1, sales: 6);
+        await SeedScoredSurveyAsync("Q3", SurveyStatuses.Closed, DateTimeOffset.UtcNow.AddDays(-30), engineering: 0, sales: 6);
 
         var climate = (await ReadAsync(await LeaderAsync())).Climate!;
 

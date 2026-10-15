@@ -829,10 +829,22 @@ public static class DashboardEndpoints
 
         // The withheld ids never leave this method. They exist only to decide which names
         // may -- see the plan projection below.
+        //
+        // THE FLOOR HERE IS THIS ENDPOINT'S OWN SINCE 2026-10-15, and it is still
+        // MinimumSegmentRespondents. It used to read `segment.IsSuppressed` and inherit the
+        // results floor; the ruling of 2026-10-15 publishes every department's climate at any
+        // size, which is a decision about what an ADMINISTRATOR of the tenant reads on the
+        // results page. This payload goes to every employee in the company and carries no
+        // score whatever -- the one thing it discloses is a department NAME beside an action
+        // plan, and naming the one-person department whose plan it is, to the whole company,
+        // is exactly the disclosure this set exists to prevent. Inheriting the ruling here
+        // would have done that silently, so the floor is applied here instead and the
+        // endpoint reports the floor it actually applied.
         var protectedDepartmentIds = new HashSet<Guid>();
         foreach (var segment in segments)
         {
-            if (segment.IsSuppressed && Guid.TryParse(segment.Key, out var withheldId))
+            if ((segment.IsSuppressed || !SurveyResultsPrivacy.MeetsSegmentFloor(segment.RespondentCount))
+                && Guid.TryParse(segment.Key, out var withheldId))
             {
                 protectedDepartmentIds.Add(withheldId);
             }
@@ -850,8 +862,8 @@ public static class DashboardEndpoints
             survey.EndDate,
             aggregate.Summary.CompletedCount,
             segments.Count,
-            segments.Count(s => s.IsSuppressed),
-            SurveyResultsPrivacy.MinimumSingleSegmentRespondents,
+            protectedDepartmentIds.Count,
+            SurveyResultsPrivacy.MinimumSegmentRespondents,
             [.. planRows.Select(p => new DashboardPlanOpened(
                 p.DepartmentId is Guid departmentId && !protectedDepartmentIds.Contains(departmentId)
                     ? p.DepartmentName

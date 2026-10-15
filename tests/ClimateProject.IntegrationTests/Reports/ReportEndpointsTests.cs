@@ -291,14 +291,14 @@ public class ReportEndpointsTests : IAsyncLifetime
     /// <c>/surveys/{id}/results</c> in the same test and requiring the two to agree, so
     /// this test fails if the report ever grows its own arithmetic.
     ///
-    /// The privacy half is the part that must be impossible to regress: Sales has 2
-    /// completed responses, below <see cref="SurveyResultsPrivacy.MinimumSegmentRespondents"/>,
-    /// and the results screens suppress it -- so the report must too. The raw persisted
-    /// document is searched for Sales's row to prove the withheld headcount is not
-    /// merely flagged but absent.
+    /// The privacy half is the part that must be impossible to regress, and since 2026-10-15
+    /// it runs the other way: Sales has 2 completed responses, the results screens publish it,
+    /// so the report must publish it too. What must never happen is the two DISAGREEING, which
+    /// is why both are read in one test. The raw persisted document is searched for Sales's id
+    /// so this is a claim about the stored bytes and not about the typed projection.
     /// </summary>
     [Fact]
-    public async Task A_generated_report_aggregates_like_the_results_screen_and_keeps_a_small_department_suppressed()
+    public async Task A_generated_report_aggregates_like_the_results_screen_and_carries_a_small_department_too()
     {
         var engineeringId = await SeedDepartmentAsync("Engineering");
         var salesId = await SeedDepartmentAsync("Sales");
@@ -324,9 +324,9 @@ public class ReportEndpointsTests : IAsyncLifetime
         await SeedAnswerAsync(survey.Id, questionId, salesId, "2");
         await SeedAnswerAsync(survey.Id, questionId, salesId, "2");
 
-        // Three who answered nothing and carry no department: with Sales's two, the people
-        // outside Engineering are five, so Engineering stays disclosed. Without them the
-        // company's 7 minus Engineering's 5 is Sales.
+        // Three who answered nothing and carry no department. They were here to keep the
+        // people outside Engineering at the floor for a complement pass that no longer runs;
+        // they stay so the counts in this test are unchanged.
         for (var i = 0; i < 3; i++)
         {
             await SeedSilentResponseAsync(survey.Id);
@@ -361,14 +361,15 @@ public class ReportEndpointsTests : IAsyncLifetime
         Assert.False(engineering.IsSuppressed);
         Assert.Equal(5, engineering.RespondentCount);
 
-        // The anonymity floor, in the persisted document. Sales has no row at all, and the
-        // count 2 survives ONLY as the breakdown's reconciliation counter -- beside no name,
-        // because beside "Sales" it would be Sales's size (2026-10-12).
-        Assert.DoesNotContain(section.Departments, d => d.DepartmentId == salesId.ToString());
-        Assert.DoesNotContain(salesId.ToString(), created.ReportOutput!, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal(1, section.SuppressedDepartmentCount);
-        Assert.Equal(2, section.SuppressedRespondentCount);
-        Assert.Equal(SurveyResultsPrivacy.MinimumSegmentRespondents, section.MinimumGroupSize);
+        // The 2026-10-15 ruling, in the persisted document: Sales has a row of its own, its id
+        // is in the stored bytes, and nothing is counted as withheld.
+        var sales = Assert.Single(section.Departments, d => d.DepartmentId == salesId.ToString());
+        Assert.False(sales.IsSuppressed);
+        Assert.Equal(2, sales.RespondentCount);
+        Assert.Contains(salesId.ToString(), created.ReportOutput!, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, section.SuppressedDepartmentCount);
+        Assert.Equal(0, section.SuppressedRespondentCount);
+        Assert.Equal(SurveyResultsPrivacy.MinimumSingleSegmentRespondents, section.MinimumGroupSize);
     }
 
     // ------------------------------------------------------------------
@@ -521,17 +522,17 @@ public class ReportEndpointsTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// req(#88 follow-up): demographic breakdowns beyond department reach the document --
-    /// and a group below <see cref="SurveyResultsPrivacy.MinimumSegmentRespondents"/> reaches
-    /// it carrying no number at all.
+    /// req(#88 follow-up): demographic breakdowns beyond department reach the document, and
+    /// since 2026-10-15 a two-person group reaches it with its number.
     ///
-    /// <para>The two tenure groups answer differently on purpose (4 against 1) so the
-    /// withheld group has a reading of its own, 1.0, that exists nowhere else in the
-    /// document. A projection that printed the aggregate's raw segment collection, or that
-    /// scored a suppressed group, puts that number in the bytes.</para>
+    /// <para>The two tenure groups answer differently on purpose (4 against 1) so the small
+    /// group has a reading of its own, 1.0, that exists nowhere else in the document. That
+    /// number used to be the proof the group was withheld; it is now the proof it was
+    /// published, which is the same assertion pointed the other way and the sharpest statement
+    /// of what the ruling traded.</para>
     /// </summary>
     [Fact]
-    public async Task A_generated_report_prints_demographic_breakdowns_and_withholds_a_sub_floor_group()
+    public async Task A_generated_report_prints_demographic_breakdowns_including_a_small_group()
     {
         var engineeringId = await SeedDepartmentAsync("Engineering");
 
@@ -548,7 +549,8 @@ public class ReportEndpointsTests : IAsyncLifetime
         var newcomer = new Dictionary<string, string>(StringComparer.Ordinal) { ["tenure"] = "0-1" };
         for (var i = 0; i < 5; i++) await SeedAnswerAsync(survey.Id, questionId, engineeringId, "4", senior);
         for (var i = 0; i < 2; i++) await SeedAnswerAsync(survey.Id, questionId, engineeringId, "1", newcomer);
-        // Three who gave no tenure and answered nothing, so the people outside "2-5" are five.
+        // Three who gave no tenure and answered nothing. Unchanged from when they kept "2-5"
+        // clear of the complement pass, so the numbers below are a reversal, not a new fixture.
         for (var i = 0; i < 3; i++) await SeedSilentResponseAsync(survey.Id);
 
         var document = await GenerateAsync(client);
@@ -566,18 +568,20 @@ public class ReportEndpointsTests : IAsyncLifetime
         Assert.Equal("leadership", leadership.Dimension);
         Assert.Equal(4d, leadership.AverageScore);
 
-        // The withheld group has no row: it is counted, never named. The count 2 survives
-        // once, as the breakdown's reconciliation counter, beside no group.
-        Assert.DoesNotContain(tenure.Segments, s => s.Key == "0-1");
-        Assert.Equal(1, tenure.SuppressedSegmentCount);
-        Assert.Equal(2, tenure.SuppressedRespondentCount);
+        // The small group has a row of its own, with its own reading.
+        var newcomerGroup = Assert.Single(tenure.Segments, s => s.Key == "0-1");
+        Assert.False(newcomerGroup.IsSuppressed);
+        Assert.Equal(2, newcomerGroup.RespondentCount);
+        Assert.Equal(0, tenure.SuppressedSegmentCount);
+        Assert.Equal(0, tenure.SuppressedRespondentCount);
 
-        // Document-wide: no suppressed segment anywhere, and the withheld group's own
-        // reading of 1.0 is not a score in the document at all.
+        // Document-wide: still no suppressed segment anywhere -- now because none was
+        // suppressed rather than because the suppressed ones were dropped -- and the small
+        // group's own 1.0 IS a score in the document.
         Assert.DoesNotContain(
             document.Surveys.SelectMany(s => s.Demographics).SelectMany(b => b.Segments),
             s => s.IsSuppressed);
-        Assert.DoesNotContain(
+        Assert.Contains(
             1d,
             document.Surveys.SelectMany(s => s.Demographics).SelectMany(b => b.Segments)
                 .SelectMany(s => s.Dimensions).Select(d => d.AverageScore));
