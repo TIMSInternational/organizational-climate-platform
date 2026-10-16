@@ -1609,11 +1609,16 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
         var byToken = await Anonymous().GetFromJsonAsync<SurveyInvitationTokenDetail>($"/survey-invitations/{token}?lang=es");
         Assert.Contains("Esta encuesta es anónima", byToken!.Anonymity.Guarantee);
 
-        // A named survey says so, in the reader's language too.
+        // A named survey, in the reader's language too. Both modes now open with "Esta
+        // encuesta es anónima" -- ruled 2026-10-16: the company never sees an individual
+        // answer either way, so the product never calls a survey "no anónima". The
+        // discriminator is the named-only sentence about the invitation lifecycle.
         var namedSurvey = await CreateActiveSurveyAsync(client, anonymous: false);
         var named = await client.GetFromJsonAsync<SurveyInvitationListResponse>(
             $"/surveys/{namedSurvey.Id}/invitations?lang=es");
         Assert.False(named!.Anonymity.Anonymous);
-        Assert.Contains("Esta encuesta no es anónima", named.Anonymity.Guarantee);
+        Assert.Contains("Esta encuesta es anónima", named.Anonymity.Guarantee);
+        Assert.Contains("El ciclo completo de la invitación se registra", named.Anonymity.Guarantee);
+        Assert.DoesNotContain("no es anónima", named.Anonymity.Guarantee);
     }
 }

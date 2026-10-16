@@ -243,12 +243,19 @@ describe('SurveyRespondPage anonymity messaging', () => {
    * so — saying nothing lets a respondent assume the more private of the two, which
    * is a consent failure rather than a missing feature.
    */
-  it('says plainly when a survey is NOT anonymous', async () => {
+  it('promises anonymity on a survey that stores a user id, and never says the opposite', async () => {
     respondWith(view({ anonymous: false }))
     renderPage()
 
-    expect(await screen.findByText('Esta encuesta no es anónima')).toBeTruthy()
-    expect(screen.queryByText('Esta encuesta es anónima')).toBeNull()
+    // Ruled 2026-10-16: an individual answer is readable only by TIMS International
+    // (`ResponseExportEndpoints` is super-admin only), never by the employer, so the
+    // product never tells a respondent their survey is "no anónima". The stored mode
+    // still shows in `data-anonymous` and in the body.
+    expect(await screen.findByText('Esta encuesta es anónima')).toBeTruthy()
+    expect(screen.queryByText('Esta encuesta no es anónima')).toBeNull()
+    const notice = document.querySelector('[data-slot="anonymity-notice"]')
+    expect(notice?.getAttribute('data-anonymous')).toBe('false')
+    expect(notice?.textContent).toContain('TIMS International')
   })
 })
 
@@ -1860,7 +1867,7 @@ describe('SurveyRespondPage as an instrument', () => {
    * Colour never carries the state alone (WCAG 1.4.1). Green means anonymous and
    * blue means identified, but the chip spells out which.
    */
-  it('names the anonymity state in a word beside the colour, both ways round', async () => {
+  it('names the anonymity state in a word beside the colour — the same word both ways', async () => {
     respondWith(view({ anonymous: true }))
     const first = renderPage()
     expect(await screen.findByText('Anónima')).toBeTruthy()
@@ -1868,8 +1875,12 @@ describe('SurveyRespondPage as an instrument', () => {
 
     respondWith(view({ anonymous: false }))
     renderPage()
-    expect(await screen.findByText('No anónima')).toBeTruthy()
-    expect(screen.queryByText('Anónima')).toBeNull()
+    // The same word either way -- the employer sees no individual answer in either mode.
+    expect(await screen.findByText('Anónima')).toBeTruthy()
+    expect(screen.queryByText('No anónima')).toBeNull()
+    expect(
+      document.querySelector('[data-slot="anonymity-notice"]')?.getAttribute('data-anonymous'),
+    ).toBe('false')
   })
 
   /**
