@@ -3,6 +3,8 @@ import { LanguageSwitcher } from '../../i18n'
 import { OccLogo } from './OccLogo'
 import { SkipLink } from '../ui'
 import { ThemeSwitcher } from './ShellControls'
+import { CompanyLogo } from './CompanyLogo'
+import { useOwnCompanyBrand } from '../../company-context/useCompanyName'
 
 /**
  * The wordmark, split for its two-tone treatment. Same two halves as
@@ -60,10 +62,35 @@ import { ThemeSwitcher } from './ShellControls'
  * needs to know what site they are on, and the page under this strip tells them
  * whether the answers can come back to them. Anything else here would be a claim
  * about a tenant.
+ *
+ * ## The one exception, and why it is not an exception to that rule
+ *
+ * `showCompanyLogo` puts the viewer's OWN company logo beside the product lockup. It is
+ * opt-in and defaults to off, and exactly one of this component's callers passes it:
+ * `SurveyRespondPage`, the only one of the seven that sits inside `RequireAuth`
+ * (`router.tsx`). The other six — `/survey/:id`, `/s/:token`, the two invitation pages, the
+ * microclimate respond page and the shared report — are routes a link-holder may open, and
+ * they pass nothing.
+ *
+ * It does not weaken the rule above because the logo is not a claim made TO a stranger: the
+ * value comes from `/profile`, which is `RequireAuthorization()`, so it can only ever be the
+ * company of the person already signed in, shown to that person. A visitor holding a link
+ * has no token and so no value to render, which is the second of the two locks
+ * `useOwnCompanyBrand` describes.
+ *
+ * The product lockup stays. A tenant's mark replacing it would misrepresent whose product
+ * this is — the thing `docs/decisions/admin-visual-language.md` refuses in the other
+ * direction — and for most respondents this is the only screen of this product they see.
  */
 export interface RespondShellProps {
   /** Already-translated label for the skip link, e.g. "Skip to the survey". */
   skipLabel: string
+  /**
+   * Show the signed-in respondent their own company's logo beside the product lockup.
+   * Defaults to false: see the remarks above, and pass it only from a route inside
+   * `RequireAuth`.
+   */
+  showCompanyLogo?: boolean
   /**
    * The id the skip link targets and `<main>` carries. Defaults to `respond`.
    * `/survey/:id` passes `survey`, which is the anchor its own test pins.
@@ -72,7 +99,16 @@ export interface RespondShellProps {
   children: ReactNode
 }
 
-export function RespondShell({ skipLabel, contentId = 'respond', children }: RespondShellProps) {
+export function RespondShell({
+  skipLabel,
+  contentId = 'respond',
+  showCompanyLogo = false,
+  children,
+}: RespondShellProps) {
+  // Unconditional call with a gate inside, because a hook cannot be called conditionally.
+  // Off, it asks nothing and answers nulls, so the public routes send no request.
+  const brand = useOwnCompanyBrand(showCompanyLogo)
+
   return (
     <div className="flex min-h-dvh flex-col bg-surface-outer">
       {/* First focusable thing on the page, so a keyboard user is not made to Tab
@@ -91,6 +127,15 @@ export function RespondShell({ skipLabel, contentId = 'respond', children }: Res
       <header className="mx-auto flex w-full max-w-field flex-wrap items-center justify-between gap-inline px-4 py-3.5 md:max-w-respond">
         <span className="flex flex-wrap items-center gap-inline">
           <BrandLockup size="compact" />
+          {/* After the lockup, so the product is still what the strip opens on, and
+              separated by a hairline rather than crowded against it. `h-7` matches the
+              compact lockup's own height so a tall logo cannot grow the strip. */}
+          {brand.logoUrl && brand.companyName ? (
+            <>
+              <span aria-hidden="true" className="h-5 w-px bg-line-light" />
+              <CompanyLogo src={brand.logoUrl} companyName={brand.companyName} className="h-7 max-w-36" />
+            </>
+          ) : null}
         </span>
         <span className="flex flex-wrap items-center gap-1.5">
           <LanguageSwitcher variant="chip" />

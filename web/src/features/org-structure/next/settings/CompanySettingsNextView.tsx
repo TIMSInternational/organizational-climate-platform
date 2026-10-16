@@ -12,6 +12,7 @@ import { CanvasSelect, Field, Panel } from '../super/parts'
 import {
   HEX_COLOUR,
   changesOf,
+  logoValid,
   draftOf,
   retentionOptions,
   timezoneOptions,
@@ -153,7 +154,12 @@ function SettingsForm({
     setNotice(null)
   }
   const colourValid = HEX_COLOUR.test(draft.primaryColor)
-  const logoUrl = model.settings.branding.logoUrl
+  const logoOk = logoValid(draft.logoUrl)
+  // The DRAFT, not the saved value, so the box previews what the field now says — an admin
+  // who has mistyped a path should see the box go empty rather than keep showing the logo
+  // that is still stored. Only when the draft is valid: an invalid value in an `<img src>`
+  // is a request to nowhere and a torn-image glyph.
+  const logoUrl = logoOk && draft.logoUrl.trim() !== '' ? draft.logoUrl.trim() : null
   const name = model.companyName ?? DASH
   const now = new Date()
   // The artboard's pattern, with the tenant's own survey and how it was really created.
@@ -209,7 +215,7 @@ function SettingsForm({
             >
               {t(`${K}.discard`)}
             </Button>
-            <Button variant="primary" size="canvas" disabled={saving || !colourValid || !bandsValid} onClick={() => void save()}>
+            <Button variant="primary" size="canvas" disabled={saving || !colourValid || !logoOk || !bandsValid} onClick={() => void save()}>
               <Check aria-hidden="true" />
               {saving ? t(`${K}.saving`) : t(`${K}.save`)}
             </Button>
@@ -390,6 +396,28 @@ function SettingsForm({
                       className="h-control-lg w-30 font-mono text-sm"
                     />
                   </div>
+                </Field>
+                <Field
+                  fieldLabel={t(`${K}.logoPath`)}
+                  htmlFor={`${ids}-logo`}
+                  helper={logoOk ? t(`${K}.logoPathHelp`) : <span className="text-accent-red">{t(`${K}.logoPathInvalid`)}</span>}
+                >
+                  {/* The field the disabled Upload button below already promises: its own
+                      helper has always said "the logo is stored as a link", and until now
+                      there was nowhere to put one. Upload stays unavailable because there is
+                      no asset store in this product and adding one is a dependency
+                      decision, not a form field. */}
+                  <Input
+                    id={`${ids}-logo`}
+                    value={draft.logoUrl}
+                    aria-invalid={!logoOk}
+                    // No placeholder: the example belongs in the helper below, where it is
+                    // translated. A literal one here is untranslated copy, which
+                    // `noHardcodedStrings.test.ts` refuses — and it would have said the same
+                    // path twice on one row.
+                    onChange={(event) => set({ logoUrl: event.target.value })}
+                    className="h-control-lg w-full font-mono text-sm"
+                  />
                 </Field>
                 <Field fieldLabel={t(`${K}.sender`)} helper={t(`${K}.senderPlatform`)}>
                   {/* The sender of every tenant's mail is the platform's `Email:FromName`

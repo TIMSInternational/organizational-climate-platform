@@ -41,7 +41,29 @@ describe('changesOf', () => {
 
   it('never carries the microclimate or AI flag — the form has no control for either', () => {
     const initial = draftOf(response)
-    expect(Object.keys(initial).sort()).toEqual(['anonymousSurveys', 'dataRetentionDays', 'language', 'primaryColor', 'surveyFrequency', 'timezone'])
+    expect(Object.keys(initial).sort()).toEqual(['anonymousSurveys', 'dataRetentionDays', 'language', 'logoUrl', 'primaryColor', 'surveyFrequency', 'timezone'])
     expect(changesOf(initial, { ...initial, language: 'es' })).toEqual({ language: 'es' })
+  })
+
+  it('reads a null logo as an empty field, so the control has a string to hold', () => {
+    expect(draftOf(response).logoUrl).toBe('')
+  })
+
+  it('sends a blank logo, because emptying the field is how a stored logo is removed', () => {
+    // The one field `UpdateSettingsAsync` assigns on non-null rather than non-blank, which
+    // is what makes `""` a clear rather than a no-op.
+    const initial = draftOf({ ...response, branding: { ...response.branding, logoUrl: '/brand/esph-logo.png' } })
+
+    expect(changesOf(initial, { ...initial, logoUrl: '' })).toEqual({ logoUrl: '' })
+  })
+
+  it('does not send a logo the API would refuse', () => {
+    // Otherwise the Save button enables, the request 400s, and what the administrator sees
+    // is a button that does nothing.
+    const initial = draftOf(response)
+
+    expect(changesOf(initial, { ...initial, logoUrl: 'https://cdn.example.com/logo.png' })).toEqual({})
+    expect(changesOf(initial, { ...initial, logoUrl: '/brand/notes.txt' })).toEqual({})
+    expect(changesOf(initial, { ...initial, logoUrl: '/brand/esph-logo.png' })).toEqual({ logoUrl: '/brand/esph-logo.png' })
   })
 })

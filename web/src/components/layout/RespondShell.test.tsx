@@ -5,6 +5,9 @@ import { SidebarBrand } from './SidebarBrand'
 import { CHIP_SELECT_STYLE } from './chipSelectStyle'
 import { TranslationProvider } from '../../i18n'
 import { LOCALE_STORAGE_KEY } from '../../i18n/locale'
+import { setToken, clearToken } from '../../auth/token'
+import { tokenFor } from '../../test/jwtFixture'
+import { clearCompanyNameCache } from '../../company-context/useCompanyName'
 
 function renderShell(children: React.ReactNode = <p>body</p>) {
   return render(
@@ -24,6 +27,8 @@ function renderShell(children: React.ReactNode = <p>body</p>) {
 afterEach(() => {
   cleanup()
   window.localStorage.clear()
+  clearToken()
+  clearCompanyNameCache()
 })
 
 describe('RespondShell', () => {
@@ -259,5 +264,58 @@ describe('RespondReading', () => {
 
     expect(screen.getByText('12')).toBeTruthy()
     expect(screen.queryByText('Nothing is submitted for you')).toBeNull()
+  })
+})
+
+/**
+ * White-label, and the boundary around it.
+ *
+ * `RespondShell` is shared by one authenticated route and six that anybody holding a link
+ * may open, and its own remarks refuse any claim about a tenant on those six. The logo is
+ * opt-in with the default off, so the question these ask is not "does the logo render" but
+ * "can it render where it must not".
+ */
+describe('the tenant logo', () => {
+  function renderWith(props: { showCompanyLogo?: boolean }) {
+    render(
+      <TranslationProvider initialLocale="es">
+        <RespondShell skipLabel="Saltar a la encuesta" {...props}>
+          <p>body</p>
+        </RespondShell>
+      </TranslationProvider>,
+    )
+  }
+
+  it('renders no company logo by default, which is what the six link-holder routes get', () => {
+    renderWith({})
+
+    expect(document.querySelector('[data-slot="company-logo"]')).toBeNull()
+  })
+
+  it('renders no company logo for a visitor holding a link, even when the caller opts in', () => {
+    // The second of `useOwnCompanyBrand`'s two locks, and the one that does not depend on a
+    // prop being passed correctly: `/profile` is RequireAuthorization(), so with no token
+    // there is nothing to render. This is what makes the guarantee structural.
+    clearToken()
+    renderWith({ showCompanyLogo: true })
+
+    expect(document.querySelector('[data-slot="company-logo"]')).toBeNull()
+  })
+
+  it('renders no company logo when no API is configured, rather than a broken image', () => {
+    setToken(tokenFor({ name: 'Ana', role: 'employee', companyId: 'c1' }))
+    renderWith({ showCompanyLogo: true })
+
+    // `VITE_API_BASE_URL` is unset in the suite, so the hook asks nothing. A test that
+    // asserted the logo WAS here would be asserting the fixture, not the product.
+    expect(document.querySelector('[data-slot="company-logo"]')).toBeNull()
+  })
+
+  it('keeps the product lockup whatever the tenant logo does', () => {
+    // A tenant mark replacing the product lockup would misrepresent whose product this is,
+    // and for most respondents this is the only screen of it they ever see.
+    renderWith({ showCompanyLogo: true })
+
+    expect(document.querySelector('[data-slot="brand-lockup"], img[alt], svg')).not.toBeNull()
   })
 })

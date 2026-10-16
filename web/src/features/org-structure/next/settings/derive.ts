@@ -23,9 +23,51 @@ export interface SettingsDraft {
   dataRetentionDays: number
   timezone: string
   primaryColor: string
+  /**
+   * The company logo, as a root-relative path or a `data:` URI. Empty means no logo, and
+   * emptying the field is a change the form may send — it is how a logo is removed.
+   */
+  logoUrl: string
 }
 
+/**
+ * The branding rules, mirroring `BrandingValidation.cs` on the API.
+ *
+ * `brandingValidationParity.test.ts` reads that C# file and asserts each of these equals the
+ * value the server enforces. Two copies of one rule that drift mean a form that accepts what
+ * the API refuses, which reaches the administrator as the save button not working — the
+ * failure `productName.test.ts` was written for, with the same cross-stack fix.
+ */
 export const HEX_COLOUR = /^#[0-9a-fA-F]{6}$/
+
+/** Matches the `branding_logo_url` column width. */
+export const LOGO_MAX_LENGTH = 500
+
+export const LOGO_PATH = /^\/[A-Za-z0-9._/-]+(\?[A-Za-z0-9._=-]*)?$/
+
+export const LOGO_DATA_URI = /^data:image\/(svg\+xml|png|jpeg|webp|avif|gif);base64,[A-Za-z0-9+/]+={0,2}$/
+
+export const LOGO_EXTENSIONS: readonly string[] = ['.svg', '.png', '.jpg', '.jpeg', '.webp', '.avif', '.gif']
+
+/**
+ * Whether the form may send this logo value. Blank is valid and means "clear it".
+ *
+ * An absolute URL is refused here for the reason the API gives: `vercel.json` sets
+ * `img-src 'self' data:`, and an externally hosted logo would report every respondent's
+ * address to whoever hosts the file.
+ */
+export function logoValid(value: string): boolean {
+  const logo = value.trim()
+  if (logo === '') return true
+  if (logo.length > LOGO_MAX_LENGTH) return false
+  if (/\s/.test(logo)) return false
+  if (logo.startsWith('data:')) return LOGO_DATA_URI.test(logo)
+  if (logo.includes('://') || logo.startsWith('//')) return false
+  if (logo.includes('..') || logo.includes('\\')) return false
+  if (!LOGO_PATH.test(logo)) return false
+  const path = logo.split('?', 1)[0].toLowerCase()
+  return LOGO_EXTENSIONS.some((ext) => path.endsWith(ext))
+}
 
 export function draftOf(response: CompanySettingsResponse): SettingsDraft {
   const { settings, branding } = response
@@ -36,6 +78,7 @@ export function draftOf(response: CompanySettingsResponse): SettingsDraft {
     dataRetentionDays: settings.dataRetentionDays,
     timezone: settings.timezone,
     primaryColor: branding.primaryColor,
+    logoUrl: branding.logoUrl ?? '',
   }
 }
 
@@ -52,6 +95,10 @@ export function changesOf(initial: SettingsDraft, draft: SettingsDraft): UpdateC
   if (draft.dataRetentionDays !== initial.dataRetentionDays && draft.dataRetentionDays >= 1) changes.dataRetentionDays = draft.dataRetentionDays
   if (draft.timezone !== initial.timezone && draft.timezone.trim()) changes.timezone = draft.timezone
   if (draft.primaryColor !== initial.primaryColor && HEX_COLOUR.test(draft.primaryColor)) changes.primaryColor = draft.primaryColor
+  // Trimmed, and a blank IS sent: `UpdateSettingsAsync` assigns when the field is non-null
+  // rather than non-blank for this one field, so `""` is what clears a stored logo.
+  // `NormaliseLogoUrl` on the API turns it into the single null the readers expect.
+  if (draft.logoUrl.trim() !== initial.logoUrl.trim() && logoValid(draft.logoUrl)) changes.logoUrl = draft.logoUrl.trim()
   return changes
 }
 

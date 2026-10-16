@@ -122,9 +122,15 @@ public static class ProfileEndpoints
         // am I in" is not answerable by a Guid. Both are separate lookups rather than
         // Includes because User has no navigation properties -- the FKs are configured
         // without them (see UserConfiguration).
-        var companyName = user.CompanyId is { } companyId
-            ? await db.Companies.Where(c => c.Id == companyId).Select(c => c.Name).FirstOrDefaultAsync(cancellationToken)
+        // One projection for both, rather than a second round trip for the logo: it is the
+        // same row, and the shell reads this response on every page an employee opens.
+        var company = user.CompanyId is { } companyId
+            ? await db.Companies
+                .Where(c => c.Id == companyId)
+                .Select(c => new { c.Name, c.Branding.LogoUrl })
+                .FirstOrDefaultAsync(cancellationToken)
             : null;
+        var companyName = company?.Name;
 
         var departmentName = user.DepartmentId is { } departmentId
             ? await db.Departments.Where(d => d.Id == departmentId).Select(d => d.Name).FirstOrDefaultAsync(cancellationToken)
@@ -147,7 +153,8 @@ public static class ProfileEndpoints
             HasPassword: user.PasswordHash is not null,
             user.LastLoginAt,
             user.CreatedAt,
-            demographics);
+            demographics,
+            company?.LogoUrl);
     }
 
     /// <summary>

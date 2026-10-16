@@ -31,7 +31,28 @@ public sealed record ProfileResponse(
     bool HasPassword,
     DateTimeOffset? LastLoginAt,
     DateTimeOffset CreatedAt,
-    IReadOnlyDictionary<string, string> Demographics);
+    IReadOnlyDictionary<string, string> Demographics,
+    /// <summary>
+    /// The caller's own company logo, or null when that company has none.
+    ///
+    /// <para>
+    /// It rides on this response rather than on a branding endpoint of its own for two
+    /// reasons. The shell already fetches <c>/profile</c> for the department name, so the
+    /// respondent's portal costs no second request; and this route is
+    /// <c>RequireAuthorization()</c>, which makes "only a signed-in member of the company
+    /// sees the company's mark" a property of where the value lives rather than of anyone
+    /// remembering to check. The public respond route holds no token, so it cannot reach
+    /// this response at all -- see <c>RespondShell</c>, whose own remarks refuse any claim
+    /// about a tenant on a link anybody may hold.
+    /// </para>
+    /// <para>
+    /// Appended last, without a default, so the compiler names every construction site. An
+    /// insertion next to <c>CompanyName</c> would have been the natural place and the wrong
+    /// one: both are <c>string?</c>, so every argument after it would have shifted by one
+    /// and still compiled.
+    /// </para>
+    /// </summary>
+    string? CompanyLogoUrl);
 
 /// <summary>
 /// What a person may change about themselves: their display name, and nothing else.
