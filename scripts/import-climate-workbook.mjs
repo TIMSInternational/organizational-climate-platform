@@ -574,6 +574,11 @@ async function main() {
       email: { type: 'string', default: 'fede.super@acme.test' },
       password: { type: 'string', default: 'Local1234!' },
       apply: { type: 'boolean', default: false },
+      // ESPH's mass invite is username+password (ruled 2026-10-13), which is the
+      // endpoint's `withCredentials` branch. Without it every person gets an ACCOUNT
+      // INVITATION instead -- "use the link below to set up your account" -- and chooses
+      // their own password, which is a different product decision wearing the same name.
+      'with-credentials': { type: 'boolean', default: false },
       'skip-demographic': { type: 'string', multiple: true, default: [] },
       anonymous: { type: 'string', default: 'true' },
       start: { type: 'string' },
@@ -588,6 +593,7 @@ async function main() {
     throw new Error(`--anonymous must be true or false (recibido: ${values.anonymous})`)
   }
   const anonymous = values.anonymous === 'true'
+  const withCredentials = values['with-credentials'] === true
 
   const parsed = parseClimate(readWorkbook(values.file))
   const skipping = skipDemographics(parsed.climate, values['skip-demographic'])
@@ -602,6 +608,9 @@ async function main() {
   log(`  zona horaria de la empresa: ${values.timezone}`)
   log(`  escala de resultados: ${values.scale === 'percent' ? 'percent — 0 a 100 (promedio × 20)' : values.scale === 'mean' ? 'mean — promedio de 1,00 a 5,00' : values.scale}`)
   if (!window.problems.length) log(`  ventana de la encuesta: ${window.startDate} → ${window.endDate}${values.start ? '' : ' (por defecto: sin --start/--end)'}`)
+  log(withCredentials
+    ? '  acceso: USUARIO Y CONTRASEÑA generados por la plataforma, enviados en el correo de credenciales'
+    : '  acceso: INVITACIÓN de cuenta — cada persona abre el enlace y elige su propia contraseña')
   log(anonymous
     ? '  anonimato: ANÓNIMA — no se guarda quién respondió, así que nada impide que alguien la responda otra vez'
     : '  anonimato: IDENTIFICADA — se guarda quién respondió, así que el servidor permite UNA sola respuesta por persona (los resultados siguen siendo solo agregados)')
@@ -675,7 +684,7 @@ async function main() {
   const known = new Set((departments.departments ?? departments).map((d) => norm(d.name)))
   const newDepartments = [...new Set(rows.map((r) => r.department).filter((d) => d && !known.has(norm(d))))]
   const preview = rows.length
-    ? await call('POST', '/admin/users/bulk-import/rows', { companyId, preview: true, rows, newDepartments }, token)
+    ? await call('POST', '/admin/users/bulk-import/rows', { companyId, preview: true, rows, newDepartments, withCredentials }, token)
     : { rows: [] }
   // BulkImportResponse { rows: [{ rowNumber, email, status: valid|error|invited, errors[], issues[{code}] }] }.
   // The natural key of a person is the email: one already invited or already registered is
@@ -692,7 +701,7 @@ async function main() {
   }
   const toImport = rows.filter((r) => !present.has(r.email.toLowerCase()))
   const imported = toImport.length
-    ? await call('POST', '/admin/users/bulk-import/rows', { companyId, preview: false, rows: toImport, newDepartments }, token)
+    ? await call('POST', '/admin/users/bulk-import/rows', { companyId, preview: false, rows: toImport, newDepartments, withCredentials }, token)
     : { rows: [], successCount: 0, errorCount: 0 }
   const byStatus = imported.rows.reduce((acc, r) => ({ ...acc, [r.status]: (acc[r.status] ?? 0) + 1 }), {})
   if (!climate.linkOnly) log(`people: ${JSON.stringify(byStatus)} (success ${imported.successCount}, errors ${imported.errorCount})${newDepartments.length ? `; departments created: ${newDepartments.join(', ')}` : ''}`)
