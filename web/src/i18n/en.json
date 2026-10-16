@@ -7340,6 +7340,8 @@
     "file": "Completed workbook (.xlsx, up to 10 MB)",
     "previewOnly": "Reviewing creates no records and sends no emails. Complete EMPRESA, DESCRIPCION, ESCALAS, PREGUNTAS and DEMOGRAFICOS.",
     "review": "Review workbook",
+    "incompleteTitle": "Complete your workbook before importing",
+    "incompleteHelp": "Correct the issues below in Excel. Company values go in column B of EMPRESA; participant names, emails and departments start in row 6 of DEMOGRAFICOS. The expected participant count does not add people. Save the workbook, select the updated file above and review again. Nothing has been created or sent.",
     "failed": "The workbook could not be processed. Try again.",
     "changed": "Existing records changed since the review. Review this updated plan and approve again.",
     "retryNote": "Some steps may already have completed. Review the same workbook again to resume using the existing company, survey and accounts. Existing passwords will stay unchanged.",

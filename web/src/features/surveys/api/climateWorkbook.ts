@@ -68,7 +68,10 @@ export async function applyClimateWorkbook(baseUrl: string, plan: ClimateWorkboo
   progress({ stage: 'survey', done: 0, total: 1 })
   const surveyId = plan.surveyId ?? (await createSurvey(baseUrl, {
     companyId, title: { [content.company.language]: content.title }, description: { [content.company.language]: content.description },
-    type: 'periodic', language: content.company.language, startDate: content.startDate, endDate: content.endDate,
+    // Preview resolves each wall-clock date using the workbook's timezone. Send the
+    // same instants in UTC: Npgsql rejects nonzero offsets for timestamptz columns.
+    type: 'periodic', language: content.company.language,
+    startDate: new Date(content.startDate).toISOString(), endDate: new Date(content.endDate).toISOString(),
     questions: content.questions, targetAudienceCount: content.people.length,
     departmentIds: [...new Set(content.people.map(p => departmentIds.get(key(p.department ?? ''))).filter((v): v is string => Boolean(v)))],
     settings: { anonymous: content.company.anonymous, allowPartialResponses: true, showProgress: true, autoSave: true,

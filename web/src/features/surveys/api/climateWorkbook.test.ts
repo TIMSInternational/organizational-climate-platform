@@ -33,6 +33,17 @@ beforeEach(()=>{
   vi.mocked(listUsers).mockResolvedValue(plan().content.people.map((p,i)=>({...p,id:`id${i}`,departmentId:'ops',isActive:true,lastLoginAt:null,createdAt:'2026-01-01',username:null})) as Awaited<ReturnType<typeof listUsers>>)
 })
 describe('complete climate workbook',()=>{
+  it('sends UTC survey dates while preserving Chicago instants across the daylight-saving change',async()=>{
+    const p=plan(1)
+    p.content.company.timezone='America/Chicago'
+    p.content.startDate='2026-10-15T00:00:00-05:00'
+    p.content.endDate='2026-11-15T23:59:00-06:00'
+    await applyClimateWorkbook('',p,vi.fn())
+    expect(createSurvey).toHaveBeenCalledWith('',expect.objectContaining({
+      startDate:'2026-10-15T05:00:00.000Z',endDate:'2026-11-16T05:59:00.000Z',
+    }))
+    expect(updateCompanySettings).toHaveBeenCalledWith('', 'company',expect.objectContaining({timezone:'America/Chicago'}))
+  })
   it('imports 800 accounts in bounded batches, validates every batch first and invites exactly those people',async()=>{
     const result=await applyClimateWorkbook('',plan(),vi.fn())
     expect(result).toMatchObject({total:800,created:800,reused:0,credentialsNotSent:[]})
