@@ -1897,10 +1897,20 @@ function Submitted({
           {t('whatHappensNowTitle')}
         </h2>
         <ul className="m-0 flex list-none flex-col p-0">
+          {/* Two different true sentences, chosen the same way the submitted-at line
+              above chooses. An anonymous response really is pooled on arrival. An
+              identified one is read per person by the external processor before
+              anything is grouped, so "se agrupan de inmediato" is exactly the promise
+              the response export breaks -- it was rendered here unconditionally until
+              that export shipped. */}
           <WhatHappensRow
             icon={<Lock aria-hidden="true" className="size-icon" />}
-            title={t('happensPooledTitle')}
-            body={t('happensPooledBody', { floor: ANONYMITY_FLOOR })}
+            title={result.isAnonymous ? t('happensPooledTitle') : t('happensAttributedTitle')}
+            body={
+              result.isAnonymous
+                ? t('happensPooledBody', { floor: ANONYMITY_FLOOR })
+                : t('happensAttributedBody', { floor: ANONYMITY_FLOOR })
+            }
           />
           {/* Dropped rather than guessed at when the payload never loaded — a date
               is the one part of this the page cannot approximate. */}
@@ -1934,7 +1944,11 @@ function Submitted({
         </Button>
       )}
 
-      <p className="m-0 text-sm text-fg-secondary">{t('noCopyNote')}</p>
+      {/* "sin vincularlo a sus respuestas" is true only of an anonymous response.
+          On an identified one the completion IS the same row as the answers. */}
+      <p className="m-0 text-sm text-fg-secondary">
+        {result.isAnonymous ? t('noCopyNote') : t('noCopyNoteIdentified')}
+      </p>
     </div>
   )
 }

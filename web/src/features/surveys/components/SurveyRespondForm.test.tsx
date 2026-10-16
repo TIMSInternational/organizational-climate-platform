@@ -998,8 +998,15 @@ describe('SurveyRespondForm layout', () => {
  * to fetch something could fail after a response was accepted.
  */
 describe('SurveyRespondForm confirmation', () => {
-  async function submitOnce(overrides: SubmissionOverrides = {}, props = {}) {
-    respondWith(view({ questions: [question()] }), { answeredQuestionCount: 3, ...overrides })
+  async function submitOnce(
+    overrides: SubmissionOverrides = {},
+    props = {},
+    viewOverrides: Partial<SurveyRespondView> = {},
+  ) {
+    // `respondWith` echoes `payload.anonymous` back as the submission's `isAnonymous`,
+    // so `{ anonymous: false }` here is what makes the confirmation take its
+    // identified branch.
+    respondWith(view({ questions: [question()], ...viewOverrides }), { answeredQuestionCount: 3, ...overrides })
     const rendered = renderForm(props)
     await userEvent.click(await screen.findByRole('radio', { name: 'Muy de acuerdo' }))
     await userEvent.click(screen.getByRole('button', { name: 'Enviar mis respuestas' }))
@@ -1026,6 +1033,35 @@ describe('SurveyRespondForm confirmation', () => {
   it('says plainly that it cannot show the answers again', async () => {
     await submitOnce()
     expect(screen.getByText(/No podemos volver a mostrarle sus respuestas/)).toBeTruthy()
+  })
+
+  /**
+   * Both sentences below were rendered unconditionally until the response export
+   * shipped, so an IDENTIFIED respondent -- whose row that export returns per person,
+   * with their name on it -- was told their answers were pooled on arrival and that
+   * their completion was recorded "sin vincularlo a sus respuestas". Neither was true
+   * of them. The anonymous wording is still asserted by the two tests above, so this
+   * pair proves the branch rather than the string.
+   */
+  it('does not promise pooling to a respondent whose answers are attributed', async () => {
+    await submitOnce({}, {}, { anonymous: false })
+
+    expect(screen.getByText('Sus respuestas las procesa un equipo externo')).toBeTruthy()
+    expect(screen.getByText(/su empresa no ve su nombre junto a lo que usted respondió/i)).toBeTruthy()
+    expect(screen.queryByText('Sus respuestas se agrupan de inmediato')).toBeNull()
+
+    // The floor is still the platform constant on this branch, not a number retyped
+    // into the second copy of the sentence.
+    expect(
+      screen.getByText(new RegExp(`cruces de variables demográficas requieren al menos ${ANONYMITY_FLOOR}`)),
+    ).toBeTruthy()
+  })
+
+  it('tells an attributed respondent that completion is visible, not that it is unlinked', async () => {
+    await submitOnce({}, {}, { anonymous: false })
+
+    expect(screen.getByText(/su empresa puede ver quién ya respondió, nunca qué respondió/)).toBeTruthy()
+    expect(screen.queryByText(/sin vincularlo a sus respuestas/)).toBeNull()
   })
 
   it('reads back what was recorded, and when', async () => {
