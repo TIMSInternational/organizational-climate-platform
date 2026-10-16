@@ -333,6 +333,7 @@
     "id": "59ed9ace-f88b-51b6-82e4-7d1109715941",
     "companyId": null,
     "companyName": null,
+    "companyLogoUrl": null,
     "email": "rebeca.solis@meridiano.test",
     "name": "Rebeca Solís",
     "role": "super_admin",
