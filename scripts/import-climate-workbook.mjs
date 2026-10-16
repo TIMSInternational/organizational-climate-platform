@@ -86,12 +86,27 @@ export function decodeXml(text) {
   })
 }
 
+/**
+ * An optional XML namespace prefix on a spreadsheetml element.
+ *
+ * Excel writes `<sheet>`; several other writers — including whatever produced the TIMS
+ * climate template — write `<x:sheet>` and declare `xmlns:x` on the root. Both are valid
+ * OOXML and mean the same element, so every tag matched in this file tolerates a prefix.
+ *
+ * Found 2026-10-16: without it `readWorkbook` returned ZERO sheets for the template and for
+ * every workbook built from it, and the run reported "Falta la hoja DESCRIPCION" for all
+ * four sheets — a file-not-understood failure wearing the costume of an empty workbook.
+ * The attributes are not affected: `name`, `r:id`, `r`, `t` and `s` are spelled the same
+ * either way, and the relationship parts are a different namespace that is never prefixed.
+ */
+const NS = '(?:[A-Za-z_][\\w.-]*:)?'
+
 /** Every <t> inside an element, joined — a rich-text string is several runs. */
-const textOf = (xml) => [...xml.matchAll(/<t(?:\s[^>]*)?>([\s\S]*?)<\/t>/g)].map((m) => decodeXml(m[1])).join('')
+const textOf = (xml) => [...xml.matchAll(new RegExp(`<${NS}t(?:\\s[^>]*)?>([\\s\\S]*?)</${NS}t>`, 'g'))].map((m) => decodeXml(m[1])).join('')
 
 export function parseSharedStrings(xml) {
   if (!xml) return []
-  return [...xml.matchAll(/<si>([\s\S]*?)<\/si>/g)].map((m) => textOf(m[1]))
+  return [...xml.matchAll(new RegExp(`<${NS}si(?:\\s[^>]*)?>([\\s\\S]*?)</${NS}si>`, 'g'))].map((m) => textOf(m[1]))
 }
 
 /**
@@ -100,14 +115,15 @@ export function parseSharedStrings(xml) {
  * re-saved; what they point at does not.
  */
 export function parseStyles(xml) {
-  const section = (name) => xml.match(new RegExp(`<${name}[^>]*>([\\s\\S]*?)</${name}>`))?.[1] ?? ''
-  const fonts = [...section('fonts').matchAll(/<font>([\s\S]*?)<\/font>|<font\/>/g)].map((m) => /<b\/>|<b val="(1|true)"\/>/.test(m[1] ?? ''))
-  const fills = [...section('fills').matchAll(/<fill>([\s\S]*?)<\/fill>/g)].map((m) => {
+  const section = (name) => xml.match(new RegExp(`<${NS}${name}[^>]*>([\\s\\S]*?)</${NS}${name}>`))?.[1] ?? ''
+  const fonts = [...section('fonts').matchAll(new RegExp(`<${NS}font>([\\s\\S]*?)</${NS}font>|<${NS}font/>`, 'g'))]
+    .map((m) => new RegExp(`<${NS}b/>|<${NS}b val="(1|true)"/>`).test(m[1] ?? ''))
+  const fills = [...section('fills').matchAll(new RegExp(`<${NS}fill>([\\s\\S]*?)</${NS}fill>`, 'g'))].map((m) => {
     const solid = /patternType="solid"/.test(m[1])
-    const rgb = m[1].match(/<fgColor[^>]*rgb="([0-9A-F]{8})"/i)?.[1] ?? null
+    const rgb = m[1].match(new RegExp(`<${NS}fgColor[^>]*rgb="([0-9A-F]{8})"`, 'i'))?.[1] ?? null
     return { solid, rgb }
   })
-  return [...section('cellXfs').matchAll(/<xf\b([^>]*?)(?:\/>|>[\s\S]*?<\/xf>)/g)].map((m) => {
+  return [...section('cellXfs').matchAll(new RegExp(`<${NS}xf\\b([^>]*?)(?:/>|>[\\s\\S]*?</${NS}xf>)`, 'g'))].map((m) => {
     const fontId = Number(m[1].match(/fontId="(\d+)"/)?.[1] ?? 0)
     const fillId = Number(m[1].match(/fillId="(\d+)"/)?.[1] ?? 0)
     const fill = fills[fillId] ?? { solid: false, rgb: null }
@@ -118,14 +134,14 @@ export function parseStyles(xml) {
 /** { A1: { value, style } } for one sheet. Numbers stay numbers; a formula keeps its cached value. */
 export function parseSheet(xml, sharedStrings, styles) {
   const cells = {}
-  for (const m of xml.matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
+  for (const m of xml.matchAll(new RegExp(`<${NS}c\\b([^>]*?)(?:/>|>([\\s\\S]*?)</${NS}c>)`, 'g'))) {
     const attrs = m[1]
     const ref = attrs.match(/\br="([A-Z]+\d+)"/)?.[1]
     if (!ref) continue
     const type = attrs.match(/\bt="(\w+)"/)?.[1] ?? 'n'
     const style = styles[Number(attrs.match(/\bs="(\d+)"/)?.[1] ?? 0)] ?? { bold: false, filled: false, rgb: null }
     const body = m[2] ?? ''
-    const raw = body.match(/<v>([\s\S]*?)<\/v>/)?.[1]
+    const raw = body.match(new RegExp(`<${NS}v(?:\\s[^>]*)?>([\\s\\S]*?)</${NS}v>`))?.[1]
     let value = null
     if (type === 's' && raw !== undefined) value = sharedStrings[Number(raw)] ?? null
     else if (type === 'inlineStr') value = textOf(body)
@@ -153,7 +169,7 @@ export function readWorkbook(path) {
   const shared = parseSharedStrings(part('xl/sharedStrings.xml'))
   const styles = parseStyles(part('xl/styles.xml'))
   const sheets = {}
-  for (const m of workbook.matchAll(/<sheet\b([^>]*)\/?>/g)) {
+  for (const m of workbook.matchAll(new RegExp(`<${NS}sheet\\b([^>]*?)/?>`, 'g'))) {
     const name = attr(m[1], 'name')
     const target = targets[attr(m[1], 'r:id')]
     if (!name || !target) continue
@@ -245,7 +261,11 @@ export function parseClimate(sheets) {
     if (!text) continue
     const looksLikeTitle = cell.style.filled || cell.style.bold || !/[.?!:]$/.test(text)
     if (looksLikeTitle && !(dimensions.length && /[.?!]$/.test(text))) {
-      dimensions.push({ name: text, open: /^preguntas abiertas$/.test(norm(text)), questions: [] })
+      // Singular too: ESPH's own questionnaire heads its last section "Pregunta abierta",
+      // which is natural Spanish for a section holding one. Matched only plural, that
+      // question imported as a LIKERT -- the respondent would have been shown a 1-5 scale
+      // for "¿Hay algún aspecto importante sobre su trabajo...?" (found 2026-10-16).
+      dimensions.push({ name: text, open: /^preguntas? abiertas?$/.test(norm(text)), questions: [] })
     } else if (dimensions.length) {
       dimensions.at(-1).questions.push(text)
     } else {

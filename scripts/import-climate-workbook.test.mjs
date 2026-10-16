@@ -10,7 +10,7 @@ import assert from 'node:assert/strict'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import {
-  readWorkbook, parseClimate, skipDemographics, surveyWindow, roleForTitle, slug, toImportRows, toSurveyRequest, toFieldRequest, toBandsRequest, toSettingsRequest, validTimeZone, validScale, decodeXml, parseStyles,
+  readWorkbook, parseClimate, parseSheet, parseSharedStrings, skipDemographics, surveyWindow, roleForTitle, slug, toImportRows, toSurveyRequest, toFieldRequest, toBandsRequest, toSettingsRequest, validTimeZone, validScale, decodeXml, parseStyles,
 } from './import-climate-workbook.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -256,4 +256,65 @@ test('--scale: mean by default, percent on request, sent as resultBands.scale; a
   assert.equal(validScale('Percent'), null)
   assert.equal(validScale('0-100'), null)
   assert.equal(validScale(''), null)
+})
+
+/**
+ * Found 2026-10-16, against ESPH's own template.
+ *
+ * Excel writes `<sheet>`, `<c>`, `<v>`; the writer that produced the TIMS climate template
+ * writes `<x:sheet>`, `<x:c>`, `<x:v>` and declares `xmlns:x` on the root. Both are valid
+ * OOXML for the same elements, and every regex in the reader matched only the unprefixed
+ * spelling -- so `readWorkbook` returned ZERO sheets and the run reported "Falta la hoja
+ * DESCRIPCION" for all four sheets. A file it could not understand wore the costume of an
+ * empty workbook, which is the worst way for this to fail: it reads as the client having
+ * sent a blank book.
+ */
+test('a workbook written with an x: namespace prefix reads the same as one without', () => {
+  const plain = '<worksheet><sheetData><row r="1">'
+    + '<c r="A1" t="str"><v>Hola</v></c><c r="B1"><v>42</v></c>'
+    + '</row></sheetData></worksheet>'
+  const prefixed = '<x:worksheet xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><x:sheetData><x:row r="1">'
+    + '<x:c r="A1" t="str"><x:v>Hola</x:v></x:c><x:c r="B1"><x:v>42</x:v></x:c>'
+    + '</x:row></x:sheetData></x:worksheet>'
+
+  const a = parseSheet(plain, [], [])
+  const b = parseSheet(prefixed, [], [])
+  assert.equal(a.A1.value, 'Hola')
+  assert.equal(a.B1.value, 42)
+  assert.deepEqual(Object.keys(b), Object.keys(a))
+  assert.equal(b.A1.value, 'Hola')
+  assert.equal(b.B1.value, 42)
+})
+
+test('shared strings read with an x: prefix too', () => {
+  assert.deepEqual(parseSharedStrings('<sst><si><t>uno</t></si><si><t>dos</t></si></sst>'), ['uno', 'dos'])
+  assert.deepEqual(
+    parseSharedStrings('<x:sst xmlns:x="n"><x:si><x:t>uno</x:t></x:si><x:si><x:t>dos</x:t></x:si></x:sst>'),
+    ['uno', 'dos'],
+  )
+})
+
+/**
+ * ESPH's questionnaire heads its last section "Pregunta abierta" -- natural Spanish for a
+ * section holding exactly one. The rule matched only the plural, so that question imported
+ * as a LIKERT and the respondent would have been shown a 1-5 scale for "¿Hay algún aspecto
+ * importante sobre su trabajo, equipo o entorno laboral...?".
+ */
+test('a dimension titled in the singular, "Pregunta abierta", still holds open questions', () => {
+  const sheet = (heading) => ({
+    A1: { value: 'PREGUNTAS', style: {} },
+    B5: { value: 'Pregunta', style: {} },
+    B6: { value: heading, style: { bold: true } },
+    B7: { value: '¿Hay algo más que quiera contarnos?', style: {} },
+  })
+  // Both spellings reach the same place; `parseClimate` needs the rest of the book, so the
+  // rule is asserted where it lives -- on the dimension flag the reader sets.
+  for (const heading of ['Preguntas abiertas', 'Pregunta abierta', 'PREGUNTA ABIERTA']) {
+    const { climate } = parseClimate({ PREGUNTAS: sheet(heading) })
+    const dimension = climate.dimensions.find((d) => d.name === heading)
+    assert.ok(dimension, `no dimension for ${heading}`)
+    assert.equal(dimension.open, true, `${heading} should hold open questions`)
+  }
+  const { climate } = parseClimate({ PREGUNTAS: sheet('Liderazgo') })
+  assert.equal(climate.dimensions.find((d) => d.name === 'Liderazgo').open, false)
 })
