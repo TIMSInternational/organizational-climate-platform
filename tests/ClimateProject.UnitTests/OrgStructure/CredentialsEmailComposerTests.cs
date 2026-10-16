@@ -127,55 +127,67 @@ public class CredentialsEmailComposerTests
     [Theory]
     [InlineData(CredentialsEmailPurpose.Invitation)]
     [InlineData(CredentialsEmailPurpose.Reminder)]
-    public void Both_purposes_greet_the_person_by_name_in_both_languages(CredentialsEmailPurpose purpose)
+    public void No_part_of_the_message_carries_the_recipients_name(CredentialsEmailPurpose purpose)
     {
-        // "Ese correo de invitación es un correo personalizado: Muy buenas tardes, gracias por
-        // participar." The name is the one already on the account; nothing is asked for it.
+        // Ruled 2026-10-16 by Federico: no name reaches the respondent. This replaced three
+        // tests that asserted the opposite -- the greeting in both languages, the name
+        // rendered whole rather than split, and the `To:` display name.
+        //
+        // The reason it reversed is the copy that shipped the day before (§6 of
+        // `docs/decisions/who-may-see-an-individual-answer.md`): all 640 ESPH respondents are
+        // now told their company will never see their name beside their answers, and this is
+        // the first mail the platform sends them.
+        //
+        // EVERY rendered field is read, not just the body. The name reached the envelope
+        // through `ToName`, which no assertion over `TextBody` or `HtmlBody` would catch --
+        // and an envelope is the field a recipient sees before opening anything.
         var message = CredentialsEmailComposer.Compose(
             "person@example.com", Person, Username, Password, LoginUrl, "es", purpose);
 
-        Assert.Contains($"Hola, {Person}:", message.TextBody, StringComparison.Ordinal);
-        Assert.Contains($"Hello {Person},", message.TextBody, StringComparison.Ordinal);
-        // ESCAPED in the HTML, which is both how an accent survives the transport and why a
-        // name carrying "<" cannot inject markup into the message.
-        Assert.Contains(EmailBranding.Escape($"Hola, {Person}:"), message.HtmlBody, StringComparison.Ordinal);
-        Assert.DoesNotContain("<script", message.HtmlBody, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(Person, message.TextBody, StringComparison.Ordinal);
+        Assert.DoesNotContain(Person, message.HtmlBody, StringComparison.Ordinal);
+        Assert.DoesNotContain(EmailBranding.Escape(Person), message.HtmlBody, StringComparison.Ordinal);
+        Assert.DoesNotContain(Person, message.Subject, StringComparison.Ordinal);
+        Assert.Null(message.ToName);
 
-        // Addressed to a person, not to an empty envelope.
-        Assert.Equal(Person, message.ToName);
-    }
+        // Nor one token of it. The greeting rendered the name whole, so a half-measure that
+        // took a first name would pass an assertion on the whole string and still leak.
+        foreach (var token in Person.Split(' '))
+        {
+            Assert.DoesNotContain(token, message.TextBody, StringComparison.Ordinal);
+            Assert.DoesNotContain(token, message.HtmlBody, StringComparison.Ordinal);
+        }
 
-    [Fact]
-    public void The_name_is_never_split_into_a_first_name()
-    {
-        // A Costa Rican roster carries compound given names and rows entered surname-first, so
-        // taking the first token would greet this person as "María" and "Rodríguez Vargas, Ana"
-        // as "Rodríguez". Whole, exactly as imported.
-        var text = SpanishText(CredentialsEmailPurpose.Invitation);
-
-        Assert.Contains("Hola, María José Rodríguez Vargas:", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("Hola, María:", text, StringComparison.Ordinal);
+        // And it still carries the three things it exists to carry.
+        Assert.Contains(Username, message.TextBody, StringComparison.Ordinal);
+        Assert.Contains(Password, message.TextBody, StringComparison.Ordinal);
+        Assert.Contains(LoginUrl, message.TextBody, StringComparison.Ordinal);
     }
 
     [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public void An_account_with_no_name_is_greeted_by_nothing_rather_than_by_a_blank(string? missing)
+    public void A_nameless_account_gets_byte_identical_mail_to_a_named_one(string? missing)
     {
-        // Some imported rows carry an email and no name. A greeting built from one would read
-        // "Hola, :" -- worse than no greeting at all.
-        var message = CredentialsEmailComposer.Compose(
+        // The nameless row used to be the one branch that rendered no greeting, which is why
+        // it had a test of its own. There is no longer a branch: this asserts that, rather
+        // than asserting the absence of a greeting twice over.
+        var nameless = CredentialsEmailComposer.Compose(
             "person@example.com", missing, Username, Password, LoginUrl, "es",
             CredentialsEmailPurpose.Invitation);
+        var named = CredentialsEmailComposer.Compose(
+            "person@example.com", Person, Username, Password, LoginUrl, "es",
+            CredentialsEmailPurpose.Invitation);
 
-        Assert.DoesNotContain("Hola,", message.TextBody, StringComparison.Ordinal);
-        Assert.DoesNotContain("Hello", message.TextBody, StringComparison.Ordinal);
-        Assert.Null(message.ToName);
+        Assert.Equal(named.TextBody, nameless.TextBody);
+        Assert.Equal(named.HtmlBody, nameless.HtmlBody);
+        Assert.Equal(named.Subject, nameless.Subject);
+        Assert.Null(nameless.ToName);
 
         // And it still carries what it exists to carry.
-        Assert.Contains(Username, message.TextBody, StringComparison.Ordinal);
-        Assert.Contains(Password, message.TextBody, StringComparison.Ordinal);
+        Assert.Contains(Username, nameless.TextBody, StringComparison.Ordinal);
+        Assert.Contains(Password, nameless.TextBody, StringComparison.Ordinal);
     }
 
     [Fact]

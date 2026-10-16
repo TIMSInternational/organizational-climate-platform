@@ -56,19 +56,73 @@ describe('SidebarUserMenu, accented names', () => {
   })
 
   it('uppercases a lowercase accented initial without mangling it', () => {
-    setToken(tokenFor({ name: 'ángela', role: 'employee', companyId: 'c1' }))
+    // `company_admin`, not the `employee` this used to use: since 2026-10-16 a respondent
+    // renders no name and no initial (`auth/ownName.ts`), so an employee fixture would make
+    // this decoder test pass for the wrong reason — it would assert nothing at all.
+    setToken(tokenFor({ name: 'ángela', role: 'company_admin', companyId: 'c1' }))
     renderMenu()
 
     expect(screen.getByText('Á')).toBeTruthy()
   })
 
-  it('falls back to a question mark when there is no name claim at all', () => {
-    setToken(tokenFor({ role: 'employee', companyId: 'c1' }))
+  it('shows a person glyph, not a letter, when there is no name to take an initial from', () => {
+    setToken(tokenFor({ role: 'company_admin', companyId: 'c1' }))
     renderMenu()
 
-    // Guards the `?? '?'` branch, so the accented cases above cannot pass merely because
-    // the component renders a placeholder for everything.
-    expect(screen.getByText('?')).toBeTruthy()
+    // Guards the no-name branch, so the accented cases above cannot pass merely because the
+    // component renders a placeholder for everything. It used to be a literal `?`, which
+    // read as the rail asking who you were — and a respondent now reaches this branch on
+    // every page, where the collapsed rail renders this circle and nothing else.
+    const avatar = document.querySelector('[data-slot="sidebar-avatar"]') as HTMLElement
+    expect(avatar.querySelector('svg')).toBeTruthy()
+    expect(avatar.textContent).toBe('')
+  })
+})
+
+/**
+ * The rule itself, at the surface that obeys it. `ownName.test.ts` pins the predicate; these
+ * assert the rail actually reads it — the failure mode `auth/ownName.ts` was written against
+ * is a shared rule that one of its two callers stops calling.
+ */
+describe('a respondent is not shown their own name', () => {
+  // Spanish, because that is the locale this product ships in and the one all 640 ESPH
+  // people will read. `renderMenu` above leaves the provider on its English default.
+  function renderMenuEs() {
+    render(
+      <TranslationProvider initialLocale="es">
+        <MemoryRouter>
+          <SidebarUserMenu onSignOut={() => {}} />
+        </MemoryRouter>
+      </TranslationProvider>,
+    )
+  }
+
+  it('replaces the name with "Cuenta" and the initial with a glyph, for an employee', () => {
+    setToken(tokenFor({ name: 'Ángela Hernández', role: 'employee', companyId: 'c1' }))
+    renderMenuEs()
+
+    expect(screen.queryByText('Ángela Hernández')).toBeNull()
+    expect(screen.queryByText('Á')).toBeNull()
+    expect(screen.getByText(es.shell.account)).toBeTruthy()
+  })
+
+  it('does the same for a role it has never heard of, and for no role at all', () => {
+    setToken(tokenFor({ name: 'Ángela Hernández', role: 'auditor_externo', companyId: 'c1' }))
+    renderMenu()
+    expect(screen.queryByText('Ángela Hernández')).toBeNull()
+
+    cleanup()
+    // No `role` claim: the predicate fails closed, so this is a respondent too.
+    setToken(tokenFor({ name: 'Ángela Hernández', companyId: 'c1' }))
+    renderMenu()
+    expect(screen.queryByText('Ángela Hernández')).toBeNull()
+  })
+
+  it('still shows an administrator their own name, because the roster is still theirs', () => {
+    setToken(tokenFor({ name: 'Ana Rojas', role: 'company_admin', companyId: 'c1' }))
+    renderMenu()
+
+    expect(screen.getByText('Ana Rojas')).toBeTruthy()
   })
 })
 

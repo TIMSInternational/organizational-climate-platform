@@ -409,9 +409,11 @@ describe('DashboardPage', () => {
     renderDashboard()
 
     await waitFor(() => expect(requestedPath()).toContain('/dashboard/employee'))
-    // Addressed to the person and naming them. This is the one page in the product written
-    // in that voice, and an admin view reaching an employee would be titled after a report.
-    expect(await screen.findByRole('heading', { level: 1, name: 'Good morning, Ana' })).toBeTruthy()
+    // Addressed to the person, in the second person, but NOT naming them -- ruled
+    // 2026-10-16, `auth/ownName.ts`. This is still the one page in the product written in
+    // that voice, and an admin view reaching an employee would be titled after a report.
+    // `name` is an exact accessible-name match, so this also asserts no name was appended.
+    expect(await screen.findByRole('heading', { level: 1, name: 'Good morning' })).toBeTruthy()
 
     // Both surveys are named, and both are reachable. The hrefs are the half that survived
     // the redesign untouched: titles alone would be satisfied by a page that lists what is

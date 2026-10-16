@@ -5858,9 +5858,9 @@
   },
   "employee": {
     "eyebrow": "Espacio de trabajo",
-    "greetingMorning": "Buenos días, {name}",
-    "greetingAfternoon": "Buenas tardes, {name}",
-    "greetingEvening": "Buenas noches, {name}",
+    "greetingMorning": "Buenos días",
+    "greetingAfternoon": "Buenas tardes",
+    "greetingEvening": "Buenas noches",
     "homeDescription": "Hay una encuesta abierta para usted. Todo lo demás en esta página es lo que la empresa hizo con la anterior.",
     "homeDescriptionNothingDue": "Ahora mismo no hay nada que necesite de usted, así que esta página trata de lo que pasó con las respuestas que ya dio.",
     "taskQuestions": "Preguntas",

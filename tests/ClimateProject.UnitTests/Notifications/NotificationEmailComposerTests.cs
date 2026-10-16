@@ -38,7 +38,44 @@ public class NotificationEmailComposerTests
 
         Assert.Equal("Survey closes Friday", message.Subject);
         Assert.Equal("ana@example.com", message.ToAddress);
-        Assert.Equal("Ana", message.ToName);
+        // Null since 2026-10-16: the invitation is addressed to the bare address, as its
+        // greeting is gone. `No_part_of_the_message_carries_the_recipients_name` below is
+        // the guard; this line is here because the envelope used to be set right here.
+        Assert.Null(message.ToName);
+    }
+
+    [Theory]
+    [InlineData(ContentLanguages.Spanish)]
+    [InlineData(ContentLanguages.English)]
+    public void No_part_of_the_message_carries_the_recipients_name(string language)
+    {
+        // Ruled 2026-10-16 by Federico: no name reaches the respondent. This is the survey
+        // INVITATION -- the mail 863 of ESPH's go out as -- and its default subject and body
+        // never carried a name, which is exactly why this test is about the chrome. The
+        // greeting ("Hola {0}:") and the `To:` display name were wrapped around clean copy,
+        // so reading the defaults said the invitation was already nameless and it was not.
+        //
+        // A distinctive name, not the fixture's "Ana": a three-letter token can be a
+        // substring of unrelated chrome, and a guard that cannot fail is not a guard.
+        const string Person = "Ángela Hernández Zúñiga";
+        var message = NotificationEmailComposer.Compose(
+            Notification(), Recipient(language, Person), PreferencesUrl, surveyUrl: null);
+
+        Assert.DoesNotContain(Person, message.TextBody, StringComparison.Ordinal);
+        Assert.DoesNotContain(Person, message.HtmlBody, StringComparison.Ordinal);
+        Assert.DoesNotContain(EmailBranding.Escape(Person), message.HtmlBody, StringComparison.Ordinal);
+        Assert.DoesNotContain(Person, message.Subject, StringComparison.Ordinal);
+        Assert.Null(message.ToName);
+
+        foreach (var token in Person.Split(' '))
+        {
+            Assert.DoesNotContain(token, message.TextBody, StringComparison.Ordinal);
+            Assert.DoesNotContain(token, message.HtmlBody, StringComparison.Ordinal);
+        }
+
+        // Still the mail it was: the authored message and the address survive.
+        Assert.Contains("Please respond", message.TextBody, StringComparison.Ordinal);
+        Assert.Equal("ana@example.com", message.ToAddress);
     }
 
     [Fact]
@@ -68,12 +105,16 @@ public class NotificationEmailComposerTests
         var english = NotificationEmailComposer.Compose(
             Notification(), Recipient(ContentLanguages.English), PreferencesUrl, surveyUrl: null);
 
-        Assert.Contains("Hola Ana", spanish.TextBody, StringComparison.Ordinal);
+        // The greeting used to be this test's tell in both languages. With it gone the
+        // "why you are receiving this" line is the chrome that still differs, so it carries
+        // the assertion alone -- and it is asserted in BOTH languages rather than one, since
+        // a fallback that rendered English to a Spanish recipient would otherwise pass.
         Assert.Contains("Recibes este mensaje", spanish.TextBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("You are receiving this", spanish.TextBody, StringComparison.Ordinal);
         Assert.Contains("""<html lang="es">""", spanish.HtmlBody, StringComparison.Ordinal);
 
-        Assert.Contains("Hi Ana", english.TextBody, StringComparison.Ordinal);
         Assert.Contains("You are receiving this", english.TextBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("Recibes este mensaje", english.TextBody, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -96,7 +137,9 @@ public class NotificationEmailComposerTests
     {
         var message = NotificationEmailComposer.Compose(Notification(), Recipient("klingon"), PreferencesUrl, surveyUrl: null);
 
-        Assert.Contains("Hi Ana", message.TextBody, StringComparison.Ordinal);
+        // The English chrome, by the same substitution as above: the greeting that used to
+        // prove the fallback had fired is gone, and this line is what is left of it.
+        Assert.Contains("You are receiving this", message.TextBody, StringComparison.Ordinal);
     }
 
     [Fact]

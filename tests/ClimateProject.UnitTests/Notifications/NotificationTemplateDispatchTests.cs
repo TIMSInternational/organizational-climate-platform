@@ -115,17 +115,24 @@ public class NotificationTemplateDispatchTests
     }
 
     /// <summary>
-    /// <b>G2.</b> The chrome is untouched by a template: the greeting and the preferences link
-    /// are product UI in the recipient's language and a template governs the message inside
-    /// them, not the envelope.
+    /// <b>G2.</b> The chrome is untouched by a template: the "why you are receiving this"
+    /// line and the preferences link are product UI in the recipient's language, and a
+    /// template governs the message inside them, not the envelope.
+    ///
+    /// <para>
+    /// The greeting was this test's other half until 2026-10-16, when it was removed so no
+    /// name reaches a respondent. The remaining chrome is asserted in Spanish, which is also
+    /// what proves the template did not displace the recipient's language.
+    /// </para>
     /// </summary>
     [Fact]
     public void A_template_does_not_displace_the_chrome()
     {
         var composed = Compose(Template(), recipient: Recipient(ContentLanguages.Spanish));
 
-        Assert.Contains("Hola Ana", composed.Message.TextBody, StringComparison.Ordinal);
+        Assert.Contains("Recibes este mensaje", composed.Message.TextBody, StringComparison.Ordinal);
         Assert.Contains("https://app.example.com/settings/notifications", composed.Message.TextBody, StringComparison.Ordinal);
+        Assert.Null(composed.Message.ToName);
     }
 
     /// <summary>

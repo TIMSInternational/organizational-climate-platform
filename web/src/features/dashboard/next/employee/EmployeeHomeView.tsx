@@ -76,8 +76,11 @@ export default function EmployeeHomeView({
         // is worse than one that arrives with its page.
         eyebrow={model ? eyebrowFor(model, role, t) : null}
         // The greeting IS the heading: the one page in the product addressed to a person
-        // rather than to an administrator.
-        title={model ? t(greetingKey(new Date().getHours()), { name: model.personName }) : t('dashboard.myDashboard')}
+        // rather than to an administrator. It greets the hour and not the person — ruled
+        // 2026-10-16, the same ruling behind `auth/ownName.ts`: this page tells the reader
+        // their company will never see their name beside their answers, so it does not open
+        // by printing that name back at them.
+        title={model ? t(greetingKey(new Date().getHours())) : t('dashboard.myDashboard')}
         description={model ? homeDescription(model.pendingCount, t) : undefined}
       />
 

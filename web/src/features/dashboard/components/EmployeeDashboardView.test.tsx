@@ -175,14 +175,17 @@ describe('EmployeeDashboardView', () => {
     serves(payload())
     renderHome()
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Good morning, Ana' })).toBeTruthy()
+    // The hour, and not the reader: no name reaches a respondent (`auth/ownName.ts`,
+    // ruled 2026-10-16). `name` here is an exact accessible-name match, so "Good morning"
+    // also asserts the name is not appended to it.
+    expect(await screen.findByRole('heading', { level: 1, name: 'Good morning' })).toBeTruthy()
 
     cleanup()
     vi.setSystemTime(new Date(2026, 8, 6, 20, 0, 0))
     serves(payload())
     renderHome()
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Good evening, Ana' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Good evening' })).toBeTruthy()
   })
 
   /**
