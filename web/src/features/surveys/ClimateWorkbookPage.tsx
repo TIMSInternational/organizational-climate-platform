@@ -75,6 +75,11 @@ export default function ClimateWorkbookPage() {
     </section>}
     {error && <Alert variant="destructive" role="alert"><AlertDescription className="whitespace-pre-wrap">{error}</AlertDescription></Alert>}
     {plan && !result && <section className="space-y-5 rounded-lg border border-line-default bg-surface-card p-6">
+      {plan.errors.length > 0 ? <>
+        <h2>{t('climateWorkbook.incompleteTitle')}</h2>
+        <p>{t('climateWorkbook.incompleteHelp')}</p>
+        <Alert variant="destructive" role="alert"><AlertDescription><ul>{plan.errors.map((e, i) => <li key={i}>{e}</li>)}</ul></AlertDescription></Alert>
+      </> : <>
       <h2>{plan.content.title}</h2>
       <p>{plan.content.company.name} · {plan.content.company.emailDomain} · {plan.content.company.language} · {plan.content.company.timezone}</p>
       <p>{t('climateWorkbook.counts', { people: plan.content.people.length, questions: plan.content.questions.length, fields: plan.fields.length, created: plan.content.people.length - plan.existingPeople.length, reused: plan.existingPeople.length })}</p>
@@ -83,10 +88,11 @@ export default function ClimateWorkbookPage() {
       <p>{t('climateWorkbook.bands', { low: plan.content.company.resultBands.opportunityMin, high: plan.content.company.resultBands.strengthMin, scale: plan.content.company.resultBands.scale === 'percent' ? '0–100' : '1–5' })}</p>
       <p>{t(plan.companyId ? 'climateWorkbook.existingCompany' : 'climateWorkbook.newCompany')}</p>
       <p>{t('climateWorkbook.credentials')}</p>
+      </>}
       <details><summary>{t('climateWorkbook.questions')}</summary><ol className="list-decimal space-y-2 pl-6">{plan.content.questions.map((q, i) => <li key={i}><strong>{q.category}</strong> · {typeof q.text === 'string' ? q.text : q.text.es ?? q.text.en} · {t(q.type === 'open_ended' ? 'climateWorkbook.openQuestion' : 'climateWorkbook.scaleQuestion')}</li>)}</ol></details>
+      {plan.errors.length === 0 && <>
       <details><summary>{t('climateWorkbook.fields')}</summary><ul>{plan.fields.map(f => <li key={f.field}>{f.label}: {f.options.map(o => o.label).join(', ')}</li>)}</ul></details>
       <details><summary>{t('climateWorkbook.people')}</summary><div className="max-h-96 overflow-auto"><Table><thead><tr>{['name', 'email', 'department', 'role'].map(k => <th key={k}>{t(`climateWorkbook.${k}`)}</th>)}</tr></thead><tbody>{plan.content.people.map(p => <tr key={p.email}><td>{p.name}</td><td>{p.email}</td><td>{p.department}</td><td>{t(roleLabelKey(plan.existingPeople.find(u => u.email.toLowerCase() === p.email.toLowerCase())?.role ?? p.role) ?? 'users.employee')}</td></tr>)}</tbody></Table></div></details>
-      {plan.errors.length > 0 ? <Alert variant="destructive" role="alert"><AlertDescription><ul>{plan.errors.map((e, i) => <li key={i}>{e}</li>)}</ul></AlertDescription></Alert> : <>
         <label className="flex items-start gap-3"><input type="checkbox" checked={approved} disabled={busy} onChange={e => setApproved(e.target.checked)} /><span>{t('climateWorkbook.approve')}</span></label>
         <Button disabled={!approved || busy} onClick={() => void apply()}>{t('climateWorkbook.apply')}</Button>
       </>}

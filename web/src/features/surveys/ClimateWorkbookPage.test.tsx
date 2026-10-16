@@ -13,7 +13,7 @@ const plan:ClimateWorkbookPreview={companyId:null,surveyId:null,surveyStatus:nul
 function renderPage(){return render(<TranslationProvider><RouterProvider router={createMemoryRouter([{path:'/',element:<ClimateWorkbookPage/>}])}/></TranslationProvider>)}
 beforeEach(()=>{vi.resetAllMocks();localStorage.setItem(LOCALE_STORAGE_KEY,'es');vi.mocked(previewClimateWorkbook).mockResolvedValue(plan);vi.mocked(applyClimateWorkbook).mockResolvedValue({companyId:'company',surveyId:'survey',total:1,created:1,reused:0,credentialsNotSent:[]})})
 afterEach(()=>{cleanup();localStorage.clear()})
-async function review(){const user=userEvent.setup();await user.upload(screen.getByLabelText(/Libro completo/),new File(['xlsx'],'clima.xlsx',{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));await user.click(screen.getByRole('button',{name:'Revisar archivo'}));await screen.findByRole('heading',{name:'Clima 800'});return user}
+async function review(heading='Clima 800'){const user=userEvent.setup();await user.upload(screen.getByLabelText(/Libro completo/),new File(['xlsx'],'clima.xlsx',{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));await user.click(screen.getByRole('button',{name:'Revisar archivo'}));await screen.findByRole('heading',{name:heading});return user}
 describe('complete Excel review',()=>{
  it('lets a super administrator without a selected company review all sections and requires approval before sending',async()=>{
    renderPage();const user=await review()
@@ -28,8 +28,21 @@ describe('complete Excel review',()=>{
    expect(localStorage.getItem(COMPANY_CONTEXT_STORAGE_KEY)).toBe('company')
  })
  it('blocks approval when validation finds an error',async()=>{
-   vi.mocked(previewClimateWorkbook).mockResolvedValue({...plan,errors:['Correo duplicado en fila 106']});renderPage();await review()
+   vi.mocked(previewClimateWorkbook).mockResolvedValue({...plan,errors:['Correo duplicado en fila 106']});renderPage();await review('Complete el archivo antes de importar')
    expect(screen.getByRole('alert').textContent).toContain('Correo duplicado');expect(screen.queryByRole('checkbox')).toBeNull();expect(applyClimateWorkbook).not.toHaveBeenCalled()
+ })
+ it('explains an unfilled template without displaying default dates or promising company creation',async()=>{
+   vi.mocked(previewClimateWorkbook).mockResolvedValue({...plan,content:{...plan.content,title:'',company:{...plan.content.company,name:'',emailDomain:'',timezone:''},startDate:'0001-01-01T00:00:00+00:00',endDate:'0001-01-01T00:00:00+00:00',people:[]},errors:['EMPRESA: complete Nombre legal / comercial.','DEMOGRAFICOS: agregue al menos una persona.']})
+   renderPage();await review('Complete el archivo antes de importar')
+   expect(screen.getByText(/columna B de EMPRESA/)).toBeTruthy()
+   expect(screen.getByText(/La cantidad prevista no agrega personas/)).toBeTruthy()
+   expect(screen.getByRole('alert').textContent).toContain('agregue al menos una persona')
+   expect(screen.queryByText(/0001-01-01/)).toBeNull()
+   expect(screen.queryByText(/Se creará una empresa/)).toBeNull()
+   expect(screen.queryByText(/cuentas nuevas reciben usuario/)).toBeNull()
+   expect(screen.getByText(/Pregunta de prueba/)).toBeTruthy()
+   expect(screen.queryByRole('button',{name:'Crear clima y enviar accesos'})).toBeNull()
+   expect(applyClimateWorkbook).not.toHaveBeenCalled()
  })
  it('requires a new review when existing accounts change after approval',async()=>{
    renderPage();const user=await review();vi.mocked(previewClimateWorkbook).mockResolvedValue({...plan,companyId:'newly-created-company'})

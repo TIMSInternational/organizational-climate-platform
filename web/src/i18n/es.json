@@ -7340,6 +7340,8 @@
     "file": "Libro completo (.xlsx, hasta 10 MB)",
     "previewOnly": "La revisión no crea registros ni envía correos. Complete EMPRESA, DESCRIPCION, ESCALAS, PREGUNTAS y DEMOGRAFICOS.",
     "review": "Revisar archivo",
+    "incompleteTitle": "Complete el archivo antes de importar",
+    "incompleteHelp": "Corrija los problemas indicados en Excel. Los datos de empresa van en la columna B de EMPRESA; los nombres, correos y departamentos empiezan en la fila 6 de DEMOGRAFICOS. La cantidad prevista no agrega personas. Guarde el archivo, seleccione arriba la versión actualizada y revise de nuevo. No se ha creado ni enviado nada.",
     "failed": "No se pudo procesar el archivo. Inténtelo de nuevo.",
     "changed": "Los registros existentes cambiaron desde la revisión. Revise este plan actualizado y apruébelo de nuevo.",
     "retryNote": "Algunos pasos pueden haberse completado. Revise el mismo archivo para continuar con la empresa, encuesta y cuentas existentes. Se conservan sus contraseñas.",
