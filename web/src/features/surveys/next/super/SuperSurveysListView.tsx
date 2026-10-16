@@ -29,6 +29,14 @@ import { calendarDay, calendarDayLong } from '../../../../lib/calendarDay'
 import { cn } from '../../../../lib/cn'
 import { downloadBlobFile } from '../../../../lib/downloadBlobFile'
 import { allResponsesFileName, getAllResponsesWorkbook } from '../../api/responseExport'
+
+/**
+ * The API origin, the same way every other caller reads it. An empty string here is not a
+ * harmless default: it makes the request a relative path, which resolves against the WEB
+ * origin, and the SPA host answers unknown paths with `index.html` and a 200 — so the
+ * download succeeds and saves the app shell under an .xlsx name.
+ */
+const RESPONSE_EXPORT_BASE_URL = import.meta.env.VITE_API_BASE_URL
 import { companyShortName } from '../../../../lib/companyShortName'
 import { signedReading } from '../../../dashboard/next/derive'
 import { statusLabel, typeLabel } from '../../surveyVocabulary'
@@ -577,7 +585,10 @@ function OneClimateResponsesItem({ surveyId, title, t }: { surveyId: string; tit
   async function run() {
     setFailed(false)
     try {
-      downloadBlobFile(allResponsesFileName(new Date(), title), await getAllResponsesWorkbook('', surveyId))
+      downloadBlobFile(
+        allResponsesFileName(new Date(), title),
+        await getAllResponsesWorkbook(RESPONSE_EXPORT_BASE_URL, surveyId),
+      )
     } catch {
       setFailed(true)
     }
@@ -614,7 +625,7 @@ function AllResponsesButton({ t }: { t: TranslateFn }) {
     setBusy(true)
     setFailed(false)
     try {
-      downloadBlobFile(allResponsesFileName(new Date()), await getAllResponsesWorkbook(''))
+      downloadBlobFile(allResponsesFileName(new Date()), await getAllResponsesWorkbook(RESPONSE_EXPORT_BASE_URL))
     } catch {
       setFailed(true)
     } finally {

@@ -19,10 +19,21 @@ import { authFetch } from '../../../api/authFetch'
  * The server decides that, not this module; the button is hidden from everyone else so the
  * refusal is never the first a reader hears of it.
  */
+/** What the endpoint serves, and the only thing worth saving under an .xlsx name. */
+const WORKBOOK_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+
 export async function getAllResponsesWorkbook(baseUrl: string, surveyId?: string): Promise<Blob> {
   const query = surveyId ? `?surveyId=${encodeURIComponent(surveyId)}` : ''
   const response = await authFetch(`${baseUrl}/admin/exports/responses${query}`)
   if (!response.ok) throw new Error('surveys.next.super.exportFailed')
+
+  // `response.ok` is not enough, and this cost a corrupt download to learn. With an empty
+  // `baseUrl` the request is a RELATIVE path, so it resolves against the web origin instead
+  // of the API, and the SPA host answers every unknown path with `index.html` and a 200. The
+  // browser then saves the app shell under an .xlsx name and the reader opens 1 KB of HTML.
+  // A 200 says the server replied, not that it replied with a workbook.
+  const type = response.headers.get('content-type') ?? ''
+  if (!type.includes(WORKBOOK_TYPE)) throw new Error('surveys.next.super.exportFailed')
   return response.blob()
 }
 
