@@ -260,7 +260,7 @@ public static class SearchEndpoints
         {
             AdminAccess admin => ForAdmin(admin.Scope, type, tsQuery, limit, db),
             AssignedSurveysAccess assigned when type == SearchEntityTypes.Survey => SearchQueries.AssignedSurveys(
-                db.Surveys, db.SurveyDepartmentTargets, db.Responses,
+                db.Surveys, db.SurveyDepartmentTargets, db.SurveyUserTargets, db.Responses,
                 assigned.CompanyId, assigned.DepartmentId, assigned.UserId, tsQuery, limit),
             _ => null,
         };

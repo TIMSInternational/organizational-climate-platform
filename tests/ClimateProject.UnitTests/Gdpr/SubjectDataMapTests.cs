@@ -271,7 +271,12 @@ public class SubjectDataMapTests
         //
         // 31 since #139: report_shares carries created_by and revoked_by, both SET NULL, and
         // counts once for the same reason QuestionLibraryItem does.
-        Assert.Equal(31, nonOwnedReferrers.Count);
+        //
+        // 32 since #587: survey_user_targets names the people a survey is aimed at, for a
+        // roster a department cannot express. It is a census of referring TYPES, so a new
+        // number here means a new table can hold a person -- which is exactly when
+        // SubjectDataMap must gain an entry, and did.
+        Assert.Equal(32, nonOwnedReferrers.Count);
 
         var restricting = user.GetReferencingForeignKeys()
             .Where(fk => !fk.DeclaringEntityType.IsOwned() && fk.DeleteBehavior == DeleteBehavior.Restrict)

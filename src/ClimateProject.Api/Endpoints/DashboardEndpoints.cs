@@ -654,7 +654,7 @@ public static class DashboardEndpoints
             : null;
 
         var assigned = SurveyQueries.AssignedTo(
-            db.Surveys, db.SurveyDepartmentTargets, db.Responses, myCompanyId, me.DepartmentId, me.Id);
+            db.Surveys, db.SurveyDepartmentTargets, db.SurveyUserTargets, db.Responses, myCompanyId, me.DepartmentId, me.Id);
 
         var pendingCount = await assigned.CountAsync(cancellationToken);
         var pendingRows = await DashboardQueries

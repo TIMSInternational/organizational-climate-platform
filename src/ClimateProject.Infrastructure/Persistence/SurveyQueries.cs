@@ -64,6 +64,7 @@ public static class SurveyQueries
     public static IQueryable<Survey> AssignedTo(
         IQueryable<Survey> surveys,
         IQueryable<SurveyDepartmentTarget> departmentTargets,
+        IQueryable<SurveyUserTarget> userTargets,
         IQueryable<Response> responses,
         Guid companyId,
         Guid? departmentId,
@@ -71,12 +72,15 @@ public static class SurveyQueries
     {
         var query = surveys.Where(s => s.CompanyId == companyId && s.Status == SurveyStatuses.Active);
 
-        // No targets at all means company-wide; any targets means only those departments.
-        query = departmentId is Guid department
-            ? query.Where(s =>
-                !departmentTargets.Any(t => t.SurveyId == s.Id)
-                || departmentTargets.Any(t => t.SurveyId == s.Id && t.DepartmentId == department))
-            : query.Where(s => !departmentTargets.Any(t => t.SurveyId == s.Id));
+        // No targets of EITHER kind means company-wide; otherwise the audience is the union
+        // of "my department is targeted" and "I am targeted". Per-person targets exist
+        // because a department cannot express a roster that cuts across the org -- ESPH's
+        // teletrabajadores sit in all eight departments, so a department-based audience for
+        // them resolved to everybody.
+        query = query.Where(s =>
+            (!departmentTargets.Any(t => t.SurveyId == s.Id) && !userTargets.Any(t => t.SurveyId == s.Id))
+            || (departmentId != null && departmentTargets.Any(t => t.SurveyId == s.Id && t.DepartmentId == departmentId))
+            || userTargets.Any(t => t.SurveyId == s.Id && t.UserId == userId));
 
         // "Must answer" excludes what has already been answered. An anonymous survey stores
         // no UserId, so it stays listed for its whole window -- the alternative is
