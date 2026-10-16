@@ -10,7 +10,7 @@ import assert from 'node:assert/strict'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import {
-  readWorkbook, parseClimate, parseSheet, parseSharedStrings, skipDemographics, surveyWindow, roleForTitle, slug, toImportRows, toSurveyRequest, toFieldRequest, toBandsRequest, toSettingsRequest, validTimeZone, validScale, decodeXml, parseStyles,
+  readWorkbook, parseClimate, parseSheet, parseSharedStrings, skipDemographics, surveyWindow, roleForTitle, slug, toImportRows, toSurveyRequest, toFieldRequest, toBandsRequest, toSettingsRequest, validTimeZone, validScale, decodeXml, parseStyles, applyCompanyName,
 } from './import-climate-workbook.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -317,4 +317,21 @@ test('a dimension titled in the singular, "Pregunta abierta", still holds open q
   }
   const { climate } = parseClimate({ PREGUNTAS: sheet('Liderazgo') })
   assert.equal(climate.dimensions.find((d) => d.name === 'Liderazgo').open, false)
+})
+
+test('applyCompanyName substitutes the template placeholder everywhere the C# parser does', () => {
+  const climate = {
+    intro: 'el trabajo en [Empresa] e identificar',
+    invitation: { subject: 'Invitación al clima organizacional de [Empresa]', message: 'Hola, [Empresa] le invita' },
+    dimensions: [{ name: 'D', questions: [{ text: 'Confío en [Empresa]' }, 'Recomiendo [Empresa]'] }],
+  }
+  const out = applyCompanyName(climate, 'ESPH')
+  assert.equal(out.intro, 'el trabajo en ESPH e identificar')
+  assert.equal(out.invitation.subject, 'Invitación al clima organizacional de ESPH')
+  assert.equal(out.invitation.message, 'Hola, ESPH le invita')
+  assert.equal(out.dimensions[0].questions[0].text, 'Confío en ESPH')
+  assert.equal(out.dimensions[0].questions[1], 'Recomiendo ESPH')
+  // No name: leave the text alone rather than substitute an empty string.
+  assert.equal(applyCompanyName(climate, undefined).invitation.subject,
+    'Invitación al clima organizacional de [Empresa]')
 })

@@ -531,6 +531,38 @@ export function validTimeZone(zone) {
 }
 
 /** One line per thing the run would do — what the dry run prints. */
+/**
+ * Substitutes the template's `[Empresa]` placeholder with the company's name, the same way
+ * the server-side parser does (`ClimateWorkbook.cs:108,110,158`).
+ *
+ * Without it this importer shipped the placeholder verbatim: the ESPH workbook's invitation
+ * subject is "Invitación al clima organizacional de [Empresa]" and its description opens
+ * "cómo vivimos el trabajo en [Empresa]", so 617 people would have received an email whose
+ * subject line read `[Empresa]`. The two code paths parse the same workbook and must agree
+ * about its text; only the C# one had learned this.
+ *
+ * Applied before `summarise`, so the dry run prints the sentence the respondent will
+ * actually read rather than the template's.
+ *
+ * A missing name leaves the text untouched: `--company-id` alone cannot know it, and
+ * printing the placeholder is honest where substituting an empty string is not.
+ */
+export function applyCompanyName(climate, name) {
+  if (!name) return climate
+  const sub = (text) => (typeof text === 'string' ? text.split('[Empresa]').join(name) : text)
+  return {
+    ...climate,
+    intro: sub(climate.intro),
+    invitation: climate.invitation
+      ? { ...climate.invitation, subject: sub(climate.invitation.subject), message: sub(climate.invitation.message) }
+      : climate.invitation,
+    dimensions: climate.dimensions.map((d) => ({
+      ...d,
+      questions: d.questions.map((q) => (typeof q === 'string' ? sub(q) : { ...q, text: sub(q.text) })),
+    })),
+  }
+}
+
 export function summarise(climate) {
   const likert = climate.dimensions.filter((d) => !d.open).reduce((n, d) => n + d.questions.length, 0)
   const open = climate.dimensions.filter((d) => d.open).reduce((n, d) => n + d.questions.length, 0)
@@ -601,7 +633,7 @@ async function main() {
   const zoneProblems = validTimeZone(values.timezone) ? [] : [`--timezone "${values.timezone}" no es una zona horaria válida (ej. America/Costa_Rica).`]
   const scaleProblems = validScale(values.scale) ? [] : [`--scale "${values.scale}" debe ser mean (1,00–5,00) o percent (0–100).`]
   const problems = [...parsed.problems, ...skipping.problems, ...window.problems, ...zoneProblems, ...scaleProblems]
-  const climate = skipping.climate
+  const climate = applyCompanyName(skipping.climate, values['company-name'])
   log(`import-climate-workbook: ${values.file}`)
   for (const line of summarise(climate)) log(`  ${line}`)
   if (skipping.skipped.length) log(`  sin importar (--skip-demographic): ${skipping.skipped.join(' · ')}`)
