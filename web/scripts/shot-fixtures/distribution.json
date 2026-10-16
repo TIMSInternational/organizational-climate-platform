@@ -268,6 +268,6 @@
     "email": "ada.lovelace@northwind.example",
     "role": "super_admin",
     "companyId": "11111111-1111-1111-1111-111111111111",
-    "companyName": "Northwind Logistics"
+    "companyName": "Northwind Logistics", "companyLogoUrl": null
   }
 }

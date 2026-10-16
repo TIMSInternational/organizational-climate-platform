@@ -32,8 +32,12 @@ export default function SurveyRespondPage() {
 
   if (!id) return null
 
+  // `showCompanyLogo` is passed here and nowhere else: this is the only one of
+  // `RespondShell`'s seven callers inside `RequireAuth` (`router.tsx`). The six link-holder
+  // routes must not pass it — see `RespondShell`'s remarks and `useOwnCompanyBrand`'s two
+  // locks.
   return (
-    <RespondShell skipLabel={t('skipToSurvey')} contentId="survey">
+    <RespondShell skipLabel={t('skipToSurvey')} contentId="survey" showCompanyLogo>
       <SurveyRespondForm surveyId={id} />
     </RespondShell>
   )

@@ -2711,6 +2711,7 @@
     "role": "company_admin",
     "companyId": "11111111-1111-1111-1111-111111111111",
     "companyName": "Northwind Logistics",
+    "companyLogoUrl": null,
     "departmentId": null,
     "departmentName": null,
     "managerId": null,

@@ -33,10 +33,17 @@ import { getToken } from '../auth/token'
  * tenant at all (#191), so `companyName` is legitimately null for them and the eyebrow
  * stays empty, which is the honest answer rather than a placeholder.
  */
-/** The two names the shell and the page eyebrows read off `/profile`. */
+/**
+ * What the shell, the page eyebrows and the respondent's portal read off `/profile`.
+ *
+ * The logo joined the two names rather than getting a fetch of its own for the reason the
+ * cache below exists: these are one row, read once per token, and the portal that shows the
+ * logo is a page that already asks for this response.
+ */
 interface ProfileNames {
   companyName: string | null
   departmentName: string | null
+  companyLogoUrl: string | null
 }
 
 const cache = new Map<string, Promise<ProfileNames | null>>()
@@ -52,7 +59,11 @@ function profileNames(token: string): Promise<ProfileNames | null> {
   if (!pending) {
     const baseUrl = import.meta.env.VITE_API_BASE_URL as string
     pending = getProfile(baseUrl)
-      .then((profile) => ({ companyName: profile.companyName ?? null, departmentName: profile.departmentName ?? null }))
+      .then((profile) => ({
+        companyName: profile.companyName ?? null,
+        departmentName: profile.departmentName ?? null,
+        companyLogoUrl: profile.companyLogoUrl ?? null,
+      }))
       // A failed lookup is not worth an error state on a page whose actual content
       // loaded fine: the eyebrow simply stays empty. Cached as a resolved null so a
       // page that remounts does not retry on every navigation.
@@ -105,4 +116,64 @@ export function useOwnDepartmentName(enabled: boolean): string | null {
   // configured; there it asks nothing rather than sending a request to nowhere.
   const configured = Boolean(import.meta.env.VITE_API_BASE_URL)
   return useProfileName(pickDepartment, enabled && configured)
+}
+
+/** What a white-labelled surface needs: the mark, and the name that labels it. */
+export interface OwnCompanyBrand {
+  logoUrl: string | null
+  companyName: string | null
+}
+
+const NO_BRAND: OwnCompanyBrand = { logoUrl: null, companyName: null }
+
+/**
+ * The viewer's own company logo and name, off the same cached `/profile` read as the two
+ * hooks above. Both together because an `<img>` needs its own alt text, and a logo whose
+ * alt text arrived in a second render would announce itself twice to a screen reader.
+ *
+ * Answers `NO_BRAND` while loading, when the company has no logo, when nobody is signed in,
+ * when no API is configured, and when `enabled` is false — every one of which renders no
+ * `<img>` rather than a broken one.
+ *
+ * ## `enabled` is the white-label privacy boundary, and it fails closed
+ *
+ * `RespondShell` is shared by one authenticated route and six that anybody holding a link
+ * may open, and its own remarks refuse any claim about a tenant on those six. So the caller
+ * has to opt in, and the default is off.
+ *
+ * There are two locks, not one. The opt-in is the first; the second is that `/profile` is
+ * `RequireAuthorization()`, so a visitor with no token has nothing to render even if a
+ * future edit passed `enabled` from a public page by mistake. The reason for the second lock
+ * is that the first is a prop somebody has to keep passing correctly, and this guarantee is
+ * too load-bearing to rest on that.
+ */
+export function useOwnCompanyBrand(enabled: boolean): OwnCompanyBrand {
+  // Same gate as `useOwnDepartmentName`: these surfaces render in unit tests with no API
+  // configured, and there they ask nothing rather than sending a request to nowhere.
+  const configured = Boolean(import.meta.env.VITE_API_BASE_URL)
+  const [brand, setBrand] = useState<OwnCompanyBrand>(NO_BRAND)
+
+  useEffect(() => {
+    const token = getToken()
+    if (!token || !enabled || !configured) {
+      setBrand(NO_BRAND)
+      return
+    }
+
+    let cancelled = false
+    void profileNames(token).then((resolved) => {
+      if (cancelled) return
+      setBrand(
+        resolved
+          ? { logoUrl: resolved.companyLogoUrl, companyName: resolved.companyName }
+          : NO_BRAND,
+      )
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [enabled, configured])
+
+  return brand
 }

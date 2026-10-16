@@ -240,6 +240,16 @@ public static class CompanyEndpoints
             ResultBandsValidation.Apply(company.Settings, request.ResultBands);
         }
 
+        // Same rule, same reason: refused before the first assignment below, so a bad colour
+        // does not leave the timezone saved and the branding half-applied. The logo is the
+        // field that matters most here -- it is the only branding value a RESPONDENT's
+        // browser fetches, since `GET /profile` began carrying it.
+        var brandingRefusal = BrandingValidation.Validate(request);
+        if (brandingRefusal is not null)
+        {
+            return Results.Json(new { message = brandingRefusal }, statusCode: 400);
+        }
+
         if (!string.IsNullOrWhiteSpace(request.SurveyFrequency)) company.Settings.SurveyFrequency = request.SurveyFrequency;
         if (request.MicroclimateEnabled.HasValue) company.Settings.MicroclimateEnabled = request.MicroclimateEnabled.Value;
         if (request.AiInsightsEnabled.HasValue) company.Settings.AiInsightsEnabled = request.AiInsightsEnabled.Value;
@@ -248,7 +258,10 @@ public static class CompanyEndpoints
         if (!string.IsNullOrWhiteSpace(request.Timezone)) company.Settings.Timezone = request.Timezone;
         if (!string.IsNullOrWhiteSpace(request.Language)) company.Settings.Language = request.Language;
 
-        if (request.LogoUrl is not null) company.Branding.LogoUrl = request.LogoUrl;
+        // Normalised, so "" and "   " and null are one stored value. A reader that had to
+        // treat a blank string as "no logo" would be a second place to get it wrong, and the
+        // one on the respondent's portal decides whether an <img> is rendered at all.
+        if (request.LogoUrl is not null) company.Branding.LogoUrl = BrandingValidation.NormaliseLogoUrl(request.LogoUrl);
         if (!string.IsNullOrWhiteSpace(request.PrimaryColor)) company.Branding.PrimaryColor = request.PrimaryColor;
         if (!string.IsNullOrWhiteSpace(request.SecondaryColor)) company.Branding.SecondaryColor = request.SecondaryColor;
         if (!string.IsNullOrWhiteSpace(request.FontFamily)) company.Branding.FontFamily = request.FontFamily;

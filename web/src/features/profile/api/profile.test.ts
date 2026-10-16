@@ -29,6 +29,7 @@ const profile: Profile = {
   lastLoginAt: '2026-08-01T09:00:00Z',
   createdAt: '2026-01-01T09:00:00Z',
   demographics: {},
+  companyLogoUrl: null,
 }
 
 const preferences: ProfilePreferences = {

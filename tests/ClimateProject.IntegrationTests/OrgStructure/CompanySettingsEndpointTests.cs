@@ -72,7 +72,10 @@ public class CompanySettingsEndpointTests : IAsyncLifetime
             DataRetentionDays: null,
             Timezone: null,
             Language: null,
-            LogoUrl: "https://example.test/logo.png",
+            // A root-relative path, because this endpoint stopped accepting an absolute
+            // URL on 2026-10-16. It used to send "https://example.test/logo.png" and
+            // assert it round-tripped -- see the test below, which now pins the refusal.
+            LogoUrl: "/brand/acme-logo.svg",
             PrimaryColor: "#000000",
             SecondaryColor: null,
             FontFamily: null,
@@ -83,8 +86,74 @@ public class CompanySettingsEndpointTests : IAsyncLifetime
         Assert.Equal("monthly", result!.Settings.SurveyFrequency);
         Assert.False(result.Settings.MicroclimateEnabled);
         Assert.True(result.Settings.AnonymousSurveys);
-        Assert.Equal("https://example.test/logo.png", result.Branding.LogoUrl);
+        Assert.Equal("/brand/acme-logo.svg", result.Branding.LogoUrl);
         Assert.Equal("#000000", result.Branding.PrimaryColor);
+    }
+
+    /// <summary>
+    /// The refusal at the real endpoint, through the real pipeline, by the role that can
+    /// actually reach it. <c>BrandingValidationTests</c> covers the rule; this covers that
+    /// the rule is WIRED -- a validator nobody calls is the failure mode that unit tests
+    /// cannot see, and this endpoint went a long time assigning all five branding fields raw.
+    /// </summary>
+    [Theory]
+    [InlineData("https://cdn.example.test/logo.png")]
+    [InlineData("//cdn.example.test/logo.png")]
+    [InlineData("/brand/../../etc/passwd")]
+    [InlineData("/brand/notes.txt")]
+    public async Task An_off_origin_or_non_image_logo_is_refused(string logo)
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.PutAsJsonAsync($"/admin/companies/{_companyAId}/settings", new UpdateCompanySettingsRequest(
+            SurveyFrequency: null, MicroclimateEnabled: null, AiInsightsEnabled: null,
+            AnonymousSurveys: null, DataRetentionDays: null, Timezone: null, Language: null,
+            LogoUrl: logo, PrimaryColor: null, SecondaryColor: null, FontFamily: null, CustomCss: null));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    /// <summary>
+    /// Refused rather than capped: arbitrary CSS on these screens could hide the anonymity
+    /// notice a respondent reads before answering, or the hatching that marks a suppressed
+    /// cell. Both are privacy guarantees that happen to be drawn.
+    /// </summary>
+    [Fact]
+    public async Task Custom_css_cannot_be_saved_through_the_endpoint_at_all()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        // A known-good logo first, so there is a value to prove was NOT overwritten.
+        var seeded = await client.PutAsJsonAsync($"/admin/companies/{_companyAId}/settings", new UpdateCompanySettingsRequest(
+            SurveyFrequency: null, MicroclimateEnabled: null, AiInsightsEnabled: null,
+            AnonymousSurveys: null, DataRetentionDays: null, Timezone: null, Language: null,
+            LogoUrl: "/brand/before.svg", PrimaryColor: null, SecondaryColor: null,
+            FontFamily: null, CustomCss: null));
+        Assert.Equal(HttpStatusCode.OK, seeded.StatusCode);
+
+        var response = await client.PutAsJsonAsync($"/admin/companies/{_companyAId}/settings", new UpdateCompanySettingsRequest(
+            SurveyFrequency: "weekly", MicroclimateEnabled: null, AiInsightsEnabled: null,
+            AnonymousSurveys: null, DataRetentionDays: null, Timezone: null, Language: null,
+            LogoUrl: "/brand/after.svg", PrimaryColor: null, SecondaryColor: null, FontFamily: null,
+            CustomCss: ".anonymity-notice { display: none }"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        // Nothing in that request was applied. The refusal happens before the first
+        // assignment, so a rejected branding field cannot half-save the rest of the page --
+        // which is the property `ResultBandsValidation` is placed for and this one copies.
+        var after = await client.PutAsJsonAsync($"/admin/companies/{_companyAId}/settings", new UpdateCompanySettingsRequest(
+            SurveyFrequency: null, MicroclimateEnabled: null, AiInsightsEnabled: null,
+            AnonymousSurveys: null, DataRetentionDays: null, Timezone: null, Language: null,
+            LogoUrl: null, PrimaryColor: null, SecondaryColor: null, FontFamily: null, CustomCss: null));
+        Assert.Equal(HttpStatusCode.OK, after.StatusCode);
+        var result = await after.Content.ReadFromJsonAsync<CompanySettingsResponse>();
+        Assert.Equal("/brand/before.svg", result!.Branding.LogoUrl);
+        Assert.NotEqual("weekly", result.Settings.SurveyFrequency);
     }
 
     [Fact]

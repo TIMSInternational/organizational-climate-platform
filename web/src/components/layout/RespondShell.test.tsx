@@ -1,10 +1,15 @@
-import { describe, it, expect, afterEach } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { describe, it, expect, afterEach, vi } from 'vitest'
+import { render, screen, cleanup, waitFor } from '@testing-library/react'
+import { readFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
 import { RespondShell, RespondCaption, RespondReading, BrandLockup } from './RespondShell'
 import { SidebarBrand } from './SidebarBrand'
 import { CHIP_SELECT_STYLE } from './chipSelectStyle'
 import { TranslationProvider } from '../../i18n'
 import { LOCALE_STORAGE_KEY } from '../../i18n/locale'
+import { setToken, clearToken } from '../../auth/token'
+import { tokenFor } from '../../test/jwtFixture'
+import { clearCompanyNameCache } from '../../company-context/useCompanyName'
 
 function renderShell(children: React.ReactNode = <p>body</p>) {
   return render(
@@ -24,6 +29,8 @@ function renderShell(children: React.ReactNode = <p>body</p>) {
 afterEach(() => {
   cleanup()
   window.localStorage.clear()
+  clearToken()
+  clearCompanyNameCache()
 })
 
 describe('RespondShell', () => {
@@ -259,5 +266,140 @@ describe('RespondReading', () => {
 
     expect(screen.getByText('12')).toBeTruthy()
     expect(screen.queryByText('Nothing is submitted for you')).toBeNull()
+  })
+})
+
+/**
+ * White-label, and the boundary around it.
+ *
+ * `RespondShell` is shared by one authenticated route and six that anybody holding a link
+ * may open, and its own remarks refuse any claim about a tenant on those six. The logo is
+ * opt-in with the default off, so the question these ask is not "does the logo render" but
+ * "can it render where it must not".
+ *
+ * ## They stub the API on purpose
+ *
+ * The suite has no `VITE_API_BASE_URL`, so `useOwnCompanyBrand` asks nothing and answers
+ * nulls — which means a test written without this stub passes whether the default is off or
+ * ON. It would assert the absence of a request, not the boundary. The stub is what makes
+ * the negative cases mean something: the logo IS reachable here, and still must not appear.
+ */
+describe('the tenant logo', () => {
+  const LOGO = '/brand/esph-logo.png'
+
+  function serveProfile() {
+    vi.stubEnv('VITE_API_BASE_URL', 'http://api.test')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              id: 'u1',
+              companyId: 'c1',
+              companyName: 'ESPH',
+              email: 'a@esph-sa.com',
+              name: 'Ana',
+              role: 'employee',
+              departmentId: null,
+              departmentName: null,
+              managerId: null,
+              isActive: true,
+              hasPassword: true,
+              lastLoginAt: null,
+              createdAt: '2026-01-01T00:00:00Z',
+              demographics: {},
+              companyLogoUrl: LOGO,
+            }),
+            { status: 200 },
+          ),
+        ),
+      ),
+    )
+  }
+
+  function renderWith(props: { showCompanyLogo?: boolean }) {
+    render(
+      <TranslationProvider initialLocale="es">
+        <RespondShell skipLabel="Saltar a la encuesta" {...props}>
+          <p>body</p>
+        </RespondShell>
+      </TranslationProvider>,
+    )
+  }
+
+  const logo = () => document.querySelector('[data-slot="company-logo"]')
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+  })
+
+  it('shows the signed-in respondent their own company logo when the caller opts in', () => {
+    // The control for every negative case below. Without it they could all pass over a
+    // component that never renders a logo under any circumstances.
+    serveProfile()
+    setToken(tokenFor({ name: 'Ana', role: 'employee', companyId: 'c1' }))
+    renderWith({ showCompanyLogo: true })
+
+    return waitFor(() => {
+      expect(logo()).not.toBeNull()
+      expect(logo()!.getAttribute('src')).toBe(LOGO)
+    })
+  })
+
+  it('renders no company logo by default, which is what the six link-holder routes get', async () => {
+    serveProfile()
+    setToken(tokenFor({ name: 'Ana', role: 'employee', companyId: 'c1' }))
+    renderWith({})
+
+    // The profile would answer with a logo; the default refuses to ask for it.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(logo()).toBeNull()
+  })
+
+  it('renders no company logo for a visitor holding a link, even when the caller opts in', async () => {
+    // The second of `useOwnCompanyBrand`'s two locks, and the one that does not depend on a
+    // prop being passed correctly: `/profile` is RequireAuthorization(), so with no token
+    // there is nothing to render. This is what makes the guarantee structural.
+    serveProfile()
+    clearToken()
+    renderWith({ showCompanyLogo: true })
+
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(logo()).toBeNull()
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled()
+  })
+
+  it('keeps the product lockup beside the tenant logo rather than being replaced by it', async () => {
+    // A tenant mark replacing the product lockup would misrepresent whose product this is,
+    // and for most respondents this is the only screen of it they ever see.
+    serveProfile()
+    setToken(tokenFor({ name: 'Ana', role: 'employee', companyId: 'c1' }))
+    renderWith({ showCompanyLogo: true })
+
+    await waitFor(() => expect(logo()).not.toBeNull())
+    const occ = [...document.querySelectorAll('img')].filter((img) => img !== logo())
+    expect(occ.length).toBeGreaterThan(0)
+  })
+})
+
+/**
+ * A sweep, not a named list. `resultsContrast` named four files and missed the fifth; the
+ * guard that swept its directory caught it. The risk here is the same shape: a SEVENTH
+ * caller of `RespondShell` added on a public route and opted in by copy-paste.
+ */
+describe('who may opt into the tenant logo', () => {
+  it('is exactly one page, and it is the one inside RequireAuth', () => {
+    const root = join(process.cwd(), 'src')
+    const callers = readdirSync(root, { recursive: true, encoding: 'utf8' })
+      .filter((rel) => (rel.endsWith('.tsx') || rel.endsWith('.ts')) && !rel.endsWith('.test.tsx') && !rel.endsWith('.test.ts'))
+      .filter((rel) => readFileSync(join(root, rel), 'utf8').includes('showCompanyLogo'))
+      .sort()
+
+    expect(callers).toEqual([
+      join('components', 'layout', 'RespondShell.tsx'),
+      join('features', 'surveys', 'pages', 'SurveyRespondPage.tsx'),
+    ])
   })
 })

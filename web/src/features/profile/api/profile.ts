@@ -30,6 +30,17 @@ export interface Profile {
   lastLoginAt: string | null
   createdAt: string
   demographics: Record<string, string>
+  /**
+   * The caller's own company logo, or null when that company has none. A root-relative path
+   * under `/brand/` or a `data:` URI — never an absolute URL, which `BrandingValidation` on
+   * the API refuses because `vercel.json` sets `img-src 'self' data:`.
+   *
+   * It arrives here, on an authorized route, rather than on a public branding endpoint, so
+   * that "only a signed-in member of the company sees the company's mark" holds because of
+   * where the value lives. See `RespondShell`, which refuses any claim about a tenant on the
+   * link-holder route it shares.
+   */
+  companyLogoUrl: string | null
 }
 
 export interface ProfileActivityEntry {
