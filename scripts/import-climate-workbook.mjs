@@ -86,12 +86,27 @@ export function decodeXml(text) {
   })
 }
 
+/**
+ * An optional XML namespace prefix on a spreadsheetml element.
+ *
+ * Excel writes `<sheet>`; several other writers — including whatever produced the TIMS
+ * climate template — write `<x:sheet>` and declare `xmlns:x` on the root. Both are valid
+ * OOXML and mean the same element, so every tag matched in this file tolerates a prefix.
+ *
+ * Found 2026-10-16: without it `readWorkbook` returned ZERO sheets for the template and for
+ * every workbook built from it, and the run reported "Falta la hoja DESCRIPCION" for all
+ * four sheets — a file-not-understood failure wearing the costume of an empty workbook.
+ * The attributes are not affected: `name`, `r:id`, `r`, `t` and `s` are spelled the same
+ * either way, and the relationship parts are a different namespace that is never prefixed.
+ */
+const NS = '(?:[A-Za-z_][\\w.-]*:)?'
+
 /** Every <t> inside an element, joined — a rich-text string is several runs. */
-const textOf = (xml) => [...xml.matchAll(/<t(?:\s[^>]*)?>([\s\S]*?)<\/t>/g)].map((m) => decodeXml(m[1])).join('')
+const textOf = (xml) => [...xml.matchAll(new RegExp(`<${NS}t(?:\\s[^>]*)?>([\\s\\S]*?)</${NS}t>`, 'g'))].map((m) => decodeXml(m[1])).join('')
 
 export function parseSharedStrings(xml) {
   if (!xml) return []
-  return [...xml.matchAll(/<si>([\s\S]*?)<\/si>/g)].map((m) => textOf(m[1]))
+  return [...xml.matchAll(new RegExp(`<${NS}si(?:\\s[^>]*)?>([\\s\\S]*?)</${NS}si>`, 'g'))].map((m) => textOf(m[1]))
 }
 
 /**
@@ -100,14 +115,15 @@ export function parseSharedStrings(xml) {
  * re-saved; what they point at does not.
  */
 export function parseStyles(xml) {
-  const section = (name) => xml.match(new RegExp(`<${name}[^>]*>([\\s\\S]*?)</${name}>`))?.[1] ?? ''
-  const fonts = [...section('fonts').matchAll(/<font>([\s\S]*?)<\/font>|<font\/>/g)].map((m) => /<b\/>|<b val="(1|true)"\/>/.test(m[1] ?? ''))
-  const fills = [...section('fills').matchAll(/<fill>([\s\S]*?)<\/fill>/g)].map((m) => {
+  const section = (name) => xml.match(new RegExp(`<${NS}${name}[^>]*>([\\s\\S]*?)</${NS}${name}>`))?.[1] ?? ''
+  const fonts = [...section('fonts').matchAll(new RegExp(`<${NS}font>([\\s\\S]*?)</${NS}font>|<${NS}font/>`, 'g'))]
+    .map((m) => new RegExp(`<${NS}b/>|<${NS}b val="(1|true)"/>`).test(m[1] ?? ''))
+  const fills = [...section('fills').matchAll(new RegExp(`<${NS}fill>([\\s\\S]*?)</${NS}fill>`, 'g'))].map((m) => {
     const solid = /patternType="solid"/.test(m[1])
-    const rgb = m[1].match(/<fgColor[^>]*rgb="([0-9A-F]{8})"/i)?.[1] ?? null
+    const rgb = m[1].match(new RegExp(`<${NS}fgColor[^>]*rgb="([0-9A-F]{8})"`, 'i'))?.[1] ?? null
     return { solid, rgb }
   })
-  return [...section('cellXfs').matchAll(/<xf\b([^>]*?)(?:\/>|>[\s\S]*?<\/xf>)/g)].map((m) => {
+  return [...section('cellXfs').matchAll(new RegExp(`<${NS}xf\\b([^>]*?)(?:/>|>[\\s\\S]*?</${NS}xf>)`, 'g'))].map((m) => {
     const fontId = Number(m[1].match(/fontId="(\d+)"/)?.[1] ?? 0)
     const fillId = Number(m[1].match(/fillId="(\d+)"/)?.[1] ?? 0)
     const fill = fills[fillId] ?? { solid: false, rgb: null }
@@ -118,14 +134,14 @@ export function parseStyles(xml) {
 /** { A1: { value, style } } for one sheet. Numbers stay numbers; a formula keeps its cached value. */
 export function parseSheet(xml, sharedStrings, styles) {
   const cells = {}
-  for (const m of xml.matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
+  for (const m of xml.matchAll(new RegExp(`<${NS}c\\b([^>]*?)(?:/>|>([\\s\\S]*?)</${NS}c>)`, 'g'))) {
     const attrs = m[1]
     const ref = attrs.match(/\br="([A-Z]+\d+)"/)?.[1]
     if (!ref) continue
     const type = attrs.match(/\bt="(\w+)"/)?.[1] ?? 'n'
     const style = styles[Number(attrs.match(/\bs="(\d+)"/)?.[1] ?? 0)] ?? { bold: false, filled: false, rgb: null }
     const body = m[2] ?? ''
-    const raw = body.match(/<v>([\s\S]*?)<\/v>/)?.[1]
+    const raw = body.match(new RegExp(`<${NS}v(?:\\s[^>]*)?>([\\s\\S]*?)</${NS}v>`))?.[1]
     let value = null
     if (type === 's' && raw !== undefined) value = sharedStrings[Number(raw)] ?? null
     else if (type === 'inlineStr') value = textOf(body)
@@ -153,7 +169,7 @@ export function readWorkbook(path) {
   const shared = parseSharedStrings(part('xl/sharedStrings.xml'))
   const styles = parseStyles(part('xl/styles.xml'))
   const sheets = {}
-  for (const m of workbook.matchAll(/<sheet\b([^>]*)\/?>/g)) {
+  for (const m of workbook.matchAll(new RegExp(`<${NS}sheet\\b([^>]*?)/?>`, 'g'))) {
     const name = attr(m[1], 'name')
     const target = targets[attr(m[1], 'r:id')]
     if (!name || !target) continue
@@ -245,7 +261,11 @@ export function parseClimate(sheets) {
     if (!text) continue
     const looksLikeTitle = cell.style.filled || cell.style.bold || !/[.?!:]$/.test(text)
     if (looksLikeTitle && !(dimensions.length && /[.?!]$/.test(text))) {
-      dimensions.push({ name: text, open: /^preguntas abiertas$/.test(norm(text)), questions: [] })
+      // Singular too: ESPH's own questionnaire heads its last section "Pregunta abierta",
+      // which is natural Spanish for a section holding one. Matched only plural, that
+      // question imported as a LIKERT -- the respondent would have been shown a 1-5 scale
+      // for "¿Hay algún aspecto importante sobre su trabajo...?" (found 2026-10-16).
+      dimensions.push({ name: text, open: /^preguntas? abiertas?$/.test(norm(text)), questions: [] })
     } else if (dimensions.length) {
       dimensions.at(-1).questions.push(text)
     } else {
@@ -554,6 +574,11 @@ async function main() {
       email: { type: 'string', default: 'fede.super@acme.test' },
       password: { type: 'string', default: 'Local1234!' },
       apply: { type: 'boolean', default: false },
+      // ESPH's mass invite is username+password (ruled 2026-10-13), which is the
+      // endpoint's `withCredentials` branch. Without it every person gets an ACCOUNT
+      // INVITATION instead -- "use the link below to set up your account" -- and chooses
+      // their own password, which is a different product decision wearing the same name.
+      'with-credentials': { type: 'boolean', default: false },
       'skip-demographic': { type: 'string', multiple: true, default: [] },
       anonymous: { type: 'string', default: 'true' },
       start: { type: 'string' },
@@ -568,6 +593,7 @@ async function main() {
     throw new Error(`--anonymous must be true or false (recibido: ${values.anonymous})`)
   }
   const anonymous = values.anonymous === 'true'
+  const withCredentials = values['with-credentials'] === true
 
   const parsed = parseClimate(readWorkbook(values.file))
   const skipping = skipDemographics(parsed.climate, values['skip-demographic'])
@@ -582,6 +608,9 @@ async function main() {
   log(`  zona horaria de la empresa: ${values.timezone}`)
   log(`  escala de resultados: ${values.scale === 'percent' ? 'percent — 0 a 100 (promedio × 20)' : values.scale === 'mean' ? 'mean — promedio de 1,00 a 5,00' : values.scale}`)
   if (!window.problems.length) log(`  ventana de la encuesta: ${window.startDate} → ${window.endDate}${values.start ? '' : ' (por defecto: sin --start/--end)'}`)
+  log(withCredentials
+    ? '  acceso: USUARIO Y CONTRASEÑA generados por la plataforma, enviados en el correo de credenciales'
+    : '  acceso: INVITACIÓN de cuenta — cada persona abre el enlace y elige su propia contraseña')
   log(anonymous
     ? '  anonimato: ANÓNIMA — no se guarda quién respondió, así que nada impide que alguien la responda otra vez'
     : '  anonimato: IDENTIFICADA — se guarda quién respondió, así que el servidor permite UNA sola respuesta por persona (los resultados siguen siendo solo agregados)')
@@ -655,7 +684,7 @@ async function main() {
   const known = new Set((departments.departments ?? departments).map((d) => norm(d.name)))
   const newDepartments = [...new Set(rows.map((r) => r.department).filter((d) => d && !known.has(norm(d))))]
   const preview = rows.length
-    ? await call('POST', '/admin/users/bulk-import/rows', { companyId, preview: true, rows, newDepartments }, token)
+    ? await call('POST', '/admin/users/bulk-import/rows', { companyId, preview: true, rows, newDepartments, withCredentials }, token)
     : { rows: [] }
   // BulkImportResponse { rows: [{ rowNumber, email, status: valid|error|invited, errors[], issues[{code}] }] }.
   // The natural key of a person is the email: one already invited or already registered is
@@ -672,7 +701,7 @@ async function main() {
   }
   const toImport = rows.filter((r) => !present.has(r.email.toLowerCase()))
   const imported = toImport.length
-    ? await call('POST', '/admin/users/bulk-import/rows', { companyId, preview: false, rows: toImport, newDepartments }, token)
+    ? await call('POST', '/admin/users/bulk-import/rows', { companyId, preview: false, rows: toImport, newDepartments, withCredentials }, token)
     : { rows: [], successCount: 0, errorCount: 0 }
   const byStatus = imported.rows.reduce((acc, r) => ({ ...acc, [r.status]: (acc[r.status] ?? 0) + 1 }), {})
   if (!climate.linkOnly) log(`people: ${JSON.stringify(byStatus)} (success ${imported.successCount}, errors ${imported.errorCount})${newDepartments.length ? `; departments created: ${newDepartments.join(', ')}` : ''}`)
