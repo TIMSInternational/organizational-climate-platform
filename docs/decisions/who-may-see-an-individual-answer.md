@@ -4,8 +4,16 @@
 > Federico, platform-wide. The reasoning below stands as written; only the threshold moved.
 > See [`privacy-floor-is-three.md`](privacy-floor-is-three.md).
 
+> **RULED on section 4, 2026-10-15, by Federico: Mode C is built, under the constraints in
+> [§5](#5-the-ruling-on-mode-c-2026-10-15).** The recommendation in section 4 was *against*
+> it. It was overridden deliberately and with the reasoning read: TIMS builds its work plan on
+> a spreadsheet, the ESPH results are due 14 December, and the platform's own reporting is not
+> the artefact that work happens on. §5 records what was and was not conceded — in particular
+> that an anonymous survey is untouched by this, because there is nothing to concede.
 
-**Status: OPEN. Owner: Andrés, with Federico.** Raised 2026-10-08 by TIMS: "it's extremely
+
+**Status: section 4 RULED 2026-10-15 (see §5); sections 2 and 3 OPEN. Owner: Andrés, with
+Federico.** Raised 2026-10-08 by TIMS: "it's extremely
 important for us to understand and know what were the results per person, their answers, who has
 completed the assessment … we should be able to cross reference and ask for specific reports, so
 for example, a report of the finance department against the generals/managers", with a recorded
@@ -239,3 +247,69 @@ Where it lives: `GdprEndpoints.AccessAsync` passes `withholdVerbatimAnswers: sub
 caller.Id`; `SubjectAccessExport.QuestionResponsesAsync` applies it. Tests:
 `GdprEndpointsTests.Own_access_export_returns_the_subjects_own_words_in_both_columns` and
 `GdprEndpointsTests.An_admins_export_of_someone_else_withholds_their_typed_words_and_says_so`.
+
+## 5. The ruling on Mode C, 2026-10-15
+
+**Ruled by Federico, over section 4's recommendation, having read it.** TIMS does not analyse on
+the platform's screens; it analyses in Excel and writes the work plan from there. ESPH's results
+are due 14 December. The request was made four times across one evening and in these words: *"me
+as a super admin, I need a button, where I can download an excel with all the responses of ALL
+the climate evaluations."*
+
+**Built:** `GET /admin/exports/responses` → `ResponseExportEndpoints`, one workbook, one sheet
+per climate, one row per response, one column per question, with `RESUMEN`, `PREGUNTAS` and
+`PENDIENTES` index sheets. Two ways in: the whole platform from the super-admin surveys header,
+and one climate from its own row (`?surveyId=`); `?companyId=` narrows to one company.
+
+`RESUMEN` carries each climate's **Abre / Cierra / Respuestas / Completas / Pendientes / Última
+respuesta**, and the filename carries the climate and the day. A workbook pulled while a
+measurement is still running must not be mistakable a week later for a finished one.
+
+`PENDIENTES` is the listado the twice-daily status mail is written from: everyone invited who
+has not finished, keeping the roster's own three-way distinction (`started`, `not_started`,
+`not_completed`) rather than flattening it — somebody who never opened it needs their sign-in
+details again, somebody who stopped half way already has them. It calls
+`SurveyParticipationEndpoints.BuildRosterAsync`, the same derivation the Distribución screen
+reads, made `internal` for the purpose: a status report that disagreed with the screen an
+administrator is looking at would be worse than no report.
+
+**Not built, and deliberately out of this change:** the *scheduled* twice-daily email.
+`RecurrenceSchedule` has `daily`, `weekly` and `monthly` and no twice-daily, and no report type
+lists pending people, so that is a cadence, a digest and a recipient list — a separate piece of
+work. The sheet above makes the report sendable by hand in the meantime.
+
+### What the ruling did NOT concede, and why each one held
+
+- **An anonymous survey is untouched.** Not "withheld from the export" — absent.
+  `SurveyResponseEndpoints.StoredUserId` returns null the moment `Settings.Anonymous` is true,
+  so no row was ever written to attribute. Those sheets carry **no identity columns at all**
+  rather than empty ones, and `RESUMEN` says so in words, because a blank `nombre` column reads
+  as data that went missing and nothing went missing. Nothing in this ruling can reach back into
+  a survey already answered anonymously, which is the practical reason the ESPH launch moved to
+  **Mode B / Identificada** on the same day rather than relying on this export.
+- **Verbatim answers stay withheld.** The same rule section 4's own GDPR ruling set, reused and
+  not restated: `response_text` is replaced with `SubjectDataMap.WithheldAnswerMarker` whenever
+  it holds anything, and `response_value` likewise unless the question is positively a closed
+  type. An unrecognised type counts as open. Two surfaces that each decide what a reader may see,
+  each with its own copy of the rule, are one edit away from disagreeing — and the direction they
+  disagree in is somebody's words in a spreadsheet.
+- **Super admin only.** A company administrator reading their own tenant's attributable answers
+  is a larger change to the product's promises than TIMS's own analyst reading them, and nobody
+  asked for it. `ResponseExportEndpointsTests.A_company_administrator_cannot_read_the_platform_wide_response_export`.
+- **Every call is audited.** `AuditSensitiveReadAttribute(AuditVerbs.Export)`, as `GET
+  /audit/export` and `GET /gdpr/access` already are. A surface that can read one person's answers
+  is one whose use has to be reviewable afterwards.
+
+### What section 4 warned about, restated so it is not lost
+
+*"The moment a product can show one person's answers, every anonymous survey it has ever run
+becomes a question about whether it really was."* That cost is now carried by the respondent-facing
+copy: `AnonymityNotice` states which of the two modes a survey is in **before** the person answers,
+and `surveyRespond.identifiedBody` says in as many words that administrators can see who gave each
+answer. The ruling is defensible only for as long as that sentence is true and shown. Anyone
+widening this surface — to company admins, to anonymous surveys, to verbatim text — is changing
+what 800 people were told, not adding a column.
+
+Tests: `ResponseWorkbookTests` (shape, and that an anonymous sheet has no identity column — proved
+by mutation, the guard inverted and the test observed to fail) and `ResponseExportEndpointsTests`
+(authorization, identity by mode, withheld verbatim, demographics decoded out of jsonb).

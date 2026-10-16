@@ -653,6 +653,7 @@ app.MapSystemSettingsEndpoints();
 app.MapDemographicFieldEndpoints();
 app.MapBulkImportEndpoints();
 app.MapClimateWorkbookEndpoints();
+app.MapResponseExportEndpoints();
 app.MapMassInviteEndpoints();
 app.MapActionPlanEndpoints();
 app.MapActionPlanTemplateEndpoints();

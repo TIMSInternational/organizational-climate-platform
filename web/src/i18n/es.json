@@ -4171,6 +4171,10 @@
       "super": {
         "barNoteUnchosen": "Esta lista es de toda la plataforma y no depende de la selección. Para crear una encuesta, elige primero la empresa en la que va.",
         "barNoteChosen": "Esta lista es de toda la plataforma y no depende de la selección. Una encuesta nueva se crea en la empresa elegida.",
+        "exportAll": "Descargar todas las respuestas",
+        "exportOne": "Descargar las respuestas de este clima",
+        "exportBusy": "Preparando el archivo…",
+        "exportFailed": "No se pudo preparar el archivo. Inténtelo de nuevo.",
         "eyebrow": "Todas las empresas",
         "description": "Cuál encuesta está abierta hoy en cada empresa, cuánto le falta para cerrar y dónde leer las que ya cerraron.",
         "allCompanies": "Todas las empresas",

@@ -10,6 +10,8 @@ import { tokenFor } from '../../../../test/jwtFixture'
 import { listSurveys, type SurveyListItem } from '../../api/surveys'
 import { getClimateTrends, type ClimateTrendsResponse } from '../../api/climateTrends'
 import { listCompanies } from '../../../org-structure/api/companies'
+import { getAllResponsesWorkbook } from '../../api/responseExport'
+import { downloadBlobFile } from '../../../../lib/downloadBlobFile'
 import SurveysListNextPage from '../list/SurveysListNextPage'
 import en from '../../../../i18n/en.json'
 import es from '../../../../i18n/es.json'
@@ -29,6 +31,11 @@ vi.mock('../../../org-structure/api/companies', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../../org-structure/api/companies')>()),
   listCompanies: vi.fn(),
 }))
+vi.mock('../../api/responseExport', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../api/responseExport')>()),
+  getAllResponsesWorkbook: vi.fn(),
+}))
+vi.mock('../../../../lib/downloadBlobFile', () => ({ downloadBlobFile: vi.fn() }))
 
 function row(over: Partial<SurveyListItem>): SurveyListItem {
   return {
@@ -216,6 +223,8 @@ describe('SuperSurveysListView — the artboard\'s order, copy and the Distribuc
     vi.mocked(listSurveys).mockResolvedValue(FIX_ROUND)
     vi.mocked(getClimateTrends).mockReset()
     vi.mocked(getClimateTrends).mockRejectedValue(new Error('404'))
+    vi.mocked(getAllResponsesWorkbook).mockReset()
+    vi.mocked(downloadBlobFile).mockReset()
     vi.mocked(listCompanies).mockReset()
     vi.mocked(listCompanies).mockResolvedValue([
       { id: 'meridiano', name: 'Grupo Meridiano S.A.', emailDomain: null, industry: null, size: null, country: null, subscriptionTier: null, createdAt: '2026-01-01T00:00:00Z' },
@@ -252,5 +261,50 @@ describe('SuperSurveysListView — the artboard\'s order, copy and the Distribuc
     await userEvent.click(rowOf('m-open').querySelector('[data-action="distribution"]') as HTMLElement)
     expect(await screen.findByTestId('distribution-route')).toBeTruthy()
     expect(window.localStorage.getItem(COMPANY_CONTEXT_STORAGE_KEY)).toBe('meridiano')
+  })
+
+  /**
+   * The response workbook (ruled 2026-10-15,
+   * `docs/decisions/who-may-see-an-individual-answer.md` §5). The server refuses anyone but a
+   * super administrator; the control is hidden from everyone else so the refusal is never the
+   * first a reader hears of it.
+   */
+  describe('the response workbook', () => {
+    it('offers a super administrator every response, and hands the file over', async () => {
+      const blob = new Blob(['xlsx'])
+      vi.mocked(getAllResponsesWorkbook).mockResolvedValue(blob)
+      renderAs({ role: 'super_admin' })
+
+      const button = await screen.findByRole('button', { name: copy.exportAll })
+      await userEvent.click(button)
+
+      // Waited on the DOWNLOAD, not on the fetch. Waiting on the fetch lets the rest of the
+      // chain finish after the test has ended, and the hand-off then lands in the next test's
+      // mock — which is exactly how this file first went red.
+      await waitFor(() => expect(downloadBlobFile).toHaveBeenCalled())
+      expect(vi.mocked(downloadBlobFile).mock.calls[0][1]).toBe(blob)
+      expect(vi.mocked(downloadBlobFile).mock.calls[0][0]).toMatch(/^respuestas-clima-\d{4}-\d{2}-\d{2}\.xlsx$/)
+    })
+
+    it('says so beside the button when the workbook cannot be prepared, rather than doing nothing', async () => {
+      vi.mocked(getAllResponsesWorkbook).mockRejectedValue(new Error('nope'))
+      renderAs({ role: 'super_admin' })
+
+      await userEvent.click(await screen.findByRole('button', { name: copy.exportAll }))
+
+      // The button's OWN message, not "an alert": this page renders a NetworkError alert of
+      // its own whenever a company's trends fail to load, and `findByRole('alert')` matched
+      // that one while the button had done nothing at all.
+      await screen.findByText(copy.exportFailed)
+      expect(downloadBlobFile).not.toHaveBeenCalled()
+    })
+
+    it('does not offer it to a company administrator — the endpoint refuses them', async () => {
+      vi.mocked(listSurveys).mockResolvedValue(PLATFORM.filter((survey) => survey.companyId === 'meridiano'))
+      renderAs({ role: 'company_admin', companyId: 'meridiano' })
+
+      await screen.findByText('Climate Survey Q4')
+      expect(screen.queryByRole('button', { name: copy.exportAll })).toBeNull()
+    })
   })
 })
