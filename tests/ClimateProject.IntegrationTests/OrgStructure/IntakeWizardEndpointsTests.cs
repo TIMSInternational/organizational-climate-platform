@@ -377,7 +377,7 @@ public class IntakeWizardEndpointsTests : IAsyncLifetime
         company.Cell("B7").Value="Intake Co";company.Cell("B8").Value=_companyDomain;
         company.Cell("B9").Value="Costa Rica";company.Cell("B10").Value="Servicios";
         company.Cell("B13").Value="Clima completo";company.Cell("B15").Value=DateTime.UtcNow.AddDays(1).ToString("yyyy-MM-dd HH:mm");
-        company.Cell("B16").Value=DateTime.UtcNow.AddDays(30).ToString("yyyy-MM-dd HH:mm");company.Cell("B17").Value="UTC";
+        company.Cell("B16").Value=DateTime.UtcNow.AddDays(30).ToString("yyyy-MM-dd HH:mm");company.Cell("B17").Value="America/Costa_Rica";
         var people=book.Worksheet("DEMOGRAFICOS");
         for(var i=0;i<800;i++)
         {
@@ -407,7 +407,7 @@ public class IntakeWizardEndpointsTests : IAsyncLifetime
         var sheet=book.Worksheet("EMPRESA");sheet.Cell("B7").Value="Otra empresa";
         sheet.Cell("B8").Value=$"foreign-{Guid.NewGuid():N}.test";sheet.Cell("B9").Value="Costa Rica";
         sheet.Cell("B10").Value="Servicios";sheet.Cell("B13").Value="Clima ajeno";
-        sheet.Cell("B15").Value=DateTime.UtcNow.AddDays(1).ToString("yyyy-MM-dd");sheet.Cell("B16").Value=DateTime.UtcNow.AddDays(30).ToString("yyyy-MM-dd");sheet.Cell("B17").Value="UTC";
+        sheet.Cell("B15").Value=DateTime.UtcNow.AddDays(1).ToString("yyyy-MM-dd");sheet.Cell("B16").Value=DateTime.UtcNow.AddDays(30).ToString("yyyy-MM-dd");sheet.Cell("B17").Value="America/Costa_Rica";
         var people=book.Worksheet("DEMOGRAFICOS");people.Cell("B6").Value="Persona";people.Cell("D6").Value="p@example.test";people.Cell("K6").Value="Operaciones";
         using var output=new MemoryStream();book.SaveAs(output);using var form=FileForm(output.ToArray(),_companyId,"clima.xlsx");
         var response=await client.PostAsync("/admin/climate-workbooks/preview",form);
@@ -423,7 +423,7 @@ public class IntakeWizardEndpointsTests : IAsyncLifetime
         company.Cell("B7").Value="Intake Co";company.Cell("B8").Value=_companyDomain;
         company.Cell("B9").Value="Costa Rica";company.Cell("B10").Value="Servicios";company.Cell("B13").Value="Clima integrado";
         company.Cell("B15").Value=DateTime.UtcNow.AddDays(1).ToString("yyyy-MM-dd HH:mm");
-        company.Cell("B16").Value=DateTime.UtcNow.AddDays(30).ToString("yyyy-MM-dd HH:mm");company.Cell("B17").Value="UTC";
+        company.Cell("B16").Value=DateTime.UtcNow.AddDays(30).ToString("yyyy-MM-dd HH:mm");company.Cell("B17").Value="America/Costa_Rica";
         var email=$"workbook-{Guid.NewGuid():N}@example.test";var people=book.Worksheet("DEMOGRAFICOS");
         people.Cell("B6").Value="Persona";people.Cell("C6").Value="Integrada";people.Cell("D6").Value=email;
         people.Cell("E6").Value="Analista";people.Cell("F6").Value="Norte";people.Cell("K6").Value="Ingeniería";people.Cell("L6").Value="Colaborador";
@@ -431,7 +431,7 @@ public class IntakeWizardEndpointsTests : IAsyncLifetime
         using var file=FileForm(bytes,_companyId,"clima.xlsx");var preview=await client.PostAsync("/admin/climate-workbooks/preview",file);
         preview.EnsureSuccessStatusCode();var plan=(await preview.Content.ReadFromJsonAsync<ClimateWorkbookPreview>())!;Assert.Empty(plan.Errors);
         var content=plan.Content;
-        var settings=await client.PutAsJsonAsync($"/admin/companies/{_companyId}/settings",new {language="es",timezone="UTC",anonymousSurveys=true,resultBands=content.Company.ResultBands});
+        var settings=await client.PutAsJsonAsync($"/admin/companies/{_companyId}/settings",new {language="es",timezone=content.Company.Timezone,anonymousSurveys=true,resultBands=content.Company.ResultBands});
         settings.EnsureSuccessStatusCode();
         foreach(var field in plan.Fields)
         {

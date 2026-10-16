@@ -422,6 +422,12 @@ public static class SurveyEndpoints
             return ActingUserRequired();
         }
 
+        // Normalised to UTC before it is persisted, not merely compared. Npgsql refuses any
+        // DateTimeOffset whose offset is not zero for a `timestamp with time zone` column --
+        // "Cannot write DateTimeOffset with Offset=-06:00:00" -- and the request body is JSON a
+        // client wrote, so it may legally carry any offset. Every existing caller happens to send
+        // Z (`wizardValues.ts` calls `.toISOString()`), which is why the 500 only surfaced when the
+        // complete-workbook import sent the company's own zone. ToUniversalTime() keeps the instant.
         var now = DateTimeOffset.UtcNow;
         var survey = new Survey
         {
@@ -435,8 +441,8 @@ public static class SurveyEndpoints
             Language = language,
             Type = type,
             ServiceType = serviceType,
-            StartDate = request.StartDate,
-            EndDate = request.EndDate,
+            StartDate = request.StartDate.ToUniversalTime(),
+            EndDate = request.EndDate.ToUniversalTime(),
             Status = SurveyStatuses.Draft,
             TargetAudienceCount = request.TargetAudienceCount,
             CreatedAt = now,
@@ -687,8 +693,8 @@ public static class SurveyEndpoints
             }
         }
 
-        var startDate = request.StartDate ?? survey.StartDate;
-        var endDate = request.EndDate ?? survey.EndDate;
+        var startDate = (request.StartDate ?? survey.StartDate).ToUniversalTime();
+        var endDate = (request.EndDate ?? survey.EndDate).ToUniversalTime();
         if (startDate >= endDate)
         {
             return Results.Json(new { message = "StartDate must be before EndDate" }, statusCode: 400);
@@ -1042,8 +1048,8 @@ public static class SurveyEndpoints
             return Results.Json(new { message = titleError }, statusCode: 400);
         }
 
-        var startDate = request?.StartDate ?? survey.StartDate;
-        var endDate = request?.EndDate ?? survey.EndDate;
+        var startDate = (request?.StartDate ?? survey.StartDate).ToUniversalTime();
+        var endDate = (request?.EndDate ?? survey.EndDate).ToUniversalTime();
         if (startDate >= endDate)
         {
             return Results.Json(new { message = "StartDate must be before EndDate" }, statusCode: 400);
