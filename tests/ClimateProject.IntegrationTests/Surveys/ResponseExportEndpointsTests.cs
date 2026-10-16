@@ -226,8 +226,17 @@ public class ResponseExportEndpointsTests : IAsyncLifetime
         Assert.False(await UserIdIsNullAsync(_identifiedSurveyId));
     }
 
+    /// <summary>
+    /// Reversed on 2026-10-16, §6 of who-may-see-an-individual-answer.md: TIMS is the
+    /// external processor and the words ARE the analysis, so a super admin's export
+    /// returns them. Nothing else moved with it --
+    /// <c>A_company_administrator_cannot_read_the_platform_wide_response_export</c> is what
+    /// keeps the client company off this surface, and <c>GET /gdpr/access</c> keeps its own
+    /// stricter rule. The respondent copy changed in the same release, which is the only
+    /// reason this is defensible.
+    /// </summary>
     [Fact]
-    public async Task The_words_a_respondent_typed_are_withheld_and_the_scale_answer_is_not()
+    public async Task The_words_a_respondent_typed_reach_the_super_admins_export()
     {
         using var client = await ClientAsync(Roles.SuperAdmin);
 
@@ -242,9 +251,11 @@ public class ResponseExportEndpointsTests : IAsyncLifetime
         // quotes is what the raw column holds, and it would break every pivot on the column.
         Assert.Equal("4_a_6_anos", sheet.Cell(2, header.IndexOf("antiguedad") + 1).GetString());
 
+        // What the respondent actually typed, not the marker. Asserted both ways round so
+        // that returning the marker AND accidentally returning the words are each a failure.
         var typed = sheet.Cell(2, header.IndexOf("P02") + 1).GetString();
-        Assert.Equal(SubjectDataMap.WithheldAnswerMarker, typed);
-        Assert.DoesNotContain("nunca me escucha", typed, StringComparison.Ordinal);
+        Assert.Contains("nunca me escucha", typed, StringComparison.Ordinal);
+        Assert.NotEqual(SubjectDataMap.WithheldAnswerMarker, typed);
     }
 
     /// <summary>

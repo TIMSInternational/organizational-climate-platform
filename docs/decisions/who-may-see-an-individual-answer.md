@@ -313,3 +313,65 @@ what 800 people were told, not adding a column.
 Tests: `ResponseWorkbookTests` (shape, and that an anonymous sheet has no identity column — proved
 by mutation, the guard inverted and the test observed to fail) and `ResponseExportEndpointsTests`
 (authorization, identity by mode, withheld verbatim, demographics decoded out of jsonb).
+
+## 6. Verbatim open text reaches the processor, and the respondent is told the truth, 2026-10-16
+
+**Ruled by Federico, over §5's own carve-out, having read it. Owner: Federico.**
+
+§5 kept verbatim answers withheld and listed that as one of the things the Mode-C ruling did
+**not** concede. This reverses that one point, and only that one.
+
+**Why.** The arrangement these surveys actually run under is the standard external-processor
+one: **TIMS International is the processor and reads the data; the client company is the
+controller and receives only aggregates.** For ESPH's three October climates the client never
+touches this surface at all — the export is super admin only, and a company administrator is
+refused by name. The words people type are the analysis TIMS is engaged to do; withholding them
+from TIMS withheld them from the only reader who was ever going to act on them, while the client
+— the reader the rule was written to stop — was already stopped by authorization.
+
+It also made the product ask for something it would not return. The Teletrabajo instrument marks
+*"¿Qué recursos, herramientas tecnológicas o mejoras considera que podrían fortalecer su
+desempeño?"* **obligatoria**. A required question whose answer no one can read is worse than no
+question: it spends the respondent's attention and returns nothing.
+
+**Built.** `ResponseExportEndpoints` computes `mayReadVerbatim` from the actor's role and passes
+raw `response_value` / `response_text` when it is true. The flag is derived from the actor rather
+than assumed from the route even though the 403 above it already guarantees it — so that widening
+this endpoint's authorization restores the withholding by itself rather than by someone
+remembering to.
+
+**What did not move, and why each held:**
+
+- **Company administrators still cannot reach it.** Unchanged, and still pinned by
+  `ResponseExportEndpointsTests.A_company_administrator_cannot_read_the_platform_wide_response_export`.
+  This ruling is about *which* reader, and the answer is still "one".
+- **`GET /gdpr/access` keeps its own stricter rule.** `SubjectAccessExport` is untouched. §5
+  reused one rule across two surfaces to stop them drifting; they now differ on purpose, which is
+  why the reason is written here rather than left to be inferred from the code.
+- **An anonymous survey is still unreachable.** `StoredUserId` returns null the moment
+  `Settings.Anonymous` is true, so those rows were never attributable and no export can change it.
+
+**The copy shipped in the same release, and that is the condition of this ruling.**
+§5 said *"the ruling is defensible only for as long as that sentence is true and shown."* The
+sentence it meant — `surveyRespond.identifiedBody` — was accurate about attribution but named the
+wrong party: it told an employee that *"los administradores que gestionan esta encuesta"* could
+read their individual answers. Under this arrangement they cannot. It now reads:
+
+> *"Sus respuestas se guardan asociadas a su cuenta, pero su empresa nunca verá su nombre junto a
+> ellas. Los datos los procesa un equipo externo e independiente, TIMS International, que entrega
+> a su empresa únicamente resultados agrupados."*
+
+Two further sentences on the confirmation screen were rendered to **every** respondent, including
+identified ones, and were already false the day the §5 export shipped: *"Sus respuestas se
+agrupan de inmediato"* and *"se registra por separado que terminó, sin vincularlo a sus
+respuestas."* Both now branch on the same `isAnonymous` the submitted-at line has always branched
+on, with identified wording that names who reads the words and who does not.
+
+**Anyone widening this further** — to company admins, to anonymous surveys, to the GDPR path —
+is changing what people were told, not adding a column. That sentence is §5's and it still holds.
+
+Tests: `ResponseExportEndpointsTests.The_words_a_respondent_typed_reach_the_super_admins_export`
+(asserts both directions: the words present AND the marker absent), the unchanged
+company-administrator refusal, and on the web side two confirmation-screen tests proved by
+mutation — each branch inverted, the mutation observed to compile, and exactly its own test
+observed to fail.

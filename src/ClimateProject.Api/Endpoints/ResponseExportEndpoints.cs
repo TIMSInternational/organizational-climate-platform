@@ -226,6 +226,10 @@ public static class ResponseExportEndpoints
                     (spanish ? q.TextEs ?? q.TextEn : q.TextEn ?? q.TextEs) ?? ""))
                 .ToList();
 
+            // See the answer mapping below. Super admin is TIMS, the external processor;
+            // `GET /gdpr/access` keeps its own stricter rule and is deliberately untouched.
+            var mayReadVerbatim = actor.Role == Roles.SuperAdmin;
+
             var rows = responses.Where(r => r.SurveyId == survey.Id)
                 .Select(r =>
                 {
@@ -233,19 +237,23 @@ public static class ResponseExportEndpoints
                     var rowAnswers = answersByResponse.GetValueOrDefault(r.Id, [])
                         .Select(a =>
                         {
-                            // The SAME withholding rule `GET /gdpr/access` applies when an
-                            // administrator reads somebody else's record, reused rather than
-                            // restated: ruled 2026-10-12 in
-                            // docs/decisions/who-may-see-an-individual-answer.md. Two surfaces
-                            // that both decide what a reader may see, each with its own copy of
-                            // the rule, are one edit away from disagreeing -- and the direction
-                            // they disagree in is somebody's words in a spreadsheet.
+                            // Verbatim text is returned to a super admin and withheld from
+                            // everyone else -- ruled 2026-10-16, §6 of
+                            // docs/decisions/who-may-see-an-individual-answer.md, reversing §5
+                            // on this one point. TIMS is the external processor and analyses
+                            // the words; the client company never reads this surface at all.
+                            //
+                            // `mayReadVerbatim` is computed from the actor rather than assumed
+                            // from the route. The 403 above already makes it true for every
+                            // caller that reaches here, and that is exactly why it is written
+                            // out: the day someone widens this endpoint's authorization, the
+                            // withholding has to come back by itself rather than by remembering.
                             var closed = questionTypes.TryGetValue(a.QuestionId, out var type) && IsClosedType(type);
                             var value = SurveyResponseValues.Read(a.ResponseValue).Value;
                             return new ResponseExportAnswer(
                                 a.QuestionId,
-                                closed ? value : Withheld(value),
-                                Withheld(a.ResponseText));
+                                closed || mayReadVerbatim ? value : Withheld(value),
+                                mayReadVerbatim ? a.ResponseText : Withheld(a.ResponseText));
                         })
                         .ToList();
 
