@@ -176,7 +176,13 @@ public static class SurveyParticipationEndpoints
     /// required for the API to start -- but a test can be, and the honest answer is cheap.
     /// </para>
     /// </remarks>
-    private static async Task<(List<SurveyRosterRow> Rows, bool SignInOnly)> BuildRosterAsync(
+    /// <summary>
+    /// Internal rather than private so <see cref="ResponseExportEndpoints"/> can put the same
+    /// roster in its PENDIENTES sheet. Shared, not copied: "who has not answered" is the one
+    /// question the morning and afternoon status reports are about, and two derivations of it
+    /// would eventually disagree about somebody.
+    /// </summary>
+    internal static async Task<(List<SurveyRosterRow> Rows, bool SignInOnly)> BuildRosterAsync(
         Guid surveyId,
         Guid companyId,
         bool anonymous,

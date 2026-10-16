@@ -80,6 +80,11 @@ public class AuditCoverageTests : IAsyncLifetime
     private static readonly string[] ExpectedSensitiveReadRoutes =
     [
         "GET /admin/reports/{id:guid}",
+        // The widest disclosure in the product, and the only one that can attribute an answer
+        // to a named person: every response of every climate, as a workbook. Ruled 2026-10-15,
+        // docs/decisions/who-may-see-an-individual-answer.md §5, super admin only. If any read
+        // in this list has to stay audited, it is this one.
+        "GET /admin/exports/responses",
         "GET /audit/export",
         // #134. A dashboard export hands over a company's or a department's figures as a
         // file to keep, which is the same disclosure the survey exports below are marked

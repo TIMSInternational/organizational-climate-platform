@@ -4171,6 +4171,10 @@
       "super": {
         "barNoteUnchosen": "This list covers the whole platform and does not depend on the selection. To create a survey, first choose the company it belongs to.",
         "barNoteChosen": "This list covers the whole platform and does not depend on the selection. A new survey is created in the chosen company.",
+        "exportAll": "Download every response",
+        "exportOne": "Download this climate's responses",
+        "exportBusy": "Preparing the workbook…",
+        "exportFailed": "The workbook could not be prepared. Try again.",
         "eyebrow": "Every company",
         "description": "Which survey is open today in each company, how long it has left, and where to read the ones that closed.",
         "allCompanies": "Every company",

@@ -1,6 +1,6 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
-import { ChevronDown, MoreHorizontal, Plus, Search } from 'lucide-react'
+import { ChevronDown, Download, MoreHorizontal, Plus, Search } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
 import CompanyContextBar from '../../../../components/layout/CompanyContextBar'
@@ -27,6 +27,8 @@ import { readViewerClaims, useViewerCapabilities } from '../../../../auth/viewer
 import { formatMetric } from '../../../../components/charts/formatMetric'
 import { calendarDay, calendarDayLong } from '../../../../lib/calendarDay'
 import { cn } from '../../../../lib/cn'
+import { downloadBlobFile } from '../../../../lib/downloadBlobFile'
+import { allResponsesFileName, getAllResponsesWorkbook } from '../../api/responseExport'
 import { companyShortName } from '../../../../lib/companyShortName'
 import { signedReading } from '../../../dashboard/next/derive'
 import { statusLabel, typeLabel } from '../../surveyVocabulary'
@@ -126,7 +128,9 @@ export default function SuperSurveysListView() {
         description={t('surveys.next.super.description')}
         actions={
           capabilities.canAuthorSurveys || readViewerClaims().role === 'super_admin' ? (
-            <div className="flex flex-wrap gap-2"><Button asChild variant="outline"><Link to="/surveys/import">{t('climateWorkbook.title')}</Link></Button>
+            <div className="flex flex-wrap gap-2">
+            {readViewerClaims().role === 'super_admin' && <AllResponsesButton t={t} />}
+            <Button asChild variant="outline"><Link to="/surveys/import">{t('climateWorkbook.title')}</Link></Button>
             {capabilities.canAuthorSurveys && <Button asChild variant="primary">
               <Link to="/surveys/new">
                 <Plus aria-hidden="true" />
@@ -546,10 +550,89 @@ function SuperRow({ row, model, t, locale }: { row: SurveyRow; model: SuperSurve
                   {t('surveys.duplicate')}
                 </DropdownMenuItem>
               )}
+              {/* One climate's own responses. The platform-wide button in the header stays:
+                  this is the cut TIMS actually works on — one evaluation, one company — and
+                  scrolling past 24 other companies' sheets to reach it is not that cut. */}
+              {readViewerClaims().role === 'super_admin' && (
+                <OneClimateResponsesItem surveyId={row.id} title={row.title ?? ''} t={t} />
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </td>
     </tr>
+  )
+}
+
+/**
+ * One climate's responses, from the row that names it.
+ *
+ * The failure is shown as the item's own label rather than a toast, and the menu is held open
+ * for it: a menu item that closes the menu and does nothing is indistinguishable from a
+ * download the browser is still preparing, and the reader would press it again.
+ */
+function OneClimateResponsesItem({ surveyId, title, t }: { surveyId: string; title: string; t: TranslateFn }) {
+  const [failed, setFailed] = useState(false)
+
+  async function run() {
+    setFailed(false)
+    try {
+      downloadBlobFile(allResponsesFileName(new Date(), title), await getAllResponsesWorkbook('', surveyId))
+    } catch {
+      setFailed(true)
+    }
+  }
+
+  return (
+    <DropdownMenuItem
+      onSelect={(event) => {
+        event.preventDefault()
+        void run()
+      }}
+    >
+      {failed ? t('surveys.next.super.exportFailed') : t('surveys.next.super.exportOne')}
+    </DropdownMenuItem>
+  )
+}
+
+/**
+ * Downloads every response of every climate as one workbook.
+ *
+ * Super admin only, and the server says so independently (`ResponseExportEndpoints` returns
+ * 403 to anyone else): the control is hidden rather than shown-and-refused, because a button
+ * whose only outcome is a permission error teaches the reader nothing.
+ *
+ * The failure message sits beside the button rather than in a toast. The reader is standing at
+ * the control they just pressed, and the one failure mode a download must never have is doing
+ * nothing silently — a browser gives no sign that a fetch rejected.
+ */
+function AllResponsesButton({ t }: { t: TranslateFn }) {
+  const [busy, setBusy] = useState(false)
+  const [failed, setFailed] = useState(false)
+
+  async function download() {
+    setBusy(true)
+    setFailed(false)
+    try {
+      downloadBlobFile(allResponsesFileName(new Date()), await getAllResponsesWorkbook(''))
+    } catch {
+      setFailed(true)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      {failed && (
+        <span className="m-0 text-sm text-accent-red-ink" role="alert">
+          {t('surveys.next.super.exportFailed')}
+        </span>
+      )}
+      <Button type="button" variant="outline" disabled={busy} onClick={() => void download()}>
+        <Download aria-hidden="true" />
+        {busy ? t('surveys.next.super.exportBusy') : t('surveys.next.super.exportAll')}
+      </Button>
+    </div>
   )
 }
