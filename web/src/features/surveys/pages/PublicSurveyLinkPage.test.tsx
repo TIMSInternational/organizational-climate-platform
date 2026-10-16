@@ -175,8 +175,14 @@ describe('PublicSurveyLinkPage', () => {
     })
     renderPage()
 
-    expect(await screen.findByText('Esta encuesta no es anónima')).toBeTruthy()
-    expect(screen.queryByText('Esta encuesta es anónima')).toBeNull()
+    // Both modes now open with the same promise -- the employer never sees an individual
+    // answer either way -- so the title no longer tells them apart. The survey's own flag
+    // shows in `data-anonymous` and in the body, which still differ.
+    expect(await screen.findByText('Esta encuesta es anónima')).toBeTruthy()
+    const notice = document.querySelector('[data-slot="anonymity-notice"]')
+    expect(notice?.getAttribute('data-anonymous')).toBe('false')
+    expect(notice?.textContent).toContain('TIMS International')
+    expect(notice?.textContent).not.toContain('sin su nombre, cuenta, dirección IP')
   })
 
   /**

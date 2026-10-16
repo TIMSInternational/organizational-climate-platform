@@ -238,7 +238,7 @@ describe('EmployeeHomeView', () => {
     expect(within(notice).getByText(es('surveyRespond.anonymousBody'))).toBeTruthy()
   })
 
-  it('makes no promise at all beside a survey that records who answered — and never says "not anonymous"', async () => {
+  it('makes no promise at all beside a survey that records who answered', async () => {
     serves({ dashboard: home({ pendingSurveys: [survey({ anonymous: false })] }) })
     renderHome()
 

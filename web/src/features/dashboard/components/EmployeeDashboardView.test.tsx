@@ -227,19 +227,19 @@ describe('EmployeeDashboardView', () => {
   /**
    * The direction that matters, and the reason the gate is not a ternary.
    *
-   * `surveyRespond.identifiedChip` ("Not anonymous") exists and the respond page renders it
+   * `surveyRespond.identifiedChip` ("Anonymous") exists and the respond page renders it
    * under a heading and a paragraph that explain what is recorded. On a card crossed in two
    * seconds there is no room for that, and the failure modes are not symmetrical: a missing
    * chip understates a real promise, while a chip over a survey that stores `user_id` tells
    * somebody their answers are untraceable when they are not. So `false` draws nothing.
    */
-  it('draws no chip at all when the survey is not anonymous, and never “Not anonymous”', async () => {
+  it('draws no chip at all when the survey records who answered', async () => {
     serves(payload({ pendingSurveys: [pending({ anonymous: false })] }))
     const { container } = renderHome()
 
     await screen.findByRole('heading', { level: 2, name: 'Q4 Climate Survey' })
     expect(screen.queryByText('Anonymous'), 'anonymity was promised on a survey that records who answered').toBeNull()
-    expect(screen.queryByText('Not anonymous'), 'the negative belongs on the respond page, not on this card').toBeNull()
+    expect(screen.queryByText('Anónima'), 'no anonymity wording belongs on this card').toBeNull()
     // The deadline is still chipped, so this is the chip missing rather than the row.
     expect(chipTexts(container)).toEqual(['Closes in 6 days'])
   })

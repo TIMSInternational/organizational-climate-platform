@@ -25,14 +25,19 @@ internal static class InvitationGuaranteeCopy
                   + "cuenta, se registra por separado que terminó y el día, sin hora ni referencia a sus respuestas. "
                   + "El listado distingue quién terminó y quién falta; no distingue quién empezó y quién no entró. "
                   + "Una respuesta por enlace público sin cuenta no identifica quién terminó."
-                : "Esta encuesta no es anónima. El ciclo completo de la invitación se registra por cada persona invitada.")
+                : "Esta encuesta es anónima: su organización ve quién ha respondido, nunca qué respondió. "
+                  + "TIMS International recibe los resultados y los analiza, y entrega a su organización "
+                  + "únicamente resultados agrupados. El ciclo completo de la invitación se registra por cada "
+                  + "persona invitada.")
             : (anonymous
                 ? "This survey is anonymous. Invitation tracking records the invitation and its opening, "
                   + "without individual start or completion timestamps. When someone answers while signed in, "
                   + "their completion and calendar day are recorded separately, without a time or reference to "
                   + "their answers. The roster distinguishes finished from unfinished, not started from never opened. "
                   + "An answer through a public link without an account does not identify who finished."
-                : "This survey is not anonymous. The full invitation lifecycle is recorded per invitee.");
+                : "This survey is anonymous: your organisation sees who has answered, never what they "
+                  + "answered. The results are received and analysed by TIMS International, which gives your "
+                  + "organisation grouped results only. The full invitation lifecycle is recorded per invitee.");
 
     public static string Microclimate(bool anonymous, string? locale)
         => ContentLanguages.NormaliseLocale(locale) == ContentLanguages.Spanish
@@ -43,7 +48,9 @@ internal static class InvitationGuaranteeCopy
                   + "respuesta puede cruzarse con el conteo de respuestas en vivo -- que este producto publica "
                   + "mientras la sesión está abierta -- y reidentificar a quien respondió. La participación solo "
                   + "está disponible como un recuento agregado."
-                : "Este microclima no es anónimo; ya exige que quienes responden inicien sesión. El ciclo "
+                : "Este microclima es anónimo: su organización ve quién participó, nunca qué respondió. Ya "
+                  + "exige que quienes responden inicien sesión. Los resultados los recibe y analiza TIMS "
+                  + "International, que entrega a su organización únicamente resultados agrupados. El ciclo "
                   + "completo de la invitación se registra por cada persona invitada.")
             : (anonymous
                 ? "This microclimate is anonymous. Invitation tracking records that a person was invited and "
@@ -51,6 +58,8 @@ internal static class InvitationGuaranteeCopy
                   + "an individual, because a per-person timestamp asserting a response exists can be lined up "
                   + "against the live response count -- which this product publishes while the session runs -- "
                   + "and re-identifies the respondent. Participation is only ever available as an aggregate count."
-                : "This microclimate is not anonymous; it already requires respondents to sign in. The full "
-                  + "invitation lifecycle is recorded per invitee.");
+                : "This microclimate is anonymous: your organisation sees who took part, never what they "
+                  + "answered. It already requires respondents to sign in. The results are received and "
+                  + "analysed by TIMS International, which gives your organisation grouped results only. The "
+                  + "full invitation lifecycle is recorded per invitee.");
 }

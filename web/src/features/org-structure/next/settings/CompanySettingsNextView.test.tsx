@@ -68,7 +68,7 @@ const dashboard = {
   ],
 } as CompanyAdminDashboard
 
-/** `GET /surveys/{id}`: the running Q4 was created not anonymous (measured 11 Sep); the older wave is flipped so picking it shows. */
+/** `GET /surveys/{id}`: the running Q4 was created identified (measured 11 Sep); the older wave is flipped so picking it shows. */
 function surveyDetail(id: string): SurveyDetail {
   return id === 's-q4'
     ? ({ id, title: 'Encuesta de Clima Q4 (abierta)', settings: { anonymous: false } } as unknown as SurveyDetail)
@@ -181,7 +181,7 @@ describe('CompanySettingsNextView (/admin/companies/:id for a company administra
     await screen.findByLabelText(new RegExp(copy.language))
     // The latest of the running surveys by start, not the first listed.
     expect(vi.mocked(getSurvey).mock.calls.map((call) => call[1])).toEqual(['s-q4'])
-    expect(screen.getByText('The Q4 survey was created as not anonymous; this value applies to new surveys only.')).toBeTruthy()
+    expect(screen.getByText('The Q4 survey was created as identified; this value applies to new surveys only.')).toBeTruthy()
     expect(screen.getByText('How long closed responses are kept. 7 years until another period is set.')).toBeTruthy()
     cleanup()
 
@@ -210,7 +210,7 @@ describe('CompanySettingsNextView (/admin/companies/:id for a company administra
     const readings = screen.getByText(es.companySettings.next.departmentsReading).closest('dl') as HTMLElement
     expect(within(readings).getByText('1 activo · 1 inactivo')).toBeTruthy()
     expect(within(readings).getByText('5 · 1 activa')).toBeTruthy()
-    expect(screen.getByText('La encuesta Q4 se creó como no anónima; este valor solo aplica a encuestas nuevas.')).toBeTruthy()
+    expect(screen.getByText('La encuesta Q4 se creó como identificada; este valor solo aplica a encuestas nuevas.')).toBeTruthy()
     expect(screen.getByText('Cuánto tiempo se conservan las respuestas cerradas. 7 años hasta que se fije otro plazo.')).toBeTruthy()
   })
 
