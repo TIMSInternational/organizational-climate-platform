@@ -16,6 +16,7 @@
  */
 
 export { PageTopBar, type PageTopBarProps, type PageBreadcrumb } from './PageTopBar'
+export { CompanyLogo } from './CompanyLogo'
 export { MobileNav, type MobileNavProps } from './MobileNav'
 export {
   DashboardGrid,

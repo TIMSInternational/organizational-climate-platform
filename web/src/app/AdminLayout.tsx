@@ -10,6 +10,7 @@ import { SkipLink } from '../components/ui'
 import {
   CommandPalette,
   CompanyContextSwitcher,
+  CompanyLogo,
   MobileNav,
   SearchTrigger,
   ShellControls,
@@ -19,6 +20,7 @@ import {
 import { CompanyContextProvider, writeSelectedCompanyId } from '../company-context'
 import { NotificationBell } from '../features/notifications/components/NotificationBell'
 import { useCompanyContext } from '../company-context'
+import { useOwnCompanyBrand } from '../company-context/useCompanyName'
 import { headerSwitcherStandsDown } from './headerScope'
 
 /**
@@ -159,10 +161,16 @@ function AdminShell() {
               eye landed on. The bar is chrome floating in the shell's gutter; the
               card below is the only panel. */}
           <header
+            // Still `justify-end`, with the tenant mark below taking `mr-auto` to push
+            // itself left. `justify-between` was the obvious spelling and it is WRONG here:
+            // `md:hidden` removes the mark from flex layout entirely, so on a desktop strip
+            // whose only remaining children are the search glyph and the bell, `between`
+            // would strand the glyph at the far left. The canvas draws them flush right.
             className="on-shell flex shrink-0 items-center justify-end gap-inline"
             // The canvas's strip: 52px, 20px in from the edge (every artboard).
             style={{ minHeight: 52, padding: '0 20px' }}
           >
+            <MobileTenantLogo />
             {/* #124's company-context selector. Renders `null` for every role but
                 SuperAdmin, so the strip is unchanged for everyone else — the bell
                 stays flush right and nothing shifts. It is here rather than in
@@ -261,6 +269,36 @@ function AdminShell() {
           the rail gets, so it can only ever offer this role's own destinations. */}
       <CommandPalette sections={sections} />
     </div>
+  )
+}
+
+/**
+ * The company's own logo in the header strip, on phones only.
+ *
+ * Below `md` the rail is gone, so this strip was the only chrome on the screen an employee
+ * lands on after signing in — and its left half was empty. That screen is what most of a
+ * mass-invited workforce sees first, because they answer on a phone.
+ *
+ * `md:hidden` rather than a second component: from `md` the rail already opens on
+ * `SidebarBrand`, and showing the mark twice on one screen is worse than once.
+ *
+ * It carries the same guarantee `RespondShell` does, and for the same two reasons.
+ * `AdminLayout` renders only inside `RequireAuth` (`router.tsx`), and the value comes from
+ * `GET /profile`, which is `RequireAuthorization()` — so there is no path by which a
+ * visitor holding a link reaches it. `h-6` keeps a tall logo from growing the 52px strip.
+ */
+function MobileTenantLogo() {
+  const brand = useOwnCompanyBrand(true)
+  if (!brand.logoUrl || !brand.companyName) return null
+
+  // `mr-auto` is what places it: see the header's own comment on why this is not
+  // `justify-between`. `h-6` keeps a tall logo from growing the 52px strip.
+  return (
+    <CompanyLogo
+      src={brand.logoUrl}
+      companyName={brand.companyName}
+      className="mr-auto h-6 max-w-32 md:hidden"
+    />
   )
 }
 

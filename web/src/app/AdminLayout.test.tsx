@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { TranslationProvider } from '../i18n'
 import { setToken, clearToken } from '../auth/token'
+import { clearCompanyNameCache } from '../company-context/useCompanyName'
 import { ADMIN_THEME_ATTRIBUTE, ADMIN_THEME_STORAGE_KEY } from '../theme/adminTheme'
 import { COMPANY_CONTEXT_STORAGE_KEY } from '../company-context'
 import AdminLayout from './AdminLayout'
@@ -396,5 +397,86 @@ describe('AdminLayout', () => {
 
     expect(document.documentElement.getAttribute(ADMIN_THEME_ATTRIBUTE)).toBe('dark')
     expect(localStorage.getItem(ADMIN_THEME_STORAGE_KEY)).toBe('dark')
+  })
+})
+
+/**
+ * The tenant's mark in the header strip, which below `md` is the only chrome on the screen
+ * an employee lands on after signing in. Its left half used to be empty, and that screen is
+ * what most of a mass-invited workforce sees first because they answer on a phone.
+ *
+ * These stub `/profile` so the logo is genuinely reachable — the negative cases are
+ * worthless otherwise, which is the trap `RespondShell.test.tsx` was rewritten for.
+ */
+describe('the tenant logo in the header strip', () => {
+  const LOGO = '/brand/esph-logo.png'
+
+  function serveProfile(logoUrl: string | null) {
+    // BEFORE anything renders. `useCompanyName`'s cache is module-level and keyed by the
+    // TOKEN, and every test in this file signs in with the same claims — so an earlier test
+    // that rendered with no fetch stub has already cached a resolved `null` for this key,
+    // and without this the first test here reads that instead of the stub. Clearing it in
+    // `afterEach` alone is not enough: the pollution arrives from outside this describe.
+    clearCompanyNameCache()
+    vi.stubEnv('VITE_API_BASE_URL', 'http://api.test')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) =>
+        String(input).endsWith('/profile')
+          ? Promise.resolve(
+              new Response(
+                JSON.stringify({
+                  id: 'u1', companyId: 'c1', companyName: 'ESPH', email: 'a@esph-sa.com',
+                  name: 'Ana', role: 'employee', departmentId: null, departmentName: null,
+                  managerId: null, isActive: true, hasPassword: true, lastLoginAt: null,
+                  createdAt: '2026-01-01T00:00:00Z', demographics: {}, companyLogoUrl: logoUrl,
+                }),
+                { status: 200 },
+              ),
+            )
+          : Promise.resolve(new Response('{}', { status: 200 })),
+      ),
+    )
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+    clearCompanyNameCache()
+  })
+
+  const logo = () => document.querySelector('[data-slot="company-logo"]')
+
+  it('shows the signed-in person their own company mark', async () => {
+    serveProfile(LOGO)
+    setToken(tokenFor({ role: 'employee', companyId: 'c1' }))
+    renderShell()
+
+    await waitFor(() => expect(logo()).not.toBeNull())
+    expect(logo()!.getAttribute('src')).toBe(LOGO)
+  })
+
+  it('hides it from `md` up, because the rail already opens on the product lockup', async () => {
+    // Showing the mark twice on one screen is worse than once. Asserted on the class
+    // because the suite has no layout engine and cannot see a breakpoint apply.
+    serveProfile(LOGO)
+    setToken(tokenFor({ role: 'employee', companyId: 'c1' }))
+    renderShell()
+
+    await waitFor(() => expect(logo()).not.toBeNull())
+    expect(logo()!.className).toContain('md:hidden')
+    // `mr-auto` is what places it left while the header stays `justify-end`. With
+    // `justify-between` instead, `md:hidden` would strand the search glyph at the far
+    // left of every desktop strip — see the header's own comment.
+    expect(logo()!.className).toContain('mr-auto')
+  })
+
+  it('renders nothing when the company has no logo', async () => {
+    serveProfile(null)
+    setToken(tokenFor({ role: 'employee', companyId: 'c1' }))
+    renderShell()
+
+    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalled())
+    expect(logo()).toBeNull()
   })
 })
