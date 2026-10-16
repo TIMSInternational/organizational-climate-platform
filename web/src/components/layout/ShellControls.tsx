@@ -5,6 +5,7 @@ import { useTranslation, LanguageSwitcher } from '../../i18n'
 import { Avatar, AvatarFallback } from '../ui/avatar'
 import { getToken } from '../../auth/token'
 import { decodeJwtPayload } from '../../auth/jwt'
+import { showsOwnName } from '../../auth/ownName'
 import { readAdminThemeMode, setAdminThemeMode, type AdminThemeMode } from '../../theme/adminTheme'
 import { CHIP_SELECT_LABEL_STYLE, CHIP_SELECT_STYLE } from './chipSelectStyle'
 
@@ -120,28 +121,41 @@ function SidebarUser() {
   const { t } = useTranslation()
   const token = getToken()
   const claims = token ? decodeJwtPayload(token) : null
-  const name = typeof claims?.name === 'string' ? claims.name : undefined
+  const claimedName = typeof claims?.name === 'string' ? claims.name : undefined
   const role = typeof claims?.role === 'string' ? claims.role : undefined
 
-  // No name means no block. A tile showing a blank initial over an empty line is
-  // worse than nothing there, and says less than the sign-out button below it.
-  if (!name) return null
-
+  // The same rule the desktop rail obeys, from the same module, so the two shells cannot
+  // drift: a respondent is not shown their own name (`auth/ownName.ts`). This is the drawer
+  // most of ESPH's 640 people will see, because they answer on a phone.
+  const name = showsOwnName(role) ? claimedName : undefined
   const roleKey = role ? ROLE_LABEL_KEY[role] : undefined
+
+  // Nothing to say means no block, which is why this is `&&` and not the `!name` it was: a
+  // respondent still gets the role line ("Colaborador"), which names no person, and the tile
+  // beside it. A caller with neither a name nor a known role would be a blank tile over an
+  // empty line — worse than nothing, and saying less than the sign-out button below it.
+  if (!name && !roleKey) return null
 
   return (
     <div className="flex w-full items-center gap-inline">
       <Avatar className="size-icon-box shrink-0">
         {/* The initial, not an image: there is no avatar upload in this product,
-            so an <AvatarImage> would always fall through to this anyway. */}
+            so an <AvatarImage> would always fall through to this anyway. With no
+            name to take one from, the person glyph the drawer already imports. */}
         <AvatarFallback className="text-2xs font-semibold">
-          {name.trim().charAt(0).toUpperCase()}
+          {name ? (
+            name.trim().charAt(0).toUpperCase()
+          ) : (
+            <UserRound aria-hidden="true" className="size-icon" />
+          )}
         </AvatarFallback>
       </Avatar>
       <span className="flex min-w-0 flex-col">
         {/* `truncate` on both: the rail is a fixed width and a long name has to
             clip rather than widen it or wrap into the controls below. */}
-        <span className="truncate text-sm font-medium text-fg-primary">{name}</span>
+        <span className="truncate text-sm font-medium text-fg-primary">
+          {name ?? t('shell.account')}
+        </span>
         {roleKey ? (
           <span className="truncate text-2xs text-fg-tertiary">{t(roleKey)}</span>
         ) : null}

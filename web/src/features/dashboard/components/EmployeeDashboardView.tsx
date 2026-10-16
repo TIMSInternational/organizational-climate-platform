@@ -125,7 +125,9 @@ export default function EmployeeDashboardView({ notice }: EmployeeDashboardViewP
         // The greeting IS the heading here. This is the one page in the product addressed
         // to an individual rather than to an administrator, and a report title over it
         // would be the wrong voice.
-        title={data ? t(greetingKey(new Date().getHours()), { name: data.name }) : t('dashboard.myDashboard')}
+        // Greets the hour and not the person, for `auth/ownName.ts`'s reason (ruled
+        // 2026-10-16). Kept in step with `EmployeeHomeView`, which is the live portal.
+        title={data ? t(greetingKey(new Date().getHours())) : t('dashboard.myDashboard')}
         description={
           data
             ? data.pendingSurveyCount > 0

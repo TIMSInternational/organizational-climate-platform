@@ -15,6 +15,7 @@ import { useTranslation } from '../../i18n'
 import { LOCALES, isLocale } from '../../i18n/locale'
 import { getToken } from '../../auth/token'
 import { decodeJwtPayload } from '../../auth/jwt'
+import { showsOwnName } from '../../auth/ownName'
 import { useOwnDepartmentName } from '../../company-context/useCompanyName'
 import {
   readAdminThemeMode,
@@ -101,8 +102,12 @@ export function SidebarUserMenu({ onSignOut, collapsed = false, onExpand }: Side
 
   const token = getToken()
   const claims = token ? decodeJwtPayload(token) : null
-  const name = typeof claims?.name === 'string' ? claims.name : undefined
+  const claimedName = typeof claims?.name === 'string' ? claims.name : undefined
   const role = typeof claims?.role === 'string' ? claims.role : undefined
+  // `showsOwnName` is the whole rule, and it is shared with `ShellControls` — see
+  // `auth/ownName.ts`. A respondent's rail says "Mi cuenta" and carries the role line, which
+  // names no person. Everything below reads `name`, so there is one place to be wrong.
+  const name = showsOwnName(role) ? claimedName : undefined
   const roleKey = role ? ROLE_LABEL_KEY[role] : undefined
   const departmentName = useOwnDepartmentName(role !== undefined && DEPARTMENT_ROLES.has(role))
   const roleLine = roleKey
@@ -148,7 +153,12 @@ export function SidebarUserMenu({ onSignOut, collapsed = false, onExpand }: Side
         }}
       >
         {/* The canvas's `.avatar` (10 Sep, every role's rail): a 28px circle in the rail's
-            raised indigo with its strong ink, 11px at 600 — not an accent-filled tile. */}
+            raised indigo with its strong ink, 11px at 600 — not an accent-filled tile.
+
+            With no name to take an initial from it holds a person glyph rather than the `?`
+            it used to. A respondent now reaches this branch on every page (`ownName.ts`), and
+            `?` read as an error — the rail asking who you were — where the collapsed rail
+            renders this circle and nothing else. */}
         <span
           data-slot="sidebar-avatar"
           style={{
@@ -165,7 +175,11 @@ export function SidebarUserMenu({ onSignOut, collapsed = false, onExpand }: Side
             flexShrink: 0,
           }}
         >
-          {(name?.trim().charAt(0) ?? '?').toUpperCase()}
+          {name ? (
+            name.trim().charAt(0).toUpperCase()
+          ) : (
+            <User aria-hidden="true" style={{ width: collapsed ? 14 : 16, height: collapsed ? 14 : 16 }} />
+          )}
         </span>
         {!collapsed && (
           <>

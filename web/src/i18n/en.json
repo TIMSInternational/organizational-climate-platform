@@ -5858,9 +5858,9 @@
   },
   "employee": {
     "eyebrow": "Workspace",
-    "greetingMorning": "Good morning, {name}",
-    "greetingAfternoon": "Good afternoon, {name}",
-    "greetingEvening": "Good evening, {name}",
+    "greetingMorning": "Good morning",
+    "greetingAfternoon": "Good afternoon",
+    "greetingEvening": "Good evening",
     "homeDescription": "One survey is open to you. Everything else on this page is what the company did with the last one.",
     "homeDescriptionNothingDue": "Nothing needs you right now, so this page is about what happened to the answers you have already given.",
     "taskQuestions": "Questions",
