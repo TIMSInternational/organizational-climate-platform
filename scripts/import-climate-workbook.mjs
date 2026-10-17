@@ -810,7 +810,25 @@ async function main() {
     }
   }
 
-  // 2. Demographic fields, matched by key. A field that already exists is EXTENDED with the
+  // 2. The company's settings: its result bands, how a result is read, its time zone and its
+  // LANGUAGE.
+  //
+  // Before the people, not after them, and that order is the whole point of the language.
+  // `BulkImportEndpoints` gives each account it creates the COMPANY's language, and every
+  // message to that person is resolved against the account's language first
+  // (`SurveyDistributionEndpoints.RecipientLocale`) -- so an account created while the company
+  // is still on its `en` default is an English account for good, whatever the company is set to
+  // a moment later. This call used to be step 5, after the import, which made the setting
+  // correct and the 617 accounts it was meant for English anyway.
+  const settings = toSettingsRequest(climate.bands, values.timezone, values.scale, values.language)
+  const bandsRequest = settings.resultBands
+  await call('PUT', `/admin/companies/${companyId}/settings`, settings, token)
+  log(`time zone set: ${values.timezone}`)
+  log(`result scale set: ${values.scale}`)
+  log(`company language set: ${values.language} — every account this import creates inherits it`)
+  log(`result bands set: ${bandsRequest.criticalName} < ${bandsRequest.opportunityMin} ≤ ${bandsRequest.opportunityName} < ${bandsRequest.strengthMin} ≤ ${bandsRequest.strengthName}`)
+
+  // 3. Demographic fields, matched by key. A field that already exists is EXTENDED with the
   // options this workbook adds -- see mergeFieldOptions for the ESPH measurement that forced it.
   const [existingFields, existingFieldsEn] = await Promise.all([
     call('GET', `/admin/demographic-fields?companyId=${companyId}&lang=es`, null, token),
@@ -856,7 +874,7 @@ async function main() {
     }
   }
 
-  // 3. People — preview first, apply only a clean preview.
+  // 4. People — preview first, apply only a clean preview.
   const rows = climate.linkOnly ? [] : toImportRows(climate)
   const departments = await call('GET', `/admin/departments?companyId=${companyId}`, null, token)
   const known = new Set((departments.departments ?? departments).map((d) => norm(d.name)))
@@ -908,7 +926,7 @@ async function main() {
   if (!climate.linkOnly) log(`people: ${JSON.stringify(byStatus)} (success ${imported.successCount}, errors ${imported.errorCount})${newDepartments.length ? `; departments created: ${newDepartments.join(', ')}` : ''}`)
   if (imported.errorCount > 0) for (const r of imported.rows.filter((x) => x.errors.length)) log(`  - fila ${r.rowNumber} ${r.email}: ${r.errors.join('; ')}`)
 
-  // 4. The survey, as a draft, matched by title.
+  // 5. The survey, as a draft, matched by title.
   const surveys = await call('GET', `/surveys?companyId=${companyId}`, null, token)
   const surveyTitle = title ?? `Clima Organizacional ${new Date().getFullYear()}`
   const already = (surveys.surveys ?? surveys).find((s) => s.companyId === companyId && norm(s.title) === norm(surveyTitle))
@@ -925,14 +943,6 @@ async function main() {
     if (!id) throw new Error(`survey create: unexpected body ${JSON.stringify(created).slice(0, 200)}`)
     log(`survey created as a DRAFT: ${surveyTitle} (${id}), ${body.questions.length} questions, targeted at ${departmentIds.length} department(s): ${audience.wanted.join(', ')} — review and launch it in the product`)
   }
-  // 5. The company's result bands, result scale and time zone.
-  const settings = toSettingsRequest(climate.bands, values.timezone, values.scale, values.language)
-  const bandsRequest = settings.resultBands
-  await call('PUT', `/admin/companies/${companyId}/settings`, settings, token)
-  log(`time zone set: ${values.timezone}`)
-  log(`result scale set: ${values.scale}`)
-  log(`company language set: ${values.language} — decides which half of the credential email comes first`)
-  log(`result bands set: ${bandsRequest.criticalName} < ${bandsRequest.opportunityMin} ≤ ${bandsRequest.opportunityName} < ${bandsRequest.strengthMin} ≤ ${bandsRequest.strengthName}`)
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
