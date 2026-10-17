@@ -935,6 +935,23 @@ async function main() {
   if (!climate.linkOnly) log(`people: ${JSON.stringify(byStatus)} (success ${imported.successCount}, errors ${imported.errorCount})${newDepartments.length ? `; departments created: ${newDepartments.join(', ')}` : ''}`)
   if (imported.errorCount > 0) for (const r of imported.rows.filter((x) => x.errors.length)) log(`  - fila ${r.rowNumber} ${r.email}: ${r.errors.join('; ')}`)
 
+  // A credential email that did not go out is an ISSUE on a row whose status is `created`, so
+  // it counts as a success and used to be printed nowhere. That person has an account they
+  // cannot sign in to, and the invitation they are sent next says "recibirá sus datos de acceso
+  // en un correo separado" -- an email that already failed. The send goes direct through the
+  // provider, NOT through the notifications table, so this output is the ONLY record there
+  // will ever be: unprinted, it is unrecoverable the moment the terminal scrolls.
+  const unmailed = imported.rows.filter((r) => (r.issues ?? []).some((i) => i.code === 'credentials_not_sent'))
+  if (unmailed.length) {
+    log(`\n⚠️  ${unmailed.length} account(s) were CREATED but their credential email did NOT go out.`)
+    log('   They cannot sign in, and the survey invitation will still reach them.')
+    for (const r of unmailed) log(`   - fila ${r.rowNumber} ${r.email}`)
+    log('   Resend to them with POST /admin/users/credentials (at most 100 ids per call);')
+    log('   it generates a FRESH password, because the one minted here is already gone.')
+  } else if (withCredentials && (byStatus.created ?? 0) > 0) {
+    log(`credential emails: ${byStatus.created} accepted by the provider for delivery (nothing bounced at send time)`)
+  }
+
   // 5. The survey, as a draft, matched by title.
   const surveys = await call('GET', `/surveys?companyId=${companyId}`, null, token)
   const surveyTitle = title ?? `Clima Organizacional ${new Date().getFullYear()}`
