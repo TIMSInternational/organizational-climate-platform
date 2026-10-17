@@ -822,10 +822,19 @@ async function main() {
   // correct and the 617 accounts it was meant for English anyway.
   const settings = toSettingsRequest(climate.bands, values.timezone, values.scale, values.language)
   const bandsRequest = settings.resultBands
-  await call('PUT', `/admin/companies/${companyId}/settings`, settings, token)
+  // The response carries the STORED settings, which is the only way to read the company's
+  // language back at all: there is no GET for it (`CompanyEndpoints` maps PUT /settings and no
+  // GET, and `CompanyDetail` has no settings), and the UI's own client only ever PUTs. Asserted
+  // rather than logged, because "language set" is otherwise a claim about the one field that
+  // decides what language 642 people are written to, with nothing anywhere that can check it.
+  const applied = await call('PUT', `/admin/companies/${companyId}/settings`, settings, token)
+  for (const [field, want] of [['language', values.language], ['timezone', values.timezone]]) {
+    const got = applied?.settings?.[field]
+    if (got !== want) throw new Error(`company ${field}: asked for "${want}", the company now reports "${got}" — the accounts this import creates would inherit the wrong one`)
+  }
   log(`time zone set: ${values.timezone}`)
   log(`result scale set: ${values.scale}`)
-  log(`company language set: ${values.language} — every account this import creates inherits it`)
+  log(`company language set: ${values.language} (confirmed by the response) — every account this import creates inherits it`)
   log(`result bands set: ${bandsRequest.criticalName} < ${bandsRequest.opportunityMin} ≤ ${bandsRequest.opportunityName} < ${bandsRequest.strengthMin} ≤ ${bandsRequest.strengthName}`)
 
   // 3. Demographic fields, matched by key. A field that already exists is EXTENDED with the

@@ -58,6 +58,15 @@
  * those invitation rows, with no backfill — answering before being invited leaves a person
  * outstanding forever (`SurveyResponseEndpoints.cs:816`).
  *
+ * ## It must run AFTER the clima import, and not only for the accounts
+ *
+ * `BulkImportEndpoints` gives every account it creates the COMPANY's language, and that field
+ * is the first thing each message to that person is resolved against — including every reminder
+ * subject, which no survey can override. The company's language is set by
+ * `import-climate-workbook.mjs`, and it cannot be read back through the API (there is no GET for
+ * it), so this script cannot check it: run the clima import first and read ITS
+ * `company language set:` line.
+ *
  * The survey is created as a DRAFT. Programar it in the product (never Activar) and then send
  * its invitations: 240 is under the 500 batch cap, so it goes in one.
  */
