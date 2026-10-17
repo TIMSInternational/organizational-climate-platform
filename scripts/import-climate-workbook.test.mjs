@@ -10,7 +10,7 @@ import assert from 'node:assert/strict'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import {
-  readWorkbook, parseClimate, parseSheet, parseSharedStrings, skipDemographics, surveyWindow, roleForTitle, slug, toImportRows, toSurveyRequest, toFieldRequest, toBandsRequest, toSettingsRequest, validTimeZone, validScale, decodeXml, parseStyles, applyCompanyName, existingOptionInputs, mergeFieldOptions, chunkRows, surveyDepartmentIds, IMPORT_CHUNK_ROWS, validLanguage,
+  readWorkbook, parseClimate, parseSheet, parseSharedStrings, skipDemographics, surveyWindow, roleForTitle, slug, toImportRows, toSurveyRequest, toFieldRequest, toBandsRequest, toSettingsRequest, validTimeZone, validScale, decodeXml, parseStyles, applyCompanyName, existingOptionInputs, mergeFieldOptions, chunkRows, surveyDepartmentIds, IMPORT_CHUNK_ROWS, validLanguage, credentialDelivery,
 } from './import-climate-workbook.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -491,4 +491,62 @@ test('the company language is set, because the entity default "en" puts English 
   assert.equal(validLanguage('ES'), null)
   assert.equal(validLanguage(''), null)
   assert.equal(validLanguage(undefined), null)
+})
+
+// ---------------------------------------------------------------------------------------
+// Credential delivery. The invitation every respondent gets says "si es su primera
+// participación, recibirá sus datos de acceso en un correo separado" — so whether that mail
+// actually went out is a promise the import makes on the product's behalf.
+// ---------------------------------------------------------------------------------------
+
+const row = (n, email, status, issues = [], errors = []) =>
+  ({ rowNumber: n, email, status, issues: issues.map((code) => ({ code })), errors })
+
+test('a created account whose credential mail failed is named, though it has no errors and status "created"', () => {
+  // THE regression. The endpoint records a failed send as an ISSUE on a row that is otherwise a
+  // success: status `created`, errors empty, counted in successCount. Filtering on either —
+  // which is what this script did — reports that person as fine. They then hold an account they
+  // cannot sign in to and still receive the invitation.
+  const rows = [
+    row(6, 'ana@ejemplo.test', 'created'),
+    row(7, 'bruno@ejemplo.test', 'created', ['credentials_not_sent']),
+    row(8, 'carla@ejemplo.test', 'created'),
+  ]
+  const d = credentialDelivery(rows, true)
+  assert.equal(d.verdict, 'some_failed')
+  assert.deepEqual(d.unmailed.map((r) => r.email), ['bruno@ejemplo.test'])
+  assert.equal(d.created, 3)
+  // Proof the row really does look like a success by every other measure.
+  const bruno = rows[1]
+  assert.deepEqual(bruno.errors, [])
+  assert.equal(bruno.status, 'created')
+})
+
+test('the issue is found alongside others, and never confused with an unrelated one', () => {
+  assert.equal(credentialDelivery([row(6, 'a@b.test', 'created', ['already_user', 'credentials_not_sent'])], true).verdict, 'some_failed')
+  // A different issue on a created row is not a delivery failure.
+  assert.equal(credentialDelivery([row(6, 'a@b.test', 'created', ['invalid_demographic'])], true).verdict, 'all_accepted')
+})
+
+test('a clean run SAYS it is clean, so silence is never the evidence', () => {
+  const d = credentialDelivery([row(6, 'a@b.test', 'created'), row(7, 'c@d.test', 'created')], true)
+  assert.equal(d.verdict, 'all_accepted')
+  assert.equal(d.created, 2)
+  assert.deepEqual(d.unmailed, [])
+})
+
+test('nothing is claimed when no credential was being sent, or nobody was created', () => {
+  // The invitation path sends no credentials at all, so it must not report on them.
+  assert.equal(credentialDelivery([row(6, 'a@b.test', 'invited')], false).verdict, 'nothing_to_report')
+  assert.equal(credentialDelivery([row(6, 'a@b.test', 'created')], false).verdict, 'nothing_to_report')
+  // A re-run that creates nobody has nothing to say either.
+  assert.equal(credentialDelivery([row(6, 'a@b.test', 'duplicate', ['already_user'], ['exists'])], true).verdict, 'nothing_to_report')
+  assert.equal(credentialDelivery([], true).verdict, 'nothing_to_report')
+  assert.equal(credentialDelivery(undefined, true).verdict, 'nothing_to_report')
+  // ...but a failure still outranks "nobody created", because the row IS the failure.
+  assert.equal(credentialDelivery([row(6, 'a@b.test', 'created', ['credentials_not_sent'])], false).verdict, 'some_failed')
+})
+
+test('a row with no issues array at all does not throw', () => {
+  assert.equal(credentialDelivery([{ rowNumber: 6, email: 'a@b.test', status: 'created' }], true).verdict, 'all_accepted')
 })

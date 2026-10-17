@@ -511,6 +511,33 @@ export function surveyDepartmentIds(climate, departments) {
   }
 }
 
+/**
+ * What the import can say about credential delivery, from the rows the endpoint returned.
+ *
+ * The three verdicts exist because SILENCE MUST NEVER BE THE EVIDENCE. A failed send is an
+ * ISSUE (`credentials_not_sent`) on a row whose status stays `created` and whose `errors` are
+ * empty, so it counts toward `successCount` — filtering on errors or on status, which is what
+ * this script used to do, reports that person as a success. They then hold an account they
+ * cannot sign in to, and the survey invitation reaches them anyway (an audience resolves
+ * `db.Users`), saying their access details are on the way.
+ *
+ * Nothing else records it: the credential mail goes direct through the provider, not through
+ * the `notifications` table. This verdict is the only record there will ever be.
+ *
+ *   some_failed        name them, and the resend that fixes it
+ *   all_accepted       say so, so a silent run is never mistaken for a clean one
+ *   nothing_to_report  no credentials were being sent, or nobody was created
+ */
+export function credentialDelivery(rows, withCredentials) {
+  const all = rows ?? []
+  const created = all.filter((row) => row.status === 'created').length
+  // By ISSUE CODE, never by status or errors -- that is the whole point.
+  const unmailed = all.filter((row) => (row.issues ?? []).some((issue) => issue.code === 'credentials_not_sent'))
+  if (unmailed.length > 0) return { verdict: 'some_failed', unmailed, created }
+  if (withCredentials && created > 0) return { verdict: 'all_accepted', unmailed: [], created }
+  return { verdict: 'nothing_to_report', unmailed: [], created }
+}
+
 export function toImportRows(climate) {
   return climate.persons.map((person) => {
     const demographics = {}
@@ -941,15 +968,15 @@ async function main() {
   // en un correo separado" -- an email that already failed. The send goes direct through the
   // provider, NOT through the notifications table, so this output is the ONLY record there
   // will ever be: unprinted, it is unrecoverable the moment the terminal scrolls.
-  const unmailed = imported.rows.filter((r) => (r.issues ?? []).some((i) => i.code === 'credentials_not_sent'))
-  if (unmailed.length) {
-    log(`\n⚠️  ${unmailed.length} account(s) were CREATED but their credential email did NOT go out.`)
+  const delivery = credentialDelivery(imported.rows, withCredentials)
+  if (delivery.verdict === 'some_failed') {
+    log(`\n⚠️  ${delivery.unmailed.length} account(s) were CREATED but their credential email did NOT go out.`)
     log('   They cannot sign in, and the survey invitation will still reach them.')
-    for (const r of unmailed) log(`   - fila ${r.rowNumber} ${r.email}`)
+    for (const r of delivery.unmailed) log(`   - fila ${r.rowNumber} ${r.email}`)
     log('   Resend to them with POST /admin/users/credentials (at most 100 ids per call);')
     log('   it generates a FRESH password, because the one minted here is already gone.')
-  } else if (withCredentials && (byStatus.created ?? 0) > 0) {
-    log(`credential emails: ${byStatus.created} accepted by the provider for delivery (nothing bounced at send time)`)
+  } else if (delivery.verdict === 'all_accepted') {
+    log(`credential emails: ${delivery.created} accepted by the provider for delivery (none failed at send time)`)
   }
 
   // 5. The survey, as a draft, matched by title.
