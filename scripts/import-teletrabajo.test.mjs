@@ -10,7 +10,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   clean, edadBand, antiguedadBand, parseRoster, toImportRow, splitByExisting,
-  unknownValues, classifyDepartments, toSurveyBody, ROSTER_COLUMNS,
+  unknownValues, classifyDepartments, toSurveyBody, ROSTER_COLUMNS, splitRefusals,
 } from './import-teletrabajo.mjs'
 
 /** A sheet from rows of [letter, value] pairs — row 1 is the header. */
@@ -240,4 +240,50 @@ test('every demographic a row carries actually came from a column of the roster'
   for (const key of ['name', 'email', 'department', 'puesto', 'edad', 'genero', 'antiguedad', 'proceso', 'jefatura']) {
     assert.ok(key in ROSTER_COLUMNS, `${key} has no roster column`)
   }
+})
+
+/**
+ * Found by RUNNING it, 2026-10-17, against a local copy of the real company: a review run of
+ * ESPH's own roster printed "the preview refused 5 row(s) — nothing was imported" and exited 1,
+ * for a run that `--apply` completes without a single error. A review writes nothing, so it has
+ * not added the missing options yet, and the preview validates against the field as it stands.
+ */
+const row = (n, email, status, issues, errors = ['x']) => ({ rowNumber: n, email, status, issues: issues.map((code) => ({ code })), errors })
+
+test('a row the preview can only refuse until its option is added is not reported as a refusal', () => {
+  const pending = new Set(['ealfaro@esph-sa.com', 'yalfaro@esph-sa.com'])
+  const rows = [
+    row(55, 'ealfaro@esph-sa.com', 'error', ['invalid_demographic']),
+    row(239, 'yalfaro@esph-sa.com', 'error', ['invalid_demographic']),
+    row(2, 'ana@esph-sa.com', 'duplicate', ['already_user']),
+    row(3, 'bruno@esph-sa.com', 'valid', [], []),
+  ]
+  const review = splitRefusals(rows, pending, false)
+  assert.deepEqual(review.deferred.map((r) => r.rowNumber), [55, 239])
+  assert.deepEqual(review.refused, [])
+
+  // On an APPLY run the options were added first, so the same row is a real refusal and must be
+  // reported — this is what stops the deferral hiding a defect.
+  const applied = splitRefusals(rows, pending, true)
+  assert.deepEqual(applied.refused.map((r) => r.rowNumber), [55, 239])
+  assert.deepEqual(applied.deferred, [])
+})
+
+test('only an unlisted VALUE is deferred — any other problem, or anyone else, stays a refusal', () => {
+  const pending = new Set(['ealfaro@esph-sa.com'])
+  // A second problem beside the value: the row would still be refused after the option exists.
+  const alsoBadDepartment = row(55, 'ealfaro@esph-sa.com', 'error', ['invalid_demographic', 'department_not_found'])
+  assert.deepEqual(splitRefusals([alsoBadDepartment], pending, false).refused.map((r) => r.rowNumber), [55])
+  // The same issue code on somebody who carries none of the pending values is a real refusal:
+  // their value is unlisted and nothing is going to add it.
+  const strangerSameCode = row(77, 'nadie@esph-sa.com', 'error', ['invalid_demographic'])
+  assert.deepEqual(splitRefusals([strangerSameCode], pending, false).refused.map((r) => r.rowNumber), [77])
+  // A duplicate is neither: it is not a refusal at all.
+  assert.deepEqual(splitRefusals([row(2, 'ana@esph-sa.com', 'duplicate', ['already_user'])], pending, false),
+    { refused: [], deferred: [] })
+  // An error row with no issues at all (a shape this endpoint does not currently produce) is a
+  // refusal, never silently deferred.
+  assert.deepEqual(splitRefusals([row(9, 'ealfaro@esph-sa.com', 'error', [])], pending, false).refused.map((r) => r.rowNumber), [9])
+  // Matching is case-insensitive on the address, as every other email comparison here is.
+  assert.deepEqual(splitRefusals([row(55, 'EAlfaro@ESPH-SA.com', 'error', ['invalid_demographic'])], pending, false).deferred.length, 1)
 })

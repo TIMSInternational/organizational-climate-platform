@@ -255,6 +255,39 @@ export function unknownValues(people, fields) {
 }
 
 /**
+ * The rows the preview refused, split into the ones that are a problem and the ones that are not.
+ *
+ * A review run writes nothing, so it has NOT added the missing options yet — and the preview
+ * validates against the field as it stands, so every row carrying a value this run would add
+ * comes back `error`. Under `--apply` the options are added FIRST and those same rows are
+ * `valid`. Before this split, a review run against ESPH's own roster printed "the preview
+ * refused 5 row(s) — nothing was imported" and exited 1, for a run that would have worked —
+ * found by running it against a local copy of the real company, 2026-10-17.
+ *
+ * Recognised by the issue CODE rather than the message text, and only for a person who actually
+ * carries one of the pending values: a row with any OTHER problem — a bad address, an unknown
+ * department, a second problem beside the value — stays a refusal. `optionsAlreadyAdded` is what
+ * stops this hiding a real defect: once the options exist nothing is deferred, so an apply run
+ * that still sees `invalid_demographic` reports it.
+ */
+export function splitRefusals(previewRows, pendingValueEmails, optionsAlreadyAdded) {
+  const PRESENT = new Set(['already_invited', 'already_user'])
+  const refused = []
+  const deferred = []
+  for (const row of previewRows ?? []) {
+    const issues = row.issues ?? []
+    const errors = row.errors ?? []
+    const isRefusal = row.status === 'error' || (errors.length > 0 && !issues.every((issue) => PRESENT.has(issue.code)))
+    if (!isRefusal) continue
+    const onlyUnlistedValue = issues.length > 0 && issues.every((issue) => issue.code === 'invalid_demographic')
+    const holdsPendingValue = pendingValueEmails.has(String(row.email ?? '').toLowerCase())
+    if (!optionsAlreadyAdded && onlyUnlistedValue && holdsPendingValue) deferred.push(row)
+    else refused.push(row)
+  }
+  return { refused, deferred }
+}
+
+/**
  * The roster's departments against the company's, matched the way the server matches them:
  * `departments.FirstOrDefault(d => d.Name == row.Department)` is ORDINAL and case-SENSITIVE
  * (BulkImportEndpoints.cs:255), while the approved-new list is case-INSENSITIVE and drops any
@@ -487,8 +520,13 @@ async function main() {
     const byStatus = (preview.rows ?? []).reduce((acc, row) => ({ ...acc, [row.status]: (acc[row.status] ?? 0) + 1 }), {})
     log(`\npreview  : ${JSON.stringify(byStatus)}`)
 
-    const PRESENT = new Set(['already_invited', 'already_user'])
-    const refused = (preview.rows ?? []).filter((row) => row.status === 'error' || (row.errors.length > 0 && !row.issues.every((issue) => PRESENT.has(issue.code))))
+    // The options are in place only on an apply run; see splitRefusals.
+    const pendingValueEmails = new Set([...unknown.values()].flatMap((byValue) => [...byValue.values()].flat().map((person) => person.email)))
+    const { refused, deferred } = splitRefusals(preview.rows, pendingValueEmails, values.apply)
+    if (deferred.length) {
+      log(`  ${deferred.length} row(s) the preview can only refuse until --apply adds their option first — not a problem:`)
+      for (const row of deferred) log(`     row ${row.rowNumber} ${row.email}`)
+    }
     if (refused.length) {
       log(`\nthe preview refused ${refused.length} row(s) — nothing was imported:`)
       for (const row of refused.slice(0, 25)) log(`  - row ${row.rowNumber} ${row.email}: ${row.errors.join('; ')}`)
@@ -499,9 +537,11 @@ async function main() {
     // The server's own count of who is already there must equal this script's, or the split that
     // decided which rows carry demographics was computed against a different company.
     const serverDuplicates = byStatus.duplicate ?? 0
-    const serverValid = byStatus.valid ?? 0
-    if (serverDuplicates !== existing.length || serverValid !== fresh.length) {
-      log(`\nthe preview disagrees with the user list: it reports ${serverDuplicates} duplicate and ${serverValid} valid, the user list says ${existing.length} and ${fresh.length} — refusing.`)
+    // A deferred row is a fresh one the preview could only refuse because this run has not added
+    // its option yet, so it counts towards the fresh total the user list predicts.
+    const serverFresh = (byStatus.valid ?? 0) + deferred.length
+    if (serverDuplicates !== existing.length || serverFresh !== fresh.length) {
+      log(`\nthe preview disagrees with the user list: it reports ${serverDuplicates} duplicate and ${serverFresh} importable, the user list says ${existing.length} and ${fresh.length} — refusing.`)
       process.exitCode = 1
       return
     }
