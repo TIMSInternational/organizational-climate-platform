@@ -64,7 +64,7 @@
 import { parseArgs } from 'node:util'
 import { pathToFileURL } from 'node:url'
 import { readFileSync } from 'node:fs'
-import { readWorkbook, slug, roleForTitle, mergeFieldOptions, existingOptionInputs } from './import-climate-workbook.mjs'
+import { readWorkbook, slug, roleForTitle, mergeFieldOptions, existingOptionInputs, chunkRows, IMPORT_CHUNK_ROWS } from './import-climate-workbook.mjs'
 
 const log = (line) => process.stdout.write(`${line}\n`)
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -502,11 +502,31 @@ async function main() {
     } else if (fresh.length === 0) {
       log('\nevery person already has an account — nothing to import.')
     } else {
-      const imported = await call('POST', '/admin/users/bulk-import/rows', { companyId, preview: false, rows: fresh.map((person) => toImportRow(person, fields)), newDepartments: missing, withCredentials: true }, token)
-      const importedByStatus = (imported.rows ?? []).reduce((acc, row) => ({ ...acc, [row.status]: (acc[row.status] ?? 0) + 1 }), {})
-      log(`imported : ${JSON.stringify(importedByStatus)} (success ${imported.successCount}, errors ${imported.errorCount})`)
-      for (const row of (imported.rows ?? []).filter((r) => r.errors.length)) log(`  - row ${row.rowNumber} ${row.email}: ${row.errors.join('; ')}`)
-      if (imported.errorCount > 0) { process.exitCode = 1; return }
+      // Batched for the same reason the climate importer is: App Runner ends a request at 120 s
+      // and each row costs a bcrypt-12 hash plus a paced email. 17 rows is nowhere near it, but
+      // the ceiling belongs to the endpoint, not to today's roster.
+      const all = []
+      let failed = false
+      for (const [index, batch] of chunkRows(fresh.map((person) => toImportRow(person, fields)), IMPORT_CHUNK_ROWS).entries()) {
+        let response
+        try {
+          response = await call('POST', '/admin/users/bulk-import/rows', { companyId, preview: false, rows: batch, newDepartments: missing, withCredentials: true }, token)
+        } catch (error) {
+          log(`\nrequest ${index + 1} FAILED after ${all.filter((r) => r.status === 'created').length} of ${fresh.length} were created: ${error.message}`)
+          log('  Those accounts are COMMITTED. Re-run this command: the people who exist are')
+          log('  reported as duplicates and left alone, so only the remainder is created.')
+          log('  Anyone created before their email went out has no password yet:')
+          log('    POST /admin/users/credentials sends a fresh pair, at most 100 ids per call.')
+          failed = true
+          break
+        }
+        all.push(...(response.rows ?? []))
+      }
+      const importedByStatus = all.reduce((acc, row) => ({ ...acc, [row.status]: (acc[row.status] ?? 0) + 1 }), {})
+      log(`imported : ${JSON.stringify(importedByStatus)}`)
+      for (const row of all.filter((r) => r.errors.length)) log(`  - row ${row.rowNumber} ${row.email}: ${row.errors.join('; ')}`)
+      // A survey aimed at people must not be created when some of those people were not created.
+      if (failed || all.some((r) => r.errors.length)) { process.exitCode = 1; return }
     }
   }
 

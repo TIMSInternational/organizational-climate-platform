@@ -458,6 +458,59 @@ export function mergeFieldOptions(existing, wanted) {
   return { options: [...existing, ...added], added }
 }
 
+/**
+ * One apply request per 100 rows, the same number `IntakeWizard` uses (`IMPORT_CHUNK_ROWS`) and
+ * the same number `MassInviteEndpoints.MaxBatch` caps a credential resend at.
+ *
+ * **App Runner ends every HTTP request at 120 seconds and the limit is not configurable.** Each
+ * row of an apply costs one bcrypt hash at work factor 12 — measured at 1.09 s on the 0.25 vCPU
+ * instance, about 0.27 vCPU-seconds — and then one email through a process-wide pacer of 10 a
+ * second, so a request takes roughly `rows x 0.27 + rows / 10` seconds
+ * (`docs/runbooks/mass-invite-launch.md`): 300 rows is ~111 s with 9 s of margin, and 400 is
+ * killed. ESPH's Clima roster is **617 people in one file**, i.e. ~228 s, so as a single request
+ * it cannot finish — it would be killed mid-hash, before the save, having created nothing and
+ * sent nothing, two minutes into launch morning.
+ *
+ * The PREVIEW stays one request for the whole file: it hashes nothing, mails nothing, and is the
+ * only place the server can see the same address at rows 50 and 150 as a repeat (`seenInThisFile`
+ * is per request). `parseClimate` refuses a repeated address in the workbook as well, so that
+ * check is not lost by batching the apply.
+ */
+export const IMPORT_CHUNK_ROWS = 100
+
+export function chunkRows(rows, size = IMPORT_CHUNK_ROWS) {
+  if (!Number.isInteger(size) || size < 1) throw new Error(`chunk size must be a positive whole number, got ${size}`)
+  const out = []
+  for (let index = 0; index < rows.length; index += size) out.push(rows.slice(index, index + size))
+  return out
+}
+
+/**
+ * The departments **this workbook's people** are in, resolved to ids — not every department the
+ * company has.
+ *
+ * It used to be every active department, which is the same thing for a company this import just
+ * created and wrong for the second import into one. Measured on ESPH, 2026-10-16: the Clima
+ * import creates 7 departments and its survey targets those 7; the Contraloría import then runs
+ * into the SAME company, and "every active department" is 8 — so its survey, written for the
+ * **8 people** of Contraloría Empresarial, would have been visible and answerable by **all 625**.
+ * That is the defect #587 exists to prevent, in a second place and reached without any user
+ * targeting at all.
+ *
+ * `missing` is returned rather than skipped: a workbook department that does not resolve would
+ * silently shrink the audience, and a name differing from the company's only in case is exactly
+ * how that happens (the server matches a department name ordinally).
+ */
+export function surveyDepartmentIds(climate, departments) {
+  const wanted = [...new Set((climate.linkOnly ? climate.departments : climate.persons.map((p) => p.department)).filter(Boolean))]
+  const byName = new Map((departments ?? []).filter((d) => d.isActive !== false).map((d) => [d.name, d.id]))
+  return {
+    wanted,
+    missing: wanted.filter((name) => !byName.has(name)),
+    departmentIds: wanted.map((name) => byName.get(name)).filter(Boolean),
+  }
+}
+
 export function toImportRows(climate) {
   return climate.persons.map((person) => {
     const demographics = {}
@@ -802,9 +855,32 @@ async function main() {
     return
   }
   const toImport = rows.filter((r) => !present.has(r.email.toLowerCase()))
-  const imported = toImport.length
-    ? await call('POST', '/admin/users/bulk-import/rows', { companyId, preview: false, rows: toImport, newDepartments, withCredentials }, token)
-    : { rows: [], successCount: 0, errorCount: 0 }
+  // One request per IMPORT_CHUNK_ROWS rows -- see that constant for the measurement that forces
+  // it. `newDepartments` goes with EVERY batch: the endpoint creates a department only for a row
+  // it is actually writing, so the batch that first needs one must carry the approval, and a
+  // name that an earlier batch already created is simply matched instead.
+  const batches = chunkRows(toImport)
+  const imported = { rows: [], successCount: 0, errorCount: 0 }
+  if (batches.length > 1) log(`people: ${toImport.length} to create, in ${batches.length} requests of at most ${IMPORT_CHUNK_ROWS}`)
+  for (const [index, batch] of batches.entries()) {
+    let response
+    try {
+      response = await call('POST', '/admin/users/bulk-import/rows', { companyId, preview: false, rows: batch, newDepartments, withCredentials }, token)
+    } catch (error) {
+      const landed = imported.rows.filter((r) => r.status === 'created' || r.status === 'invited').length
+      log(`\nrequest ${index + 1} of ${batches.length} FAILED: ${error.message}`)
+      log(`  ${landed} of ${toImport.length} people were created and are COMMITTED.`)
+      log('  Re-run the same command. The preview reports everyone who already exists and leaves')
+      log('  them alone, so a re-run imports only the remainder and mails nobody twice.')
+      if (withCredentials) log('  Anyone created by a request that died before its emails has no password yet:\n    POST /admin/users/credentials sends a fresh pair, at most 100 ids per call.')
+      process.exitCode = 1
+      return
+    }
+    imported.rows.push(...(response.rows ?? []))
+    imported.successCount += response.successCount ?? 0
+    imported.errorCount += response.errorCount ?? 0
+    if (batches.length > 1) log(`  ${index + 1}/${batches.length}: ${imported.rows.filter((r) => r.status === 'created' || r.status === 'invited').length} of ${toImport.length}`)
+  }
   const byStatus = imported.rows.reduce((acc, r) => ({ ...acc, [r.status]: (acc[r.status] ?? 0) + 1 }), {})
   if (!climate.linkOnly) log(`people: ${JSON.stringify(byStatus)} (success ${imported.successCount}, errors ${imported.errorCount})${newDepartments.length ? `; departments created: ${newDepartments.join(', ')}` : ''}`)
   if (imported.errorCount > 0) for (const r of imported.rows.filter((x) => x.errors.length)) log(`  - fila ${r.rowNumber} ${r.email}: ${r.errors.join('; ')}`)
@@ -815,12 +891,16 @@ async function main() {
   const already = (surveys.surveys ?? surveys).find((s) => s.companyId === companyId && norm(s.title) === norm(surveyTitle))
   if (already) { log(`survey exists: ${already.title} (${already.id}, ${already.status}) — left as it is`) } else {
     const afterImport = await call('GET', `/admin/departments?companyId=${companyId}`, null, token)
-    const departmentIds = (afterImport.departments ?? afterImport).filter((d) => d.isActive !== false).map((d) => d.id)
+    const audience = surveyDepartmentIds(climate, afterImport.departments ?? afterImport)
+    if (audience.missing.length) {
+      throw new Error(`these departments of the workbook are not in the company, so the survey would reach fewer people than the roster: ${audience.missing.map((n) => `"${n}"`).join(', ')}`)
+    }
+    const departmentIds = audience.departmentIds
     const body = toSurveyRequest(climate, { companyId, title: surveyTitle, departmentIds, startDate: window.startDate, endDate: window.endDate, anonymous })
     const created = await call('POST', '/surveys', body, token)
     const id = created?.id ?? created?.survey?.id
     if (!id) throw new Error(`survey create: unexpected body ${JSON.stringify(created).slice(0, 200)}`)
-    log(`survey created as a DRAFT: ${surveyTitle} (${id}), ${body.questions.length} questions — review and launch it in the product`)
+    log(`survey created as a DRAFT: ${surveyTitle} (${id}), ${body.questions.length} questions, targeted at ${departmentIds.length} department(s): ${audience.wanted.join(', ')} — review and launch it in the product`)
   }
   // 5. The company's result bands, result scale and time zone.
   const settings = toSettingsRequest(climate.bands, values.timezone, values.scale)

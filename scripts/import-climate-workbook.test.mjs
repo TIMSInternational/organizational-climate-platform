@@ -10,7 +10,7 @@ import assert from 'node:assert/strict'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import {
-  readWorkbook, parseClimate, parseSheet, parseSharedStrings, skipDemographics, surveyWindow, roleForTitle, slug, toImportRows, toSurveyRequest, toFieldRequest, toBandsRequest, toSettingsRequest, validTimeZone, validScale, decodeXml, parseStyles, applyCompanyName, existingOptionInputs, mergeFieldOptions,
+  readWorkbook, parseClimate, parseSheet, parseSharedStrings, skipDemographics, surveyWindow, roleForTitle, slug, toImportRows, toSurveyRequest, toFieldRequest, toBandsRequest, toSettingsRequest, validTimeZone, validScale, decodeXml, parseStyles, applyCompanyName, existingOptionInputs, mergeFieldOptions, chunkRows, surveyDepartmentIds, IMPORT_CHUNK_ROWS,
 } from './import-climate-workbook.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -403,4 +403,67 @@ test('a value already stored on a user is passed through verbatim, never derived
   // and it is NOT treated as missing when the workbook asks for the slugged spelling
   const merge = mergeFieldOptions(inputs, [{ value: 'Negocio-AP', label: { es: 'Negocio AP', en: 'Negocio AP' } }])
   assert.equal(merge, null)
+})
+
+// ---------------------------------------------------------------------------------------
+// The two things that would have broken ESPH's launch morning, measured 2026-10-16.
+// ---------------------------------------------------------------------------------------
+
+test('an apply is split into requests of at most 100 rows, because 617 in one cannot finish', () => {
+  // App Runner kills a request at 120 s; a row costs ~0.27 vCPU-s of bcrypt plus a paced email,
+  // so `rows x 0.27 + rows/10` — 300 rows is ~111 s and 400 is killed. ESPH's Clima roster is
+  // 617 people in one file. See IMPORT_CHUNK_ROWS.
+  assert.equal(IMPORT_CHUNK_ROWS, 100)
+  const rows = Array.from({ length: 617 }, (_, i) => ({ email: `p${i}@ejemplo.test` }))
+  const batches = chunkRows(rows)
+  assert.equal(batches.length, 7)
+  assert.deepEqual(batches.map((b) => b.length), [100, 100, 100, 100, 100, 100, 17])
+  // Every row appears exactly once and in order — a batching bug that drops or repeats a row
+  // creates the wrong number of accounts, which is the one thing nothing downstream would catch.
+  assert.deepEqual(batches.flat().map((r) => r.email), rows.map((r) => r.email))
+  // The estimate each batch has to beat.
+  for (const batch of batches) assert.ok(batch.length * 0.27 + batch.length / 10 < 120)
+  // Exact multiples leave no empty trailing batch; an empty file is no requests at all.
+  assert.deepEqual(chunkRows(rows.slice(0, 200)).map((b) => b.length), [100, 100])
+  assert.deepEqual(chunkRows([]), [])
+  assert.throws(() => chunkRows(rows, 0), /positive whole number/)
+})
+
+test('a survey is targeted at the workbook’s own departments, not at every department the company has', () => {
+  // ESPH's order is clima then contraloria into the SAME company. "Every active department"
+  // made the Contraloría survey — written for its 8 people — visible to all 625.
+  const climate = {
+    linkOnly: false,
+    persons: [
+      { department: 'Contraloría Empresarial' },
+      { department: 'Contraloría Empresarial' },
+    ],
+    departments: [],
+  }
+  const company = [
+    { id: 'd1', name: 'Administración', isActive: true },
+    { id: 'd2', name: 'Negocio de Agua Potable', isActive: true },
+    { id: 'd3', name: 'Contraloría Empresarial', isActive: true },
+  ]
+  const audience = surveyDepartmentIds(climate, company)
+  assert.deepEqual(audience.departmentIds, ['d3'])
+  assert.deepEqual(audience.wanted, ['Contraloría Empresarial'])
+  assert.deepEqual(audience.missing, [])
+
+  // For the company this import just created, every active department IS the workbook's, so
+  // nothing changes for the ordinary single-import case.
+  const clima = { linkOnly: false, persons: [{ department: 'Administración' }, { department: 'Negocio de Agua Potable' }], departments: [] }
+  assert.deepEqual(surveyDepartmentIds(clima, company.slice(0, 2)).departmentIds, ['d1', 'd2'])
+
+  // A retired department is not somewhere to aim a survey.
+  assert.deepEqual(surveyDepartmentIds(climate, [{ id: 'd3', name: 'Contraloría Empresarial', isActive: false }]).missing,
+    ['Contraloría Empresarial'])
+
+  // A name that does not resolve is REPORTED, never skipped: skipping it shrinks the audience
+  // silently, and a case difference is exactly how that happens.
+  assert.deepEqual(surveyDepartmentIds(climate, [{ id: 'd9', name: 'contraloría empresarial', isActive: true }]),
+    { wanted: ['Contraloría Empresarial'], missing: ['Contraloría Empresarial'], departmentIds: [] })
+
+  // Link-only mode has no people; its departments come from OPCIONES.
+  assert.deepEqual(surveyDepartmentIds({ linkOnly: true, persons: [], departments: ['Administración'] }, company).departmentIds, ['d1'])
 })
