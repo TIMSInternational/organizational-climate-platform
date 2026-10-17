@@ -4016,6 +4016,23 @@ namespace ClimateProject.Infrastructure.Migrations
                     b.ToTable("survey_templates", (string)null);
                 });
 
+            modelBuilder.Entity("ClimateProject.Domain.Entities.SurveyUserTarget", b =>
+                {
+                    b.Property<Guid>("SurveyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_id");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("SurveyId", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("survey_user_targets", (string)null);
+                });
+
             modelBuilder.Entity("ClimateProject.Domain.Entities.SurveyVersion", b =>
                 {
                     b.Property<Guid>("Id")
@@ -6149,6 +6166,21 @@ namespace ClimateProject.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("SourceSurveyId")
                         .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("ClimateProject.Domain.Entities.SurveyUserTarget", b =>
+                {
+                    b.HasOne("ClimateProject.Domain.Entities.Survey", null)
+                        .WithMany()
+                        .HasForeignKey("SurveyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ClimateProject.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("ClimateProject.Domain.Entities.SurveyVersion", b =>

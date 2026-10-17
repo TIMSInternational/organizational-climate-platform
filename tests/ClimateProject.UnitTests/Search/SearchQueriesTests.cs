@@ -135,7 +135,7 @@ public class SearchQueriesTests
         using var db = CreateContext();
 
         var sql = Statement(SearchQueries.AssignedSurveys(
-            db.Surveys, db.SurveyDepartmentTargets, db.Responses, CompanyId, DepartmentId, UserId, Query, Limit).ToQueryString());
+            db.Surveys, db.SurveyDepartmentTargets, db.SurveyUserTargets, db.Responses, CompanyId, DepartmentId, UserId, Query, Limit).ToQueryString());
 
         // Both halves must be in one statement: the assignment predicate from
         // SurveyQueries.AssignedTo, and the full-text match.

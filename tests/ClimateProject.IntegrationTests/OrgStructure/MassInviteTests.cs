@@ -796,6 +796,48 @@ public class MassInviteTests(PostgresContainerFixture postgres, CapturingCredent
         Assert.Equal(CredentialsEmailPurpose.Invitation, _factory.Sent.Where(s => s.ToEmail == email).Last().Purpose);
     }
 
+    /// <summary>
+    /// The account a mass invite creates speaks the COMPANY's language, not the <c>"en"</c> that
+    /// <see cref="UserPreferences"/> defaults to.
+    ///
+    /// <para>
+    /// Measured on ESPH, 2026-10-16. Its holder has chosen no language — the account was created
+    /// from a spreadsheet row — and <c>UserPreferences.Language</c> is the FIRST thing every
+    /// message to them is resolved against: <c>SurveyDistributionEndpoints.RecipientLocale</c>
+    /// reads it before it will look at the survey's own language. Left at <c>"en"</c> it decides
+    /// the invitation subject and body of any survey carrying no custom text, the title and body
+    /// of the in-app notification rows, and — whatever any survey says — EVERY reminder subject,
+    /// because <c>BuildReminderNotification</c> passes <c>custom: null</c> and
+    /// <c>DefaultReminderSubject[locale]</c> is its only source. A Spanish survey, invited from a
+    /// Spanish company, into a Costa Rican workforce, reminded in English.
+    /// </para>
+    /// <para>
+    /// Both halves matter: the Spanish company proves the value is applied, and the company with
+    /// no language set proves it is READ rather than hardcoded to Spanish — which would be the
+    /// same defect pointing the other way for an English tenant.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task An_imported_account_speaks_its_companys_language_and_not_the_en_a_preference_defaults_to()
+    {
+        var spanishEmail = $"idioma-es-{Guid.NewGuid():N}@example.com";
+        var client = await AdminClientAsync(_companyId);
+        Assert.Equal(HttpStatusCode.OK, (await ImportAsync(client, preview: false,
+            new BulkImportRowInput(2, "Ana Rojas", spanishEmail, "Colaborador", null))).StatusCode);
+
+        // `other` is created with no Settings at all, so its language is the Company default.
+        var englishEmail = $"idioma-en-{Guid.NewGuid():N}@example.com";
+        var stranger = await AdminClientAsync(_otherCompanyId);
+        var response = await stranger.PostAsJsonAsync("/admin/users/bulk-import/rows", new BulkImportRowsRequest(
+            _otherCompanyId, false, [new BulkImportRowInput(2, "Ann Rogers", englishEmail, "employee", null)], WithCredentials: true));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        Assert.Equal("es", (await db.Users.FirstAsync(u => u.Email == spanishEmail)).Preferences.Language);
+        Assert.Equal("en", (await db.Users.FirstAsync(u => u.Email == englishEmail)).Preferences.Language);
+    }
+
     private async Task<Guid[]> IdsOfAsync(params string[] emails)
     {
         using var scope = _factory.Services.CreateScope();

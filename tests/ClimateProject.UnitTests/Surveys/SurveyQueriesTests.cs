@@ -34,11 +34,27 @@ public class SurveyQueriesTests
         using var db = CreateContext();
 
         var sql = SurveyQueries.AssignedTo(
-            db.Surveys, db.SurveyDepartmentTargets, db.Responses, CompanyId, DepartmentId, UserId).ToQueryString();
+            db.Surveys, db.SurveyDepartmentTargets, db.SurveyUserTargets, db.Responses, CompanyId, DepartmentId, UserId).ToQueryString();
 
         Assert.Contains("survey_department_targets", sql, StringComparison.Ordinal);
         Assert.Contains("responses", sql, StringComparison.Ordinal);
         Assert.Contains("status", sql, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_assigned_to_filter_reaches_people_targeted_individually()
+    {
+        using var db = CreateContext();
+
+        var sql = SurveyQueries.AssignedTo(
+            db.Surveys, db.SurveyDepartmentTargets, db.SurveyUserTargets, db.Responses, CompanyId, DepartmentId, UserId).ToQueryString();
+
+        // #587: a department cannot express a roster that cuts across the org -- ESPH's
+        // teletrabajadores sit in all eight departments, so a department-only audience for
+        // them resolved to every employee. Both target tables must be in the predicate, or
+        // the per-person audience silently falls back to company-wide.
+        Assert.Contains("survey_user_targets", sql, StringComparison.Ordinal);
+        Assert.Contains("survey_department_targets", sql, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -47,7 +63,7 @@ public class SurveyQueriesTests
         using var db = CreateContext();
 
         var sql = SurveyQueries.AssignedTo(
-            db.Surveys, db.SurveyDepartmentTargets, db.Responses, CompanyId, departmentId: null, UserId).ToQueryString();
+            db.Surveys, db.SurveyDepartmentTargets, db.SurveyUserTargets, db.Responses, CompanyId, null, UserId).ToQueryString();
 
         // The no-department branch must be a plain "has no targets" test, never a
         // department comparison against NULL that is silently never true.
@@ -100,7 +116,7 @@ public class SurveyQueriesTests
         using var db = CreateContext();
 
         var assigned = SurveyQueries.AssignedTo(
-            db.Surveys, db.SurveyDepartmentTargets, db.Responses, CompanyId, DepartmentId, UserId);
+            db.Surveys, db.SurveyDepartmentTargets, db.SurveyUserTargets, db.Responses, CompanyId, DepartmentId, UserId);
 
         // Composing the filter and the projection is what the endpoint actually does, and
         // either half translating alone would not prove the pair does.

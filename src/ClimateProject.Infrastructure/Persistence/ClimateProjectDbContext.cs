@@ -27,6 +27,7 @@ public class ClimateProjectDbContext(DbContextOptions<ClimateProjectDbContext> o
     public DbSet<QuestionConditionalLogic> QuestionConditionalLogics => Set<QuestionConditionalLogic>();
     public DbSet<QuestionEmojiOption> QuestionEmojiOptions => Set<QuestionEmojiOption>();
     public DbSet<SurveyDepartmentTarget> SurveyDepartmentTargets => Set<SurveyDepartmentTarget>();
+    public DbSet<SurveyUserTarget> SurveyUserTargets => Set<SurveyUserTarget>();
     public DbSet<SurveyTemplate> SurveyTemplates => Set<SurveyTemplate>();
     public DbSet<TemplateQuestion> TemplateQuestions => Set<TemplateQuestion>();
     public DbSet<TemplateQuestionOption> TemplateQuestionOptions => Set<TemplateQuestionOption>();

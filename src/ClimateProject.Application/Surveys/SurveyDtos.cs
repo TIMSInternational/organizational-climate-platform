@@ -208,6 +208,9 @@ public sealed record CreateSurveyRequest(
     DateTimeOffset EndDate,
     LocalizedInput? Description = null,
     List<Guid>? DepartmentIds = null,
+    // People aimed at individually, for a roster a department cannot express (#587).
+    // Union with DepartmentIds; both empty still means company-wide.
+    List<Guid>? UserIds = null,
     List<CreateSurveyQuestionInput>? Questions = null,
     SurveySettingsInput? Settings = null,
     int? TargetAudienceCount = null,
@@ -235,6 +238,9 @@ public sealed record UpdateSurveyRequest(
     DateTimeOffset? StartDate = null,
     DateTimeOffset? EndDate = null,
     List<Guid>? DepartmentIds = null,
+    // People aimed at individually, for a roster a department cannot express (#587).
+    // Union with DepartmentIds; both empty still means company-wide.
+    List<Guid>? UserIds = null,
     List<CreateSurveyQuestionInput>? Questions = null,
     SurveySettingsInput? Settings = null,
     int? TargetAudienceCount = null,

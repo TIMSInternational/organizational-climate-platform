@@ -419,6 +419,15 @@ public static class SubjectDataMap
 
         NotPersonal("SurveyDepartmentTarget", "survey_department_targets",
             "Which departments a survey targets. Departments, not people."),
+
+        new("SurveyUserTarget", "survey_user_targets", SubjectLink.Subject, ["UserId"],
+            ExportTreatment.FullRecord, ErasureTreatment.Deleted,
+            BasisContract,
+            "Deleted on erasure; otherwise kept while the survey's audience is meaningful.",
+            "That the subject was named individually in a survey's audience (#587), for a roster a "
+            + "department cannot express. Membership only -- it carries no answer and no content. "
+            + "Deleting it removes them from the audience, which is the honest effect of erasure; "
+            + "redacting it would leave a row aiming a survey at nobody."),
         Actor("SurveyDistribution", "survey_distributions", "LastRegeneratedBy",
             "Who last regenerated a distribution link or QR code."),
 

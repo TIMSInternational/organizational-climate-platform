@@ -201,7 +201,7 @@ public static class SurveyEndpoints
         }
 
         var query = SurveyQueries.AssignedTo(
-            db.Surveys, db.SurveyDepartmentTargets, db.Responses, myCompanyId, me.DepartmentId, me.Id);
+            db.Surveys, db.SurveyDepartmentTargets, db.SurveyUserTargets, db.Responses, myCompanyId, me.DepartmentId, me.Id);
 
         var rows = await SurveyQueries.ToMyRows(query, db.Questions).ToListAsync(cancellationToken);
 
@@ -386,6 +386,13 @@ public static class SurveyEndpoints
         }
 
         var departmentIds = (request.DepartmentIds ?? []).Distinct().ToList();
+        var userIds = (request.UserIds ?? []).Distinct().ToList();
+        var userError = await ValidateUsersAsync(db, request.CompanyId, userIds, cancellationToken);
+        if (userError is not null)
+        {
+            return userError;
+        }
+
         var departmentError = await ValidateDepartmentsAsync(db, request.CompanyId, departmentIds, cancellationToken);
         if (departmentError is not null)
         {
@@ -479,6 +486,11 @@ public static class SurveyEndpoints
         foreach (var departmentId in departmentIds)
         {
             db.SurveyDepartmentTargets.Add(new SurveyDepartmentTarget { SurveyId = survey.Id, DepartmentId = departmentId });
+        }
+
+        foreach (var userId in userIds)
+        {
+            db.SurveyUserTargets.Add(new SurveyUserTarget { SurveyId = survey.Id, UserId = userId });
         }
 
         AddQuestions(db, survey.Id, prepared);
@@ -727,6 +739,23 @@ public static class SurveyEndpoints
             foreach (var departmentId in departmentIds)
             {
                 db.SurveyDepartmentTargets.Add(new SurveyDepartmentTarget { SurveyId = survey.Id, DepartmentId = departmentId });
+            }
+        }
+
+        if (request.UserIds is not null)
+        {
+            var userIds = request.UserIds.Distinct().ToList();
+            var userError = await ValidateUsersAsync(db, survey.CompanyId, userIds, cancellationToken);
+            if (userError is not null)
+            {
+                return userError;
+            }
+
+            var existingUsers = await db.SurveyUserTargets.Where(t => t.SurveyId == survey.Id).ToListAsync(cancellationToken);
+            db.SurveyUserTargets.RemoveRange(existingUsers);
+            foreach (var userId in userIds)
+            {
+                db.SurveyUserTargets.Add(new SurveyUserTarget { SurveyId = survey.Id, UserId = userId });
             }
         }
 
@@ -1199,6 +1228,36 @@ public static class SurveyEndpoints
         CancellationToken cancellationToken)
         => survey.ResponseCount > 0
            || await db.Responses.AnyAsync(r => r.SurveyId == survey.Id, cancellationToken);
+
+    /// <summary>
+    /// Every targeted person must belong to the SURVEY's company and be active, for the same
+    /// reason <see cref="ValidateDepartmentsAsync"/> checks the survey's company rather than
+    /// the caller's: a super_admin acting on tenant A must not be able to put tenant B's
+    /// employee into tenant A's audience.
+    /// </summary>
+    private static async Task<IResult?> ValidateUsersAsync(
+        ClimateProjectDbContext db,
+        Guid companyId,
+        IReadOnlyCollection<Guid> userIds,
+        CancellationToken cancellationToken)
+    {
+        if (userIds.Count == 0)
+        {
+            return null;
+        }
+
+        var found = await db.Users
+            .Where(u => userIds.Contains(u.Id) && u.CompanyId == companyId && u.IsActive)
+            .Select(u => u.Id)
+            .ToListAsync(cancellationToken);
+
+        var unknown = userIds.Except(found).ToList();
+        return unknown.Count == 0
+            ? null
+            : Results.Json(
+                new { message = $"Unknown or inactive user(s) for this company: {string.Join(", ", unknown)}" },
+                statusCode: 400);
+    }
 
     private static async Task<IResult?> ValidateDepartmentsAsync(
         ClimateProjectDbContext db,

@@ -100,6 +100,7 @@ public static class SearchQueries
     public static IQueryable<SearchHitRow> AssignedSurveys(
         IQueryable<Survey> surveys,
         IQueryable<SurveyDepartmentTarget> departmentTargets,
+        IQueryable<SurveyUserTarget> userTargets,
         IQueryable<Response> responses,
         Guid companyId,
         Guid? departmentId,
@@ -107,7 +108,7 @@ public static class SearchQueries
         string tsQuery,
         int limit)
         => Surveys(
-            SurveyQueries.AssignedTo(surveys, departmentTargets, responses, companyId, departmentId, userId),
+            SurveyQueries.AssignedTo(surveys, departmentTargets, userTargets, responses, companyId, departmentId, userId),
             SearchScope.ForCompany(companyId),
             tsQuery,
             limit);

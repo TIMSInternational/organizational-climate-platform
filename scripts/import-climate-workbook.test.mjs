@@ -10,7 +10,7 @@ import assert from 'node:assert/strict'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import {
-  readWorkbook, parseClimate, parseSheet, parseSharedStrings, skipDemographics, surveyWindow, roleForTitle, slug, toImportRows, toSurveyRequest, toFieldRequest, toBandsRequest, toSettingsRequest, validTimeZone, validScale, decodeXml, parseStyles, applyCompanyName,
+  readWorkbook, parseClimate, parseSheet, parseSharedStrings, skipDemographics, surveyWindow, roleForTitle, slug, toImportRows, toSurveyRequest, toFieldRequest, toBandsRequest, toSettingsRequest, validTimeZone, validScale, decodeXml, parseStyles, applyCompanyName, existingOptionInputs, mergeFieldOptions, chunkRows, surveyDepartmentIds, IMPORT_CHUNK_ROWS, validLanguage,
 } from './import-climate-workbook.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -235,7 +235,8 @@ test('bands: ordered by minimum into critical < opportunity < strength, names ca
 test('settings: the bands and the time zone travel in one request; a mistyped zone is refused', () => {
   const bands = [{ name: 'C', min: 1, max: 3.79 }, { name: 'O', min: 3.8, max: 4.29 }, { name: 'F', min: 4.3, max: 5 }]
   // "EAGLE (prueba)" was left on UTC: an answer at 20:56 in Costa Rica was dated the next day.
-  assert.deepEqual(toSettingsRequest(bands, 'America/Costa_Rica'), { resultBands: { ...toBandsRequest(bands), scale: 'mean' }, timezone: 'America/Costa_Rica' })
+  // The language rides along: Company.Language defaults to "en" and this is the only call that can set it.
+  assert.deepEqual(toSettingsRequest(bands, 'America/Costa_Rica'), { resultBands: { ...toBandsRequest(bands), scale: 'mean' }, timezone: 'America/Costa_Rica', language: 'es' })
   assert.equal(validTimeZone('America/Costa_Rica'), 'America/Costa_Rica')
   assert.equal(validTimeZone('UTC'), 'UTC')
   assert.equal(validTimeZone('America/Costa Rica'), null)
@@ -334,4 +335,160 @@ test('applyCompanyName substitutes the template placeholder everywhere the C# pa
   // No name: leave the text alone rather than substitute an empty string.
   assert.equal(applyCompanyName(climate, undefined).invitation.subject,
     'Invitación al clima organizacional de [Empresa]')
+})
+
+// ---------------------------------------------------------------------------------------
+// Extending a field that already exists. The case is ESPH's, measured 2026-10-16: the
+// Contraloría roster carries one Proceso and two Jefaturas that the Clima import, which runs
+// first and creates the fields, never saw. `DemographicValueValidation` refuses a value outside
+// a select's options, so every row carrying one became a hard `error` and the run was refused.
+// ---------------------------------------------------------------------------------------
+
+const FIELD_ES = {
+  id: 'f1', field: 'proceso', type: 'select', label: 'Proceso',
+  options: [
+    { order: 0, value: 'negocio_ap_automatizacion', label: 'Negocio AP - Automatización' },
+    { order: 1, value: 'negocio_ee_redes', label: 'Negocio EE - Redes' },
+  ],
+  fallbackFields: [],
+}
+const FIELD_EN = { ...FIELD_ES, options: FIELD_ES.options.map((o) => ({ ...o })), fallbackFields: [] }
+
+test('an existing field is extended only by the options it does not already carry, and keeps the order it had', () => {
+  const existing = existingOptionInputs(FIELD_ES, FIELD_EN)
+  const wanted = ['Negocio EE - Redes', 'Contraloría Empresarial', 'Junta Directiva']
+    .map((label) => ({ value: slug(label), label: { es: label, en: label } }))
+  const merge = mergeFieldOptions(existing, wanted)
+  assert.deepEqual(merge.added.map((o) => o.value), ['contraloria_empresarial', 'junta_directiva'])
+  // The two it had come first and unchanged; nothing is removed and nothing is renamed.
+  assert.deepEqual(merge.options.map((o) => o.value), [
+    'negocio_ap_automatizacion', 'negocio_ee_redes', 'contraloria_empresarial', 'junta_directiva',
+  ])
+  assert.deepEqual(merge.options[0].label, { es: 'Negocio AP - Automatización', en: 'Negocio AP - Automatización' })
+  // ...and a workbook that adds nothing writes nothing at all.
+  assert.equal(mergeFieldOptions(existing, [{ value: 'negocio_ee_redes', label: { es: 'x', en: 'x' } }]), null)
+  assert.equal(mergeFieldOptions(existing, []), null)
+})
+
+test('an option the API resolved from the OTHER language is not re-sent as that language', () => {
+  // `ToDetail` resolves one label per option and names the ones it had to fall back for. An
+  // English-only option asked for in Spanish comes back with the English text; re-sending it as
+  // `es` would invent a Spanish label the field never had. PUT replaces the whole list, so this
+  // is the one chance to get it wrong.
+  const es = {
+    ...FIELD_ES,
+    options: [{ order: 0, value: 'english_only', label: 'English only' }],
+    fallbackFields: ['options[0].label'],
+  }
+  const en = {
+    ...FIELD_ES,
+    options: [{ order: 0, value: 'english_only', label: 'English only' }],
+    fallbackFields: [],
+  }
+  assert.deepEqual(existingOptionInputs(es, en), [{ value: 'english_only', label: { en: 'English only' } }])
+  // The reverse direction, and an option with no label at all, keep their value either way.
+  assert.deepEqual(existingOptionInputs({ ...es, fallbackFields: [] }, { ...en, fallbackFields: ['options[0].label'] }),
+    [{ value: 'english_only', label: { es: 'English only' } }])
+  assert.deepEqual(existingOptionInputs({ ...es, options: [{ order: 0, value: 'v', label: null }], fallbackFields: [] }, { ...en, options: [] }),
+    [{ value: 'v', label: null }])
+})
+
+test('a value already stored on a user is passed through verbatim, never derived again', () => {
+  // user_demographics.value holds the option's `value`. A field created before `slug` changed —
+  // or by the product rather than this importer — can hold a value that slug() would not
+  // produce; re-deriving it would silently orphan everyone already carrying it.
+  const es = { ...FIELD_ES, options: [{ order: 0, value: 'Negocio-AP', label: 'Negocio AP' }], fallbackFields: [] }
+  const inputs = existingOptionInputs(es, { ...es })
+  assert.deepEqual(inputs.map((o) => o.value), ['Negocio-AP'])
+  assert.notEqual(inputs[0].value, slug('Negocio AP'))
+  // and it is NOT treated as missing when the workbook asks for the slugged spelling
+  const merge = mergeFieldOptions(inputs, [{ value: 'Negocio-AP', label: { es: 'Negocio AP', en: 'Negocio AP' } }])
+  assert.equal(merge, null)
+})
+
+// ---------------------------------------------------------------------------------------
+// The two things that would have broken ESPH's launch morning, measured 2026-10-16.
+// ---------------------------------------------------------------------------------------
+
+test('an apply is split into requests of at most 100 rows, because 617 in one cannot finish', () => {
+  // App Runner kills a request at 120 s; a row costs ~0.27 vCPU-s of bcrypt plus a paced email,
+  // so `rows x 0.27 + rows/10` — 300 rows is ~111 s and 400 is killed. ESPH's Clima roster is
+  // 617 people in one file. See IMPORT_CHUNK_ROWS.
+  assert.equal(IMPORT_CHUNK_ROWS, 100)
+  const rows = Array.from({ length: 617 }, (_, i) => ({ email: `p${i}@ejemplo.test` }))
+  const batches = chunkRows(rows)
+  assert.equal(batches.length, 7)
+  assert.deepEqual(batches.map((b) => b.length), [100, 100, 100, 100, 100, 100, 17])
+  // Every row appears exactly once and in order — a batching bug that drops or repeats a row
+  // creates the wrong number of accounts, which is the one thing nothing downstream would catch.
+  assert.deepEqual(batches.flat().map((r) => r.email), rows.map((r) => r.email))
+  // The estimate each batch has to beat.
+  for (const batch of batches) assert.ok(batch.length * 0.27 + batch.length / 10 < 120)
+  // Exact multiples leave no empty trailing batch; an empty file is no requests at all.
+  assert.deepEqual(chunkRows(rows.slice(0, 200)).map((b) => b.length), [100, 100])
+  assert.deepEqual(chunkRows([]), [])
+  assert.throws(() => chunkRows(rows, 0), /positive whole number/)
+})
+
+test('a survey is targeted at the workbook’s own departments, not at every department the company has', () => {
+  // ESPH's order is clima then contraloria into the SAME company. "Every active department"
+  // made the Contraloría survey — written for its 8 people — visible to all 625.
+  const climate = {
+    linkOnly: false,
+    persons: [
+      { department: 'Contraloría Empresarial' },
+      { department: 'Contraloría Empresarial' },
+    ],
+    departments: [],
+  }
+  const company = [
+    { id: 'd1', name: 'Administración', isActive: true },
+    { id: 'd2', name: 'Negocio de Agua Potable', isActive: true },
+    { id: 'd3', name: 'Contraloría Empresarial', isActive: true },
+  ]
+  const audience = surveyDepartmentIds(climate, company)
+  assert.deepEqual(audience.departmentIds, ['d3'])
+  assert.deepEqual(audience.wanted, ['Contraloría Empresarial'])
+  assert.deepEqual(audience.missing, [])
+
+  // For the company this import just created, every active department IS the workbook's, so
+  // nothing changes for the ordinary single-import case.
+  const clima = { linkOnly: false, persons: [{ department: 'Administración' }, { department: 'Negocio de Agua Potable' }], departments: [] }
+  assert.deepEqual(surveyDepartmentIds(clima, company.slice(0, 2)).departmentIds, ['d1', 'd2'])
+
+  // A retired department is not somewhere to aim a survey.
+  assert.deepEqual(surveyDepartmentIds(climate, [{ id: 'd3', name: 'Contraloría Empresarial', isActive: false }]).missing,
+    ['Contraloría Empresarial'])
+
+  // A name that does not resolve is REPORTED, never skipped: skipping it shrinks the audience
+  // silently, and a case difference is exactly how that happens.
+  assert.deepEqual(surveyDepartmentIds(climate, [{ id: 'd9', name: 'contraloría empresarial', isActive: true }]),
+    { wanted: ['Contraloría Empresarial'], missing: ['Contraloría Empresarial'], departmentIds: [] })
+
+  // Link-only mode has no people; its departments come from OPCIONES.
+  assert.deepEqual(surveyDepartmentIds({ linkOnly: true, persons: [], departments: ['Administración'] }, company).departmentIds, ['d1'])
+})
+
+test('the company language is set, because the entity default "en" puts English first in 642 emails', () => {
+  // Company.Language defaults to "en" and CreateCompanyRequest cannot carry it, so this
+  // settings call is the only way. It decides which half of the bilingual credential email
+  // comes first — see toSettingsRequest.
+  const bands = [{ min: 4, max: 5, name: 'F', color: 'FF70AD47' }, { min: 3, max: 3.99, name: 'O', color: 'FFFFC000' }, { min: 1, max: 2.99, name: 'C', color: 'FFC00000' }]
+  assert.equal(toSettingsRequest(bands, 'America/Costa_Rica', 'mean', 'es').language, 'es')
+  assert.equal(toSettingsRequest(bands, 'America/Costa_Rica', 'mean', 'en').language, 'en')
+  // The default is the one ESPH needs: an unpassed flag must not mean English.
+  assert.equal(toSettingsRequest(bands, 'America/Costa_Rica').language, 'es')
+  // ...and it does not disturb what the call already sent.
+  const sent = toSettingsRequest(bands, 'America/Costa_Rica', 'percent', 'es')
+  assert.equal(sent.timezone, 'America/Costa_Rica')
+  assert.equal(sent.resultBands.scale, 'percent')
+
+  // A typo is refused, not passed through: the endpoint ignores a blank/unknown language and
+  // the company would silently stay English.
+  assert.equal(validLanguage('es'), 'es')
+  assert.equal(validLanguage('en'), 'en')
+  assert.equal(validLanguage('Español'), null)
+  assert.equal(validLanguage('ES'), null)
+  assert.equal(validLanguage(''), null)
+  assert.equal(validLanguage(undefined), null)
 })

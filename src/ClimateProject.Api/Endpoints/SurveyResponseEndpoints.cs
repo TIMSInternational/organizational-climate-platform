@@ -226,16 +226,22 @@ public static class SurveyResponseEndpoints
 
         var hasDepartmentTargets = await db.SurveyDepartmentTargets
             .AnyAsync(t => t.SurveyId == survey.Id, cancellationToken);
-        if (hasDepartmentTargets)
+        var hasUserTargets = await db.SurveyUserTargets
+            .AnyAsync(t => t.SurveyId == survey.Id, cancellationToken);
+        if (hasDepartmentTargets || hasUserTargets)
         {
-            // Matches SurveyQueries.AssignedTo exactly: no targets means company-wide, any
-            // targets means only those departments. Two implementations of "is this survey
-            // mine to answer" that disagree would list a survey in /surveys/my that the
-            // respond endpoint then refuses.
-            var targeted = me.DepartmentId is Guid department
+            // Matches SurveyQueries.AssignedTo exactly: no targets of EITHER kind means
+            // company-wide, otherwise the audience is the union of "my department is
+            // targeted" and "I am targeted". Two implementations of "is this survey mine to
+            // answer" that disagree would list a survey in /surveys/my that the respond
+            // endpoint then refuses -- or, worse the other way, let somebody answer a survey
+            // that was never aimed at them.
+            var byDepartment = me.DepartmentId is Guid department
                 && await db.SurveyDepartmentTargets
                     .AnyAsync(t => t.SurveyId == survey.Id && t.DepartmentId == department, cancellationToken);
-            if (!targeted)
+            var byUser = await db.SurveyUserTargets
+                .AnyAsync(t => t.SurveyId == survey.Id && t.UserId == me.Id, cancellationToken);
+            if (!byDepartment && !byUser)
             {
                 return new RespondentResolution(null, Results.Forbid());
             }

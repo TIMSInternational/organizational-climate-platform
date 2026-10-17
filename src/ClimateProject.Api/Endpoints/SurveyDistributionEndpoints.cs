@@ -1289,14 +1289,32 @@ public static class SurveyDistributionEndpoints
             .Where(t => t.SurveyId == survey.Id)
             .Select(t => t.DepartmentId)
             .ToListAsync(cancellationToken);
+        var targetedUsers = await db.SurveyUserTargets
+            .Where(t => t.SurveyId == survey.Id)
+            .Select(t => t.UserId)
+            .ToListAsync(cancellationToken);
 
-        if (targets.Count == 0)
+        if (targets.Count == 0 && targetedUsers.Count == 0)
         {
             var everyone = await db.Users
                 .Where(u => u.CompanyId == survey.CompanyId && u.IsActive)
                 .Select(u => u.Id)
                 .ToListAsync(cancellationToken);
             return (everyone, null);
+        }
+
+        // The union, matching SurveyQueries.AssignedTo: a person targeted directly is in the
+        // audience whatever their department, and only ACTIVE users are ever invited.
+        if (targetedUsers.Count > 0)
+        {
+            var byDepartment = targets.Count == 0
+                ? []
+                : await UsersInDepartmentsAsync(db, survey.CompanyId, targets, cancellationToken);
+            var active = await db.Users
+                .Where(u => u.CompanyId == survey.CompanyId && u.IsActive && targetedUsers.Contains(u.Id))
+                .Select(u => u.Id)
+                .ToListAsync(cancellationToken);
+            return (byDepartment.Concat(active).Distinct().ToList(), null);
         }
 
         return (await UsersInDepartmentsAsync(db, survey.CompanyId, targets, cancellationToken), null);

@@ -163,4 +163,59 @@ public class SurveyCoreTests(PostgresContainerFixture postgres)
         Assert.Null(loadedQuestion.CommentPromptEn);
         Assert.False(loadedQuestion.Required);
     }
+    /// <summary>
+    /// #587: a survey aimed at a PERSON reaches them whatever their department, and reaches
+    /// nobody else.
+    ///
+    /// <para>
+    /// Departments were the only targeting the product had, and a person has exactly one.
+    /// ESPH's 240 teletrabajadores sit in all eight of its departments, so every
+    /// department-based audience for them resolved to all 625 employees -- 402 of whom
+    /// would have seen, and been able to answer, a survey that was never theirs.
+    /// </para>
+    /// <para>
+    /// Both directions are asserted. Only the positive one would pass just as well if the
+    /// predicate had quietly fallen back to company-wide, which is the failure this is for.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task A_survey_targeted_at_a_person_reaches_them_and_nobody_else()
+    {
+        await using var db = CreateContext();
+        var (company, user, department) = await SeedTenantAsync(db);
+
+        var survey = new Survey
+        {
+            Id = Guid.NewGuid(),
+            CompanyId = company.Id,
+            CreatedBy = user.Id,
+            TitleEn = "Teletrabajo",
+            Type = "periodic",
+            Status = "active",
+            StartDate = DateTimeOffset.UtcNow.AddDays(-1),
+            EndDate = DateTimeOffset.UtcNow.AddDays(14),
+            Settings = new SurveySettings(),
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+        };
+        db.Surveys.Add(survey);
+        db.SurveyUserTargets.Add(new SurveyUserTarget { SurveyId = survey.Id, UserId = user.Id });
+        await db.SaveChangesAsync();
+
+        await using var readDb = CreateContext();
+        var somebodyElsesDepartment = Guid.NewGuid();
+
+        var mine = await ClimateProject.Infrastructure.Persistence.SurveyQueries.AssignedTo(
+                readDb.Surveys, readDb.SurveyDepartmentTargets, readDb.SurveyUserTargets, readDb.Responses,
+                company.Id, somebodyElsesDepartment, user.Id)
+            .Select(s => s.Id).ToListAsync();
+        Assert.Contains(survey.Id, mine);
+
+        var theirs = await ClimateProject.Infrastructure.Persistence.SurveyQueries.AssignedTo(
+                readDb.Surveys, readDb.SurveyDepartmentTargets, readDb.SurveyUserTargets, readDb.Responses,
+                company.Id, department.Id, Guid.NewGuid())
+            .Select(s => s.Id).ToListAsync();
+        Assert.DoesNotContain(survey.Id, theirs);
+    }
+
 }

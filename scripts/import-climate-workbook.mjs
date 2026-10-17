@@ -412,6 +412,105 @@ export function toFieldRequest(column, companyId, order) {
   }
 }
 
+/**
+ * The options a select field already carries, as option inputs that reproduce it exactly.
+ *
+ * The listing resolves ONE label per option for the locale asked for
+ * (DemographicFieldEndpoints.ToDetail), so both locales are read and an option whose label the
+ * API reported as a fallback for a locale is sent WITHOUT that locale -- re-sending a fallback
+ * would invent an `es` label for an option that only ever had an `en` one. `value` is passed
+ * through verbatim because it is what `user_demographics.value` already holds for everyone who
+ * answered: derive it again and the people already carrying it stop matching their own option.
+ */
+export function existingOptionInputs(detailEs, detailEn) {
+  const enByValue = new Map((detailEn?.options ?? []).map((o) => [o.value, o.label]))
+  const fallbackEs = new Set(detailEs?.fallbackFields ?? [])
+  const fallbackEn = new Set(detailEn?.fallbackFields ?? [])
+  return (detailEs?.options ?? []).map((option) => {
+    const key = `options[${option.order}].label`
+    const label = {}
+    if (option.label && !fallbackEs.has(key)) label.es = option.label
+    const en = enByValue.get(option.value)
+    if (en && !fallbackEn.has(key)) label.en = en
+    return { value: option.value, label: Object.keys(label).length ? label : null }
+  })
+}
+
+/**
+ * The options `wanted` adds to a field that already exists, appended AFTER the ones it carries.
+ * Null when it adds nothing, so the caller can skip the write entirely.
+ *
+ * Why this exists: a field is created by whichever import runs first and `PUT
+ * /admin/demographic-fields/{id}` REPLACES the whole option list, while
+ * `DemographicValueValidation` refuses a value outside it -- so a second import into the same
+ * company whose roster holds one new Proceso made every row carrying it a hard `error`, and
+ * `import-climate-workbook.mjs` refuses the run when any row is refused. Measured 2026-10-16 on
+ * ESPH: the Contraloría roster's `proceso: "Contraloría Empresarial"` and two of its jefaturas
+ * are absent from the options the Clima import creates, so ALL 8 of its rows would have been
+ * refused and neither its accounts nor its survey would have been created.
+ *
+ * Existing options keep their order and their labels; nothing is ever removed or renamed here.
+ */
+export function mergeFieldOptions(existing, wanted) {
+  const have = new Set(existing.map((option) => option.value))
+  const added = wanted.filter((option) => !have.has(option.value))
+  if (added.length === 0) return null
+  return { options: [...existing, ...added], added }
+}
+
+/**
+ * One apply request per 100 rows, the same number `IntakeWizard` uses (`IMPORT_CHUNK_ROWS`) and
+ * the same number `MassInviteEndpoints.MaxBatch` caps a credential resend at.
+ *
+ * **App Runner ends every HTTP request at 120 seconds and the limit is not configurable.** Each
+ * row of an apply costs one bcrypt hash at work factor 12 — measured at 1.09 s on the 0.25 vCPU
+ * instance, about 0.27 vCPU-seconds — and then one email through a process-wide pacer of 10 a
+ * second, so a request takes roughly `rows x 0.27 + rows / 10` seconds
+ * (`docs/runbooks/mass-invite-launch.md`): 300 rows is ~111 s with 9 s of margin, and 400 is
+ * killed. ESPH's Clima roster is **617 people in one file**, i.e. ~228 s, so as a single request
+ * it cannot finish — it would be killed mid-hash, before the save, having created nothing and
+ * sent nothing, two minutes into launch morning.
+ *
+ * The PREVIEW stays one request for the whole file: it hashes nothing, mails nothing, and is the
+ * only place the server can see the same address at rows 50 and 150 as a repeat (`seenInThisFile`
+ * is per request). `parseClimate` refuses a repeated address in the workbook as well, so that
+ * check is not lost by batching the apply.
+ */
+export const IMPORT_CHUNK_ROWS = 100
+
+export function chunkRows(rows, size = IMPORT_CHUNK_ROWS) {
+  if (!Number.isInteger(size) || size < 1) throw new Error(`chunk size must be a positive whole number, got ${size}`)
+  const out = []
+  for (let index = 0; index < rows.length; index += size) out.push(rows.slice(index, index + size))
+  return out
+}
+
+/**
+ * The departments **this workbook's people** are in, resolved to ids — not every department the
+ * company has.
+ *
+ * It used to be every active department, which is the same thing for a company this import just
+ * created and wrong for the second import into one. Measured on ESPH, 2026-10-16: the Clima
+ * import creates 7 departments and its survey targets those 7; the Contraloría import then runs
+ * into the SAME company, and "every active department" is 8 — so its survey, written for the
+ * **8 people** of Contraloría Empresarial, would have been visible and answerable by **all 625**.
+ * That is the defect #587 exists to prevent, in a second place and reached without any user
+ * targeting at all.
+ *
+ * `missing` is returned rather than skipped: a workbook department that does not resolve would
+ * silently shrink the audience, and a name differing from the company's only in case is exactly
+ * how that happens (the server matches a department name ordinally).
+ */
+export function surveyDepartmentIds(climate, departments) {
+  const wanted = [...new Set((climate.linkOnly ? climate.departments : climate.persons.map((p) => p.department)).filter(Boolean))]
+  const byName = new Map((departments ?? []).filter((d) => d.isActive !== false).map((d) => [d.name, d.id]))
+  return {
+    wanted,
+    missing: wanted.filter((name) => !byName.has(name)),
+    departmentIds: wanted.map((name) => byName.get(name)).filter(Boolean),
+  }
+}
+
 export function toImportRows(climate) {
   return climate.persons.map((person) => {
     const demographics = {}
@@ -509,10 +608,27 @@ export function toBandsRequest(bands) {
 /**
  * The company settings the import applies: the bands, how a result is READ (`scale`: "mean"
  * prints 1,00–5,00, "percent" prints 0–100 = mean × 20 -- the bands themselves stay on 1–5
- * either way), and the zone every "day" is read in.
+ * either way), the zone every "day" is read in, and the company's LANGUAGE.
+ *
+ * The language is here because `Company.Language` defaults to **"en"** (`Company.cs:34`),
+ * `CreateCompanyRequest` cannot carry it, and this settings call is the only way to set it --
+ * so every company this importer created was English. What that decides is the ORDER of the
+ * two halves of the credential email: `CredentialsEmailComposer` writes Spanish and English in
+ * one message and puts the company's own language first, "so a Costa Rican workforce reads
+ * Spanish before anything else". Left at "en", the first mail ESPH's 642 people ever receive
+ * from the platform opens in English with Spanish below a horizontal rule.
+ *
+ * It is not read from the workbook. `EMPRESA!B14` says "Español" and `parseClimate` does not
+ * parse it, so making this a flag that DEFAULTS to `es` states the decision in one place and
+ * matches `toSurveyRequest`, which has always hardcoded the survey's own `language: 'es'`.
  */
-export function toSettingsRequest(bands, timezone, scale = 'mean') {
-  return { resultBands: { ...toBandsRequest(bands), scale }, timezone }
+export function toSettingsRequest(bands, timezone, scale = 'mean', language = 'es') {
+  return { resultBands: { ...toBandsRequest(bands), scale }, timezone, language }
+}
+
+/** "en" or "es", or null: the two the catalogues and both email composers actually have. */
+export function validLanguage(language) {
+  return language === 'en' || language === 'es' ? language : null
 }
 
 /** "mean" or "percent", or null: anything else the API refuses with a 400 after the import ran. */
@@ -601,6 +717,7 @@ async function main() {
       country: { type: 'string', default: 'Costa Rica' },
       timezone: { type: 'string', default: 'America/Costa_Rica' },
       scale: { type: 'string', default: 'mean' },
+      language: { type: 'string', default: 'es' },
       title: { type: 'string' },
       api: { type: 'string', default: 'http://127.0.0.1:5080' },
       email: { type: 'string', default: 'fede.super@acme.test' },
@@ -632,13 +749,18 @@ async function main() {
   const window = surveyWindow({ start: values.start, end: values.end })
   const zoneProblems = validTimeZone(values.timezone) ? [] : [`--timezone "${values.timezone}" no es una zona horaria válida (ej. America/Costa_Rica).`]
   const scaleProblems = validScale(values.scale) ? [] : [`--scale "${values.scale}" debe ser mean (1,00–5,00) o percent (0–100).`]
-  const problems = [...parsed.problems, ...skipping.problems, ...window.problems, ...zoneProblems, ...scaleProblems]
+  // Refused rather than passed through, for the same reason as the zone: the settings call sets
+  // the language only when it is non-blank (`CompanyEndpoints.cs:259`), so a typo would leave
+  // the company on its "en" default and the only sign would be 642 English-first emails.
+  const languageProblems = validLanguage(values.language) ? [] : [`--language "${values.language}" debe ser es o en.`]
+  const problems = [...parsed.problems, ...skipping.problems, ...window.problems, ...zoneProblems, ...scaleProblems, ...languageProblems]
   const climate = applyCompanyName(skipping.climate, values['company-name'])
   log(`import-climate-workbook: ${values.file}`)
   for (const line of summarise(climate)) log(`  ${line}`)
   if (skipping.skipped.length) log(`  sin importar (--skip-demographic): ${skipping.skipped.join(' · ')}`)
   log(`  zona horaria de la empresa: ${values.timezone}`)
   log(`  escala de resultados: ${values.scale === 'percent' ? 'percent — 0 a 100 (promedio × 20)' : values.scale === 'mean' ? 'mean — promedio de 1,00 a 5,00' : values.scale}`)
+  log(`  idioma de la empresa: ${values.language}${values.language === 'es' ? ' — el correo de credenciales abre en español' : ' — ⚠️ el correo de credenciales abre en inglés'}`)
   if (!window.problems.length) log(`  ventana de la encuesta: ${window.startDate} → ${window.endDate}${values.start ? '' : ' (por defecto: sin --start/--end)'}`)
   log(withCredentials
     ? '  acceso: USUARIO Y CONTRASEÑA generados por la plataforma, enviados en el correo de credenciales'
@@ -688,15 +810,66 @@ async function main() {
     }
   }
 
-  // 2. Demographic fields, matched by key.
-  const existingFields = await call('GET', `/admin/demographic-fields?companyId=${companyId}`, null, token)
-  const fieldKeys = new Set(existingFields.fields.map((f) => f.field))
-  let order = fieldKeys.size
+  // 2. The company's settings: its result bands, how a result is read, its time zone and its
+  // LANGUAGE.
+  //
+  // Before the people, not after them, and that order is the whole point of the language.
+  // `BulkImportEndpoints` gives each account it creates the COMPANY's language, and every
+  // message to that person is resolved against the account's language first
+  // (`SurveyDistributionEndpoints.RecipientLocale`) -- so an account created while the company
+  // is still on its `en` default is an English account for good, whatever the company is set to
+  // a moment later. This call used to be step 5, after the import, which made the setting
+  // correct and the 617 accounts it was meant for English anyway.
+  const settings = toSettingsRequest(climate.bands, values.timezone, values.scale, values.language)
+  const bandsRequest = settings.resultBands
+  // The response carries the STORED settings, which is the only way to read the company's
+  // language back at all: there is no GET for it (`CompanyEndpoints` maps PUT /settings and no
+  // GET, and `CompanyDetail` has no settings), and the UI's own client only ever PUTs. Asserted
+  // rather than logged, because "language set" is otherwise a claim about the one field that
+  // decides what language 642 people are written to, with nothing anywhere that can check it.
+  const applied = await call('PUT', `/admin/companies/${companyId}/settings`, settings, token)
+  for (const [field, want] of [['language', values.language], ['timezone', values.timezone]]) {
+    const got = applied?.settings?.[field]
+    if (got !== want) throw new Error(`company ${field}: asked for "${want}", the company now reports "${got}" — the accounts this import creates would inherit the wrong one`)
+  }
+  log(`time zone set: ${values.timezone}`)
+  log(`result scale set: ${values.scale}`)
+  log(`company language set: ${values.language} (confirmed by the response) — every account this import creates inherits it`)
+  log(`result bands set: ${bandsRequest.criticalName} < ${bandsRequest.opportunityMin} ≤ ${bandsRequest.opportunityName} < ${bandsRequest.strengthMin} ≤ ${bandsRequest.strengthName}`)
+
+  // 3. Demographic fields, matched by key. A field that already exists is EXTENDED with the
+  // options this workbook adds -- see mergeFieldOptions for the ESPH measurement that forced it.
+  const [existingFields, existingFieldsEn] = await Promise.all([
+    call('GET', `/admin/demographic-fields?companyId=${companyId}&lang=es`, null, token),
+    call('GET', `/admin/demographic-fields?companyId=${companyId}&lang=en`, null, token),
+  ])
+  const fieldsByKey = new Map(existingFields.fields.map((f) => [f.field, f]))
+  const fieldsEnByKey = new Map(existingFieldsEn.fields.map((f) => [f.field, f]))
+  let order = fieldsByKey.size
   for (const column of climate.columns) {
-    if (fieldKeys.has(column.field)) { log(`field exists: ${column.field}`); continue }
-    const created = await call('POST', '/admin/demographic-fields', toFieldRequest(column, companyId, order++), token)
-    if (created?.field !== column.field) throw new Error(`field ${column.field}: unexpected body ${JSON.stringify(created).slice(0, 200)}`)
-    log(`field created: ${column.field} (${column.type})`)
+    const existing = fieldsByKey.get(column.field)
+    if (!existing) {
+      const created = await call('POST', '/admin/demographic-fields', toFieldRequest(column, companyId, order++), token)
+      if (created?.field !== column.field) throw new Error(`field ${column.field}: unexpected body ${JSON.stringify(created).slice(0, 200)}`)
+      log(`field created: ${column.field} (${column.type})`)
+      continue
+    }
+    // Only a select has options to extend, and only when both sides agree it is one: a column
+    // read as numeric here against a field stored as a select (or the reverse) is a mismatch to
+    // report, not to repair by replacing a list with the wrong kind of value.
+    if (column.type !== 'select' || existing.type !== 'select') {
+      if (column.type !== existing.type) log(`field exists: ${column.field} — ⚠️ the workbook reads it as ${column.type}, the company stores it as ${existing.type}; left as it is`)
+      else log(`field exists: ${column.field}`)
+      continue
+    }
+    const merge = mergeFieldOptions(
+      existingOptionInputs(existing, fieldsEnByKey.get(column.field)),
+      column.options.map((option) => ({ value: slug(option), label: both(option) })),
+    )
+    if (!merge) { log(`field exists: ${column.field}`); continue }
+    const updated = await call('PUT', `/admin/demographic-fields/${existing.id}`, { options: merge.options }, token)
+    if ((updated?.options ?? []).length !== merge.options.length) throw new Error(`field ${column.field}: PUT returned ${(updated?.options ?? []).length} options, expected ${merge.options.length}`)
+    log(`field extended: ${column.field} — ${merge.added.length} option(s) added: ${merge.added.map((o) => o.label.es).join(', ')}`)
   }
 
   // 3a. Link-only: the departments OPCIONES lists, matched by name; nobody is invited.
@@ -710,7 +883,7 @@ async function main() {
     }
   }
 
-  // 3. People — preview first, apply only a clean preview.
+  // 4. People — preview first, apply only a clean preview.
   const rows = climate.linkOnly ? [] : toImportRows(climate)
   const departments = await call('GET', `/admin/departments?companyId=${companyId}`, null, token)
   const known = new Set((departments.departments ?? departments).map((d) => norm(d.name)))
@@ -732,33 +905,53 @@ async function main() {
     return
   }
   const toImport = rows.filter((r) => !present.has(r.email.toLowerCase()))
-  const imported = toImport.length
-    ? await call('POST', '/admin/users/bulk-import/rows', { companyId, preview: false, rows: toImport, newDepartments, withCredentials }, token)
-    : { rows: [], successCount: 0, errorCount: 0 }
+  // One request per IMPORT_CHUNK_ROWS rows -- see that constant for the measurement that forces
+  // it. `newDepartments` goes with EVERY batch: the endpoint creates a department only for a row
+  // it is actually writing, so the batch that first needs one must carry the approval, and a
+  // name that an earlier batch already created is simply matched instead.
+  const batches = chunkRows(toImport)
+  const imported = { rows: [], successCount: 0, errorCount: 0 }
+  if (batches.length > 1) log(`people: ${toImport.length} to create, in ${batches.length} requests of at most ${IMPORT_CHUNK_ROWS}`)
+  for (const [index, batch] of batches.entries()) {
+    let response
+    try {
+      response = await call('POST', '/admin/users/bulk-import/rows', { companyId, preview: false, rows: batch, newDepartments, withCredentials }, token)
+    } catch (error) {
+      const landed = imported.rows.filter((r) => r.status === 'created' || r.status === 'invited').length
+      log(`\nrequest ${index + 1} of ${batches.length} FAILED: ${error.message}`)
+      log(`  ${landed} of ${toImport.length} people were created and are COMMITTED.`)
+      log('  Re-run the same command. The preview reports everyone who already exists and leaves')
+      log('  them alone, so a re-run imports only the remainder and mails nobody twice.')
+      if (withCredentials) log('  Anyone created by a request that died before its emails has no password yet:\n    POST /admin/users/credentials sends a fresh pair, at most 100 ids per call.')
+      process.exitCode = 1
+      return
+    }
+    imported.rows.push(...(response.rows ?? []))
+    imported.successCount += response.successCount ?? 0
+    imported.errorCount += response.errorCount ?? 0
+    if (batches.length > 1) log(`  ${index + 1}/${batches.length}: ${imported.rows.filter((r) => r.status === 'created' || r.status === 'invited').length} of ${toImport.length}`)
+  }
   const byStatus = imported.rows.reduce((acc, r) => ({ ...acc, [r.status]: (acc[r.status] ?? 0) + 1 }), {})
   if (!climate.linkOnly) log(`people: ${JSON.stringify(byStatus)} (success ${imported.successCount}, errors ${imported.errorCount})${newDepartments.length ? `; departments created: ${newDepartments.join(', ')}` : ''}`)
   if (imported.errorCount > 0) for (const r of imported.rows.filter((x) => x.errors.length)) log(`  - fila ${r.rowNumber} ${r.email}: ${r.errors.join('; ')}`)
 
-  // 4. The survey, as a draft, matched by title.
+  // 5. The survey, as a draft, matched by title.
   const surveys = await call('GET', `/surveys?companyId=${companyId}`, null, token)
   const surveyTitle = title ?? `Clima Organizacional ${new Date().getFullYear()}`
   const already = (surveys.surveys ?? surveys).find((s) => s.companyId === companyId && norm(s.title) === norm(surveyTitle))
   if (already) { log(`survey exists: ${already.title} (${already.id}, ${already.status}) — left as it is`) } else {
     const afterImport = await call('GET', `/admin/departments?companyId=${companyId}`, null, token)
-    const departmentIds = (afterImport.departments ?? afterImport).filter((d) => d.isActive !== false).map((d) => d.id)
+    const audience = surveyDepartmentIds(climate, afterImport.departments ?? afterImport)
+    if (audience.missing.length) {
+      throw new Error(`these departments of the workbook are not in the company, so the survey would reach fewer people than the roster: ${audience.missing.map((n) => `"${n}"`).join(', ')}`)
+    }
+    const departmentIds = audience.departmentIds
     const body = toSurveyRequest(climate, { companyId, title: surveyTitle, departmentIds, startDate: window.startDate, endDate: window.endDate, anonymous })
     const created = await call('POST', '/surveys', body, token)
     const id = created?.id ?? created?.survey?.id
     if (!id) throw new Error(`survey create: unexpected body ${JSON.stringify(created).slice(0, 200)}`)
-    log(`survey created as a DRAFT: ${surveyTitle} (${id}), ${body.questions.length} questions — review and launch it in the product`)
+    log(`survey created as a DRAFT: ${surveyTitle} (${id}), ${body.questions.length} questions, targeted at ${departmentIds.length} department(s): ${audience.wanted.join(', ')} — review and launch it in the product`)
   }
-  // 5. The company's result bands, result scale and time zone.
-  const settings = toSettingsRequest(climate.bands, values.timezone, values.scale)
-  const bandsRequest = settings.resultBands
-  await call('PUT', `/admin/companies/${companyId}/settings`, settings, token)
-  log(`time zone set: ${values.timezone}`)
-  log(`result scale set: ${values.scale}`)
-  log(`result bands set: ${bandsRequest.criticalName} < ${bandsRequest.opportunityMin} ≤ ${bandsRequest.opportunityName} < ${bandsRequest.strengthMin} ≤ ${bandsRequest.strengthName}`)
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {

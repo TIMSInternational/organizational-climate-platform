@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using ClimateProject.Api.Infrastructure;
 using ClimateProject.Application.Auth;
+using ClimateProject.Application.Localization;
 using ClimateProject.Application.OrgStructure;
 using ClimateProject.Application.OrgStructure.Intake;
 using ClimateProject.Domain.Entities;
@@ -380,6 +381,29 @@ public static class BulkImportEndpoints
                         Role = row.Role,
                         DepartmentId = department?.Id,
                         IsActive = true,
+                        // The COMPANY's language, not the "en" a `UserPreferences` defaults to.
+                        //
+                        // This account's holder has chosen nothing -- it was created from a
+                        // spreadsheet row a moment ago -- and `UserPreferences.Language` is the
+                        // FIRST thing every message to them is resolved against:
+                        // `SurveyDistributionEndpoints.RecipientLocale` reads it before it will
+                        // look at the survey's own language. Left at "en" it decides
+                        //
+                        //   - the invitation subject and body, for any survey that does not
+                        //     carry custom text (ESPH's Teletrabajo does not: 240 people),
+                        //   - EVERY reminder subject, which cannot be overridden at all --
+                        //     `BuildReminderNotification` passes `custom: null`, so
+                        //     `DefaultReminderSubject[locale]` is the only source, for all
+                        //     three of ESPH's surveys,
+                        //   - and the title and body of the in-app notification rows.
+                        //
+                        // A survey written in Spanish, invited from a Spanish company, into a
+                        // Costa Rican workforce, reminding them in English. Measured 2026-10-16.
+                        Preferences = new UserPreferences
+                        {
+                            Language = ContentLanguages.NormaliseLocale(company?.Settings.Language)
+                                       ?? ContentLanguages.FallbackLocale,
+                        },
                         CreatedAt = now,
                         UpdatedAt = now,
                     };

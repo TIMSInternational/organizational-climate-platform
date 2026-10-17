@@ -137,6 +137,11 @@ public static class SubjectErasure
             db.Notifications.Where(n => n.UserId == id), cancellationToken));
         actions.Add(await DeleteAsync("SurveyDraft",
             db.SurveyDrafts.Where(d => d.UserId == id), cancellationToken));
+        // #587: audience membership, carrying no answer and no content. The FK cascades
+        // from users, but erasure ANONYMISES the user rather than deleting them, so the
+        // cascade never fires and the row would outlive the subject it names.
+        actions.Add(await DeleteAsync("SurveyUserTarget",
+            db.SurveyUserTargets.Where(t => t.UserId == id), cancellationToken));
 
         var invitationIds = await SubjectAccessExport
             .AddressedInvitations(db, originalEmail, companyScope)
