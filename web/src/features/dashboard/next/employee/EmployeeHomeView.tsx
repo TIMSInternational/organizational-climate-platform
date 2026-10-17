@@ -360,7 +360,10 @@ function NothingDueCard({ model }: { model: EmployeeHomeModel }) {
   )
 }
 
-/** The artboard's right-hand column: three things that are true of every reader who owes nothing. */
+/**
+ * The artboard's right-hand column: what is true of a reader who owes nothing — two things
+ * always, and the no-receipt explanation only where there is no receipt to explain.
+ */
 function WhatHappensNow({ model }: { model: EmployeeHomeModel }) {
   const { t } = useTranslation()
   // The server's own floor, from the last outcome it sent — never the constant 5 assumed
@@ -395,11 +398,24 @@ function WhatHappensNow({ model }: { model: EmployeeHomeModel }) {
               : t('employee.next.resultsGoToBody', { floor })
           }
         />
-        <NextStep
-          icon={<EyeOff className="size-icon" />}
-          title={t('employee.next.anonymousNoReceiptTitle')}
-          body={t('employee.next.anonymousNoReceiptBody')}
-        />
+        {/* Only where there is no record to contradict it.
+            `anonymousNoReceiptBody` says "la plataforma no sabe si usted la respondió" —
+            it explains an ABSENT receipt. `hasAnsweredIdentified` is the platform holding
+            a completed response against this user row (`completedCount` counts
+            `r.UserId == me.Id`, and an anonymous survey writes no user id), so when it is
+            true the sentence is false, and it was printed on the same card as the
+            "✓ Respondida" chip that proves it. All three ESPH surveys are
+            `anonymous: false`, so all 642 respondents would have read it.
+
+            `false` is silence, not "you did not answer" — the step stays there, because
+            an unexplained absence of a receipt is the thing it exists to explain. */}
+        {model.hasAnsweredIdentified ? null : (
+          <NextStep
+            icon={<EyeOff className="size-icon" />}
+            title={t('employee.next.anonymousNoReceiptTitle')}
+            body={t('employee.next.anonymousNoReceiptBody')}
+          />
+        )}
       </ul>
     </div>
   )

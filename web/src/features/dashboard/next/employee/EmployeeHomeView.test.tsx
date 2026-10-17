@@ -454,6 +454,41 @@ describe('EmployeeHomeView', () => {
     expect(document.body.textContent).not.toContain('37')
   })
 
+  /**
+   * The mirror image of #585, found in the ESPH rehearsal on 2026-10-17.
+   *
+   * The step was rendered unconditionally, so the same card carried the "✓ Respondida"
+   * chip AND *"Una encuesta anónima no deja recibo — La plataforma no sabe si usted la
+   * respondió"*. The chip is drawn from a completed response the server holds against this
+   * user row, so the platform demonstrably does know. All three ESPH surveys are
+   * `anonymous: false`, so all 642 respondents would have read the contradiction.
+   */
+  it('does not tell a reader it cannot know they answered on the card that says they did', async () => {
+    serves({ dashboard: home({ pendingSurveyCount: 0, pendingSurveys: [], nextDeadline: null }) })
+    renderHome()
+
+    expect(await screen.findByText(es('employee.next.answeredChip'))).toBeTruthy()
+    expect(screen.queryByText(es('employee.next.anonymousNoReceiptTitle'))).toBeNull()
+    expect(screen.queryByText(es('employee.next.anonymousNoReceiptBody'))).toBeNull()
+    // The other two steps of the column are unaffected: this removes a false claim, not
+    // the explanation of where results go.
+    expect(screen.getByText(es('employee.next.nextSurveyTitle'))).toBeTruthy()
+    expect(screen.getByText(es('employee.next.resultsGoToTitle'))).toBeTruthy()
+  })
+
+  it('still explains the missing receipt when the platform holds no record either way', async () => {
+    // Zero is silence, not "you did not answer" — and an unexplained absent receipt is
+    // precisely what this step exists to explain. Removing it outright would have taken
+    // the explanation away from the anonymous respondent it was written for.
+    serves({
+      dashboard: home({ pendingSurveyCount: 0, pendingSurveys: [], nextDeadline: null, completedSurveyCount: 0 }),
+    })
+    renderHome()
+
+    expect(await screen.findByText(es('employee.next.anonymousNoReceiptTitle'))).toBeTruthy()
+    expect(screen.queryByText(es('employee.next.answeredChip'))).toBeNull()
+  })
+
   it('never says a reader with no such record failed to answer — the heading goes neutral instead', async () => {
     // `completedSurveyCount` is 0 for someone who answered an anonymous survey, because
     // `SurveyResponseEndpoints.cs` writes no user id for one. Zero is silence.
