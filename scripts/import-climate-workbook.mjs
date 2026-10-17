@@ -608,10 +608,27 @@ export function toBandsRequest(bands) {
 /**
  * The company settings the import applies: the bands, how a result is READ (`scale`: "mean"
  * prints 1,00–5,00, "percent" prints 0–100 = mean × 20 -- the bands themselves stay on 1–5
- * either way), and the zone every "day" is read in.
+ * either way), the zone every "day" is read in, and the company's LANGUAGE.
+ *
+ * The language is here because `Company.Language` defaults to **"en"** (`Company.cs:34`),
+ * `CreateCompanyRequest` cannot carry it, and this settings call is the only way to set it --
+ * so every company this importer created was English. What that decides is the ORDER of the
+ * two halves of the credential email: `CredentialsEmailComposer` writes Spanish and English in
+ * one message and puts the company's own language first, "so a Costa Rican workforce reads
+ * Spanish before anything else". Left at "en", the first mail ESPH's 642 people ever receive
+ * from the platform opens in English with Spanish below a horizontal rule.
+ *
+ * It is not read from the workbook. `EMPRESA!B14` says "Español" and `parseClimate` does not
+ * parse it, so making this a flag that DEFAULTS to `es` states the decision in one place and
+ * matches `toSurveyRequest`, which has always hardcoded the survey's own `language: 'es'`.
  */
-export function toSettingsRequest(bands, timezone, scale = 'mean') {
-  return { resultBands: { ...toBandsRequest(bands), scale }, timezone }
+export function toSettingsRequest(bands, timezone, scale = 'mean', language = 'es') {
+  return { resultBands: { ...toBandsRequest(bands), scale }, timezone, language }
+}
+
+/** "en" or "es", or null: the two the catalogues and both email composers actually have. */
+export function validLanguage(language) {
+  return language === 'en' || language === 'es' ? language : null
 }
 
 /** "mean" or "percent", or null: anything else the API refuses with a 400 after the import ran. */
@@ -700,6 +717,7 @@ async function main() {
       country: { type: 'string', default: 'Costa Rica' },
       timezone: { type: 'string', default: 'America/Costa_Rica' },
       scale: { type: 'string', default: 'mean' },
+      language: { type: 'string', default: 'es' },
       title: { type: 'string' },
       api: { type: 'string', default: 'http://127.0.0.1:5080' },
       email: { type: 'string', default: 'fede.super@acme.test' },
@@ -731,13 +749,18 @@ async function main() {
   const window = surveyWindow({ start: values.start, end: values.end })
   const zoneProblems = validTimeZone(values.timezone) ? [] : [`--timezone "${values.timezone}" no es una zona horaria válida (ej. America/Costa_Rica).`]
   const scaleProblems = validScale(values.scale) ? [] : [`--scale "${values.scale}" debe ser mean (1,00–5,00) o percent (0–100).`]
-  const problems = [...parsed.problems, ...skipping.problems, ...window.problems, ...zoneProblems, ...scaleProblems]
+  // Refused rather than passed through, for the same reason as the zone: the settings call sets
+  // the language only when it is non-blank (`CompanyEndpoints.cs:259`), so a typo would leave
+  // the company on its "en" default and the only sign would be 642 English-first emails.
+  const languageProblems = validLanguage(values.language) ? [] : [`--language "${values.language}" debe ser es o en.`]
+  const problems = [...parsed.problems, ...skipping.problems, ...window.problems, ...zoneProblems, ...scaleProblems, ...languageProblems]
   const climate = applyCompanyName(skipping.climate, values['company-name'])
   log(`import-climate-workbook: ${values.file}`)
   for (const line of summarise(climate)) log(`  ${line}`)
   if (skipping.skipped.length) log(`  sin importar (--skip-demographic): ${skipping.skipped.join(' · ')}`)
   log(`  zona horaria de la empresa: ${values.timezone}`)
   log(`  escala de resultados: ${values.scale === 'percent' ? 'percent — 0 a 100 (promedio × 20)' : values.scale === 'mean' ? 'mean — promedio de 1,00 a 5,00' : values.scale}`)
+  log(`  idioma de la empresa: ${values.language}${values.language === 'es' ? ' — el correo de credenciales abre en español' : ' — ⚠️ el correo de credenciales abre en inglés'}`)
   if (!window.problems.length) log(`  ventana de la encuesta: ${window.startDate} → ${window.endDate}${values.start ? '' : ' (por defecto: sin --start/--end)'}`)
   log(withCredentials
     ? '  acceso: USUARIO Y CONTRASEÑA generados por la plataforma, enviados en el correo de credenciales'
@@ -903,11 +926,12 @@ async function main() {
     log(`survey created as a DRAFT: ${surveyTitle} (${id}), ${body.questions.length} questions, targeted at ${departmentIds.length} department(s): ${audience.wanted.join(', ')} — review and launch it in the product`)
   }
   // 5. The company's result bands, result scale and time zone.
-  const settings = toSettingsRequest(climate.bands, values.timezone, values.scale)
+  const settings = toSettingsRequest(climate.bands, values.timezone, values.scale, values.language)
   const bandsRequest = settings.resultBands
   await call('PUT', `/admin/companies/${companyId}/settings`, settings, token)
   log(`time zone set: ${values.timezone}`)
   log(`result scale set: ${values.scale}`)
+  log(`company language set: ${values.language} — decides which half of the credential email comes first`)
   log(`result bands set: ${bandsRequest.criticalName} < ${bandsRequest.opportunityMin} ≤ ${bandsRequest.opportunityName} < ${bandsRequest.strengthMin} ≤ ${bandsRequest.strengthName}`)
 }
 

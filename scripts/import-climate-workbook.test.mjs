@@ -10,7 +10,7 @@ import assert from 'node:assert/strict'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import {
-  readWorkbook, parseClimate, parseSheet, parseSharedStrings, skipDemographics, surveyWindow, roleForTitle, slug, toImportRows, toSurveyRequest, toFieldRequest, toBandsRequest, toSettingsRequest, validTimeZone, validScale, decodeXml, parseStyles, applyCompanyName, existingOptionInputs, mergeFieldOptions, chunkRows, surveyDepartmentIds, IMPORT_CHUNK_ROWS,
+  readWorkbook, parseClimate, parseSheet, parseSharedStrings, skipDemographics, surveyWindow, roleForTitle, slug, toImportRows, toSurveyRequest, toFieldRequest, toBandsRequest, toSettingsRequest, validTimeZone, validScale, decodeXml, parseStyles, applyCompanyName, existingOptionInputs, mergeFieldOptions, chunkRows, surveyDepartmentIds, IMPORT_CHUNK_ROWS, validLanguage,
 } from './import-climate-workbook.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -235,7 +235,8 @@ test('bands: ordered by minimum into critical < opportunity < strength, names ca
 test('settings: the bands and the time zone travel in one request; a mistyped zone is refused', () => {
   const bands = [{ name: 'C', min: 1, max: 3.79 }, { name: 'O', min: 3.8, max: 4.29 }, { name: 'F', min: 4.3, max: 5 }]
   // "EAGLE (prueba)" was left on UTC: an answer at 20:56 in Costa Rica was dated the next day.
-  assert.deepEqual(toSettingsRequest(bands, 'America/Costa_Rica'), { resultBands: { ...toBandsRequest(bands), scale: 'mean' }, timezone: 'America/Costa_Rica' })
+  // The language rides along: Company.Language defaults to "en" and this is the only call that can set it.
+  assert.deepEqual(toSettingsRequest(bands, 'America/Costa_Rica'), { resultBands: { ...toBandsRequest(bands), scale: 'mean' }, timezone: 'America/Costa_Rica', language: 'es' })
   assert.equal(validTimeZone('America/Costa_Rica'), 'America/Costa_Rica')
   assert.equal(validTimeZone('UTC'), 'UTC')
   assert.equal(validTimeZone('America/Costa Rica'), null)
@@ -466,4 +467,28 @@ test('a survey is targeted at the workbook’s own departments, not at every dep
 
   // Link-only mode has no people; its departments come from OPCIONES.
   assert.deepEqual(surveyDepartmentIds({ linkOnly: true, persons: [], departments: ['Administración'] }, company).departmentIds, ['d1'])
+})
+
+test('the company language is set, because the entity default "en" puts English first in 642 emails', () => {
+  // Company.Language defaults to "en" and CreateCompanyRequest cannot carry it, so this
+  // settings call is the only way. It decides which half of the bilingual credential email
+  // comes first — see toSettingsRequest.
+  const bands = [{ min: 4, max: 5, name: 'F', color: 'FF70AD47' }, { min: 3, max: 3.99, name: 'O', color: 'FFFFC000' }, { min: 1, max: 2.99, name: 'C', color: 'FFC00000' }]
+  assert.equal(toSettingsRequest(bands, 'America/Costa_Rica', 'mean', 'es').language, 'es')
+  assert.equal(toSettingsRequest(bands, 'America/Costa_Rica', 'mean', 'en').language, 'en')
+  // The default is the one ESPH needs: an unpassed flag must not mean English.
+  assert.equal(toSettingsRequest(bands, 'America/Costa_Rica').language, 'es')
+  // ...and it does not disturb what the call already sent.
+  const sent = toSettingsRequest(bands, 'America/Costa_Rica', 'percent', 'es')
+  assert.equal(sent.timezone, 'America/Costa_Rica')
+  assert.equal(sent.resultBands.scale, 'percent')
+
+  // A typo is refused, not passed through: the endpoint ignores a blank/unknown language and
+  // the company would silently stay English.
+  assert.equal(validLanguage('es'), 'es')
+  assert.equal(validLanguage('en'), 'en')
+  assert.equal(validLanguage('Español'), null)
+  assert.equal(validLanguage('ES'), null)
+  assert.equal(validLanguage(''), null)
+  assert.equal(validLanguage(undefined), null)
 })
