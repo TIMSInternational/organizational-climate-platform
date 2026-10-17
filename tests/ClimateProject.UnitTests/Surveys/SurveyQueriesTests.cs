@@ -27,6 +27,7 @@ public class SurveyQueriesTests
     private static readonly Guid CompanyId = Guid.Parse("11111111-1111-1111-1111-111111111111");
     private static readonly Guid DepartmentId = Guid.Parse("22222222-2222-2222-2222-222222222222");
     private static readonly Guid UserId = Guid.Parse("33333333-3333-3333-3333-333333333333");
+    private static readonly Guid SurveyId = Guid.Parse("44444444-4444-4444-4444-444444444444");
 
     [Fact]
     public void The_assigned_to_filter_translates_for_a_user_with_a_department()
@@ -69,6 +70,39 @@ public class SurveyQueriesTests
         // department comparison against NULL that is silently never true.
         Assert.Contains("survey_department_targets", sql, StringComparison.Ordinal);
         Assert.DoesNotContain("department_id =", sql, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_audience_query_translates_and_reads_BOTH_target_tables()
+    {
+        using var db = CreateContext();
+
+        var sql = SurveyQueries
+            .Audience(db.Users, db.SurveyDepartmentTargets, db.SurveyUserTargets, SurveyId, CompanyId)
+            .ToQueryString();
+
+        // The audience is the UNION of the two target kinds. Reading only
+        // survey_department_targets is the drift this query exists to end: zero department
+        // targets was taken for "no targets at all" and resolved to the whole company, so a
+        // survey aimed at 240 people by name reported 642.
+        Assert.Contains("survey_department_targets", sql, StringComparison.Ordinal);
+        Assert.Contains("survey_user_targets", sql, StringComparison.Ordinal);
+        Assert.Contains("is_active", sql, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_audience_query_tests_department_membership_explicitly_rather_than_against_null()
+    {
+        using var db = CreateContext();
+
+        var sql = SurveyQueries
+            .Audience(db.Users, db.SurveyDepartmentTargets, db.SurveyUserTargets, SurveyId, CompanyId)
+            .ToQueryString();
+
+        // A user with no department is in NO department, not in all of them. The branch has
+        // to say so: a bare `department_id = <target>` comparison against NULL is never true,
+        // which is the right answer by accident and the wrong shape to rely on.
+        Assert.Contains("department_id IS NOT NULL", sql, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -199,7 +199,7 @@ public class SurveyRosterTests : IAsyncLifetime
         return (await response.Content.ReadFromJsonAsync<SurveyParticipationView>())!;
     }
 
-    private Task<Guid> SeedPersonAsync(string name, string role, string? username = null)
+    private Task<Guid> SeedPersonAsync(string name, string role, string? username = null, Guid? departmentId = null)
         => _harness.WithDbAsync(async db =>
         {
             var now = DateTimeOffset.UtcNow;
@@ -207,7 +207,7 @@ public class SurveyRosterTests : IAsyncLifetime
             {
                 Id = Guid.NewGuid(),
                 CompanyId = _companyId,
-                DepartmentId = null,
+                DepartmentId = departmentId,
                 Email = $"{Guid.NewGuid():N}@{_mail}",
                 Name = name,
                 Username = username,
@@ -347,6 +347,116 @@ public class SurveyRosterTests : IAsyncLifetime
                 ParticipatedOn = DateOnly.FromDateTime(DateTime.UtcNow),
             });
             await db.SaveChangesAsync();
+        });
+
+    /// <summary>
+    /// The roster is the SURVEY's audience, not the company's payroll.
+    ///
+    /// <para>
+    /// Measured in the ESPH rehearsal on 2026-10-17: a survey aimed at ONE person by name
+    /// listed all four accounts in the tenant, every one of the other three reading "no
+    /// iniciada". On Monday's real company that is a 240-person survey listing 642 people,
+    /// 402 of whom cannot see it, were never invited and are not expected to answer -- on the
+    /// one screen an administrator opens to decide whom to chase.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task The_roster_lists_only_the_people_a_per_person_survey_is_aimed_at()
+    {
+        var aimedAt = await SeedPersonAsync("Audrey Herra", Roles.Employee, username: Username("audrey"));
+        await SeedPersonAsync("Johanna Mena", Roles.Employee, username: Username("johanna"));
+        await SeedPersonAsync("Andrés Tafur", Roles.Employee, username: Username("andres"));
+
+        var surveyId = await SeedSurveyAsync(anonymous: false);
+        await SeedUserTargetAsync(surveyId, aimedAt);
+
+        var view = await ParticipationAsync(surveyId);
+
+        var row = Assert.Single(view.Roster);
+        Assert.Equal(aimedAt, row.UserId);
+
+        // The counts are projections of the roster, so they move with it -- and the author,
+        // who is not targeted, is off the list too.
+        Assert.Equal(1, view.NotStartedCount);
+        Assert.Equal(1, view.PendingCount);
+        Assert.Equal(0, view.AnsweredCount);
+    }
+
+    /// <summary>
+    /// The same defect for DEPARTMENT targets, which is how it predates per-person targeting:
+    /// a survey aimed at one department listed every other department's people too.
+    /// </summary>
+    [Fact]
+    public async Task The_roster_excludes_people_in_a_department_the_survey_does_not_target()
+    {
+        var targeted = await SeedDepartmentAsync("Agua Potable");
+        var untargeted = await SeedDepartmentAsync("Energía Eléctrica");
+        var inside = await SeedPersonAsync("Dentro Alcance", Roles.Employee, username: Username("dentro"), departmentId: targeted);
+        await SeedPersonAsync("Fuera Alcance", Roles.Employee, username: Username("fuera"), departmentId: untargeted);
+
+        var surveyId = await SeedSurveyAsync(anonymous: false);
+        await SeedDepartmentTargetAsync(surveyId, targeted);
+
+        var view = await ParticipationAsync(surveyId);
+
+        var row = Assert.Single(view.Roster);
+        Assert.Equal(inside, row.UserId);
+    }
+
+    /// <summary>
+    /// And the mistake that would be worse than the one being fixed: a survey that targets
+    /// NEITHER kind is company-wide, so its roster must stay the whole company. Reading an
+    /// empty target list as "nobody" would empty every untargeted survey's roster.
+    /// </summary>
+    [Fact]
+    public async Task A_survey_with_no_targets_of_either_kind_still_rosters_the_whole_company()
+    {
+        var first = await SeedPersonAsync("Primera Persona", Roles.Employee, username: Username("primera"));
+        var second = await SeedPersonAsync("Segunda Persona", Roles.Employee, username: Username("segunda"));
+
+        var surveyId = await SeedSurveyAsync(anonymous: false);
+
+        var view = await ParticipationAsync(surveyId);
+
+        // The two seeded here plus the author this class seeds for every test.
+        Assert.Equal(3, view.Roster.Count);
+        Assert.Contains(view.Roster, row => row.UserId == first);
+        Assert.Contains(view.Roster, row => row.UserId == second);
+        Assert.Contains(view.Roster, row => row.UserId == _authorId);
+    }
+
+    private Task<Guid> SeedDepartmentAsync(string name)
+        => _harness.WithDbAsync(async db =>
+        {
+            var now = DateTimeOffset.UtcNow;
+            var department = new Department
+            {
+                Id = Guid.NewGuid(),
+                CompanyId = _companyId,
+                Name = $"{name} {_tag}",
+                IsActive = true,
+                CreatedAt = now,
+                UpdatedAt = now,
+            };
+            db.Departments.Add(department);
+            await db.SaveChangesAsync();
+            return department.Id;
+        });
+
+    private Task SeedUserTargetAsync(Guid surveyId, Guid userId)
+        => _harness.WithDbAsync(async db =>
+        {
+            db.SurveyUserTargets.Add(new SurveyUserTarget { SurveyId = surveyId, UserId = userId });
+            await db.SaveChangesAsync();
+            return 0;
+        });
+
+    private Task SeedDepartmentTargetAsync(Guid surveyId, Guid departmentId)
+        => _harness.WithDbAsync(async db =>
+        {
+            db.SurveyDepartmentTargets.Add(new SurveyDepartmentTarget { SurveyId = surveyId, DepartmentId = departmentId });
+            await db.SaveChangesAsync();
+            return 0;
         });
 
     private Task<Guid> SeedSurveyAsync(bool anonymous)

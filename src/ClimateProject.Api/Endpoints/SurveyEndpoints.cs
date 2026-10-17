@@ -1573,6 +1573,13 @@ public static class SurveyEndpoints
             .Select(t => t.DepartmentId)
             .ToListAsync(cancellationToken);
 
+        // Both halves of the audience, or the client cannot apply the rule. Reporting the
+        // departments alone let a survey aimed at 240 people by name read as company-wide.
+        var userIds = await db.SurveyUserTargets
+            .Where(t => t.SurveyId == survey.Id)
+            .Select(t => t.UserId)
+            .ToListAsync(cancellationToken);
+
         var settings = new SurveySettingsDto(
             survey.Settings.Anonymous,
             survey.Settings.AllowPartialResponses,
@@ -1625,6 +1632,7 @@ public static class SurveyEndpoints
             survey.TargetAudienceCount,
             survey.Version,
             departmentIds,
+            userIds,
             questionDtos,
             settings,
             SurveyStatuses.AllowedTransitionsFrom(survey.Status),

@@ -103,6 +103,11 @@ public sealed record SurveyDetail(
     int? TargetAudienceCount,
     int Version,
     IReadOnlyList<Guid> DepartmentIds,
+    // People aimed at individually (#587), the other half of the audience. Present because
+    // without it the client cannot tell a 240-person survey from a company-wide one: it saw
+    // an empty DepartmentIds and reported "the whole company", which is the rule for a survey
+    // that targets NEITHER. Union with DepartmentIds; both empty still means company-wide.
+    IReadOnlyList<Guid> UserIds,
     IReadOnlyList<SurveyQuestionDto> Questions,
     SurveySettingsDto Settings,
     // What the caller may do next, computed server-side. The wizard would otherwise

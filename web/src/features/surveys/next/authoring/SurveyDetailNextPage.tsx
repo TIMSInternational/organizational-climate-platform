@@ -13,7 +13,7 @@ import {
   SkeletonText,
 } from '../../../../components/ui'
 import { ANONYMITY_FLOOR } from '../../../../components/charts'
-import { estimateAudience } from '../../../../components/distribution'
+import { estimateAudience, targetsWholeCompany } from '../../../../components/distribution'
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { useCompanyScope } from '../../../../company-context/useCompanyScope'
 import { useTranslation } from '../../../../i18n'
@@ -108,11 +108,17 @@ export function SurveyDetailView({
   const { survey, departments, distribution, invitations, users } = model
   const copy = (key: string, vars?: Record<string, string | number>) => t(`surveys.next.detail.${key}`, vars)
   const title = survey.title ?? t('surveys.untitled')
+  // The survey's own targets, BOTH kinds — `departmentIds` alone reported a survey aimed at
+  // people by name as company-wide.
+  const surveyTargets = { departmentIds: survey.departmentIds, userIds: survey.userIds }
   // ONE audience, the one Distribución prints (`surveyAudience`): the invited once invitations
   // exist, the directory's resolution before that, the stated target only when neither is read.
   const audience = surveyAudience({
     invited: invitations?.summary.total ?? null,
-    resolved: users === null ? null : estimateAudience('allTargeted', users, [], [], survey.departmentIds).length,
+    resolved:
+      users === null
+        ? null
+        : estimateAudience('allTargeted', users, { departmentIds: [], userIds: [] }, surveyTargets).length,
     stated: survey.targetAudienceCount,
   })
   const rate = responseRate(survey.responseCount, audience?.count ?? null)
@@ -211,11 +217,15 @@ export function SurveyDetailView({
           label={copy('audience')}
           value={audience?.count ?? null}
           unit={
-            survey.departmentIds.length === 0
+            targetsWholeCompany(surveyTargets)
               ? copy('audienceCompany')
-              : copy(survey.departmentIds.length === 1 ? 'audienceOneDepartment' : 'audienceDepartments', {
-                  count: survey.departmentIds.length,
-                })
+              : survey.departmentIds.length === 0
+                ? copy('audiencePeople')
+                : survey.userIds.length > 0
+                  ? copy('audienceMixed')
+                  : copy(survey.departmentIds.length === 1 ? 'audienceOneDepartment' : 'audienceDepartments', {
+                      count: survey.departmentIds.length,
+                    })
           }
         >
           {targets.names.length > 0 && <span className="text-sm text-fg-secondary">{targets.names.join(' · ')}</span>}
@@ -317,8 +327,13 @@ export function SurveyDetailView({
           </Card>
           <Card className="flex flex-col gap-2.5 px-5 pb-4.5 pt-4" data-testid="detail-departments">
             <CardHeading title={copy('departments')} />
-            {survey.departmentIds.length === 0 ? (
+            {targetsWholeCompany(surveyTargets) ? (
               <p className="m-0 text-sm">{copy('wholeCompany')}</p>
+            ) : survey.departmentIds.length === 0 ? (
+              // Aimed at people and no department. This card said "Toda la empresa", which
+              // is the rule for a survey that targets NEITHER, under a heading that is
+              // about departments — so the one card naming the audience named the wrong one.
+              <p className="m-0 text-sm">{copy('departmentsNoneButPeople', { count: survey.userIds.length })}</p>
             ) : targets.names.length === 0 ? (
               <p className="m-0 text-sm text-fg-secondary">{copy('departmentsUnlisted', { count: survey.departmentIds.length })}</p>
             ) : (
@@ -333,6 +348,13 @@ export function SurveyDetailView({
                   </li>
                 ))}
               </ul>
+            )}
+            {/* Targeted BOTH ways: the list above is only half the audience, and a card
+                that stops at the departments understates who gets the survey. */}
+            {survey.departmentIds.length > 0 && survey.userIds.length > 0 && (
+              <p className="m-0 text-sm text-fg-secondary">
+                {copy('departmentsAlsoPeople', { count: survey.userIds.length })}
+              </p>
             )}
             <p className="m-0 text-xs leading-normal text-fg-secondary">{copy('departmentsNote', { floor: ANONYMITY_FLOOR })}</p>
           </Card>

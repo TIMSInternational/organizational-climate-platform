@@ -161,6 +161,15 @@ export interface SurveyDetail {
   targetAudienceCount: number | null
   version: number
   departmentIds: string[]
+  /**
+   * People this survey is aimed at individually (#587) — the other half of the audience,
+   * a UNION with `departmentIds` and not an alternative to it.
+   *
+   * Required, not optional: without it a screen reads an empty `departmentIds` and prints
+   * "the whole company", which is the rule for a survey that targets NEITHER. A survey
+   * aimed at 240 people by name reported 642 on every screen that showed it.
+   */
+  userIds: string[]
   questions: SurveyQuestion[]
   settings: SurveySettings
   /**

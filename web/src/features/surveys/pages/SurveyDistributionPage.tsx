@@ -159,12 +159,17 @@ export default function SurveyDistributionPage() {
   const scopedToSurvey =
     context !== null && scope.status === 'ready' && scope.companyId === context.survey.companyId
 
+  // BOTH target kinds, or a survey aimed at people by name resolves to the whole company.
+  const surveyTargets = {
+    departmentIds: context?.survey.departmentIds ?? [],
+    userIds: context?.survey.userIds ?? [],
+  }
+
   const recipientCount = estimateAudience(
     mode,
     users,
-    selectedDepartmentIds,
-    selectedUserIds,
-    context?.survey.departmentIds ?? [],
+    { departmentIds: selectedDepartmentIds, userIds: selectedUserIds },
+    surveyTargets,
   ).length
 
   const selection = audienceSelection(mode, selectedDepartmentIds, selectedUserIds)
@@ -404,7 +409,7 @@ export default function SurveyDistributionPage() {
                       onUsersChange={setSelectedUserIds}
                       departments={departments}
                       users={users}
-                      surveyDepartmentIds={context.survey.departmentIds}
+                      surveyTargets={surveyTargets}
                       disabled={busy}
                     />
                     <div className="flex flex-wrap gap-inline">

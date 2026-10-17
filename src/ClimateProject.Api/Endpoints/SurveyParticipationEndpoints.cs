@@ -190,9 +190,22 @@ public static class SurveyParticipationEndpoints
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
     {
-        var users = await db.Users
-            .AsNoTracking()
-            .Where(u => u.CompanyId == companyId && u.IsActive && u.Email != "")
+        // THE SURVEY'S AUDIENCE, not the company's payroll.
+        //
+        // This listed every active account in the tenant, whatever the survey was aimed at.
+        // On a survey targeted at 240 people in a 642-person company that is 402 rows reading
+        // "no iniciada" for people who cannot see it, were never invited and are not expected
+        // to answer -- on the one screen an administrator opens to decide whom to chase, and
+        // in the PENDIENTES sheet of the status-report export, which reuses this method
+        // (`ResponseExportEndpoints`). It was wrong for department targets too, so it
+        // predates per-person targeting rather than arriving with it.
+        //
+        // `SurveyQueries.Audience` is the same rule `/surveys/my`, the respond gate and the
+        // invitation resolver apply, so the roster cannot name somebody the survey does not
+        // reach. An untargeted survey is company-wide and this is unchanged for it.
+        var users = await SurveyQueries
+            .Audience(db.Users.AsNoTracking(), db.SurveyDepartmentTargets, db.SurveyUserTargets, surveyId, companyId)
+            .Where(u => u.Email != "")
             .Select(u => new { u.Id, u.Name, u.Email, u.Username, u.Role })
             .ToListAsync(cancellationToken);
 
