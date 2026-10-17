@@ -225,6 +225,19 @@ test('the survey body overrides what the built payload decided, and aims at peop
   assert.equal(body.type, 'periodic')
   assert.equal(body.serviceType, undefined)     // unmetered: no licence row is ever spent
   assert.deepEqual(body.questions, [{ type: 'likert' }])
+  // The denominator the RESULTS screen uses. It is `targetAudienceCount` and nothing else,
+  // and the server returns a NULL participation rate rather than inventing one -- so an
+  // unset value means the 240-person survey reports no rate at all, all week.
+  assert.equal(body.targetAudienceCount, 2)
+})
+
+test('a survey aimed at nobody states no audience rather than zero', () => {
+  // `|| null` and not `?? null`: a count of 0 must not become the denominator of a
+  // percentage, which is a divide-by-zero dressed up as "0 % participation".
+  const body = toSurveyBody({ title: 'x' }, {
+    companyId: '1', startDate: 'a', endDate: 'b', userIds: [],
+  })
+  assert.equal(body.targetAudienceCount, null)
 })
 
 test('every demographic a row carries actually came from a column of the roster', () => {

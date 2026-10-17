@@ -323,6 +323,14 @@ export function toSurveyBody(payload, { companyId, startDate, endDate, userIds }
     endDate,
     userIds,
     departmentIds: [],
+    // The STATED audience, which is a different number from the resolved one and the only
+    // denominator the RESULTS screen will use. `SurveyResultsSummary.ParticipationRate` is
+    // "completed / invited" where invited is `targetAudienceCount`, and it is deliberately
+    // NULL rather than fabricated when the survey has none -- so without this the results
+    // screen shows NO participation rate at all for a 240-person survey. Measured locally
+    // on 2026-10-17: Clima states 617 and prints a rate, Teletrabajo stated nothing and
+    // printed `participationRate: null`. `import-climate-workbook.mjs` has always set it.
+    targetAudienceCount: userIds.length || null,
     settings: { ...(payload.settings ?? {}), notificationSendInvitations: true },
   }
 }
