@@ -418,11 +418,18 @@ public class SurveyRosterTests : IAsyncLifetime
 
         var view = await ParticipationAsync(surveyId);
 
-        // The two seeded here plus the author this class seeds for every test.
-        Assert.Equal(3, view.Roster.Count);
         Assert.Contains(view.Roster, row => row.UserId == first);
         Assert.Contains(view.Roster, row => row.UserId == second);
         Assert.Contains(view.Roster, row => row.UserId == _authorId);
+
+        // EVERY active account with an address, counted from the database rather than from a
+        // number written here: `ClientAsync` signs a caller up through `/auth/signup` and
+        // re-homes them into this company, so reading the roster is itself what creates the
+        // last of its rows. A literal would have encoded that and broken the day the harness
+        // stopped doing it.
+        var active = await _harness.WithDbAsync(db => db.Users
+            .CountAsync(u => u.CompanyId == _companyId && u.IsActive && u.Email != ""));
+        Assert.Equal(active, view.Roster.Count);
     }
 
     private Task<Guid> SeedDepartmentAsync(string name)
