@@ -109,6 +109,7 @@ export const DELETED_LABEL_PATH: Record<string, string> = {
   survey_audit_logs: 'privacy.erasureDeletedSurveyAuditLogs',
   survey_drafts: 'privacy.erasureDeletedSurveyDrafts',
   survey_participations: 'privacy.erasureDeletedSurveyParticipations',
+  survey_user_targets: 'privacy.erasureDeletedSurveyUserTargets',
   user_demographics: 'privacy.erasureDeletedUserDemographics',
   user_invitation_demographics: 'privacy.erasureDeletedInvitationDemographics',
 }

@@ -171,6 +171,13 @@ public static class SubjectAccessExport
             await FullAsync(db, "SurveyParticipation", "Email",
                 ParticipationsFor(db, email, companyScope), cancellationToken),
 
+            // Which surveys were aimed at the subject by name rather than at their department
+            // (#587). Membership only: the row is (SurveyId, UserId) and carries no answer.
+            // Not company-scoped, like the other sections keyed on the user id rather than on
+            // an address: a user id resolves to one person in one company already.
+            await FullAsync(db, "SurveyUserTarget", "UserId",
+                db.SurveyUserTargets.Where(t => t.UserId == id), cancellationToken),
+
             // --- Actor: the subject as author, approver or manager ---------------------------
             // Paired-column labels (#195/#210) are whichever half exists, English first: an
             // access export has no reader locale, and a label is attribution, not content.
