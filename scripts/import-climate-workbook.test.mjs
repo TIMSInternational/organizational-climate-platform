@@ -10,7 +10,7 @@ import assert from 'node:assert/strict'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import {
-  readWorkbook, parseClimate, parseSheet, parseSharedStrings, skipDemographics, surveyWindow, roleForTitle, slug, toImportRows, toSurveyRequest, toFieldRequest, toBandsRequest, toSettingsRequest, validTimeZone, validScale, decodeXml, parseStyles, applyCompanyName,
+  readWorkbook, parseClimate, parseSheet, parseSharedStrings, skipDemographics, surveyWindow, roleForTitle, slug, toImportRows, toSurveyRequest, toFieldRequest, toBandsRequest, toSettingsRequest, validTimeZone, validScale, decodeXml, parseStyles, applyCompanyName, existingOptionInputs, mergeFieldOptions,
 } from './import-climate-workbook.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -334,4 +334,73 @@ test('applyCompanyName substitutes the template placeholder everywhere the C# pa
   // No name: leave the text alone rather than substitute an empty string.
   assert.equal(applyCompanyName(climate, undefined).invitation.subject,
     'Invitación al clima organizacional de [Empresa]')
+})
+
+// ---------------------------------------------------------------------------------------
+// Extending a field that already exists. The case is ESPH's, measured 2026-10-16: the
+// Contraloría roster carries one Proceso and two Jefaturas that the Clima import, which runs
+// first and creates the fields, never saw. `DemographicValueValidation` refuses a value outside
+// a select's options, so every row carrying one became a hard `error` and the run was refused.
+// ---------------------------------------------------------------------------------------
+
+const FIELD_ES = {
+  id: 'f1', field: 'proceso', type: 'select', label: 'Proceso',
+  options: [
+    { order: 0, value: 'negocio_ap_automatizacion', label: 'Negocio AP - Automatización' },
+    { order: 1, value: 'negocio_ee_redes', label: 'Negocio EE - Redes' },
+  ],
+  fallbackFields: [],
+}
+const FIELD_EN = { ...FIELD_ES, options: FIELD_ES.options.map((o) => ({ ...o })), fallbackFields: [] }
+
+test('an existing field is extended only by the options it does not already carry, and keeps the order it had', () => {
+  const existing = existingOptionInputs(FIELD_ES, FIELD_EN)
+  const wanted = ['Negocio EE - Redes', 'Contraloría Empresarial', 'Junta Directiva']
+    .map((label) => ({ value: slug(label), label: { es: label, en: label } }))
+  const merge = mergeFieldOptions(existing, wanted)
+  assert.deepEqual(merge.added.map((o) => o.value), ['contraloria_empresarial', 'junta_directiva'])
+  // The two it had come first and unchanged; nothing is removed and nothing is renamed.
+  assert.deepEqual(merge.options.map((o) => o.value), [
+    'negocio_ap_automatizacion', 'negocio_ee_redes', 'contraloria_empresarial', 'junta_directiva',
+  ])
+  assert.deepEqual(merge.options[0].label, { es: 'Negocio AP - Automatización', en: 'Negocio AP - Automatización' })
+  // ...and a workbook that adds nothing writes nothing at all.
+  assert.equal(mergeFieldOptions(existing, [{ value: 'negocio_ee_redes', label: { es: 'x', en: 'x' } }]), null)
+  assert.equal(mergeFieldOptions(existing, []), null)
+})
+
+test('an option the API resolved from the OTHER language is not re-sent as that language', () => {
+  // `ToDetail` resolves one label per option and names the ones it had to fall back for. An
+  // English-only option asked for in Spanish comes back with the English text; re-sending it as
+  // `es` would invent a Spanish label the field never had. PUT replaces the whole list, so this
+  // is the one chance to get it wrong.
+  const es = {
+    ...FIELD_ES,
+    options: [{ order: 0, value: 'english_only', label: 'English only' }],
+    fallbackFields: ['options[0].label'],
+  }
+  const en = {
+    ...FIELD_ES,
+    options: [{ order: 0, value: 'english_only', label: 'English only' }],
+    fallbackFields: [],
+  }
+  assert.deepEqual(existingOptionInputs(es, en), [{ value: 'english_only', label: { en: 'English only' } }])
+  // The reverse direction, and an option with no label at all, keep their value either way.
+  assert.deepEqual(existingOptionInputs({ ...es, fallbackFields: [] }, { ...en, fallbackFields: ['options[0].label'] }),
+    [{ value: 'english_only', label: { es: 'English only' } }])
+  assert.deepEqual(existingOptionInputs({ ...es, options: [{ order: 0, value: 'v', label: null }], fallbackFields: [] }, { ...en, options: [] }),
+    [{ value: 'v', label: null }])
+})
+
+test('a value already stored on a user is passed through verbatim, never derived again', () => {
+  // user_demographics.value holds the option's `value`. A field created before `slug` changed —
+  // or by the product rather than this importer — can hold a value that slug() would not
+  // produce; re-deriving it would silently orphan everyone already carrying it.
+  const es = { ...FIELD_ES, options: [{ order: 0, value: 'Negocio-AP', label: 'Negocio AP' }], fallbackFields: [] }
+  const inputs = existingOptionInputs(es, { ...es })
+  assert.deepEqual(inputs.map((o) => o.value), ['Negocio-AP'])
+  assert.notEqual(inputs[0].value, slug('Negocio AP'))
+  // and it is NOT treated as missing when the workbook asks for the slugged spelling
+  const merge = mergeFieldOptions(inputs, [{ value: 'Negocio-AP', label: { es: 'Negocio AP', en: 'Negocio AP' } }])
+  assert.equal(merge, null)
 })

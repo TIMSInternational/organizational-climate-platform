@@ -412,6 +412,52 @@ export function toFieldRequest(column, companyId, order) {
   }
 }
 
+/**
+ * The options a select field already carries, as option inputs that reproduce it exactly.
+ *
+ * The listing resolves ONE label per option for the locale asked for
+ * (DemographicFieldEndpoints.ToDetail), so both locales are read and an option whose label the
+ * API reported as a fallback for a locale is sent WITHOUT that locale -- re-sending a fallback
+ * would invent an `es` label for an option that only ever had an `en` one. `value` is passed
+ * through verbatim because it is what `user_demographics.value` already holds for everyone who
+ * answered: derive it again and the people already carrying it stop matching their own option.
+ */
+export function existingOptionInputs(detailEs, detailEn) {
+  const enByValue = new Map((detailEn?.options ?? []).map((o) => [o.value, o.label]))
+  const fallbackEs = new Set(detailEs?.fallbackFields ?? [])
+  const fallbackEn = new Set(detailEn?.fallbackFields ?? [])
+  return (detailEs?.options ?? []).map((option) => {
+    const key = `options[${option.order}].label`
+    const label = {}
+    if (option.label && !fallbackEs.has(key)) label.es = option.label
+    const en = enByValue.get(option.value)
+    if (en && !fallbackEn.has(key)) label.en = en
+    return { value: option.value, label: Object.keys(label).length ? label : null }
+  })
+}
+
+/**
+ * The options `wanted` adds to a field that already exists, appended AFTER the ones it carries.
+ * Null when it adds nothing, so the caller can skip the write entirely.
+ *
+ * Why this exists: a field is created by whichever import runs first and `PUT
+ * /admin/demographic-fields/{id}` REPLACES the whole option list, while
+ * `DemographicValueValidation` refuses a value outside it -- so a second import into the same
+ * company whose roster holds one new Proceso made every row carrying it a hard `error`, and
+ * `import-climate-workbook.mjs` refuses the run when any row is refused. Measured 2026-10-16 on
+ * ESPH: the Contraloría roster's `proceso: "Contraloría Empresarial"` and two of its jefaturas
+ * are absent from the options the Clima import creates, so ALL 8 of its rows would have been
+ * refused and neither its accounts nor its survey would have been created.
+ *
+ * Existing options keep their order and their labels; nothing is ever removed or renamed here.
+ */
+export function mergeFieldOptions(existing, wanted) {
+  const have = new Set(existing.map((option) => option.value))
+  const added = wanted.filter((option) => !have.has(option.value))
+  if (added.length === 0) return null
+  return { options: [...existing, ...added], added }
+}
+
 export function toImportRows(climate) {
   return climate.persons.map((person) => {
     const demographics = {}
@@ -688,15 +734,39 @@ async function main() {
     }
   }
 
-  // 2. Demographic fields, matched by key.
-  const existingFields = await call('GET', `/admin/demographic-fields?companyId=${companyId}`, null, token)
-  const fieldKeys = new Set(existingFields.fields.map((f) => f.field))
-  let order = fieldKeys.size
+  // 2. Demographic fields, matched by key. A field that already exists is EXTENDED with the
+  // options this workbook adds -- see mergeFieldOptions for the ESPH measurement that forced it.
+  const [existingFields, existingFieldsEn] = await Promise.all([
+    call('GET', `/admin/demographic-fields?companyId=${companyId}&lang=es`, null, token),
+    call('GET', `/admin/demographic-fields?companyId=${companyId}&lang=en`, null, token),
+  ])
+  const fieldsByKey = new Map(existingFields.fields.map((f) => [f.field, f]))
+  const fieldsEnByKey = new Map(existingFieldsEn.fields.map((f) => [f.field, f]))
+  let order = fieldsByKey.size
   for (const column of climate.columns) {
-    if (fieldKeys.has(column.field)) { log(`field exists: ${column.field}`); continue }
-    const created = await call('POST', '/admin/demographic-fields', toFieldRequest(column, companyId, order++), token)
-    if (created?.field !== column.field) throw new Error(`field ${column.field}: unexpected body ${JSON.stringify(created).slice(0, 200)}`)
-    log(`field created: ${column.field} (${column.type})`)
+    const existing = fieldsByKey.get(column.field)
+    if (!existing) {
+      const created = await call('POST', '/admin/demographic-fields', toFieldRequest(column, companyId, order++), token)
+      if (created?.field !== column.field) throw new Error(`field ${column.field}: unexpected body ${JSON.stringify(created).slice(0, 200)}`)
+      log(`field created: ${column.field} (${column.type})`)
+      continue
+    }
+    // Only a select has options to extend, and only when both sides agree it is one: a column
+    // read as numeric here against a field stored as a select (or the reverse) is a mismatch to
+    // report, not to repair by replacing a list with the wrong kind of value.
+    if (column.type !== 'select' || existing.type !== 'select') {
+      if (column.type !== existing.type) log(`field exists: ${column.field} — ⚠️ the workbook reads it as ${column.type}, the company stores it as ${existing.type}; left as it is`)
+      else log(`field exists: ${column.field}`)
+      continue
+    }
+    const merge = mergeFieldOptions(
+      existingOptionInputs(existing, fieldsEnByKey.get(column.field)),
+      column.options.map((option) => ({ value: slug(option), label: both(option) })),
+    )
+    if (!merge) { log(`field exists: ${column.field}`); continue }
+    const updated = await call('PUT', `/admin/demographic-fields/${existing.id}`, { options: merge.options }, token)
+    if ((updated?.options ?? []).length !== merge.options.length) throw new Error(`field ${column.field}: PUT returned ${(updated?.options ?? []).length} options, expected ${merge.options.length}`)
+    log(`field extended: ${column.field} — ${merge.added.length} option(s) added: ${merge.added.map((o) => o.label.es).join(', ')}`)
   }
 
   // 3a. Link-only: the departments OPCIONES lists, matched by name; nobody is invited.
