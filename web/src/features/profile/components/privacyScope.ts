@@ -84,6 +84,7 @@ export const ERASURE_DELETED_TABLES = [
   'survey_audit_logs',
   'survey_drafts',
   'survey_participations',
+  'survey_user_targets',
   'user_demographics',
   'user_invitation_demographics',
 ] as const
