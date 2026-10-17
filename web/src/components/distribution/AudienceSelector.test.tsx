@@ -42,6 +42,7 @@ function renderSelector(
   overrides: {
     mode?: AudienceMode
     surveyDepartmentIds?: string[]
+    surveyUserIds?: string[]
     selectedDepartmentIds?: string[]
     selectedUserIds?: string[]
     onModeChange?: () => void
@@ -61,7 +62,10 @@ function renderSelector(
         onUsersChange={overrides.onUsersChange ?? (() => {})}
         departments={overrides.departments ?? DEPARTMENTS}
         users={USERS}
-        surveyDepartmentIds={overrides.surveyDepartmentIds ?? []}
+        surveyTargets={{
+          departmentIds: overrides.surveyDepartmentIds ?? [],
+          userIds: overrides.surveyUserIds ?? [],
+        }}
       />
     </TranslationProvider>,
   )
@@ -73,13 +77,25 @@ describe('AudienceSelector', () => {
     expect(screen.getByText('3 people will be invited')).toBeTruthy()
   })
 
-  it('says “everyone in the company” only when the survey targets no department', () => {
+  it('says “everyone in the company” only when the survey targets neither kind', () => {
     renderSelector()
     expect(screen.getByLabelText('Everyone in the company')).toBeTruthy()
 
     cleanup()
     renderSelector({ surveyDepartmentIds: ['eng'] })
     expect(screen.getByLabelText('The departments this survey targets')).toBeTruthy()
+
+    // A survey aimed at PEOPLE has no department targets and is not company-wide. This
+    // label read "Everyone in the company" for it, beside a count of the whole directory.
+    cleanup()
+    renderSelector({ surveyUserIds: ['c'] })
+    expect(screen.getByLabelText('The people this survey targets')).toBeTruthy()
+  })
+
+  it('counts a per-person survey as those people, not as the whole company', () => {
+    // The rehearsal's reading for a one-person survey was "3 people will be invited".
+    renderSelector({ surveyUserIds: ['c'] })
+    expect(screen.getByText('1 people will be invited')).toBeTruthy()
   })
 
   it('recounts as the selection changes', () => {

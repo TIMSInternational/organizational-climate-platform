@@ -8,7 +8,14 @@
  * api layer, which a microclimate caller can supply its own equivalents for.
  */
 export { default as AudienceSelector, type AudienceSelectorProps } from './AudienceSelector'
-export { audienceSelection, estimateAudience, type AudienceMode } from './audience'
+export {
+  audienceSelection,
+  estimateAudience,
+  targetsWholeCompany,
+  type AudienceMode,
+  type AudienceSelectionInput,
+  type SurveyTargets,
+} from './audience'
 export { default as DistributionProgress, type DistributionProgressProps } from './DistributionProgress'
 export { default as InvitationCopyEditor, type InvitationCopyEditorProps } from './InvitationCopyEditor'
 export { default as InvitationTable, type InvitationTableProps } from './InvitationTable'

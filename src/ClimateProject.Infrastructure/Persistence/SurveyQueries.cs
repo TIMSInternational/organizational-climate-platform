@@ -90,6 +90,40 @@ public static class SurveyQueries
     }
 
     /// <summary>
+    /// The people a survey is aimed at: <see cref="AssignedTo"/> read the other way round.
+    ///
+    /// <para>
+    /// Same rule, one expression of it. The audience is the UNION of "my department is
+    /// targeted" and "I am targeted", and the whole company only when the survey targets
+    /// neither -- so a survey aimed at 240 people by name cannot be reported as aimed at
+    /// everybody. It had been written out four times (here, the respond path's gate, the
+    /// invitation resolver and a reimplementation in TypeScript), and the fourth had already
+    /// drifted: zero DEPARTMENT targets was read as "no targets at all" and returned the
+    /// whole company.
+    /// </para>
+    ///
+    /// <para>
+    /// Only ACTIVE users are ever in an audience, and department membership is
+    /// <c>users.department_id</c> -- a user with none is in no department rather than in all
+    /// of them, which is why the department branch tests it explicitly instead of letting a
+    /// <c>= NULL</c> comparison decide.
+    /// </para>
+    /// </summary>
+    public static IQueryable<User> Audience(
+        IQueryable<User> users,
+        IQueryable<SurveyDepartmentTarget> departmentTargets,
+        IQueryable<SurveyUserTarget> userTargets,
+        Guid surveyId,
+        Guid companyId)
+        => users.Where(u =>
+            u.CompanyId == companyId
+            && u.IsActive
+            && ((!departmentTargets.Any(t => t.SurveyId == surveyId) && !userTargets.Any(t => t.SurveyId == surveyId))
+                || (u.DepartmentId != null
+                    && departmentTargets.Any(t => t.SurveyId == surveyId && t.DepartmentId == u.DepartmentId))
+                || userTargets.Any(t => t.SurveyId == surveyId && t.UserId == u.Id)));
+
+    /// <summary>
     /// Searches BOTH title columns. Searching only the requested locale would make a
     /// bilingual survey findable in one language and invisible in the other.
     /// </summary>

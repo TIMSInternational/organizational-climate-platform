@@ -60,6 +60,7 @@ const detail: SurveyDetail = {
   targetAudienceCount: null,
   version: 1,
   departmentIds: [],
+  userIds: [],
   questions: [],
   settings: {
     anonymous: true,

@@ -77,8 +77,13 @@ export type InvitationCopyByLocale = Record<Locale, Record<InvitationCopyField, 
 export interface DistributionSurveyFacts {
   companyId: string
   status: string
-  /** The survey's own department targets. Empty means company-wide. */
+  /**
+   * The survey's own department targets. Empty does NOT mean company-wide on its own —
+   * see `userIds`, which is the other half of the audience.
+   */
   departmentIds: string[]
+  /** People the survey is aimed at individually (#587). Union with `departmentIds`. */
+  userIds: string[]
   responseCount: number
   /** Resolved for the caller's locale. */
   title: string | null
@@ -106,6 +111,7 @@ interface SurveyCopyRead {
   resolvedLocale: string
   fallbackFields: string[]
   departmentIds: string[]
+  userIds: string[]
   responseCount: number
   settings: {
     invitationCustomSubject: string | null
@@ -202,6 +208,7 @@ export async function getSurveyInvitationCopy(
       companyId: first.companyId,
       status: first.status,
       departmentIds: first.departmentIds,
+      userIds: first.userIds,
       responseCount: first.responseCount,
       title: display.title,
       resolvedLocale: display.resolvedLocale,

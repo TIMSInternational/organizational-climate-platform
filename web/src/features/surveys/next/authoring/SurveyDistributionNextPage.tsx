@@ -33,6 +33,7 @@ import {
   InvitationCopyEditor,
   audienceSelection,
   estimateAudience,
+  targetsWholeCompany,
   type AudienceMode,
 } from '../../../../components/distribution'
 import { useTranslation } from '../../../../i18n'
@@ -158,10 +159,20 @@ export function DistributionView({
   const participation = useSurveyParticipation(survey.id, scoped)
 
   const actionable = scoped && canDistribute(survey.status)
-  // The audience the server would resolve for the survey as targeted — `ResolveAudienceAsync`,
+  // The survey's own targets, BOTH kinds. Passing the departments alone is what made a
+  // survey aimed at 240 people by name read as "the whole company · 642 personas".
+  const surveyTargets = { departmentIds: survey.departmentIds, userIds: survey.userIds }
+  // The audience the server would resolve for the survey as targeted — `SurveyQueries.Audience`,
   // mirrored by `estimateAudience`. Unknown (null), never 0, for a viewer who cannot read users.
-  const resolved = scoped ? estimateAudience('allTargeted', users, [], [], survey.departmentIds).length : null
-  const recipients = estimateAudience(mode, users, selectedDepartmentIds, selectedUserIds, survey.departmentIds).length
+  const resolved = scoped
+    ? estimateAudience('allTargeted', users, { departmentIds: [], userIds: [] }, surveyTargets).length
+    : null
+  const recipients = estimateAudience(
+    mode,
+    users,
+    { departmentIds: selectedDepartmentIds, userIds: selectedUserIds },
+    surveyTargets,
+  ).length
   const selection = audienceSelection(mode, selectedDepartmentIds, selectedUserIds)
   const summary = invitations.summary
   const buckets = invitationBuckets(summary)
@@ -387,13 +398,22 @@ export function DistributionView({
               ? summary.total > 0
                 ? copy('audienceInvited', { people: summary.total })
                 : t('surveys.distribution.outOfScope')
-              : survey.departmentIds.length === 0
+              : targetsWholeCompany(surveyTargets)
                 ? copy('audienceCompany', { people: audience?.count ?? resolved })
-                : copy(survey.departmentIds.length === 1 ? 'audienceOne' : 'audienceLine', {
-                    count: survey.departmentIds.length,
-                    people: audience?.count ?? resolved,
-                    names: joinNames(targets.names, copy('and')),
-                  })}
+                : survey.departmentIds.length === 0
+                  ? // Aimed at people by name and no department at all. This branch did not
+                    // exist, so it fell through to "Toda la empresa".
+                    copy('audiencePeople', { people: audience?.count ?? resolved })
+                  : survey.userIds.length > 0
+                    ? copy('audienceMixed', {
+                        people: audience?.count ?? resolved,
+                        names: joinNames(targets.names, copy('and')),
+                      })
+                    : copy(survey.departmentIds.length === 1 ? 'audienceOne' : 'audienceLine', {
+                        count: survey.departmentIds.length,
+                        people: audience?.count ?? resolved,
+                        names: joinNames(targets.names, copy('and')),
+                      })}
           </p>
         </Step>
 
@@ -631,7 +651,7 @@ export function DistributionView({
             onUsersChange={setSelectedUserIds}
             departments={departments}
             users={users}
-            surveyDepartmentIds={survey.departmentIds}
+            surveyTargets={surveyTargets}
             disabled={busy}
           />
           <div className="flex justify-end">

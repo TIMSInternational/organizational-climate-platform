@@ -1282,42 +1282,18 @@ public static class SurveyDistributionEndpoints
             return (await UsersInDepartmentsAsync(db, survey.CompanyId, distinct, cancellationToken), null);
         }
 
-        // allTargeted: the survey's own audience. No department targets means company-wide --
-        // the same rule SurveyQueries.AssignedTo applies to /surveys/my, so "who gets invited"
-        // and "who sees it in their inbox" cannot drift apart.
-        var targets = await db.SurveyDepartmentTargets
-            .Where(t => t.SurveyId == survey.Id)
-            .Select(t => t.DepartmentId)
+        // allTargeted: the survey's own audience, which is `SurveyQueries.Audience` and
+        // nothing written out again here. The union of "my department is targeted" and "I am
+        // targeted", company-wide only when it targets neither -- the same rule
+        // SurveyQueries.AssignedTo applies to /surveys/my, so "who gets invited", "who sees it
+        // in their inbox", "who may answer it" and "who the roster lists" cannot drift apart.
+        // They did: the browser's copy read zero DEPARTMENT targets as no targets at all and
+        // showed a 240-person survey as aimed at the whole company.
+        var audience = await SurveyQueries
+            .Audience(db.Users, db.SurveyDepartmentTargets, db.SurveyUserTargets, survey.Id, survey.CompanyId)
+            .Select(u => u.Id)
             .ToListAsync(cancellationToken);
-        var targetedUsers = await db.SurveyUserTargets
-            .Where(t => t.SurveyId == survey.Id)
-            .Select(t => t.UserId)
-            .ToListAsync(cancellationToken);
-
-        if (targets.Count == 0 && targetedUsers.Count == 0)
-        {
-            var everyone = await db.Users
-                .Where(u => u.CompanyId == survey.CompanyId && u.IsActive)
-                .Select(u => u.Id)
-                .ToListAsync(cancellationToken);
-            return (everyone, null);
-        }
-
-        // The union, matching SurveyQueries.AssignedTo: a person targeted directly is in the
-        // audience whatever their department, and only ACTIVE users are ever invited.
-        if (targetedUsers.Count > 0)
-        {
-            var byDepartment = targets.Count == 0
-                ? []
-                : await UsersInDepartmentsAsync(db, survey.CompanyId, targets, cancellationToken);
-            var active = await db.Users
-                .Where(u => u.CompanyId == survey.CompanyId && u.IsActive && targetedUsers.Contains(u.Id))
-                .Select(u => u.Id)
-                .ToListAsync(cancellationToken);
-            return (byDepartment.Concat(active).Distinct().ToList(), null);
-        }
-
-        return (await UsersInDepartmentsAsync(db, survey.CompanyId, targets, cancellationToken), null);
+        return (audience, null);
     }
 
     private static async Task<List<Guid>> UsersInDepartmentsAsync(

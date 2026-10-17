@@ -102,6 +102,7 @@ function survey(over: Partial<SurveyDetail> = {}): SurveyDetail {
     type: 'periodic', serviceType: null, status: 'active', language: 'both', resolvedLocale: 'es', fallbackFields: [],
     startDate: '2026-09-03T12:00:00Z', endDate: '2026-10-10T12:00:00Z', responseCount: 3, targetAudienceCount: 24, version: 1,
     departmentIds: ['d1', 'd2'],
+    userIds: [],
     questions: [question(0, 'psychological_safety', 'Puedo plantear preocupaciones.'), question(1, 'workload', 'Mi carga es sostenible.')],
     // Anonymous: the shape every survey the builder and the API create now has (ruled
     // 2026-10-12). An identified survey is the legacy case and is tested by name below.
@@ -285,6 +286,37 @@ describe('Detalle de encuesta (SurveyDetail artboard)', () => {
    * off screen -- hiding the address while the QR stayed would hide nothing, because the code
    * IS the address.
    */
+  it('does not call a per-person survey company-wide on the one card that names its audience', () => {
+    // The Ficha's "Departamentos" card read "Toda la empresa" for a survey aimed at people
+    // by name — the rule for a survey that targets NEITHER — under a heading about
+    // departments. Listed as a symptom of the same defect in the rehearsal.
+    detail(survey({ departmentIds: [], userIds: ['u3', 'u4'] }), 'company_admin', { users })
+    const card = screen.getByTestId('detail-departments')
+    expect(card.textContent).not.toContain('Toda la empresa')
+    expect(card.textContent).toContain('Ningún departamento: 2 personas elegidas individualmente.')
+  })
+
+  it('names the people as well as the departments when a survey targets both', () => {
+    detail(survey({ departmentIds: ['d1'], userIds: ['u3'] }), 'company_admin', { users })
+    const card = screen.getByTestId('detail-departments')
+    expect(card.textContent).toContain('Finanzas')
+    expect(card.textContent).toContain('y 1 personas elegidas individualmente.')
+  })
+
+  it('still says the whole company when the survey targets neither', () => {
+    detail(survey({ departmentIds: [], userIds: [] }), 'company_admin', { users })
+    expect(screen.getByTestId('detail-departments').textContent).toContain('Toda la empresa')
+  })
+
+  it('labels the audience tile by what the survey actually targets, not by its departments alone', () => {
+    // `users` is read here, so the tile has a resolved count to print beside the label.
+    detail(survey({ departmentIds: [], userIds: ['u3'] }), 'company_admin', { users })
+    const tile = screen.getByTestId('tile-audience')
+    expect(tile.textContent).toContain('elegidas individualmente')
+    expect(tile.textContent).not.toContain('toda la empresa')
+    expect(tile.querySelector('[data-slot="reading"]')?.textContent).toBe('1')
+  })
+
   it('shows the link and its QR without asking, and one control takes both off screen', async () => {
     detail(survey())
     const card = screen.getByTestId('detail-link')
@@ -409,6 +441,43 @@ describe('Distribución (Distribution artboard)', () => {
     expect(screen.getByTestId('tile-ready').textContent).not.toContain('Falta que las invitaciones salgan')
     expect(screen.getByTestId('step-invitations').getAttribute('data-state')).toBe('idle')
     expect(screen.getByTestId('step-audience').textContent).toContain('2 departamentos · 6 personas. Finanzas y Ingeniería.')
+  })
+
+  /**
+   * THE REHEARSAL'S READING, 2026-10-17. The Teletrabajo survey targets ONE person
+   * (`u3`) and no department; every figure on this screen said 4, and the audience line
+   * said "Toda la empresa · 4 personas". Monday's reads 642 for 240 people.
+   */
+  it('reads a survey aimed at ONE person as one person, not as the whole company', () => {
+    distribution(invitationList(), 'company_admin', true, {
+      survey: survey({ departmentIds: [], userIds: ['u3'], responseCount: 0, targetAudienceCount: null }),
+    })
+
+    const audience = screen.getByTestId('step-audience').textContent
+    expect(audience).toContain('Personas elegidas individualmente · 1 personas.')
+    expect(audience).not.toContain('Toda la empresa')
+    // The same number is the reach and the response rate's denominator.
+    expect(reading('tile-reach')).toBe('1')
+    expect(screen.getByTestId('tile-responses').textContent).toContain('de 1')
+  })
+
+  it('still reads an untargeted survey as the whole company, which is the costlier mistake', () => {
+    // Reading an empty target list as "nobody" would empty every company-wide survey's
+    // audience and tell an administrator the survey reaches no one.
+    distribution(invitationList(), 'company_admin', true, {
+      survey: survey({ departmentIds: [], userIds: [] }),
+    })
+    expect(screen.getByTestId('step-audience').textContent).toContain('Toda la empresa · 6 personas.')
+  })
+
+  it('names both halves when a survey targets departments AND people', () => {
+    // u1 is in d2, so the union is d1's three plus u1 — counted once, not twice.
+    distribution(invitationList(), 'company_admin', true, {
+      survey: survey({ departmentIds: ['d1'], userIds: ['u1'] }),
+    })
+    const audience = screen.getByTestId('step-audience').textContent
+    expect(audience).toContain('Departamentos y personas elegidas · 4 personas.')
+    expect(audience).not.toContain('Toda la empresa')
   })
 
   it("shows the first rows of the invitations and the rest on request, in the artboard's columns and link ink", async () => {
@@ -606,6 +675,7 @@ describe('Distribución — a survey handed out by link alone', () => {
       survey({
         settings: { anonymous: true } as SurveyDetail['settings'],
         departmentIds: [],
+        userIds: [],
         targetAudienceCount: null,
         responseCount: 37,
       }),

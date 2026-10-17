@@ -1,6 +1,6 @@
 import { useTranslation } from '../../i18n'
 import { Badge, Checkbox, Label, RadioGroup, RadioGroupItem } from '../ui'
-import { estimateAudience, type AudienceMode } from './audience'
+import { estimateAudience, targetsWholeCompany, type AudienceMode, type SurveyTargets } from './audience'
 import type { Department } from '../../features/org-structure/api/departments'
 import type { User } from '../../features/org-structure/api/users'
 
@@ -11,11 +11,12 @@ import type { User } from '../../features/org-structure/api/users'
  *
  * Sending to the wrong audience is not undoable — the mail is out. So the preview is the
  * safeguard, and it has to be the *same* number the server will act on or it is worse
- * than none. `estimateAudience` below therefore mirrors `ResolveAudienceAsync` clause for
+ * than none. `estimateAudience` below therefore mirrors `SurveyQueries.Audience` clause for
  * clause: inactive users excluded, department membership via `departmentId`, and
- * `allTargeted` meaning the survey's own department targets — or the whole company when
- * it targets none, which is the same rule `/surveys/my` applies, so "who gets invited"
- * and "who sees it in their inbox" cannot drift apart.
+ * `allTargeted` meaning the survey's own targets of BOTH kinds — or the whole company when
+ * it targets neither, which is the same rule `/surveys/my` applies, so "who gets invited"
+ * and "who sees it in their inbox" cannot drift apart. They did: reading the departments
+ * alone showed a survey aimed at one person by name as aimed at all 642.
  *
  * ## Why it cannot offer another company's people
  *
@@ -37,8 +38,11 @@ export interface AudienceSelectorProps {
   departments: readonly Department[]
   /** Already scoped to the survey's company by the caller. */
   users: readonly User[]
-  /** The survey's own department targets. Empty means company-wide. */
-  surveyDepartmentIds: readonly string[]
+  /**
+   * The survey's own targets, BOTH kinds. Company-wide only when it targets neither —
+   * a survey aimed at people by name has no department targets and is not company-wide.
+   */
+  surveyTargets: SurveyTargets
   disabled?: boolean
 }
 
@@ -55,16 +59,15 @@ export default function AudienceSelector({
   onUsersChange,
   departments,
   users,
-  surveyDepartmentIds,
+  surveyTargets,
   disabled = false,
 }: AudienceSelectorProps) {
   const { t } = useTranslation()
   const recipients = estimateAudience(
     mode,
     users,
-    selectedDepartmentIds,
-    selectedUserIds,
-    surveyDepartmentIds,
+    { departmentIds: selectedDepartmentIds, userIds: selectedUserIds },
+    surveyTargets,
   )
 
   return (
@@ -78,9 +81,13 @@ export default function AudienceSelector({
         <div className="flex items-center gap-inline">
           <RadioGroupItem value="allTargeted" id="audience-all-targeted" />
           <Label htmlFor="audience-all-targeted" className="mb-0">
-            {surveyDepartmentIds.length === 0
+            {targetsWholeCompany(surveyTargets)
               ? t('surveys.distribution.audienceWholeCompany')
-              : t('surveys.distribution.audienceSurveyTargets')}
+              : surveyTargets.departmentIds.length === 0
+                ? // Aimed at people and no department. "The departments this survey targets"
+                  // was printed here, under a radio whose count was the whole directory.
+                  t('surveys.distribution.audienceSurveyPeople')
+                : t('surveys.distribution.audienceSurveyTargets')}
           </Label>
         </div>
         <div className="flex items-center gap-inline">
