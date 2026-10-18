@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using ClimateProject.Api.Infrastructure;
 using ClimateProject.Application.Auth;
+using ClimateProject.Application.Email;
 using ClimateProject.Application.Localization;
 using ClimateProject.Application.OrgStructure;
 using ClimateProject.Application.OrgStructure.Intake;
@@ -475,6 +476,10 @@ public static class BulkImportEndpoints
             {
                 var outcome = await credentials!.Sender.SendAsync(
                     toEmail, name, username, password, company?.Settings.Language,
+                    // The company row is already loaded here, so its branding costs no query.
+                    company is null
+                        ? EmailBrand.None
+                        : new EmailBrand(company.Branding.LogoUrl, company.Name, company.Branding.PrimaryColor),
                     CredentialsEmailPurpose.Invitation, cancellationToken);
                 if (!outcome.Delivered)
                 {

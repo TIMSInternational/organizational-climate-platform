@@ -19,7 +19,15 @@ public interface ICredentialsEmailSender
     /// Who to greet, as the roster spells it, or null for an account carrying no name. Already
     /// on the account, so nothing is asked of anybody to obtain it.
     /// </param>
+    /// <param name="brand">
+    /// The company's logo, name and accent, as the columns hold them -- the logo path is
+    /// resolved against the app's base URL by the implementation, which is the only layer that
+    /// knows the host. Required, with no default, for <paramref name="purpose"/>'s reason: a
+    /// caller that already has the company row in hand should not be able to send its people an
+    /// unbranded message by leaving an argument off. Pass
+    /// <see cref="ClimateProject.Application.Email.EmailBrand.None"/> to mean it deliberately.
+    /// </param>
     Task<EmailSendOutcome> SendAsync(
         string toEmail, string? recipientName, string username, string password, string? companyLanguage,
-        CredentialsEmailPurpose purpose, CancellationToken cancellationToken);
+        EmailBrand? brand, CredentialsEmailPurpose purpose, CancellationToken cancellationToken);
 }
