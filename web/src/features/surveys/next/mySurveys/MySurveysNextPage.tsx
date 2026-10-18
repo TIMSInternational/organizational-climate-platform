@@ -19,7 +19,6 @@ import {
   belongsToNoCompany,
   groupMySurveys,
   isClosingSoon,
-  roleLabelKey,
   type MySurveyRow,
 } from './derive'
 import { byCount } from '../../../../i18n/plural'
@@ -100,10 +99,10 @@ export default function MySurveysNextPage() {
     return <NoCompanyState superAdmin={scope.isSuperAdmin} />
   }
 
-  return <SurveyList eyebrowRoleKey={roleLabelKey(scope.role)} />
+  return <SurveyList />
 }
 
-function SurveyList({ eyebrowRoleKey }: { eyebrowRoleKey: string | null }) {
+function SurveyList() {
   const { t } = useTranslation()
   const { status, surveys, error, departmentName, reload } = useMySurveysModel()
 
@@ -113,9 +112,8 @@ function SurveyList({ eyebrowRoleKey }: { eyebrowRoleKey: string | null }) {
   return (
     <div>
       <PageTopBar
-        // "INGENIERÍA · EMPLEADO", the artboard's eyebrow — the department when the
-        // supplementary read has named one, the role alone until then and if it fails.
-        eyebrow={eyebrowFor(departmentName, eyebrowRoleKey, t)}
+        // "INGENIERÍA", the artboard's eyebrow less its role half — see `eyebrowFor`.
+        eyebrow={eyebrowFor(departmentName)}
         title={t('navigation.mySurveys')}
         description={t('employee.next.mySurveysDescription')}
       />
@@ -206,12 +204,23 @@ function SurveyList({ eyebrowRoleKey }: { eyebrowRoleKey: string | null }) {
   )
 }
 
-/** "Ingeniería · Empleado" — either half alone where only one is known, and neither invented. */
-function eyebrowFor(departmentName: string | null, roleKey: string | null, t: TranslateFn): string | null {
-  const parts = [departmentName, roleKey ? t(roleKey) : null].filter(
-    (part): part is string => typeof part === 'string' && part !== '',
-  )
-  return parts.length > 0 ? parts.join(' · ') : null
+/**
+ * "Ingeniería" — the department, never invented.
+ *
+ * **The role was dropped 2026-10-18.** This printed "Operaciones y Logística · EMPLEADO"
+ * over a respondent's own survey, and ESPH's rehearsal reported it as data about the
+ * evaluado being shown back to them. It is the same KIND of thing as the name
+ * `auth/ownName.ts` already removed on 10-16 — a classification this platform applies to a
+ * person — and that ruling's own words apply unchanged: chrome arguing with its own promise.
+ * It also said nothing: there is exactly one role a reader of this page can be.
+ *
+ * The DEPARTMENT stays, and the distinction is not squeamishness. It is not a label on the
+ * person; it is the unit whose results they are promised, and this page's own foot says so —
+ * "los resultados de su departamento se publican cuando la encuesta cierra". Removing it here
+ * while that sentence stands would leave the page contradicting itself.
+ */
+function eyebrowFor(departmentName: string | null): string | null {
+  return departmentName && departmentName !== '' ? departmentName : null
 }
 
 /** `6 preguntas · unos 4 minutos · cierra el 10 oct`, the line Home prints for the same row. */

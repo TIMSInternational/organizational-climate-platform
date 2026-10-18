@@ -595,13 +595,19 @@ describe('EmployeeHomeView', () => {
     expect(screen.queryByText(es('employee.cameOfItHeading'))).toBeNull()
   })
 
-  it('names the department and the role in the eyebrow for an employee', async () => {
+  it('names the department in the eyebrow, and NOT the role', async () => {
+    // The role half was dropped 2026-10-18: "Ingeniería · EMPLEADO" over a respondent's own
+    // survey is a classification this platform applies to them, the same kind of thing as
+    // the name `auth/ownName.ts` removed on 10-16 — and it said nothing, since there is one
+    // role a reader of this page can be. The department is not a label on the person; it is
+    // the unit whose results this very page promises them.
     serves()
     renderHome('employee')
 
     await screen.findByRole('link', { name: es('employee.startAnswering') })
     const eyebrow = document.querySelector('[data-slot="page-eyebrow"]')
-    expect(eyebrow?.textContent).toBe(`Ingeniería · ${es('users.employee')}`)
+    expect(eyebrow?.textContent).toBe('Ingeniería')
+    expect(document.body.textContent).not.toContain(es('users.employee'))
   })
 
   it('names only the department for a role it does not know, rather than guessing one', async () => {

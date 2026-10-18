@@ -9,6 +9,7 @@ import { cn } from '../../../lib/cn'
 import { CanvasChip, CanvasSelect, Panel } from '../../org-structure/next/super/parts'
 import { PERIODS, facetCounts, matchesFacet, oldestShown, rowOf, withinPeriod, type Facet, type InboxRow, type RowIcon } from './derive'
 import { useNotificationsModel } from './useNotificationsModel'
+import { useRespondentShell } from '../../../navigation/useRespondentShell'
 
 const K = 'notifications.next'
 const FACETS: readonly Facet[] = ['all', 'unread', 'surveys', 'plans', 'reports', 'other']
@@ -37,6 +38,7 @@ const ICONS: Record<RowIcon, { Icon: typeof Bell; tone: string }> = {
  * rows, no counts and nothing to mark read.
  */
 export default function NotificationsNextPage() {
+  const respondent = useRespondentShell()
   const { t, locale } = useTranslation()
   const capabilities = useViewerCapabilities()
   const state = useNotificationsModel()
@@ -78,12 +80,21 @@ export default function NotificationsNextPage() {
                 {t(`${K}.markAll`)}
               </Button>
             )}
-            <Button asChild variant="outline" size="canvas">
-              <Link to="/settings/notifications">
-                <Settings aria-hidden="true" />
-                {t(`${K}.settings`)}
-              </Link>
-            </Button>
+            {/* Not for a respondent. `/settings/notifications` offers four email toggles,
+                three of which govern mail they are never sent — including "Correos de
+                planes de acción", the "sistema de seguimiento" ESPH's reviewer could not
+                place — and the fourth can switch off the survey invitation this launch
+                depends on. It also carries `AccountTabs`, which was the way back to their
+                own Nombre and Departamento. The bell is still in their strip, so this
+                button was the first link in that chain. */}
+            {respondent ? null : (
+              <Button asChild variant="outline" size="canvas">
+                <Link to="/settings/notifications">
+                  <Settings aria-hidden="true" />
+                  {t(`${K}.settings`)}
+                </Link>
+              </Button>
+            )}
           </>
         }
       />
@@ -210,9 +221,11 @@ export default function NotificationsNextPage() {
             )}
             {/* The artboard's link is the secondary ink (`a { color: #4a3d72 }`), not the
                 app's blue link colour the base layer gives every anchor. */}
-            <Link to="/settings/notifications" data-slot="by-type-link" className="text-xs text-fg-secondary">
-              {t(`${K}.byType`)}
-            </Link>
+            {respondent ? null : (
+              <Link to="/settings/notifications" data-slot="by-type-link" className="text-xs text-fg-secondary">
+                {t(`${K}.byType`)}
+              </Link>
+            )}
           </Panel>
           {localMail && (
             // The local stack's mail sender refuses `.test`, `.invalid` and `example.com`

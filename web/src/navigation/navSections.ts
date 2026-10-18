@@ -624,6 +624,47 @@ export function leafNavItems(sections: NavSection[]): NavItem[] {
 }
 
 /**
+ * The destinations that are about the signed-in PERSON rather than about the tenant:
+ * their own home, their own surveys, their own notifications, their own tracking tasks.
+ *
+ * Deliberately the hrefs and not a list of roles. See {@link isPerUserOnly}.
+ */
+const PER_USER_HREFS: ReadonlySet<string> = new Set([
+  '/dashboard',
+  '/surveys/my',
+  '/notifications',
+  '/tracking/mis-tareas',
+])
+
+/**
+ * True when every destination a role can reach is one of its own pages — no admin
+ * surface, nothing tenant-wide, nothing it shares with anybody.
+ *
+ * ## Why this is computed and not `role === 'employee'`
+ *
+ * `AdminLayout` uses it to decide whether to draw a navigation rail at all, and a rail
+ * is worth its 236px only when it reaches somewhere the page does not. For a respondent
+ * it reaches the page they are already on: ESPH's 2026-10-17 rehearsal returned exactly
+ * that as a finding — *"al ser un sistema nuevo y la gente no saber usarlo van a
+ * consultar mucho referente a como ingresar en la encuesta"* — against a shell whose
+ * every row was already on screen.
+ *
+ * A hardcoded `['employee', 'supervisor']` would answer today's question and then go
+ * quietly stale: the day a supervisor gains a team page, the rail must come back, and
+ * nothing would make that happen or fail. Reading the sections means the rail returns
+ * on its own the moment there is somewhere to go, and `navSections.test.ts` asserts
+ * that rather than trusting it.
+ *
+ * Empty sections answer **false**: a role with no destinations at all is a role this
+ * module does not know, and stripping the chrome off an unknown role is a guess. The
+ * shell it already had is the safer wrong answer.
+ */
+export function isPerUserOnly(sections: NavSection[]): boolean {
+  const leaves = leafNavItems(sections)
+  return leaves.length > 0 && leaves.every((item) => PER_USER_HREFS.has(item.href))
+}
+
+/**
  * The Notifications row, carrying the caller's unread tally.
  *
  * ## Why this is the only badged row

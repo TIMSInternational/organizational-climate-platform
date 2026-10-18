@@ -305,18 +305,25 @@ describe('MySurveysNextPage', () => {
     expect(screen.queryByRole('table')).toBeNull()
   })
 
-  it('names the department and the role in the eyebrow', async () => {
+  it('names the department in the eyebrow, and NOT the role', async () => {
+    // The role half was dropped 2026-10-18. It printed "Ingeniería · EMPLEADO" over a
+    // respondent's own surveys — the same kind of thing as the name `auth/ownName.ts`
+    // removed on 10-16, and ESPH's rehearsal reported it as data about the evaluado shown
+    // back to them. The department stays because it is not a label on the person: it is
+    // the unit whose results they are promised, and the page says so in its own prose.
     serves()
     renderPage()
 
     await waitFor(() =>
-      expect(document.querySelector('[data-slot="page-eyebrow"]')?.textContent).toBe(
-        `Ingeniería · ${es('users.employee')}`,
-      ),
+      expect(document.querySelector('[data-slot="page-eyebrow"]')?.textContent).toBe('Ingeniería'),
     )
+    expect(document.body.textContent).not.toContain(es('users.employee'))
   })
 
-  it('names the role alone when the department could not be read, rather than guessing one', async () => {
+  it('shows no eyebrow at all when the department could not be read', async () => {
+    // This used to fall back to the role alone. With the role gone there is nothing
+    // truthful left to print, and an invented one would be worse than none — the same
+    // rule the department half already followed.
     serves({ home: 'fail' })
     renderPage()
 
@@ -324,7 +331,7 @@ describe('MySurveysNextPage', () => {
     await waitFor(() =>
       expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/dashboard/employee'))).toBe(true),
     )
-    expect(document.querySelector('[data-slot="page-eyebrow"]')?.textContent).toBe(es('users.employee'))
+    expect(document.querySelector('[data-slot="page-eyebrow"]')).toBeNull()
   })
 
   it('renders the centred employee empty state rather than an admin “adjust your filters”', async () => {

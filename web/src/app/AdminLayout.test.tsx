@@ -137,13 +137,32 @@ describe('AdminLayout', () => {
     expect(screen.getByRole('button', { name: /Company Administration/ })).toBeTruthy()
   })
 
-  it('shows no admin nav rows for a role that has no admin pages', () => {
+  it('gives a role with no admin pages no navigation chrome at all', () => {
+    // This used to assert the opposite half: no admin rows, but its own inbox row
+    // PRESENT in the rail. `isPerUserOnly` removed the rail from under that row, and the
+    // reason is the row itself — every destination it offered was the page it was on.
+    // ESPH's rehearsal: "al ser un sistema nuevo y la gente no saber usarlo van a
+    // consultar mucho referente a como ingresar en la encuesta".
     setToken(tokenFor({ role: 'employee', companyId: 'c1' }))
     renderShell()
+
     expect(screen.queryByRole('button', { name: /Administration/ })).toBeNull()
-    // Since #99 this role is no longer given an *empty* nav — it gets the one
-    // page it can load, its own inbox.
-    expect(screen.getAllByRole('link', { name: 'Notifications' }).length).toBeGreaterThan(0)
+    // No rail, and no mobile tab bar either: the bar is the same chrome one breakpoint
+    // down, so leaving it would move the problem to the screen most people answer on.
+    expect(screen.queryByRole('link', { name: 'Notifications' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Collapse sidebar' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'More' })).toBeNull()
+    // The palette's chip advertises a shortcut to this role's own three pages.
+    expect(screen.queryByRole('button', { name: /Search/i })).toBeNull()
+  })
+
+  it('keeps the rail for a role that can reach somewhere the page is not', () => {
+    // The other side of the same rule, so `isPerUserOnly` cannot be made to return true
+    // for everyone without this failing. `leader` has pages of its own.
+    setToken(tokenFor({ role: 'leader', companyId: 'c1' }))
+    renderShell()
+
+    expect(screen.getByRole('button', { name: 'Collapse sidebar' })).toBeTruthy()
   })
 
   it('collapses and expands the sidebar, and says which it will do', async () => {
@@ -352,11 +371,14 @@ describe('AdminLayout', () => {
    * are role-aware today — a fact worth pinning rather than assuming.
    */
   describe('the way to the privacy page', () => {
-    const ROLES = ['super_admin', 'company_admin', 'leader', 'supervisor', 'employee'] as const
+    /** The roles that still have a rail, and therefore a mobile drawer under it. */
+    const RAIL_ROLES = ['super_admin', 'company_admin', 'leader'] as const
+    /** The roles `isPerUserOnly` strips the chrome from. */
+    const PER_USER_ROLES = ['supervisor', 'employee'] as const
 
     beforeEach(stubShellFetch)
 
-    it.each(ROLES)('is in the sidebar account menu for %s', async (role) => {
+    it.each(RAIL_ROLES)('is in the account menu for %s', async (role) => {
       setToken(tokenFor({ role, companyId: 'c1' }))
       renderShell()
 
@@ -368,9 +390,14 @@ describe('AdminLayout', () => {
       )
     })
 
-    it.each(ROLES)('is in the mobile drawer for %s', async (role) => {
+    it.each(RAIL_ROLES)('is in the mobile drawer for %s', async (role) => {
       // Below `md` the sidebar — and with it the account menu above — is `hidden`
       // entirely, so on a phone the drawer is the only way to this page.
+      //
+      // RAIL_ROLES only, since `isPerUserOnly`: a respondent has no drawer because it
+      // has no tab bar to open one from. That is not a hole in the guarantee — the test
+      // below covers those two roles, and the account button it uses is in the strip at
+      // EVERY width, which is one affordance where the rail needed two.
       setToken(tokenFor({ role, companyId: 'c1' }))
       renderShell()
 
@@ -380,6 +407,83 @@ describe('AdminLayout', () => {
       expect(within(drawer).getByRole('link', { name: 'Privacy' }).getAttribute('href')).toBe(
         '/settings/privacy',
       )
+    })
+
+    it.each(PER_USER_ROLES)(
+      'offers %s neither their profile page nor the notification settings',
+      async (role) => {
+        // Findings 3 and 4 of ESPH's rehearsal, which are one surface rather than two.
+        //
+        // `/profile` prints the respondent's own Nombre completo, Rol, Empresa and
+        // Departamento under copy reading "así te ven en la bitácora de cada plan y en lo
+        // que creas" — read, reasonably, as the platform saying their name is attached to
+        // what they do. `/settings/notifications` offers them "Correos de planes de acción
+        // — Asignaciones y avances de los planes de acción", which is the "asociado al
+        // sistema de seguimiento" the reviewer could not place: it is the action-plan
+        // module, and a respondent is assigned no action plans.
+        //
+        // Both routes still exist. What is gone is the invitation to wander into them in
+        // the middle of a survey, which is the whole of what was reported.
+        setToken(tokenFor({ role, companyId: 'c1' }))
+        renderShell()
+
+        await userEvent.click(screen.getByRole('button', { name: /Account/i }))
+        const menu = await screen.findByRole('menu')
+
+        expect(within(menu).queryByRole('menuitem', { name: /profile/i })).toBeNull()
+        expect(within(menu).queryByRole('menuitem', { name: /settings/i })).toBeNull()
+      },
+    )
+
+    it.each(RAIL_ROLES)('still offers %s their profile, since it is an admin page', async (role) => {
+      // The other side, so "hide it from everyone" cannot pass. An administrator's name
+      // really does appear in an audit trail, which is what that page is for.
+      setToken(tokenFor({ role, companyId: 'c1' }))
+      renderShell()
+
+      await userEvent.click(screen.getAllByRole('button', { name: /Account/i })[0])
+      const menu = await screen.findByRole('menu')
+
+      expect(within(menu).getByRole('menuitem', { name: /profile/i }).getAttribute('href')).toBe(
+        '/profile',
+      )
+    })
+
+    it.each(PER_USER_ROLES)('is DELIBERATELY not offered to %s — ruled 2026-10-18', async (role) => {
+      // **This reverses the guarantee above for two roles, and the reversal is the point
+      // of the test rather than a gap in it.**
+      //
+      // What the page does to a respondent, measured by rendering it as one: it opens on
+      // "Qué se guarda sobre ti" and states, in a table, that "tus respuestas... llevan tu
+      // identificador" and "tus datos demográficos... llevan tu identificador", then
+      // prints their Nombre and Correo at the foot. Every word is true — ESPH's surveys
+      // are identified so the server can enforce one response per person — and ESPH's
+      // reviewer, reading it the day before launch, wrote: "entonces mi información sí es
+      // guardada, no está siendo anónima, entonces no voy a contestar."
+      //
+      // The right is not removed; the LINK is. And the product already routes the other
+      // half of the same right through an administrator — that page's own words: "el
+      // borrado no es un botón de esta página... lo pides tú; lo ejecuta quien administra
+      // tu organización". Access now travels the same path, which is consistent.
+      //
+      // The three admin roles keep both affordances, asserted above, because the argument
+      // in this block's docstring still holds for everyone who is not being asked to
+      // answer a climate survey this week.
+      setToken(tokenFor({ role, companyId: 'c1' }))
+      renderShell()
+
+      expect(screen.queryByRole('button', { name: 'More' })).toBeNull()
+
+      await userEvent.click(screen.getByRole('button', { name: /Account/i }))
+      const menu = await screen.findByRole('menu')
+
+      expect(within(menu).queryByRole('menuitem', { name: 'Privacy' })).toBeNull()
+      // What a respondent is left with, and all they need: read it in their language, in
+      // the theme they can see, and leave. Sign out especially — it is the whole reason
+      // this control followed the rail into the strip.
+      expect(within(menu).getByRole('menuitem', { name: /Sign out/i })).toBeTruthy()
+      expect(within(menu).getByRole('menuitem', { name: /Language/i })).toBeTruthy()
+      expect(within(menu).getByRole('menuitem', { name: /Theme/i })).toBeTruthy()
     })
   })
 
@@ -456,11 +560,16 @@ describe('the tenant logo in the header strip', () => {
     expect(logo()!.getAttribute('src')).toBe(LOGO)
   })
 
-  it('hides it from `md` up, because the rail already opens on the product lockup', async () => {
+  it('hides it from `md` up when there IS a rail, which already opens on the lockup', async () => {
     // Showing the mark twice on one screen is worse than once. Asserted on the class
     // because the suite has no layout engine and cannot see a breakpoint apply.
+    //
+    // `leader`, not `employee`: since `isPerUserOnly` a respondent has no rail, so there
+    // is no second copy to avoid and the mark shows at every width. That case is the
+    // next test — this one would otherwise have been quietly retargeted at a shell that
+    // no longer exists for the role it names.
     serveProfile(LOGO)
-    setToken(tokenFor({ role: 'employee', companyId: 'c1' }))
+    setToken(tokenFor({ role: 'leader', companyId: 'c1' }))
     renderShell()
 
     await waitFor(() => expect(logo()).not.toBeNull())
@@ -469,6 +578,15 @@ describe('the tenant logo in the header strip', () => {
     // `justify-between` instead, `md:hidden` would strand the search glyph at the far
     // left of every desktop strip — see the header's own comment.
     expect(logo()!.className).toContain('mr-auto')
+  })
+
+  it('shows it at every width when there is no rail to show it twice', async () => {
+    serveProfile(LOGO)
+    setToken(tokenFor({ role: 'employee', companyId: 'c1' }))
+    renderShell()
+
+    await waitFor(() => expect(logo()).not.toBeNull())
+    expect(logo()!.className).not.toContain('md:hidden')
   })
 
   it('renders nothing when the company has no logo', async () => {
