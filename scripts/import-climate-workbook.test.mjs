@@ -173,6 +173,29 @@ test('toSurveyRequest: anonymity defaults to anonymous and can be chosen', () =>
   assert.equal(toSurveyRequest(climate, { ...args, anonymous: false }).settings.anonymous, false)
 })
 
+test('toSurveyRequest: question order is fixed unless randomisation is asked for, and headings survive it', () => {
+  const climate = {
+    intro: 'i', invitation: null, bands: [], columns: [], persons: [],
+    scale: [{ label: 'Nunca', value: 1 }, { label: 'Siempre', value: 5 }],
+    dimensions: [{ name: 'Comunicación', open: false, questions: ['q1', 'q2'] }],
+  }
+  const args = { companyId: 'c', title: 't', departmentIds: [], startDate: 'a', endDate: 'b' }
+
+  // Finding 7: every import before this one left the 40 questions in one fixed order.
+  assert.equal(toSurveyRequest(climate, args).settings.randomizeQuestions, false)
+  assert.equal(toSurveyRequest(climate, { ...args, randomizeQuestions: true }).settings.randomizeQuestions, true)
+
+  // Present even when false. `SurveyEndpoints.cs:1494` applies the value only
+  // `if (input.RandomizeQuestions.HasValue)`, so omitting the key would leave a re-imported
+  // survey on whatever the row already held rather than turning randomisation off.
+  assert.ok('randomizeQuestions' in toSurveyRequest(climate, args).settings)
+
+  // Finding 7b, ruled 2026-10-13: randomising must not cost the dimension headings, because
+  // `category` is what dimension analysis groups by.
+  const randomised = toSurveyRequest(climate, { ...args, randomizeQuestions: true })
+  assert.ok(randomised.questions.every((q) => q.category === 'Comunicación'))
+})
+
 // ---------------------------------------------------------------------------------------
 // Link-only (OPCIONES, no people) — EAGLE's shape. Built from the sample with its people
 // removed, so everything else about the workbook is a shape the importer already reads.
