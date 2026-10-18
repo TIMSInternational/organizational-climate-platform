@@ -22,16 +22,8 @@ function question(overrides: Partial<SurveyRespondQuestion> = {}): SurveyRespond
   }
 }
 
-/**
- * `respondDimensions` with a seed, which it now needs: when `randomizeQuestions` is on the
- * SECTION order is shuffled from it. Defaulted here so the unrandomised cases read as before.
- */
-function dims(
-  questions: readonly SurveyRespondQuestion[],
-  randomize: boolean,
-  seed = 'session-fixed',
-) {
-  return respondDimensions(questions, randomize, seed)
+function dims(questions: readonly SurveyRespondQuestion[], randomize: boolean) {
+  return respondDimensions(questions, randomize)
 }
 
 /** The categorised twelve-question form the approved design draws. */
@@ -130,49 +122,52 @@ describe('respondDimensions', () => {
     ])
   })
 
-  it('keeps the dimension headings on a randomised survey', () => {
-    // Ruled 2026-10-13. This used to return one flat unsectioned run, which left an
-    // 80-item, ten-dimension instrument with nothing to orient it.
+  it('prints no heading at all on a randomised survey, however many categories it has', () => {
+    // Reversed 2026-10-18, restoring the behaviour #556 replaced. A respondent who can
+    // read the construct above a question can answer it as that construct, which is the
+    // bias the shuffle exists to remove -- PROCOMER's 12 Aug minuta and ESPH's review
+    // both state it. The module note carries the argument.
     const model = dims(safetyThenWorkload(), true)
-    expect(model.sectioned).toBe(true)
-    expect(model.sections.map((section) => section.key).sort()).toEqual([
-      'In your words',
-      'Psychological safety',
-      'Workload',
-    ])
+    expect(model.sectioned).toBe(false)
+    expect(model.sections).toHaveLength(1)
+    // Unnamed, so there is nothing a call site could print even if it tried.
+    expect(model.sections[0].key).toBe(UNCATEGORISED_DIMENSION)
   })
 
-  it('shuffles the section order, and gives one session the same order every time', () => {
-    const keysFor = (seed: string) =>
-      dims(safetyThenWorkload(), true, seed)
-        .sections.map((section) => section.key)
-        .join('>')
+  it('asks a randomised survey in the exact order it was handed, gathering nothing', () => {
+    // The guarantee ESPH's review asks for, and the one #556 took away: a dimension's
+    // questions must NOT end up consecutive. Grouping and then laying the sections end to
+    // end asks A, A, B -- the respondent reads the grouping off the screen without ever
+    // being shown its name. `orderQuestions` has already shuffled this list; the only
+    // correct thing left to do with it is nothing.
+    const interleaved = [
+      question({ id: 'a1', category: 'Psychological safety' }),
+      question({ id: 'b1', category: 'Workload' }),
+      question({ id: 'a2', category: 'Psychological safety' }),
+      question({ id: 'b2', category: 'Workload' }),
+    ]
+    const asked = dims(interleaved, true).sections.flatMap((section) =>
+      section.questions.map((q) => q.id),
+    )
+    expect(asked).toEqual(['a1', 'b1', 'a2', 'b2'])
 
-    // Deterministic per seed: a respondent who reloads must not have the form rearrange
-    // itself around the question they were halfway through.
-    expect(keysFor('session-a')).toBe(keysFor('session-a'))
-
-    // ...and not the author's order for every seed, or "randomised" would be a setting that
-    // does nothing. Seeded, so this cannot be flaky.
-    const authorOrder = dims(safetyThenWorkload(), false)
-      .sections.map((section) => section.key)
-      .join('>')
-    const orders = new Set(Array.from({ length: 24 }, (_, i) => keysFor(`session-${i}`)))
-    expect(orders.size).toBeGreaterThan(1)
-    expect([...orders].some((order) => order !== authorOrder)).toBe(true)
+    // The control: the same list unrandomised DOES gather, which is what sections are for.
+    const grouped = dims(interleaved, false).sections.flatMap((section) =>
+      section.questions.map((q) => q.id),
+    )
+    expect(grouped).toEqual(['a1', 'a2', 'b1', 'b2'])
   })
 
   it('keeps the order WITHIN a section exactly as it was handed over', () => {
-    // The within-section half of randomisation needs no code: `orderQuestions` has already
-    // shuffled the flat list, so grouping preserves each dimension's internal order AS the
-    // shuffled order. Here 'b' precedes 'a' only because the caller handed them over that
-    // way -- a function that re-sorted by `order` would return ['a', 'b'] and fail.
+    // Sections never re-sort: 'b' precedes 'a' here only because the caller handed them
+    // over that way -- a function that re-sorted by `order` would return ['a', 'b'] and
+    // fail. Unrandomised, because a randomised form has no sections to look up.
     const shuffled = [
       question({ id: 'b', category: 'Psychological safety' }),
       question({ id: 'c', category: 'Workload' }),
       question({ id: 'a', category: 'Psychological safety' }),
     ]
-    const safety = dims(shuffled, true).sections.find(
+    const safety = dims(shuffled, false).sections.find(
       (section) => section.key === 'Psychological safety',
     )
     expect(safety?.questions.map((q) => q.id)).toEqual(['b', 'a'])
@@ -217,7 +212,7 @@ describe('respondDimensions', () => {
     expect(model.sections[0].key).toBe(UNCATEGORISED_DIMENSION)
   })
 
-  it('spans the whole form across its sections when randomised', () => {
+  it('still numbers the whole form when randomised, as one run', () => {
     const model = dims(safetyThenWorkload(), true)
     expect(model.sections[0].firstIndex).toBe(1)
     expect(model.sections[model.sections.length - 1].lastIndex).toBe(4)

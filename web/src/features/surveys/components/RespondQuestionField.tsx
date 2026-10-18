@@ -11,6 +11,7 @@ import {
   NUMERIC_SCALE_TYPES,
   answerShapeOf,
   choicesFor,
+  commentIsRequired,
   isAnswered,
   moveRankingEntry,
   type AnswerState,
@@ -577,13 +578,19 @@ interface CommentFieldProps {
 }
 
 /**
- * The optional free-text comment beside an answer.
+ * The free-text comment beside an answer.
  *
- * Rendered only when the question carries a `commentPrompt`, and deliberately NOT
- * when `commentRequired` is set: that column defaults to `true` in the DDL, so
- * keying off it would put a comment box under every question of every existing
- * survey. The submission endpoint does not enforce it either. An author who wants a
- * comment writes a prompt for it.
+ * WHETHER there is a box is decided by `commentPrompt` alone, and deliberately NOT by
+ * `commentRequired`: that column defaults to `true` in the DDL, so keying off it would
+ * put a comment box under every question of every existing survey. An author who wants
+ * a comment writes a prompt for it.
+ *
+ * Whether that box may be left BLANK is the pair of the two — `commentIsRequired`. The
+ * flag read on its own means nothing; read beside a prompt somebody wrote, it is the
+ * author's decision, and the submit gate enforces it. ESPH, 2026-10-18, on Teletrabajo
+ * question 12: *"indica que la respuesta debe ser obligatoria"*. The marker goes on the
+ * label so the respondent learns it when they read the prompt, not when the form refuses
+ * to send.
  *
  * Read-only until the question itself is answered, because the server refuses a
  * comment on a question with no value and tells the caller to omit the question
@@ -595,17 +602,20 @@ function CommentField({ question, answer, answered, disabled, onChange }: Commen
   const { t } = useTranslation('surveyRespond')
   const commentId = `${questionFieldId(question.id)}-comment`
   const hintId = `${commentId}-hint`
+  const required = commentIsRequired(question)
 
   return (
     <div className="mt-4">
       <label htmlFor={commentId} className="text-sm font-normal text-fg-secondary">
         {question.commentPrompt}
+        {required && <span className="ml-1">{t('requiredMarker')}</span>}
       </label>
       <Textarea
         id={commentId}
         value={answer?.text ?? ''}
         readOnly={!answered}
         disabled={disabled}
+        aria-required={required || undefined}
         aria-describedby={answered ? undefined : hintId}
         onChange={(event) => onChange({ ...answer, text: event.target.value })}
       />
