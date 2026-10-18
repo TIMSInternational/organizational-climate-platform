@@ -9,10 +9,24 @@ namespace ClimateProject.Application.OrgStructure;
 /// generated for one person (ruled 2026-10-13).
 ///
 /// <para>
-/// Both languages in one message, like <see cref="InvitationEmailComposer"/> and for its reason:
-/// the account was created a moment ago from a spreadsheet row and its holder has chosen no
-/// language. The company's own language goes first, so a Costa Rican workforce reads Spanish
-/// before anything else.
+/// **One language when the company has declared one; both only when it has not.** Both
+/// languages in one message was right while the only fact available was that the account had
+/// been created from a spreadsheet row a moment ago and its holder had chosen no language. It
+/// is wrong once the COMPANY has said which language it speaks, and ESPH's rehearsal returned
+/// the duplication as its very first finding (2026-10-17): "toda la poblacion habla espanol y
+/// que los accesos y link de ingreso venga doble puede generar confusion", with the two
+/// questions it actually produced -- "Ingreso con los accesos de arriba o los de abajo?" and
+/// "Ingreso primero con el link de arriba y luego realizo la encuesta de abajo?". One username,
+/// one password and one button, rendered twice, read as two of each. The subject line carried
+/// the same duplication: "Tu acceso a ... / Your access to ...".
+/// </para>
+/// <para>
+/// So a company whose <c>Settings.Language</c> is a single locale gets that locale alone --
+/// body, subject and footer. <c>both</c>, or no company language at all, still gets both with
+/// the company's language first, because there the original reasoning is untouched: nothing has
+/// said which language this reader wants, and a message they cannot read is worse than one that
+/// repeats itself. <see cref="InvitationEmailComposer"/> is unchanged; it is reached from the
+/// one-by-one admin invite, which has no company language to consult.
 /// </para>
 /// <para>
 /// The password is in the body because that is the ruling: nobody chooses one. It is never
@@ -57,29 +71,41 @@ public static class CredentialsEmailComposer
         ArgumentException.ThrowIfNullOrWhiteSpace(password);
         ArgumentException.ThrowIfNullOrWhiteSpace(loginUrl);
 
-        var spanishFirst = string.Equals(companyLanguage, "es", StringComparison.OrdinalIgnoreCase);
-        var (first, second) = spanishFirst
-            ? (CopyFor(purpose, spanish: true), CopyFor(purpose, spanish: false))
-            : (CopyFor(purpose, spanish: false), CopyFor(purpose, spanish: true));
+        // Null for `both`, for no language at all, and for anything unrecognised -- which is
+        // exactly the set of cases where the reader's language is still unknown and both
+        // blocks still earn their place. A single locale here means this message carries that
+        // locale and nothing else.
+        var single = ContentLanguages.SingleLocaleOf(companyLanguage);
+        var spanishFirst = single == ContentLanguages.Spanish;
+        var first = CopyFor(purpose, spanish: spanishFirst);
+        var second = single is null ? CopyFor(purpose, spanish: !spanishFirst) : null;
 
         var html = new StringBuilder();
         AppendHtml(html, first, username, password, loginUrl);
-        html.Append("""<hr style="border:none;border-top:1px solid #e4e7eb;margin:28px 0;">""");
-        AppendHtml(html, second, username, password, loginUrl);
-        html.Append(EmailBranding.Footer(EmailBranding.Escape($"{first.Ignore} / {second.Ignore}")));
+        if (second is not null)
+        {
+            html.Append("""<hr style="border:none;border-top:1px solid #e4e7eb;margin:28px 0;">""");
+            AppendHtml(html, second, username, password, loginUrl);
+        }
+
+        html.Append(EmailBranding.Footer(EmailBranding.Escape(
+            second is null ? first.Ignore : $"{first.Ignore} / {second.Ignore}")));
 
         var text = new StringBuilder();
         AppendText(text, first, username, password, loginUrl);
-        text.Append("\n--\n\n");
-        AppendText(text, second, username, password, loginUrl);
+        if (second is not null)
+        {
+            text.Append("\n--\n\n");
+            AppendText(text, second, username, password, loginUrl);
+        }
 
         return new EmailMessage(
             toEmail,
             // Null, so the mail is addressed to the bare address. See `recipientName`.
             ToName: null,
-            EmailMessage.ToHeaderValue($"{first.Subject} / {second.Subject}"),
+            EmailMessage.ToHeaderValue(second is null ? first.Subject : $"{first.Subject} / {second.Subject}"),
             text.ToString(),
-            EmailBranding.Document(spanishFirst ? "es" : ContentLanguages.FallbackLocale, html.ToString()));
+            EmailBranding.Document(single ?? ContentLanguages.FallbackLocale, html.ToString()));
     }
 
     private static void AppendHtml(

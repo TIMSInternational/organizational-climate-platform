@@ -25,6 +25,15 @@ public class CredentialsEmailComposerTests
     private static string SpanishText(CredentialsEmailPurpose purpose) =>
         CredentialsEmailComposer.Compose("person@example.com", Person, Username, Password, LoginUrl, "es", purpose).TextBody;
 
+    /// <summary>
+    /// The same message for a company that speaks English. It exists because each copy
+    /// assertion below used to read both languages out of ONE message, and a message now
+    /// carries one -- so the English half of every such assertion has to come from here or it
+    /// would be asserting the behaviour this change removed.
+    /// </summary>
+    private static string EnglishText(CredentialsEmailPurpose purpose) =>
+        CredentialsEmailComposer.Compose("person@example.com", Person, Username, Password, LoginUrl, "en", purpose).TextBody;
+
     [Fact]
     public void The_reminder_asks_the_person_to_go_in_and_answer()
     {
@@ -33,7 +42,8 @@ public class CredentialsEmailComposerTests
         var reminder = SpanishText(CredentialsEmailPurpose.Reminder);
 
         Assert.Contains("por favor ingreses y respondas la encuesta", reminder, StringComparison.Ordinal);
-        Assert.Contains("Please sign in and answer the survey", reminder, StringComparison.Ordinal);
+        Assert.Contains("Please sign in and answer the survey", EnglishText(CredentialsEmailPurpose.Reminder), StringComparison.Ordinal);
+        Assert.DoesNotContain("Please sign in and answer the survey", reminder, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -71,7 +81,8 @@ public class CredentialsEmailComposerTests
         var reminder = SpanishText(CredentialsEmailPurpose.Reminder);
 
         Assert.Contains("la anterior deja de funcionar", reminder, StringComparison.Ordinal);
-        Assert.Contains("previous password stops working", reminder, StringComparison.Ordinal);
+        Assert.Contains("previous password stops working", EnglishText(CredentialsEmailPurpose.Reminder), StringComparison.Ordinal);
+        Assert.DoesNotContain("previous password stops working", reminder, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -82,31 +93,94 @@ public class CredentialsEmailComposerTests
         var reminder = SpanishText(CredentialsEmailPurpose.Reminder);
 
         Assert.Contains("puedes continuar donde la dejaste", reminder, StringComparison.Ordinal);
-        Assert.Contains("carry on where you left off", reminder, StringComparison.Ordinal);
+        Assert.Contains("carry on where you left off", EnglishText(CredentialsEmailPurpose.Reminder), StringComparison.Ordinal);
+        Assert.DoesNotContain("carry on where you left off", reminder, StringComparison.Ordinal);
     }
 
     [Theory]
     [InlineData(CredentialsEmailPurpose.Invitation)]
     [InlineData(CredentialsEmailPurpose.Reminder)]
-    public void Both_purposes_send_both_languages_with_the_company_first(CredentialsEmailPurpose purpose)
+    public void A_company_with_one_language_is_written_to_in_that_language_alone(CredentialsEmailPurpose purpose)
     {
-        // The account was created from a spreadsheet row a moment ago and its holder has chosen
-        // no language, so both go in one message and the company's own language leads.
+        // This REPLACED `Both_purposes_send_both_languages_with_the_company_first`, which
+        // asserted the behaviour ESPH's rehearsal returned as its first finding: every account
+        // got one username and one password printed twice, under two headings, with two
+        // buttons. The reviewer's own questions are the acceptance criteria -- "Ingreso con los
+        // accesos de arriba o los de abajo?" cannot be asked of a message with one of each.
         var spanishCompany = CredentialsEmailComposer.Compose(
             "person@example.com", Person, Username, Password, LoginUrl, "es", purpose);
         var englishCompany = CredentialsEmailComposer.Compose(
             "person@example.com", Person, Username, Password, LoginUrl, "en", purpose);
 
         Assert.Contains("Usuario", spanishCompany.TextBody, StringComparison.Ordinal);
-        Assert.Contains("Username", spanishCompany.TextBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("Username", spanishCompany.TextBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("Username", spanishCompany.HtmlBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("Sign in", spanishCompany.HtmlBody, StringComparison.Ordinal);
+
+        Assert.Contains("Username", englishCompany.TextBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("Usuario", englishCompany.TextBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("Usuario", englishCompany.HtmlBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("Iniciar", englishCompany.HtmlBody, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(CredentialsEmailPurpose.Invitation)]
+    [InlineData(CredentialsEmailPurpose.Reminder)]
+    public void The_credentials_and_the_button_appear_exactly_once(CredentialsEmailPurpose purpose)
+    {
+        // The literal complaint: "los accesos y link de ingreso venga doble". Counting is the
+        // only form of it a future edit has to get past -- every assertion above would still
+        // pass if a second Spanish block were appended, because `Contains` cannot see a
+        // duplicate. The login URL is counted in the TEXT body alone: the HTML carries it twice
+        // per block by construction (href and visible label), which is a property of
+        // `EmailBranding.Button` and not of this composer.
+        var message = CredentialsEmailComposer.Compose(
+            "person@example.com", Person, Username, Password, LoginUrl, "es", purpose);
+
+        Assert.Equal(1, Occurrences(message.TextBody, Username));
+        Assert.Equal(1, Occurrences(message.TextBody, Password));
+        Assert.Equal(1, Occurrences(message.TextBody, LoginUrl));
+        Assert.Equal(1, Occurrences(message.HtmlBody, Username));
+        Assert.Equal(1, Occurrences(message.HtmlBody, Password));
+        // "Iniciar sesi" rather than the whole label: `EmailBranding.Escape` is
+        // `WebUtility.HtmlEncode`, which turns the accented o into a numeric entity, so the
+        // literal does not survive into the HTML. The prefix is still unique to the button.
+        Assert.Equal(1, Occurrences(message.HtmlBody, "Iniciar sesi"));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("both")]
+    [InlineData("klingon")]
+    public void A_company_that_has_named_no_single_language_still_gets_both(string? language)
+    {
+        // The original reasoning survives exactly where it still applies: nothing has said
+        // which language this reader wants, so a message they cannot read is the worse risk.
+        // "both" and an unrecognised value land here together on purpose -- `SingleLocaleOf`
+        // refuses to guess, and guessing is what would send a Spanish-only mail to a reader
+        // the platform knows nothing about.
+        var message = CredentialsEmailComposer.Compose(
+            "person@example.com", Person, Username, Password, LoginUrl, language,
+            CredentialsEmailPurpose.Invitation);
+
+        Assert.Contains("Username", message.TextBody, StringComparison.Ordinal);
+        Assert.Contains("Usuario", message.TextBody, StringComparison.Ordinal);
         Assert.True(
-            spanishCompany.TextBody.IndexOf("Usuario", StringComparison.Ordinal)
-                < spanishCompany.TextBody.IndexOf("Username", StringComparison.Ordinal),
-            "A company set to Spanish must read Spanish before English.");
-        Assert.True(
-            englishCompany.TextBody.IndexOf("Username", StringComparison.Ordinal)
-                < englishCompany.TextBody.IndexOf("Usuario", StringComparison.Ordinal),
-            "A company set to English must read English before Spanish.");
+            message.TextBody.IndexOf("Username", StringComparison.Ordinal)
+                < message.TextBody.IndexOf("Usuario", StringComparison.Ordinal),
+            "With no company language to lead with, English comes first, as it did before.");
+    }
+
+    private static int Occurrences(string haystack, string needle)
+    {
+        var count = 0;
+        for (var i = haystack.IndexOf(needle, StringComparison.Ordinal); i >= 0;
+             i = haystack.IndexOf(needle, i + needle.Length, StringComparison.Ordinal))
+        {
+            count++;
+        }
+
+        return count;
     }
 
     [Fact]
@@ -121,7 +195,16 @@ public class CredentialsEmailComposerTests
 
         Assert.NotEqual(invitation, reminder);
         Assert.Contains("Recordatorio", reminder, StringComparison.Ordinal);
-        Assert.Contains("Reminder", reminder, StringComparison.Ordinal);
+
+        // And the subject is in ONE language too. It used to read
+        // "Tu acceso a ... / Your access to ...", which is the first thing the recipient saw
+        // and the first place the duplication showed -- see the screenshot in the 2026-10-17
+        // rehearsal review. The English subject still exists, for an English company.
+        Assert.DoesNotContain("Reminder", reminder, StringComparison.Ordinal);
+        Assert.DoesNotContain("/", reminder, StringComparison.Ordinal);
+        Assert.Contains("Reminder", CredentialsEmailComposer.Compose(
+            "person@example.com", Person, Username, Password, LoginUrl, "en",
+            CredentialsEmailPurpose.Reminder).Subject, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -196,7 +279,8 @@ public class CredentialsEmailComposerTests
         var text = SpanishText(CredentialsEmailPurpose.Invitation);
 
         Assert.Contains("Gracias por participar.", text, StringComparison.Ordinal);
-        Assert.Contains("Thank you for taking part.", text, StringComparison.Ordinal);
+        Assert.Contains("Thank you for taking part.", EnglishText(CredentialsEmailPurpose.Invitation), StringComparison.Ordinal);
+        Assert.DoesNotContain("Thank you for taking part.", text, StringComparison.Ordinal);
     }
 
     [Fact]
