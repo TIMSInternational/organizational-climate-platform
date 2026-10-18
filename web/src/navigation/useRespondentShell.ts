@@ -19,9 +19,19 @@ import { buildNavSections, isPerUserOnly } from './navSections'
  * and its Nombre and Departamento were three clicks from a control the redesign kept.
  * Removing the two rows from the account menu had closed nothing.
  *
- * Deliberately NOT a route guard. The pages stay reachable by URL, so no right is removed,
- * only the invitation to wander in mid-survey — see `AdminLayout.test.tsx`'s privacy block
- * for the whole of that argument and the 2026-10-18 ruling it records.
+ * ## What this hides, and what it now also blocks
+ *
+ * For `/settings/privacy` and `/settings/notifications` this removes the INVITATION and not
+ * the right: the pages stay reachable by URL. #137's acceptance criterion is that the
+ * privacy page be "reachable by every role" — `router.test.ts:286` calls that an acceptance
+ * criterion *rather than a convenience* — and `AdminLayout.test.tsx`'s privacy block carries
+ * the whole argument.
+ *
+ * `/profile` is no longer in that set. Ruled by Federico 2026-10-18, superseding the earlier
+ * ruling the same day: *"the action button … should not be there. All this should be
+ * inaccessible for them."* It is the one account page that prints the respondent's Nombre and
+ * Departamento, which is ESPH's finding 3, and `router.test.ts` calls it a convenience (#136)
+ * rather than a criterion. `ProfileNextPage` redirects on this hook; see its note.
  */
 export function useRespondentShell(): boolean {
   const token = getToken()
