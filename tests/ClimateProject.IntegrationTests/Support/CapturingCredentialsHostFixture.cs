@@ -52,7 +52,7 @@ internal sealed class CapturingCredentialsSender(ConcurrentQueue<SentCredentials
 {
     public Task<EmailSendOutcome> SendAsync(
         string toEmail, string? recipientName, string username, string password, string? companyLanguage,
-        CredentialsEmailPurpose purpose, CancellationToken cancellationToken)
+        EmailBrand? brand, CredentialsEmailPurpose purpose, CancellationToken cancellationToken)
     {
         if (failFor.Contains(toEmail))
         {

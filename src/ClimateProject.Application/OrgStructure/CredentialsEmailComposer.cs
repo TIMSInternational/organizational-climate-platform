@@ -62,9 +62,16 @@ public static class CredentialsEmailComposer
     /// which reads every rendered field.
     /// </para>
     /// </param>
+    /// <param name="brand">
+    /// The company's own logo and accent. Optional, and null means the unbranded shell -- which
+    /// is what the composer's own tests exercise. The decision is forced one layer up:
+    /// <see cref="ICredentialsEmailSender.SendAsync"/> takes it as a REQUIRED argument, so an
+    /// endpoint that has a company in hand cannot send its people an unbranded message by
+    /// forgetting a parameter.
+    /// </param>
     public static EmailMessage Compose(
         string toEmail, string? recipientName, string username, string password, string loginUrl,
-        string? companyLanguage, CredentialsEmailPurpose purpose)
+        string? companyLanguage, CredentialsEmailPurpose purpose, EmailBrand? brand = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(toEmail);
         ArgumentException.ThrowIfNullOrWhiteSpace(username);
@@ -81,11 +88,11 @@ public static class CredentialsEmailComposer
         var second = single is null ? CopyFor(purpose, spanish: !spanishFirst) : null;
 
         var html = new StringBuilder();
-        AppendHtml(html, first, username, password, loginUrl);
+        AppendHtml(html, first, username, password, loginUrl, brand);
         if (second is not null)
         {
             html.Append("""<hr style="border:none;border-top:1px solid #e4e7eb;margin:28px 0;">""");
-            AppendHtml(html, second, username, password, loginUrl);
+            AppendHtml(html, second, username, password, loginUrl, brand);
         }
 
         html.Append(EmailBranding.Footer(EmailBranding.Escape(
@@ -105,11 +112,12 @@ public static class CredentialsEmailComposer
             ToName: null,
             EmailMessage.ToHeaderValue(second is null ? first.Subject : $"{first.Subject} / {second.Subject}"),
             text.ToString(),
-            EmailBranding.Document(single ?? ContentLanguages.FallbackLocale, html.ToString()));
+            EmailBranding.Document(single ?? ContentLanguages.FallbackLocale, html.ToString(), brand));
     }
 
     private static void AppendHtml(
-        StringBuilder html, CredentialsCopy copy, string username, string password, string loginUrl)
+        StringBuilder html, CredentialsCopy copy, string username, string password, string loginUrl,
+        EmailBrand? brand)
     {
         html.Append(EmailBranding.Heading(copy.Subject));
         html.Append(EmailBranding.Paragraphs(copy.Body));
@@ -119,7 +127,7 @@ public static class CredentialsEmailComposer
         html.Append(EmailBranding.Escape(copy.PasswordLabel)).Append(": ")
             .Append("""<strong style="font-family:Menlo,Consolas,monospace;font-size:16px;">""").Append(EmailBranding.Escape(password)).Append("</strong>");
         html.Append("</p>");
-        html.Append(EmailBranding.Button(loginUrl, copy.Cta));
+        html.Append(EmailBranding.Button(loginUrl, copy.Cta, brand));
         html.Append(EmailBranding.Paragraphs(copy.Keep));
     }
 
