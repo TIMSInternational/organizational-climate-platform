@@ -5,6 +5,7 @@ import {
   domainOf,
   loginOutcome,
   meetsPasswordPolicy,
+  prefilledUsername,
   registerOutcome,
   DEFAULT_PASSWORD_POLICY,
   MAX_PASSWORD_LENGTH,
@@ -172,5 +173,31 @@ describe('loginOutcome on a rate limit', () => {
     expect(loginOutcome(503, '')).toEqual({ kind: 'page', reason: 'maintenance' })
     expect(loginOutcome(403, '')).toEqual({ kind: 'page', reason: 'login-disabled' })
     expect(loginOutcome(500, 'Boom')).toEqual({ kind: 'form-server', message: 'Boom' })
+  })
+})
+
+describe('prefilledUsername', () => {
+  it('reads the username the invitation link carries', () => {
+    expect(prefilledUsername('?u=esphensa-k85j9uyv')).toBe('esphensa-k85j9uyv')
+    expect(prefilledUsername('?lang=es&u=esphensa-k85j9uyv')).toBe('esphensa-k85j9uyv')
+  })
+
+  it('decodes it, because the composer percent-encodes what it puts on the link', () => {
+    expect(prefilledUsername('?u=a%2Bb%40c')).toBe('a+b@c')
+  })
+
+  it('is empty when the link carries nothing, so the field is just empty', () => {
+    expect(prefilledUsername('')).toBe('')
+    expect(prefilledUsername('?lang=es')).toBe('')
+    expect(prefilledUsername('?u=')).toBe('')
+    expect(prefilledUsername('?u=%20%20')).toBe('')
+  })
+
+  it('drops a value too long to be a username rather than pasting it into the field', () => {
+    // Anyone can write this link. The cap is not validation -- the server decides what a
+    // username is -- it only keeps a hand-written link from filling the field with a
+    // paragraph the respondent then has to clear by hand.
+    expect(prefilledUsername(`?u=${'x'.repeat(256)}`)).toBe('x'.repeat(256))
+    expect(prefilledUsername(`?u=${'x'.repeat(257)}`)).toBe('')
   })
 })
