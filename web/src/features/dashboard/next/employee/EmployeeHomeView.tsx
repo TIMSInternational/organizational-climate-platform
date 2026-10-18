@@ -9,6 +9,7 @@ import { cn } from '../../../../lib/cn'
 import DashboardState from '../../components/DashboardState'
 import { AnonymityNotice } from '../../../surveys/components/AnonymityNotice'
 import { formatDayMonth } from '../../../surveys/respondEstimate'
+import { useRespondentShell } from '../../../../navigation/useRespondentShell'
 import { useEmployeeHomeModel } from './useEmployeeHomeModel'
 import type { EmployeeHomeModel, HomeOutcome, HomeSurvey } from './model'
 import { byCount } from '../../../../i18n/plural'
@@ -64,6 +65,7 @@ export default function EmployeeHomeView({
   notice?: ReactNode
 } = {}) {
   const { t } = useTranslation()
+  const respondent = useRespondentShell()
   const { model, loading, failed, error, reload } = useEmployeeHomeModel()
 
   return (
@@ -72,7 +74,7 @@ export default function EmployeeHomeView({
         // "INGENIERÍA · EMPLEADO": where this person stands, as the artboard's eyebrow
         // says it. `null` while loading, because an eyebrow that appears and then changes
         // is worse than one that arrives with its page.
-        eyebrow={model ? eyebrowFor(model, t) : null}
+        eyebrow={model ? eyebrowFor(model, t, respondent) : null}
         // The greeting IS the heading: the one page in the product addressed to a person
         // rather than to an administrator. It greets the hour and not the person — ruled
         // 2026-10-16, the same ruling behind `auth/ownName.ts`: this page tells the reader
@@ -107,7 +109,19 @@ export default function EmployeeHomeView({
  * "los resultados de su departamento se publican cuando la encuesta cierra". Removing it here
  * while that sentence stands would leave the page contradicting itself.
  */
-function eyebrowFor(model: EmployeeHomeModel, t: TranslateFn): string {
+function eyebrowFor(model: EmployeeHomeModel, t: TranslateFn, respondent: boolean): string {
+  // **The department went for the respondent on 2026-10-18 too, and this is a reversal of the
+  // paragraph above.** That paragraph argued the department could stay because it names the
+  // unit whose results the reader is promised rather than labelling the person. ESPH's finding
+  // 3 does not draw that line: "se ven los datos demograficos como Nombre, Departamento y esa
+  // informacion es imprescindible ocultarla del evaluado". Nombre and Departamento are named
+  // together, as one ask, by the client whose anonymity promise it is.
+  //
+  // Conditioned on the shell and not applied outright, because this component is not only the
+  // respondent's: `TeamDashboardPage` and `DepartmentAdminDashboardView` both render it for
+  // roles who are reading ABOUT a department rather than being labelled with one, and for them
+  // the eyebrow is orientation.
+  if (respondent) return t('employee.eyebrow')
   return model.departmentName && model.departmentName !== ''
     ? model.departmentName
     : t('employee.eyebrow')

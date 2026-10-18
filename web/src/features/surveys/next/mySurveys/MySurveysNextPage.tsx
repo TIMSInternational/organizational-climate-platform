@@ -14,6 +14,7 @@ import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { calendarDay } from '../../../../lib/calendarDay'
 import { useCompanyScope } from '../../../../company-context'
 import { hasAnswered } from '../../respondReceipt'
+import { useRespondentShell } from '../../../../navigation/useRespondentShell'
 import { useMySurveysModel } from './useMySurveysModel'
 import {
   belongsToNoCompany,
@@ -104,6 +105,7 @@ export default function MySurveysNextPage() {
 
 function SurveyList() {
   const { t } = useTranslation()
+  const respondent = useRespondentShell()
   const { status, surveys, error, departmentName, reload } = useMySurveysModel()
 
   // One clock reading for the whole render, so every row agrees about which day today is.
@@ -112,8 +114,9 @@ function SurveyList() {
   return (
     <div>
       <PageTopBar
-        // "INGENIERÍA", the artboard's eyebrow less its role half — see `eyebrowFor`.
-        eyebrow={eyebrowFor(departmentName)}
+        // The artboard's eyebrow, less its role half and — for a respondent — less its
+        // department half as well. See `eyebrowFor`.
+        eyebrow={eyebrowFor(departmentName, respondent)}
         title={t('navigation.mySurveys')}
         description={t('employee.next.mySurveysDescription')}
       />
@@ -219,7 +222,16 @@ function SurveyList() {
  * "los resultados de su departamento se publican cuando la encuesta cierra". Removing it here
  * while that sentence stands would leave the page contradicting itself.
  */
-function eyebrowFor(departmentName: string | null): string | null {
+function eyebrowFor(departmentName: string | null, respondent: boolean): string | null {
+  // The department went for the respondent on 2026-10-18 as well — ESPH's finding 3 names
+  // "Nombre, Departamento" together as the demographics to hide from the evaluado. Null
+  // rather than a replacement word: this screen's eyebrow has always been allowed to be
+  // absent, so there is nothing to put in its place.
+  //
+  // Conditioned on the shell because `/surveys/my` is NOT the respondent's alone — the router
+  // records that employee, supervisor and leader can all load it (`router.tsx:463`), and a
+  // leader reading their own list is not the person finding 3 is about.
+  if (respondent) return null
   return departmentName && departmentName !== '' ? departmentName : null
 }
 
