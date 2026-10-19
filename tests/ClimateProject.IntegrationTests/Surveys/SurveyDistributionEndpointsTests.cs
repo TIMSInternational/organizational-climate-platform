@@ -90,19 +90,34 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
         });
 
     /// <summary>An active survey, published through the real status route so the publish gate runs.</summary>
+    /// <param name="sendInvitations">
+    /// Turned ON for this class by default, and that is the opposite of the product's own
+    /// default since 2026-10-19 -- a survey is created with `NotificationSendInvitations`
+    /// false, because the credentials mail already carries the sign-in button and the
+    /// invitation mail's button answers the survey without signing in (the reasoning is in
+    /// SurveyEndpoints' create path). These tests are about what the invitation MACHINERY
+    /// does once a tenant has asked for it, so they ask for it explicitly rather than lean
+    /// on a default that no longer means what they were written against.
+    /// `A_survey_is_created_with_the_invitation_email_off` is where the default itself is
+    /// pinned, and two tests below deliberately pass false.
+    /// </param>
     private async Task<SurveyDetail> CreateActiveSurveyAsync(
         HttpClient client,
         bool anonymous = false,
         string? language = null,
-        List<Guid>? departmentIds = null)
+        List<Guid>? departmentIds = null,
+        bool sendInvitations = true)
     {
         var created = await SurveyTestHarness.CreateSurveyAsync(
             client, SurveyTestHarness.MinimalRequest(_companyAId, language: language, departmentIds: departmentIds));
 
-        if (anonymous)
+        if (anonymous || sendInvitations)
         {
             var patched = await client.PutAsJsonAsync(
-                $"/surveys/{created.Id}", new UpdateSurveyRequest(Settings: new SurveySettingsInput(Anonymous: true)));
+                $"/surveys/{created.Id}",
+                new UpdateSurveyRequest(Settings: new SurveySettingsInput(
+                    Anonymous: anonymous ? true : null,
+                    NotificationSendInvitations: sendInvitations ? true : null)));
             patched.EnsureSuccessStatusCode();
         }
 
@@ -525,6 +540,49 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
             new CreateSurveyInvitationsRequest(UserIds: [employee], DepartmentIds: [_engineeringId]));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    /// <summary>
+    /// The 2026-10-19 ruling, at the only place it can be observed: a survey nobody said
+    /// anything to about invitations does not mail one.
+    ///
+    /// <para>
+    /// The respondent gets exactly one email -- their credentials -- and the invitation mail
+    /// that used to follow it is gone, because its button opened the survey WITHOUT signing
+    /// in and because it repeated what the credentials mail already says. The invitation ROW
+    /// is deliberately still minted: it is the audience artefact and the resend route's
+    /// subject, and nothing per-person is lost by not mailing it -- on an anonymous survey
+    /// `SurveyInvitationStatuses.AnonymityCeiling` already forbids recording `started` or
+    /// `completed`, so the only state the mail could ever have produced is `opened`.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task A_survey_is_created_with_the_invitation_email_off()
+    {
+        var client = await AdminAAsync();
+
+        // No Settings at all on the request -- which is what the climate workbook import and
+        // every other caller send when nobody has mentioned invitations.
+        var created = await SurveyTestHarness.CreateSurveyAsync(client, SurveyTestHarness.MinimalRequest(_companyAId));
+        Assert.False(created.Settings.NotificationSendInvitations);
+
+        (await SurveyTestHarness.SetStatusAsync(client, created.Id, SurveyStatuses.Active)).EnsureSuccessStatusCode();
+        var employee = await SeedEmployeeAsync(_companyAId);
+        var result = await InviteAsync(client, created.Id, new CreateSurveyInvitationsRequest(UserIds: [employee]));
+
+        Assert.Equal(1, result.Created);
+        Assert.Equal(0, result.NotificationsQueued);
+        Assert.NotNull(result.Note);
+        Assert.Contains("notificationSendInvitations", result.Note, StringComparison.Ordinal);
+
+        Assert.False(await _harness.WithDbAsync(db => db.Notifications
+            .AnyAsync(n => n.Type == NotificationTypes.SurveyInvitation && n.UserId == employee)));
+
+        // Minted and left at the start of the ladder: `sent` would claim a mail that never
+        // went, and `SentAt` anchors the reminder cadence.
+        var invitation = await InvitationRowAsync(result.InvitationIds[0]);
+        Assert.Equal(SurveyInvitationStatuses.Pending, invitation.Status);
+        Assert.Null(invitation.SentAt);
     }
 
     [Fact]
