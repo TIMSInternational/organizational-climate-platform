@@ -81,6 +81,14 @@ public sealed class RateLimitingOptions
     /// </para>
     /// </summary>
     public int AuthenticationPermitsPerMinute { get; set; } = RateLimitPolicies.DefaultAuthenticationPermitsPerMinute;
+
+    /// <summary>
+    /// The budget on the survey respond and submit routes, per authenticated user or, for a
+    /// respondent with no account, per caller address. See
+    /// <see cref="RateLimitPolicies.DefaultResponseSubmissionPermitsPerMinute"/> for the
+    /// measurement that sets it and for why the key is what it is.
+    /// </summary>
+    public int ResponseSubmissionPermitsPerMinute { get; set; } = RateLimitPolicies.DefaultResponseSubmissionPermitsPerMinute;
 }
 
 /// <summary>
@@ -213,6 +221,45 @@ public static class RateLimitPolicies
     /// </para>
     /// </summary>
     public const int PublicLinkPermitsPerWindow = 120;
+
+    /// <summary>
+    /// Default for <see cref="RateLimitingOptions.ResponseSubmissionPermitsPerMinute"/>:
+    /// the budget an ANONYMOUS respondent's address gets on the survey respond and submit
+    /// routes. Authenticated respondents are keyed by <c>sub</c> and have a bucket each, so
+    /// this number only ever binds on people with no account.
+    ///
+    /// <para>
+    /// It was a hardcoded 60 and that is too low for the one audience it governs, measured
+    /// 2026-10-19 against Eagle, whose respondents are ALL anonymous (a QR survey, no
+    /// accounts by ruling). The respond form debounces a partial save
+    /// <c>RESPOND_AUTOSAVE_DELAY_MS</c> = 1500 ms after each answer changes
+    /// (<c>web/src/features/surveys/respondAutosave.ts:30</c>), so one person answering an
+    /// 82-question instrument spends about 84 requests -- one GET, one save per answer, one
+    /// completing POST -- over the ten or fifteen minutes it takes them, i.e. roughly eight
+    /// a minute. Sixty a minute for a whole egress address is therefore about SEVEN people
+    /// answering at once from one plant's wifi before the eighth is refused, and
+    /// <c>PartitionResponseSubmission</c>'s own remarks already name that failure for the
+    /// authenticated case: "Keeping those on one IP-wide bucket would throttle an entire
+    /// workplace after only sixty combined operations per minute."
+    /// </para>
+    /// <para>
+    /// 600 puts the ceiling at roughly seventy-five concurrent anonymous respondents per
+    /// address, which is a shift rather than a handful, and it is deliberately not higher:
+    /// <see cref="DefaultGlobalPermitsPerMinute"/> is 600 on the same key shape, so going
+    /// past it would only move the refusal to the coarse limiter and make this number a
+    /// lie. Both are configurable, so a site that is genuinely larger is a setting and not
+    /// a deploy -- which is the whole reason this stopped being a const. The precedent is
+    /// <see cref="DefaultAuthenticationPermitsPerMinute"/>, raised from 20 to 400 after the
+    /// twenty-first person at a client site got a 429 instead of a sign-in page.
+    /// </para>
+    /// <para>
+    /// What it does NOT change: the key. An anonymous caller is still bucketed by address,
+    /// because the only per-person thing an anonymous respondent carries is a session id
+    /// they mint themselves, and keying on that would hand a flooder an unlimited supply of
+    /// buckets.
+    /// </para>
+    /// </summary>
+    public const int DefaultResponseSubmissionPermitsPerMinute = 600;
 
     /// <summary>Default for <see cref="RateLimitingOptions.GlobalPermitsPerMinute"/>.</summary>
     public const int DefaultGlobalPermitsPerMinute = 600;
