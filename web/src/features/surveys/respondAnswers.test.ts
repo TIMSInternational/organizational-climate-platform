@@ -275,6 +275,85 @@ describe('orderQuestions', () => {
     const shuffled = orderQuestions(questions, true, 'survey-1').map((q) => q.id)
     expect([...shuffled].sort()).toEqual(['a', 'b', 'c'])
   })
+
+  /**
+   * The open question is asked LAST even when the survey randomises, and that is the
+   * whole point of these three.
+   *
+   * ESPH's climate instrument asks its one open question at order 63 of 63, and the
+   * reviewer's screenshot of it there is what made the position look settled. It was
+   * only settled because that rehearsal was not randomised: turning randomisation on
+   * for every ESPH survey put question 63 anywhere from 1/63 to 63/63, which nobody
+   * asked for and nobody would have seen until a respondent hit it first.
+   *
+   * Several seeds rather than one, because a single seed can leave the open question
+   * last by luck -- it is 1 in 8 here -- and would then pass against the shuffle this
+   * fix replaced.
+   */
+  const SEEDS = ['s1', 's2', 's3', 's4', 's5', 's6', 's7', 's8']
+
+  function withOpenInTheMiddle(): SurveyRespondQuestion[] {
+    return [
+      question({ id: 'c1', order: 0 }),
+      question({ id: 'c2', order: 1 }),
+      question({ id: 'c3', order: 2 }),
+      question({ id: 'open', order: 3, type: 'open_ended', options: null }),
+      question({ id: 'c4', order: 4 }),
+      question({ id: 'c5', order: 5 }),
+      question({ id: 'c6', order: 6 }),
+      question({ id: 'c7', order: 7 }),
+    ]
+  }
+
+  it('asks the open question last under every seed, wherever it was authored', () => {
+    const asked = SEEDS.map((seed) => orderQuestions(withOpenInTheMiddle(), true, seed).map((q) => q.id))
+
+    for (const order of asked) {
+      expect(order[order.length - 1], `seed order: ${order.join()}`).toBe('open')
+      // Last, not merely present once at the end: a shuffle that duplicated it would
+      // satisfy the line above.
+      expect(order.filter((id) => id === 'open')).toHaveLength(1)
+      expect([...order].sort()).toEqual(['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'open'])
+    }
+
+    // And the closed questions are still shuffled: holding the open one back must not
+    // have cost the randomisation it was held back from. Different seeds, different
+    // orders -- otherwise this whole block would pass against a function that returned
+    // the authored order and never shuffled at all.
+    expect(new Set(asked.map((order) => order.join())).size).toBeGreaterThan(1)
+  })
+
+  /**
+   * ESPH's Teletrabajo instrument asks two open questions, at orders 11 and 15 of 15.
+   * "Last" has to mean both of them, in the order their author wrote them in -- one at
+   * the end and one still buried in the shuffle would be the same defect, half fixed.
+   */
+  it('asks TWO open questions last, in their authored order', () => {
+    const questions: SurveyRespondQuestion[] = [
+      ...Array.from({ length: 10 }, (_unused, index) => question({ id: `c${index}`, order: index })),
+      question({ id: 'open-11', order: 10, type: 'open_ended', options: null }),
+      question({ id: 'c11', order: 11 }),
+      question({ id: 'c12', order: 12 }),
+      question({ id: 'c13', order: 13 }),
+      question({ id: 'open-15', order: 14, type: 'open_ended', options: null }),
+    ]
+
+    for (const seed of SEEDS) {
+      const asked = orderQuestions(questions, true, seed).map((q) => q.id)
+      expect(asked.slice(-2), `seed order: ${asked.join()}`).toEqual(['open-11', 'open-15'])
+      expect(asked).toHaveLength(15)
+    }
+  })
+
+  /**
+   * The exception is scoped to the shuffle. With randomisation off, the authored order
+   * IS the order asked, open questions included -- an author who put free text at 11 of
+   * 15 chose that, and this function has no business overruling them.
+   */
+  it('leaves an open question where its author put it when randomisation is off', () => {
+    const asked = orderQuestions(withOpenInTheMiddle(), false, 's1').map((q) => q.id)
+    expect(asked).toEqual(['c1', 'c2', 'c3', 'open', 'c4', 'c5', 'c6', 'c7'])
+  })
 })
 
 describe('moveRankingEntry', () => {

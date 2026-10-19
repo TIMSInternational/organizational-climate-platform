@@ -29,8 +29,9 @@ import { UNCATEGORISED_DIMENSION, dimensionKeyOf } from './surveyResultsMap'
  * ## A randomised survey prints no headings at all
  *
  * `orderQuestions` shuffles the flat list with a session-seeded PRNG when
- * `Survey.Settings.RandomizeQuestions` is on, and this module then prints that list
- * as one flat, unsectioned run. Randomisation and the hidden dimension are one
+ * `Survey.Settings.RandomizeQuestions` is on — all of it but the free-text questions,
+ * which it holds back and asks last — and this module then prints that list as one
+ * flat, unsectioned run. Randomisation and the hidden dimension are one
  * setting because they are one promise: a respondent who can read the construct
  * above a question can still answer it as that construct, which is the bias the
  * shuffle exists to remove.
