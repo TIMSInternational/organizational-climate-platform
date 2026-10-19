@@ -121,7 +121,6 @@ const CONTRACT = [
   'employee.taskClosesInOneDay',
   'employee.taskClosesToday',
   'employee.startAnswering',
-  'employee.emptyBodyInDepartment',
   'dashboard.noPendingSurveys',
   'dashboard.noPendingSurveysDescription',
   // What came of the last one.

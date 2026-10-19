@@ -108,6 +108,11 @@ export default function EmployeeHomeView({
  * person; it is the unit whose results they are promised, and this page's own foot says so —
  * "los resultados de su departamento se publican cuando la encuesta cierra". Removing it here
  * while that sentence stands would leave the page contradicting itself.
+ *
+ * **That foot is gone as of 2026-10-19**, removed at the client's request along with the
+ * empty state's "para <departamento>". So the paragraph above no longer has the sentence it
+ * leans on, and the page no longer says the word "departamento" to a respondent anywhere.
+ * Kept here because the reversal below is only legible beside the argument it reversed.
  */
 function eyebrowFor(model: EmployeeHomeModel, t: TranslateFn, respondent: boolean): string {
   // **The department went for the respondent on 2026-10-18 too, and this is a reversal of the
@@ -209,12 +214,6 @@ function HomeBody({ model }: { model: EmployeeHomeModel }) {
       {/* Absent, not empty, when nothing has closed: the endpoint's `null`. */}
       {model.outcome ? <OutcomeCard outcome={model.outcome} /> : null}
 
-      {/* Only under a task. With nothing owed, `NothingDueCard`'s right-hand column says
-          the same three things at more length, and printing both put two sentences about
-          publication and two about the email one screen apart. */}
-      {model.lead ? (
-        <p className="mb-0 mt-5 max-w-measure text-sm text-fg-secondary">{t('employee.next.resultsNote')}</p>
-      ) : null}
     </div>
   )
 }
@@ -350,12 +349,22 @@ function NothingDueCard({ model }: { model: EmployeeHomeModel }) {
         ) : null}
         <h3 className="m-0 font-store-serif text-2xl font-normal">{t('employee.next.nothingDueTitle')}</h3>
         <p className="mb-0 max-w-measure text-base text-fg-secondary">
-          {/* Department-aware where there is a department to name: "no survey is open to
-              Ingeniería" is a fact about this reader. The sentence the old empty state
-              carried, kept word for word. */}
-          {model.departmentName
-            ? t('employee.emptyBodyInDepartment', { department: model.departmentName })
-            : t('dashboard.noPendingSurveysDescription')}
+          {/* Never the department. This used to read "no hay ninguna encuesta abierta para
+              <departamento>", which was wrong twice over and ESPH's rehearsal caught it on
+              2026-10-19.
+
+              It was FALSE: `pendingSurveyCount` is per-person -- `SurveyQueries.AssignedTo`
+              ends `!responses.Any(r => r.SurveyId == s.Id && r.UserId == userId &&
+              r.IsComplete)` -- so it drops to zero the moment THIS reader answers, while the
+              survey stays open to everyone else in their department. Every ESPH respondent
+              would have been told their department had nothing open, from the minute they
+              finished until the survey closed.
+
+              And it printed the department at the evaluado, which finding 3 had already
+              ruled against -- the same sweep that took it off the eyebrow above stopped
+              short of this sentence. The generic line is the one the count can actually
+              support: it speaks about the reader, which is all this number knows. */}
+          {t('dashboard.noPendingSurveysDescription')}
         </p>
         <div className="mt-1 flex flex-wrap items-center gap-3">
           {/* The artboard's "Ver el recibo en Mis Encuestas", without the receipt: the
