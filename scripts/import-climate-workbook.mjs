@@ -619,18 +619,21 @@ export function toSurveyRequest(climate, { companyId, title, departmentIds, star
       allowPartialResponses: true,
       showProgress: true,
       /**
-       * Finding 7 of ESPH's 2026-10-17 rehearsal: the 40 climate questions arrived in a
+       * Finding 7 of ESPH's 2026-10-17 rehearsal: the 63 climate questions arrived in a
        * fixed order for everybody, so the answers of anyone who tired partway through all
-       * tired on the same dimension.
+       * tired on the same dimension. The reviewer boxed the dimension title printed over
+       * question 4 and gave the reason in their own words -- *"las preguntas deben ir en
+       * aleatorio justamente para que la persona no pueda asociarlas a una categoria"*.
        *
        * Sent ALWAYS rather than only when true, because `SurveyEndpoints.cs:1494` applies it
        * only `if (input.RandomizeQuestions.HasValue)` -- an omitted flag leaves whatever the
        * row already held, which for a re-import is not the same thing as "off".
        *
-       * It does NOT hide the category headings, and that is deliberate: the headings are what
-       * `category` feeds, dimension analysis reads them, and removing them was ruled against
-       * 2026-10-13. Randomised questions under visible dimension headings is the whole of
-       * what this flag buys.
+       * The flag carries BOTH halves of one promise: a random order AND no dimension title
+       * over any question (`web/src/features/surveys/respondDimensions.ts:161`). #556 split
+       * them on 13 Oct and this comment used to record that split as deliberate; it was
+       * reversed 18 Oct. Dimension analysis is unaffected -- `category` is still sent on
+       * every question below, it is only never shown to the respondent.
        */
       randomizeQuestions,
       ...(climate.invitation?.subject ? { invitationCustomSubject: both(climate.invitation.subject) } : {}),
@@ -828,7 +831,7 @@ async function main() {
     ? '  anonimato: ANÓNIMA — no se guarda quién respondió, así que nada impide que alguien la responda otra vez'
     : '  anonimato: IDENTIFICADA — se guarda quién respondió, así que el servidor permite UNA sola respuesta por persona (los resultados siguen siendo solo agregados)')
   log(randomizeQuestions
-    ? '  orden de las preguntas: ALEATORIO por persona — los títulos de dimensión siguen visibles'
+    ? '  orden de las preguntas: ALEATORIO por persona — sin título de dimensión sobre las preguntas'
     : '  orden de las preguntas: FIJO — todas las personas las reciben en el mismo orden')
   if (problems.length) {
     log(`\n${problems.length} problem(s) in the workbook — nothing was sent:`)

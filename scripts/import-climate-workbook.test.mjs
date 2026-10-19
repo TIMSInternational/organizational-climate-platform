@@ -177,7 +177,7 @@ test('toSurveyRequest: anonymity defaults to anonymous and can be chosen', () =>
   assert.equal(toSurveyRequest(climate, { ...args, anonymous: false }).settings.anonymous, false)
 })
 
-test('toSurveyRequest: question order is fixed unless randomisation is asked for, and headings survive it', () => {
+test('toSurveyRequest: question order is fixed unless randomisation is asked for, and the category survives it', () => {
   const climate = {
     intro: 'i', invitation: null, bands: [], columns: [], persons: [],
     scale: [{ label: 'Nunca', value: 1 }, { label: 'Siempre', value: 5 }],
@@ -185,7 +185,7 @@ test('toSurveyRequest: question order is fixed unless randomisation is asked for
   }
   const args = { companyId: 'c', title: 't', departmentIds: [], startDate: 'a', endDate: 'b' }
 
-  // Finding 7: every import before this one left the 40 questions in one fixed order.
+  // Finding 7: every import before this one left the 63 questions in one fixed order.
   assert.equal(toSurveyRequest(climate, args).settings.randomizeQuestions, false)
   assert.equal(toSurveyRequest(climate, { ...args, randomizeQuestions: true }).settings.randomizeQuestions, true)
 
@@ -194,8 +194,12 @@ test('toSurveyRequest: question order is fixed unless randomisation is asked for
   // survey on whatever the row already held rather than turning randomisation off.
   assert.ok('randomizeQuestions' in toSurveyRequest(climate, args).settings)
 
-  // Finding 7b, ruled 2026-10-13: randomising must not cost the dimension headings, because
-  // `category` is what dimension analysis groups by.
+  // Randomising costs the respondent the dimension HEADING, not the data: this asserts the
+  // half that must survive. `category` is still on every question, because it is what
+  // dimension analysis groups by; `respondDimensions.ts:161` is what stops the respondent
+  // ever seeing it. The 2026-10-13 ruling that kept the heading on screen was reversed
+  // 2026-10-18 -- one flag, one promise -- and this test deliberately does NOT assert that
+  // reversal, which is a web concern and is pinned in `respondDimensions.test.ts`.
   const randomised = toSurveyRequest(climate, { ...args, randomizeQuestions: true })
   assert.ok(randomised.questions.every((q) => q.category === 'Comunicación'))
 })
