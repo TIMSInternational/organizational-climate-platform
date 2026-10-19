@@ -424,14 +424,18 @@ describe('AdminLayout', () => {
         //
         // Both routes still exist. What is gone is the invitation to wander into them in
         // the middle of a survey, which is the whole of what was reported.
+        //
+        // Asserted against the WHOLE shell rather than inside a menu, because since the
+        // evening of 2026-10-18 there is no menu to look in: the strip is the wordmark
+        // and Cerrar sesión. A query scoped to a control that no longer exists would
+        // pass for the wrong reason, which is the failure mode this file has hit before.
         setToken(tokenFor({ role, companyId: 'c1' }))
         renderShell()
 
-        await userEvent.click(screen.getByRole('button', { name: /Account/i }))
-        const menu = await screen.findByRole('menu')
-
-        expect(within(menu).queryByRole('menuitem', { name: /profile/i })).toBeNull()
-        expect(within(menu).queryByRole('menuitem', { name: /settings/i })).toBeNull()
+        expect(screen.queryByRole('button', { name: /Account/i })).toBeNull()
+        const hrefs = screen.queryAllByRole('link').map((a) => a.getAttribute('href'))
+        expect(hrefs).not.toContain('/profile')
+        expect(hrefs).not.toContain('/settings/notifications')
       },
     )
 
@@ -474,16 +478,32 @@ describe('AdminLayout', () => {
 
       expect(screen.queryByRole('button', { name: 'More' })).toBeNull()
 
-      await userEvent.click(screen.getByRole('button', { name: /Account/i }))
-      const menu = await screen.findByRole('menu')
+      // **Extended the same evening, after ESPH read the strip back.** The account menu
+      // itself is gone, not just its Privacy row: "no tenemos el botón de usuario para
+      // que puedan revisar su información" is satisfied by a control that cannot be
+      // mistaken for an account surface, and an avatar is exactly that. The BELL went
+      // with it — it was the last surviving row of the rail this block removed, and its
+      // unread badge put a red count beside a survey someone is being asked to answer.
+      expect(screen.queryByRole('button', { name: /Account/i })).toBeNull()
+      expect(screen.queryByRole('button', { name: /Notifications/i })).toBeNull()
 
-      expect(within(menu).queryByRole('menuitem', { name: 'Privacy' })).toBeNull()
-      // What a respondent is left with, and all they need: read it in their language, in
-      // the theme they can see, and leave. Sign out especially — it is the whole reason
-      // this control followed the rail into the strip.
-      expect(within(menu).getByRole('menuitem', { name: /Sign out/i })).toBeTruthy()
-      expect(within(menu).getByRole('menuitem', { name: /Language/i })).toBeTruthy()
-      expect(within(menu).getByRole('menuitem', { name: /Theme/i })).toBeTruthy()
+      const hrefs = screen.queryAllByRole('link').map((a) => a.getAttribute('href'))
+      expect(hrefs).not.toContain('/settings/privacy')
+
+      // What a respondent is left with, and all they need: the way out, named rather
+      // than drawn. Sign out is the whole reason any of this followed the rail into the
+      // strip, so it is the one thing that must survive every cull.
+      expect(screen.getByRole('button', { name: /Sign out/i })).toBeTruthy()
+    })
+
+    it.each(RAIL_ROLES)('keeps the notification bell for %s', async (role) => {
+      // The other side of the cull, so "remove the bell" cannot quietly become "remove
+      // the bell for everyone". An administrator's notifications are a real inbox for
+      // rows a respondent never has: action plans, imports, delivery reports.
+      setToken(tokenFor({ role, companyId: 'c1' }))
+      renderShell()
+
+      expect(screen.getByRole('button', { name: /Notifications/i })).toBeTruthy()
     })
   })
 
