@@ -37,8 +37,34 @@ jobs:
       - name: Build
         run: dotnet build ClimateProject.slnx --no-restore --configuration Release
 
+      # ## Why the outcome is written to a file and not only to the console
+      #
+      # This suite prints ~220 MB of EF Core `dbug:` lines, and GitHub drops a job's log
+      # once it reaches about that size. On 2026-10-19 PR #601 failed three times and the
+      # name of the failing test was in none of the three logs: the Test step ran
+      # 21:03:45 -> 21:26:11 and the captured log stopped at 21:16:46, so the nine minutes
+      # holding the failure had already been discarded by the time anyone opened it. Three
+      # separate sessions read that log and concluded the suite "fails with no nameable
+      # test", which was a property of the instrument, not of the code.
+      #
+      # A TRX is a few hundred KB, carries every test's name, outcome, duration and failure
+      # message, and `if: always()` uploads it on the run where it is the only evidence
+      # there is. `LogFilePrefix` rather than `LogFileName` because a solution run writes
+      # one file per project into the same directory, and a fixed name makes them collide.
       - name: Test
-        run: dotnet test ClimateProject.slnx --no-build --configuration Release --verbosity normal
+        run: >-
+          dotnet test ClimateProject.slnx --no-build --configuration Release --verbosity normal
+          --logger "trx;LogFilePrefix=results"
+          --results-directory artifacts/test-results
+
+      - name: Test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dotnet-test-results
+          path: artifacts/test-results/**/*.trx
+          if-no-files-found: warn
+          retention-days: 14
 
   # `services/tracking-api` is a SEPARATE SOLUTION, so `dotnet test ClimateProject.slnx`
   # above never touched it: 163 tests across ClimateTracking.UnitTests and
