@@ -20,6 +20,7 @@ import {
   SidebarUserMenu,
 } from '../components/layout'
 import { CompanyContextProvider, writeSelectedCompanyId } from '../company-context'
+import { LogOut } from 'lucide-react'
 import { NotificationBell } from '../features/notifications/components/NotificationBell'
 import { useCompanyContext } from '../company-context'
 import { useOwnCompanyBrand } from '../company-context/useCompanyName'
@@ -182,41 +183,91 @@ function AdminShell() {
             // `md:hidden` removes the mark from flex layout entirely, so on a desktop strip
             // whose only remaining children are the search glyph and the bell, `between`
             // would strand the glyph at the far left. The canvas draws them flush right.
-            className="on-shell flex shrink-0 items-center justify-end gap-inline"
+            className="on-shell flex shrink-0 items-center"
             // The canvas's strip: 52px, 20px in from the edge (every artboard).
-            style={{ minHeight: 52, padding: '0 20px' }}
+            //
+            // The RAILLESS shell overrides that to the shell gutter, because its strip has to
+            // line up with something the canvas never drew: a CENTRED card. Below, the railless
+            // card is `mx-auto max-w-content` inside `p-gutter`, so at 1440 its left edge is
+            // 12 + (1416 - 1280) / 2 = 80px, while a 20px strip put the lockup at 20. Sixty
+            // pixels out, and read as a logo hanging off the card's edge. Matching the gutter
+            // here and capping the row below with the same `max-w-content` makes the two edges
+            // one line at EVERY width rather than at one.
+            style={{ minHeight: 52, padding: perUserOnly ? '0 var(--spacing-gutter)' : '0 20px' }}
           >
-            {/* Railless: the rail's head and its footer both land here. `mr-auto` on the
-                lockup pushes everything else right, the way `MobileTenantLogo` does on a
-                phone -- see the header's own note on why this is not `justify-between`. */}
-            {perUserOnly ? (
-              <span className="mr-auto flex items-center gap-inline">
-                <BrandLockup size="compact" />
-                <RailessTenantLogo />
-              </span>
-            ) : (
-              <MobileTenantLogo />
-            )}
-            {/* #124's company-context selector. Renders `null` for every role but
-                SuperAdmin, so the strip is unchanged for everyone else — the bell
-                stays flush right and nothing shifts. It is here rather than in
-                `ShellControls` for the reason that block is hidden on a collapsed
-                rail and below `md`: a global scope switch that disappears while
-                the pages it scopes stay visible is worse than none. */}
-            <HeaderCompanySwitcher />
-            {/* ForMaps puts the search glyph and its Cmd+K chip immediately before
-                the bell in this same strip, and so does this. It opens the palette
-                by dispatching a window event rather than by holding shared state —
-                see `CommandPalette.tsx`. */}
-            {/* The palette offers this role its own three pages, which are the page it is
-                on. The chip is chrome advertising a shortcut to nowhere. */}
-            {perUserOnly ? null : <SearchTrigger />}
-            <NotificationBell onUnreadCountChange={setUnreadCount} />
-            {perUserOnly ? (
-              <span className="relative">
-                <SidebarUserMenu onSignOut={handleSignOut} variant="strip" />
-              </span>
-            ) : null}
+            <div
+              className={cn(
+                'flex w-full items-center justify-end gap-inline',
+                // Railless only. The rail's card is deliberately flush against the rail's edge
+                // and NOT centred -- see the scroll container's note -- so capping its strip
+                // would pull the bell in from a card that never moved.
+                perUserOnly ? 'mx-auto max-w-content' : null,
+              )}
+            >
+              {/* Railless: the rail's head and its footer both land here. `mr-auto` on the
+                  lockup pushes everything else right, the way `MobileTenantLogo` does on a
+                  phone -- see the header's own note on why this is not `justify-between`. */}
+              {perUserOnly ? (
+                <span className="mr-auto flex items-center gap-inline">
+                  <BrandLockup size="compact" />
+                  <RailessTenantLogo />
+                </span>
+              ) : (
+                <MobileTenantLogo />
+              )}
+              {/* #124's company-context selector. Renders `null` for every role but
+                  SuperAdmin, so the strip is unchanged for everyone else — the bell
+                  stays flush right and nothing shifts. It is here rather than in
+                  `ShellControls` for the reason that block is hidden on a collapsed
+                  rail and below `md`: a global scope switch that disappears while
+                  the pages it scopes stay visible is worse than none. */}
+              <HeaderCompanySwitcher />
+              {/* ForMaps puts the search glyph and its Cmd+K chip immediately before
+                  the bell in this same strip, and so does this. It opens the palette
+                  by dispatching a window event rather than by holding shared state —
+                  see `CommandPalette.tsx`. */}
+              {/* The palette offers this role its own three pages, which are the page it is
+                  on. The chip is chrome advertising a shortcut to nowhere. */}
+              {perUserOnly ? null : <SearchTrigger />}
+              {/* Ruled 2026-10-18, after ESPH read the strip back: a respondent's strip is a
+                  wordmark and one exit, and nothing else.
+
+                  The bell is not a notification CENTRE for this role -- it is the last surviving
+                  row of the rail the client asked to hide. The rail's own note above already
+                  calls Notificaciones "the bell two inches to the right", which is an argument
+                  for deleting the row, not for keeping the bell. And its unread badge puts a red
+                  count beside a survey someone is being asked to answer this week.
+
+                  `unreadCount` stays wired for the rail roles; with no rail there is no badge for
+                  it to feed, so it simply stays 0. */}
+              {perUserOnly ? null : <NotificationBell onUnreadCountChange={setUnreadCount} />}
+              {perUserOnly ? (
+                /* Sign out as plain words, not an avatar. The avatar went with the bell: it is a
+                   circular control that LOOKS like an account surface, and "no tenemos el botón
+                   de usuario para que puedan revisar su información" was the ruling. What it
+                   still owed the respondent is the way OUT, so that is all it is now -- named
+                   rather than drawn.
+
+                   ⚠️ Theme and Language went with it; they lived in that menu. The respond screen
+                   carries its own Español/Claro pair, which is where a respondent spends the
+                   week, and ESPH's company language is `es` for all 642. If they are ever wanted
+                   on THIS page they come back as bare chips beside this button, not as a menu
+                   behind an avatar. */
+                <button
+                  type="button"
+                  onClick={handleSignOut}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    background: 'transparent', border: 0, borderRadius: 6,
+                    padding: '6px 8px', height: 32, cursor: 'pointer',
+                    color: 'var(--admin-font-secondary)', fontSize: 13, lineHeight: 1,
+                  }}
+                >
+                  <LogOut aria-hidden="true" style={{ width: 15, height: 15, flexShrink: 0 }} />
+                  {t('shell.signOut')}
+                </button>
+              ) : null}
+            </div>
           </header>
 
           {/* The scroll container. */}
