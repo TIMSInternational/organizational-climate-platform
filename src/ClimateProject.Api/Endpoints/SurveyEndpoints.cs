@@ -506,6 +506,18 @@ public static class SurveyEndpoints
         // honours it, and `POST /invitations/{id}/resend` is still a deliberate act.
         survey.Settings.NotificationSendInvitations = false;
 
+        // And no reminder mail, for the same sentence: "just one email, with the credentials
+        // to login". A reminder is a SECOND message to the same person, and on an ANONYMOUS
+        // survey it is one that cannot even be correct -- `InvitationReminderJob` selects on
+        // `completed_on IS NULL`, and `SurveyInvitationStatuses.AnonymityCeiling` forbids
+        // ever writing that column there, so every invitee stays a reminder candidate for the
+        // whole window however many of them have answered.
+        //
+        // Still a per-survey setting, not a removal: a three-week window with a nudge at day
+        // three is a reasonable thing for a tenant to ask for, and `ApplySettings` honours it.
+        // What changes is that nobody gets one by default.
+        survey.Settings.NotificationSendReminders = false;
+
         if (request.Settings is not null)
         {
             var settingsError = ApplySettings(survey.Settings, request.Settings, language);

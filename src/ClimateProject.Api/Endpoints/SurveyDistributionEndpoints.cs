@@ -714,6 +714,29 @@ public static class SurveyDistributionEndpoints
             return Results.Json(new { message = "The invited user no longer exists." }, statusCode: 409);
         }
 
+        // `NotificationSendInvitations` governs THIS route too, and until 2026-10-19 it did
+        // not -- this was the one producer of a `survey_invitation` notification that never
+        // consulted it. A survey created with the mail off would still mail somebody the
+        // moment an admin pressed "Reenviar", which is one click away in Distribucion, and
+        // the mail it sent is the one ruled out: its button opens the survey WITHOUT signing
+        // in. "Off" has to mean off on every producer or it means nothing.
+        //
+        // Refused rather than silently skipped, and refused BEFORE the token is re-minted:
+        // a resend is a deliberate act by a named administrator, so answering 409 tells them
+        // the survey's own setting is in the way and leaves the invitation they were looking
+        // at exactly as it was. Silently minting a new token and queueing nothing would
+        // invalidate the live one and report success.
+        if (!survey.Settings.NotificationSendInvitations)
+        {
+            return Results.Json(
+                new
+                {
+                    message = "This survey does not send invitation email: notificationSendInvitations is off. "
+                        + "Turn it on for this survey first, or distribute its link another way.",
+                },
+                statusCode: 409);
+        }
+
         invitation.InvitationToken = SurveyAccessTokens.Mint();
         invitation.ExpiresAt = survey.EndDate;
         invitation.Status = SurveyInvitationStatuses.Sent;

@@ -101,23 +101,31 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
     /// `A_survey_is_created_with_the_invitation_email_off` is where the default itself is
     /// pinned, and two tests below deliberately pass false.
     /// </param>
+    /// <param name="sendReminders">
+    /// On for this class by default, and the product's own default is off since 2026-10-19
+    /// for the same sentence that silenced the invitation: "just one email, with the
+    /// credentials to login". The reminder tests below are about what the sweep DOES once a
+    /// tenant has asked for reminders, so they ask.
+    /// </param>
     private async Task<SurveyDetail> CreateActiveSurveyAsync(
         HttpClient client,
         bool anonymous = false,
         string? language = null,
         List<Guid>? departmentIds = null,
-        bool sendInvitations = true)
+        bool sendInvitations = true,
+        bool sendReminders = true)
     {
         var created = await SurveyTestHarness.CreateSurveyAsync(
             client, SurveyTestHarness.MinimalRequest(_companyAId, language: language, departmentIds: departmentIds));
 
-        if (anonymous || sendInvitations)
+        if (anonymous || sendInvitations || sendReminders)
         {
             var patched = await client.PutAsJsonAsync(
                 $"/surveys/{created.Id}",
                 new UpdateSurveyRequest(Settings: new SurveySettingsInput(
                     Anonymous: anonymous ? true : null,
-                    NotificationSendInvitations: sendInvitations ? true : null)));
+                    NotificationSendInvitations: sendInvitations ? true : null,
+                    NotificationSendReminders: sendReminders ? true : null)));
             patched.EnsureSuccessStatusCode();
         }
 
@@ -556,6 +564,57 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
     /// `completed`, so the only state the mail could ever have produced is `opened`.
     /// </para>
     /// </summary>
+    /// <summary>
+    /// The last producer of a `survey_invitation` notification, and until 2026-10-19 the one
+    /// that never consulted the flag. "Reenviar" is one click away in Distribucion, so a
+    /// survey created with the mail off would still have mailed somebody the first time an
+    /// administrator pressed it.
+    /// </summary>
+    [Fact]
+    public async Task Resending_an_invitation_is_refused_when_the_survey_sends_no_invitation_email()
+    {
+        var client = await AdminAAsync();
+        var survey = await CreateActiveSurveyAsync(client, sendInvitations: false);
+        var employee = await SeedEmployeeAsync(_companyAId);
+        var result = await InviteAsync(client, survey.Id, new CreateSurveyInvitationsRequest(UserIds: [employee]));
+        Assert.Equal(1, result.Created);
+        Assert.Equal(0, result.NotificationsQueued);
+
+        var before = await InvitationRowAsync(result.InvitationIds[0]);
+
+        var resend = await client.PostAsync($"/surveys/{survey.Id}/invitations/{result.InvitationIds[0]}/resend", null);
+
+        Assert.Equal(HttpStatusCode.Conflict, resend.StatusCode);
+        Assert.Contains(
+            "notificationSendInvitations is off",
+            await resend.Content.ReadAsStringAsync(),
+            StringComparison.Ordinal);
+
+        // Nothing queued, and the invitation left exactly as it was -- refused BEFORE the
+        // token is re-minted, so the live one still works.
+        Assert.False(await _harness.WithDbAsync(db => db.Notifications
+            .AnyAsync(n => n.Type == NotificationTypes.SurveyInvitation && n.UserId == employee)));
+        var after = await InvitationRowAsync(result.InvitationIds[0]);
+        Assert.Equal(before.InvitationToken, after.InvitationToken);
+        Assert.Equal(before.Status, after.Status);
+        Assert.Null(after.SentAt);
+    }
+
+    /// <summary>
+    /// "Just one email, with the credentials to login" -- so not a reminder either. A
+    /// reminder is a second message to the same person, and on an anonymous survey it is one
+    /// that can never be correct: the sweep selects on `completed_on IS NULL` and the
+    /// anonymity ceiling forbids ever writing that column.
+    /// </summary>
+    [Fact]
+    public async Task A_survey_is_created_with_reminders_off()
+    {
+        var client = await AdminAAsync();
+        var created = await SurveyTestHarness.CreateSurveyAsync(client, SurveyTestHarness.MinimalRequest(_companyAId));
+
+        Assert.False(created.Settings.NotificationSendReminders);
+    }
+
     [Fact]
     public async Task A_survey_is_created_with_the_invitation_email_off()
     {
