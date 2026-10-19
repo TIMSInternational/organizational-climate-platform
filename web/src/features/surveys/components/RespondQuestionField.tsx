@@ -338,6 +338,32 @@ function ChoiceAnswer({ question, answer, disabled, invalid, errorId, onChange }
   // they are the two that carry a face. `multiple_choice` is a set of alternatives with no
   // order, and `yes_no` has no middle, so neither gets one.
   const isScale = question.type !== 'multiple_choice' && question.type !== 'yes_no' && choices.length >= 3
+
+  /**
+   * Which choice is the LEAST and which the MOST — by the option's value, not by where it
+   * sits in the list.
+   *
+   * This used to be `index === 0` and `index === choices.length - 1`, which reads the
+   * display order as the scale's direction. That holds only for a scale authored worst to
+   * best, and it shipped inverted the first time one was not: EAGLE's instrument puts the
+   * positives first at the client's request, so on 2026-10-19 its live questions showed a
+   * FROWN beside "Totalmente de acuerdo" and a SMILE beside "Totalmente en desacuerdo" --
+   * every question, on a survey whose respondents are operarios scanning a QR, where a
+   * skimmed face is a plausible way to answer. Found by opening the link, not by a test:
+   * the suite has no layout engine and every assertion was green.
+   *
+   * The value is the stable, locale-independent code that lands in
+   * `question_responses.response_value` (`SurveyQuestionOptionDto`), and for a likert it is
+   * the scale point -- "1" is the bottom whether it is drawn first or last. So the faces
+   * follow the meaning and the author stays free to order the list either way.
+   *
+   * Non-numeric codes (an authored set like `nunca`/`siempre`) have no orderable value, so
+   * those fall back to first-and-last, which is what they always had.
+   */
+  const scalePoints = choices.map((choice) => Number(choice.value))
+  const orderable = isScale && scalePoints.every((point) => Number.isFinite(point))
+  const leastIndex = orderable ? scalePoints.indexOf(Math.min(...scalePoints)) : 0
+  const mostIndex = orderable ? scalePoints.indexOf(Math.max(...scalePoints)) : choices.length - 1
   // The end captions repeat the first and last choice verbatim whenever the author labelled
   // the scale in words — "Nunca … Siempre" under a row that already reads Nunca … Siempre.
   // Printed only when they say something the choices do not.
@@ -368,10 +394,10 @@ function ChoiceAnswer({ question, answer, disabled, invalid, errorId, onChange }
           const checked = answer?.value === choice.value
           const face = !isScale
             ? null
-            : index === 0
-              ? <Frown aria-hidden="true" className="size-icon shrink-0 text-fg-secondary" />
-              : index === choices.length - 1
-                ? <Smile aria-hidden="true" className="size-icon shrink-0 text-fg-secondary" />
+            : index === leastIndex
+              ? <Frown data-slot="scale-least" aria-hidden="true" className="size-icon shrink-0 text-fg-secondary" />
+              : index === mostIndex
+                ? <Smile data-slot="scale-most" aria-hidden="true" className="size-icon shrink-0 text-fg-secondary" />
                 : null
           return (
             // `<label>` still wraps nothing: `htmlFor` keeps the whole cell as the hit target
