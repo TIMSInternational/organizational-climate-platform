@@ -400,13 +400,29 @@ describe('EmployeeHomeView', () => {
     expect(way.className.split(/\s+/)).toEqual(expect.arrayContaining(['shrink-0', 'ml-auto']))
   })
 
-  it('answers an empty queue in words naming the department, and offers no way into a survey', async () => {
+  /**
+   * It used to name the department -- "no hay ninguna encuesta abierta para Ingeniería" --
+   * and ESPH's rehearsal caught it on 2026-10-19, on a reader whose department was
+   * "Negocio de Residuos".
+   *
+   * The fixture is the point: this reader IS in a department (`departmentName:
+   * 'Ingeniería'`, the state that used to take the department branch), and the sentence
+   * must still be the one about the reader. A fixture with no department would pass
+   * against the old code too.
+   */
+  it('answers an empty queue without naming the department, and offers no way into a survey', async () => {
     serves({ dashboard: home({ pendingSurveyCount: 0, pendingSurveys: [], nextDeadline: null }) })
     renderHome()
 
-    expect(
-      await screen.findByText(es('employee.emptyBodyInDepartment', { department: 'Ingeniería' })),
-    ).toBeTruthy()
+    expect(await screen.findByText(es('dashboard.noPendingSurveysDescription'))).toBeTruthy()
+    expect(screen.queryByText(/ninguna encuesta abierta para/)).toBeNull()
+    // Scoped to the card, not the page: "Ingeniería" also appears in the plans line of
+    // "Qué pasó con la anterior" ("En Personas, Operaciones e Ingeniería"), which is a
+    // list of where plans are open and not a label on this reader. A page-wide assertion
+    // failed on that and would have been the wrong guard, not a real finding.
+    const card = document.querySelector('[data-slot="home-nothing-due"]')
+    expect(card).toBeTruthy()
+    expect(card!.textContent).not.toContain('Ingeniería')
     expect(respondHrefs()).toEqual([])
     expect(screen.getByText(es('employee.homeDescriptionNothingDue'))).toBeTruthy()
   })
@@ -532,18 +548,39 @@ describe('EmployeeHomeView', () => {
     expect(screen.queryByText(es('employee.next.resultsGoToBody', { floor: ANONYMITY_FLOOR }))).toBeNull()
   })
 
-  it('keeps the standing note off the answered page, where the column beside it says the same', async () => {
-    serves({ dashboard: home({ pendingSurveyCount: 0, pendingSurveys: [], nextDeadline: null }) })
-    renderHome()
-
-    await screen.findByText(es('employee.next.nothingDueTitle'))
-    expect(screen.queryByText(es('employee.next.resultsNote'))).toBeNull()
-    // …and keeps it where there IS a task, which is the state it was written for.
-    cleanup()
+  /**
+   * The standing note under the task -- "Los resultados de su departamento se publican
+   * cuando la encuesta cierra…" -- was removed on 2026-10-19 at the client's request,
+   * along with the second sentence of the greeting's subtitle. It used to be printed
+   * whenever there was a task, so the state it was written for is the one to assert it
+   * is gone from; the answered page never had it.
+   *
+   * Matched by its own sentence rather than by a key, because the key is gone too and
+   * `es()` would quietly return the key name instead of failing.
+   */
+  it('prints no standing note about publication, in either state', async () => {
     serves()
     renderHome()
-    expect(await screen.findByText(es('employee.next.resultsNote'))).toBeTruthy()
-    expect(document.querySelector('[data-slot="home-nothing-due"]')).toBeNull()
+
+    await screen.findByText(es('employee.greetingMorning'), { exact: false }).catch(() => null)
+    expect(screen.queryByText(/se publican cuando la encuesta cierra/)).toBeNull()
+    expect(screen.queryByText(/avisaremos por correo/)).toBeNull()
+
+    cleanup()
+    serves({ dashboard: home({ pendingSurveyCount: 0, pendingSurveys: [], nextDeadline: null }) })
+    renderHome()
+    await screen.findByText(es('employee.next.nothingDueTitle'))
+    expect(screen.queryByText(/se publican cuando la encuesta cierra/)).toBeNull()
+    expect(document.querySelector('[data-slot="home-nothing-due"]')).toBeTruthy()
+  })
+
+  it('says only that a survey is open, with nothing about the rest of the page', async () => {
+    serves()
+    renderHome()
+
+    expect(await screen.findByText(es('employee.homeDescription'))).toBeTruthy()
+    expect(es('employee.homeDescription')).toBe('Hay una encuesta abierta para usted.')
+    expect(screen.queryByText(/Todo lo dem.s en esta p.gina/)).toBeNull()
   })
 
   it('tells what came of the last survey, naming no protected department and counting none of its answers', async () => {

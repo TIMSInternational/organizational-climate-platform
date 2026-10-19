@@ -317,16 +317,18 @@ describe('EmployeeDashboardView', () => {
    * outstanding" with a 0 tile, a — tile, two more zeros and an empty table, which is the
    * same fact spelled as a measurement of nothing.
    */
-  it('answers an empty queue in words, naming the department, and draws no zeros', async () => {
+  it('answers an empty queue in words, never naming the department, and draws no zeros', async () => {
     serves(payload({ pendingSurveyCount: 0, pendingSurveys: [], nextDeadline: null }))
     const { container } = renderHome()
 
     expect(await screen.findByText('Nothing is waiting for you')).toBeTruthy()
-    expect(
-      screen.getByText(
-        'No survey is open to Engineering right now. You will be emailed when the next one opens.',
-      ),
-    ).toBeTruthy()
+    // It used to read "No survey is open to Engineering right now." The count behind this
+    // state is per-person, so that was a department-wide claim drawn from a number that
+    // only knows about the reader -- false for anyone who had simply answered already.
+    // Removed 2026-10-19; this reader is still IN Engineering, which is what makes the
+    // absence worth asserting.
+    expect(screen.getByText('No survey needs your answer right now. You will be notified when one does.')).toBeTruthy()
+    expect(screen.queryByText(/No survey is open to/)).toBeNull()
     // The greeting's description changes with the state too: nothing is due, so the page
     // is about what happened to the answers already given.
     expect(screen.getByText(/Nothing needs you right now/)).toBeTruthy()

@@ -199,14 +199,12 @@ export default function EmployeeDashboardView({ notice }: EmployeeDashboardViewP
               ) : (
                 <EmptyState
                   title={t('dashboard.noPendingSurveys')}
-                  // Department-aware where there is a department to name: "no survey is
-                  // open to Engineering" is a fact about this reader, where the generic
-                  // line is a fact about the app.
-                  description={
-                    data.departmentName
-                      ? t('employee.emptyBodyInDepartment', { department: data.departmentName })
-                      : t('dashboard.noPendingSurveysDescription')
-                  }
+                  // Never the department -- see `EmployeeHomeView`, which is the live
+                  // portal and carries the reasoning. In short: the count behind this
+                  // state is per-person, so "no survey is open to <department>" is a
+                  // claim it cannot support, and finding 3 had already ruled the
+                  // department off the respondent's screen.
+                  description={t('dashboard.noPendingSurveysDescription')}
                 />
               )}
 
