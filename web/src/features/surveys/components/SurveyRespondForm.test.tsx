@@ -15,7 +15,6 @@ import { RADIO_CEILING } from './RespondDemographicField'
 import { hasAnswered, markAnswered } from '../respondReceipt'
 import { readSessionId } from '../respondSession'
 import { STALE_MS, heldElsewhere } from '../respondLock'
-import { ANONYMITY_FLOOR } from '../../../components/charts'
 
 /**
  * The shipped wording, read from the catalogue the component reads.
@@ -1113,7 +1112,21 @@ describe('SurveyRespondForm confirmation', () => {
 
     expect(screen.getByText('Sus respuestas se agrupan de inmediato')).toBeTruthy()
     // The floor is the platform constant, not a number typed into the copy.
-    expect(screen.getByText(new RegExp(`combine dos de esos datos a la vez.*al menos ${ANONYMITY_FLOOR} personas`))).toBeTruthy()
+    // The cross-tab floor is NOT stated here. Ruled by Federico 2026-10-18 on ESPH's
+    // finding 9 -- the reviewer boxed "Los cruces de variables demográficas requieren al
+    // menos 3" and wrote *"Por lo menos de mi parte no queda claro"* -- and it follows
+    // `docs/decisions/public-surface-copy.md`, which rules the promise is said ONCE.
+    //
+    // What is lost with it: these two tests used to pin the floor to the platform constant
+    // so nobody could retype the number into the copy. There is no number in this copy any
+    // more, so the guard has no subject here; `suppression.ts` still owns the constant and
+    // the admin-facing strings still interpolate it.
+    //
+    // What must NOT be lost is the honest half, asserted on the line below: a single
+    // department or demographic value can still be reported from one response, and the
+    // respondent is still told so before they answer.
+    expect(screen.queryByText(/cruces de variables/i)).toBeNull()
+    expect(screen.queryByText(/combine dos/i)).toBeNull()
     expect(screen.getByText(/pueden mostrarse aunque haya respondido una sola persona/)).toBeTruthy()
     // The close date is `view.endDate`, spelled out rather than abbreviated.
     expect(screen.getByText('La encuesta cierra el 12 de septiembre de 2026')).toBeTruthy()
@@ -1146,9 +1159,9 @@ describe('SurveyRespondForm confirmation', () => {
 
     // The floor is still the platform constant on this branch, not a number retyped
     // into the second copy of the sentence.
-    expect(
-      screen.getByText(new RegExp(`combine dos datos suyos a la vez.*al menos ${ANONYMITY_FLOOR} personas`)),
-    ).toBeTruthy()
+    // Gone on this branch too -- see the pooled test above for the ruling. The sentence
+    // that carries the real disclosure is asserted immediately above this.
+    expect(screen.queryByText(/cruces de variables/i)).toBeNull()
   })
 
   it('tells an attributed respondent that completion is visible, not that it is unlinked', async () => {

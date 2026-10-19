@@ -564,8 +564,17 @@ export function toSurveyRequest(climate, { companyId, title, departmentIds, star
   const questions = []
   for (const dimension of climate.dimensions) {
     for (const text of dimension.questions) {
+      // `required: true` on the open question too. Ruled by Federico 2026-10-18 on ESPH's
+      // finding 8 -- *"La pregunta 63 abierta sale como opcional"*, and the screenshot of
+      // the completion card beside it reads "62 de 63", which is what skipping it costs
+      // the analysis. It used to be `false` unconditionally, so an open question could
+      // never be required however the workbook was written.
+      //
+      // Measured before changing it: all three ESPH workbooks hold 63 questions of which
+      // exactly ONE is open, so this makes one answer mandatory per respondent, not a
+      // wall of them.
       questions.push(dimension.open
-        ? { text: both(text), type: 'open_ended', category: dimension.name, required: false, order: questions.length }
+        ? { text: both(text), type: 'open_ended', category: dimension.name, required: true, order: questions.length }
         : {
             text: both(text), type: 'likert', category: dimension.name, required: true, order: questions.length,
             scaleMin: min, scaleMax: max, scaleLabelMin: both(climate.scale[0]?.label ?? ''), scaleLabelMax: both(climate.scale.at(-1)?.label ?? ''), options,

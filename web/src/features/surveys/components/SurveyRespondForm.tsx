@@ -27,7 +27,6 @@ import {
 // about data, not a chart, and this is the one page an unauthenticated visitor
 // loads — reaching through the barrel would put every chart module in its import
 // graph to read a single integer.
-import { ANONYMITY_FLOOR } from '../../../components/charts/suppression'
 import {
   hydrateAnswers,
   missingRequired,
@@ -1103,7 +1102,7 @@ export default function SurveyRespondForm({
             field it would push the field itself down the phone, which is the same
             reasoning the author's description follows on the question pages. */}
         {demographicStep === 0 ? (
-          <p className="m-0 text-respond text-fg-secondary">{t('demographics.intro', { floor: ANONYMITY_FLOOR })}</p>
+          <p className="m-0 text-respond text-fg-secondary">{t('demographics.intro')}</p>
         ) : null}
 
         <div className="flex flex-col gap-4">
@@ -1932,8 +1931,8 @@ function Submitted({
             title={result.isAnonymous ? t('happensPooledTitle') : t('happensAttributedTitle')}
             body={
               result.isAnonymous
-                ? t('happensPooledBody', { floor: ANONYMITY_FLOOR })
-                : t('happensAttributedBody', { floor: ANONYMITY_FLOOR })
+                ? t('happensPooledBody')
+                : t('happensAttributedBody')
             }
           />
           {/* Dropped rather than guessed at when the payload never loaded — a date

@@ -109,7 +109,11 @@ test('the survey request: likert with the five labels, open questions open, anon
   assert.equal(likert.length, 38)
   assert.deepEqual(likert[0].options.map((o) => [o.value, o.label.es]), [['1', 'Nunca'], ['2', 'Casi nunca'], ['3', 'Algunas veces'], ['4', 'Casi siempre'], ['5', 'Siempre']])
   assert.equal(likert[0].category, 'Claridad y organización')
-  assert.ok(body.questions.filter((q) => q.type === 'open_ended').every((q) => q.required === false))
+  // Required, like every other question. Ruled 2026-10-18 on ESPH's finding 8 -- *"La
+  // pregunta 63 abierta sale como opcional"* -- so the open question is no longer the one
+  // a respondent can walk past. This asserted `=== false` until that day.
+  assert.ok(body.questions.filter((q) => q.type === 'open_ended').every((q) => q.required === true))
+  assert.ok(body.questions.every((q) => q.required === true))
   assert.equal(body.settings.anonymous, true)
   assert.equal(body.settings.invitationCustomSubject.es, 'Tu opinión cuenta – Encuesta de Clima 2026')
   assert.deepEqual(body.questions.map((q) => q.order), [...body.questions.keys()])
