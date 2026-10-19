@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { MemoryRouter } from 'react-router'
+import { MemoryRouter, Route, Routes } from 'react-router'
 import { TranslationProvider } from '../../../i18n'
 import { clearToken, getToken, setToken } from '../../../auth/token'
 import { tokenFor } from '../../../test/jwtFixture'
@@ -27,6 +27,27 @@ const PROFILE = {
   createdAt: '2026-09-10T01:58:51Z',
   demographics: {},
 }
+/**
+ * The token `POST /profile/password` hands back.
+ *
+ * It used to be the literal `'header.renewed.signature'`, which is not a token: the endpoint
+ * ends in `AuthEndpoints.IssueTokenForAsync`, so what really arrives is a signed JWT carrying
+ * the caller's own claims. That only became visible when `/profile` started reading the token
+ * to decide whether the caller is a respondent — an undecodable one reads as "no role", which
+ * is the per-user nav, which redirected a company_admin off the page mid-password-change.
+ * A fixture that cannot be decoded was asserting a flow production does not have.
+ *
+ * `stamp` only makes the string differ from the one `beforeEach` sets, so "the REPLACEMENT
+ * token is stored" is still what is being tested.
+ */
+const RENEWED_TOKEN = tokenFor({
+  sub: '7b34dd6e-3472-4180-9873-ec5cf7d2af65',
+  role: 'company_admin',
+  companyId: '16c97c29-07f8-4522-86fc-e6cc56298829',
+  name: 'Ana Rojas',
+  stamp: 'renewed',
+})
+
 const PREFS = {
   display: { language: 'en', timezone: 'UTC', theme: 'light', dashboardLayout: 'default' },
   notifications: { emailSurveys: true, emailMicroclimates: true, emailActionPlans: true, emailReminders: true, digestFrequency: 'weekly' },
@@ -48,7 +69,7 @@ function routeFetch(options: Options = {}) {
     calls.push({ method, url, body })
     const json = (payload: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(payload), { status }))
     if (url.includes('/profile/password'))
-      return options.passwordRejected ? json({ message: 'La contraseña actual no coincide.' }, 400) : json({ token: 'header.renewed.signature' })
+      return options.passwordRejected ? json({ message: 'La contraseña actual no coincide.' }, 400) : json({ token: RENEWED_TOKEN })
     if (url.includes('/profile/preferences')) return method === 'PUT' ? json({ ...PREFS, display: body }) : json(PREFS)
     if (url.includes('/profile/activity')) return options.activityFails ? json({ message: 'no' }, 500) : json({ activity: [] })
     if (url.endsWith('/profile')) {
@@ -82,6 +103,76 @@ afterEach(() => {
   clearToken()
   vi.unstubAllGlobals()
   localStorage.clear()
+})
+
+/**
+ * ESPH finding 3: *"se ven los datos demográficos como Nombre, Departamento y esa información
+ * es imprescindible ocultarla del evaluado (por temas de anonimato por ello los usuarios deben
+ * ser códigos y no nombres)"*.
+ *
+ * Ruled by Federico 2026-10-18, superseding the earlier ruling the same day that the account
+ * pages stay reachable by URL: *"the action button … should not be there. All this should be
+ * inaccessible for them."* Removing the links closed the doors a respondent can see; this
+ * closes the address.
+ */
+describe('ProfileNextPage — the respondent is not shown their own name', () => {
+  function renderAsRespondent(role: string) {
+    setToken(tokenFor({ sub: PROFILE.id, role, companyId: PROFILE.companyId, name: 'Ana Rojas' }))
+    routeFetch()
+    return render(
+      <TranslationProvider initialLocale="es">
+        <MemoryRouter initialEntries={['/profile']}>
+          <Routes>
+            <Route path="/profile" element={<ProfileNextPage />} />
+            <Route path="/dashboard" element={<p>panel</p>} />
+          </Routes>
+        </MemoryRouter>
+      </TranslationProvider>,
+    )
+  }
+
+  it('sends an employee to their own home instead of rendering the page', async () => {
+    renderAsRespondent('employee')
+    expect(await screen.findByText('panel')).toBeTruthy()
+  })
+
+  it('never puts the name or the department in the DOM, not even for a frame', async () => {
+    renderAsRespondent('employee')
+    await screen.findByText('panel')
+    // The two the reviewer named. `Ana Rojas` is in the token as well as the payload, so a
+    // render that reached the eyebrow would print it before any fetch resolved.
+    expect(screen.queryByText('Ana Rojas')).toBeNull()
+    expect(screen.queryByDisplayValue('Ana Rojas')).toBeNull()
+    expect(screen.queryByRole('heading', { name: es.profile.accountTitle })).toBeNull()
+  })
+
+  it('redirects a role this build does not recognise, which takes the per-user nav', () => {
+    // Not the `isPerUserOnly([]) === false` case: an unknown role falls to the dispatch's
+    // DEFAULT navigation, which IS the per-user set — so it is a respondent here, and the
+    // safe answer is the same one.
+    renderAsRespondent('auditor')
+    expect(screen.getByText('panel')).toBeTruthy()
+  })
+
+  it('redirects a supervisor too, whose every page is also their own', () => {
+    // Measured, not assumed: `navSections.test.ts:712` and `AdminLayout.test.tsx`'s
+    // `PER_USER_ROLES = ['supervisor', 'employee']` both already say so, and the nav note
+    // gives the reason -- "no admin page exists for this role yet". A supervisor in this
+    // build has no admin surface, so #594 already gives them the railless shell; this
+    // follows that decision rather than inventing a second one.
+    renderAsRespondent('supervisor')
+    expect(screen.getByText('panel')).toBeTruthy()
+  })
+
+  it('still lets every role that administers anything in', async () => {
+    // The guard is the shell's own predicate, not a role list. A company_admin's navigation
+    // is not per-user, so nothing changes for them -- the control for all of the above.
+    for (const role of ['company_admin', 'leader', 'super_admin']) {
+      renderAsRespondent(role)
+      expect(await screen.findByRole('heading', { name: es.profile.accountTitle })).toBeTruthy()
+      cleanup()
+    }
+  })
 })
 
 describe('ProfileNextPage', () => {
@@ -141,7 +232,7 @@ describe('ProfileNextPage', () => {
     fireEvent.change(within(password).getByLabelText(new RegExp(es.profile.confirmPassword)), { target: { value: 'Nueva1234!' } })
     fireEvent.click(within(password).getByRole('button', { name: es.profile.changePassword }))
     expect(await within(password).findByText(es.profile.passwordSaved)).toBeTruthy()
-    expect(getToken()).toBe('header.renewed.signature')
+    expect(getToken()).toBe(RENEWED_TOKEN)
     expect((within(password).getByLabelText(new RegExp(es.profile.currentPassword)) as HTMLInputElement).value).toBe('')
   })
 

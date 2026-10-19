@@ -305,26 +305,51 @@ describe('MySurveysNextPage', () => {
     expect(screen.queryByRole('table')).toBeNull()
   })
 
-  it('names the department and the role in the eyebrow', async () => {
+  it('shows a respondent NEITHER the role nor the department — ESPH finding 3', async () => {
+    // "Ingeniería · EMPLEADO" lost its role half on 2026-10-18 and its department half the
+    // same day. ESPH's finding 3 names "Nombre, Departamento" together as the demographics
+    // to hide from the evaluado, and this screen sits over their own surveys.
     serves()
-    renderPage()
-
-    await waitFor(() =>
-      expect(document.querySelector('[data-slot="page-eyebrow"]')?.textContent).toBe(
-        `Ingeniería · ${es('users.employee')}`,
-      ),
-    )
-  })
-
-  it('names the role alone when the department could not be read, rather than guessing one', async () => {
-    serves({ home: 'fail' })
     renderPage()
 
     await screen.findByText('Encuesta de Clima Q4 (abierta)')
     await waitFor(() =>
       expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/dashboard/employee'))).toBe(true),
     )
-    expect(document.querySelector('[data-slot="page-eyebrow"]')?.textContent).toBe(es('users.employee'))
+    // Null rather than a replacement word: this eyebrow has always been allowed to be absent.
+    expect(document.querySelector('[data-slot="page-eyebrow"]')).toBeNull()
+    expect(document.body.textContent).not.toContain(es('users.employee'))
+  })
+
+  it('still names the department for a role the respondent shell does not strip', async () => {
+    // `/surveys/my` is not the respondent's alone — `router.tsx:463` records that employee,
+    // supervisor and leader can all load it. A leader reading their own list is not the
+    // person finding 3 is about, so their eyebrow is untouched; without this, removing the
+    // department outright would have taken it from them silently.
+    serves()
+    renderPage({ role: 'leader', companyId: COMPANY })
+
+    await waitFor(() =>
+      expect(document.querySelector('[data-slot="page-eyebrow"]')?.textContent).toBe('Ingeniería'),
+    )
+  })
+
+  it('shows no eyebrow at all when the department could not be read', async () => {
+    // This used to fall back to the role alone. With the role gone there is nothing
+    // truthful left to print, and an invented one would be worse than none — the same
+    // rule the department half already followed.
+    //
+    // Rendered as a LEADER on purpose. Since 2026-10-18 a respondent's eyebrow is null
+    // whatever the server says, so running this as an employee would pass without the
+    // failed read having anything to do with it — a test asserting the adjacent thing.
+    serves({ home: 'fail' })
+    renderPage({ role: 'leader', companyId: COMPANY })
+
+    await screen.findByText('Encuesta de Clima Q4 (abierta)')
+    await waitFor(() =>
+      expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/dashboard/employee'))).toBe(true),
+    )
+    expect(document.querySelector('[data-slot="page-eyebrow"]')).toBeNull()
   })
 
   it('renders the centred employee empty state rather than an admin “adjust your filters”', async () => {

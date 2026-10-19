@@ -1,5 +1,5 @@
 import { useId, useState, type FormEvent, type ReactNode } from 'react'
-import { Link } from 'react-router'
+import { Link, Navigate } from 'react-router'
 import { Check, CircleAlert, Clock, Lock, LogOut } from 'lucide-react'
 import { PageTopBar } from '../../../components/layout'
 import { Alert, AlertDescription, Button, ErrorState, Input, LoadingRegion, SkeletonText, Table } from '../../../components/ui'
@@ -12,6 +12,7 @@ import { roleText } from '../../org-structure/next/super/labels'
 import { PROFILE_THEMES, type Profile, type ProfileActivityEntry, type ProfileDisplayPreferences, type ProfileTheme } from '../api/profile'
 import AccountTabs from './AccountTabs'
 import { useProfileModel } from './useProfileModel'
+import { useRespondentShell } from '../../../navigation/useRespondentShell'
 
 const TH = 'border-b border-line-default bg-transparent px-3 pb-2 pt-1 text-2xs font-bold uppercase tracking-label whitespace-nowrap text-fg-tertiary'
 
@@ -61,9 +62,41 @@ function stamp(iso: string, locale: string, withTime: boolean): string {
  * screen only after the server accepts them), the password (hidden for an account with none)
  * and the account's own activity.
  */
+/**
+ * A respondent's own name and department, which they may not be shown.
+ *
+ * Ruled by Federico 2026-10-18, superseding the ruling earlier the same day that these
+ * pages stay reachable by URL: *"the action button (the check so that they can check their
+ * profile) should not be there. All this should be inaccessible for them."* ESPH's review
+ * is the reason — *"se ven los datos demográficos como Nombre, Departamento y esa
+ * información es imprescindible ocultarla del evaluado (por temas de anonimato…)"*.
+ *
+ * Removing the LINKS, which is what the earlier ruling did, closes the doors a respondent
+ * can see. It does not close the address, and the address is what a person types when a
+ * colleague tells them where their name is.
+ *
+ * `/settings/privacy` is deliberately NOT guarded the same way: #137's acceptance criterion
+ * is that it be "reachable by every role", `router.test.ts:286` calls that an acceptance
+ * criterion *rather than a convenience*, and `SubjectAccessWireShapeTests` holds the server
+ * end of it. It also shows nobody their department. `/profile` is #136 and the same test
+ * calls it a convenience — so this is the page the ruling can take.
+ *
+ * A redirect to their own home, not a 403: they have done nothing wrong, and the page they
+ * wanted is simply not one of theirs.
+ */
+function RespondentRedirect() {
+  return <Navigate to="/dashboard" replace />
+}
+
 export default function ProfileNextPage() {
   const { t } = useTranslation()
+  const respondent = useRespondentShell()
   const state = useProfileModel()
+
+  // After the hooks, which must all run, and before any render: no name reaches the DOM,
+  // not even for a frame. `useProfileModel` still issues its GET — the respondent is
+  // entitled to their own row, so that request is not a leak, only a wasted one.
+  if (respondent) return <RespondentRedirect />
 
   return (
     <div className="flex flex-col gap-section">

@@ -595,22 +595,58 @@ describe('EmployeeHomeView', () => {
     expect(screen.queryByText(es('employee.cameOfItHeading'))).toBeNull()
   })
 
-  it('names the department and the role in the eyebrow for an employee', async () => {
+  it('shows a respondent NEITHER the role nor the department — ESPH finding 3', async () => {
+    // Both halves of the artboard's "INGENIERÍA · EMPLEADO" are gone for the person being
+    // surveyed. The role half went 2026-10-18 as a classification this platform applies to
+    // them; the department half went the same day, because ESPH's finding 3 names the two
+    // together as one ask — "se ven los datos demográficos como Nombre, Departamento y esa
+    // información es imprescindible ocultarla del evaluado".
+    //
+    // The earlier reasoning here argued the department could stay because it names the unit
+    // whose results the reader is promised. That line is the client's to draw, and they drew
+    // it the other way.
     serves()
     renderHome('employee')
 
     await screen.findByRole('link', { name: es('employee.startAnswering') })
     const eyebrow = document.querySelector('[data-slot="page-eyebrow"]')
-    expect(eyebrow?.textContent).toBe(`Ingeniería · ${es('users.employee')}`)
+    expect(eyebrow?.textContent).toBe(es('employee.eyebrow'))
+    // Scoped to the eyebrow deliberately: "Ingeniería" legitimately appears elsewhere on
+    // this page — the outcome panel names the departments a plan was opened in — so a
+    // whole-body assertion would fail for a reason that has nothing to do with the label.
+    expect(eyebrow?.textContent).not.toContain('Ingeniería')
+    expect(document.body.textContent).not.toContain(es('users.employee'))
   })
 
-  it('names only the department for a role it does not know, rather than guessing one', async () => {
+  it('still names the department for a role the respondent shell does not strip', async () => {
+    // The scoping is the point. `TeamDashboardPage` and `DepartmentAdminDashboardView` render
+    // this same component for people reading ABOUT a department rather than being labelled
+    // with one, and for them the eyebrow is orientation. Deleting the department outright
+    // would have taken it from them too, and nothing here would have said so.
+    serves()
+    renderHome('company_admin')
+
+    await screen.findByRole('link', { name: es('employee.startAnswering') })
+    expect(document.querySelector('[data-slot="page-eyebrow"]')?.textContent).toBe('Ingeniería')
+  })
+
+  it('gives a role it does not know the respondent eyebrow, not a guessed department', async () => {
+    // An unrecognised role takes the dispatch's DEFAULT navigation, and that default is the
+    // per-user set — so `isPerUserOnly` is true for it and it gets the respondent treatment.
+    // This test used to assert the opposite ("names only the department"), which was right
+    // while the department was shown to everyone; the direction it fails in now is the one
+    // to want, because an unknown reader is shown LESS about themselves rather than more.
+    //
+    // Note this is NOT the `isPerUserOnly([]) === false` case in `navSections.test.ts`: that
+    // one is a role with no sections at all, which keeps its shell. `auditor` has sections,
+    // and they happen to be the per-user ones.
     serves()
     renderHome('auditor')
 
     await screen.findByRole('link', { name: es('employee.startAnswering') })
     const eyebrow = document.querySelector('[data-slot="page-eyebrow"]')
-    expect(eyebrow?.textContent).toBe('Ingeniería')
+    expect(eyebrow?.textContent).toBe(es('employee.eyebrow'))
+    expect(eyebrow?.textContent).not.toContain('Ingeniería')
   })
 
   it('greets the person by name in the heading, by their own clock', async () => {

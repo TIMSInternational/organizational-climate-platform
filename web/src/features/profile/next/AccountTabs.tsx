@@ -2,6 +2,7 @@ import { NavLink } from 'react-router'
 import { Bell, Lock, UsersRound } from 'lucide-react'
 import { useTranslation } from '../../../i18n'
 import { cn } from '../../../lib/cn'
+import { useRespondentShell } from '../../../navigation/useRespondentShell'
 
 const TABS = [
   { to: '/profile', key: 'profile.next.tabs.profile', icon: UsersRound },
@@ -17,6 +18,18 @@ const TABS = [
  */
 export default function AccountTabs() {
   const { t } = useTranslation()
+  const respondent = useRespondentShell()
+
+  // Nothing at all in the respondent's shell, and this is the hop that mattered. The two
+  // account rows were taken out of their menu on 2026-10-18; this strip put them straight
+  // back, because landing on ANY of the three pages offered the other two. A respondent
+  // reaches one through the bell -> /notifications -> "Preferencias de notificaciones",
+  // which is a chain of links the shell does not control.
+  //
+  // `null` rather than a filtered list: with one page left the strip is a single raised
+  // chip labelling the page you are already on, which is chrome, not navigation.
+  if (respondent) return null
+
   return (
     <nav aria-label={t('profile.next.tabs.label')} className="self-start">
       <ul className="m-0 inline-flex list-none gap-1 rounded-lg border border-line-default bg-surface-icon-box p-1">

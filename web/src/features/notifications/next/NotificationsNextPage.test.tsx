@@ -128,10 +128,25 @@ describe('NotificationsNextPage (/notifications)', () => {
   })
 
   it('draws "Adjust by kind of notice" in the secondary ink, as the artboard does, not the blue link colour', async () => {
-    renderAs({ role: 'employee', companyId: 'c1' })
+    // `company_admin`, not `employee`: since 2026-10-18 the respondent shell offers no
+    // route into the account pages at all, and this link was the first step of the chain
+    // that defeated removing them from the menu — bell -> /notifications -> here ->
+    // `/settings/notifications` -> `AccountTabs` -> their own Nombre and Departamento.
+    // The ink claim is unchanged; only the role that can see the link it is about.
+    renderAs({ role: 'company_admin', companyId: 'c1' })
     const link = await screen.findByRole('link', { name: copy.byType })
     expect(link.getAttribute('href')).toBe('/settings/notifications')
     expect(link.className.split(/\s+/)).toContain('text-fg-secondary')
+  })
+
+  it('offers a respondent no way into the notification settings', async () => {
+    renderAs({ role: 'employee', companyId: 'c1' })
+    await screen.findByRole('heading', { level: 1 })
+
+    expect(screen.queryByRole('link', { name: copy.byType })).toBeNull()
+    expect(
+      screen.queryAllByRole('link').filter((a) => a.getAttribute('href') === '/settings/notifications'),
+    ).toHaveLength(0)
   })
 
   it('offers the results only to a viewer who may open them', async () => {
