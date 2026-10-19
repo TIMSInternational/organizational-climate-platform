@@ -54,10 +54,10 @@ import { usePublicEntryModel } from '../next/entry/usePublicEntryModel'
 export default function PublicSurveyLinkPage() {
   const { token } = useParams<{ token: string }>()
   const { t, locale } = useTranslation('surveyRespond')
-  const { state, begin } = usePublicEntryModel(token)
+  const { state, brand, begin } = usePublicEntryModel(token)
 
   return (
-    <RespondShell skipLabel={t('skipToSurvey')} contentId="survey">
+    <RespondShell skipLabel={t('skipToSurvey')} contentId="survey" brand={brand ?? undefined}>
       {state.status === 'answering' ? (
         // `publicEntry`: whoever followed this link may hold nothing but the link. It
         // changes what a 401 from the respond endpoint means — closed, or not open to
