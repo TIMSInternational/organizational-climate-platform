@@ -472,6 +472,40 @@ public static class SurveyEndpoints
         // SurveyResponseEndpoints.AsksParticipantIdentity refuses the step for the surveys
         // already carrying the column true.
 
+        // NO INVITATION EMAIL. Ruled 2026-10-19 by Federico, from the rehearsal's own mail:
+        // "we ONLY WANT THE ONE WITH THE CODE... it opens up the survey without them needing
+        // to log in. This should never happen."
+        //
+        // Three measurements make it the right default rather than a preference.
+        //
+        // It is a SECOND DOOR. The invitation mail's button is `/survey-invitations/{token}`,
+        // and `SurveyInvitationPage` renders the respond form with `publicEntry` set "even
+        // though this visitor is named" -- so the holder answers as that person without
+        // signing in. On a mass invite, where the platform generated a username and a
+        // password for everyone (ruled 2026-10-13), that is a third way in that nobody
+        // designed, and it travels with a forwarded email.
+        //
+        // It is a DUPLICATE. `CredentialsEmailComposer` already says "Tu organizacion te
+        // invita a responder una encuesta. Inicia sesion con el usuario y la contrasena de
+        // abajo" over a sign-in button. The same rehearsal's FIRST finding (2026-10-17) was
+        // that duplicated access instructions read as two different accounts: "Ingreso con
+        // los accesos de arriba o los de abajo?".
+        //
+        // And it COSTS NO TRACKING, which is the part that looks like it should block this.
+        // `SurveyInvitationStatuses.AnonymityCeiling` is `opened`, so on an anonymous survey
+        // -- every climate survey this product sends -- `started` and `completed` are never
+        // persisted and `AdvanceInvitationAsync` returns before it writes. The only state an
+        // invitation could record is `opened`, which happens when somebody opens the mail
+        // this removes. Participation is `surveys.response_count` against
+        // `target_audience_count`, an aggregate, which is the only shape of that number that
+        // names nobody.
+        //
+        // The entity default stays `true` for the same reason Anonymous's stays false: it is
+        // the legacy shape and changing it would re-read every row materialised without the
+        // flag. A tenant that wants the mail turns it on per survey -- `ApplySettings` still
+        // honours it, and `POST /invitations/{id}/resend` is still a deliberate act.
+        survey.Settings.NotificationSendInvitations = false;
+
         if (request.Settings is not null)
         {
             var settingsError = ApplySettings(survey.Settings, request.Settings, language);
