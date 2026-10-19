@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useIsRespondent } from '../../navigation/respondentSurface'
 import { Link } from 'react-router'
 import { BellRing, LogOut, ShieldCheck, UserRound } from 'lucide-react'
 import { useTranslation, LanguageSwitcher } from '../../i18n'
@@ -184,6 +185,9 @@ export interface ShellControlsProps {
  * them, on every role.
  */
 export function ShellControls({ onSignOut }: ShellControlsProps) {
+  // A respondent is held to their dashboard and the survey they are answering
+  // (`navigation/respondentSurface`), so the three account rows below would each bounce.
+  const respondent = useIsRespondent()
   const { t } = useTranslation()
 
   return (
@@ -216,33 +220,44 @@ export function ShellControls({ onSignOut }: ShellControlsProps) {
           The profile row (#136) is here for exactly the reason the notification
           preferences row below it is: every role owns a profile, and `navSections`
           is role-aware and returns nothing for most of them. */}
-      <Link
-        to="/profile"
-        className="flex w-full items-center gap-inline rounded-md px-2 py-1 text-sm text-fg-secondary no-underline hover:bg-state-hover hover:text-fg-primary"
-      >
-        <UserRound aria-hidden="true" className="nav-icon" />
-        {t('profile.title')}
-      </Link>
-      <Link
-        to="/settings/notifications"
-        className="flex w-full items-center gap-inline rounded-md px-2 py-1 text-sm text-fg-secondary no-underline hover:bg-state-hover hover:text-fg-primary"
-      >
-        <BellRing aria-hidden="true" className="nav-icon" />
-        {t('notifications.preferences.title')}
-      </Link>
+      {/* Hidden for a respondent, who is held to `respondentSurface`: these three would
+          each bounce straight back to the dashboard, and a control that exists and then
+          refuses is worse than one never offered -- the argument `viewerCapabilities`
+          opens with. The rows stay for every other role, including in the mobile drawer
+          this component also draws. */}
+      {!respondent && (
+        <Link
+          to="/profile"
+          className="flex w-full items-center gap-inline rounded-md px-2 py-1 text-sm text-fg-secondary no-underline hover:bg-state-hover hover:text-fg-primary"
+        >
+          <UserRound aria-hidden="true" className="nav-icon" />
+          {t('profile.title')}
+        </Link>
+      )}
+      {!respondent && (
+        <Link
+          to="/settings/notifications"
+          className="flex w-full items-center gap-inline rounded-md px-2 py-1 text-sm text-fg-secondary no-underline hover:bg-state-hover hover:text-fg-primary"
+        >
+          <BellRing aria-hidden="true" className="nav-icon" />
+          {t('notifications.preferences.title')}
+        </Link>
+      )}
       {/* #137. Third per-account row, on the same argument as the two above: the one
           endpoint behind `/settings/privacy` is `GET /gdpr/access` with no user id,
           which the handler documents as the self-service case that needs no role, so
           every role can load it and `navSections` would hide it from most of them. */}
-      <Link
-        to="/settings/privacy"
-        className="flex w-full items-center gap-inline rounded-md px-2 py-1 text-sm text-fg-secondary no-underline hover:bg-state-hover hover:text-fg-primary"
-      >
-        <ShieldCheck aria-hidden="true" className="nav-icon" />
-        {/* The short label, matching `SidebarUserMenu`: this rail is 230px and the two
-            rows above it are two words each. */}
-        {t('privacy.navLabel')}
-      </Link>
+      {!respondent && (
+        <Link
+          to="/settings/privacy"
+          className="flex w-full items-center gap-inline rounded-md px-2 py-1 text-sm text-fg-secondary no-underline hover:bg-state-hover hover:text-fg-primary"
+        >
+          <ShieldCheck aria-hidden="true" className="nav-icon" />
+          {/* The short label, matching `SidebarUserMenu`: this rail is 230px and the two
+              rows above it are two words each. */}
+          {t('privacy.navLabel')}
+        </Link>
+      )}
       <button
         type="button"
         onClick={onSignOut}

@@ -447,13 +447,33 @@ describe('EmployeeHomeView', () => {
     expect(card.textContent).not.toContain('Encuesta de Clima Q4')
     // No readings row: "Su respuesta · 9 sept" is the tile the artboard marks "dato nuevo".
     expect(card.querySelector('dl')).toBeNull()
-    // The way out the artboard draws, at a real route.
-    expect(within(card).getByRole('link', { name: es('navigation.mySurveys') }).getAttribute('href')).toBe(
-      '/surveys/my',
-    )
+    // The artboard's way out was "Mis Encuestas". A RESPONDENT no longer has it: they are
+    // held to their dashboard and the survey they are answering (2026-10-19,
+    // `navigation/respondentSurface`), so /surveys/my would bounce straight back here and
+    // a button that returns you to the page you are on is worse than no button.
+    expect(within(card).queryByRole('link', { name: es('navigation.mySurveys') })).toBeNull()
     expect(within(card).getByText(es('employee.next.nothingDueAnswersNote'))).toBeTruthy()
     expect(document.querySelector('[data-slot="home-to-answer-meta"]')?.textContent).toBe(
       es('employee.next.nothingDueMeta'),
+    )
+  })
+
+  /**
+   * The other half of the same rule, and the reason the link is hidden by ROLE rather
+   * than by `useRespondentShell`: a leader reaches `/surveys/my` perfectly well, so
+   * removing their way out would be a regression dressed as a restriction.
+   */
+  it('keeps the way out for a leader, who can still reach it', async () => {
+    serves({ dashboard: home({ pendingSurveyCount: 0, pendingSurveys: [], nextDeadline: null }) })
+    renderHome('leader')
+
+    const card = await waitFor(() => {
+      const node = document.querySelector<HTMLElement>('[data-slot="home-nothing-due"]')
+      if (!node) throw new Error('no answered card yet')
+      return node
+    })
+    expect(within(card).getByRole('link', { name: es('navigation.mySurveys') }).getAttribute('href')).toBe(
+      '/surveys/my',
     )
   })
 
