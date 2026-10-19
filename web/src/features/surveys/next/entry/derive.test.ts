@@ -25,6 +25,8 @@ const DETAIL: SurveyPublicLinkDetail = {
   requireLogin: false,
   allowAnonymous: true,
   singleResponse: true,
+  companyName: 'Eagle',
+  companyLogoUrl: '/brand/eagle-logo.png',
 }
 
 function view(overrides: Partial<SurveyRespondView> = {}): SurveyRespondView {
