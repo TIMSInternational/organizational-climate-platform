@@ -557,15 +557,24 @@ export function toImportRows(climate) {
   })
 }
 
-export function toSurveyRequest(climate, { companyId, title, departmentIds, startDate, endDate, anonymous = true }) {
+export function toSurveyRequest(climate, { companyId, title, departmentIds, startDate, endDate, anonymous = true, randomizeQuestions = false }) {
   const options = climate.scale.map((point) => ({ value: String(point.value), label: both(point.label) }))
   const min = climate.scale[0]?.value ?? 1
   const max = climate.scale.at(-1)?.value ?? 5
   const questions = []
   for (const dimension of climate.dimensions) {
     for (const text of dimension.questions) {
+      // `required: true` on the open question too. Ruled by Federico 2026-10-18 on ESPH's
+      // finding 8 -- *"La pregunta 63 abierta sale como opcional"*, and the screenshot of
+      // the completion card beside it reads "62 de 63", which is what skipping it costs
+      // the analysis. It used to be `false` unconditionally, so an open question could
+      // never be required however the workbook was written.
+      //
+      // Measured before changing it: all three ESPH workbooks hold 63 questions of which
+      // exactly ONE is open, so this makes one answer mandatory per respondent, not a
+      // wall of them.
       questions.push(dimension.open
-        ? { text: both(text), type: 'open_ended', category: dimension.name, required: false, order: questions.length }
+        ? { text: both(text), type: 'open_ended', category: dimension.name, required: true, order: questions.length }
         : {
             text: both(text), type: 'likert', category: dimension.name, required: true, order: questions.length,
             scaleMin: min, scaleMax: max, scaleLabelMin: both(climate.scale[0]?.label ?? ''), scaleLabelMax: both(climate.scale.at(-1)?.label ?? ''), options,
@@ -609,6 +618,24 @@ export function toSurveyRequest(climate, { companyId, title, departmentIds, star
       selfDeclaredDemographics: true,
       allowPartialResponses: true,
       showProgress: true,
+      /**
+       * Finding 7 of ESPH's 2026-10-17 rehearsal: the 63 climate questions arrived in a
+       * fixed order for everybody, so the answers of anyone who tired partway through all
+       * tired on the same dimension. The reviewer boxed the dimension title printed over
+       * question 4 and gave the reason in their own words -- *"las preguntas deben ir en
+       * aleatorio justamente para que la persona no pueda asociarlas a una categoria"*.
+       *
+       * Sent ALWAYS rather than only when true, because `SurveyEndpoints.cs:1494` applies it
+       * only `if (input.RandomizeQuestions.HasValue)` -- an omitted flag leaves whatever the
+       * row already held, which for a re-import is not the same thing as "off".
+       *
+       * The flag carries BOTH halves of one promise: a random order AND no dimension title
+       * over any question (`web/src/features/surveys/respondDimensions.ts:161`). #556 split
+       * them on 13 Oct and this comment used to record that split as deliberate; it was
+       * reversed 18 Oct. Dimension analysis is unaffected -- `category` is still sent on
+       * every question below, it is only never shown to the respondent.
+       */
+      randomizeQuestions,
       ...(climate.invitation?.subject ? { invitationCustomSubject: both(climate.invitation.subject) } : {}),
       ...(climate.invitation?.message ? { invitationCustomMessage: both(climate.invitation.message) } : {}),
     },
@@ -757,6 +784,10 @@ async function main() {
       'with-credentials': { type: 'boolean', default: false },
       'skip-demographic': { type: 'string', multiple: true, default: [] },
       anonymous: { type: 'string', default: 'true' },
+      // Defaults to the behaviour every import before it had: OFF. Turning it on is a
+      // decision about the instrument, so it is made on the command line and printed
+      // below, never inferred from the workbook.
+      'randomize-questions': { type: 'string', default: 'false' },
       start: { type: 'string' },
       end: { type: 'string' },
     },
@@ -769,6 +800,10 @@ async function main() {
     throw new Error(`--anonymous must be true or false (recibido: ${values.anonymous})`)
   }
   const anonymous = values.anonymous === 'true'
+  if (values['randomize-questions'] !== 'true' && values['randomize-questions'] !== 'false') {
+    throw new Error(`--randomize-questions must be true or false (recibido: ${values['randomize-questions']})`)
+  }
+  const randomizeQuestions = values['randomize-questions'] === 'true'
   const withCredentials = values['with-credentials'] === true
 
   const parsed = parseClimate(readWorkbook(values.file))
@@ -795,6 +830,9 @@ async function main() {
   log(anonymous
     ? '  anonimato: ANÓNIMA — no se guarda quién respondió, así que nada impide que alguien la responda otra vez'
     : '  anonimato: IDENTIFICADA — se guarda quién respondió, así que el servidor permite UNA sola respuesta por persona (los resultados siguen siendo solo agregados)')
+  log(randomizeQuestions
+    ? '  orden de las preguntas: ALEATORIO por persona — sin título de dimensión sobre las preguntas'
+    : '  orden de las preguntas: FIJO — todas las personas las reciben en el mismo orden')
   if (problems.length) {
     log(`\n${problems.length} problem(s) in the workbook — nothing was sent:`)
     for (const problem of problems) log(`  - ${problem}`)
@@ -990,7 +1028,7 @@ async function main() {
       throw new Error(`these departments of the workbook are not in the company, so the survey would reach fewer people than the roster: ${audience.missing.map((n) => `"${n}"`).join(', ')}`)
     }
     const departmentIds = audience.departmentIds
-    const body = toSurveyRequest(climate, { companyId, title: surveyTitle, departmentIds, startDate: window.startDate, endDate: window.endDate, anonymous })
+    const body = toSurveyRequest(climate, { companyId, title: surveyTitle, departmentIds, startDate: window.startDate, endDate: window.endDate, anonymous, randomizeQuestions })
     const created = await call('POST', '/surveys', body, token)
     const id = created?.id ?? created?.survey?.id
     if (!id) throw new Error(`survey create: unexpected body ${JSON.stringify(created).slice(0, 200)}`)

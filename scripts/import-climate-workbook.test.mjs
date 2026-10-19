@@ -109,7 +109,11 @@ test('the survey request: likert with the five labels, open questions open, anon
   assert.equal(likert.length, 38)
   assert.deepEqual(likert[0].options.map((o) => [o.value, o.label.es]), [['1', 'Nunca'], ['2', 'Casi nunca'], ['3', 'Algunas veces'], ['4', 'Casi siempre'], ['5', 'Siempre']])
   assert.equal(likert[0].category, 'Claridad y organización')
-  assert.ok(body.questions.filter((q) => q.type === 'open_ended').every((q) => q.required === false))
+  // Required, like every other question. Ruled 2026-10-18 on ESPH's finding 8 -- *"La
+  // pregunta 63 abierta sale como opcional"* -- so the open question is no longer the one
+  // a respondent can walk past. This asserted `=== false` until that day.
+  assert.ok(body.questions.filter((q) => q.type === 'open_ended').every((q) => q.required === true))
+  assert.ok(body.questions.every((q) => q.required === true))
   assert.equal(body.settings.anonymous, true)
   assert.equal(body.settings.invitationCustomSubject.es, 'Tu opinión cuenta – Encuesta de Clima 2026')
   assert.deepEqual(body.questions.map((q) => q.order), [...body.questions.keys()])
@@ -171,6 +175,33 @@ test('toSurveyRequest: anonymity defaults to anonymous and can be chosen', () =>
   assert.equal(toSurveyRequest(climate, args).settings.anonymous, true)
   assert.equal(toSurveyRequest(climate, { ...args, anonymous: true }).settings.anonymous, true)
   assert.equal(toSurveyRequest(climate, { ...args, anonymous: false }).settings.anonymous, false)
+})
+
+test('toSurveyRequest: question order is fixed unless randomisation is asked for, and the category survives it', () => {
+  const climate = {
+    intro: 'i', invitation: null, bands: [], columns: [], persons: [],
+    scale: [{ label: 'Nunca', value: 1 }, { label: 'Siempre', value: 5 }],
+    dimensions: [{ name: 'Comunicación', open: false, questions: ['q1', 'q2'] }],
+  }
+  const args = { companyId: 'c', title: 't', departmentIds: [], startDate: 'a', endDate: 'b' }
+
+  // Finding 7: every import before this one left the 63 questions in one fixed order.
+  assert.equal(toSurveyRequest(climate, args).settings.randomizeQuestions, false)
+  assert.equal(toSurveyRequest(climate, { ...args, randomizeQuestions: true }).settings.randomizeQuestions, true)
+
+  // Present even when false. `SurveyEndpoints.cs:1494` applies the value only
+  // `if (input.RandomizeQuestions.HasValue)`, so omitting the key would leave a re-imported
+  // survey on whatever the row already held rather than turning randomisation off.
+  assert.ok('randomizeQuestions' in toSurveyRequest(climate, args).settings)
+
+  // Randomising costs the respondent the dimension HEADING, not the data: this asserts the
+  // half that must survive. `category` is still on every question, because it is what
+  // dimension analysis groups by; `respondDimensions.ts:161` is what stops the respondent
+  // ever seeing it. The 2026-10-13 ruling that kept the heading on screen was reversed
+  // 2026-10-18 -- one flag, one promise -- and this test deliberately does NOT assert that
+  // reversal, which is a web concern and is pinned in `respondDimensions.test.ts`.
+  const randomised = toSurveyRequest(climate, { ...args, randomizeQuestions: true })
+  assert.ok(randomised.questions.every((q) => q.category === 'Comunicación'))
 })
 
 // ---------------------------------------------------------------------------------------

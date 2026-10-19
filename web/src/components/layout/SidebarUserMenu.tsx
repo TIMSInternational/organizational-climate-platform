@@ -92,9 +92,36 @@ export interface SidebarUserMenuProps {
   /** Collapsed rail: avatar only, and opening the menu expands the rail instead. */
   collapsed?: boolean
   onExpand?: () => void
+  /**
+   * Where this block is drawn.
+   *
+   * `rail` is the sidebar's footer: a bordered block pinned to the bottom, the signed-in
+   * person's name and role line under the avatar, Configuración and Cerrar sesión in a
+   * row beneath, and the menu opening upward because there is nothing below it.
+   *
+   * `strip` is the railless shell (`isPerUserOnly`), where the same control sits in the
+   * 52px top bar. Three differences, each for a reason rather than for taste:
+   *
+   * 1. The menu opens DOWNWARD and right-aligned. Upward from a top bar is off the top of
+   *    the window — not a layout bug anyone can see, just a menu that appears not to open.
+   * 2. The trigger is the avatar alone. The rail's trigger prints the role under the name,
+   *    and `EMPLEADO` beside a respondent's own survey is the badge ESPH's rehearsal
+   *    objected to; a strip is not the place to re-draw it.
+   * 3. Configuración and Cerrar sesión move INTO the menu. In the rail they are a row
+   *    under the avatar; in a 52px bar that row is a second line, which is how the first
+   *    attempt grew the bar to 80px. **Sign out has to go somewhere** — it is the whole
+   *    reason this control follows the rail into the header at all.
+   */
+  variant?: 'rail' | 'strip'
 }
 
-export function SidebarUserMenu({ onSignOut, collapsed = false, onExpand }: SidebarUserMenuProps) {
+export function SidebarUserMenu({
+  onSignOut,
+  collapsed = false,
+  onExpand,
+  variant = 'rail',
+}: SidebarUserMenuProps) {
+  const strip = variant === 'strip'
   const { t, locale, setLocale } = useTranslation()
   const [open, setOpen] = useState(false)
   const [submenu, setSubmenu] = useState<'theme' | 'language' | null>(null)
@@ -122,11 +149,24 @@ export function SidebarUserMenu({ onSignOut, collapsed = false, onExpand }: Side
   }
 
   return (
-    <div style={{ padding: collapsed ? '8px 6px' : '8px 8px', borderTop: '1px solid var(--admin-border-light)', position: 'relative' }}>
+    <div
+      style={
+        strip
+          ? { position: 'relative', display: 'flex', alignItems: 'center' }
+          : { padding: collapsed ? '8px 6px' : '8px 8px', borderTop: '1px solid var(--admin-border-light)', position: 'relative' }
+      }
+    >
       <button
         type="button"
         aria-expanded={open}
         aria-haspopup="menu"
+        // The rail's trigger is named by the text inside it. A collapsed rail and the
+        // strip both draw the avatar ALONE, and a nameless account button is one a
+        // screen reader announces as "button" — so the label comes from here instead.
+        // Caught by `AdminLayout.test.tsx`'s privacy-page tests, which look this control
+        // up by its accessible name; without it a respondent's only route to their own
+        // GDPR page is a button nothing can address.
+        aria-label={collapsed || strip ? t('shell.account') : undefined}
         onClick={() => {
           // Collapsed, the menu has nowhere to go and the labels inside it would be
           // unreadable, so the click expands the rail — ForMaps' behaviour.
@@ -181,7 +221,7 @@ export function SidebarUserMenu({ onSignOut, collapsed = false, onExpand }: Side
             <User aria-hidden="true" style={{ width: collapsed ? 14 : 16, height: collapsed ? 14 : 16 }} />
           )}
         </span>
-        {!collapsed && (
+        {!collapsed && !strip && (
           <>
             <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
               <span style={{ display: 'block', fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -215,7 +255,7 @@ export function SidebarUserMenu({ onSignOut, collapsed = false, onExpand }: Side
         )}
       </button>
 
-      {!collapsed && (
+      {!collapsed && !strip && (
         // ForMaps' Settings/Sign-out row, with one thing theirs does not need. Their
         // two labels are "Settings" and "Sign out"; the Spanish pair is
         // "Configuración" and "Cerrar sesión", which at 12px plus two 14px glyphs
@@ -261,10 +301,10 @@ export function SidebarUserMenu({ onSignOut, collapsed = false, onExpand }: Side
             role="menu"
             style={{
               position: 'absolute',
-              bottom: '100%',
-              left: 8,
+              ...(strip
+                ? { top: '100%', right: 0, marginTop: 4 }
+                : { bottom: '100%', left: 8, marginBottom: 4 }),
               width: 200,
-              marginBottom: 4,
               background: 'var(--admin-bg-overlay)',
               backdropFilter: 'blur(12px) saturate(200%) contrast(100%) brightness(130%)',
               WebkitBackdropFilter: 'blur(12px) saturate(200%) contrast(100%) brightness(130%)',
@@ -290,6 +330,15 @@ export function SidebarUserMenu({ onSignOut, collapsed = false, onExpand }: Side
                       leaders, so a nav entry would hide the page from most of the
                       people whose own profile it is. This menu is where a reader
                       looks for "things about me". */}
+                  {/* Not offered in the strip. `/profile` is where a respondent meets
+                      their own Nombre completo, Rol, Empresa and Departamento, under copy
+                      that says "así te ven en la bitácora de cada plan y en lo que creas" —
+                      and ESPH's reviewer read that, correctly, as the platform telling them
+                      their name is attached to what they do. It is their own data and no
+                      leak, but it is an admin's page: nothing on it a respondent answering a
+                      one-week survey needs, and the one thing it offers them to change is
+                      the name they were told not to think about. The route still exists. */}
+                  {strip ? null : (
                   <Link
                     to="/profile"
                     role="menuitem"
@@ -301,11 +350,30 @@ export function SidebarUserMenu({ onSignOut, collapsed = false, onExpand }: Side
                       {t('profile.title')}
                     </span>
                   </Link>
+                  )}
                   {/* #137, immediately after Profile because it answers the same
                       question — "what does this product know about me". Same
                       argument for being here rather than in `navSections`: the page
                       is per-user surface every role can load, and that module is
                       role-aware. */}
+                  {/* Nor Privacidad, and this is the one that was reported as costing an
+                      answer. The page is honest and it is a right — but it opens on "Qué se
+                      guarda sobre ti" and tells a respondent, in a table, that "tus
+                      respuestas... llevan tu identificador", then prints their Nombre and
+                      Correo at the foot. ESPH's reviewer read exactly that and wrote: "mi
+                      información sí es guardada, no está siendo anónima, entonces no voy a
+                      contestar."
+
+                      Hiding the LINK does not remove the right, and this product already
+                      routes the other half of it through an administrator — the page itself
+                      says "el borrado no es un botón de esta página... lo pides tú; lo
+                      ejecuta quien administra tu organización". Access now travels the same
+                      way, which is consistent rather than a reduction.
+
+                      It also had to go for a reason the menu alone did not show: that page
+                      carries a tab bar — Tu perfil / Notificaciones / Privacidad — so while
+                      it was offered here, dropping the other two rows bought nothing. */}
+                  {strip ? null : (
                   <Link
                     to="/settings/privacy"
                     role="menuitem"
@@ -321,6 +389,7 @@ export function SidebarUserMenu({ onSignOut, collapsed = false, onExpand }: Side
                       {t('privacy.navLabel')}
                     </span>
                   </Link>
+                  )}
                   <button type="button" role="menuitem" style={ROW} onClick={() => setSubmenu('theme')}>
                     <Moon aria-hidden="true" style={{ width: 16, height: 16, color: 'var(--admin-font-tertiary)', flexShrink: 0 }} />
                     <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -335,6 +404,35 @@ export function SidebarUserMenu({ onSignOut, collapsed = false, onExpand }: Side
                     </span>
                     <ChevronRight aria-hidden="true" style={{ width: 12, height: 12, color: 'var(--admin-font-section-label)' }} />
                   </button>
+                  {strip && (
+                    <>
+                      {/* Configuración is NOT offered here, and that is finding 4 rather
+                          than tidiness. It opens `/settings/notifications`, whose rows
+                          include "Correos de planes de acción — Asignaciones y avances de
+                          los planes de acción": action plans are *seguimiento*, and ESPH's
+                          reviewer reported being shown "asociado al sistema de seguimiento"
+                          without being able to tell whether that was meant for them. It was
+                          not — a respondent is assigned no action plans. The page offers
+                          them four toggles, three of which govern mail they will never be
+                          sent, and the fourth of which can switch off the invitation this
+                          whole launch depends on. */}
+                      <div style={{ height: 1, background: 'var(--admin-border-hover)', margin: '4px 6px' }} />
+                      <button
+                        type="button"
+                        role="menuitem"
+                        style={ROW}
+                        onClick={() => {
+                          close()
+                          onSignOut()
+                        }}
+                      >
+                        <LogOut aria-hidden="true" style={{ width: 16, height: 16, color: 'var(--admin-font-tertiary)', flexShrink: 0 }} />
+                        <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {t('shell.signOut')}
+                        </span>
+                      </button>
+                    </>
+                  )}
                 </>
               )}
 

@@ -15,7 +15,6 @@ import { RADIO_CEILING } from './RespondDemographicField'
 import { hasAnswered, markAnswered } from '../respondReceipt'
 import { readSessionId } from '../respondSession'
 import { STALE_MS, heldElsewhere } from '../respondLock'
-import { ANONYMITY_FLOOR } from '../../../components/charts'
 
 /**
  * The shipped wording, read from the catalogue the component reads.
@@ -298,28 +297,26 @@ describe('SurveyRespondForm dimension labels', () => {
   })
 
   /**
-   * This asserted three nulls until 2026-10-13, because `respondDimensions` switched grouping
-   * off entirely for a randomised survey. Ruled that day: the headings stay, and randomisation
-   * means the SECTION order is shuffled and so is the order within each section. The page
-   * honours that rather than re-deriving its own answer, and every question is still asked —
-   * now under a name.
+   * Three nulls: this is the respondent-facing half of the 2026-10-18 reversal, and the
+   * assertion this test carried before 2026-10-13 took it away.
+   *
+   * It is the screen, not the module, that the client's review is about. ESPH's reviewer
+   * boxed the category printed over question 4 of 63 and wrote that the questions must be
+   * randomised *"para que la persona no pueda asociarlas a una categoria"* — so the
+   * guarantee has to hold where the respondent can see it, on every page, not only in
+   * `respondDimensions`' return value.
    */
-  it('still prints a dimension for every question when the survey randomises them', async () => {
+  it('prints no dimension on any page when the survey randomises them', async () => {
     respondWith(view({ ...sectioned, randomizeQuestions: true }))
     renderForm()
 
     await screen.findByRole('radio', { name: 'Muy de acuerdo' })
     const dimensions = await dimensionsAcrossPages()
 
+    // Every page of the form, not just the first: a heading that appeared from page two
+    // would leak the construct just as well as one on page one.
     expect(dimensions).toHaveLength(3)
-    expect(dimensions.filter((dimension) => dimension === null)).toEqual([])
-
-    // Two CONTIGUOUS runs over the three pages, in whichever order the shuffle put the two
-    // sections. Contiguity is what sectioning means: the two psychological-safety questions are
-    // asked together under one heading rather than interleaved with workload. A flat run would
-    // give three nulls, and a regrouping that lost the sections would give three runs.
-    const runs = dimensions.filter((dimension, index) => index === 0 || dimension !== dimensions[index - 1])
-    expect(runs).toHaveLength(2)
+    expect(dimensions).toEqual([null, null, null])
   })
 
   /**
@@ -997,6 +994,102 @@ describe('SurveyRespondForm layout', () => {
  * `answeredQuestionCount` and the platform anonymity floor. A confirmation that had
  * to fetch something could fail after a response was accepted.
  */
+/**
+ * Teletrabajo question 12, as ESPH's 2026-10-18 review describes it: a choice with an
+ * explanation beneath it that *"indica que la respuesta debe ser obligatoria (en el caso de
+ * la respuesta abierta quedo como opcional"*.
+ *
+ * `commentRequired` was a column the respond path never read — the switch in the authoring
+ * editor wrote it, `SurveyVersioning` diffed it, and nothing enforced it. These tests are
+ * the enforcement, at the screen.
+ */
+describe('SurveyRespondForm required comments', () => {
+  const ASKED = {
+    commentPrompt: 'Comente brevemente las razones de su respuesta:',
+    commentRequired: true,
+  }
+
+  it('will not send an answered question whose required comment is blank', async () => {
+    respondWith(view({ questions: [question({ id: 'q12', required: true, ...ASKED })] }))
+    renderForm()
+
+    await userEvent.click(await screen.findByRole('radio', { name: 'Muy de acuerdo' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Enviar mis respuestas' }))
+
+    // Nothing posted, and the respondent is told which thing is missing — not the
+    // "still need an answer" sentence, which would send them looking for a question
+    // they have already answered.
+    expect(
+      vi.mocked(fetch).mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === 'POST'),
+    ).toHaveLength(0)
+    expect(await screen.findByText('Faltan 1 comentarios obligatorios.')).toBeTruthy()
+  })
+
+  it('sends it once the comment is written', async () => {
+    respondWith(view({ questions: [question({ id: 'q12', required: true, ...ASKED })] }))
+    renderForm()
+
+    await userEvent.click(await screen.findByRole('radio', { name: 'Muy de acuerdo' }))
+    await userEvent.type(
+      screen.getByLabelText(/Comente brevemente las razones de su respuesta/),
+      'Rindo mas en casa.',
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Enviar mis respuestas' }))
+
+    await screen.findByText('Qué pasa ahora')
+    const body = lastSubmission()
+    expect(body.answers).toEqual([
+      { questionId: 'q12', value: 'strongly_agree', text: 'Rindo mas en casa.' },
+    ])
+  })
+
+  it('stops the respondent on the page rather than at the end of the survey', async () => {
+    // The same rule on "Siguiente": found on the question they are looking at, not after
+    // the last page sends them back to it.
+    respondWith(
+      view({
+        questions: [
+          question({ id: 'q12', required: true, ...ASKED }),
+          question({ id: 'q13', order: 1, text: 'Otra pregunta' }),
+        ],
+      }),
+    )
+    renderForm()
+
+    await userEvent.click(await screen.findByRole('radio', { name: 'Muy de acuerdo' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+
+    // Still on question 1 of 2.
+    expect(screen.getByText('¿Qué tan satisfecho estás?')).toBeTruthy()
+    expect(screen.queryByText('Otra pregunta')).toBeNull()
+  })
+
+  it('says on the label that the comment is required, before the form refuses it', async () => {
+    respondWith(view({ questions: [question({ id: 'q12', required: true, ...ASKED })] }))
+    renderForm()
+
+    await screen.findByRole('radio', { name: 'Muy de acuerdo' })
+    expect(screen.getByText(/Comente brevemente las razones de su respuesta/).textContent).toContain(
+      '(obligatoria)',
+    )
+  })
+
+  it('leaves an optional comment optional, which is every comment that shipped before', async () => {
+    // The flag's DDL default is `true`. Enforcing it without the prompt beside it would
+    // have made a comment mandatory on every question of every survey already running.
+    respondWith(
+      view({ questions: [question({ id: 'q1', required: true, commentPrompt: '¿Algo más?', commentRequired: false })] }),
+    )
+    renderForm()
+
+    await userEvent.click(await screen.findByRole('radio', { name: 'Muy de acuerdo' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Enviar mis respuestas' }))
+
+    await screen.findByText('Qué pasa ahora')
+    expect(lastSubmission().answers).toEqual([{ questionId: 'q1', value: 'strongly_agree' }])
+  })
+})
+
 describe('SurveyRespondForm confirmation', () => {
   async function submitOnce(
     overrides: SubmissionOverrides = {},
@@ -1019,8 +1112,22 @@ describe('SurveyRespondForm confirmation', () => {
 
     expect(screen.getByText('Sus respuestas se agrupan de inmediato')).toBeTruthy()
     // The floor is the platform constant, not a number typed into the copy.
-    expect(screen.getByText(new RegExp(`cruces de variables demográficas requieren al menos ${ANONYMITY_FLOOR}`))).toBeTruthy()
-    expect(screen.getByText(/puede mostrarse con una respuesta/)).toBeTruthy()
+    // The cross-tab floor is NOT stated here. Ruled by Federico 2026-10-18 on ESPH's
+    // finding 9 -- the reviewer boxed "Los cruces de variables demográficas requieren al
+    // menos 3" and wrote *"Por lo menos de mi parte no queda claro"* -- and it follows
+    // `docs/decisions/public-surface-copy.md`, which rules the promise is said ONCE.
+    //
+    // What is lost with it: these two tests used to pin the floor to the platform constant
+    // so nobody could retype the number into the copy. There is no number in this copy any
+    // more, so the guard has no subject here; `suppression.ts` still owns the constant and
+    // the admin-facing strings still interpolate it.
+    //
+    // What must NOT be lost is the honest half, asserted on the line below: a single
+    // department or demographic value can still be reported from one response, and the
+    // respondent is still told so before they answer.
+    expect(screen.queryByText(/cruces de variables/i)).toBeNull()
+    expect(screen.queryByText(/combine dos/i)).toBeNull()
+    expect(screen.getByText(/pueden mostrarse aunque haya respondido una sola persona/)).toBeTruthy()
     // The close date is `view.endDate`, spelled out rather than abbreviated.
     expect(screen.getByText('La encuesta cierra el 12 de septiembre de 2026')).toBeTruthy()
     // Ruled 2026-10-13: the card may not promise the results reach the respondent's
@@ -1052,9 +1159,9 @@ describe('SurveyRespondForm confirmation', () => {
 
     // The floor is still the platform constant on this branch, not a number retyped
     // into the second copy of the sentence.
-    expect(
-      screen.getByText(new RegExp(`cruces de variables demográficas requieren al menos ${ANONYMITY_FLOOR}`)),
-    ).toBeTruthy()
+    // Gone on this branch too -- see the pooled test above for the ruling. The sentence
+    // that carries the real disclosure is asserted immediately above this.
+    expect(screen.queryByText(/cruces de variables/i)).toBeNull()
   })
 
   it('tells an attributed respondent that completion is visible, not that it is unlinked', async () => {

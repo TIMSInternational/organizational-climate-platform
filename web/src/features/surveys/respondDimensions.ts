@@ -1,5 +1,4 @@
 import type { SurveyRespondQuestion } from './api/surveyResponses'
-import { seededShuffle } from './respondAnswers'
 import { UNCATEGORISED_DIMENSION, dimensionKeyOf } from './surveyResultsMap'
 
 /**
@@ -27,26 +26,43 @@ import { UNCATEGORISED_DIMENSION, dimensionKeyOf } from './surveyResultsMap'
  * then be asked under two headings what is reported under one.
  * `UNCATEGORISED_DIMENSION` comes from the same module for the same reason.
  *
- * ## How randomisation works, and what it used to do
+ * ## A randomised survey prints no headings at all
  *
  * `orderQuestions` shuffles the flat list with a session-seeded PRNG when
- * `Survey.Settings.RandomizeQuestions` is on. This module used to answer that by
- * printing a randomised survey as one flat, unsectioned run, reasoning that grouping
- * the shuffled list would gather each dimension's questions back together and so
- * *undo* the randomisation the author asked for.
+ * `Survey.Settings.RandomizeQuestions` is on, and this module then prints that list
+ * as one flat, unsectioned run. Randomisation and the hidden dimension are one
+ * setting because they are one promise: a respondent who can read the construct
+ * above a question can still answer it as that construct, which is the bias the
+ * shuffle exists to remove.
  *
- * That reasoning holds for the thing it describes — regrouping into the order the
- * author typed — but it is not the only way to group. Ruled 2026-10-13: a randomised
- * survey keeps its headings, and randomisation means **the section order is shuffled
- * and so is the order within each section**. Nothing returns to the author's order, so
- * nothing is undone; and an 80-item, ten-dimension instrument stays navigable instead
- * of arriving as eighty unlabelled questions.
+ * `docs/runbooks/procomer-instrument-2026.md` states it as a commitment to a client
+ * — "`randomizeQuestions: true` carries both commitments from the 12 Aug minuta at
+ * once: the questions are asked in a random order AND the dimension is not shown" —
+ * and ESPH's 2026-10-18 review names the same thing as a defect in its own words:
+ * *"viene sobre la pregunta la categoria ... las preguntas deben ir en aleatorio
+ * justamente para que la persona no pueda asociarlas a una categoria"*.
  *
- * The within-section half is free: the list this function receives has already been
- * shuffled flat, so grouping it preserves each dimension's internal order AS the
- * shuffled order. Only the section order needs a shuffle of its own, seeded from
- * `<sessionId>:sections` so it is not a function of the same draws that ordered the
- * questions.
+ * ## The superseded ruling, and why it did not survive
+ *
+ * Ruled 2026-10-13 (#556), reversed 2026-10-18: that ruling kept the headings on a
+ * randomised survey and shuffled the SECTION order instead, so an 80-item,
+ * ten-dimension instrument would stay navigable rather than arrive as eighty
+ * unlabelled questions. Three things count against it, and none of them is taste:
+ *
+ * 1. It made the PROCOMER runbook false the day it shipped. That runbook records a
+ *    commitment to a client and an on-screen verification of it ("no theme or
+ *    dimension appeared anywhere"); neither was revisited.
+ * 2. Sections laid end to end ask each dimension's questions CONSECUTIVELY. The
+ *    section order moves, but the grouping the respondent can see does not, so the
+ *    association the shuffle exists to break survives it.
+ * 3. Its own argument no longer holds. The form asks one question per page
+ *    (`SurveyRespondForm`, "one question at a time on small screens"), so a heading
+ *    sits over a single question and orients nothing -- there is no run of eighty to
+ *    navigate. The ruling was written for a page that had already been split.
+ *
+ * What is lost is real, and is recorded here rather than denied: a long randomised
+ * instrument gives the respondent no sense of what is being asked about. The progress
+ * reading ("4 de 63") is what is left to orient them.
  *
  * Two cases still print no headings, because a heading there would say nothing: every
  * category null or blank (there is no structure to show), and a single distinct
@@ -125,13 +141,10 @@ function unsectioned(questions: readonly SurveyRespondQuestion[]): RespondDimens
  *
  * @param questions the questions **in the order they are asked** — the output of
  * `orderQuestions`, not the raw payload. This function never sorts.
- * @param randomizeQuestions `SurveyRespondView.randomizeQuestions`. When true the
- * SECTION order is shuffled as well; the order within each section is already the
- * shuffled one. See the module note.
- * @param seed The respondent's session id (`respondSession.ts`), the same seed
- * `orderQuestions` was given. Unused when `randomizeQuestions` is false, and required
- * rather than optional so that a call site cannot quietly ask for randomisation and
- * get a fixed section order.
+ * @param randomizeQuestions `SurveyRespondView.randomizeQuestions`. When true there
+ * are no sections at all and the whole form is one nameless run -- see the module
+ * note. It takes no seed of its own: the only shuffle a randomised survey needs has
+ * already happened in `orderQuestions`, and this function never reorders.
  *
  * Sections appear in order of first appearance of their category, so the survey
  * author's ordering survives — the same rule, and for the same reason, that
@@ -140,8 +153,13 @@ function unsectioned(questions: readonly SurveyRespondQuestion[]): RespondDimens
 export function respondDimensions(
   questions: readonly SurveyRespondQuestion[],
   randomizeQuestions: boolean,
-  seed: string,
 ): RespondDimensionModel {
+  // Before any grouping: a randomised survey is asked as the flat shuffled list it
+  // arrived as, under no heading. Grouping first and discarding the result would be
+  // the same answer by a longer road, but it would also leave `sections` holding a
+  // structure the page must then be trusted not to print.
+  if (randomizeQuestions) return unsectioned(questions)
+
   // Insertion order IS first-appearance order, which is the ordering rule.
   const grouped = new Map<string, SurveyRespondQuestion[]>()
   for (const question of questions) {
@@ -155,10 +173,9 @@ export function respondDimensions(
   // "every question is in one dimension". Zero keys is the empty form.
   if (grouped.size < 2) return unsectioned(questions)
 
-  // First-appearance order by default; shuffled when the author asked for randomisation.
-  // A separate seed stream from the one that ordered the questions -- see the module note.
+  // First-appearance order: the author's own ordering, which survives because this is
+  // the only path left -- a randomised survey returned above.
   const keys = [...grouped.keys()]
-  if (randomizeQuestions) seededShuffle(keys, `${seed}:sections`)
 
   const sections: RespondSection[] = []
   let position = 1

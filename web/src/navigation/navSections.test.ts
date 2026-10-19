@@ -5,6 +5,7 @@ import { join, sep } from 'node:path'
 import {
   activeHref,
   buildNavSections,
+  isPerUserOnly,
   isUnder,
   leafNavItems,
   sectionTitleKeyForPath,
@@ -696,5 +697,59 @@ describe('the super administrator’s rail glyphs', () => {
     // railIcons.test.tsx pins for the company administrator: one item, one glyph.
     expect(icon('navigation.questionBank')).toBe(RailQuestionBankIcon)
     expect(icon('navigation.questionLibrary')).toBe(RailQuestionLibraryIcon)
+  })
+})
+
+describe('isPerUserOnly', () => {
+  /**
+   * `AdminLayout` draws a 236px rail, a mobile tab bar and a command-palette chip only
+   * when this is false. It is the whole gate, so the cases below are the shell's
+   * behaviour, not a helper's.
+   */
+  const sections = (role: string | undefined, trackingEnabled = false) =>
+    buildNavSections(role, 'company-1', { trackingEnabled })
+
+  it.each(['employee', 'supervisor'])('is true for %s, whose every page is its own', (role) => {
+    expect(isPerUserOnly(sections(role))).toBe(true)
+  })
+
+  it('stays true with the tracking module on, because Mis Tareas is also their own', () => {
+    // Tracking is a DEPLOYMENT capability, so a build with the service configured adds a
+    // fourth row for these roles. It is still their own task list, so it must not bring
+    // the rail back — and a local build with `VITE_TRACKING_API_BASE_URL` set is exactly
+    // where this would otherwise be noticed only by eye.
+    expect(leafNavItems(sections('employee', true)).map((item) => item.href)).toContain(
+      '/tracking/mis-tareas',
+    )
+    expect(isPerUserOnly(sections('employee', true))).toBe(true)
+  })
+
+  it.each(['super_admin', 'company_admin', 'leader'])(
+    'is false for %s, who can reach somewhere the page is not',
+    (role) => {
+      expect(isPerUserOnly(sections(role))).toBe(false)
+    },
+  )
+
+  it('comes back on its own the day one of those roles gains an admin page', () => {
+    // The reason this reads the SECTIONS instead of a role list. A hardcoded
+    // ['employee','supervisor'] would answer today and then go quietly stale: the rail
+    // would stay gone from a role that had somewhere to go, and nothing would say so.
+    const withAnAdminPage: NavSection[] = [
+      ...sections('employee'),
+      {
+        titleKey: 'navigation.sectionAdministration',
+        items: [{ labelKey: 'x', href: '/admin/companies', icon: CircleAlert }],
+      },
+    ]
+
+    expect(isPerUserOnly(withAnAdminPage)).toBe(false)
+  })
+
+  it('is false for no sections at all, so an unknown role keeps the shell it had', () => {
+    // Stripping the chrome off a role this module has never heard of is a guess, and the
+    // shell it already has is the safer wrong answer.
+    expect(isPerUserOnly([])).toBe(false)
+    expect(isPerUserOnly([{ titleKey: 'empty', items: [] } satisfies NavSection])).toBe(false)
   })
 })

@@ -6,10 +6,10 @@ import { Button, Chip } from '../../../../components/ui'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { calendarDay } from '../../../../lib/calendarDay'
 import { cn } from '../../../../lib/cn'
-import { useCompanyScope } from '../../../../company-context'
 import DashboardState from '../../components/DashboardState'
 import { AnonymityNotice } from '../../../surveys/components/AnonymityNotice'
 import { formatDayMonth } from '../../../surveys/respondEstimate'
+import { useRespondentShell } from '../../../../navigation/useRespondentShell'
 import { useEmployeeHomeModel } from './useEmployeeHomeModel'
 import type { EmployeeHomeModel, HomeOutcome, HomeSurvey } from './model'
 import { byCount } from '../../../../i18n/plural'
@@ -65,7 +65,7 @@ export default function EmployeeHomeView({
   notice?: ReactNode
 } = {}) {
   const { t } = useTranslation()
-  const { role } = useCompanyScope()
+  const respondent = useRespondentShell()
   const { model, loading, failed, error, reload } = useEmployeeHomeModel()
 
   return (
@@ -74,7 +74,7 @@ export default function EmployeeHomeView({
         // "INGENIERÍA · EMPLEADO": where this person stands, as the artboard's eyebrow
         // says it. `null` while loading, because an eyebrow that appears and then changes
         // is worse than one that arrives with its page.
-        eyebrow={model ? eyebrowFor(model, role, t) : null}
+        eyebrow={model ? eyebrowFor(model, t, respondent) : null}
         // The greeting IS the heading: the one page in the product addressed to a person
         // rather than to an administrator. It greets the hour and not the person — ruled
         // 2026-10-16, the same ruling behind `auth/ownName.ts`: this page tells the reader
@@ -93,23 +93,38 @@ export default function EmployeeHomeView({
   )
 }
 
-const ROLE_LABEL_KEY: Readonly<Record<string, string>> = {
-  employee: 'users.employee',
-  leader: 'users.leader',
-  supervisor: 'users.supervisor',
-}
 
 /**
- * The department and the role, joined — "Ingeniería · Empleado". A role this page does not
- * know (it is the dispatch's default) contributes no word rather than a guessed one, and a
- * person with neither gets the workspace eyebrow.
+ * The department alone — "Ingeniería". A person with none gets the workspace eyebrow.
+ *
+ * **The role was dropped 2026-10-18.** This printed "Operaciones y Logística · EMPLEADO"
+ * over a respondent's own survey, and ESPH's rehearsal reported it as data about the
+ * evaluado being shown back to them. It is the same KIND of thing as the name
+ * `auth/ownName.ts` already removed on 10-16 — a classification this platform applies to a
+ * person — and that ruling's own words apply unchanged: chrome arguing with its own promise.
+ * It also said nothing: there is exactly one role a reader of this page can be.
+ *
+ * The DEPARTMENT stays, and the distinction is not squeamishness. It is not a label on the
+ * person; it is the unit whose results they are promised, and this page's own foot says so —
+ * "los resultados de su departamento se publican cuando la encuesta cierra". Removing it here
+ * while that sentence stands would leave the page contradicting itself.
  */
-function eyebrowFor(model: EmployeeHomeModel, role: string | undefined, t: TranslateFn): string {
-  const roleKey = role === undefined ? undefined : ROLE_LABEL_KEY[role]
-  const parts = [model.departmentName, roleKey ? t(roleKey) : null].filter(
-    (part): part is string => typeof part === 'string' && part !== '',
-  )
-  return parts.length > 0 ? parts.join(' · ') : t('employee.eyebrow')
+function eyebrowFor(model: EmployeeHomeModel, t: TranslateFn, respondent: boolean): string {
+  // **The department went for the respondent on 2026-10-18 too, and this is a reversal of the
+  // paragraph above.** That paragraph argued the department could stay because it names the
+  // unit whose results the reader is promised rather than labelling the person. ESPH's finding
+  // 3 does not draw that line: "se ven los datos demograficos como Nombre, Departamento y esa
+  // informacion es imprescindible ocultarla del evaluado". Nombre and Departamento are named
+  // together, as one ask, by the client whose anonymity promise it is.
+  //
+  // Conditioned on the shell and not applied outright, because this component is not only the
+  // respondent's: `TeamDashboardPage` and `DepartmentAdminDashboardView` both render it for
+  // roles who are reading ABOUT a department rather than being labelled with one, and for them
+  // the eyebrow is orientation.
+  if (respondent) return t('employee.eyebrow')
+  return model.departmentName && model.departmentName !== ''
+    ? model.departmentName
+    : t('employee.eyebrow')
 }
 
 /**

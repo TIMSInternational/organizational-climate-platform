@@ -205,6 +205,52 @@ export function missingRequired(
 }
 
 /**
+ * Whether this question's comment box must be filled before the form will submit.
+ *
+ * `commentRequired` is a column with a DDL default of `true`, so on its own it means
+ * nothing: every question of every survey carries it. What makes it an author's decision
+ * is the PROMPT — a comment box is rendered only where someone wrote one
+ * (`RespondQuestionField`), so the pair "a prompt was written AND the flag is on" is the
+ * narrowest reading of the flag that is still the flag.
+ *
+ * `open_ended` is excluded for the same reason it renders no box: its answer already is
+ * its text, and `toAnswerInputs` sends no separate comment for it.
+ *
+ * ESPH, 2026-10-18, on Teletrabajo question 12: *"indica que la respuesta debe ser
+ * obligatoria (en el caso de la respuesta abierta quedo como opcional"*. Until this, the
+ * switch in the authoring editor wrote a column nothing ever read.
+ */
+export function commentIsRequired(question: SurveyRespondQuestion): boolean {
+  if (!question.commentRequired) return false
+  if (!question.commentPrompt) return false
+  const shape = answerShapeOf(question)
+  return shape !== 'text' && shape !== 'unsupported'
+}
+
+/**
+ * The ids of answered questions whose required comment is still blank, in the order they
+ * are asked.
+ *
+ * Only ANSWERED questions. An unanswered one is either already in `missingRequired`, or
+ * optional and skipped — and demanding an explanation for an answer nobody gave would
+ * make an optional question impossible to leave alone. It also matches the box itself,
+ * which is read-only until the question is answered.
+ */
+export function missingRequiredComments(
+  questions: readonly SurveyRespondQuestion[],
+  answers: AnswerMap,
+): string[] {
+  return questions
+    .filter(
+      (question) =>
+        commentIsRequired(question) &&
+        isAnswered(question, answers[question.id]) &&
+        !(answers[question.id]?.text ?? '').trim(),
+    )
+    .map((question) => question.id)
+}
+
+/**
  * The submission payload.
  *
  * Unanswered questions are omitted rather than sent empty, which is exactly what the

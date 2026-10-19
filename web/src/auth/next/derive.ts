@@ -187,3 +187,37 @@ export function registerOutcome(status: number, message: string): RegisterOutcom
   if (status === 404) return { kind: 'invitation' }
   return { kind: 'form-server', message }
 }
+
+/**
+ * The longest `?u=` this will accept.
+ *
+ * A generated mass-invite username is `<company slug>-<9 random chars>`; the column
+ * behind it is a `varchar(256)`. The cap is not a validation rule — the server decides
+ * what is a username — it only stops a hand-written link pasting a paragraph into a
+ * field the respondent then has to clear by hand.
+ */
+const MAX_PREFILLED_USERNAME = 256
+
+/**
+ * The username an invitation link carries, or `''` when it carries none.
+ *
+ * ESPH's 2026-10-18 review ends on a respondent who could not sign in from their phone.
+ * The screenshot answers why: the email read `esphensa-k85j9uyv`, the field read
+ * `esphensa-k85j9ujv`. One character, `y` for `j`, retyped from an email into a browser
+ * on a phone — where there is no second window to copy from and the two glyphs differ by
+ * a descender. The credentials mail puts the username in the sign-in link so the field
+ * arrives already filled, and `CredentialsEmailComposer` is the one place that builds it.
+ *
+ * Only the username. The password stays in the body and never reaches a URL: query
+ * strings are kept in history, in `Referer`, and in every proxy and access log between
+ * the phone and the API.
+ *
+ * Untrusted, because anyone can write this link: it is trimmed, length-capped, and put in
+ * a visible field the respondent can edit. Nothing is submitted for them.
+ */
+export function prefilledUsername(search: string): string {
+  const raw = new URLSearchParams(search).get('u')
+  if (!raw) return ''
+  const trimmed = raw.trim()
+  return trimmed.length > MAX_PREFILLED_USERNAME ? '' : trimmed
+}

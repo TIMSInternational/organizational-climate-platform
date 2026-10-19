@@ -137,11 +137,14 @@ public class CredentialsEmailComposerTests
         var message = CredentialsEmailComposer.Compose(
             "person@example.com", Person, Username, Password, LoginUrl, "es", purpose);
 
-        Assert.Equal(1, Occurrences(message.TextBody, Username));
+        // The PASSWORD is the clean counter now: it appears once per language block and
+        // nowhere else, so a second block still doubles it. The username deliberately appears
+        // twice per block -- as the credential and again on the sign-in link -- so counting it
+        // at 1 would now fail for the right reason and hide the duplication it was watching.
         Assert.Equal(1, Occurrences(message.TextBody, Password));
-        Assert.Equal(1, Occurrences(message.TextBody, LoginUrl));
-        Assert.Equal(1, Occurrences(message.HtmlBody, Username));
         Assert.Equal(1, Occurrences(message.HtmlBody, Password));
+        Assert.Equal(2, Occurrences(message.TextBody, Username));
+        Assert.Equal(1, Occurrences(message.TextBody, LoginUrl));
         // "Iniciar sesi" rather than the whole label: `EmailBranding.Escape` is
         // `WebUtility.HtmlEncode`, which turns the accented o into a numeric entity, so the
         // literal does not survive into the HTML. The prefix is still unique to the button.
@@ -281,6 +284,58 @@ public class CredentialsEmailComposerTests
         Assert.Contains("Gracias por participar.", text, StringComparison.Ordinal);
         Assert.Contains("Thank you for taking part.", EnglishText(CredentialsEmailPurpose.Invitation), StringComparison.Ordinal);
         Assert.DoesNotContain("Thank you for taking part.", text, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(CredentialsEmailPurpose.Invitation)]
+    [InlineData(CredentialsEmailPurpose.Reminder)]
+    public void The_sign_in_link_carries_the_username_so_nobody_retypes_it(CredentialsEmailPurpose purpose)
+    {
+        // ESPH, 2026-10-18: "La encuesta no pude abrirla desde el celular, use los accesos
+        // enviados." The screenshot beside that sentence shows `esphensa-k85j9ujv` typed into
+        // the field against `esphensa-k85j9uyv` in the mail -- `y` read as `j`, which is what a
+        // nine-character random suffix retyped by eye on a phone costs.
+        var message = CredentialsEmailComposer.Compose(
+            "person@example.com", Person, Username, Password, LoginUrl, "es", purpose);
+
+        Assert.Contains($"{LoginUrl}?u={Username}", message.TextBody, StringComparison.Ordinal);
+        Assert.Contains($"{LoginUrl}?u={Username}", message.HtmlBody, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_password_is_never_put_on_the_link()
+    {
+        // A query string outlives the message: browser history, the `Referer` header, and every
+        // proxy and access log between the phone and the API. The username is printed in this
+        // same mail in plain text and signs nobody in on its own; the password is the secret.
+        var message = CredentialsEmailComposer.Compose(
+            "person@example.com", Person, Username, Password, LoginUrl, "es", CredentialsEmailPurpose.Invitation);
+
+        foreach (var line in message.TextBody.Split('\n'))
+        {
+            if (line.Contains(LoginUrl, StringComparison.Ordinal))
+            {
+                Assert.DoesNotContain(Password, line, StringComparison.Ordinal);
+            }
+        }
+
+        Assert.DoesNotContain($"u={Password}", message.HtmlBody, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_login_url_that_already_has_a_query_or_a_fragment_is_still_a_valid_link()
+    {
+        // `?` twice is not a query, and `#x?u=` is not a query at all -- it is part of the
+        // fragment, which never reaches the server.
+        var withQuery = CredentialsEmailComposer.Compose(
+            "person@example.com", Person, Username, Password, "https://app.example.com/login?lang=es", "es",
+            CredentialsEmailPurpose.Invitation);
+        Assert.Contains($"https://app.example.com/login?lang=es&u={Username}", withQuery.TextBody, StringComparison.Ordinal);
+
+        var withFragment = CredentialsEmailComposer.Compose(
+            "person@example.com", Person, Username, Password, "https://app.example.com/login#top", "es",
+            CredentialsEmailPurpose.Invitation);
+        Assert.Contains($"https://app.example.com/login?u={Username}#top", withFragment.TextBody, StringComparison.Ordinal);
     }
 
     [Fact]

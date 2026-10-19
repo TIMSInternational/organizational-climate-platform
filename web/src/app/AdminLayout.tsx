@@ -1,13 +1,15 @@
 import { useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router'
 import RoleBasedNav from '../navigation/RoleBasedNav'
-import { buildNavSections, withUnreadBadge } from '../navigation/navSections'
+import { buildNavSections, isPerUserOnly, withUnreadBadge } from '../navigation/navSections'
 import { isTrackingEnabled } from '../features/tracking/api/config'
 import { clearToken, getToken } from '../auth/token'
 import { decodeJwtPayload } from '../auth/jwt'
 import { useTranslation } from '../i18n'
+import { cn } from '../lib/cn'
 import { SkipLink } from '../components/ui'
 import {
+  BrandLockup,
   CommandPalette,
   CompanyContextSwitcher,
   CompanyLogo,
@@ -87,6 +89,18 @@ function AdminShell() {
     unreadCount,
   )
 
+  // A rail is worth 236px only when it reaches somewhere the page does not. For a
+  // respondent every row in it IS the page they are on -- `/dashboard` is this page,
+  // "Mis Encuestas" is the list it already prints, and Notificaciones is the bell two
+  // inches to the right. ESPH's rehearsal returned that as its second finding.
+  //
+  // So those roles get no rail, no mobile tab bar and no command-palette chip, and the
+  // three things the rail's footer owned -- the account menu, the theme and language
+  // pickers, and SIGN OUT -- move into the strip. That last one is why this is not a
+  // `hidden` class on the aside: delete the rail without moving its footer and a
+  // respondent has no way to leave.
+  const perUserOnly = isPerUserOnly(sections)
+
   return (
     <div className="flex h-dvh flex-col bg-surface-shell">
       {/* First focusable thing on the page, so a keyboard user is not made to Tab
@@ -95,6 +109,7 @@ function AdminShell() {
       <SkipLink href="#main">{t('shell.skipToContent')}</SkipLink>
 
       <div className="flex min-h-0 flex-1">
+        {perUserOnly ? null : (
         <aside
           // Transparent, not a panel. The ForMaps rail has no background of its
           // own -- it sits on the page surface, and only the content column is a
@@ -131,6 +146,7 @@ function AdminShell() {
             />
           </div>
         </aside>
+        )}
 
         {/* The content column: a fixed header strip over the scrolling `<main>`.
             `min-w-0` sits here, on the flex *child*, so a wide table inside the
@@ -170,7 +186,17 @@ function AdminShell() {
             // The canvas's strip: 52px, 20px in from the edge (every artboard).
             style={{ minHeight: 52, padding: '0 20px' }}
           >
-            <MobileTenantLogo />
+            {/* Railless: the rail's head and its footer both land here. `mr-auto` on the
+                lockup pushes everything else right, the way `MobileTenantLogo` does on a
+                phone -- see the header's own note on why this is not `justify-between`. */}
+            {perUserOnly ? (
+              <span className="mr-auto flex items-center gap-inline">
+                <BrandLockup size="compact" />
+                <RailessTenantLogo />
+              </span>
+            ) : (
+              <MobileTenantLogo />
+            )}
             {/* #124's company-context selector. Renders `null` for every role but
                 SuperAdmin, so the strip is unchanged for everyone else — the bell
                 stays flush right and nothing shifts. It is here rather than in
@@ -182,8 +208,15 @@ function AdminShell() {
                 the bell in this same strip, and so does this. It opens the palette
                 by dispatching a window event rather than by holding shared state —
                 see `CommandPalette.tsx`. */}
-            <SearchTrigger />
+            {/* The palette offers this role its own three pages, which are the page it is
+                on. The chip is chrome advertising a shortcut to nowhere. */}
+            {perUserOnly ? null : <SearchTrigger />}
             <NotificationBell onUnreadCountChange={setUnreadCount} />
+            {perUserOnly ? (
+              <span className="relative">
+                <SidebarUserMenu onSignOut={handleSignOut} variant="strip" />
+              </span>
+            ) : null}
           </header>
 
           {/* The scroll container. */}
@@ -197,7 +230,15 @@ function AdminShell() {
               does the same for the document scroller the auth and respond screens use. */}
           <main
             id="main"
-            className="min-w-0 flex-1 overflow-y-auto p-gutter [scrollbar-gutter:stable] md:pt-0 md:pl-0"
+            // `md:pt-0 md:pl-0` is the RAIL's geometry: every artboard of the 10 Sep canvas
+            // draws the card flush against the rail's edge and the bar's foot, with the
+            // gutter only on the right and the bottom. With no rail there is no edge to sit
+            // against, and the card read as shoved into the corner — one gutter on the right,
+            // none on the left. So the railless shell keeps `p-gutter` on all four sides.
+            className={cn(
+              'min-w-0 flex-1 overflow-y-auto p-gutter [scrollbar-gutter:stable]',
+              perUserOnly ? null : 'md:pt-0 md:pl-0',
+            )}
           >
           {/* Legacy AppShell inset its content by 12px and put it on a panel:
               `background: var(--admin-bg-panel)`, `1px solid
@@ -255,14 +296,34 @@ function AdminShell() {
                 which reads as content that failed to load rather than as a page
                 with little on it. The panel is the page's surface, so it should be
                 the height of the page. */}
-            <div className="flex min-h-full w-full flex-col overflow-x-auto rounded-xl border border-line-panel bg-surface-panel px-6 pb-20 pt-5 md:pb-8">
+            <div
+              className={cn(
+                'flex min-h-full w-full flex-col overflow-x-auto rounded-xl border border-line-panel bg-surface-panel px-6 pb-20 pt-5 md:pb-8',
+                // The cap this file removed in general, put back for the one shell it is
+                // right for. The note above records why it went: the column starts AFTER
+                // the rail, so centring a capped card inside it pushed the card away from
+                // the rail and left 530px of empty surface between them at 2560.
+                //
+                // With no rail there is nothing to drift away from, and the opposite
+                // defect appears instead — a 1413px card at 1440 with the heading and the
+                // prose pinned to its left edge and the right half empty, which is what
+                // ESPH read as "no padding on the left".
+                perUserOnly ? 'mx-auto max-w-content' : null,
+              )}
+            >
               <Outlet />
             </div>
           </main>
         </div>
       </div>
 
-      <MobileNav sections={sections} footer={<ShellControls onSignOut={handleSignOut} />} />
+      {/* The same argument as the rail, one breakpoint down: five truncated tabs
+          ("Panel de Co…", "Mis Encuest…", "Notificacion…", "Más") across the foot of a
+          390px screen, all of them this page. Most of a mass-invited workforce answers
+          on a phone, so this is the copy of the chrome that matters most. */}
+      {perUserOnly ? null : (
+        <MobileNav sections={sections} footer={<ShellControls onSignOut={handleSignOut} />} />
+      )}
 
       {/* Last in the shell, outside every column, because it portals to the body
           anyway and its Cmd+K listener is document-wide. Handed the same `sections`
@@ -287,6 +348,30 @@ function AdminShell() {
  * `GET /profile`, which is `RequireAuthorization()` — so there is no path by which a
  * visitor holding a link reaches it. `h-6` keeps a tall logo from growing the 52px strip.
  */
+/**
+ * The tenant's logo in the RAILLESS strip, at every width.
+ *
+ * `MobileTenantLogo` below is `md:hidden` because from `md` the rail already opens on
+ * `SidebarBrand` and the mark would be drawn twice. With no rail there is no second
+ * copy, so the same mark is simply shown — which is also what the respondent's own
+ * survey page does (`RespondShell`: the OCC lockup, a hairline, then the company's).
+ *
+ * Same guarantee as its sibling and for the same two reasons: `AdminLayout` renders only
+ * inside `RequireAuth`, and the value comes from `GET /profile`, which is
+ * `RequireAuthorization()`. `h-6` keeps a tall logo from growing the 52px strip.
+ */
+function RailessTenantLogo() {
+  const brand = useOwnCompanyBrand(true)
+  if (!brand.logoUrl || !brand.companyName) return null
+
+  return (
+    <>
+      <span aria-hidden="true" className="h-5 w-px bg-line-light" />
+      <CompanyLogo src={brand.logoUrl} companyName={brand.companyName} className="h-6 max-w-32" />
+    </>
+  )
+}
+
 function MobileTenantLogo() {
   const brand = useOwnCompanyBrand(true)
   if (!brand.logoUrl || !brand.companyName) return null

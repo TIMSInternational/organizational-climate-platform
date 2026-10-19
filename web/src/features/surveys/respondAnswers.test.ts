@@ -5,9 +5,11 @@ import {
   answerShapeOf,
   answeredCount,
   choicesFor,
+  commentIsRequired,
   hydrateAnswers,
   isAnswered,
   missingRequired,
+  missingRequiredComments,
   moveRankingEntry,
   orderQuestions,
   toAnswerInputs,
@@ -283,5 +285,67 @@ describe('moveRankingEntry', () => {
   it('is a no-op past either end, so a ranking stays a permutation', () => {
     expect(moveRankingEntry(['a', 'b'], 0, -1)).toEqual(['a', 'b'])
     expect(moveRankingEntry(['a', 'b'], 1, 2)).toEqual(['a', 'b'])
+  })
+})
+
+describe('commentIsRequired', () => {
+  /** A question whose author wrote a prompt AND asked for it to be filled. */
+  const asked = { commentPrompt: 'Comente brevemente las razones de su respuesta:', commentRequired: true }
+
+  it('is the prompt AND the flag, never the flag alone', () => {
+    expect(commentIsRequired(question(asked))).toBe(true)
+
+    // The flag's DDL default is `true`, so on its own it is every question ever written.
+    // Without a prompt there is no box, and a box nobody can see cannot be required.
+    expect(commentIsRequired(question({ commentRequired: true, commentPrompt: null }))).toBe(false)
+    expect(commentIsRequired(question({ ...asked, commentRequired: false }))).toBe(false)
+  })
+
+  it('is never asked of an open question, which renders no comment box at all', () => {
+    // Its answer already IS its text, and `toAnswerInputs` sends no separate comment for
+    // it -- a required comment there would be unsatisfiable.
+    expect(commentIsRequired(question({ ...asked, type: 'open_ended', options: null }))).toBe(false)
+  })
+
+  it('is never asked of a question this build cannot render', () => {
+    expect(commentIsRequired(question({ ...asked, type: 'not_a_type_we_know' }))).toBe(false)
+  })
+})
+
+describe('missingRequiredComments', () => {
+  const asked = { commentPrompt: 'Comente brevemente las razones de su respuesta:', commentRequired: true }
+
+  it('names an answered question whose required comment is blank', () => {
+    const q = question({ id: 'q12', ...asked })
+    expect(missingRequiredComments([q], { q12: { value: 'agree' } })).toEqual(['q12'])
+    expect(missingRequiredComments([q], { q12: { value: 'agree', text: '   ' } })).toEqual(['q12'])
+  })
+
+  it('is satisfied by any non-blank comment', () => {
+    const q = question({ id: 'q12', ...asked })
+    expect(missingRequiredComments([q], { q12: { value: 'agree', text: 'Rindo mas en casa.' } })).toEqual([])
+  })
+
+  it('asks nothing of a question nobody answered', () => {
+    // Either it is required and `missingRequired` already has it, or it is optional and
+    // skipped -- and demanding an explanation for an answer nobody gave would make an
+    // optional question impossible to leave alone. It matches the box, which is read-only
+    // until the question is answered.
+    const q = question({ id: 'q12', ...asked })
+    expect(missingRequiredComments([q], {})).toEqual([])
+    expect(missingRequiredComments([q], { q12: { value: '' } })).toEqual([])
+  })
+
+  it('leaves every question whose comment the author did not require', () => {
+    const optional = question({ id: 'q1', commentPrompt: 'Anything to add?', commentRequired: false })
+    expect(missingRequiredComments([optional], { q1: { value: 'agree' } })).toEqual([])
+  })
+
+  it('returns the ids in the order the questions are asked', () => {
+    const a = question({ id: 'a', ...asked })
+    const b = question({ id: 'b', ...asked })
+    const answers = { a: { value: 'agree' }, b: { value: 'agree' } }
+    expect(missingRequiredComments([a, b], answers)).toEqual(['a', 'b'])
+    expect(missingRequiredComments([b, a], answers)).toEqual(['b', 'a'])
   })
 })
