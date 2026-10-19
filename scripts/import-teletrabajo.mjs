@@ -622,6 +622,14 @@ async function main() {
   log(`\nsurvey   : ${title}`)
   log(`questions: ${(body.questions ?? []).length} — ${JSON.stringify(types)}`)
   log(`anonymous: ${body.settings?.anonymous}   sendInvitations: ${body.settings?.notificationSendInvitations}   serviceType: ${body.serviceType ?? 'null (unmetered)'}`)
+  // Printed because omitting it is itself a decision, and an invisible one: a payload with
+  // no `randomizeQuestions` asks every respondent the same order, under the dimension
+  // heading, which is the defect ESPH's review raises against both of their surveys.
+  log(
+    body.settings?.randomizeQuestions
+      ? 'orden    : ALEATORIO por persona — sin titulo de dimension sobre las preguntas'
+      : 'orden    : FIJO, el del documento — y la dimension se imprime sobre cada pregunta',
+  )
   log(`targets  : ${values.apply ? userIds.length : people.length} PEOPLE by id, 0 departments — only they see it, whatever their department`)
 
   const surveys = await call('GET', `/surveys?companyId=${companyId}`, null, token)

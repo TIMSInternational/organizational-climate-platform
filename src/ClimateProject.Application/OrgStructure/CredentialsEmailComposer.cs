@@ -87,23 +87,26 @@ public static class CredentialsEmailComposer
         var first = CopyFor(purpose, spanish: spanishFirst);
         var second = single is null ? CopyFor(purpose, spanish: !spanishFirst) : null;
 
+        // Every link in the message carries the username; see `WithUsername`.
+        var signInUrl = WithUsername(loginUrl, username);
+
         var html = new StringBuilder();
-        AppendHtml(html, first, username, password, loginUrl, brand);
+        AppendHtml(html, first, username, password, signInUrl, brand);
         if (second is not null)
         {
             html.Append("""<hr style="border:none;border-top:1px solid #e4e7eb;margin:28px 0;">""");
-            AppendHtml(html, second, username, password, loginUrl, brand);
+            AppendHtml(html, second, username, password, signInUrl, brand);
         }
 
         html.Append(EmailBranding.Footer(EmailBranding.Escape(
             second is null ? first.Ignore : $"{first.Ignore} / {second.Ignore}")));
 
         var text = new StringBuilder();
-        AppendText(text, first, username, password, loginUrl);
+        AppendText(text, first, username, password, signInUrl);
         if (second is not null)
         {
             text.Append("\n--\n\n");
-            AppendText(text, second, username, password, loginUrl);
+            AppendText(text, second, username, password, signInUrl);
         }
 
         return new EmailMessage(
@@ -113,6 +116,37 @@ public static class CredentialsEmailComposer
             EmailMessage.ToHeaderValue(second is null ? first.Subject : $"{first.Subject} / {second.Subject}"),
             text.ToString(),
             EmailBranding.Document(single ?? ContentLanguages.FallbackLocale, html.ToString(), brand));
+    }
+
+    /// <summary>
+    /// The sign-in link with the username on it, so the field arrives filled.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ESPH's 2026-10-18 review ends on a respondent who could not sign in from their
+    /// phone. The screenshot says why without anyone having to guess: the mail read
+    /// <c>esphensa-k85j9uyv</c> and the field read <c>esphensa-k85j9ujv</c> — one
+    /// character, <c>y</c> retyped as <c>j</c>. A mass-invite username ends in nine random
+    /// characters, and on a phone there is no second window to copy it from, so it is
+    /// retyped by eye from a mail where <c>y</c> and <c>j</c> differ by a descender.
+    /// </para>
+    /// <para>
+    /// The username is not a secret: it is printed in this same message in plain text, and
+    /// on its own it signs nobody in. The PASSWORD is, and it stays in the body — a query
+    /// string survives in browser history, in the <c>Referer</c> header, and in every proxy
+    /// and access log between the phone and the API, none of which the body touches.
+    /// </para>
+    /// <para>
+    /// Appended before any fragment, because <c>…/login#x?u=…</c> is not a query at all.
+    /// </para>
+    /// </remarks>
+    private static string WithUsername(string loginUrl, string username)
+    {
+        var hash = loginUrl.IndexOf('#', StringComparison.Ordinal);
+        var head = hash < 0 ? loginUrl : loginUrl[..hash];
+        var fragment = hash < 0 ? string.Empty : loginUrl[hash..];
+        var separator = head.Contains('?', StringComparison.Ordinal) ? '&' : '?';
+        return $"{head}{separator}u={Uri.EscapeDataString(username)}{fragment}";
     }
 
     private static void AppendHtml(

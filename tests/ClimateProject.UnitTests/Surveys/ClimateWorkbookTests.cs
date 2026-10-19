@@ -45,7 +45,11 @@ public class ClimateWorkbookTests
         Assert.Equal(800,content.People.Select(p=>p.Email).Distinct().Count());Assert.Equal(2,content.Questions.Count);
         Assert.Contains("Empresa prueba",content.Questions[0].Text!.ByLocale!["es"]);
         Assert.Equal("likert",content.Questions[0].Type);Assert.Equal(5,content.Questions[0].Options!.Count);
-        Assert.Equal("open_ended",content.Questions[1].Type);Assert.False(content.Questions[1].Required);
+        Assert.Equal("open_ended",content.Questions[1].Type);
+        // Required, as every question in a climate workbook now is. Ruled 2026-10-18 on ESPH's
+        // finding 8 -- "La pregunta 63 abierta sale como opcional". This asserted False until then,
+        // and `scripts/import-climate-workbook.mjs` asserts the same thing for the same workbook.
+        Assert.True(content.Questions[1].Required);
         Assert.Equal("percent",content.Company.ResultBands.Scale);Assert.Equal("large",content.Company.Size);
         Assert.Contains(content.Fields,f=>f.Field=="puesto");Assert.Equal("norte",content.People[0].Demographics!["region"]);
     }

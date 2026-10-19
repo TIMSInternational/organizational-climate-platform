@@ -173,7 +173,10 @@ public static partial class ClimateWorkbook
                 ScaleMin: open ? null : 1, ScaleMax: open ? null : 5,
                 ScaleLabelMin: open || labels.Count == 0 ? null : Local(labels[0],language),
                 ScaleLabelMax: open || labels.Count == 0 ? null : Local(labels[^1],language),
-                Required: !open, CommentRequired: false, Order: questions.Count + 1, Category: dimension));
+                // Required even when open: ESPH finding 8, ruled 2026-10-18. Kept identical to
+                // `scripts/import-climate-workbook.mjs`, which reads the same workbook for the same
+                // survey -- two readers of one file that disagreed would be the worse bug.
+                Required: true, CommentRequired: false, Order: questions.Count + 1, Category: dimension));
             dimensionQuestions++;
         }
         if (dimension is not null && dimensionQuestions == 0) errors.Add($"PREGUNTAS: {dimension} no contiene preguntas.");

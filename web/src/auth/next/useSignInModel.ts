@@ -5,7 +5,7 @@ import { setToken } from '../token'
 import { resolveInitialRoute } from '../../app/resolveInitialRoute'
 import { safeReturnPath } from '../returnPath'
 import { useTranslation } from '../../i18n'
-import { loginOutcome, type LoginOutcome } from './derive'
+import { loginOutcome, prefilledUsername, type LoginOutcome } from './derive'
 
 /** What the sign-in card shows above its first field, or `null` while nothing has failed. */
 export type SignInError = Extract<LoginOutcome, { kind: 'form' } | { kind: 'form-server' }>
@@ -31,6 +31,12 @@ export interface SignInModel {
  * needs the router and the token store, which is this hook. Keeping the two apart is what
  * lets `derive.test.ts` pin every branch without a DOM.
  *
+ * ## The field starts from the link when the link carries a username
+ *
+ * `?u=` is how the credentials mail hands over the generated username, which is a
+ * nine-character random suffix nobody can be asked to retype on a phone — ESPH's review
+ * ends on exactly that failure. `prefilledUsername` carries the reasoning and the limits.
+ *
  * ## The typed email survives every failure
  *
  * `email` and `password` are held here rather than in the page, so the "your credentials
@@ -46,8 +52,12 @@ export function useSignInModel(): SignInModel {
   // — today the microclimate invitation's «Iniciar sesión y volver aquí». Validated rather
   // than trusted: see `returnPath.ts`. This lives HERE, on the routed component's model,
   // and not on `auth/LoginPage.tsx`, which the auth lane left in the tree unrouted.
-  const returnPath = safeReturnPath(useLocation().state)
-  const [email, setEmail] = useState('')
+  const location = useLocation()
+  const returnPath = safeReturnPath(location.state)
+  // Seeded once, from the link rather than from the respondent's memory of it — see
+  // `prefilledUsername`. A lazy initialiser, so a later re-render of this hook cannot
+  // put the link's value back over what the respondent has since typed.
+  const [email, setEmail] = useState(() => prefilledUsername(location.search))
   const [password, setPassword] = useState('')
   const [error, setError] = useState<SignInError | null>(null)
   const [submitting, setSubmitting] = useState(false)

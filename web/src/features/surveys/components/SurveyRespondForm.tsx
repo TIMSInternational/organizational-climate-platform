@@ -27,10 +27,10 @@ import {
 // about data, not a chart, and this is the one page an unauthenticated visitor
 // loads — reaching through the barrel would put every chart module in its import
 // graph to read a single integer.
-import { ANONYMITY_FLOOR } from '../../../components/charts/suppression'
 import {
   hydrateAnswers,
   missingRequired,
+  missingRequiredComments,
   orderQuestions,
   toAnswerInputs,
   type AnswerMap,
@@ -411,8 +411,8 @@ export default function SurveyRespondForm({
   // the headings the analysis will report under. It returns the whole form either
   // way — `sectioned: false` means "print no headings", not "here is half of it".
   const dimensions = useMemo(
-    () => respondDimensions(orderedQuestions, randomizeQuestions, sessionId),
-    [orderedQuestions, randomizeQuestions, sessionId],
+    () => respondDimensions(orderedQuestions, randomizeQuestions),
+    [orderedQuestions, randomizeQuestions],
   )
 
   /**
@@ -881,14 +881,17 @@ export default function SurveyRespondForm({
   /**
    * Siguiente. A required question stops the respondent here rather than at the end.
    *
-   * The same rule as the submit (`missingRequired`, over this one question), and the same
-   * inline error — found now, on the question they are looking at, instead of after the
-   * last page sends them back to it.
+   * The same rule as the submit (`missingRequired` and `missingRequiredComments`, over
+   * this one question), and the same inline error — found now, on the question they are
+   * looking at, instead of after the last page sends them back to it.
    */
   function goNext(index: number): void {
     const current = questions[index]
     if (current === undefined) return
-    const missing = missingRequired([current], answers)
+    const missing = [
+      ...missingRequired([current], answers),
+      ...missingRequiredComments([current], answers),
+    ]
     if (missing.length > 0) {
       setInvalidIds((ids) => (ids.includes(current.id) ? ids : [...ids, current.id]))
       document.getElementById(questionFieldId(current.id))?.focus()
@@ -909,10 +912,19 @@ export default function SurveyRespondForm({
       return
     }
 
-    const missing = missingRequired(questions, answers)
+    const unanswered = missingRequired(questions, answers)
+    const uncommented = missingRequiredComments(questions, answers)
+    // In the order they are asked, so `turnTo` below lands on the first thing wrong
+    // rather than on the first unanswered question with a blank comment two pages back.
+    const missingSet = new Set([...unanswered, ...uncommented])
+    const missing = questions.filter((question) => missingSet.has(question.id)).map((q) => q.id)
     if (missing.length > 0) {
       setInvalidIds(missing)
-      announce(t('missingRequired', { count: missing.length }))
+      announce(
+        unanswered.length > 0
+          ? t('missingRequired', { count: unanswered.length })
+          : t('missingRequiredComments', { count: uncommented.length }),
+      )
       // Turn to the first unanswered question rather than a summary: the respondent
       // has to reach the question anyway, and on a 40-question survey a summary leaves
       // them paging for it. `turnTo` focuses it once it is on screen.
@@ -1090,7 +1102,7 @@ export default function SurveyRespondForm({
             field it would push the field itself down the phone, which is the same
             reasoning the author's description follows on the question pages. */}
         {demographicStep === 0 ? (
-          <p className="m-0 max-w-prose text-respond text-fg-secondary">{t('demographics.intro', { floor: ANONYMITY_FLOOR })}</p>
+          <p className="m-0 text-respond text-fg-secondary">{t('demographics.intro')}</p>
         ) : null}
 
         <div className="flex flex-col gap-4">
@@ -1185,7 +1197,7 @@ export default function SurveyRespondForm({
           </h1>
         </header>
 
-        <p data-slot="identity-intro" className="m-0 max-w-prose text-respond text-fg-secondary">
+        <p data-slot="identity-intro" className="m-0 text-respond text-fg-secondary">
           {t('identity.intro')}
         </p>
 
@@ -1245,8 +1257,10 @@ export default function SurveyRespondForm({
     view.timeLimitMinutes === null ? null : startedAt.current + view.timeLimitMinutes * 60_000
   const remainingMs = deadline === null ? null : deadline - now
   // The heading of the section this question is asked under, when the form prints
-  // sections at all — `respondDimensions`' decision, exactly as the headings were before
-  // the page was split: a randomised survey, or one with no categories, prints none.
+  // sections at all — `respondDimensions`' decision: a randomised survey, or one with
+  // no categories, prints none. That sentence stood here while the module did the
+  // opposite (2026-10-13 to 2026-10-18); it is the module that was changed to match it,
+  // for the reasons its own note now carries.
   const dimensionKey =
     current && dimensions.sectioned
       ? dimensions.sections.find((section) => section.questions.some((q) => q.id === current.id))?.key
@@ -1299,9 +1313,18 @@ export default function SurveyRespondForm({
       </header>
 
       {/* The author's description, on the first page only: it introduces the survey,
-          and repeated over every question it would push the question down the phone. */}
+          and repeated over every question it would push the question down the phone.
+
+          No `max-w-prose`, here or on the two intros above. The respond column is already
+          `max-w-field` (32rem) on a phone and `md:max-w-respond` (44rem) from the `md`
+          breakpoint up (`RespondShell`), so prose's 65ch bound only ever bit on desktop —
+          and there it set the paragraph to a measure ~190px narrower than the question card
+          directly beneath it. ESPH's 2026-10-18 review boxed that gap and read it as the
+          text being broken rather than laid out: *"no viene distribuido (todo se agrupa
+          alineado a la izquierda)"*. The column IS the measure; a second one inside it only
+          made the page look ragged. */}
       {index === 0 && view.description ? (
-        <p className="m-0 max-w-prose text-respond text-fg-secondary">{view.description}</p>
+        <p className="m-0 text-respond text-fg-secondary">{view.description}</p>
       ) : null}
 
       {remainingMs !== null && remainingMs > 0 ? (
@@ -1908,8 +1931,8 @@ function Submitted({
             title={result.isAnonymous ? t('happensPooledTitle') : t('happensAttributedTitle')}
             body={
               result.isAnonymous
-                ? t('happensPooledBody', { floor: ANONYMITY_FLOOR })
-                : t('happensAttributedBody', { floor: ANONYMITY_FLOOR })
+                ? t('happensPooledBody')
+                : t('happensAttributedBody')
             }
           />
           {/* Dropped rather than guessed at when the payload never loaded — a date

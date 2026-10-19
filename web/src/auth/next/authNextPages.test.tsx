@@ -148,6 +148,32 @@ describe('LoginNextPage', () => {
     expect(screen.queryByText(/signing in only checks that you were invited/i)).toBeNull()
   })
 
+  /**
+   * ESPH, 2026-10-18: *"La encuesta no pude abrirla desde el celular, use los accesos
+   * enviados."* The screenshot beside that sentence shows `esphensa-k85j9ujv` in the field
+   * against `esphensa-k85j9uyv` in the mail — `y` retyped as `j`. On a phone there is no
+   * second window to copy from, and the mail's monospace `y` and `j` differ by a descender.
+   */
+  it('starts from the username the invitation link carries, rather than from memory', () => {
+    renderAuthRoutes('/login?u=esphensa-k85j9uyv')
+    expect(screen.getByLabelText(/Email address/)).toHaveProperty('value', 'esphensa-k85j9uyv')
+  })
+
+  it('leaves the field empty for everyone who did not arrive on such a link', () => {
+    renderAuthRoutes('/login')
+    expect(screen.getByLabelText(/Email address/)).toHaveProperty('value', '')
+  })
+
+  it('still lets the respondent correct what the link filled in', async () => {
+    // Filled, not locked: the link is untrusted input, and a person whose mail client
+    // mangled it has to be able to fix it in place.
+    renderAuthRoutes('/login?u=wrong-code')
+    const field = screen.getByLabelText(/Email address/)
+    await userEvent.clear(field)
+    await userEvent.type(field, 'esphensa-k85j9uyv')
+    expect(field).toHaveProperty('value', 'esphensa-k85j9uyv')
+  })
+
   it('explains the product on the stage instead, and a different slice per screen', () => {
     renderAuthRoutes('/login')
     expect(screen.getByText(/An instrument for measuring workplace climate/i)).toBeTruthy()
