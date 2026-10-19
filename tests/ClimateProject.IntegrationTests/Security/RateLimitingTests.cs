@@ -385,32 +385,78 @@ public class RateLimitingTests : IClassFixture<WebApplicationFactory<Program>>
         }
     }
 
+    /// <summary>
+    /// The budget is configured rather than hardcoded here, so that raising the shipped
+    /// number is not a test edit. What this asserts is the PARTITION -- that two signed-in
+    /// employees behind one office address do not share one budget -- and that is true at
+    /// any size. The shipped size has its own test below.
+    /// </summary>
     [Fact]
     public void Survey_respondents_behind_one_office_address_have_independent_budgets()
     {
-        var first = ContextBehindOneProxy("203.0.113.7", "198.51.100.9");
-        var second = ContextBehindOneProxy("203.0.113.7", "198.51.100.9");
+        const int Permits = 3;
+        var first = ContextBehindOneProxy("203.0.113.7", "198.51.100.9", Permits);
+        var second = ContextBehindOneProxy("203.0.113.7", "198.51.100.9", Permits);
         first.User = new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim("sub", "employee-one") }, "test"));
         second.User = new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim("sub", "employee-two") }, "test"));
         using var limiter = PartitionedRateLimiter.Create<HttpContext, string>(SurveyResponseEndpoints.PartitionResponseSubmission);
 
-        using var firstBudget = limiter.AttemptAcquire(first, 60);
+        using var firstBudget = limiter.AttemptAcquire(first, Permits);
         using var exhaustedFirst = limiter.AttemptAcquire(first);
-        using var secondBudget = limiter.AttemptAcquire(second, 60);
+        using var secondBudget = limiter.AttemptAcquire(second, Permits);
         Assert.True(firstBudget.IsAcquired);
         Assert.False(exhaustedFirst.IsAcquired);
         Assert.True(secondBudget.IsAcquired);
     }
 
+    /// <summary>
+    /// The size an anonymous respondent's address actually gets, pinned where changing it is
+    /// a decision. 600 a minute is about seventy-five people answering an 82-question survey
+    /// at once from one site, at the ~8 requests a minute the autosave debounce produces per
+    /// respondent; the 60 it replaced was about seven, which is a plant's wifi on the morning
+    /// the QR goes up (measured 2026-10-19 against Eagle).
+    /// </summary>
+    [Fact]
+    public void The_shipped_response_submission_budget_is_six_hundred_a_minute()
+    {
+        Assert.Equal(600, new RateLimitingOptions().ResponseSubmissionPermitsPerMinute);
+        Assert.Equal(
+            RateLimitPolicies.DefaultResponseSubmissionPermitsPerMinute,
+            new RateLimitingOptions().ResponseSubmissionPermitsPerMinute);
+
+        // Not above the coarse ceiling on the same key shape: past it the refusal would come
+        // from PartitionGlobal instead and this number would be describing nothing.
+        Assert.True(new RateLimitingOptions().ResponseSubmissionPermitsPerMinute
+            <= new RateLimitingOptions().GlobalPermitsPerMinute);
+    }
+
+    /// <summary>
+    /// And that the configured value is the one the limiter uses -- the whole point of
+    /// making it a setting is that a larger site is a config change and not a deploy.
+    /// </summary>
+    [Fact]
+    public void The_response_submission_budget_is_the_configured_one()
+    {
+        var context = ContextBehindOneProxy("203.0.113.7", "198.51.100.9", responseSubmissionPermits: 2);
+        using var limiter = PartitionedRateLimiter.Create<HttpContext, string>(SurveyResponseEndpoints.PartitionResponseSubmission);
+
+        using var withinBudget = limiter.AttemptAcquire(context, 2);
+        using var refused = limiter.AttemptAcquire(context);
+
+        Assert.True(withinBudget.IsAcquired);
+        Assert.False(refused.IsAcquired);
+    }
+
     [Fact]
     public void Anonymous_survey_callers_cannot_escape_the_address_budget_with_an_unvalidated_subject()
     {
-        var first = ContextBehindOneProxy("203.0.113.7", "198.51.100.9");
-        var second = ContextBehindOneProxy("203.0.113.7", "198.51.100.9");
+        const int Permits = 3;
+        var first = ContextBehindOneProxy("203.0.113.7", "198.51.100.9", Permits);
+        var second = ContextBehindOneProxy("203.0.113.7", "198.51.100.9", Permits);
         // Claims without an authenticated identity must not create a fresh bucket.
         second.User = new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim("sub", "untrusted") }));
         using var limiter = PartitionedRateLimiter.Create<HttpContext, string>(SurveyResponseEndpoints.PartitionResponseSubmission);
-        using var firstBudget = limiter.AttemptAcquire(first, 60);
+        using var firstBudget = limiter.AttemptAcquire(first, Permits);
         using var secondRequest = limiter.AttemptAcquire(second);
         Assert.True(firstBudget.IsAcquired);
         Assert.False(secondRequest.IsAcquired);
@@ -420,11 +466,18 @@ public class RateLimitingTests : IClassFixture<WebApplicationFactory<Program>>
     /// An <see cref="HttpContext"/> shaped like one App Runner delivers: a socket peer that is
     /// the proxy, and the real caller in the last <c>X-Forwarded-For</c> entry.
     /// </summary>
-    private static DefaultHttpContext ContextBehindOneProxy(string forwardedFor, string socketPeer)
+    private static DefaultHttpContext ContextBehindOneProxy(
+        string forwardedFor,
+        string socketPeer,
+        int? responseSubmissionPermits = null)
     {
         var services = new ServiceCollection();
         services.AddSingleton(new ClientIpResolver(trustedProxyHopCount: 1));
         services.AddOptions<RateLimitingOptions>();
+        if (responseSubmissionPermits is int permits)
+        {
+            services.Configure<RateLimitingOptions>(options => options.ResponseSubmissionPermitsPerMinute = permits);
+        }
 
         var context = new DefaultHttpContext
         {
