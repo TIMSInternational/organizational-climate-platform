@@ -219,9 +219,29 @@ public class InvitationEmailLinkTests : IAsyncLifetime, IClassFixture<CapturingM
             return (user.Id, user.Email);
         });
 
+    /// <summary>
+    /// Every survey in this class asks for the invitation mail and for reminders, because the
+    /// MAIL is what the class is about.
+    ///
+    /// The product's own default for both is OFF since 2026-10-19: the invitation mail's
+    /// button answers a survey without signing in, and the ruling is one email per person --
+    /// their credentials. These 27 tests were written against the old default and relied on
+    /// it silently, which is why all of them went red at once. Asking explicitly is also the
+    /// honest shape: a test about what the mail contains should say that it wants mail.
+    /// </summary>
+    private static CreateSurveyRequest Mailing(CreateSurveyRequest request)
+        => request with
+        {
+            Settings = (request.Settings ?? new SurveySettingsInput()) with
+            {
+                NotificationSendInvitations = true,
+                NotificationSendReminders = true,
+            },
+        };
+
     private async Task<SurveyDetail> CreateActiveSurveyAsync(HttpClient client)
     {
-        var created = await SurveyTestHarness.CreateSurveyAsync(client, SurveyTestHarness.MinimalRequest(_companyId));
+        var created = await SurveyTestHarness.CreateSurveyAsync(client, Mailing(SurveyTestHarness.MinimalRequest(_companyId)));
         (await SurveyTestHarness.SetStatusAsync(client, created.Id, SurveyStatuses.Active)).EnsureSuccessStatusCode();
         return created;
     }
@@ -389,11 +409,11 @@ public class InvitationEmailLinkTests : IAsyncLifetime, IClassFixture<CapturingM
         var (employeeId, employeeEmail) = await SeedEmployeeAsync();
 
         var opensAt = DateTimeOffset.UtcNow.AddDays(3);
-        var request = SurveyTestHarness.MinimalRequest(_companyId) with
+        var request = Mailing(SurveyTestHarness.MinimalRequest(_companyId) with
         {
             StartDate = opensAt,
             EndDate = opensAt.AddDays(14),
-        };
+        });
         var survey = await SurveyTestHarness.CreateSurveyAsync(client, request);
 
         // `scheduled`, not `active`: a survey queued to open is exactly when invitations are
@@ -952,7 +972,7 @@ public class InvitationEmailLinkTests : IAsyncLifetime, IClassFixture<CapturingM
         });
 
         var formerSurvey = await SurveyTestHarness.CreateSurveyAsync(
-            formerAdmin, SurveyTestHarness.MinimalRequest(formerCompanyId));
+            formerAdmin, Mailing(SurveyTestHarness.MinimalRequest(formerCompanyId)));
         (await SurveyTestHarness.SetStatusAsync(formerAdmin, formerSurvey.Id, SurveyStatuses.Active))
             .EnsureSuccessStatusCode();
 
@@ -1100,7 +1120,7 @@ public class InvitationEmailLinkTests : IAsyncLifetime, IClassFixture<CapturingM
         // Anonymous only because this test is about the e-mail link, not anonymity: every
         // survey may have a public link since 2026-10-12.
         var survey = await SurveyTestHarness.CreateSurveyAsync(
-            client, SurveyTestHarness.MinimalRequest(_companyId) with { Settings = new SurveySettingsInput(Anonymous: true) });
+            client, Mailing(SurveyTestHarness.MinimalRequest(_companyId) with { Settings = new SurveySettingsInput(Anonymous: true) }));
         (await SurveyTestHarness.SetStatusAsync(client, survey.Id, SurveyStatuses.Active)).EnsureSuccessStatusCode();
         var (employeeId, employeeEmail) = await SeedEmployeeAsync();
 
@@ -1319,7 +1339,7 @@ public class InvitationEmailLinkTests : IAsyncLifetime, IClassFixture<CapturingM
         });
 
         var otherSurvey = await SurveyTestHarness.CreateSurveyAsync(
-            otherAdmin, SurveyTestHarness.MinimalRequest(otherCompanyId));
+            otherAdmin, Mailing(SurveyTestHarness.MinimalRequest(otherCompanyId)));
         (await SurveyTestHarness.SetStatusAsync(otherAdmin, otherSurvey.Id, SurveyStatuses.Active))
             .EnsureSuccessStatusCode();
 
@@ -1400,7 +1420,7 @@ public class InvitationEmailLinkTests : IAsyncLifetime, IClassFixture<CapturingM
         });
 
         var formerSurvey = await SurveyTestHarness.CreateSurveyAsync(
-            formerAdmin, SurveyTestHarness.MinimalRequest(formerCompanyId));
+            formerAdmin, Mailing(SurveyTestHarness.MinimalRequest(formerCompanyId)));
         (await SurveyTestHarness.SetStatusAsync(formerAdmin, formerSurvey.Id, SurveyStatuses.Active))
             .EnsureSuccessStatusCode();
 
