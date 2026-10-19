@@ -10,6 +10,7 @@ import DashboardState from '../../components/DashboardState'
 import { AnonymityNotice } from '../../../surveys/components/AnonymityNotice'
 import { formatDayMonth } from '../../../surveys/respondEstimate'
 import { useRespondentShell } from '../../../../navigation/useRespondentShell'
+import { useIsRespondent } from '../../../../navigation/respondentSurface'
 import { useEmployeeHomeModel } from './useEmployeeHomeModel'
 import type { EmployeeHomeModel, HomeOutcome, HomeSurvey } from './model'
 import { byCount } from '../../../../i18n/plural'
@@ -166,6 +167,8 @@ function toAnswerMeta(pendingCount: number, t: TranslateFn): string {
 }
 
 function HomeBody({ model }: { model: EmployeeHomeModel }) {
+  // See `navigation/respondentSurface`: /surveys/my is not reachable for a respondent.
+  const lockedToDashboard = useIsRespondent()
   const { t } = useTranslation()
 
   return (
@@ -199,8 +202,10 @@ function HomeBody({ model }: { model: EmployeeHomeModel }) {
                 ))}
               </ul>
             ) : null}
-            {/* Only when the page is genuinely showing less than it was told about. */}
-            {model.beyondList ? (
+            {/* Only when the page is genuinely showing less than it was told about -- and
+                never for a respondent, who is held to their dashboard and the survey they
+                are answering (`navigation/respondentSurface`), so this would bounce. */}
+            {model.beyondList && !lockedToDashboard ? (
               <Button asChild variant="link" className="w-fit">
                 <Link to="/surveys/my">{t('navigation.mySurveys')}</Link>
               </Button>
@@ -325,6 +330,8 @@ function LeadCard({ survey, allowsSaveForLater }: { survey: HomeSurvey; allowsSa
  *   assuming one.
  */
 function NothingDueCard({ model }: { model: EmployeeHomeModel }) {
+  // See `navigation/respondentSurface`: /surveys/my is not reachable for a respondent.
+  const lockedToDashboard = useIsRespondent()
   const { t } = useTranslation()
 
   return (
@@ -368,13 +375,17 @@ function NothingDueCard({ model }: { model: EmployeeHomeModel }) {
         </p>
         <div className="mt-1 flex flex-wrap items-center gap-3">
           {/* The artboard's "Ver el recibo en Mis Encuestas", without the receipt: the
-              destination is real and holds the same list, so it keeps the way out. */}
-          <Button asChild variant="outline" size="canvas">
-            <Link to="/surveys/my">
-              <Inbox aria-hidden="true" />
-              {t('navigation.mySurveys')}
-            </Link>
-          </Button>
+              destination is real and holds the same list, so it keeps the way out --
+              except for a respondent, for whom that destination is no longer reachable
+              (`navigation/respondentSurface`, ruled 2026-10-19). */}
+          {!lockedToDashboard && (
+            <Button asChild variant="outline" size="canvas">
+              <Link to="/surveys/my">
+                <Inbox aria-hidden="true" />
+                {t('navigation.mySurveys')}
+              </Link>
+            </Button>
+          )}
           <span className="text-sm text-fg-secondary">{t('employee.next.nothingDueAnswersNote')}</span>
         </div>
       </div>

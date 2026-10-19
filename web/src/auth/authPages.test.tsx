@@ -214,8 +214,16 @@ describe('RequireAuth and the inactive state', () => {
     await waitFor(() => expect(path()).toBe('/login'))
   })
 
+  /**
+   * `company_admin`, not `employee`, and the role is load-bearing as of 2026-10-19: a
+   * respondent is held to their dashboard and the survey they are answering
+   * (`navigation/respondentSurface`), so an employee asking for `/surveys/my` is let
+   * through this gate and then redirected by the next rule — which would make "guarded
+   * page" absent for a reason that has nothing to do with `isActive`, the thing under
+   * test here. An employee's own pass-through is covered in `app/RequireAuth.test.tsx`.
+   */
   it('lets an active session through', async () => {
-    setToken(tokenFor({ role: 'employee', companyId: 'c1', isActive: 'true' }))
+    setToken(tokenFor({ role: 'company_admin', companyId: 'c1', isActive: 'true' }))
 
     renderAuthRoutes('/surveys/my')
 
@@ -238,8 +246,10 @@ describe('RequireAuth and the inactive state', () => {
     expect(screen.queryByText('guarded page')).toBeNull()
   })
 
+  // `company_admin` for the same reason as the pass-through test above: the role must not
+  // be one the respondent rule redirects, or this would pass or fail for the wrong cause.
   it('treats a token minted before the claim existed as active, not as locked out', async () => {
-    setToken(tokenFor({ role: 'employee', companyId: 'c1' }))
+    setToken(tokenFor({ role: 'company_admin', companyId: 'c1' }))
 
     renderAuthRoutes('/surveys/my')
 

@@ -1,7 +1,8 @@
-import { Navigate, Outlet } from 'react-router'
+import { Navigate, Outlet, useLocation } from 'react-router'
 import { getToken } from '../auth/token'
 import { decodeJwtPayload } from '../auth/jwt'
 import IdleSessionGuard from '../auth/IdleSessionGuard'
+import { isRespondentRole, respondentMayReach } from '../navigation/respondentSurface'
 
 /**
  * The auth gate on every admin route.
@@ -46,6 +47,19 @@ import IdleSessionGuard from '../auth/IdleSessionGuard'
  * It applies to everyone signed in, with no role carve-out — a shared or kiosk terminal is
  * the respondent case, not the staff one.
  *
+ * ## The respondent surface rides here too
+ *
+ * A respondent is held to `navigation/respondentSurface` — their dashboard and the survey
+ * they are answering — and anything else takes them to `/dashboard`. It belongs on this
+ * gate for the same reason `IdleSessionGuard` does: every authenticated route passes
+ * through here and nothing unauthenticated does, so a public survey link (`/survey/:token`,
+ * declared outside this element) cannot be caught by it, and a new admin route cannot
+ * forget to be covered.
+ *
+ * It is a REDIRECT and not a 403 screen on purpose. The reader is somebody who was sent one
+ * email with one link; a page telling them they lack permission is a worse answer than the
+ * page they do have. `replace` so Back does not bounce them between the two.
+ *
  * This is deliberately not checked at login: `LoginAsync` filters on
  * `u.IsActive`, so a deactivated user gets 401 "Invalid email or password",
  * identical to a wrong password. That identical response is what stops the login
@@ -53,6 +67,9 @@ import IdleSessionGuard from '../auth/IdleSessionGuard'
  * ever fires for someone who already holds a token for the account.
  */
 export default function RequireAuth() {
+  // Before the early returns: a hook cannot be called conditionally, and the two
+  // `Navigate`s above the role check would make it one.
+  const location = useLocation()
   const token = getToken()
   if (!token) {
     return <Navigate to="/login" replace />
@@ -61,6 +78,13 @@ export default function RequireAuth() {
   const claims = decodeJwtPayload(token)
   if (claims?.isActive === 'false') {
     return <Navigate to="/auth/inactive" replace />
+  }
+
+  // The role claim is an untrusted string off a JWT, so this asks `isRespondentRole`
+  // rather than comparing here -- the same reason `reachableRoutes` uses `Object.hasOwn`.
+  const role = typeof claims?.role === 'string' ? claims.role : undefined
+  if (isRespondentRole(role) && !respondentMayReach(location.pathname)) {
+    return <Navigate to="/dashboard" replace />
   }
 
   return (
