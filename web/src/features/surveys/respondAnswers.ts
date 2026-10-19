@@ -345,8 +345,22 @@ function randomFrom(seed: number): () => number {
  * reshuffled on reload — the same respondent already cannot resume at all, which is the
  * larger of the two problems and is recorded in `respondSession.ts`.
  *
+ * ## The open questions are never shuffled
+ *
+ * Free-text questions are held out of the shuffle and asked after it, in their own
+ * authored order. Ruled 2026-10-19. It is a deliberate exception to the reason
+ * randomisation exists — spreading fatigue so that it does not always land on the same
+ * dimension — and the exception is safe because an open question is not scored: it
+ * belongs to no dimension, so it can bias none from wherever it is asked. Asking the
+ * free text last is also where an author's own `order` already puts it; turning
+ * randomisation on for every survey is what moved it, silently, to anywhere at all.
+ *
+ * "After it" means all of them, not the last one: a survey with two open questions asks
+ * both at the end, keeping their authored order relative to each other.
+ *
  * This function itself is seed-agnostic and makes no claim about respondents. It sorts
- * by `order` and, when asked, shuffles that list with a seeded Fisher-Yates.
+ * by `order`, holds the free-text questions back, and, when asked, shuffles the rest
+ * with a seeded Fisher-Yates.
  */
 export function orderQuestions(
   questions: readonly SurveyRespondQuestion[],
@@ -356,8 +370,14 @@ export function orderQuestions(
   const ordered = [...questions].sort((left, right) => left.order - right.order)
   if (!randomize || ordered.length < 2) return ordered
 
-  seededShuffle(ordered, seed)
-  return ordered
+  // `answerShapeOf` already names the free-text questions -- `open_ended -> 'text'` is
+  // the only text shape there is -- so this needs no question-type list of its own to
+  // keep in step with the vocabulary.
+  const closed = ordered.filter((question) => answerShapeOf(question) !== 'text')
+  const open = ordered.filter((question) => answerShapeOf(question) === 'text')
+
+  seededShuffle(closed, seed)
+  return [...closed, ...open]
 }
 
 /**
