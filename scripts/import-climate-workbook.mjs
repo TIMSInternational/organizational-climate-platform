@@ -557,7 +557,7 @@ export function toImportRows(climate) {
   })
 }
 
-export function toSurveyRequest(climate, { companyId, title, departmentIds, startDate, endDate, anonymous = true }) {
+export function toSurveyRequest(climate, { companyId, title, departmentIds, startDate, endDate, anonymous = true, randomizeQuestions = false }) {
   const options = climate.scale.map((point) => ({ value: String(point.value), label: both(point.label) }))
   const min = climate.scale[0]?.value ?? 1
   const max = climate.scale.at(-1)?.value ?? 5
@@ -609,6 +609,21 @@ export function toSurveyRequest(climate, { companyId, title, departmentIds, star
       selfDeclaredDemographics: true,
       allowPartialResponses: true,
       showProgress: true,
+      /**
+       * Finding 7 of ESPH's 2026-10-17 rehearsal: the 40 climate questions arrived in a
+       * fixed order for everybody, so the answers of anyone who tired partway through all
+       * tired on the same dimension.
+       *
+       * Sent ALWAYS rather than only when true, because `SurveyEndpoints.cs:1494` applies it
+       * only `if (input.RandomizeQuestions.HasValue)` -- an omitted flag leaves whatever the
+       * row already held, which for a re-import is not the same thing as "off".
+       *
+       * It does NOT hide the category headings, and that is deliberate: the headings are what
+       * `category` feeds, dimension analysis reads them, and removing them was ruled against
+       * 2026-10-13. Randomised questions under visible dimension headings is the whole of
+       * what this flag buys.
+       */
+      randomizeQuestions,
       ...(climate.invitation?.subject ? { invitationCustomSubject: both(climate.invitation.subject) } : {}),
       ...(climate.invitation?.message ? { invitationCustomMessage: both(climate.invitation.message) } : {}),
     },
@@ -757,6 +772,10 @@ async function main() {
       'with-credentials': { type: 'boolean', default: false },
       'skip-demographic': { type: 'string', multiple: true, default: [] },
       anonymous: { type: 'string', default: 'true' },
+      // Defaults to the behaviour every import before it had: OFF. Turning it on is a
+      // decision about the instrument, so it is made on the command line and printed
+      // below, never inferred from the workbook.
+      'randomize-questions': { type: 'string', default: 'false' },
       start: { type: 'string' },
       end: { type: 'string' },
     },
@@ -769,6 +788,10 @@ async function main() {
     throw new Error(`--anonymous must be true or false (recibido: ${values.anonymous})`)
   }
   const anonymous = values.anonymous === 'true'
+  if (values['randomize-questions'] !== 'true' && values['randomize-questions'] !== 'false') {
+    throw new Error(`--randomize-questions must be true or false (recibido: ${values['randomize-questions']})`)
+  }
+  const randomizeQuestions = values['randomize-questions'] === 'true'
   const withCredentials = values['with-credentials'] === true
 
   const parsed = parseClimate(readWorkbook(values.file))
@@ -795,6 +818,9 @@ async function main() {
   log(anonymous
     ? '  anonimato: ANÓNIMA — no se guarda quién respondió, así que nada impide que alguien la responda otra vez'
     : '  anonimato: IDENTIFICADA — se guarda quién respondió, así que el servidor permite UNA sola respuesta por persona (los resultados siguen siendo solo agregados)')
+  log(randomizeQuestions
+    ? '  orden de las preguntas: ALEATORIO por persona — los títulos de dimensión siguen visibles'
+    : '  orden de las preguntas: FIJO — todas las personas las reciben en el mismo orden')
   if (problems.length) {
     log(`\n${problems.length} problem(s) in the workbook — nothing was sent:`)
     for (const problem of problems) log(`  - ${problem}`)
@@ -990,7 +1016,7 @@ async function main() {
       throw new Error(`these departments of the workbook are not in the company, so the survey would reach fewer people than the roster: ${audience.missing.map((n) => `"${n}"`).join(', ')}`)
     }
     const departmentIds = audience.departmentIds
-    const body = toSurveyRequest(climate, { companyId, title: surveyTitle, departmentIds, startDate: window.startDate, endDate: window.endDate, anonymous })
+    const body = toSurveyRequest(climate, { companyId, title: surveyTitle, departmentIds, startDate: window.startDate, endDate: window.endDate, anonymous, randomizeQuestions })
     const created = await call('POST', '/surveys', body, token)
     const id = created?.id ?? created?.survey?.id
     if (!id) throw new Error(`survey create: unexpected body ${JSON.stringify(created).slice(0, 200)}`)
