@@ -1,7 +1,8 @@
 using System.Net;
-using System.Text.Json;
 using System.Net.Http.Json;
+using ClimateProject.Api.Endpoints;
 using ClimateProject.Application.Auth;
+using ClimateProject.Application.Dashboard;
 using ClimateProject.Application.Localization;
 using ClimateProject.Application.Surveys;
 using ClimateProject.Domain.Entities;
@@ -98,8 +99,9 @@ public class SurveyCredentialSignInTests : IAsyncLifetime
         var response = await _factory.CreateClient().PostAsJsonAsync(
             "/auth/login", new { email = identifier, password });
         response.EnsureSuccessStatusCode();
-        var body = await response.Content.ReadFromJsonAsync<Dictionary<string, string>>();
-        return body!["token"];
+        // The real response type, for the reason the dashboard test now does the same: a
+        // field name typed as a string can be wrong and only says so at run time.
+        return (await response.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
     }
 
     private HttpClient ClientFor(string token)
@@ -166,19 +168,16 @@ public class SurveyCredentialSignInTests : IAsyncLifetime
         var (username, password) = await SeedCredentialAsync(clima.Id, employee);
 
         var client = ClientFor(await SignInAsync(username, password));
-        var response = await client.GetAsync("/dashboard/employee");
-        response.EnsureSuccessStatusCode();
 
-        // Read the property out of the document rather than binding to a shape: this test
-        // is about the COUNT, and binding would make it fail for every unrelated field the
-        // dashboard gains.
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        var pending = document.RootElement
-            .EnumerateObject()
-            .First(p => string.Equals(p.Name, "pendingCount", StringComparison.OrdinalIgnoreCase));
+        // Bound to the real DTO, not to a field name. The first version of this test looked
+        // up "pendingCount" -- the LOCAL VARIABLE's name in DashboardEndpoints -- while the
+        // payload calls it `pendingSurveyCount`, and it failed for that and not for anything
+        // about scoping. A guessed string can be wrong; a property cannot compile wrong.
+        var dashboard = await client.GetFromJsonAsync<EmployeeDashboard>("/dashboard/employee");
 
         // Two surveys exist and both target this company-wide; the session is for one.
-        Assert.Equal(1, pending.Value.GetInt32());
+        Assert.Equal(1, dashboard!.PendingSurveyCount);
+        Assert.Equal([clima.Id], dashboard.PendingSurveys.Select(s => s.Id).ToList());
     }
 
     /// <summary>
@@ -197,9 +196,7 @@ public class SurveyCredentialSignInTests : IAsyncLifetime
         var client = ClientFor(await SignInAsync(username, password));
         var refreshed = await client.PostAsync("/auth/refresh", null);
         refreshed.EnsureSuccessStatusCode();
-        var body = await refreshed.Content.ReadFromJsonAsync<Dictionary<string, string>>();
-
-        var after = ClientFor(body!["token"]);
+        var after = ClientFor((await refreshed.Content.ReadFromJsonAsync<TokenResponse>())!.Token);
         var list = await after.GetFromJsonAsync<MySurveyListResponse>("/surveys/my");
         Assert.Equal([clima.Id], list!.Surveys.Select(s => s.Id).ToList());
     }
