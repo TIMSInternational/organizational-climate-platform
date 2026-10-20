@@ -142,6 +142,14 @@ public static class SubjectErasure
         // cascade never fires and the row would outlive the subject it names.
         actions.Add(await DeleteAsync("SurveyUserTarget",
             db.SurveyUserTargets.Where(t => t.UserId == id), cancellationToken));
+        // 2026-10-19: a WORKING SIGN-IN -- the subject's per-survey username and the hash of
+        // the password they were mailed. Deleted here for exactly the reason stated above
+        // it, and the reason is not academic: this row's FK cascades from users too, and an
+        // erasure that anonymised the person while leaving their credential behind would
+        // leave a key that still opens a survey, attached to a subject who asked to be
+        // forgotten.
+        actions.Add(await DeleteAsync("SurveyCredential",
+            db.SurveyCredentials.Where(c => c.UserId == id), cancellationToken));
 
         var invitationIds = await SubjectAccessExport
             .AddressedInvitations(db, originalEmail, companyScope)
