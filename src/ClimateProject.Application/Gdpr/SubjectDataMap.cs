@@ -157,6 +157,7 @@ public static class SubjectDataMap
     public static readonly IReadOnlySet<string> RedactedColumns = new HashSet<string>(StringComparer.Ordinal)
     {
         "User.PasswordHash",
+        "SurveyCredential.PasswordHash",
         "UserInvitation.InvitationToken",
         "SurveyInvitation.InvitationToken",
         "MicroclimateInvitation.InvitationToken",
@@ -437,6 +438,19 @@ public static class SubjectDataMap
             "Deleted 30 days after last save (SurveyDraftRetention), or on erasure.",
             "The subject's unsubmitted authoring sessions, including the autosaved wizard payload. Private to "
             + "their author, referenced by nothing, and already on a 30-day clock — deleted outright."),
+
+        new("SurveyCredential", "survey_credentials", SubjectLink.Subject, ["UserId"],
+            ExportTreatment.FullRecord, ErasureTreatment.Deleted,
+            BasisContract,
+            "Deleted on erasure; otherwise kept until the survey it opens is deleted, which cascades.",
+            "A sign-in issued to the subject for ONE survey: their generated username and a bcrypt hash of "
+            + "the password mailed to them. DELETED rather than redacted, unlike survey_invitations, because "
+            + "this row is not a record of anything -- it is a working key, and the invitation beside it "
+            + "already carries the participation fact a response rate is counted from. Leaving a redacted "
+            + "shell would keep a row that opens nothing and means nothing. The hash is in RedactedColumns "
+            + "so an access export shows that a credential exists without handing back the material to "
+            + "attack it offline; the username is not redacted because it is printed in plain text in the "
+            + "mail the subject already holds and signs nobody in on its own."),
 
         new("SurveyInvitation", "survey_invitations", SubjectLink.Subject, ["UserId", "Email"],
             ExportTreatment.FullRecord, ErasureTreatment.Redacted,

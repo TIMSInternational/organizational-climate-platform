@@ -276,7 +276,11 @@ public class SubjectDataMapTests
         // roster a department cannot express. It is a census of referring TYPES, so a new
         // number here means a new table can hold a person -- which is exactly when
         // SubjectDataMap must gain an entry, and did.
-        Assert.Equal(32, nonOwnedReferrers.Count);
+        //
+        // 33 since 2026-10-19: survey_credentials issues one person a username and password
+        // for ONE survey, so ESPH's Clima and Teletrabajo can be handed out separately. It
+        // holds a credential, which is the strongest reason this census exists.
+        Assert.Equal(33, nonOwnedReferrers.Count);
 
         var restricting = user.GetReferencingForeignKeys()
             .Where(fk => !fk.DeclaringEntityType.IsOwned() && fk.DeleteBehavior == DeleteBehavior.Restrict)

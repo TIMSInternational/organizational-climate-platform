@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 using System.Net.Http.Json;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Localization;
@@ -165,10 +166,19 @@ public class SurveyCredentialSignInTests : IAsyncLifetime
         var (username, password) = await SeedCredentialAsync(clima.Id, employee);
 
         var client = ClientFor(await SignInAsync(username, password));
-        var dashboard = await client.GetFromJsonAsync<Dictionary<string, object>>("/dashboard/employee");
+        var response = await client.GetAsync("/dashboard/employee");
+        response.EnsureSuccessStatusCode();
+
+        // Read the property out of the document rather than binding to a shape: this test
+        // is about the COUNT, and binding would make it fail for every unrelated field the
+        // dashboard gains.
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var pending = document.RootElement
+            .EnumerateObject()
+            .First(p => string.Equals(p.Name, "pendingCount", StringComparison.OrdinalIgnoreCase));
 
         // Two surveys exist and both target this company-wide; the session is for one.
-        Assert.Equal(1, Convert.ToInt32(dashboard!["pendingCount"].ToString()));
+        Assert.Equal(1, pending.Value.GetInt32());
     }
 
     /// <summary>
