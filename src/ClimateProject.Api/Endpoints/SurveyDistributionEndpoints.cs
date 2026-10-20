@@ -536,7 +536,7 @@ public static class SurveyDistributionEndpoints
         // (`MassInviteEndpoints`): queueing would mean a password at rest in a table.
         var credentialsIssued = 0;
         var credentialsNotSent = 0;
-        if (perSurveyCredentials && created.Count > 0)
+        if (perSurveyCredentials && recipients.Count > 0)
         {
             var company = await db.Companies
                 .Where(c => c.Id == survey.CompanyId)
@@ -571,15 +571,21 @@ public static class SurveyDistributionEndpoints
                     .ToListAsync(cancellationToken))
                 .ToHashSet();
 
-            foreach (var invitation in created)
+            // Every recipient this request resolved who does not already hold a key for this
+            // survey -- not only the ones whose INVITATION was minted a moment ago.
+            //
+            // Those are different sets, and the difference is the recovery. An invitation row
+            // is created once and makes `created` empty on every later call, so a person
+            // holding an invitation and no credential used to be unreachable by this route for
+            // ever: the plaintext of their key is gone the moment it is sent, the account
+            // resend refuses an account with no username (`MassInviteEndpoints`), and nothing
+            // else mints one. They could not be let in except by editing the database.
+            //
+            // `alreadyCredentialed` is still what makes this re-runnable: somebody who holds a
+            // key keeps the one they were mailed, because re-minting would silently invalidate
+            // a password they are already using.
+            foreach (var recipient in recipients.Where(r => !alreadyCredentialed.Contains(r.Id)))
             {
-                if (alreadyCredentialed.Contains(invitation.UserId))
-                {
-                    continue;
-                }
-
-                var recipient = recipients.First(u => u.Id == invitation.UserId);
-
                 string username;
                 do
                 {
@@ -588,16 +594,16 @@ public static class SurveyDistributionEndpoints
                 while (!taken.Add(username));
 
                 var password = MassInviteCredentials.Password();
-                db.SurveyCredentials.Add(new SurveyCredential
+                var credential = new SurveyCredential
                 {
                     SurveyId = surveyId,
                     UserId = recipient.Id,
                     Username = username,
                     PasswordHash = passwordHasher.Hash(password),
                     CreatedAt = now,
-                });
+                };
+                db.SurveyCredentials.Add(credential);
                 await db.SaveChangesAsync(cancellationToken);
-                credentialsIssued++;
 
                 // The survey's name is the whole point: this person may be receiving a
                 // second one of these for another survey, and the subject is the only thing
@@ -605,10 +611,27 @@ public static class SurveyDistributionEndpoints
                 var outcome = await credentialsSender.SendAsync(
                     recipient.Email, recipient.Name, username, password, company?.Language,
                     brand, CredentialsEmailPurpose.Invitation, surveyTitle, cancellationToken);
-                if (!outcome.Delivered)
+                if (outcome.Delivered)
                 {
-                    credentialsNotSent++;
+                    credentialsIssued++;
+                    continue;
                 }
+
+                // WITHDRAWN, and this is the one place in the product where a failed send
+                // must undo its row. Everywhere else the row is the artefact and the mail is
+                // a notification of it -- an invitation whose mail failed still has a link
+                // somebody can be given by hand. Here the mail is the ONLY copy of the key:
+                // the password was hashed before the save and the plaintext dies with this
+                // iteration. A kept row is therefore not a recoverable state, it is a person
+                // who can never sign in, because `alreadyCredentialed` above would skip them
+                // on every re-run of the route that is supposed to be the repair.
+                //
+                // Dropping it leaves them exactly as they were -- invited, with no key -- so
+                // running this again mints and mails a fresh pair, which is what an operator
+                // reading `credentialsNotSent` needs the next command to be able to do.
+                db.SurveyCredentials.Remove(credential);
+                await db.SaveChangesAsync(cancellationToken);
+                credentialsNotSent++;
             }
         }
 

@@ -122,6 +122,8 @@ public class MassInviteTests(PostgresContainerFixture postgres, CapturingCredent
         var result = System.Text.Json.JsonSerializer.Deserialize<BulkImportResponse>(body, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))!;
         Assert.Equal("created", Assert.Single(result.Rows).Status);
         Assert.Empty(result.Rows[0].Issues);
+        // This company is `shared`, so the flag still decides, and still says so.
+        Assert.Equal(BulkImportDelivery.Credentials, result.Delivery);
 
         var sent = Assert.Single(_factory.Sent, s => s.ToEmail == email);
         Assert.Matches("^empresad-[23456789abcdefghjkmnpqrstuvwxyz]{8}$", sent.Username);
@@ -546,7 +548,9 @@ public class MassInviteTests(PostgresContainerFixture postgres, CapturingCredent
         var response = await client.PostAsJsonAsync("/admin/users/bulk-import/rows", new BulkImportRowsRequest(
             _companyId, false, [new BulkImportRowInput(2, "Invited Person", email, "Colaborador", null)]));
 
-        Assert.Equal("invited", Assert.Single((await response.Content.ReadFromJsonAsync<BulkImportResponse>())!.Rows).Status);
+        var body = (await response.Content.ReadFromJsonAsync<BulkImportResponse>())!;
+        Assert.Equal("invited", Assert.Single(body.Rows).Status);
+        Assert.Equal(BulkImportDelivery.Invitation, body.Delivery);
         Assert.DoesNotContain(_factory.Sent, s => s.ToEmail == email);
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();

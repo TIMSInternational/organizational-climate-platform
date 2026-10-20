@@ -196,15 +196,17 @@ public sealed record SurveyInvitationBatchResult(
     int UndeliverableRecipients,
     string? Note,
     /// <summary>
-    /// Per-survey credentials minted and mailed by this call. Zero in `shared` mode, where
-    /// the account the person already has opens every survey they are targeted by.
+    /// Per-survey credentials minted AND mailed by this call -- the two are one event here,
+    /// because a key whose message did not go is withdrawn. Zero in `shared` mode, where the
+    /// account the person already has opens every survey they are targeted by.
     /// </summary>
     int CredentialsIssued = 0,
     /// <summary>
-    /// Credentials that were minted but whose mail did not go. The ROW exists, so the
-    /// person has a working username and password they have not been told -- which is what
-    /// the resend route is for. Reported rather than rolled back, because rolling back
-    /// would also destroy the credentials that did arrive.
+    /// Recipients whose key was minted and whose mail did not go, and whose
+    /// <c>survey_credentials</c> row was therefore DROPPED again: the mail is the only copy
+    /// of the password, so a kept row would be a person who can never sign in and whom this
+    /// route would skip on every later call. They are left invited with no key, which is the
+    /// state a re-run of this same request repairs by minting a fresh pair.
     /// </summary>
     int CredentialsNotSent = 0);
 

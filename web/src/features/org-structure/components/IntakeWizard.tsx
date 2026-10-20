@@ -277,6 +277,14 @@ export default function IntakeWizard({ baseUrl, companyId, onImported, revealDel
       finish(mergeImportResponses(landed))
     })
 
+  /**
+   * What the server says it DID about mail, which is not always what was asked for: a company
+   * in `per_survey` credential mode has no account credentials to send, so its import creates
+   * the accounts and mails nobody — the codes go out one per survey, when the survey is
+   * distributed. Falling back to the radio keeps the old copy against an API without the field.
+   */
+  const delivered = result?.delivery ?? (accessMode === 'credentials' ? 'credentials' : 'invitation')
+
   function chooseAccessMode(mode: 'invitation' | 'credentials') {
     setAccessMode(mode)
     setVerdict(null)
@@ -400,7 +408,7 @@ export default function IntakeWizard({ baseUrl, companyId, onImported, revealDel
               total: result.rows.length,
             })}
           </p>
-          {accessMode === 'credentials' && notSent.length > 0 ? (
+          {delivered === 'credentials' && notSent.length > 0 ? (
             // Never beside the sentence that promises the credentials were emailed: for these
             // rows that promise is false, so this replaces it rather than contradicting it.
             <Alert variant="destructive">
@@ -416,9 +424,11 @@ export default function IntakeWizard({ baseUrl, companyId, onImported, revealDel
           ) : (
             <p className="m-0">
               {t(
-                accessMode === 'credentials'
+                delivered === 'credentials'
                   ? 'users.intake.doneBodyCredentials'
-                  : 'users.intake.doneBody',
+                  : delivered === 'none'
+                    ? 'users.intake.doneBodyPerSurvey'
+                    : 'users.intake.doneBody',
               )}
             </p>
           )}

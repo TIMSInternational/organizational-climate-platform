@@ -4648,6 +4648,7 @@
       "fixBeforeApproving": "Corrija las filas marcadas con error y valide de nuevo.",
       "doneBody": "Se creó una invitación para cada persona. Al aceptarla, cada una define su propio nombre y contraseña.",
       "doneBodyCredentials": "Se creó una cuenta para cada persona y se le enviaron su usuario y su contraseña por correo, junto con el enlace a la encuesta. Nadie tiene que aceptar nada.",
+      "doneBodyPerSurvey": "Se creó una cuenta para cada persona y no se envió ningún correo: en esta empresa las credenciales se envían por encuesta. Cada persona recibirá su usuario y su contraseña de cada encuesta cuando esa encuesta se distribuya.",
       "doneCredentialsNotSentOne": "1 persona no recibió sus datos de acceso: su cuenta quedó creada, pero el correo no salió. Búsquela en la lista de personas y use «Reenviar datos de acceso».",
       "doneCredentialsNotSentMany": "{count} personas no recibieron sus datos de acceso: sus cuentas quedaron creadas, pero el correo no salió. Búsquelas en la lista de personas y use «Reenviar datos de acceso».",
       "importingProgress": "Importando… {done} de {total} personas. Mantenga esta página abierta.",

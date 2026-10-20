@@ -72,6 +72,19 @@ public static class BulkImportEndpoints
         => currentUser.Role == Roles.SuperAdmin
            || (currentUser.Role == Roles.CompanyAdmin && currentUser.CompanyId == companyId.ToString());
 
+    /// <summary>
+    /// The company's credential mode, which is what decides whether this import may mail
+    /// anything at all. Read on both import routes rather than taken from the request: a
+    /// caller cannot be trusted to know a company-wide setting, and the one place the answer
+    /// exists is the row.
+    /// </summary>
+    private static async Task<string?> CredentialModeOfAsync(
+        ClimateProjectDbContext db, Guid companyId, CancellationToken cancellationToken)
+        => await db.Companies
+            .Where(c => c.Id == companyId)
+            .Select(c => c.Settings.CredentialMode)
+            .FirstOrDefaultAsync(cancellationToken);
+
     private static bool IsValidEmail(string email)
         => !string.IsNullOrWhiteSpace(email) && email.Contains('@') && email.Split('@').Length == 2 && email.Split('@')[1].Contains('.');
 
@@ -114,7 +127,7 @@ public static class BulkImportEndpoints
 
         return Results.Ok(await ProcessRowsAsync(
             parsedRows, [], companyId, isPreview, withCredentials: false, currentUser, db, emailSender,
-            credentials: null, cancellationToken));
+            credentials: null, await CredentialModeOfAsync(db, companyId, cancellationToken), cancellationToken));
     }
 
     /// <summary>
@@ -136,12 +149,28 @@ public static class BulkImportEndpoints
         ClimateProjectDbContext db,
         IInvitationEmailSender emailSender,
         CredentialIssuer? credentials,
+        string? companyCredentialMode,
         CancellationToken cancellationToken)
     {
         if (withCredentials && credentials is null)
         {
             throw new ArgumentNullException(nameof(credentials), "A mass invite with credentials needs a credential issuer.");
         }
+
+        // `per_survey` (ruled 2026-10-19): an account per row and NO message. The key this
+        // person signs in with is minted per survey by `SurveyDistributionEndpoints
+        // .CreateInvitationsAsync` and mailed from there, one message per survey naming its
+        // survey -- so either account message this method can compose would be a THIRD one for
+        // somebody in two surveys, which is the outcome the ruling exists to remove.
+        //
+        // It wins over `withCredentials` rather than combining with it. `ImportRowsAsync`
+        // refuses that combination outright, so the only way to reach here with both is a
+        // caller this file does not have; the invariant "a per_survey import mails nothing"
+        // is held by this one expression regardless of which.
+        var perSurvey = CredentialModes.Resolve(surveyMode: null, companyMode: companyCredentialMode)
+            == CredentialModes.PerSurvey;
+        var mintAccountKey = withCredentials && !perSurvey;
+        var createsAccount = mintAccountKey || perSurvey;
 
         // Active only, as the template's dropdown is: a department that has been retired is not
         // somewhere a new person can be placed, and matching it here would invite them into one.
@@ -207,9 +236,19 @@ public static class BulkImportEndpoints
         var issued = new List<(int ResultIndex, string Email, string? Name, string Username, string Password)>();
         Company? company = null;
         HashSet<string>? takenUsernames = null;
-        if (withCredentials && !isPreview)
+        // The company whenever an account is created, not only when one is mailed: a
+        // `per_survey` account is created here too, and it is this row that decides what
+        // language every later message to that person is written in.
+        if (createsAccount && !isPreview)
         {
             company = await db.Companies.AsNoTracking().FirstOrDefaultAsync(c => c.Id == companyId, cancellationToken);
+        }
+
+        // Only a mass invite takes a username out of the account namespace. A `per_survey`
+        // account has none at all -- `survey_credentials.username` is the only key it gets --
+        // so there is nothing here to dedupe against.
+        if (mintAccountKey && !isPreview)
+        {
             var prefix = MassInviteCredentials.PrefixFor(company?.Name ?? string.Empty) + "-";
             takenUsernames = (await db.Users
                     .Where(u => u.Username != null && u.Username.StartsWith(prefix))
@@ -357,20 +396,33 @@ public static class BulkImportEndpoints
                     createdDepartments[newDepartmentName] = department;
                 }
 
-                if (withCredentials)
+                if (createsAccount)
                 {
-                    // An account, not an invitation: the person signs in with what the email
-                    // gives them, and their demographics are already on it, so the survey
-                    // never asks. The row's Name IS carried here, unlike the invitation branch
-                    // below, because nobody will be asked to type it.
-                    string username;
-                    do
+                    // An account, not an invitation: their demographics are already on it, so
+                    // the survey never asks. The row's Name IS carried here, unlike the
+                    // invitation branch below, because nobody will be asked to type it.
+                    //
+                    // Two shapes, one row. A mass invite mints a username and a password and
+                    // mails them; a `per_survey` account gets NEITHER -- its key is a
+                    // `survey_credentials` row minted per survey, and sign-in verifies that
+                    // row's own hash (`AuthEndpoints`), never the account's. A username and a
+                    // password hash here would be a second, wider key: one that opens every
+                    // survey its holder is targeted by, which is the thing the mode denies.
+                    // Null is also what `MassInviteEndpoints` reads to refuse resending
+                    // account details for an account that has none.
+                    string? username = null;
+                    string? password = null;
+                    if (mintAccountKey)
                     {
-                        username = MassInviteCredentials.Username(MassInviteCredentials.PrefixFor(company?.Name ?? string.Empty));
-                    }
-                    while (!takenUsernames!.Add(username));
+                        do
+                        {
+                            username = MassInviteCredentials.Username(MassInviteCredentials.PrefixFor(company?.Name ?? string.Empty));
+                        }
+                        while (!takenUsernames!.Add(username));
 
-                    var password = MassInviteCredentials.Password();
+                        password = MassInviteCredentials.Password();
+                    }
+
                     var user = new User
                     {
                         Id = Guid.NewGuid(),
@@ -378,7 +430,9 @@ public static class BulkImportEndpoints
                         Email = email,
                         Name = row.Name.Trim(),
                         Username = username,
-                        PasswordHash = credentials!.Hasher.Hash(password),
+                        // `credentials` is only dereferenced on the branch that mints one: the
+                        // CSV route passes none, and a `per_survey` company reaches here on it.
+                        PasswordHash = password is null ? null : credentials!.Hasher.Hash(password),
                         Role = row.Role,
                         DepartmentId = department?.Id,
                         IsActive = true,
@@ -422,7 +476,11 @@ public static class BulkImportEndpoints
                     }
 
                     existingEmails.Add(email);
-                    issued.Add((results.Count, email, row.Name, username, password));
+                    if (username is not null && password is not null)
+                    {
+                        issued.Add((results.Count, email, row.Name, username, password));
+                    }
+
                     results.Add(new BulkImportRowResult(row.RowNumber, row.Name, email, row.Role, row.Department, "created", errors, issues));
                     continue;
                 }
@@ -469,7 +527,11 @@ public static class BulkImportEndpoints
                 await InvitationEndpoints.RecordDeliveryAsync(db, emailSender, invitation, now, cancellationToken);
             }
 
-            // The accounts are committed; now the emails. A failed one is named on its row, and
+            // The accounts are committed; now the emails -- of which a `per_survey` import has
+            // none: `issued` is only added to where a password was minted, so this loop runs
+            // zero times and no `ICredentialsEmailSender` call is made at all.
+            //
+            // A failed one is named on its row, and
             // POST /admin/users/{id}/credentials sends a fresh pair -- the password generated
             // here is gone the moment this method returns.
             foreach (var (resultIndex, toEmail, name, username, password) in issued)
@@ -498,7 +560,13 @@ public static class BulkImportEndpoints
         var successCount = results.Count(r => r.Status is "valid" or "invited" or "created");
         var errorCount = results.Count - successCount;
 
-        return new BulkImportResponse(results, successCount, errorCount);
+        // Stated, never inferred by the caller. `issued` being empty is not evidence that
+        // nothing was meant to go out -- it is also what a file of refused rows looks like.
+        var delivery = perSurvey
+            ? BulkImportDelivery.None
+            : withCredentials ? BulkImportDelivery.Credentials : BulkImportDelivery.Invitation;
+
+        return new BulkImportResponse(results, successCount, errorCount, delivery);
     }
 
     private static async Task<IResult> TemplateAsync(
@@ -620,6 +688,27 @@ public static class BulkImportEndpoints
             return Results.Forbid();
         }
 
+        // Refused, not reinterpreted. `withCredentials` asks for an ACCOUNT username and
+        // password to be mailed, and a `per_survey` company has no such thing to mail: its key
+        // is minted per survey, so honouring the request as "an account, quietly" would be a
+        // different product decision wearing the caller's words. Before the rows are read, so
+        // a preview is refused exactly as an apply is and nothing is written either way.
+        var credentialMode = await CredentialModeOfAsync(db, request.CompanyId, cancellationToken);
+        if (request.WithCredentials
+            && CredentialModes.Resolve(surveyMode: null, companyMode: credentialMode) == CredentialModes.PerSurvey)
+        {
+            return Results.Json(
+                new
+                {
+                    message = $"This company is in '{CredentialModes.PerSurvey}' credential mode, where sign-in details are "
+                              + "minted one per survey by POST /surveys/{id}/invitations and mailed from there. An import "
+                              + "cannot mail account credentials as well; re-send this request with withCredentials false "
+                              + "and the accounts will be created without any email.",
+                    code = "credentials_not_available_per_survey",
+                },
+                statusCode: 400);
+        }
+
         var rows = (request.Rows ?? [])
             .Select(r => new ParsedImportRow(
                 RowNumber: r.RowNumber,
@@ -636,7 +725,7 @@ public static class BulkImportEndpoints
 
         return Results.Ok(await ProcessRowsAsync(
             rows, request.NewDepartments ?? [], request.CompanyId, request.Preview, request.WithCredentials, currentUser, db, emailSender,
-            new CredentialIssuer(passwordHasher, credentialsSender), cancellationToken));
+            new CredentialIssuer(passwordHasher, credentialsSender), credentialMode, cancellationToken));
     }
 
     /// <summary>What a mass invite needs beyond an ordinary import: a hasher for the generated password and a way to email it.</summary>
