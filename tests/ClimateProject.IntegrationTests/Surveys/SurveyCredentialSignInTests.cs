@@ -251,4 +251,30 @@ public class SurveyCredentialSignInTests : IAsyncLifetime
         Assert.Contains(clima.Id, ids);
         Assert.Contains(teletrabajo.Id, ids);
     }
+
+    /// <summary>
+    /// The listing filter is not the gate. A respondent who keeps or guesses a link to the
+    /// OTHER survey must be refused by the endpoint that takes the answer, not merely find
+    /// it missing from their dashboard.
+    /// </summary>
+    [Fact]
+    public async Task A_scoped_session_cannot_answer_the_other_survey_by_link()
+    {
+        var admin = await AdminAsync();
+        var clima = await ActiveSurveyAsync(admin, "Clima");
+        var teletrabajo = await ActiveSurveyAsync(admin, "Teletrabajo");
+        var employee = await SeedEmployeeAsync($"{Guid.NewGuid():N}@credsignin.example.com");
+        var (username, password) = await SeedCredentialAsync(clima.Id, employee);
+
+        var client = ClientFor(await SignInAsync(username, password));
+
+        // Its own survey answers.
+        var own = await client.GetAsync($"/surveys/{clima.Id}/respond");
+        Assert.Equal(HttpStatusCode.OK, own.StatusCode);
+
+        // The other one does not -- though both are active and company-wide, so targeting
+        // alone would have allowed it.
+        var other = await client.GetAsync($"/surveys/{teletrabajo.Id}/respond");
+        Assert.Equal(HttpStatusCode.Forbidden, other.StatusCode);
+    }
 }
