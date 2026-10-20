@@ -13,6 +13,7 @@ using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace ClimateProject.Api.Endpoints;
 
@@ -35,9 +36,6 @@ public static class SurveyResponseEndpoints
     /// </summary>
     public const string ResponseSubmissionRateLimiterPolicy = "survey-response-submission";
 
-    /// <summary>Requests per authenticated user, or anonymous caller IP, per window.</summary>
-    private const int RateLimitPermitsPerWindow = 60;
-
     private static readonly TimeSpan RateLimitWindow = TimeSpan.FromMinutes(1);
 
     /// <summary>
@@ -47,6 +45,16 @@ public static class SurveyResponseEndpoints
     /// after only sixty combined operations per minute.
     /// Anonymous callers remain bounded by address to limit fabricated response floods.
     /// Authentication middleware validates the subject before this partition runs.
+    ///
+    /// <para>
+    /// The size is <see cref="RateLimitingOptions.ResponseSubmissionPermitsPerMinute"/>
+    /// rather than the 60 that used to be a const here. The sentence above about throttling
+    /// a whole workplace was written for the authenticated case and is just as true of a
+    /// survey whose respondents have NO accounts -- a QR climate, where every single one of
+    /// them lands in the address bucket. At 60 that is about seven people answering at once
+    /// from one site. The measurement, the arithmetic and why 600 is the number are on
+    /// <see cref="RateLimitPolicies.DefaultResponseSubmissionPermitsPerMinute"/>.
+    /// </para>
     ///
     /// <para>
     /// The address comes from <see cref="RateLimitPolicies.ClientIpFor"/> rather than
@@ -66,11 +74,14 @@ public static class SurveyResponseEndpoints
             ? "ip:" + RateLimitPolicies.ClientIpFor(httpContext)
             : "user:" + subject;
 
+        var permits = httpContext.RequestServices
+            .GetRequiredService<IOptions<RateLimitingOptions>>().Value.ResponseSubmissionPermitsPerMinute;
+
         return RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: ResponseSubmissionRateLimiterPolicy + ":" + caller,
             factory: _ => new FixedWindowRateLimiterOptions
             {
-                PermitLimit = RateLimitPermitsPerWindow,
+                PermitLimit = permits,
                 Window = RateLimitWindow,
                 QueueLimit = 0,
             });
