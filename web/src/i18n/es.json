@@ -4598,6 +4598,18 @@
         "newCreate": "Crear plantilla",
         "newCreating": "Creando…",
         "newFailed": "No se pudo crear la plantilla. Revise los campos e inténtelo de nuevo."
+      },
+      "respondentTexts": {
+        "title": "Textos para quien responde",
+        "help": "Lo que lee cada persona en esta encuesta. Si deja un campo vacío, se muestra el texto predeterminado que aparece en gris.",
+        "introLabel": "Texto del recuadro de anonimato",
+        "introHelp": "Reemplaza el párrafo del recuadro «Anónima» al inicio, solo en respuestas anónimas. Máximo {max} caracteres.",
+        "closingLabel": "Mensaje final",
+        "closingHelp": "Se muestra al enviar las respuestas, en lugar del agradecimiento predeterminado. Máximo {max} caracteres.",
+        "open": "Textos para quien responde",
+        "openHelp": "El texto del recuadro de anonimato y el mensaje final de esta encuesta.",
+        "loadFailed": "No se pudieron cargar los textos de esta encuesta. Cierre y vuelva a intentarlo.",
+        "saved": "Textos guardados. Quien abra la encuesta desde ahora los verá."
       }
     }
   },
@@ -5442,7 +5454,7 @@
     "receiptSub": "de {total} preguntas",
     "protectedChip": "Protegido",
     "anonymousTitle": "Esta encuesta es anónima",
-    "anonymousBody": "Estimado colaborador (a) es muy importante contar con su retroalimentación y conocer aspectos, los cuales nos colaboran a mejorar el clima organizacional de la empresa: sus respuestas se manejarán de forma anónima a través de un proveedor externo.",
+    "anonymousBody": "Sus respuestas se guardan sin su nombre, cuenta, dirección IP ni navegador. Los resultados de un departamento, o de un solo dato demográfico, pueden mostrarse aunque haya respondido una sola persona. En un grupo pequeño, quien sepa quién participó podría deducir sus respuestas.",
     "identifiedTitle": "Esta encuesta es anónima",
     "identifiedBody": "Su empresa nunca verá su nombre junto a sus respuestas. Los datos los recibe y analiza un equipo externo e independiente, TIMS International, que entrega a su empresa únicamente resultados agrupados.",
     "contentLanguageTitle": "No todo está disponible en su idioma",
@@ -5522,7 +5534,6 @@
     "beginSurvey": "Comenzar la encuesta",
     "thankYouTitle": "Gracias, sus respuestas fueron recibidas",
     "thankYouBody": "Ya puede cerrar esta página.",
-    "thankYouCompany": "{company} le agradece su participación en la presente encuesta.",
     "suppressedTitle": "Algunos datos no se registraron",
     "suppressedBody": "Para mantener su respuesta anónima, estos datos sobre usted no se guardaron con ella deliberadamente: {fields}",
     "dimensions": {

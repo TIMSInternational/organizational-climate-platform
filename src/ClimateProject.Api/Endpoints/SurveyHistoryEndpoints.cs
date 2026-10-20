@@ -253,7 +253,13 @@ public static class SurveyHistoryEndpoints
             content.Settings.InvitationSendImmediately,
             content.Settings.InvitationBrandingEnabled,
             content.Settings.OneSessionOnly,
-            content.Settings.CredentialMode ?? CredentialModes.Shared);
+            content.Settings.CredentialMode ?? CredentialModes.Shared,
+            SurveyRespondentText.OrDefault(SurveyContent.Resolve(
+                content.Settings.RespondentIntroEn, content.Settings.RespondentIntroEs,
+                locale, language, "settings.respondentIntro", fallbackFields)),
+            SurveyRespondentText.OrDefault(SurveyContent.Resolve(
+                content.Settings.ClosingMessageEn, content.Settings.ClosingMessageEs,
+                locale, language, "settings.closingMessage", fallbackFields)));
 
         authors.TryGetValue(version.CreatedBy, out var author);
         var isCurrent = version.VersionNumber == survey.Version;

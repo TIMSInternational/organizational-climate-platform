@@ -77,7 +77,7 @@ export function PublicRespondEntryView({ view, locale, onBegin }: PublicRespondE
       {/* `view.anonymous` — `Survey.Settings.Anonymous`, the flag the server writes the
           response under. Never the link payload's `allowAnonymous`, which is the
           distribution's access rule and answers a different question entirely. */}
-      <AnonymityNotice anonymous={view.anonymous} recordsParticipation={view.asksParticipantIdentity === true} />
+      <AnonymityNotice anonymous={view.anonymous} recordsParticipation={view.asksParticipantIdentity === true} intro={view.respondentIntro} />
 
       <Button
         type="button"

@@ -1,4 +1,5 @@
 using ClimateProject.Domain.Entities;
+using ClimateProject.Application.Surveys;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -53,6 +54,10 @@ public class SurveyConfiguration : IEntityTypeConfiguration<Survey>
             settings.Property(x => x.NotificationReminderFrequencyDays).HasColumnName("settings_notification_reminder_frequency_days").IsRequired().HasDefaultValue(3);
             settings.Property(x => x.InvitationCustomMessageEn).HasColumnName("settings_invitation_custom_message_en").HasMaxLength(1000);
             settings.Property(x => x.InvitationCustomMessageEs).HasColumnName("settings_invitation_custom_message_es").HasMaxLength(1000);
+            settings.Property(x => x.RespondentIntroEn).HasColumnName("settings_respondent_intro_en").HasMaxLength(SurveyRespondentText.IntroMaxLength);
+            settings.Property(x => x.RespondentIntroEs).HasColumnName("settings_respondent_intro_es").HasMaxLength(SurveyRespondentText.IntroMaxLength);
+            settings.Property(x => x.ClosingMessageEn).HasColumnName("settings_closing_message_en").HasMaxLength(SurveyRespondentText.ClosingMaxLength);
+            settings.Property(x => x.ClosingMessageEs).HasColumnName("settings_closing_message_es").HasMaxLength(SurveyRespondentText.ClosingMaxLength);
             settings.Property(x => x.InvitationIncludeCredentials).HasColumnName("settings_invitation_include_credentials").IsRequired().HasDefaultValue(false);
             settings.Property(x => x.InvitationSendImmediately).HasColumnName("settings_invitation_send_immediately").IsRequired().HasDefaultValue(false);
             settings.Property(x => x.InvitationCustomSubjectEn).HasColumnName("settings_invitation_custom_subject_en").HasMaxLength(200);

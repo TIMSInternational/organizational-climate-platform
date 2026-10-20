@@ -1958,9 +1958,10 @@ describe('SurveyRespondForm — who is answering', () => {
 })
 
 /**
- * Eagle's "Correcciones encuesta de clima" (2026-10-20), the two that live in this form:
- * the closing message names the company, and a QR / shared-link respondent — who starts
- * again from scratch if they leave — is not offered "Guardar y terminar después".
+ * Eagle's "Correcciones encuesta de clima" (2026-10-20), as this form carries them: a survey's
+ * OWN intro and closing message (per survey, so no other client's respondents read Eagle's
+ * words), and a QR / shared-link respondent — who starts again from scratch if they leave —
+ * is not offered "Guardar y terminar después".
  */
 describe('SurveyRespondForm — Eagle corrections', () => {
   async function submitOne(payload: SurveyRespondView, props: { publicEntry?: boolean } = {}) {
@@ -1970,8 +1971,8 @@ describe('SurveyRespondForm — Eagle corrections', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Enviar mis respuestas' }))
   }
 
-  it('thanks the respondent in the company’s name, with no second line, and keeps the receipt', async () => {
-    await submitOne(view({ questions: [question()], companyName: 'Eagle' }), { publicEntry: true })
+  it('thanks the respondent in the survey’s own words, with no second line, and keeps the receipt', async () => {
+    await submitOne(view({ questions: [question()], closingMessage: 'Eagle le agradece su participación en la presente encuesta.' }), { publicEntry: true })
 
     const thanks = await screen.findByText('Eagle le agradece su participación en la presente encuesta.')
     const block = thanks.closest('[role="status"]') as HTMLElement
@@ -1981,11 +1982,40 @@ describe('SurveyRespondForm — Eagle corrections', () => {
     expect(document.querySelector('[data-slot="respond-receipt"]')).toBeTruthy()
   })
 
-  it('keeps the generic thanks when the API sends no company name', async () => {
+  it('keeps the default thanks when the survey has no closing message of its own', async () => {
     await submitOne(view({ questions: [question()] }))
 
     await screen.findByText(copy.es('surveyRespond.thankYouTitle'))
     expect(screen.getByText(copy.es('surveyRespond.thankYouBody'))).toBeTruthy()
+  })
+
+  const EAGLE_INTRO = 'Estimado colaborador (a) es muy importante contar con su retroalimentación y conocer aspectos, los cuales nos colaboran a mejorar el clima organizacional de la empresa: sus respuestas se manejarán de forma anónima a través de un proveedor externo.'
+
+  it('puts the survey’s own intro in the anonymity box, in place of the default paragraph', async () => {
+    respondWith(view({ anonymous: true, respondentIntro: EAGLE_INTRO }))
+    renderForm({ publicEntry: true })
+
+    const notice = (await screen.findByText(EAGLE_INTRO)).closest('[data-slot="anonymity-notice"]') as HTMLElement
+    expect(within(notice).getByText(copy.es('surveyRespond.anonymousChip'))).toBeTruthy()
+    expect(screen.queryByText(copy.es('surveyRespond.anonymousBody'))).toBeNull()
+  })
+
+  it('keeps the default paragraph for a survey without an intro of its own', async () => {
+    respondWith(view({ anonymous: true }))
+    renderForm({ publicEntry: true })
+
+    expect(await screen.findByText(copy.es('surveyRespond.anonymousBody'))).toBeTruthy()
+    expect(screen.queryByText(EAGLE_INTRO)).toBeNull()
+  })
+
+  // An author's prose must never hide that names are kept: on an identified response the
+  // disclosure stays, whatever the survey's intro says.
+  it('never lets the intro replace the disclosure on an identified response', async () => {
+    respondWith(view({ anonymous: false, respondentIntro: EAGLE_INTRO }))
+    renderForm()
+
+    expect(await screen.findByText(copy.es('surveyRespond.identifiedBody'))).toBeTruthy()
+    expect(screen.queryByText(EAGLE_INTRO)).toBeNull()
   })
 
   const twoQuestions = () => view({ allowPartialResponses: true, questions: [question(), question({ id: 'q2', order: 1 })] })

@@ -127,11 +127,13 @@ export interface SurveyRespondView {
    */
   asksParticipantIdentity?: boolean
   /**
-   * The survey's company, for the thank-you: "Eagle le agradece su participación en la presente
-   * encuesta." Optional because an API that predates it sends nothing, and null when the company
-   * row is missing; either way the screen keeps its generic thanks rather than invent a name.
+   * The survey's own paragraph for the anonymity box, set per survey ("Textos para quien
+   * responde"). Applied to an anonymous response only. Null or absent -- an API that predates it,
+   * or a survey nobody configured -- means the product's default paragraph.
    */
-  companyName?: string | null
+  respondentIntro?: string | null
+  /** The survey's own thank-you after a completed submit. Null or absent: the default thanks. */
+  closingMessage?: string | null
 }
 
 /** Who is answering, as typed. Sent on the completing post only, never on a partial save. */

@@ -4598,6 +4598,18 @@
         "newCreate": "Create template",
         "newCreating": "Creating…",
         "newFailed": "The template could not be created. Check the fields and try again."
+      },
+      "respondentTexts": {
+        "title": "Texts for respondents",
+        "help": "What each person reads in this survey. Leave a field empty and the default text shown in grey appears instead.",
+        "introLabel": "Anonymity box text",
+        "introHelp": "Replaces the paragraph in the “Anonymous” box at the start, on anonymous responses only. Up to {max} characters.",
+        "closingLabel": "Closing message",
+        "closingHelp": "Shown after the answers are sent, instead of the default thank-you. Up to {max} characters.",
+        "open": "Texts for respondents",
+        "openHelp": "This survey's anonymity box text and closing message.",
+        "loadFailed": "This survey's texts could not be loaded. Close and try again.",
+        "saved": "Texts saved. Anyone who opens the survey from now on will see them."
       }
     }
   },
@@ -5442,7 +5454,7 @@
     "receiptSub": "of {total} questions",
     "protectedChip": "Protected",
     "anonymousTitle": "This survey is anonymous",
-    "anonymousBody": "Dear colleague, it is very important to have your feedback and to learn about aspects that help us improve the company's organizational climate: your answers will be handled anonymously through an external provider.",
+    "anonymousBody": "Your answers are saved without your name, account, IP address or browser. Results for a department, or for a single demographic detail, may be shown even if only one person answered. In a small group, someone who knows who took part may infer their answers.",
     "identifiedTitle": "This survey is anonymous",
     "identifiedBody": "Your employer will never see your name beside your answers. The data is received and analysed by an independent external team, TIMS International, which gives your employer grouped results only.",
     "contentLanguageTitle": "Not everything is available in your language",
@@ -5522,7 +5534,6 @@
     "beginSurvey": "Start the survey",
     "thankYouTitle": "Thank you, your answers have been received",
     "thankYouBody": "You can close this page.",
-    "thankYouCompany": "{company} thanks you for taking part in this survey.",
     "suppressedTitle": "Some details were not recorded",
     "suppressedBody": "To keep your response anonymous, these details about you were deliberately not saved with it: {fields}",
     "dimensions": {

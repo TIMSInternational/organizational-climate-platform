@@ -371,10 +371,12 @@ public static class SurveyResponseEndpoints
                 : [],
             inProgress,
             AsksParticipantIdentity(survey, respondent),
-            await db.Companies.AsNoTracking()
-                .Where(c => c.Id == survey.CompanyId)
-                .Select(c => c.Name)
-                .FirstOrDefaultAsync(cancellationToken)));
+            SurveyRespondentText.OrDefault(SurveyContent.Resolve(
+                survey.Settings.RespondentIntroEn, survey.Settings.RespondentIntroEs,
+                locale, survey.Language, "settings.respondentIntro", fallbackFields)),
+            SurveyRespondentText.OrDefault(SurveyContent.Resolve(
+                survey.Settings.ClosingMessageEn, survey.Settings.ClosingMessageEs,
+                locale, survey.Language, "settings.closingMessage", fallbackFields))));
     }
 
     // ------------------------------------------------------------------

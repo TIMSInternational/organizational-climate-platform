@@ -97,7 +97,12 @@ public sealed record SurveyVersionSettingsSnapshot(
     /// Null here means "this version predates the setting", which reads as `shared` -- the
     /// behaviour those surveys actually had.
     /// </summary>
-    string? CredentialMode = null);
+    string? CredentialMode = null,
+    /// <summary>Added 2026-10-20; null in older snapshots, which is the default text they had.</summary>
+    string? RespondentIntroEn = null,
+    string? RespondentIntroEs = null,
+    string? ClosingMessageEn = null,
+    string? ClosingMessageEs = null);
 
 /// <summary>
 /// A whole survey's content at one instant: the two column pairs SurveyVersion carries
@@ -231,7 +236,11 @@ public static class SurveyVersioning
             survey.Settings.InvitationSendImmediately,
             survey.Settings.InvitationBrandingEnabled,
             survey.Settings.OneSessionOnly,
-            survey.Settings.CredentialMode);
+            survey.Settings.CredentialMode,
+            survey.Settings.RespondentIntroEn,
+            survey.Settings.RespondentIntroEs,
+            survey.Settings.ClosingMessageEn,
+            survey.Settings.ClosingMessageEs);
 
         return new SurveyVersionContent(
             survey.TitleEn, survey.TitleEs, survey.DescriptionEn, survey.DescriptionEs,
@@ -346,6 +355,8 @@ public static class SurveyVersioning
         ("settings.invitationSendImmediately", s => s.InvitationSendImmediately),
         ("settings.invitationBrandingEnabled", s => s.InvitationBrandingEnabled),
         ("settings.oneSessionOnly", s => s.OneSessionOnly),
+        ("settings.respondentIntro", s => Pair(s.RespondentIntroEn, s.RespondentIntroEs)),
+        ("settings.closingMessage", s => Pair(s.ClosingMessageEn, s.ClosingMessageEs)),
     ];
 
     /// <summary>

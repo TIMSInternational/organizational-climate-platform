@@ -139,6 +139,22 @@ public class SurveySettings
     public bool InvitationBrandingEnabled { get; set; }
 
     /// <summary>
+    /// The survey's own words for the respondent, both shown ON SCREEN, never emailed
+    /// (Eagle's corrections, 2026-10-20). Null or blank means the product's default text, so a
+    /// survey nobody configured -- every one before this date -- says exactly what it said.
+    /// <para>
+    /// <see cref="RespondentIntroEn"/>: replaces the anonymity box's paragraph on an ANONYMOUS
+    /// response only. The "Anónima" label stays; an identified response keeps its own
+    /// disclosure, because an author's prose must not be able to hide that names are kept.
+    /// </para>
+    /// <para><see cref="ClosingMessageEn"/>: replaces the thank-you after a completed submit.</para>
+    /// </summary>
+    public string? RespondentIntroEn { get; set; }
+    public string? RespondentIntroEs { get; set; }
+    public string? ClosingMessageEn { get; set; }
+    public string? ClosingMessageEs { get; set; }
+
+    /// <summary>
     /// Whether a respondent WITHOUT an account gets one session only: reloading or coming back
     /// serves the form as it was first served, instead of the half they left.
     /// </summary>

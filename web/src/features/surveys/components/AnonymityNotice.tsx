@@ -63,8 +63,17 @@ export function AnonymityNotice({
   anonymous,
   collapsible = false,
   recordsParticipation = false,
+  intro = null,
 }: {
   anonymous: boolean
+  /**
+   * The survey's own paragraph (`SurveyRespondView.respondentIntro`), in place of `anonymousBody`.
+   * Eagle's corrections, 2026-10-20: a client words the promise for its own people, per survey,
+   * and every other survey keeps the default. Ignored on an IDENTIFIED response, on purpose: an
+   * author's prose must never be able to hide that names are kept. Only callers holding the
+   * respond view pass it; Home has no survey text to pass and draws the default.
+   */
+  intro?: string | null
   /**
    * The respondent is asked their name and email (`asksParticipantIdentity`). The anonymous
    * body stays true word for word — the response row still holds no name, account, IP or
@@ -108,8 +117,9 @@ export function AnonymityNotice({
   const heading = <h2 className="sr-only">{anonymous ? t('anonymousTitle') : t('identifiedTitle')}</h2>
   const body = (
     <>
-      <p className="m-0 text-respond text-fg-secondary">
-        {anonymous ? t('anonymousBody') : t('identifiedBody')}
+      {/* `whitespace-pre-line`: an author's own paragraph may carry line breaks. */}
+      <p className="m-0 whitespace-pre-line text-respond text-fg-secondary">
+        {anonymous ? (intro?.trim() ? intro : t('anonymousBody')) : t('identifiedBody')}
       </p>
       {anonymous && recordsParticipation ? (
         <p data-slot="participation-promise" className="m-0 mt-1 text-respond text-fg-secondary">

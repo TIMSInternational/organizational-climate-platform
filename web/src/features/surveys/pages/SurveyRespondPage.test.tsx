@@ -235,7 +235,7 @@ describe('SurveyRespondPage anonymity messaging', () => {
     renderPage()
 
     expect(await screen.findByText('Esta encuesta es anónima')).toBeTruthy()
-    expect(screen.getByText(/se manejarán de forma anónima a través de un proveedor externo/)).toBeTruthy()
+    expect(screen.getByText(/sin tu nombre|sin su nombre/)).toBeTruthy()
   })
 
   /**
@@ -1842,7 +1842,7 @@ describe('SurveyRespondPage as an instrument', () => {
     // The whole promise travelled, not just its title: the chip that carries the
     // state in a word, and the sentence that says what is not recorded.
     expect(within(promise!).getByText('Anónima')).toBeTruthy()
-    expect(within(promise!).getByText(/se manejarán de forma anónima a través de un proveedor externo/)).toBeTruthy()
+    expect(within(promise!).getByText(/sin su nombre/)).toBeTruthy()
 
     const form = document.querySelector('form')
     expect(form).toBeTruthy()

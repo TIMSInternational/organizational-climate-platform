@@ -1596,6 +1596,38 @@ public static class SurveyEndpoints
             if (subjectEs is not null) settings.InvitationCustomSubjectEs = subjectEs;
         }
 
+        if (input.RespondentIntro is not null)
+        {
+            if (!input.RespondentIntro.TryResolve(language, "settings.respondentIntro", out var introEn, out var introEs, out var introError))
+            {
+                return Results.Json(new { message = introError }, statusCode: 400);
+            }
+
+            if ((introEn?.Length ?? 0) > SurveyRespondentText.IntroMaxLength || (introEs?.Length ?? 0) > SurveyRespondentText.IntroMaxLength)
+            {
+                return Results.Json(new { message = $"'settings.respondentIntro' admits {SurveyRespondentText.IntroMaxLength} characters." }, statusCode: 400);
+            }
+
+            if (introEn is not null) settings.RespondentIntroEn = introEn;
+            if (introEs is not null) settings.RespondentIntroEs = introEs;
+        }
+
+        if (input.ClosingMessage is not null)
+        {
+            if (!input.ClosingMessage.TryResolve(language, "settings.closingMessage", out var closingEn, out var closingEs, out var closingError))
+            {
+                return Results.Json(new { message = closingError }, statusCode: 400);
+            }
+
+            if ((closingEn?.Length ?? 0) > SurveyRespondentText.ClosingMaxLength || (closingEs?.Length ?? 0) > SurveyRespondentText.ClosingMaxLength)
+            {
+                return Results.Json(new { message = $"'settings.closingMessage' admits {SurveyRespondentText.ClosingMaxLength} characters." }, statusCode: 400);
+            }
+
+            if (closingEn is not null) settings.ClosingMessageEn = closingEn;
+            if (closingEs is not null) settings.ClosingMessageEs = closingEs;
+        }
+
         return null;
     }
 
@@ -1671,7 +1703,13 @@ public static class SurveyEndpoints
             survey.Settings.InvitationSendImmediately,
             survey.Settings.InvitationBrandingEnabled,
             survey.Settings.OneSessionOnly,
-            survey.Settings.CredentialMode ?? CredentialModes.Shared);
+            survey.Settings.CredentialMode ?? CredentialModes.Shared,
+            SurveyRespondentText.OrDefault(SurveyContent.Resolve(
+                survey.Settings.RespondentIntroEn, survey.Settings.RespondentIntroEs,
+                locale, survey.Language, "settings.respondentIntro", fallbackFields)),
+            SurveyRespondentText.OrDefault(SurveyContent.Resolve(
+                survey.Settings.ClosingMessageEn, survey.Settings.ClosingMessageEs,
+                locale, survey.Language, "settings.closingMessage", fallbackFields)));
 
         // ResolvedLocale names the language the caller is actually READING, not the one
         // they asked for. A Spanish-only survey fetched with ?lang=en comes back in
