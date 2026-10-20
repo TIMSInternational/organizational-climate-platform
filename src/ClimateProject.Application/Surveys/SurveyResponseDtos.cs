@@ -166,6 +166,12 @@ public sealed record SurveyRespondDemographicOption(string Value, string? Label)
 /// identified survey alike, since the 2026-10-12 ruling that every survey has a link. Declared last
 /// with a default so a payload from an API that predates it reads as "not asked".
 /// </param>
+/// <param name="CompanyName">
+/// The name of the company the survey belongs to, for the thank-you a respondent reads after
+/// submitting: "Eagle le agradece su participación en la presente encuesta." (Eagle's
+/// corrections, 2026-10-20). Null when the company row is missing, and the screen then keeps its
+/// generic thanks rather than inventing a name.
+/// </param>
 public sealed record SurveyRespondView(
     Guid Id,
     string? Title,
@@ -185,7 +191,8 @@ public sealed record SurveyRespondView(
     IReadOnlyList<SurveyQuestionDto> Questions,
     IReadOnlyList<SurveyRespondDemographicField> Demographics,
     SurveyResponseState? InProgress,
-    bool AsksParticipantIdentity = false);
+    bool AsksParticipantIdentity = false,
+    string? CompanyName = null);
 
 /// <param name="AlreadySubmitted">
 /// True when this call found a response that was already complete and therefore changed

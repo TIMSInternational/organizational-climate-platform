@@ -221,7 +221,7 @@ describe('PublicSurveyLinkPage', () => {
     const notice = document.querySelector('[data-slot="anonymity-notice"]')
     expect(notice?.getAttribute('data-anonymous')).toBe('false')
     expect(notice?.textContent).toContain('TIMS International')
-    expect(notice?.textContent).not.toContain('sin su nombre, cuenta, dirección IP')
+    expect(notice?.textContent).not.toContain('de forma anónima a través de un proveedor externo')
   })
 
   /**

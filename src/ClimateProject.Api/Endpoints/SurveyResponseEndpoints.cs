@@ -370,7 +370,11 @@ public static class SurveyResponseEndpoints
                     fallbackFields)
                 : [],
             inProgress,
-            AsksParticipantIdentity(survey, respondent)));
+            AsksParticipantIdentity(survey, respondent),
+            await db.Companies.AsNoTracking()
+                .Where(c => c.Id == survey.CompanyId)
+                .Select(c => c.Name)
+                .FirstOrDefaultAsync(cancellationToken)));
     }
 
     // ------------------------------------------------------------------

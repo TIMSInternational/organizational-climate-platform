@@ -354,6 +354,21 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// The thank-you names the company -- "Eagle le agradece su participación en la presente
+    /// encuesta" (Eagle's corrections, 2026-10-20) -- so the view carries the company's name, to
+    /// the visitor who holds only the QR link and to a signed-in respondent alike.
+    /// </summary>
+    [Fact]
+    public async Task The_respond_view_names_the_surveys_company_for_the_thank_you()
+    {
+        var survey = await QrSurveyAsync(collectIdentity: false);
+        var employee = await _harness.ClientAsync(Roles.Employee, _companyId, _operaciones);
+
+        Assert.Equal("Planta Co", (await RespondViewAsync(_factory.CreateClient(), survey.Id)).CompanyName);
+        Assert.Equal("Planta Co", (await RespondViewAsync(employee, survey.Id)).CompanyName);
+    }
+
+    /// <summary>
     /// And the write path: a client that asks anyway -- a stale bundle, or a script -- is
     /// REFUSED rather than quietly obeyed, so no row can reach `survey_participations`.
     /// </summary>

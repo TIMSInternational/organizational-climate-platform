@@ -126,6 +126,12 @@ export interface SurveyRespondView {
    * `demographics` note for the deploy window this survives.
    */
   asksParticipantIdentity?: boolean
+  /**
+   * The survey's company, for the thank-you: "Eagle le agradece su participación en la presente
+   * encuesta." Optional because an API that predates it sends nothing, and null when the company
+   * row is missing; either way the screen keeps its generic thanks rather than invent a name.
+   */
+  companyName?: string | null
 }
 
 /** Who is answering, as typed. Sent on the completing post only, never on a partial save. */

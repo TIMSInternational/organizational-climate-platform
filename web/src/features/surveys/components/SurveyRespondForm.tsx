@@ -972,6 +972,7 @@ export default function SurveyRespondForm({
           submittedAt={submittedAt}
           locale={locale}
           publicEntry={publicEntry}
+          companyName={view?.companyName ?? null}
         />
       </RespondSurface>
     )
@@ -1385,9 +1386,11 @@ export default function SurveyRespondForm({
             <AlertTitle>{t('saveFailedTitle')}</AlertTitle>
             <AlertDescription>
               <span>
+                {/* The public variants do not name "Guardar y terminar después": a public
+                    entry has no such button (see the save row below). */}
                 {saveState.savedAt === null
-                  ? t('saveFailedBody')
-                  : t('saveFailedSince', { time: formatTime(saveState.savedAt, locale) })}
+                  ? t(publicEntry ? 'saveFailedBodyPublic' : 'saveFailedBody')
+                  : t(publicEntry ? 'saveFailedSincePublic' : 'saveFailedSince', { time: formatTime(saveState.savedAt, locale) })}
               </span>
               {/* The server's own message names what it objected to, and "this survey
                   has reached its response limit" is something a respondent can act on
@@ -1443,8 +1446,14 @@ export default function SurveyRespondForm({
         {/* "Guardar y terminar después" as the canvas draws it — an underlined line under
             the pair — and only where the survey allows partial responses. The save state
             rides under it: it is the answer to the question this link asks, "is my work
-            anywhere but this screen", on every page of the survey. */}
-        {view.allowPartialResponses && (
+            anywhere but this screen", on every page of the survey.
+
+            Never on a public entry (the QR / shared link): ruled 2026-10-20, a respondent
+            with no account who leaves starts again from scratch, so offering to "finish
+            later" promises something they cannot do. The autosave still runs underneath —
+            it is what keeps a retried submit idempotent — but nothing invites them to rely
+            on it. */}
+        {view.allowPartialResponses && !publicEntry && (
           <div data-slot="respond-save" className="flex flex-col items-center gap-1">
             <Button
               type="button"
@@ -1810,6 +1819,7 @@ function Submitted({
   submittedAt,
   locale,
   publicEntry,
+  companyName,
 }: {
   result: SurveySubmissionResult
   /** `SurveyRespondView.endDate`, or null if the view never loaded. */
@@ -1818,6 +1828,8 @@ function Submitted({
   submittedAt: number | null
   locale: string
   publicEntry: boolean
+  /** `SurveyRespondView.companyName`: who thanks the respondent, or null to thank generically. */
+  companyName: string | null
 }) {
   const { t } = useTranslation('surveyRespond')
 
@@ -1832,14 +1844,24 @@ function Submitted({
     <div className="flex flex-col gap-4">
       {/* The canvas's thank-you (RespondConfirmationPhone, 10 Sep) is the product's own
           success alert — the soft green block with the shield — so it stays that. */}
+      {/* Eagle's corrections (2026-10-20): the green block says only "<Empresa> le agradece su
+          participación en la presente encuesta." — no second line. The receipt below stays.
+          Without a company name (an API that predates the field) it keeps the generic thanks. */}
       <Alert variant="success" role="status">
         <ShieldCheck aria-hidden="true" />
-        <AlertTitle>
-          {result.alreadySubmitted ? t('alreadyCompletedTitle') : t('thankYouTitle')}
-        </AlertTitle>
-        <AlertDescription>
-          {result.alreadySubmitted ? t('alreadyCompletedBody') : t('thankYouBody')}
-        </AlertDescription>
+        {result.alreadySubmitted ? (
+          <>
+            <AlertTitle>{t('alreadyCompletedTitle')}</AlertTitle>
+            <AlertDescription>{t('alreadyCompletedBody')}</AlertDescription>
+          </>
+        ) : companyName ? (
+          <AlertTitle>{t('thankYouCompany', { company: companyName })}</AlertTitle>
+        ) : (
+          <>
+            <AlertTitle>{t('thankYouTitle')}</AlertTitle>
+            <AlertDescription>{t('thankYouBody')}</AlertDescription>
+          </>
+        )}
       </Alert>
 
       {/* The receipt row, as the canvas draws it: the tile, and beside it when and how.
