@@ -314,7 +314,7 @@ public static class SurveyEndpoints
         // from the foreign key instead of a 400.
         var company = await db.Companies
             .Where(c => c.Id == request.CompanyId)
-            .Select(c => new { c.Settings.Language })
+            .Select(c => new { c.Settings.Language, c.Settings.CredentialMode })
             .FirstOrDefaultAsync(cancellationToken);
         if (company is null)
         {
@@ -329,6 +329,23 @@ public static class SurveyEndpoints
         var language = ContentLanguages.NormaliseLanguage(request.Language)
                        ?? ContentLanguages.NormaliseLanguage(company.Language)
                        ?? ContentLanguages.FallbackLocale;
+
+        // Refused, not coerced, for the same reason the language above is: a typo would
+        // leave this survey on `shared` and the first anyone would hear of it is a roster
+        // receiving one email where they were promised one per survey, after it was sent.
+        if (request.Settings?.CredentialMode is { } requestedMode
+            && !CredentialModes.IsValid(requestedMode))
+        {
+            return Results.Json(
+                new { message = $"settings.credentialMode must be one of: {string.Join(", ", CredentialModes.All)}" },
+                statusCode: 400);
+        }
+
+        // Survey's own choice, else the company's, else `shared` -- resolved HERE and frozen
+        // onto the row, exactly as `language` is two statements above. Resolving it at read
+        // time instead would let a company settings change re-shape a survey whose
+        // credentials have already been mailed, and credentials are mailed exactly once.
+        var credentialMode = CredentialModes.Resolve(request.Settings?.CredentialMode, company.CredentialMode);
 
         var type = request.Type?.Trim();
         if (string.IsNullOrWhiteSpace(type))
@@ -462,6 +479,10 @@ public static class SurveyEndpoints
         // they can answer. The entity's own default (false) is the legacy shape and stays,
         // because changing it would silently re-read every row materialised without the flag.
         survey.Settings.Anonymous = true;
+
+        // Frozen now. Null would have meant "inherit", and inheriting is a decision this
+        // survey has already made.
+        survey.Settings.CredentialMode = credentialMode;
 
         // Who answered is NOT asked. The 2026-10-12 ruling that put a name and email step on
         // every new survey was superseded on 2026-10-13: there are three ways to answer -- a

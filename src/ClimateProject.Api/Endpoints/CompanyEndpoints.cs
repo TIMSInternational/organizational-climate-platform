@@ -258,6 +258,24 @@ public static class CompanyEndpoints
         if (!string.IsNullOrWhiteSpace(request.Timezone)) company.Settings.Timezone = request.Timezone;
         if (!string.IsNullOrWhiteSpace(request.Language)) company.Settings.Language = request.Language;
 
+        // Refused rather than coerced. A typo here would silently leave the company on
+        // `shared` and the first anyone would learn of it is a roster receiving one email
+        // where they were promised one per survey -- after the mail has gone.
+        if (!string.IsNullOrWhiteSpace(request.CredentialMode))
+        {
+            if (!CredentialModes.IsValid(request.CredentialMode))
+            {
+                return Results.Json(
+                    new { message = $"credentialMode must be one of: {string.Join(", ", CredentialModes.All)}" },
+                    statusCode: 400);
+            }
+
+            // Only NEW surveys inherit this: each one froze its own mode when it was created.
+            // Changing it here cannot re-shape a survey whose credentials have already been
+            // mailed, which is the whole reason the resolution happens at create time.
+            company.Settings.CredentialMode = request.CredentialMode;
+        }
+
         // Normalised, so "" and "   " and null are one stored value. A reader that had to
         // treat a blank string as "no logo" would be a second place to get it wrong, and the
         // one on the respondent's portal decides whether an <img> is rendered at all.
@@ -271,7 +289,7 @@ public static class CompanyEndpoints
 
         return Results.Ok(new CompanySettingsResponse(
             company.Id,
-            new CompanySettingsDto(company.Settings.SurveyFrequency, company.Settings.MicroclimateEnabled, company.Settings.AiInsightsEnabled, company.Settings.AnonymousSurveys, company.Settings.DataRetentionDays, company.Settings.Timezone, company.Settings.Language),
+            new CompanySettingsDto(company.Settings.SurveyFrequency, company.Settings.MicroclimateEnabled, company.Settings.AiInsightsEnabled, company.Settings.AnonymousSurveys, company.Settings.DataRetentionDays, company.Settings.Timezone, company.Settings.Language, company.Settings.CredentialMode),
             new CompanyBrandingDto(company.Branding.LogoUrl, company.Branding.PrimaryColor, company.Branding.SecondaryColor, company.Branding.FontFamily, company.Branding.CustomCss),
             ResultBandsDto.From(company.Settings)));
     }
