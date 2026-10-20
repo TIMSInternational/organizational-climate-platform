@@ -6597,6 +6597,7 @@
     "erasureRedactedActionPlans": "planes de acción a tu cargo: se libera la asignación y el plan queda sin responsable, así que nada te reclama un trabajo que ya no tienes. Qué planes creaste se conserva, apuntando a tu cuenta ya anonimizada, porque crearlos fue un acto y no un dato sobre ti.",
     "erasureRedactedMicroclimateInvitations": "invitaciones a un microclima: se sobrescriben tu dirección y su token de acceso.",
     "erasureDeletedSurveyAuditLogs": "el historial de cambios de encuestas. Tus filas se eliminan por completo, no se sobrescriben, de modo que el historial de cada encuesta ya no registra que esos cambios se hicieron. El registro de auditoría general, arriba, es el que se conserva.",
+    "erasureDeletedSurveyCredentials": "tus datos de acceso a una sola encuesta: el usuario que recibiste por correo y la forma almacenada de su contrase\u00f1a. Se eliminan por completo, as\u00ed que esa llave ya no abre nada.",
     "erasureDeletedSurveyParticipations": "el registro de que respondiste una encuesta por su enlace: el nombre y el correo que escribiste y el día, nunca lo que respondiste.",
     "erasureDeletedSurveyUserTargets": "el registro de que una encuesta se dirigió a ti en particular, y no a todo tu departamento.",
     "erasureRedactedSurveyInvitations": "invitaciones a una encuesta: se sobrescriben tu dirección y su token de acceso. La fila es el denominador de una tasa de respuesta que ya se ha reportado.",

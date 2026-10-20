@@ -177,6 +177,14 @@ public static class SubjectAccessExport
             // an address: a user id resolves to one person in one company already.
             await FullAsync(db, "SurveyUserTarget", "UserId",
                 db.SurveyUserTargets.Where(t => t.UserId == id), cancellationToken),
+            // The subject's per-survey sign-in. Their username is personal data -- an
+            // identifier assigned to them and printed in a mail they hold -- so the row is
+            // disclosed; `SubjectDataMap.RedactedColumns` carries `PasswordHash`, so what
+            // comes back says a credential EXISTS without handing over the material to
+            // attack it offline. Same treatment, and the same reason, as the invitation
+            // token beside it.
+            await FullAsync(db, "SurveyCredential", "UserId",
+                db.SurveyCredentials.Where(c => c.UserId == id), cancellationToken),
 
             // --- Actor: the subject as author, approver or manager ---------------------------
             // Paired-column labels (#195/#210) are whichever half exists, English first: an

@@ -82,6 +82,7 @@ export const ERASURE_MAP_DIVERGENCES = [
 export const ERASURE_DELETED_TABLES = [
   'notifications',
   'survey_audit_logs',
+  'survey_credentials',
   'survey_drafts',
   'survey_participations',
   'survey_user_targets',
@@ -107,6 +108,7 @@ export const ERASURE_REDACTED_TABLES = [
 export const DELETED_LABEL_PATH: Record<string, string> = {
   notifications: 'privacy.erasureDeletedNotifications',
   survey_audit_logs: 'privacy.erasureDeletedSurveyAuditLogs',
+  survey_credentials: 'privacy.erasureDeletedSurveyCredentials',
   survey_drafts: 'privacy.erasureDeletedSurveyDrafts',
   survey_participations: 'privacy.erasureDeletedSurveyParticipations',
   survey_user_targets: 'privacy.erasureDeletedSurveyUserTargets',

@@ -9,7 +9,12 @@ public sealed record CurrentUser(
     string Email,
     string Name,
     string CompanyId,
-    bool IsActive);
+    bool IsActive,
+    /// <summary>
+    /// The single survey this session may see, or null for "every survey you are targeted
+    /// by". Set only when sign-in resolved a per-survey credential.
+    /// </summary>
+    Guid? SurveyScope = null);
 
 public static class ClaimsPrincipalExtensions
 {
@@ -27,7 +32,10 @@ public static class ClaimsPrincipalExtensions
             Email: principal.FindFirst("email")?.Value ?? string.Empty,
             Name: principal.FindFirst("name")?.Value ?? string.Empty,
             CompanyId: principal.FindFirst("companyId")?.Value ?? string.Empty,
-            IsActive: bool.TryParse(principal.FindFirst("isActive")?.Value, out var isActive) && isActive);
+            IsActive: bool.TryParse(principal.FindFirst("isActive")?.Value, out var isActive) && isActive,
+            SurveyScope: Guid.TryParse(principal.FindFirst(TokenClaimNames.SurveyScope)?.Value, out var scope)
+                ? scope
+                : null);
     }
 
     /// <summary>

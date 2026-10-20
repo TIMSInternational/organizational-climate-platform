@@ -61,6 +61,17 @@ public static class SurveyQueries
     /// so the generated SQL is unambiguous instead of relying on a <c>= NULL</c> comparison
     /// that is never true.
     /// </param>
+    /// <param name="surveyScope">
+    /// The ONE survey this session may see, when it was opened with a per-survey credential
+    /// -- null, the default, means every survey the person is targeted by, which is what a
+    /// shared account has always meant.
+    ///
+    /// <para>Applied here and not at each caller on purpose. This method is the single
+    /// predicate behind <c>GET /surveys/my</c>, <c>GET /dashboard/employee</c> and search,
+    /// so a filter added here cannot be forgotten by one of the three -- and a respondent
+    /// who signed in for Clima seeing Teletrabajo on their dashboard is precisely the
+    /// shared-account view the mode exists to prevent.</para>
+    /// </param>
     public static IQueryable<Survey> AssignedTo(
         IQueryable<Survey> surveys,
         IQueryable<SurveyDepartmentTarget> departmentTargets,
@@ -68,9 +79,19 @@ public static class SurveyQueries
         IQueryable<Response> responses,
         Guid companyId,
         Guid? departmentId,
-        Guid userId)
+        Guid userId,
+        Guid? surveyScope = null)
     {
         var query = surveys.Where(s => s.CompanyId == companyId && s.Status == SurveyStatuses.Active);
+
+        // Narrowed FIRST, so everything below -- targeting, completion -- is evaluated
+        // against the one survey this session is for rather than filtered down to it
+        // afterwards. The targeting check still runs: a credential for a survey the person
+        // was later untargeted from opens nothing.
+        if (surveyScope is { } scoped)
+        {
+            query = query.Where(s => s.Id == scoped);
+        }
 
         // No targets of EITHER kind means company-wide; otherwise the audience is the union
         // of "my department is targeted" and "I am targeted". Per-person targets exist

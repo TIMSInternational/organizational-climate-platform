@@ -235,6 +235,21 @@ public static class SurveyResponseEndpoints
             return new RespondentResolution(null, Results.Forbid());
         }
 
+        // A session opened with a PER-SURVEY credential may answer that survey and no
+        // other. Checked here and not only in `SurveyQueries.AssignedTo`, because that one
+        // filters LISTINGS -- it decides what `/surveys/my` and the dashboard show, and a
+        // respondent who types or keeps a link to another survey never goes near it. This
+        // is the gate the answer actually passes through, and the remarks below already
+        // name the failure: two implementations of "is this survey mine to answer" that
+        // disagree let somebody answer a survey that was never aimed at them.
+        //
+        // Forbid, matching every other refusal on this path, so it discloses nothing about
+        // which other surveys exist.
+        if (currentUser.SurveyScope is { } scopedSurveyId && scopedSurveyId != survey.Id)
+        {
+            return new RespondentResolution(null, Results.Forbid());
+        }
+
         var hasDepartmentTargets = await db.SurveyDepartmentTargets
             .AnyAsync(t => t.SurveyId == survey.Id, cancellationToken);
         var hasUserTargets = await db.SurveyUserTargets

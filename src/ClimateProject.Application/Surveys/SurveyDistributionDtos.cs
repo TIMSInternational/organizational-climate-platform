@@ -194,7 +194,19 @@ public sealed record SurveyInvitationBatchResult(
     IReadOnlyList<Guid> SkippedUserIds,
     int NotificationsQueued,
     int UndeliverableRecipients,
-    string? Note);
+    string? Note,
+    /// <summary>
+    /// Per-survey credentials minted and mailed by this call. Zero in `shared` mode, where
+    /// the account the person already has opens every survey they are targeted by.
+    /// </summary>
+    int CredentialsIssued = 0,
+    /// <summary>
+    /// Credentials that were minted but whose mail did not go. The ROW exists, so the
+    /// person has a working username and password they have not been told -- which is what
+    /// the resend route is for. Reported rather than rolled back, because rolling back
+    /// would also destroy the credentials that did arrive.
+    /// </summary>
+    int CredentialsNotSent = 0);
 
 /// <param name="Eligible">Outstanding invitations whose reminder cadence had elapsed.</param>
 /// <param name="Queued">Reminder notifications added. Equal to <paramref name="Eligible"/> unless something failed validation.</param>

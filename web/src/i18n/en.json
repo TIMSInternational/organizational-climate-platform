@@ -6597,6 +6597,7 @@
     "erasureRedactedActionPlans": "action plans you were answerable for: the assignment to you is cleared and the plan falls to no owner, so nothing chases you about work you no longer hold. Which plans you filed is kept, pointing at your anonymised account, because filing one was an act and not a detail about you.",
     "erasureRedactedMicroclimateInvitations": "invitations to a microclimate: your address and its access token are overwritten.",
     "erasureDeletedSurveyAuditLogs": "the survey change trail. Your rows are deleted outright, not overwritten - so the per-survey history no longer records that those changes were made at all. The platform-wide audit trail above is the one that survives.",
+    "erasureDeletedSurveyCredentials": "your sign-in details for one survey: the username you were mailed and the stored form of its password. Deleted outright, so that key opens nothing afterwards.",
     "erasureDeletedSurveyParticipations": "the record that you answered a survey through its link: the name and email you typed and the day, never what you answered.",
     "erasureDeletedSurveyUserTargets": "the record that a survey was aimed at you by name, rather than at your whole department.",
     "erasureRedactedSurveyInvitations": "invitations to a survey: your address and its access token are overwritten. The row is the denominator of a response rate that has already been reported.",

@@ -180,7 +180,12 @@ public static class SearchEndpoints
     private sealed record AdminAccess(SearchScope Scope) : Access;
 
     /// <summary>Surveys this person is expected to answer, and nothing else.</summary>
-    private sealed record AssignedSurveysAccess(Guid CompanyId, Guid? DepartmentId, Guid UserId) : Access;
+    /// <param name="SurveyScope">
+    /// The one survey a per-survey session may see, carried so search cannot answer with a
+    /// survey the dashboard is hiding -- two copies of "which surveys may this person see"
+    /// is one copy too many, and the copy that drifts is the one that leaks.
+    /// </param>
+    private sealed record AssignedSurveysAccess(Guid CompanyId, Guid? DepartmentId, Guid UserId, Guid? SurveyScope) : Access;
 
     /// <summary>Authenticated, but with nothing searchable. An empty result, not an error.</summary>
     private sealed record NoAccess : Access;
@@ -239,7 +244,7 @@ public static class SearchEndpoints
             .FirstOrDefaultAsync(cancellationToken);
 
         return me?.CompanyId is Guid myCompanyId
-            ? new AssignedSurveysAccess(myCompanyId, me.DepartmentId, me.Id)
+            ? new AssignedSurveysAccess(myCompanyId, me.DepartmentId, me.Id, currentUser.SurveyScope)
             : new NoAccess();
     }
 
@@ -261,7 +266,7 @@ public static class SearchEndpoints
             AdminAccess admin => ForAdmin(admin.Scope, type, tsQuery, limit, db),
             AssignedSurveysAccess assigned when type == SearchEntityTypes.Survey => SearchQueries.AssignedSurveys(
                 db.Surveys, db.SurveyDepartmentTargets, db.SurveyUserTargets, db.Responses,
-                assigned.CompanyId, assigned.DepartmentId, assigned.UserId, tsQuery, limit),
+                assigned.CompanyId, assigned.DepartmentId, assigned.UserId, tsQuery, limit, assigned.SurveyScope),
             _ => null,
         };
 

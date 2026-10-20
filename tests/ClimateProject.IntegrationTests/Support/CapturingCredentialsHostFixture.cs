@@ -15,7 +15,15 @@ namespace ClimateProject.IntegrationTests.Support;
 /// </summary>
 public sealed record SentCredentials(
     string ToEmail, string Username, string Password, string? Language, CredentialsEmailPurpose Purpose,
-    string? RecipientName);
+    string? RecipientName,
+    /// <summary>
+    /// Which survey these details open, or null when they open every survey the holder is
+    /// targeted by. Captured so a test can prove the two messages one person receives for
+    /// two surveys are actually distinguishable -- which is the whole requirement.
+    /// </summary>
+    string? SurveyName = null,
+    /// <summary>The company as the mail will name it, for the same reason.</summary>
+    string? CompanyName = null);
 
 /// <summary>
 /// A host whose <see cref="ICredentialsEmailSender"/> records instead of sending.
@@ -52,14 +60,15 @@ internal sealed class CapturingCredentialsSender(ConcurrentQueue<SentCredentials
 {
     public Task<EmailSendOutcome> SendAsync(
         string toEmail, string? recipientName, string username, string password, string? companyLanguage,
-        EmailBrand? brand, CredentialsEmailPurpose purpose, CancellationToken cancellationToken)
+        EmailBrand? brand, CredentialsEmailPurpose purpose, string? surveyName, CancellationToken cancellationToken)
     {
         if (failFor.Contains(toEmail))
         {
             return Task.FromResult(EmailSendOutcome.PermanentFailure("refused for the test"));
         }
 
-        sent.Enqueue(new SentCredentials(toEmail, username, password, companyLanguage, purpose, recipientName));
+        sent.Enqueue(new SentCredentials(
+            toEmail, username, password, companyLanguage, purpose, recipientName, surveyName, brand?.CompanyName));
         return Task.FromResult(EmailSendOutcome.Success());
     }
 }

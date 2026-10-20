@@ -87,7 +87,7 @@ public static class MassInviteEndpoints
         // person, who most often never received the first message or lost it. The bulk route
         // below is the one that chases people who did receive it.
         var outcome = await credentialsSender.SendAsync(
-            user.Email, user.Name, user.Username, password, language, brand, CredentialsEmailPurpose.Invitation, cancellationToken);
+            user.Email, user.Name, user.Username, password, language, brand, CredentialsEmailPurpose.Invitation, surveyName: null, cancellationToken);
 
         return Results.Ok(new CredentialsResendResult(outcome.Delivered, outcome.Delivered ? null : outcome.FailureReason));
     }
@@ -213,7 +213,7 @@ public static class MassInviteEndpoints
             // finished, so the message asks them to go in and finish rather than announcing an
             // account they already know about.
             var outcome = await credentialsSender.SendAsync(
-                user.Email, user.Name, user.Username, password, language, brand, CredentialsEmailPurpose.Reminder, cancellationToken);
+                user.Email, user.Name, user.Username, password, language, brand, CredentialsEmailPurpose.Reminder, surveyName: null, cancellationToken);
             outcomes.Add(new CredentialsResendOutcome(
                 userId,
                 user.Email,

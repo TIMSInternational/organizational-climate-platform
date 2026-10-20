@@ -1,3 +1,4 @@
+using ClimateProject.Application.OrgStructure;
 using System.Security.Claims;
 using System.Text.Json;
 using ClimateProject.Api.Infrastructure;
@@ -83,6 +84,14 @@ public static class SurveyDistributionEndpoints
 {
     /// <summary>Users one invitation batch will mint for. Bounded because the batch is built in memory and saved in one transaction, matching <c>NotificationEndpoints</c>' bulk cap.</summary>
     private const int MaxInvitationBatch = 500;
+
+    /// <summary>
+    /// The ceiling when each recipient also costs a bcrypt hash and an outbound message.
+    /// Same number as <c>MassInviteEndpoints.MaxBatch</c>, for the same arithmetic: ~0.37 s
+    /// per recipient against App Runner's hard 120 s request limit puts 100 at about a
+    /// third of the budget and 500 past the end of it.
+    /// </summary>
+    private const int MaxCredentialBatch = 100;
 
     /// <summary>Invitations one listing returns. Same bound and same reason as the notification listings.</summary>
     private const int MaxInvitationPageSize = 500;
@@ -376,6 +385,8 @@ public static class SurveyDistributionEndpoints
         CreateSurveyInvitationsRequest request,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
+        IPasswordHasher passwordHasher,
+        ICredentialsEmailSender credentialsSender,
         CancellationToken cancellationToken)
     {
         var (survey, error) = await LoadAdministrableSurveyAsync(surveyId, principal, db, cancellationToken);
@@ -412,10 +423,25 @@ public static class SurveyDistributionEndpoints
             return audienceError;
         }
 
-        if (userIds!.Count > MaxInvitationBatch)
+        // `shared` mints rows and nothing else, so 500 of them is one cheap transaction.
+        // `per_survey` additionally hashes a password and sends a message PER RECIPIENT, and
+        // those are the two expensive things this product does: bcrypt-12 was measured at
+        // ~0.27 vCPU-s and the shared send limiter paces mail at 10/s, so ~0.37 s each
+        // against App Runner's hard, unconfigurable 120 s request ceiling. 500 would be
+        // ~185 s -- a request that cannot finish, after it has already created rows.
+        //
+        // 100 is the number the credentials resend already uses (`MassInviteEndpoints
+        // .MaxBatch`) and lands at ~37 s, a third of the budget, with room for a cold
+        // instance or a retried send. ESPH's 617 across two surveys is 1,234 credentials:
+        // thirteen of these rather than three, each comfortably inside the ceiling.
+        var credentialMode = survey.Settings.CredentialMode ?? CredentialModes.Shared;
+        var perSurveyCredentials = credentialMode == CredentialModes.PerSurvey;
+        var maxBatch = perSurveyCredentials ? MaxCredentialBatch : MaxInvitationBatch;
+
+        if (userIds!.Count > maxBatch)
         {
             return Results.Json(
-                new { message = $"This request resolves to {userIds.Count} recipients; the maximum per request is {MaxInvitationBatch}." },
+                new { message = $"This request resolves to {userIds.Count} recipients; the maximum per request is {maxBatch}." },
                 statusCode: 400);
         }
 
@@ -498,6 +524,94 @@ public static class SurveyDistributionEndpoints
 
         await db.SaveChangesAsync(cancellationToken);
 
+        // ---- per-survey credentials -------------------------------------------------
+        //
+        // AFTER the save, deliberately, and the import's reasoning is the precedent: a
+        // password that no row backs would sign nobody in, and the person could not tell
+        // that from a typo. Rows first, then mail; a send that fails is reported, never
+        // rolled back.
+        //
+        // The plaintext exists only between these two statements. It is never written
+        // anywhere -- which is also why this mail is sent INLINE rather than queued
+        // (`MassInviteEndpoints`): queueing would mean a password at rest in a table.
+        var credentialsIssued = 0;
+        var credentialsNotSent = 0;
+        if (perSurveyCredentials && created.Count > 0)
+        {
+            var company = await db.Companies
+                .Where(c => c.Id == survey.CompanyId)
+                .Select(c => new { c.Name, c.Settings.Language, c.Branding.LogoUrl, c.Branding.PrimaryColor })
+                .FirstOrDefaultAsync(cancellationToken);
+
+            var locale = ContentLanguages.SingleLocaleOf(company?.Language) ?? ContentLanguages.FallbackLocale;
+            var surveyTitle = LocalizedContent.ResolveText(survey.TitleEn, survey.TitleEs, locale, survey.Language);
+            var brand = company is null
+                ? EmailBrand.None
+                : new EmailBrand(company.LogoUrl, company.Name, company.PrimaryColor);
+
+            // Both namespaces, because the two share one index each and a collision between
+            // them would make sign-in ambiguous about which person and which survey.
+            var prefix = MassInviteCredentials.PrefixFor(company?.Name ?? string.Empty);
+            var taken = (await db.Users
+                    .Where(u => u.Username != null && u.Username.StartsWith(prefix))
+                    .Select(u => u.Username!)
+                    .ToListAsync(cancellationToken))
+                .Concat(await db.SurveyCredentials
+                    .Where(c => c.Username.StartsWith(prefix))
+                    .Select(c => c.Username)
+                    .ToListAsync(cancellationToken))
+                .ToHashSet(StringComparer.Ordinal);
+
+            // Idempotent: a recipient who already holds a credential for THIS survey keeps
+            // the one they were mailed. Re-minting would silently invalidate a password
+            // somebody is holding, and this route is re-runnable by design.
+            var alreadyCredentialed = (await db.SurveyCredentials
+                    .Where(c => c.SurveyId == surveyId)
+                    .Select(c => c.UserId)
+                    .ToListAsync(cancellationToken))
+                .ToHashSet();
+
+            foreach (var invitation in created)
+            {
+                if (alreadyCredentialed.Contains(invitation.UserId))
+                {
+                    continue;
+                }
+
+                var recipient = recipients.First(u => u.Id == invitation.UserId);
+
+                string username;
+                do
+                {
+                    username = MassInviteCredentials.Username(prefix);
+                }
+                while (!taken.Add(username));
+
+                var password = MassInviteCredentials.Password();
+                db.SurveyCredentials.Add(new SurveyCredential
+                {
+                    SurveyId = surveyId,
+                    UserId = recipient.Id,
+                    Username = username,
+                    PasswordHash = passwordHasher.Hash(password),
+                    CreatedAt = now,
+                });
+                await db.SaveChangesAsync(cancellationToken);
+                credentialsIssued++;
+
+                // The survey's name is the whole point: this person may be receiving a
+                // second one of these for another survey, and the subject is the only thing
+                // in an inbox that tells the two apart.
+                var outcome = await credentialsSender.SendAsync(
+                    recipient.Email, recipient.Name, username, password, company?.Language,
+                    brand, CredentialsEmailPurpose.Invitation, surveyTitle, cancellationToken);
+                if (!outcome.Delivered)
+                {
+                    credentialsNotSent++;
+                }
+            }
+        }
+
         // Null unless there is something WRONG with this batch. "No mail was queued" was a
         // note while it was a per-survey setting that could differ between calls; since the
         // invitation email was deleted on 2026-10-19 it is a permanent property of the
@@ -523,7 +637,9 @@ public static class SurveyDistributionEndpoints
                 alreadyInvited,
                 notificationsQueued,
                 undeliverable,
-                note),
+                note,
+                credentialsIssued,
+                credentialsNotSent),
             statusCode: 201);
     }
 

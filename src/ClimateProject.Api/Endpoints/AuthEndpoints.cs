@@ -66,19 +66,51 @@ public static class AuthEndpoints
             ? await db.Users.FirstOrDefaultAsync(u => u.Email == identifier && u.IsActive, cancellationToken)
             : await db.Users.FirstOrDefaultAsync(u => u.Username == identifier && u.IsActive, cancellationToken);
 
+        // A PER-SURVEY credential, when the account namespace did not answer. Only for a
+        // username: `survey_credentials.username` is minted by the same generator as
+        // `users.username`, from an alphabet with no '@', so an address can never land here.
+        //
+        // Second, not first, so this cannot change what an existing sign-in does. The two
+        // namespaces share one unique index each and are deduped against each other at mint
+        // time, so at most one of the two lookups can match -- but the order makes that a
+        // property of the code rather than of the data.
+        SurveyCredential? credential = null;
+        if (user is null && !identifier.Contains('@', StringComparison.Ordinal))
+        {
+            credential = await db.SurveyCredentials
+                .FirstOrDefaultAsync(c => c.Username == identifier, cancellationToken);
+            if (credential is not null)
+            {
+                user = await db.Users.FirstOrDefaultAsync(
+                    u => u.Id == credential.UserId && u.IsActive, cancellationToken);
+            }
+        }
+
         if (user is null)
         {
             return Results.Json(new ErrorResponse("Invalid email or password"), statusCode: 401);
         }
 
-        if (user.PasswordHash is null)
+        // The credential's own hash when one was resolved, never the account's. A per-survey
+        // respondent has no password on `users` at all, and falling back to it would let the
+        // account password open a survey it was not issued for.
+        var hash = credential?.PasswordHash ?? user.PasswordHash;
+
+        if (hash is null)
         {
             return Results.Json(new ErrorResponse("This account uses Google sign-in"), statusCode: 401);
         }
 
-        if (!passwordHasher.Verify(request.Password, user.PasswordHash))
+        if (!passwordHasher.Verify(request.Password, hash))
         {
             return Results.Json(new ErrorResponse("Invalid email or password"), statusCode: 401);
+        }
+
+        if (credential is not null)
+        {
+            // Not security state. On an anonymous survey nothing else can tell an
+            // administrator that a credential arrived and was used.
+            credential.LastSignInAt = DateTimeOffset.UtcNow;
         }
 
         var gate = await CheckSystemSettingsGateAsync(db, user.Role, cancellationToken, user.Preferences.Language);
@@ -100,7 +132,8 @@ public static class AuthEndpoints
             // A sign-in is where the absolute ceiling starts counting. Every other mint
             // carries this instant forward instead of replacing it.
             sessionStartedAt: DateTimeOffset.UtcNow,
-            cancellationToken);
+            cancellationToken,
+            surveyScope: credential?.SurveyId);
     }
 
     private static async Task<IResult> SignupAsync(
@@ -298,7 +331,12 @@ public static class AuthEndpoints
             // half of the idle window -- the client calls it on real interaction -- so basing
             // the ceiling on "now" here would mean a session that is used never ends.
             sessionStartedAt: SessionWindows.StartedAt(principal, DateTimeOffset.UtcNow),
-            cancellationToken);
+            cancellationToken,
+            // Carried off the presented token for the same reason the session start is. A
+            // re-mint that dropped it would silently WIDEN the session -- a respondent who
+            // signed in for one survey would, on their next interaction, be handed a token
+            // that sees every survey they are targeted by, halfway through answering.
+            surveyScope: currentUser.SurveyScope);
     }
 
     /// <summary>
@@ -331,7 +369,8 @@ public static class AuthEndpoints
         IResult inactiveResponse,
         DateTimeOffset sessionStartedAt,
         CancellationToken cancellationToken,
-        int successStatusCode = 200)
+        int successStatusCode = 200,
+        Guid? surveyScope = null)
     {
         if (!user.IsActive)
         {
@@ -376,7 +415,10 @@ public static class AuthEndpoints
             // the OTHER sessions gone rotates the column and saves before calling this, and
             // the token minted here then carries the new value -- which is what lets a
             // password change hand its own caller a working session back.
-            SecurityStamp: user.SecurityStamp),
+            SecurityStamp: user.SecurityStamp,
+            // Null on every path but a per-survey sign-in, and null means "every survey you
+            // are targeted by" -- the answer a shared account has always given.
+            SurveyScope: surveyScope),
             window);
 
         return Results.Json(new TokenResponse(token), statusCode: successStatusCode);

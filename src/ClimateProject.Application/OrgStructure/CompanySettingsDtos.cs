@@ -7,7 +7,9 @@ public sealed record CompanySettingsDto(
     bool AnonymousSurveys,
     int DataRetentionDays,
     string Timezone,
-    string Language);
+    string Language,
+    /// <summary>`shared` | `per_survey`. The default every NEW survey inherits and freezes.</summary>
+    string CredentialMode);
 
 public sealed record CompanyBrandingDto(
     string? LogoUrl,
@@ -35,4 +37,6 @@ public sealed record UpdateCompanySettingsRequest(
     string? SecondaryColor,
     string? FontFamily,
     string? CustomCss,
-    UpdateResultBandsRequest? ResultBands = null);
+    UpdateResultBandsRequest? ResultBands = null,
+    /// <summary>`shared` | `per_survey`; omitted leaves it alone, as every member here does.</summary>
+    string? CredentialMode = null);
