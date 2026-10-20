@@ -89,31 +89,6 @@ public static class SurveyDistributionEndpoints
 
     private const int NotificationTitleMaxLength = 500;
 
-    /// <summary>
-    /// Fallback invitation copy, per locale, used when the survey carries no custom subject
-    /// or message. Backend-owned strings rather than i18n keys -- these are the body of an
-    /// email composed server-side, not chrome the web app renders, and the web app never sees
-    /// them. Both locales are present because #195's whole point is that a Spanish-speaking
-    /// recipient is not served English by default.
-    /// </summary>
-    private static readonly Dictionary<string, string> DefaultSubject = new(StringComparer.Ordinal)
-    {
-        [ContentLanguages.English] = "You have been invited to a survey",
-        [ContentLanguages.Spanish] = "Has sido invitado a una encuesta",
-    };
-
-    private static readonly Dictionary<string, string> DefaultMessage = new(StringComparer.Ordinal)
-    {
-        [ContentLanguages.English] = "Your feedback has been requested. Follow the link in this message to take part.",
-        [ContentLanguages.Spanish] = "Se ha solicitado tu opinión. Sigue el enlace de este mensaje para participar.",
-    };
-
-    private static readonly Dictionary<string, string> DefaultReminderSubject = new(StringComparer.Ordinal)
-    {
-        [ContentLanguages.English] = "Reminder: a survey is waiting for you",
-        [ContentLanguages.Spanish] = "Recordatorio: una encuesta te está esperando",
-    };
-
     public static void MapSurveyDistributionEndpoints(this WebApplication app)
     {
         var admin = app.MapGroup("/surveys").RequireAuthorization();
@@ -473,9 +448,13 @@ public static class SurveyDistributionEndpoints
             .ToListAsync(cancellationToken);
 
         var created = new List<SurveyInvitation>();
-        var notificationsQueued = 0;
+        // Always zero, and a constant rather than a counter. The survey invitation email was
+        // DELETED on 2026-10-19 -- there is no longer any code that can compose one, so there
+        // is nothing to count. The field stays on the response because callers assert on it:
+        // `silence-activate-invite.sh` refuses to continue unless it reads 0, and that
+        // assertion is now a tautology instead of a setting that could drift back.
+        const int notificationsQueued = 0;
         var undeliverable = 0;
-        var queueInvitations = survey.Settings.NotificationSendInvitations;
 
         foreach (var recipient in recipients.Where(u => !alreadyInvitedSet.Contains(u.Id)))
         {
@@ -510,27 +489,22 @@ public static class SurveyDistributionEndpoints
                 undeliverable++;
             }
 
-            if (queueInvitations)
-            {
-                db.Notifications.Add(BuildInvitationNotification(survey, invitation, recipient, now));
-                invitation.Status = SurveyInvitationStatuses.Sent;
-
-                // SentAt is the moment the invitation actually goes out, NOT the moment it was
-                // queued. Those differ whenever InvitationSendImmediately is off and the survey
-                // has not opened yet, and the difference matters: SentAt is the anchor the
-                // reminder cadence measures from, so stamping "now" on an invitation the sweep
-                // will not deliver for three weeks would make it remindable before it was ever
-                // delivered.
-                invitation.SentAt = InvitationSendsAt(survey, now);
-                notificationsQueued++;
-            }
+            // No notification is composed here any more, so the invitation stays `pending`
+            // with a null `SentAt` -- which is exactly the state ESPH's rehearsal already ran
+            // in and answered from. `pending` does not block completion tracking:
+            // `AdvanceInvitationAsync` marks the row completed on an identified survey
+            // whatever status it started from.
         }
 
         await db.SaveChangesAsync(cancellationToken);
 
-        var note = queueInvitations
-            ? null
-            : "This survey has notificationSendInvitations turned off, so invitations were minted but no notification was queued. Turn it on and use the resend route, or distribute the links another way.";
+        // Null unless there is something WRONG with this batch. "No mail was queued" was a
+        // note while it was a per-survey setting that could differ between calls; since the
+        // invitation email was deleted on 2026-10-19 it is a permanent property of the
+        // product, true of every batch, and a field that always says the same thing is noise
+        // an admin learns to skip past -- which is exactly where the undeliverable warning
+        // below needs to be read.
+        string? note = null;
 
         if (undeliverable > 0)
         {
@@ -598,75 +572,18 @@ public static class SurveyDistributionEndpoints
                 statusCode: 409);
         }
 
-        var now = UtcNow();
-
-        // 'pending' is deliberately absent: it means the invitation was minted but never
-        // queued for delivery, so a "reminder" would be the first thing that recipient ever
-        // heard. The resend route is what turns a pending invitation into a sent one.
-        var outstanding = new[]
-        {
-            SurveyInvitationStatuses.Sent,
-            SurveyInvitationStatuses.Opened,
-            SurveyInvitationStatuses.Started,
-        };
-
-        var candidates = await db.SurveyInvitations
-            .Where(i => i.SurveyId == surveyId
-                        && outstanding.Contains(i.Status)
-                        && i.ExpiresAt > now)
-            .ToListAsync(cancellationToken);
-
-        // The cadence measures from the LAST TIME WE CONTACTED THIS PERSON, whichever contact
-        // that was -- the invitation itself or the most recent reminder. Measuring from
-        // LastReminderSent alone would let the first reminder go out the same minute as the
-        // invitation, which is not a reminder, and would let a resend be followed instantly by
-        // a reminder about the thing just resent. An invitation with no SentAt was never
-        // delivered at all and is skipped: see the 'pending' note above.
-        var cadence = TimeSpan.FromDays(Math.Max(1, survey.Settings.NotificationReminderFrequencyDays));
-        var due = candidates.Where(i => LastContact(i) is { } contacted && contacted.Add(cadence) <= now).ToList();
-        var skippedTooSoon = candidates.Count - due.Count;
-
-        if (due.Count == 0)
-        {
-            return Results.Ok(new SurveyReminderResult(0, 0, skippedTooSoon, null));
-        }
-
-        // Active invitees only -- the membership rule the scheduled sweep applies
-        // (InvitationReminderJob.LoadRecipientsAsync) and the invite route enforces with a
-        // 400. An invitation minted while the person was active and still outstanding after
-        // they were deactivated used to be reminded by THIS route: its counters advanced and
-        // the reminder was reported as queued, while the sweep skipped the same row -- one
-        // invitation, two answers, depending on who asked. Narrowed before `due` is counted,
-        // so `Eligible` does not report a reminder as owed to someone it cannot be sent to.
-        // The invitation row itself is left alone: it expires with the survey, and reviving
-        // it is the resend route's decision, not a reminder's.
-        var recipientIds = due.Select(i => i.UserId).Distinct().ToList();
-        var recipients = await db.Users
-            .Where(u => recipientIds.Contains(u.Id) && u.IsActive)
-            .ToDictionaryAsync(u => u.Id, cancellationToken);
-        due = due.Where(i => recipients.ContainsKey(i.UserId)).ToList();
-
-        var queued = 0;
-        foreach (var invitation in due)
-        {
-            if (!recipients.TryGetValue(invitation.UserId, out var recipient))
-            {
-                // Unreachable: `due` was just narrowed to the keys of `recipients`. Kept as
-                // the belt, because the alternative is composing mail for an address we
-                // cannot read.
-                continue;
-            }
-
-            db.Notifications.Add(BuildReminderNotification(survey, invitation, recipient, now));
-            invitation.ReminderCount += 1;
-            invitation.LastReminderSent = now;
-            invitation.UpdatedAt = now;
-            queued++;
-        }
-
-        await db.SaveChangesAsync(cancellationToken);
-
-        return Results.Ok(new SurveyReminderResult(due.Count, queued, skippedTooSoon, null));
+        // THE REMINDER EMAIL NO LONGER EXISTS either. It was the second of the two messages
+        // ruled out on 2026-10-19 -- "the other ones that we received, like as a reminder ...
+        // we never want to send that."
+        //
+        // Answered 200 with zeroes rather than 410, because this route is polled by the
+        // Distribucion screen to show how many reminders are owed, and the honest answer to
+        // that question is now permanently none. Nothing is loaded and nothing is written.
+        //
+        // Belt as well as braces: even if this body came back, it only ever reminded
+        // invitations whose status was sent/opened/started, and no invitation can reach
+        // `sent` any more -- the one producer of that status was the invitation mail.
+        return await Task.FromResult(Results.Ok(new SurveyReminderResult(0, 0, 0, null)));
     }
 
     /// <summary>
@@ -714,42 +631,26 @@ public static class SurveyDistributionEndpoints
             return Results.Json(new { message = "The invited user no longer exists." }, statusCode: 409);
         }
 
-        // `NotificationSendInvitations` governs THIS route too, and until 2026-10-19 it did
-        // not -- this was the one producer of a `survey_invitation` notification that never
-        // consulted it. A survey created with the mail off would still mail somebody the
-        // moment an admin pressed "Reenviar", which is one click away in Distribucion, and
-        // the mail it sent is the one ruled out: its button opens the survey WITHOUT signing
-        // in. "Off" has to mean off on every producer or it means nothing.
+        // THE SURVEY INVITATION EMAIL NO LONGER EXISTS. Ruled 2026-10-19: "delete this email
+        // completely, as if it never existed ... the one with the username and password is the
+        // ONLY one the application will be sending out."
         //
-        // Refused rather than silently skipped, and refused BEFORE the token is re-minted:
-        // a resend is a deliberate act by a named administrator, so answering 409 tells them
-        // the survey's own setting is in the way and leaves the invitation they were looking
-        // at exactly as it was. Silently minting a new token and queueing nothing would
-        // invalidate the live one and report success.
-        if (!survey.Settings.NotificationSendInvitations)
-        {
-            return Results.Json(
-                new
-                {
-                    message = "This survey does not send invitation email: notificationSendInvitations is off. "
-                        + "Turn it on for this survey first, or distribute its link another way.",
-                },
-                statusCode: 409);
-        }
-
-        invitation.InvitationToken = SurveyAccessTokens.Mint();
-        invitation.ExpiresAt = survey.EndDate;
-        invitation.Status = SurveyInvitationStatuses.Sent;
-        invitation.SentAt = InvitationSendsAt(survey, now);
-        invitation.UpdatedAt = now;
-
-        // Progress timestamps are NOT cleared. Whether this person opened the previous
-        // invitation is a fact about them, and erasing it to make the new send look pristine
-        // would corrupt the only engagement history the survey has.
-        db.Notifications.Add(BuildInvitationNotification(survey, invitation, recipient, now));
-
-        await db.SaveChangesAsync(cancellationToken);
-        return Results.Ok(ToInvitationDetail(invitation, now));
+        // 410 and not 409. A 409 said "turn the setting on and try again", and there is no
+        // setting to turn on any more -- the composer is gone. Refused BEFORE the token is
+        // re-minted, because rotating it would kill the live link and deliver nothing in its
+        // place, which is the worst of both.
+        //
+        // The checks above still run first, so an administrator pressing "Reenviar" on a
+        // completed invitation or a closed survey still gets the specific answer rather than
+        // this one.
+        return await Task.FromResult(Results.Json(
+            new
+            {
+                message = "This platform does not send survey invitation email. The only message a "
+                    + "respondent is ever sent is their credentials. Share the survey's link, or ask "
+                    + "them to sign in with the credentials they already have.",
+            },
+            statusCode: 410));
     }
 
     /// <summary>
@@ -1342,44 +1243,6 @@ public static class SurveyDistributionEndpoints
             .Select(u => u.Id)
             .ToListAsync(cancellationToken);
 
-    private static Notification BuildInvitationNotification(
-        Survey survey,
-        SurveyInvitation invitation,
-        User recipient,
-        DateTimeOffset now)
-    {
-        var locale = RecipientLocale(recipient, survey);
-        var subject = Compose(
-            LocalizedContent.ResolveText(survey.Settings.InvitationCustomSubjectEn, survey.Settings.InvitationCustomSubjectEs, locale, survey.Language),
-            DefaultSubject[locale],
-            LocalizedContent.ResolveText(survey.TitleEn, survey.TitleEs, locale, survey.Language));
-
-        var message = LocalizedContent.ResolveText(
-                          survey.Settings.InvitationCustomMessageEn,
-                          survey.Settings.InvitationCustomMessageEs,
-                          locale,
-                          survey.Language)
-                      ?? DefaultMessage[locale];
-
-        return NewNotification(
-            survey, invitation, recipient, NotificationTypes.SurveyInvitation,
-            subject, message, InvitationSendsAt(survey, now), now);
-    }
-
-    /// <summary>
-    /// When an invitation queued at <paramref name="now"/> will actually go out.
-    ///
-    /// <c>InvitationSendImmediately</c> false means "hold until the survey opens", expressed
-    /// as the notification's <c>ScheduledFor</c> and left to the sweep -- which is exactly the
-    /// seam that keeps this surface out of a scheduler of its own. The same value is stamped
-    /// on the invitation's <c>SentAt</c>, so the two cannot disagree about when a person was
-    /// contacted.
-    /// </summary>
-    private static DateTimeOffset InvitationSendsAt(Survey survey, DateTimeOffset now)
-        => survey.Settings.InvitationSendImmediately || survey.StartDate <= now
-            ? now
-            : survey.StartDate;
-
     /// <summary>
     /// The most recent moment this invitee was contacted about this survey -- the invitation
     /// itself, or the latest reminder, whichever is later. Null when they have never been
@@ -1394,85 +1257,6 @@ public static class SurveyDistributionEndpoints
         }
 
         return invitation.LastReminderSent is { } reminded && reminded > sentAt ? reminded : sentAt;
-    }
-
-    private static Notification BuildReminderNotification(
-        Survey survey,
-        SurveyInvitation invitation,
-        User recipient,
-        DateTimeOffset now)
-    {
-        var locale = RecipientLocale(recipient, survey);
-        var subject = Compose(
-            null,
-            DefaultReminderSubject[locale],
-            LocalizedContent.ResolveText(survey.TitleEn, survey.TitleEs, locale, survey.Language));
-
-        var message = LocalizedContent.ResolveText(
-                          survey.Settings.InvitationCustomMessageEn,
-                          survey.Settings.InvitationCustomMessageEs,
-                          locale,
-                          survey.Language)
-                      ?? DefaultMessage[locale];
-
-        return NewNotification(survey, invitation, recipient, NotificationTypes.SurveyReminder, subject, message, now, now);
-    }
-
-    private static Notification NewNotification(
-        Survey survey,
-        SurveyInvitation invitation,
-        User recipient,
-        string type,
-        string title,
-        string message,
-        DateTimeOffset scheduledFor,
-        DateTimeOffset now) => new()
-        {
-            Id = Guid.NewGuid(),
-            UserId = recipient.Id,
-            CompanyId = survey.CompanyId,
-            Type = type,
-            Channel = NotificationChannels.Email,
-            Priority = NotificationPriorities.Default,
-            Status = NotificationStatuses.Default,
-            Title = title,
-            Message = message,
-
-            // `data` is jsonb -- serialised, never concatenated, and deliberately carrying
-            // the invitation's ID rather than its token. See the seam note on this class.
-            //
-            // Built through SurveyNotificationData rather than from literals typed here,
-            // because the reader of this blob lives in another project: EmailNotificationSender
-            // resolves the token from `surveyInvitationId` when it composes the mail, and a key
-            // spelled out independently at each end is how a sender ships green while reading a
-            // key that was never written.
-            Data = SurveyNotificationData.Serialize(survey.Id, invitation.Id),
-            ScheduledFor = scheduledFor,
-            RetryCount = 0,
-            MaxRetries = 3,
-            CreatedAt = now,
-            UpdatedAt = now,
-        };
-
-    /// <summary>
-    /// The locale to compose a recipient's mail in: their own display-language preference
-    /// when it is one we can render, otherwise the survey's own single language, otherwise
-    /// English. Note this is <c>User.Preferences.Language</c> -- the display preference --
-    /// not the survey's content language, which is a different setting by design (see
-    /// <c>ContentLanguages</c>). <see cref="LocalizedContent.Resolve"/> still has the last
-    /// word: asking for Spanish from an English-only survey yields English, because the
-    /// alternative is mailing somebody a null.
-    /// </summary>
-    private static string RecipientLocale(User recipient, Survey survey)
-        => ContentLanguages.NormaliseLocale(recipient.Preferences.Language)
-           ?? ContentLanguages.SingleLocaleOf(survey.Language)
-           ?? ContentLanguages.FallbackLocale;
-
-    private static string Compose(string? custom, string fallback, string? surveyTitle)
-    {
-        var stem = string.IsNullOrWhiteSpace(custom) ? fallback : custom.Trim();
-        var composed = string.IsNullOrWhiteSpace(surveyTitle) ? stem : $"{stem}: {surveyTitle.Trim()}";
-        return composed.Length <= NotificationTitleMaxLength ? composed : composed[..NotificationTitleMaxLength];
     }
 
     private static string SurveyPath(Guid surveyId) => $"/surveys/{surveyId}";

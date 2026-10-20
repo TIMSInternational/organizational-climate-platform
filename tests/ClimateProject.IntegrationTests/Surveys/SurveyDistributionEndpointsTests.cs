@@ -571,10 +571,12 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
     /// administrator pressed it.
     /// </summary>
     [Fact]
-    public async Task Resending_an_invitation_is_refused_when_the_survey_sends_no_invitation_email()
+    public async Task Resending_an_invitation_is_refused_because_the_platform_sends_no_invitation_email()
     {
         var client = await AdminAAsync();
-        var survey = await CreateActiveSurveyAsync(client, sendInvitations: false);
+        // sendInvitations is no longer passed: no setting can make a resend succeed. It is
+        // refused for every survey, which is what 410 rather than 409 says.
+        var survey = await CreateActiveSurveyAsync(client);
         var employee = await SeedEmployeeAsync(_companyAId);
         var result = await InviteAsync(client, survey.Id, new CreateSurveyInvitationsRequest(UserIds: [employee]));
         Assert.Equal(1, result.Created);
@@ -584,9 +586,9 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
 
         var resend = await client.PostAsync($"/surveys/{survey.Id}/invitations/{result.InvitationIds[0]}/resend", null);
 
-        Assert.Equal(HttpStatusCode.Conflict, resend.StatusCode);
+        Assert.Equal(HttpStatusCode.Gone, resend.StatusCode);
         Assert.Contains(
-            "notificationSendInvitations is off",
+            "does not send survey invitation email",
             await resend.Content.ReadAsStringAsync(),
             StringComparison.Ordinal);
 
@@ -631,8 +633,15 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
 
         Assert.Equal(1, result.Created);
         Assert.Equal(0, result.NotificationsQueued);
-        Assert.NotNull(result.Note);
-        Assert.Contains("notificationSendInvitations", result.Note, StringComparison.Ordinal);
+        // The note no longer MENTIONS the mail. "No mail was queued" stopped being news when
+        // the invitation email was deleted -- it is true of every batch now -- so the field
+        // is reserved for what is actually wrong with this one.
+        //
+        // Not Assert.Null: `SeedEmployeeAsync` mints a reserved-domain address, so the
+        // undeliverable warning legitimately fires here. Asserting null made this test about
+        // the seed helper rather than about the setting. What it must prove is that no note
+        // claims a survey-level mail setting is the reason.
+        Assert.DoesNotContain("notificationSendInvitations", result.Note ?? string.Empty, StringComparison.Ordinal);
 
         Assert.False(await _harness.WithDbAsync(db => db.Notifications
             .AnyAsync(n => n.Type == NotificationTypes.SurveyInvitation && n.UserId == employee)));
@@ -642,32 +651,6 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
         var invitation = await InvitationRowAsync(result.InvitationIds[0]);
         Assert.Equal(SurveyInvitationStatuses.Pending, invitation.Status);
         Assert.Null(invitation.SentAt);
-    }
-
-    [Fact]
-    public async Task Inviting_by_user_id_mints_one_invitation_each_and_queues_one_notification_each()
-    {
-        var client = await AdminAAsync();
-        var survey = await CreateActiveSurveyAsync(client);
-        var first = await SeedEmployeeAsync(_companyAId);
-        var second = await SeedEmployeeAsync(_companyAId);
-
-        var result = await InviteAsync(client, survey.Id, new CreateSurveyInvitationsRequest(UserIds: [first, second]));
-
-        Assert.Equal(2, result.Requested);
-        Assert.Equal(2, result.Created);
-        Assert.Equal(2, result.NotificationsQueued);
-        Assert.Empty(result.SkippedUserIds);
-
-        var queued = await _harness.WithDbAsync(db => db.Notifications
-            .Where(n => n.Type == NotificationTypes.SurveyInvitation && n.CompanyId == _companyAId)
-            .ToListAsync());
-        Assert.Equal(2, queued.Count);
-
-        // Queued, not sent. Delivery -- and the consent decision -- belong to the
-        // notification sweep, so an invitee who opts out between now and then is honoured.
-        Assert.All(queued, n => Assert.Equal(NotificationStatuses.Pending, n.Status));
-        Assert.All(queued, n => Assert.Equal(NotificationChannels.Email, n.Channel));
     }
 
     [Fact]
@@ -819,9 +802,9 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
         Assert.NotNull(result.Note);
         Assert.Contains("reserved domain", result.Note, StringComparison.Ordinal);
 
-        // ...and not enforced. Both invitations exist, and both notifications were queued.
+        // ...and not enforced. Both invitations exist. Neither queues mail -- nothing does.
         Assert.Equal(2, result.Created);
-        Assert.Equal(2, result.NotificationsQueued);
+        Assert.Equal(0, result.NotificationsQueued);
     }
 
     /// <summary>
@@ -899,71 +882,6 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task The_queued_notification_carries_the_invitation_id_and_not_the_token()
-    {
-        var client = await AdminAAsync();
-        var survey = await CreateActiveSurveyAsync(client);
-        var employee = await SeedEmployeeAsync(_companyAId);
-
-        var result = await InviteAsync(client, survey.Id, new CreateSurveyInvitationsRequest(UserIds: [employee]));
-        var token = await TokenOfAsync(result.InvitationIds[0]);
-
-        var notification = await _harness.WithDbAsync(db => db.Notifications
-            .AsNoTracking().FirstAsync(n => n.UserId == employee && n.Type == NotificationTypes.SurveyInvitation));
-
-        // notifications rows are readable through GET /notifications?companyId= by any
-        // CompanyAdmin. A token in Data would hand them every employee's survey session. The
-        // sender resolves it from survey_invitations at send time instead -- which also means
-        // a token revoked between queueing and sending is already gone.
-        Assert.NotNull(notification.Data);
-        Assert.DoesNotContain(token, notification.Data!, StringComparison.Ordinal);
-        Assert.Contains(result.InvitationIds[0].ToString(), notification.Data!, StringComparison.Ordinal);
-
-        // Data is a jsonb column: it has to parse, or Postgres would have rejected the insert.
-        using var parsed = JsonDocument.Parse(notification.Data!);
-        Assert.Equal(
-            survey.Id.ToString(),
-            parsed.RootElement.GetProperty(SurveyNotificationData.SurveyIdKey).GetString());
-        Assert.Equal(
-            result.InvitationIds[0].ToString(),
-            parsed.RootElement.GetProperty(SurveyNotificationData.SurveyInvitationIdKey).GetString());
-
-        // The payload's ENTIRE key set, not merely "the token is not in it". A `DoesNotContain`
-        // on the token value alone stays green against a payload that gained an
-        // `invitationToken` key holding a rotated or a stale token -- still a bearer credential
-        // in a blob any CompanyAdmin can read through GET /notifications?companyId=.
-        Assert.Equal(
-            new[] { SurveyNotificationData.SurveyIdKey, SurveyNotificationData.SurveyInvitationIdKey }.Order(StringComparer.Ordinal),
-            parsed.RootElement.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
-
-        // The reminder path builds its notification through the same helper from a different
-        // call site, so it is asserted by actually FETCHING a reminder -- an earlier version of
-        // this test claimed to cover it and then re-read the invitation notification it already
-        // had, which is a dead assertion under a label that says otherwise.
-        //
-        // Aged first: the reminder cadence has not elapsed for an invitation queued a moment
-        // ago, so without this the endpoint returns 200 having queued nothing and the fetch
-        // below throws "Sequence contains no elements" -- which is how this was caught.
-        await AgeInvitationAsync(result.InvitationIds[0], days: 5);
-        (await client.PostAsync($"/surveys/{survey.Id}/invitations/reminders", null)).EnsureSuccessStatusCode();
-
-        var reminder = await _harness.WithDbAsync(db => db.Notifications
-            .AsNoTracking()
-            .FirstAsync(n => n.UserId == employee && n.Type == NotificationTypes.SurveyReminder));
-
-        Assert.NotNull(reminder.Data);
-        Assert.DoesNotContain(token, reminder.Data!, StringComparison.Ordinal);
-
-        using var reminderPayload = JsonDocument.Parse(reminder.Data!);
-        Assert.Equal(
-            new[] { SurveyNotificationData.SurveyIdKey, SurveyNotificationData.SurveyInvitationIdKey }.Order(StringComparer.Ordinal),
-            reminderPayload.RootElement.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
-        Assert.Equal(
-            result.InvitationIds[0].ToString(),
-            reminderPayload.RootElement.GetProperty(SurveyNotificationData.SurveyInvitationIdKey).GetString());
-    }
-
-    [Fact]
     public async Task Two_invitations_never_share_a_token()
     {
         var client = await AdminAAsync();
@@ -1002,7 +920,8 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
 
         Assert.Equal(survey.Id, detail.SurveyId);
         Assert.Equal("Q3 Climate Survey", detail.SurveyTitle);
-        Assert.Equal(SurveyInvitationStatuses.Sent, detail.Status);
+        // `pending`, not `sent`: the one producer of `sent` was the invitation mail.
+        Assert.Equal(SurveyInvitationStatuses.Pending, detail.Status);
 
         // A leaked token must not become a disclosure of whose it is.
         var email = await _harness.WithDbAsync(db => db.Users.Where(u => u.Id == employee).Select(u => u.Email).FirstAsync());
@@ -1349,56 +1268,6 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
         });
 
     [Fact]
-    public async Task Reminders_queue_notifications_and_a_second_call_within_the_cadence_queues_nothing()
-    {
-        var client = await AdminAAsync();
-        var survey = await CreateActiveSurveyAsync(client);
-        var employee = await SeedEmployeeAsync(_companyAId);
-        var result = await InviteAsync(client, survey.Id, new CreateSurveyInvitationsRequest(UserIds: [employee]));
-        await AgeInvitationAsync(result.InvitationIds[0], days: 5);
-
-        var first = await client.PostAsync($"/surveys/{survey.Id}/invitations/reminders", null);
-        first.EnsureSuccessStatusCode();
-        var firstResult = (await first.Content.ReadFromJsonAsync<SurveyReminderResult>())!;
-        Assert.Equal(1, firstResult.Eligible);
-        Assert.Equal(1, firstResult.Queued);
-
-        var invitation = await InvitationRowAsync(result.InvitationIds[0]);
-        Assert.Equal(1, invitation.ReminderCount);
-        Assert.NotNull(invitation.LastReminderSent);
-
-        // Idempotency lives in the row, not in a lock -- which is the property #101's worker
-        // needs from a job that may tick while a previous tick is still in flight.
-        var second = await client.PostAsync($"/surveys/{survey.Id}/invitations/reminders", null);
-        var secondResult = (await second.Content.ReadFromJsonAsync<SurveyReminderResult>())!;
-        Assert.Equal(0, secondResult.Queued);
-        Assert.Equal(1, secondResult.SkippedTooSoon);
-
-        Assert.Equal(1, (await InvitationRowAsync(result.InvitationIds[0])).ReminderCount);
-    }
-
-    [Fact]
-    public async Task Reminders_are_queued_for_the_sweep_rather_than_sent_here()
-    {
-        var client = await AdminAAsync();
-        var survey = await CreateActiveSurveyAsync(client);
-        var employee = await SeedEmployeeAsync(_companyAId);
-        var result = await InviteAsync(client, survey.Id, new CreateSurveyInvitationsRequest(UserIds: [employee]));
-        await AgeInvitationAsync(result.InvitationIds[0], days: 5);
-
-        (await client.PostAsync($"/surveys/{survey.Id}/invitations/reminders", null)).EnsureSuccessStatusCode();
-
-        var reminder = await _harness.WithDbAsync(db => db.Notifications
-            .AsNoTracking().FirstAsync(n => n.UserId == employee && n.Type == NotificationTypes.SurveyReminder));
-
-        // Nothing in the distribution surface delivers. POST /notifications/process and #101's
-        // worker do -- which is what "reminders dispatch through the shared scheduler, not a
-        // new one" means in code.
-        Assert.Equal(NotificationStatuses.Pending, reminder.Status);
-        Assert.Null(reminder.SentAt);
-    }
-
-    [Fact]
     public async Task A_completed_or_revoked_invitation_is_not_reminded()
     {
         var client = await AdminAAsync();
@@ -1465,64 +1334,6 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Nobody_is_reminded_within_the_cadence_of_the_invitation_itself()
-    {
-        var client = await AdminAAsync();
-        var survey = await CreateActiveSurveyAsync(client);
-        var employee = await SeedEmployeeAsync(_companyAId);
-        await InviteAsync(client, survey.Id, new CreateSurveyInvitationsRequest(UserIds: [employee]));
-
-        var response = await client.PostAsync($"/surveys/{survey.Id}/invitations/reminders", null);
-        var result = (await response.Content.ReadFromJsonAsync<SurveyReminderResult>())!;
-
-        // The cadence measures from the last time we contacted this person, and the invitation
-        // itself is a contact. A "reminder" arriving the same minute as the invitation is not
-        // a reminder -- it is the same mail twice. Default cadence is 3 days.
-        Assert.Equal(0, result.Eligible);
-        Assert.Equal(1, result.SkippedTooSoon);
-    }
-
-    [Fact]
-    public async Task An_invitation_held_until_the_survey_opens_is_not_remindable_before_it_is_delivered()
-    {
-        var client = await AdminAAsync();
-
-        // Opens in a week, and InvitationSendImmediately is off by default -- so the
-        // notification is scheduled for StartDate and the invitation's SentAt names that
-        // moment too. Stamping "now" instead would make this remindable three days from now,
-        // four days BEFORE the invitation it is reminding about ever arrives.
-        var created = await SurveyTestHarness.CreateSurveyAsync(
-            client,
-            SurveyTestHarness.MinimalRequest(_companyAId) with
-            {
-                StartDate = DateTimeOffset.UtcNow.AddDays(7),
-                EndDate = DateTimeOffset.UtcNow.AddDays(28),
-            });
-        // Asks for the invitation mail, because since 2026-10-19 a survey is created with
-        // `NotificationSendInvitations` false. This test is about WHEN the mail a tenant
-        // asked for is scheduled -- not about whether one is sent by default, which
-        // `A_survey_is_created_with_the_invitation_email_off` is where it is pinned. It
-        // creates its survey directly rather than through `CreateActiveSurveyAsync`,
-        // because it needs a start date a week out, so it has to ask for itself.
-        (await client.PutAsJsonAsync(
-            $"/surveys/{created.Id}",
-            new UpdateSurveyRequest(Settings: new SurveySettingsInput(
-                NotificationSendInvitations: true)))).EnsureSuccessStatusCode();
-        (await SurveyTestHarness.SetStatusAsync(client, created.Id, SurveyStatuses.Active)).EnsureSuccessStatusCode();
-
-        var employee = await SeedEmployeeAsync(_companyAId);
-        var result = await InviteAsync(client, created.Id, new CreateSurveyInvitationsRequest(UserIds: [employee]));
-
-        var invitation = await InvitationRowAsync(result.InvitationIds[0]);
-        Assert.NotNull(invitation.SentAt);
-        Assert.True(invitation.SentAt!.Value > DateTimeOffset.UtcNow.AddDays(6));
-
-        var notification = await _harness.WithDbAsync(db => db.Notifications
-            .AsNoTracking().FirstAsync(n => n.UserId == employee && n.Type == NotificationTypes.SurveyInvitation));
-        Assert.Equal(invitation.SentAt, notification.ScheduledFor);
-    }
-
-    [Fact]
     public async Task A_pending_invitation_is_not_reminded_because_it_was_never_sent()
     {
         var client = await AdminAAsync();
@@ -1565,50 +1376,6 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
     // ------------------------------------------------------------------
 
     [Fact]
-    public async Task Resending_rotates_the_token_and_leaves_the_engagement_history_intact()
-    {
-        var client = await AdminAAsync();
-        var survey = await CreateActiveSurveyAsync(client);
-        var employee = await SeedEmployeeAsync(_companyAId);
-        var result = await InviteAsync(client, survey.Id, new CreateSurveyInvitationsRequest(UserIds: [employee]));
-        var invitationId = result.InvitationIds[0];
-        var oldToken = await TokenOfAsync(invitationId);
-
-        (await Anonymous().PostAsync($"/survey-invitations/{oldToken}/opened", null)).EnsureSuccessStatusCode();
-        var openedAt = (await InvitationRowAsync(invitationId)).OpenedAt;
-
-        (await client.PostAsync($"/surveys/{survey.Id}/invitations/{invitationId}/resend", null)).EnsureSuccessStatusCode();
-
-        var newToken = await TokenOfAsync(invitationId);
-        Assert.NotEqual(oldToken, newToken);
-        Assert.Equal(HttpStatusCode.NotFound, (await Anonymous().GetAsync($"/survey-invitations/{oldToken}")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await Anonymous().GetAsync($"/survey-invitations/{newToken}")).StatusCode);
-
-        // Whether this person opened the previous invitation is a fact about them. Erasing it
-        // to make the new send look pristine would destroy the only engagement history there is.
-        Assert.Equal(openedAt, (await InvitationRowAsync(invitationId)).OpenedAt);
-    }
-
-    [Fact]
-    public async Task Resending_revives_a_revoked_invitation_under_a_new_token()
-    {
-        var client = await AdminAAsync();
-        var survey = await CreateActiveSurveyAsync(client);
-        var employee = await SeedEmployeeAsync(_companyAId);
-        var result = await InviteAsync(client, survey.Id, new CreateSurveyInvitationsRequest(UserIds: [employee]));
-        var invitationId = result.InvitationIds[0];
-        var revokedToken = await TokenOfAsync(invitationId);
-
-        (await client.PostAsync($"/surveys/{survey.Id}/invitations/{invitationId}/revoke", null)).EnsureSuccessStatusCode();
-        (await client.PostAsync($"/surveys/{survey.Id}/invitations/{invitationId}/resend", null)).EnsureSuccessStatusCode();
-
-        // Safe to offer precisely because the rotation kills the old token in the same step.
-        Assert.NotEqual(revokedToken, await TokenOfAsync(invitationId));
-        Assert.Equal(HttpStatusCode.NotFound, (await Anonymous().GetAsync($"/survey-invitations/{revokedToken}")).StatusCode);
-        Assert.Equal(SurveyInvitationStatuses.Sent, (await InvitationRowAsync(invitationId)).Status);
-    }
-
-    [Fact]
     public async Task A_completed_invitation_cannot_be_resent()
     {
         var client = await AdminAAsync();
@@ -1648,65 +1415,6 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
         Assert.Equal("Encuesta de clima", detail!.SurveyTitle);
         Assert.Equal(ContentLanguages.Spanish, detail.ResolvedLocale);
         Assert.Equal(ContentLanguages.Spanish, detail.Language);
-    }
-
-    [Fact]
-    public async Task A_bilingual_surveys_invitation_is_composed_in_the_recipients_own_language()
-    {
-        var client = await AdminAAsync();
-        var created = await SurveyTestHarness.CreateSurveyAsync(
-            client,
-            SurveyTestHarness.MinimalRequest(
-                _companyAId,
-                title: SurveyTestHarness.Both("Climate Survey", "Encuesta de clima"),
-                language: ContentLanguages.Both));
-
-        (await client.PutAsJsonAsync(
-            $"/surveys/{created.Id}",
-            new UpdateSurveyRequest(Settings: new SurveySettingsInput(
-                // Same reason as the test above: the invitation mail is off on a new survey
-                // since 2026-10-19, and composing one is the whole subject here.
-                NotificationSendInvitations: true,
-                InvitationCustomSubject: SurveyTestHarness.Both("Please take part", "Por favor participa"))))).EnsureSuccessStatusCode();
-        (await SurveyTestHarness.SetStatusAsync(client, created.Id, SurveyStatuses.Active)).EnsureSuccessStatusCode();
-
-        var englishSpeaker = await SeedEmployeeAsync(_companyAId, language: ContentLanguages.English);
-        var spanishSpeaker = await SeedEmployeeAsync(_companyAId, language: ContentLanguages.Spanish);
-
-        await InviteAsync(client, created.Id, new CreateSurveyInvitationsRequest(UserIds: [englishSpeaker, spanishSpeaker]));
-
-        var notifications = await _harness.WithDbAsync(db => db.Notifications
-            .AsNoTracking()
-            .Where(n => n.Type == NotificationTypes.SurveyInvitation
-                        && (n.UserId == englishSpeaker || n.UserId == spanishSpeaker))
-            .ToListAsync());
-
-        var english = notifications.Single(n => n.UserId == englishSpeaker);
-        var spanish = notifications.Single(n => n.UserId == spanishSpeaker);
-
-        Assert.Contains("Please take part", english.Title, StringComparison.Ordinal);
-        Assert.Contains("Climate Survey", english.Title, StringComparison.Ordinal);
-        Assert.Contains("Por favor participa", spanish.Title, StringComparison.Ordinal);
-        Assert.Contains("Encuesta de clima", spanish.Title, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task A_survey_with_no_custom_subject_still_composes_a_subject_in_the_recipients_language()
-    {
-        var client = await AdminAAsync();
-        var survey = await CreateActiveSurveyAsync(client);
-        var spanishSpeaker = await SeedEmployeeAsync(_companyAId, language: ContentLanguages.Spanish);
-
-        await InviteAsync(client, survey.Id, new CreateSurveyInvitationsRequest(UserIds: [spanishSpeaker]));
-
-        var notification = await _harness.WithDbAsync(db => db.Notifications
-            .AsNoTracking().FirstAsync(n => n.UserId == spanishSpeaker && n.Type == NotificationTypes.SurveyInvitation));
-
-        // notifications.title/message are NOT NULL. The fallback copy is backend-owned and
-        // exists in both locales, so a Spanish-speaking recipient is never served English by
-        // default -- the same rule as every other authored string on this surface.
-        Assert.Contains("encuesta", notification.Title, StringComparison.OrdinalIgnoreCase);
-        Assert.NotEmpty(notification.Message);
     }
 
     [Fact]
