@@ -348,6 +348,90 @@ public class PerSurveyCredentialDeliveryTests(PostgresContainerFixture postgres,
     }
 
     /// <summary>
+    /// A key whose only copy never left is withdrawn, so the state is repairable.
+    ///
+    /// <para>The password is hashed before the row is saved and the plaintext dies with the
+    /// request, so a kept row would be a person who can never sign in: the account resend
+    /// refuses an account with no username, and this route would skip them for ever because
+    /// they "already hold" a credential. Dropping it leaves them invited with no key.</para>
+    /// </summary>
+    [Fact]
+    public async Task A_credential_whose_mail_failed_is_withdrawn_and_the_invitation_stands()
+    {
+        var admin = await AdminClientAsync();
+        var survey = await ActiveSurveyAsync(admin, "Clima");
+        var email = $"{Guid.NewGuid():N}@persona.example.com";
+        _factory.FailFor.Add(email);
+        var employee = await SeedEmployeeAsync(email);
+
+        var result = await InviteAsync(admin, survey.Id, employee);
+
+        Assert.Equal(1, result.Created);
+        Assert.Equal(0, result.CredentialsIssued);
+        Assert.Equal(1, result.CredentialsNotSent);
+        Assert.DoesNotContain(_factory.Sent, m => m.ToEmail == email);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        // No key, because nobody was told it...
+        Assert.False(await db.SurveyCredentials.AnyAsync(c => c.SurveyId == survey.Id && c.UserId == employee));
+        // ...and the invitation stands, because it is the completion-tracking artefact and
+        // its token was never the thing that failed.
+        Assert.True(await db.SurveyInvitations.AnyAsync(i => i.SurveyId == survey.Id && i.UserId == employee));
+    }
+
+    /// <summary>
+    /// The repair itself: re-running the same request mints and mails a FRESH pair to somebody
+    /// who is already invited and holds no key.
+    ///
+    /// <para>This is the half that the route could not do before. Credentials used to be
+    /// minted only for invitations created by that same call, and an invitation row is created
+    /// once -- so after the first run this loop walked an empty list for ever, whatever the
+    /// state of the keys. It now walks the audience the request resolved.</para>
+    /// </summary>
+    [Fact]
+    public async Task Re_running_mints_a_fresh_key_for_somebody_invited_who_holds_none()
+    {
+        var admin = await AdminClientAsync();
+        var survey = await ActiveSurveyAsync(admin, "Clima");
+        var email = $"{Guid.NewGuid():N}@persona.example.com";
+        var employee = await SeedEmployeeAsync(email);
+
+        Assert.Equal(1, (await InviteAsync(admin, survey.Id, employee)).CredentialsIssued);
+        var first = Assert.Single(_factory.Sent, m => m.ToEmail == email);
+
+        // The state a failed send leaves behind, and the one an operator reaches by deleting
+        // the row: invited, with no key.
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            db.SurveyCredentials.RemoveRange(
+                await db.SurveyCredentials.Where(c => c.SurveyId == survey.Id && c.UserId == employee).ToListAsync());
+            await db.SaveChangesAsync();
+        }
+
+        var again = await InviteAsync(admin, survey.Id, employee);
+
+        // No new invitation -- they already held one, which is exactly why this used to be
+        // unreachable -- and a new key all the same.
+        Assert.Equal(0, again.Created);
+        Assert.Equal(1, again.CredentialsIssued);
+
+        var mail = _factory.Sent.Where(m => m.ToEmail == email).ToList();
+        Assert.Equal(2, mail.Count);
+        Assert.NotEqual(first.Password, mail[1].Password);
+
+        // And the fresh one is the one that works.
+        var client = _factory.CreateClient();
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await client.PostAsJsonAsync("/auth/login", new LoginRequest(mail[1].Username, mail[1].Password))).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            (await client.PostAsJsonAsync("/auth/login", new LoginRequest(first.Username, first.Password))).StatusCode);
+    }
+
+    /// <summary>
     /// The mode is opt-in, so a `shared` survey must mint nothing at all -- its people
     /// already hold an account that opens every survey they are targeted by.
     /// </summary>
