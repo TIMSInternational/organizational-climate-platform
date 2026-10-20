@@ -498,10 +498,13 @@ public static class SurveyDistributionEndpoints
 
         await db.SaveChangesAsync(cancellationToken);
 
-        var note = "Invitations were minted and no mail was queued. This platform does not send "
-            + "survey invitation email: the only message a respondent ever receives is their "
-            + "credentials. Share the survey's link, or ask them to sign in with the credentials "
-            + "they already have.";
+        // Null unless there is something WRONG with this batch. "No mail was queued" was a
+        // note while it was a per-survey setting that could differ between calls; since the
+        // invitation email was deleted on 2026-10-19 it is a permanent property of the
+        // product, true of every batch, and a field that always says the same thing is noise
+        // an admin learns to skip past -- which is exactly where the undeliverable warning
+        // below needs to be read.
+        string? note = null;
 
         if (undeliverable > 0)
         {
