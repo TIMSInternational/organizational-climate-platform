@@ -160,7 +160,18 @@ public sealed record SurveyPublicLinkDetail(
     DateTimeOffset SurveyEndDate,
     bool RequireLogin,
     bool AllowAnonymous,
-    bool SingleResponse);
+    bool SingleResponse,
+    // Whose survey this is, for the strip above the questions. Added 2026-10-19: a QR
+    // respondent saw the OCC lockup alone, because the only source of a company mark was
+    // `/profile` -- authenticated, and they have no account by design. The company had its
+    // logo set and served; nothing on the anonymous path ever asked for it.
+    //
+    // It is deliberately the only tenant fact on this payload. The name and the mark are
+    // what the respondent needs in order to know whose survey they are answering -- they
+    // were handed the link BY that company -- and nothing else here describes its people,
+    // its structure or its other surveys.
+    string? CompanyName = null,
+    string? CompanyLogoUrl = null);
 
 /// <param name="Requested">Distinct users the request resolved to.</param>
 /// <param name="Created">Invitations actually minted.</param>

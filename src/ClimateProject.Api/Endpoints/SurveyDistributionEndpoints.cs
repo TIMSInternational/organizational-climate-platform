@@ -1106,6 +1106,14 @@ public static class SurveyDistributionEndpoints
         var title = SurveyContent.Resolve(survey.TitleEn, survey.TitleEs, locale, survey.Language, "surveyTitle", fallbackFields);
         var description = SurveyContent.Resolve(survey.DescriptionEn, survey.DescriptionEs, locale, survey.Language, "surveyDescription", fallbackFields);
 
+        // Whose survey it is. One projection of two columns, not the Company entity: this
+        // response is served to anyone holding the URL, so what it can carry is chosen here
+        // rather than trimmed later.
+        var brand = await db.Companies.AsNoTracking()
+            .Where(c => c.Id == survey.CompanyId)
+            .Select(c => new { c.Name, c.Branding.LogoUrl })
+            .FirstOrDefaultAsync(cancellationToken);
+
         return Results.Ok(new SurveyPublicLinkDetail(
             survey.Id,
             title,
@@ -1117,7 +1125,9 @@ public static class SurveyDistributionEndpoints
             survey.EndDate,
             distribution.AccessRules.RequireLogin,
             distribution.AccessRules.AllowAnonymous,
-            distribution.AccessRules.SingleResponse));
+            distribution.AccessRules.SingleResponse,
+            brand?.Name,
+            brand?.LogoUrl));
     }
 
     // ------------------------------------------------------------------

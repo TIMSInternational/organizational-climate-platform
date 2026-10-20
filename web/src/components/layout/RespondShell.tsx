@@ -92,6 +92,23 @@ export interface RespondShellProps {
    */
   showCompanyLogo?: boolean
   /**
+   * The company to show when the viewer has no account to read it from.
+   *
+   * `showCompanyLogo` cannot serve a link-holder: its value comes from `/profile`, which
+   * needs a token, so a QR respondent renders nothing. EAGLE's respondents met the OCC
+   * lockup alone on 2026-10-19 for exactly that reason, on a survey their own employer had
+   * handed them.
+   *
+   * So a public route passes the brand it was ALREADY told by the payload that let it in
+   * (`SurveyPublicLinkDetail`), rather than asking for it. That keeps the rule the remarks
+   * above set: nothing here is fetched about a tenant on behalf of a stranger. The one fact
+   * shown is the one the link's own response carried, about the company whose link it is.
+   *
+   * It wins over `showCompanyLogo` when both are given, because an explicit brand is a
+   * caller saying which company this page is for.
+   */
+  brand?: { logoUrl: string | null; companyName: string | null }
+  /**
    * The id the skip link targets and `<main>` carries. Defaults to `respond`.
    * `/survey/:id` passes `survey`, which is the anchor its own test pins.
    */
@@ -103,11 +120,15 @@ export function RespondShell({
   skipLabel,
   contentId = 'respond',
   showCompanyLogo = false,
+  brand: given,
   children,
 }: RespondShellProps) {
   // Unconditional call with a gate inside, because a hook cannot be called conditionally.
-  // Off, it asks nothing and answers nulls, so the public routes send no request.
-  const brand = useOwnCompanyBrand(showCompanyLogo)
+  // Off, it asks nothing and answers nulls, so the public routes send no request. A caller
+  // that passed a brand turns it off too: the page already knows, and asking `/profile`
+  // without a token would answer nulls anyway.
+  const own = useOwnCompanyBrand(showCompanyLogo && !given)
+  const brand = given ?? own
 
   return (
     <div className="flex min-h-dvh flex-col bg-surface-outer">

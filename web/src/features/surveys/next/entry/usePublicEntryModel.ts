@@ -40,6 +40,8 @@ import { entryState, type EntryState, type LinkLoad, type ViewLoad } from './der
  */
 export function usePublicEntryModel(token: string | undefined): {
   state: EntryState
+  /** The company the link belongs to, for the strip above every state. Null until resolved. */
+  brand: { logoUrl: string | null; companyName: string | null } | null
   begin: () => void
 } {
   const { locale } = useTranslation('surveyRespond')
@@ -128,6 +130,15 @@ export function usePublicEntryModel(token: string | undefined): {
 
   return {
     state: entryState(link, view, answering),
+    // Returned beside the state rather than folded into it, because the strip above the
+    // page shows the same company in EVERY state -- landing, answering, and the blocked
+    // card -- while `EntryState` is a union whose arms deliberately carry only what their
+    // own screen draws. The link's own response is where this came from; see
+    // `RespondShell`'s `brand`.
+    brand:
+      link.status === 'resolved'
+        ? { logoUrl: link.detail.companyLogoUrl, companyName: link.detail.companyName }
+        : null,
     begin,
   }
 }

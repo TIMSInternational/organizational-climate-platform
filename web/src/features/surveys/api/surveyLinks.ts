@@ -53,6 +53,9 @@ export interface SurveyPublicLinkDetail {
   requireLogin: boolean
   allowAnonymous: boolean
   singleResponse: boolean
+  /** Whose survey this is. Null for a company with no mark set; see the C# record. */
+  companyName: string | null
+  companyLogoUrl: string | null
 }
 
 /**

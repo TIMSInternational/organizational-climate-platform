@@ -24,6 +24,8 @@ function link(overrides: Partial<SurveyPublicLinkDetail> = {}): SurveyPublicLink
     requireLogin: false,
     allowAnonymous: true,
     singleResponse: true,
+    companyName: 'Eagle',
+    companyLogoUrl: '/brand/eagle-logo.png',
     ...overrides,
   }
 }
@@ -153,6 +155,43 @@ describe('PublicSurveyLinkPage', () => {
     expect(screen.getByRole('button', { name: /Empezar/ })).toBeTruthy()
     // Not the questions, yet.
     expect(screen.queryByRole('radio', { name: 'Bien' })).toBeNull()
+  })
+
+  /**
+   * Whose survey the respondent is looking at.
+   *
+   * EAGLE's QR respondents met the OCC lockup alone on 2026-10-19 -- on a survey their own
+   * employer had handed them -- because the only source of a company mark was
+   * `useOwnCompanyBrand`, which reads `/profile` behind a token nobody holding a link has.
+   * `set-branding.sh` had set the logo and it was served; nothing on the anonymous path
+   * ever asked for it.
+   *
+   * The mark now comes off the link's own payload, so it is shown WITHOUT a session and
+   * without a second request. The product lockup stays beside it: the tenant's mark is
+   * added, never substituted.
+   */
+  it("shows the company's own logo to a visitor with no account", async () => {
+    serve({})
+    renderPage()
+
+    await screen.findByRole('heading', { name: 'Clima laboral 2026' })
+    const img = document.querySelector('[data-slot="company-logo"]') as HTMLImageElement | null
+    expect(img, 'the company logo was not rendered for an anonymous visitor').not.toBeNull()
+    expect(img!.getAttribute('src')).toBe('/brand/eagle-logo.png')
+    expect(img!.getAttribute('alt')).toContain('Eagle')
+    // Added beside the product lockup, never instead of it.
+    expect(document.querySelector('[data-slot="brand-lockup"]')).not.toBeNull()
+  })
+
+  it('shows no company mark when the tenant has set none, rather than an empty frame', async () => {
+    serve({
+      resolve: () =>
+        new Response(JSON.stringify(link({ companyName: null, companyLogoUrl: null })), { status: 200 }),
+    })
+    renderPage()
+
+    expect(await screen.findByRole('heading', { name: 'Clima laboral 2026' })).toBeTruthy()
+    expect(document.querySelector('[data-slot="company-logo"]')).toBeNull()
   })
 
   /**

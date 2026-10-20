@@ -42,3 +42,8 @@ __pycache__/
 # covers rerun suffixes, e.g. the old `.tracking-integration-reports-v2/`.
 /.*-reports/
 /.*-reports-*/
+
+# `dotnet test --results-directory artifacts/test-results` writes TRX files here on every
+# CI run and on any local run that copies the CI command. Nothing tracked has ever lived
+# under this path (`git ls-files artifacts/` was empty when this was added).
+/artifacts/
