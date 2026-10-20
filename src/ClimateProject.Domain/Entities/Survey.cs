@@ -156,4 +156,16 @@ public class SurveySettings
     /// which the same ruling requires.
     /// </remarks>
     public bool OneSessionOnly { get; set; }
+
+    /// <summary>
+    /// This survey's credential mode, or null to inherit the company's.
+    ///
+    /// <para>Resolved once by <c>CredentialModes.Resolve</c> on the create path and written
+    /// here, exactly as <c>Language</c> is -- the one company-default-survey-override in
+    /// this codebase that is actually wired, rather than claimed in the UI and read nowhere
+    /// (see <c>CompanySettings.AnonymousSurveys</c>). Freezing it matters: credentials are
+    /// mailed once, and a company setting changed afterwards must not imply a different
+    /// shape for mail that has already gone out.</para>
+    /// </summary>
+    public string? CredentialMode { get; set; }
 }

@@ -36,6 +36,7 @@ public class CompanyConfiguration : IEntityTypeConfiguration<Company>
             settings.Property(s => s.AnonymousSurveys).HasColumnName("settings_anonymous_surveys").IsRequired().HasDefaultValue(false);
             settings.Property(s => s.DataRetentionDays).HasColumnName("settings_data_retention_days").IsRequired().HasDefaultValue(2555);
             settings.Property(s => s.Timezone).HasColumnName("settings_timezone").HasMaxLength(100).IsRequired().HasDefaultValue("UTC");
+            settings.Property(s => s.CredentialMode).HasColumnName("settings_credential_mode").HasMaxLength(20).IsRequired().HasDefaultValue("shared");
             settings.Property(s => s.Language).HasColumnName("settings_language").HasMaxLength(10).IsRequired().HasDefaultValue("en");
             settings.Property(s => s.ResultBandOpportunityMin).HasColumnName("settings_band_opportunity_min").HasPrecision(3, 2).IsRequired().HasDefaultValue(3.00m);
             settings.Property(s => s.ResultBandStrengthMin).HasColumnName("settings_band_strength_min").HasPrecision(3, 2).IsRequired().HasDefaultValue(4.00m);

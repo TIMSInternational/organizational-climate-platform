@@ -46,4 +46,15 @@ public class CompanySettings
     // 0–100 (mean × 20). Storage, aggregation, the privacy floor and the bands above stay on
     // 1–5 whatever this says; only what is displayed or downloaded converts.
     public string ResultScale { get; set; } = "mean";
+
+    /// <summary>
+    /// How this company's people are given sign-ins: <c>shared</c> (one account per person,
+    /// opening every survey) or <c>per_survey</c> (a username and password per survey, and
+    /// one credentials email each). See <see cref="CredentialModes"/>.
+    ///
+    /// <para>This is the DEFAULT a new survey inherits, resolved and frozen onto the survey
+    /// at create time. Changing it never re-shapes a survey whose credentials have already
+    /// been mailed.</para>
+    /// </summary>
+    public string CredentialMode { get; set; } = CredentialModes.Shared;
 }

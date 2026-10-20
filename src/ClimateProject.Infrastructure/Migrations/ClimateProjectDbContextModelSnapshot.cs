@@ -3576,6 +3576,46 @@ namespace ClimateProject.Infrastructure.Migrations
                     b.ToTable("survey_audit_logs", (string)null);
                 });
 
+            modelBuilder.Entity("ClimateProject.Domain.Entities.SurveyCredential", b =>
+                {
+                    b.Property<Guid>("SurveyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_id");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset?>("LastSignInAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_sign_in_at");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("password_hash");
+
+                    b.Property<string>("Username")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("username");
+
+                    b.HasKey("SurveyId", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("Username")
+                        .IsUnique();
+
+                    b.ToTable("survey_credentials", (string)null);
+                });
+
             modelBuilder.Entity("ClimateProject.Domain.Entities.SurveyDepartmentTarget", b =>
                 {
                     b.Property<Guid>("SurveyId")
@@ -4860,6 +4900,14 @@ namespace ClimateProject.Infrastructure.Migrations
                                 .HasDefaultValue(false)
                                 .HasColumnName("settings_anonymous_surveys");
 
+                            b1.Property<string>("CredentialMode")
+                                .IsRequired()
+                                .ValueGeneratedOnAdd()
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)")
+                                .HasDefaultValue("shared")
+                                .HasColumnName("settings_credential_mode");
+
                             b1.Property<int>("DataRetentionDays")
                                 .ValueGeneratedOnAdd()
                                 .HasColumnType("integer")
@@ -5860,6 +5908,11 @@ namespace ClimateProject.Infrastructure.Migrations
                                 .HasDefaultValue(false)
                                 .HasColumnName("settings_collect_participant_identity");
 
+                            b1.Property<string>("CredentialMode")
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)")
+                                .HasColumnName("settings_credential_mode");
+
                             b1.Property<bool>("InvitationBrandingEnabled")
                                 .ValueGeneratedOnAdd()
                                 .HasColumnType("boolean")
@@ -5972,6 +6025,21 @@ namespace ClimateProject.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ClimateProject.Domain.Entities.SurveyCredential", b =>
+                {
+                    b.HasOne("ClimateProject.Domain.Entities.Survey", null)
+                        .WithMany()
+                        .HasForeignKey("SurveyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ClimateProject.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 

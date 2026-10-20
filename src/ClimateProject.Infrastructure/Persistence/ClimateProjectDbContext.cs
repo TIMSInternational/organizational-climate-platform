@@ -36,6 +36,7 @@ public class ClimateProjectDbContext(DbContextOptions<ClimateProjectDbContext> o
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<SurveyDistribution> SurveyDistributions => Set<SurveyDistribution>();
     public DbSet<SurveyInvitation> SurveyInvitations => Set<SurveyInvitation>();
+    public DbSet<SurveyCredential> SurveyCredentials => Set<SurveyCredential>();
     public DbSet<SurveyAuditLog> SurveyAuditLogs => Set<SurveyAuditLog>();
     public DbSet<Response> Responses => Set<Response>();
     public DbSet<QuestionResponse> QuestionResponses => Set<QuestionResponse>();

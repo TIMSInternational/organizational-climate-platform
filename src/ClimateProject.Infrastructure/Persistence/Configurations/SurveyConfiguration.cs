@@ -45,6 +45,9 @@ public class SurveyConfiguration : IEntityTypeConfiguration<Survey>
             settings.Property(x => x.SelfDeclaredDemographics).HasColumnName("settings_self_declared_demographics").IsRequired().HasDefaultValue(true);
             settings.Property(x => x.CollectParticipantIdentity).HasColumnName("settings_collect_participant_identity").IsRequired().HasDefaultValue(false);
             settings.Property(x => x.OneSessionOnly).HasColumnName("settings_one_session_only").IsRequired().HasDefaultValue(false);
+            // Nullable with NO default: null is not "unset pending a default", it is the
+            // stored meaning "inherit the company". A default here would erase that.
+            settings.Property(x => x.CredentialMode).HasColumnName("settings_credential_mode").HasMaxLength(20);
             settings.Property(x => x.NotificationSendInvitations).HasColumnName("settings_notification_send_invitations").IsRequired().HasDefaultValue(true);
             settings.Property(x => x.NotificationSendReminders).HasColumnName("settings_notification_send_reminders").IsRequired().HasDefaultValue(true);
             settings.Property(x => x.NotificationReminderFrequencyDays).HasColumnName("settings_notification_reminder_frequency_days").IsRequired().HasDefaultValue(3);
