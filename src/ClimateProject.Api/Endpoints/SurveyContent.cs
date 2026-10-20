@@ -122,6 +122,16 @@ internal static class SurveyContent
                 survey.Settings.InvitationCustomMessageEn,
                 survey.Settings.InvitationCustomMessageEs,
                 Required: false),
+            new(
+                "settings.respondentIntro",
+                survey.Settings.RespondentIntroEn,
+                survey.Settings.RespondentIntroEs,
+                Required: false),
+            new(
+                "settings.closingMessage",
+                survey.Settings.ClosingMessageEn,
+                survey.Settings.ClosingMessageEs,
+                Required: false),
         };
 
         foreach (var question in questions.OrderBy(q => q.Order))

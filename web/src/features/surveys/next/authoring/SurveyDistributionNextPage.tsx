@@ -45,6 +45,7 @@ import { Card, Meter, ReadingTile, WithReading, type ShareLinkAction } from './p
 import SharePanel from './SharePanel'
 import ParticipationPanel from './ParticipationPanel'
 import SurveyRosterPanel from './SurveyRosterPanel'
+import { RespondentTextsDialog } from './RespondentTextsDialog'
 import { useSurveyParticipation } from './useSurveyParticipation'
 import {
   INVITATION_COLUMNS,
@@ -151,6 +152,8 @@ export function DistributionView({
   const [confirming, setConfirming] = useState(false)
   const [linkConfirm, setLinkConfirm] = useState<'regenerate' | 'revoke' | null>(null)
   const [copyOpen, setCopyOpen] = useState(false)
+  const [textsOpen, setTextsOpen] = useState(false)
+  const [textsSaved, setTextsSaved] = useState<string | null>(null)
   const [showAll, setShowAll] = useState(false)
 
   // ONE request for the two panels that read it. Each fetching for itself meant two identical
@@ -337,6 +340,20 @@ export function DistributionView({
               disabled={!actionable || busy}
               onChange={actions.setOneSessionOnly}
             />
+          </div>
+
+          {/* The survey's own words for the respondent: the anonymity box's paragraph and the
+              thank-you (Eagle's corrections, 2026-10-20). Here because, like the two switches
+              above, it changes what someone holding the link reads. Empty is the default. */}
+          <div className="mt-4 flex flex-col gap-2 border-t border-line-default pt-4">
+            <p className="m-0 text-base font-medium text-fg-primary">{t('surveys.next.respondentTexts.open')}</p>
+            <p className="m-0 text-sm text-fg-secondary">{t('surveys.next.respondentTexts.openHelp')}</p>
+            <div>
+              <Button type="button" variant="outline" disabled={!actionable} onClick={() => { setTextsSaved(null); setTextsOpen(true) }}>
+                {t('common.edit')}
+              </Button>
+            </div>
+            {textsSaved ? <p role="status" className="m-0 text-sm text-fg-secondary">{textsSaved}</p> : null}
           </div>
 
           {/* The server never asks public-link respondents for a name. Completion is
@@ -669,6 +686,8 @@ export function DistributionView({
           </div>
         </DialogContent>
       </Dialog>
+
+      <RespondentTextsDialog surveyId={survey.id} open={textsOpen} onOpenChange={setTextsOpen} onSaved={setTextsSaved} />
 
       <Dialog open={copyOpen} onOpenChange={setCopyOpen}>
         <DialogContent closeLabel={t('common.close')} className="max-h-[90vh] max-w-3xl overflow-y-auto">

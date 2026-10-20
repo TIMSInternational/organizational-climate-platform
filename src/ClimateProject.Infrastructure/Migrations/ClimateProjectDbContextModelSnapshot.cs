@@ -5902,6 +5902,16 @@ namespace ClimateProject.Infrastructure.Migrations
                                 .HasDefaultValue(true)
                                 .HasColumnName("settings_auto_save");
 
+                            b1.Property<string>("ClosingMessageEn")
+                                .HasMaxLength(500)
+                                .HasColumnType("character varying(500)")
+                                .HasColumnName("settings_closing_message_en");
+
+                            b1.Property<string>("ClosingMessageEs")
+                                .HasMaxLength(500)
+                                .HasColumnType("character varying(500)")
+                                .HasColumnName("settings_closing_message_es");
+
                             b1.Property<bool>("CollectParticipantIdentity")
                                 .ValueGeneratedOnAdd()
                                 .HasColumnType("boolean")
@@ -5980,6 +5990,16 @@ namespace ClimateProject.Infrastructure.Migrations
                                 .HasColumnType("boolean")
                                 .HasDefaultValue(false)
                                 .HasColumnName("settings_randomize_questions");
+
+                            b1.Property<string>("RespondentIntroEn")
+                                .HasMaxLength(1000)
+                                .HasColumnType("character varying(1000)")
+                                .HasColumnName("settings_respondent_intro_en");
+
+                            b1.Property<string>("RespondentIntroEs")
+                                .HasMaxLength(1000)
+                                .HasColumnType("character varying(1000)")
+                                .HasColumnName("settings_respondent_intro_es");
 
                             b1.Property<int?>("ResponseLimit")
                                 .HasColumnType("integer")

@@ -62,7 +62,11 @@ public sealed record SurveySettingsDto(
     /// The mode this survey actually runs in -- never null. A survey created before the
     /// setting existed stores null and reads back as <c>shared</c>, which is what it is.
     /// </summary>
-    string CredentialMode);
+    string CredentialMode,
+    /// <summary>The survey's own anonymity-box paragraph, or null for the product default.</summary>
+    string? RespondentIntro = null,
+    /// <summary>The survey's own thank-you, or null for the product default.</summary>
+    string? ClosingMessage = null);
 
 public sealed record SurveyListItem(
     Guid Id,
@@ -210,7 +214,11 @@ public sealed record SurveySettingsInput(
     bool? CollectParticipantIdentity = null,
     bool? OneSessionOnly = null,
     /// <summary>`shared` | `per_survey`, or null to leave it alone / inherit the company.</summary>
-    string? CredentialMode = null);
+    string? CredentialMode = null,
+    /// <summary>Omitted = leave alone; an empty string clears it back to the default.</summary>
+    LocalizedInput? RespondentIntro = null,
+    /// <summary>Omitted = leave alone; an empty string clears it back to the default.</summary>
+    LocalizedInput? ClosingMessage = null);
 
 public sealed record CreateSurveyRequest(
     LocalizedInput? Title,

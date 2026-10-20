@@ -200,15 +200,24 @@ describe('SurveyInvitationPage', () => {
 
   /**
    * A partial save is not a completion. Firing `completed` here would make the
-   * distribution screen report people as finished who pressed "save and finish later".
+   * distribution screen report people as finished whose progress was only saved.
+   *
+   * This route is a public entry, so since 2026-10-20 it offers no "Guardar y terminar
+   * después": the partial save is the autosave's, `RESPOND_AUTOSAVE_DELAY_MS` after an answer.
    */
-  it('does not report completed when the respondent only saves their progress', async () => {
+  it('does not report completed when the respondent’s progress is only saved', async () => {
     serve()
     renderPage()
 
     await screen.findByRole('heading', { name: 'Clima laboral 2026' })
     await userEvent.click(await screen.findByRole('button', { name: 'Comenzar la encuesta' }))
-    await userEvent.click(await screen.findByRole('button', { name: 'Guardar y terminar después' }))
+    expect(screen.queryByRole('button', { name: 'Guardar y terminar después' })).toBeNull()
+    await userEvent.click(await screen.findByRole('radio', { name: 'Bien' }))
+    await waitFor(
+      () => expect(vi.mocked(fetch).mock.calls.some(([url, init]) =>
+        String(url).includes('/responses') && (init as RequestInit | undefined)?.method === 'POST')).toBe(true),
+      { timeout: 5000 },
+    )
 
     await waitFor(() => expect(steps()).toEqual(['opened', 'started']))
   })

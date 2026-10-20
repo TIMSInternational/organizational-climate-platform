@@ -4598,6 +4598,18 @@
         "newCreate": "Crear plantilla",
         "newCreating": "Creando…",
         "newFailed": "No se pudo crear la plantilla. Revise los campos e inténtelo de nuevo."
+      },
+      "respondentTexts": {
+        "title": "Textos para quien responde",
+        "help": "Lo que lee cada persona en esta encuesta. Si deja un campo vacío, se muestra el texto predeterminado que aparece en gris.",
+        "introLabel": "Texto del recuadro de anonimato",
+        "introHelp": "Reemplaza el párrafo del recuadro «Anónima» al inicio, solo en respuestas anónimas. Máximo {max} caracteres.",
+        "closingLabel": "Mensaje final",
+        "closingHelp": "Se muestra al enviar las respuestas, en lugar del agradecimiento predeterminado. Máximo {max} caracteres.",
+        "open": "Textos para quien responde",
+        "openHelp": "El texto del recuadro de anonimato y el mensaje final de esta encuesta.",
+        "loadFailed": "No se pudieron cargar los textos de esta encuesta. Cierre y vuelva a intentarlo.",
+        "saved": "Textos guardados. Quien abra la encuesta desde ahora los verá."
       }
     }
   },
@@ -5464,6 +5476,8 @@
     "saveFailedTitle": "Sus respuestas no se están guardando",
     "saveFailedBody": "Nada de lo que ha escrito ha llegado hasta nosotros, así que solo está en esta pantalla. Inténtelo con «Guardar y terminar después», o siga respondiendo: lo volveremos a intentar.",
     "saveFailedSince": "Todo lo que ha escrito desde las {time} solo está en esta pantalla. Inténtelo con «Guardar y terminar después», o siga respondiendo: lo volveremos a intentar.",
+    "saveFailedBodyPublic": "Nada de lo que ha escrito ha llegado hasta nosotros, así que solo está en esta pantalla. Siga respondiendo: lo volveremos a intentar.",
+    "saveFailedSincePublic": "Todo lo que ha escrito desde las {time} solo está en esta pantalla. Siga respondiendo: lo volveremos a intentar.",
     "resumedAtQuestion": "Sus respuestas guardadas han vuelto. Está en la pregunta {position} de {total}, la primera que no ha respondido.",
     "resumedAllAnswered": "Sus respuestas guardadas han vuelto y todas las preguntas tienen respuesta. Puede enviarlas cuando quiera.",
     "submitFailed": "No se pudieron enviar sus respuestas",

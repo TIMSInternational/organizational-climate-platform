@@ -354,6 +354,71 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// A survey's own respondent texts (Eagle's corrections, 2026-10-20): the anonymity box's
+    /// paragraph and the thank-you, per survey, so one client's wording never reaches another's
+    /// respondents. Unset is null, which the screen reads as the product default -- what every
+    /// survey before this date, ESPH's included, keeps saying.
+    /// </summary>
+    [Fact]
+    public async Task A_survey_without_its_own_texts_sends_none_and_the_screen_keeps_the_default()
+    {
+        var survey = await QrSurveyAsync(collectIdentity: false);
+
+        var view = await RespondViewAsync(_factory.CreateClient(), survey.Id);
+
+        Assert.Null(view.RespondentIntro);
+        Assert.Null(view.ClosingMessage);
+    }
+
+    [Fact]
+    public async Task The_qr_visitor_and_the_admin_read_the_surveys_own_intro_and_closing_message()
+    {
+        const string intro = "Estimado colaborador (a) es muy importante contar con su retroalimentación.";
+        const string closing = "Eagle le agradece su participación en la presente encuesta.";
+        var survey = await QrSurveyAsync(collectIdentity: false, intro: intro, closing: closing);
+
+        var view = await RespondViewAsync(_factory.CreateClient(), survey.Id);
+        Assert.Equal(intro, view.RespondentIntro);
+        Assert.Equal(closing, view.ClosingMessage);
+
+        var admin = await AdminAsync();
+        var detail = await admin.GetFromJsonAsync<SurveyDetail>($"/surveys/{survey.Id}?lang=es");
+        Assert.Equal(intro, detail!.Settings.RespondentIntro);
+        Assert.Equal(closing, detail.Settings.ClosingMessage);
+    }
+
+    [Fact]
+    public async Task Saving_a_text_empty_puts_the_default_back()
+    {
+        var admin = await AdminAsync();
+        var draft = await SurveyTestHarness.CreateSurveyAsync(admin, SurveyTestHarness.MinimalRequest(_companyId) with
+        {
+            Settings = new SurveySettingsInput(RespondentIntro: LocalizedInput.FromBare("Texto propio"), ClosingMessage: LocalizedInput.FromBare("Gracias propias")),
+        });
+        Assert.Equal("Texto propio", draft.Settings.RespondentIntro);
+
+        var cleared = await admin.PutAsJsonAsync($"/surveys/{draft.Id}", new UpdateSurveyRequest(
+            Settings: new SurveySettingsInput(RespondentIntro: LocalizedInput.FromBare(""), ClosingMessage: LocalizedInput.FromBare("   "))));
+        cleared.EnsureSuccessStatusCode();
+
+        var detail = await admin.GetFromJsonAsync<SurveyDetail>($"/surveys/{draft.Id}");
+        Assert.Null(detail!.Settings.RespondentIntro);
+        Assert.Null(detail.Settings.ClosingMessage);
+    }
+
+    [Fact]
+    public async Task A_text_over_its_limit_is_refused_and_writes_nothing()
+    {
+        var admin = await AdminAsync();
+        var response = await admin.PostAsJsonAsync("/surveys", SurveyTestHarness.MinimalRequest(_companyId) with
+        {
+            Settings = new SurveySettingsInput(ClosingMessage: LocalizedInput.FromBare(new string('x', SurveyRespondentText.ClosingMaxLength + 1))),
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    /// <summary>
     /// And the write path: a client that asks anyway -- a stale bundle, or a script -- is
     /// REFUSED rather than quietly obeyed, so no row can reach `survey_participations`.
     /// </summary>
@@ -721,7 +786,7 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
     private Task<HttpClient> AdminAsync() => _harness.ClientAsync(Roles.CompanyAdmin, _companyId);
 
     /// <summary>An open survey answered through the QR: área asked, identity per the test.</summary>
-    private async Task<SurveyDetail> QrSurveyAsync(bool collectIdentity, bool anonymous = true)
+    private async Task<SurveyDetail> QrSurveyAsync(bool collectIdentity, bool anonymous = true, string? intro = null, string? closing = null)
     {
         var admin = await AdminAsync();
         var survey = await SurveyTestHarness.CreateSurveyAsync(admin, new CreateSurveyRequest(
@@ -745,7 +810,9 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
             Settings: new SurveySettingsInput(
                 Anonymous: anonymous,
                 SelfDeclaredDemographics: true,
-                CollectParticipantIdentity: collectIdentity)));
+                CollectParticipantIdentity: collectIdentity,
+                RespondentIntro: intro is null ? null : LocalizedInput.FromBare(intro),
+                ClosingMessage: closing is null ? null : LocalizedInput.FromBare(closing))));
         (await SurveyTestHarness.SetStatusAsync(admin, survey.Id, SurveyStatuses.Active)).EnsureSuccessStatusCode();
         await SurveyTestHarness.OpenPublicLinkAsync(admin, survey.Id);
         return survey;

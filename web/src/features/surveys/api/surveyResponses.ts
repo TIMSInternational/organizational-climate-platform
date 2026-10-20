@@ -126,6 +126,14 @@ export interface SurveyRespondView {
    * `demographics` note for the deploy window this survives.
    */
   asksParticipantIdentity?: boolean
+  /**
+   * The survey's own paragraph for the anonymity box, set per survey ("Textos para quien
+   * responde"). Applied to an anonymous response only. Null or absent -- an API that predates it,
+   * or a survey nobody configured -- means the product's default paragraph.
+   */
+  respondentIntro?: string | null
+  /** The survey's own thank-you after a completed submit. Null or absent: the default thanks. */
+  closingMessage?: string | null
 }
 
 /** Who is answering, as typed. Sent on the completing post only, never on a partial save. */

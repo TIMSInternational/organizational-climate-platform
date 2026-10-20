@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { render, screen, cleanup, within, fireEvent } from '@testing-library/react'
+import { render, screen, cleanup, within, fireEvent, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import SurveyRespondForm from './SurveyRespondForm'
@@ -164,6 +164,21 @@ function lastSubmission(): Record<string, unknown> {
     string,
     unknown
   >
+}
+
+/**
+ * Waits for the autosave's partial POST. A public entry has no manual save, so this is the
+ * only way a partial save happens there; the timeout covers `RESPOND_AUTOSAVE_DELAY_MS`.
+ */
+async function waitForPartialSave() {
+  await waitFor(
+    () => {
+      const posts = vi.mocked(fetch).mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === 'POST')
+      expect(posts.length).toBeGreaterThan(0)
+      expect(lastSubmission().isComplete).toBe(false)
+    },
+    { timeout: 5000 },
+  )
 }
 
 /** The dimension label on the question card that is on screen, or `null`. */
@@ -1712,7 +1727,9 @@ describe('SurveyRespondForm — the demographic prelude', () => {
     await userEvent.click(screen.getByRole('button', { name: copy.es('surveyRespond.demographics.start') }))
     await screen.findByText('¿Qué tan satisfecho estás?')
     await userEvent.click(screen.getByLabelText('Muy de acuerdo'))
-    await userEvent.click(screen.getByRole('button', { name: copy.es('surveyRespond.saveAndFinishLater') }))
+    // A public entry has no "Guardar y terminar después" (ruled 2026-10-20), so the partial
+    // save here is the autosave's, `RESPOND_AUTOSAVE_DELAY_MS` after the answer.
+    await waitForPartialSave()
 
     // The guarantee the autosave's own comment makes — "Nothing here is a new field, a
     // new identifier or a demographic" — extended to the manual save. A respondent who
@@ -1908,7 +1925,7 @@ describe('SurveyRespondForm — who is answering', () => {
 
     await screen.findByText('¿Qué tan satisfecho estás?')
     await userEvent.click(screen.getByLabelText('Muy de acuerdo'))
-    await userEvent.click(screen.getByRole('button', { name: copy.es('surveyRespond.saveAndFinishLater') }))
+    await waitForPartialSave()
 
     const partial = lastSubmission()
     expect(partial.isComplete).toBe(false)
@@ -1937,5 +1954,134 @@ describe('SurveyRespondForm — who is answering', () => {
     await screen.findByText(copy.es('surveyRespond.answeredOnThisDeviceTitle'))
     expect(screen.getByText(copy.es('surveyRespond.answeredOnThisDeviceBodyRecorded'), { exact: false })).toBeTruthy()
     expect(screen.queryByText(copy.es('surveyRespond.answeredOnThisDeviceBody'), { exact: false })).toBeNull()
+  })
+})
+
+/**
+ * Eagle's "Correcciones encuesta de clima" (2026-10-20), as this form carries them: a survey's
+ * OWN intro and closing message (per survey, so no other client's respondents read Eagle's
+ * words), and a QR / shared-link respondent — who starts again from scratch if they leave —
+ * is not offered "Guardar y terminar después".
+ */
+describe('SurveyRespondForm — Eagle corrections', () => {
+  async function submitOne(payload: SurveyRespondView, props: { publicEntry?: boolean } = {}) {
+    respondWith(payload, { answeredQuestionCount: 1 })
+    renderForm(props)
+    await userEvent.click(await screen.findByRole('radio', { name: 'Muy de acuerdo' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Enviar mis respuestas' }))
+  }
+
+  it('thanks the respondent in the survey’s own words, with no second line, and keeps the receipt', async () => {
+    await submitOne(view({ questions: [question()], closingMessage: 'Eagle le agradece su participación en la presente encuesta.' }), { publicEntry: true })
+
+    const thanks = await screen.findByText('Eagle le agradece su participación en la presente encuesta.')
+    const block = thanks.closest('[role="status"]') as HTMLElement
+    expect(block.textContent).toBe('Eagle le agradece su participación en la presente encuesta.')
+    expect(screen.queryByText(copy.es('surveyRespond.thankYouTitle'))).toBeNull()
+    expect(screen.queryByText(copy.es('surveyRespond.thankYouBody'))).toBeNull()
+    expect(document.querySelector('[data-slot="respond-receipt"]')).toBeTruthy()
+  })
+
+  it('keeps the default thanks when the survey has no closing message of its own', async () => {
+    await submitOne(view({ questions: [question()] }))
+
+    await screen.findByText(copy.es('surveyRespond.thankYouTitle'))
+    expect(screen.getByText(copy.es('surveyRespond.thankYouBody'))).toBeTruthy()
+  })
+
+  const EAGLE_INTRO = 'Estimado colaborador (a) es muy importante contar con su retroalimentación y conocer aspectos, los cuales nos colaboran a mejorar el clima organizacional de la empresa: sus respuestas se manejarán de forma anónima a través de un proveedor externo.'
+
+  it('puts the survey’s own intro in the anonymity box, in place of the default paragraph', async () => {
+    respondWith(view({ anonymous: true, respondentIntro: EAGLE_INTRO }))
+    renderForm({ publicEntry: true })
+
+    const notice = (await screen.findByText(EAGLE_INTRO)).closest('[data-slot="anonymity-notice"]') as HTMLElement
+    expect(within(notice).getByText(copy.es('surveyRespond.anonymousChip'))).toBeTruthy()
+    expect(screen.queryByText(copy.es('surveyRespond.anonymousBody'))).toBeNull()
+  })
+
+  it('keeps the default paragraph for a survey without an intro of its own', async () => {
+    respondWith(view({ anonymous: true }))
+    renderForm({ publicEntry: true })
+
+    expect(await screen.findByText(copy.es('surveyRespond.anonymousBody'))).toBeTruthy()
+    expect(screen.queryByText(EAGLE_INTRO)).toBeNull()
+  })
+
+  // An author's prose must never hide that names are kept: on an identified response the
+  // disclosure stays, whatever the survey's intro says.
+  it('never lets the intro replace the disclosure on an identified response', async () => {
+    respondWith(view({ anonymous: false, respondentIntro: EAGLE_INTRO }))
+    renderForm()
+
+    expect(await screen.findByText(copy.es('surveyRespond.identifiedBody'))).toBeTruthy()
+    expect(screen.queryByText(EAGLE_INTRO)).toBeNull()
+  })
+
+  const twoQuestions = () => view({ allowPartialResponses: true, questions: [question(), question({ id: 'q2', order: 1 })] })
+
+  it('offers no "Guardar y terminar después" on a public entry', async () => {
+    respondWith(twoQuestions())
+    renderForm({ publicEntry: true })
+    await screen.findByRole('button', { name: 'Siguiente' })
+    expect(screen.queryByRole('button', { name: copy.es('surveyRespond.saveAndFinishLater') })).toBeNull()
+    expect(document.querySelector('[data-slot="respond-save"]')).toBeNull()
+  })
+
+  // The control: the same survey still offers it to a signed-in respondent, who can resume.
+  it('still offers "Guardar y terminar después" to a signed-in respondent', async () => {
+    respondWith(twoQuestions())
+    renderForm()
+    await screen.findByRole('button', { name: 'Siguiente' })
+    expect(screen.getByRole('button', { name: copy.es('surveyRespond.saveAndFinishLater') })).toBeTruthy()
+  })
+
+  // The screen-reader half of the same promise: the first autosave is announced as "Puede cerrar
+  // esta página y volver más tarde", which a QR respondent cannot do.
+  it('does not announce "volver más tarde" to a public respondent after the autosave', async () => {
+    respondWith(twoQuestions())
+    renderForm({ publicEntry: true })
+    await userEvent.click(await screen.findByRole('radio', { name: 'Muy de acuerdo' }))
+    await waitForPartialSave()
+
+    expect(document.body.textContent).not.toContain(copy.es('surveyRespond.progressAutosaved'))
+  })
+
+  it('still announces it to a signed-in respondent, who can come back', async () => {
+    respondWith(twoQuestions())
+    renderForm()
+    await userEvent.click(await screen.findByRole('radio', { name: 'Muy de acuerdo' }))
+    await waitForPartialSave()
+
+    await waitFor(() => expect(document.body.textContent).toContain(copy.es('surveyRespond.progressAutosaved')))
+  })
+
+  it('does not tell a public respondent to use a save button they do not have when the autosave fails', async () => {
+    const payload = view({ allowPartialResponses: true, questions: [question(), question({ id: 'q2', order: 1 })] })
+    // Only the first POST fails. A retry still pending when the test ends must be answered by
+    // this mock, not by happy-dom's real fetch after `unstubAllGlobals`.
+    respondWith(payload)
+    const answer = vi.mocked(fetch).getMockImplementation()!
+    let failed = false
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'POST' && !failed) {
+        failed = true
+        return Promise.resolve(new Response(JSON.stringify({ message: 'down' }), { status: 500 }))
+      }
+      return answer(input, init)
+    })
+    renderForm({ publicEntry: true })
+    await userEvent.click(await screen.findByRole('radio', { name: 'Muy de acuerdo' }))
+
+    const alert = await waitFor(
+      () => {
+        const node = document.querySelector('[data-slot="respond-save-failed"]')
+        expect(node).toBeTruthy()
+        return node as HTMLElement
+      },
+      { timeout: 5000 },
+    )
+    expect(alert.textContent).toContain(copy.es('surveyRespond.saveFailedBodyPublic'))
+    expect(alert.textContent).not.toContain(copy.es('surveyRespond.saveAndFinishLater'))
   })
 })

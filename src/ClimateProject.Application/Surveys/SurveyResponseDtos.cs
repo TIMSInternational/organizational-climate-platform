@@ -166,6 +166,12 @@ public sealed record SurveyRespondDemographicOption(string Value, string? Label)
 /// identified survey alike, since the 2026-10-12 ruling that every survey has a link. Declared last
 /// with a default so a payload from an API that predates it reads as "not asked".
 /// </param>
+/// <param name="RespondentIntro">
+/// The survey's own anonymity-box paragraph in the resolved locale, or null for the product
+/// default (<c>SurveySettings.RespondentIntroEn</c>). Sent for every response; the screen
+/// applies it only to an anonymous one.
+/// </param>
+/// <param name="ClosingMessage">The survey's own thank-you, or null for the product default.</param>
 public sealed record SurveyRespondView(
     Guid Id,
     string? Title,
@@ -185,7 +191,9 @@ public sealed record SurveyRespondView(
     IReadOnlyList<SurveyQuestionDto> Questions,
     IReadOnlyList<SurveyRespondDemographicField> Demographics,
     SurveyResponseState? InProgress,
-    bool AsksParticipantIdentity = false);
+    bool AsksParticipantIdentity = false,
+    string? RespondentIntro = null,
+    string? ClosingMessage = null);
 
 /// <param name="AlreadySubmitted">
 /// True when this call found a response that was already complete and therefore changed

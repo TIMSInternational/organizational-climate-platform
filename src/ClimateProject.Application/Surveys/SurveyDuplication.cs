@@ -212,5 +212,10 @@ public static class SurveyDuplication
         InvitationCustomSubjectEs = s.InvitationCustomSubjectEs,
         InvitationBrandingEnabled = s.InvitationBrandingEnabled,
         OneSessionOnly = s.OneSessionOnly,
+        // The survey's own respondent texts travel with the copy, both languages.
+        RespondentIntroEn = s.RespondentIntroEn,
+        RespondentIntroEs = s.RespondentIntroEs,
+        ClosingMessageEn = s.ClosingMessageEn,
+        ClosingMessageEs = s.ClosingMessageEs,
     };
 }

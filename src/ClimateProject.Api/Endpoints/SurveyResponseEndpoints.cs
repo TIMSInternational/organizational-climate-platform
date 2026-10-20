@@ -370,7 +370,13 @@ public static class SurveyResponseEndpoints
                     fallbackFields)
                 : [],
             inProgress,
-            AsksParticipantIdentity(survey, respondent)));
+            AsksParticipantIdentity(survey, respondent),
+            SurveyRespondentText.OrDefault(SurveyContent.Resolve(
+                survey.Settings.RespondentIntroEn, survey.Settings.RespondentIntroEs,
+                locale, survey.Language, "settings.respondentIntro", fallbackFields)),
+            SurveyRespondentText.OrDefault(SurveyContent.Resolve(
+                survey.Settings.ClosingMessageEn, survey.Settings.ClosingMessageEs,
+                locale, survey.Language, "settings.closingMessage", fallbackFields))));
     }
 
     // ------------------------------------------------------------------

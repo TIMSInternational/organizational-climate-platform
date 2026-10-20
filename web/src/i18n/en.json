@@ -4598,6 +4598,18 @@
         "newCreate": "Create template",
         "newCreating": "Creating…",
         "newFailed": "The template could not be created. Check the fields and try again."
+      },
+      "respondentTexts": {
+        "title": "Texts for respondents",
+        "help": "What each person reads in this survey. Leave a field empty and the default text shown in grey appears instead.",
+        "introLabel": "Anonymity box text",
+        "introHelp": "Replaces the paragraph in the “Anonymous” box at the start, on anonymous responses only. Up to {max} characters.",
+        "closingLabel": "Closing message",
+        "closingHelp": "Shown after the answers are sent, instead of the default thank-you. Up to {max} characters.",
+        "open": "Texts for respondents",
+        "openHelp": "This survey's anonymity box text and closing message.",
+        "loadFailed": "This survey's texts could not be loaded. Close and try again.",
+        "saved": "Texts saved. Anyone who opens the survey from now on will see them."
       }
     }
   },
@@ -5464,6 +5476,8 @@
     "saveFailedTitle": "Your answers are not being saved",
     "saveFailedBody": "Nothing you have entered has reached us yet, so it is only on this screen. Try again with “Save and finish later”, or keep answering — we will try again.",
     "saveFailedSince": "Everything you have entered since {time} is only on this screen. Try again with “Save and finish later”, or keep answering — we will try again.",
+    "saveFailedBodyPublic": "Nothing you have entered has reached us yet, so it is only on this screen. Keep answering — we will try again.",
+    "saveFailedSincePublic": "Everything you have entered since {time} is only on this screen. Keep answering — we will try again.",
     "resumedAtQuestion": "Your saved answers are back. You are on question {position} of {total}, the first one you have not answered.",
     "resumedAllAnswered": "Your saved answers are back, and every question has an answer. You can submit whenever you are ready.",
     "submitFailed": "Your answers could not be submitted",

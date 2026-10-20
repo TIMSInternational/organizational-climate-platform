@@ -586,7 +586,11 @@ export default function SurveyRespondForm({
         // work by itself, and then never hear about it again: on a fifty-question
         // instrument, a polite region that says "saved" every fifteen seconds talks
         // over the questions it is meant to protect.
-        if (!announcedAutosave.current) {
+        //
+        // Never on a public entry: the sentence ends "Puede cerrar esta página y volver más
+        // tarde", and a QR / shared-link respondent who leaves starts again from scratch
+        // (ruled 2026-10-20 — the same reason the save row is not drawn for them).
+        if (!announcedAutosave.current && !publicEntry) {
           announcedAutosave.current = true
           announce(t('progressAutosaved'))
         }
@@ -599,7 +603,7 @@ export default function SurveyRespondForm({
         setSaveState((previous) => ({ status: 'error', savedAt: previous.savedAt, message }))
       }
     },
-    [announce, baseUrl, enqueue, recordServerAnswers, sessionId, t, tRoot],
+    [announce, baseUrl, enqueue, publicEntry, recordServerAnswers, sessionId, t, tRoot],
   )
 
   async function send(isComplete: boolean): Promise<void> {
@@ -972,6 +976,7 @@ export default function SurveyRespondForm({
           submittedAt={submittedAt}
           locale={locale}
           publicEntry={publicEntry}
+          closingMessage={view?.closingMessage?.trim() ? view.closingMessage : null}
         />
       </RespondSurface>
     )
@@ -1082,7 +1087,7 @@ export default function SurveyRespondForm({
             to be legible at the moment it is given rather than one tap behind a
             disclosure. The question screens collapse it from question 2 on for vertical
             room, which is a different situation: by then the promise has been read. */}
-        <AnonymityNotice anonymous={view.anonymous} recordsParticipation={view.asksParticipantIdentity === true} />
+        <AnonymityNotice anonymous={view.anonymous} recordsParticipation={view.asksParticipantIdentity === true} intro={view.respondentIntro} />
 
         <ContentLanguageNotice
           requested={locale}
@@ -1183,7 +1188,7 @@ export default function SurveyRespondForm({
       <RespondSurface>
         {/* Open, for the demographic screen's reason: this is the moment a name is given,
             and the promise about what happens to it is the consent. */}
-        <AnonymityNotice anonymous={view.anonymous} recordsParticipation />
+        <AnonymityNotice anonymous={view.anonymous} recordsParticipation intro={view.respondentIntro} />
 
         <ContentLanguageNotice
           requested={locale}
@@ -1277,7 +1282,7 @@ export default function SurveyRespondForm({
           From the second question on it stays at that head collapsed, not shortened —
           the same characters, one tap away, costing ~40px instead of ~148px of an
           844px fold. `AnonymityNotice` carries the measurement and the reasoning. */}
-      <AnonymityNotice anonymous={view.anonymous} recordsParticipation={asksIdentity} collapsible={index > 0} />
+      <AnonymityNotice anonymous={view.anonymous} recordsParticipation={asksIdentity} collapsible={index > 0} intro={view.respondentIntro} />
 
       <ContentLanguageNotice
         requested={locale}
@@ -1385,9 +1390,11 @@ export default function SurveyRespondForm({
             <AlertTitle>{t('saveFailedTitle')}</AlertTitle>
             <AlertDescription>
               <span>
+                {/* The public variants do not name "Guardar y terminar después": a public
+                    entry has no such button (see the save row below). */}
                 {saveState.savedAt === null
-                  ? t('saveFailedBody')
-                  : t('saveFailedSince', { time: formatTime(saveState.savedAt, locale) })}
+                  ? t(publicEntry ? 'saveFailedBodyPublic' : 'saveFailedBody')
+                  : t(publicEntry ? 'saveFailedSincePublic' : 'saveFailedSince', { time: formatTime(saveState.savedAt, locale) })}
               </span>
               {/* The server's own message names what it objected to, and "this survey
                   has reached its response limit" is something a respondent can act on
@@ -1443,8 +1450,14 @@ export default function SurveyRespondForm({
         {/* "Guardar y terminar después" as the canvas draws it — an underlined line under
             the pair — and only where the survey allows partial responses. The save state
             rides under it: it is the answer to the question this link asks, "is my work
-            anywhere but this screen", on every page of the survey. */}
-        {view.allowPartialResponses && (
+            anywhere but this screen", on every page of the survey.
+
+            Never on a public entry (the QR / shared link): ruled 2026-10-20, a respondent
+            with no account who leaves starts again from scratch, so offering to "finish
+            later" promises something they cannot do. The autosave still runs underneath —
+            it is what keeps a retried submit idempotent — but nothing invites them to rely
+            on it. */}
+        {view.allowPartialResponses && !publicEntry && (
           <div data-slot="respond-save" className="flex flex-col items-center gap-1">
             <Button
               type="button"
@@ -1810,6 +1823,7 @@ function Submitted({
   submittedAt,
   locale,
   publicEntry,
+  closingMessage,
 }: {
   result: SurveySubmissionResult
   /** `SurveyRespondView.endDate`, or null if the view never loaded. */
@@ -1818,6 +1832,8 @@ function Submitted({
   submittedAt: number | null
   locale: string
   publicEntry: boolean
+  /** `SurveyRespondView.closingMessage`: the survey's own thanks, or null for the default. */
+  closingMessage: string | null
 }) {
   const { t } = useTranslation('surveyRespond')
 
@@ -1832,14 +1848,24 @@ function Submitted({
     <div className="flex flex-col gap-4">
       {/* The canvas's thank-you (RespondConfirmationPhone, 10 Sep) is the product's own
           success alert — the soft green block with the shield — so it stays that. */}
+      {/* A survey's own closing message (Eagle's corrections, 2026-10-20, set per survey in
+          "Textos para quien responde") is the whole of the green block — no second line. The
+          receipt below stays. Without one, the default thanks every other survey shows. */}
       <Alert variant="success" role="status">
         <ShieldCheck aria-hidden="true" />
-        <AlertTitle>
-          {result.alreadySubmitted ? t('alreadyCompletedTitle') : t('thankYouTitle')}
-        </AlertTitle>
-        <AlertDescription>
-          {result.alreadySubmitted ? t('alreadyCompletedBody') : t('thankYouBody')}
-        </AlertDescription>
+        {result.alreadySubmitted ? (
+          <>
+            <AlertTitle>{t('alreadyCompletedTitle')}</AlertTitle>
+            <AlertDescription>{t('alreadyCompletedBody')}</AlertDescription>
+          </>
+        ) : closingMessage ? (
+          <AlertTitle className="whitespace-pre-line">{closingMessage}</AlertTitle>
+        ) : (
+          <>
+            <AlertTitle>{t('thankYouTitle')}</AlertTitle>
+            <AlertDescription>{t('thankYouBody')}</AlertDescription>
+          </>
+        )}
       </Alert>
 
       {/* The receipt row, as the canvas draws it: the tile, and beside it when and how.
