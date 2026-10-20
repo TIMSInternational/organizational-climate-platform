@@ -32,4 +32,17 @@ public static class TokenClaimNames
     /// <see cref="SessionWindows.StartedAt"/>, and those two are the only sides.
     /// </remarks>
     public const string SessionStart = "sessionStart";
+
+    /// <summary>
+    /// The one survey this session may see, when it was opened with a per-survey credential.
+    /// Absent on every other session, which means "every survey you are targeted by".
+    /// </summary>
+    /// <remarks>
+    /// A constant for the same reason the two above are: silent on both sides. Written and
+    /// not read means a per-survey respondent sees every survey they are in -- exactly the
+    /// shared-account view the mode exists to avoid -- and read but not written means a
+    /// refresh drops the scope and widens the session halfway through answering. The only
+    /// writer is <c>JwtTokenService</c>; the only reader is <c>CurrentUser</c>.
+    /// </remarks>
+    public const string SurveyScope = "surveyScope";
 }

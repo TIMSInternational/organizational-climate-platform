@@ -54,6 +54,14 @@ public class JwtTokenService : IJwtTokenService
                 ClaimValueTypes.Integer64),
         };
 
+        // Added only when there is one, so a shared session's token is byte-identical to
+        // what it was before this existed -- an absent claim is the "every survey" answer,
+        // and writing an empty one would make the reader parse a sentinel instead.
+        if (claims.SurveyScope is { } surveyScope)
+        {
+            jwtClaims.Add(new Claim(TokenClaimNames.SurveyScope, surveyScope.ToString()));
+        }
+
         var token = new JwtSecurityToken(
             claims: jwtClaims,
             // SessionWindows.Next decided this: the idle window from SystemSettings, or the

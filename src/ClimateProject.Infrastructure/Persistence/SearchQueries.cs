@@ -106,9 +106,10 @@ public static class SearchQueries
         Guid? departmentId,
         Guid userId,
         string tsQuery,
-        int limit)
+        int limit,
+        Guid? surveyScope = null)
         => Surveys(
-            SurveyQueries.AssignedTo(surveys, departmentTargets, userTargets, responses, companyId, departmentId, userId),
+            SurveyQueries.AssignedTo(surveys, departmentTargets, userTargets, responses, companyId, departmentId, userId, surveyScope),
             SearchScope.ForCompany(companyId),
             tsQuery,
             limit);

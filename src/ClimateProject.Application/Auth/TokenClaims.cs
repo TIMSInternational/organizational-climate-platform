@@ -17,4 +17,11 @@ public sealed record TokenClaims(
     string Name,
     string CompanyId,
     bool IsActive,
-    Guid SecurityStamp);
+    Guid SecurityStamp,
+    /// <param name="SurveyScope">
+    /// The single survey this session may see, set only when sign-in resolved a
+    /// <c>SurveyCredential</c>. Null -- the default, and every pre-existing caller -- means
+    /// the session sees every survey its holder is targeted by, which is what a shared
+    /// account has always meant.
+    /// </param>
+    Guid? SurveyScope = null);

@@ -201,7 +201,8 @@ public static class SurveyEndpoints
         }
 
         var query = SurveyQueries.AssignedTo(
-            db.Surveys, db.SurveyDepartmentTargets, db.SurveyUserTargets, db.Responses, myCompanyId, me.DepartmentId, me.Id);
+            db.Surveys, db.SurveyDepartmentTargets, db.SurveyUserTargets, db.Responses, myCompanyId, me.DepartmentId, me.Id,
+            currentUser.SurveyScope);
 
         var rows = await SurveyQueries.ToMyRows(query, db.Questions).ToListAsync(cancellationToken);
 
