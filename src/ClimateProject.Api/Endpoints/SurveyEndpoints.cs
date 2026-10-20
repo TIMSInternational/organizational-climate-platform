@@ -1648,7 +1648,8 @@ public static class SurveyEndpoints
             survey.Settings.InvitationIncludeCredentials,
             survey.Settings.InvitationSendImmediately,
             survey.Settings.InvitationBrandingEnabled,
-            survey.Settings.OneSessionOnly);
+            survey.Settings.OneSessionOnly,
+            survey.Settings.CredentialMode ?? CredentialModes.Shared);
 
         // ResolvedLocale names the language the caller is actually READING, not the one
         // they asked for. A Spanish-only survey fetched with ?lang=en comes back in

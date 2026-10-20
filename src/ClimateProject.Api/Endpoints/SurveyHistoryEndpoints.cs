@@ -252,7 +252,8 @@ public static class SurveyHistoryEndpoints
             content.Settings.InvitationIncludeCredentials,
             content.Settings.InvitationSendImmediately,
             content.Settings.InvitationBrandingEnabled,
-            content.Settings.OneSessionOnly);
+            content.Settings.OneSessionOnly,
+            content.Settings.CredentialMode ?? CredentialModes.Shared);
 
         authors.TryGetValue(version.CreatedBy, out var author);
         var isCurrent = version.VersionNumber == survey.Version;

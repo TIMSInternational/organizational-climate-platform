@@ -91,7 +91,13 @@ public sealed record SurveyVersionSettingsSnapshot(
     bool InvitationIncludeCredentials,
     bool InvitationSendImmediately,
     bool InvitationBrandingEnabled,
-    bool OneSessionOnly);
+    bool OneSessionOnly,
+    /// <summary>
+    /// Added 2026-10-19, so every snapshot taken before that date deserialises it as null.
+    /// Null here means "this version predates the setting", which reads as `shared` -- the
+    /// behaviour those surveys actually had.
+    /// </summary>
+    string? CredentialMode = null);
 
 /// <summary>
 /// A whole survey's content at one instant: the two column pairs SurveyVersion carries
@@ -224,7 +230,8 @@ public static class SurveyVersioning
             survey.Settings.InvitationIncludeCredentials,
             survey.Settings.InvitationSendImmediately,
             survey.Settings.InvitationBrandingEnabled,
-            survey.Settings.OneSessionOnly);
+            survey.Settings.OneSessionOnly,
+            survey.Settings.CredentialMode);
 
         return new SurveyVersionContent(
             survey.TitleEn, survey.TitleEs, survey.DescriptionEn, survey.DescriptionEs,

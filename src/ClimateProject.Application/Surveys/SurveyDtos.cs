@@ -57,7 +57,12 @@ public sealed record SurveySettingsDto(
     bool InvitationIncludeCredentials,
     bool InvitationSendImmediately,
     bool InvitationBrandingEnabled,
-    bool OneSessionOnly);
+    bool OneSessionOnly,
+    /// <summary>
+    /// The mode this survey actually runs in -- never null. A survey created before the
+    /// setting existed stores null and reads back as <c>shared</c>, which is what it is.
+    /// </summary>
+    string CredentialMode);
 
 public sealed record SurveyListItem(
     Guid Id,
@@ -203,7 +208,9 @@ public sealed record SurveySettingsInput(
     bool? InvitationSendImmediately = null,
     bool? InvitationBrandingEnabled = null,
     bool? CollectParticipantIdentity = null,
-    bool? OneSessionOnly = null);
+    bool? OneSessionOnly = null,
+    /// <summary>`shared` | `per_survey`, or null to leave it alone / inherit the company.</summary>
+    string? CredentialMode = null);
 
 public sealed record CreateSurveyRequest(
     LocalizedInput? Title,
