@@ -27,7 +27,16 @@ public interface ICredentialsEmailSender
     /// unbranded message by leaving an argument off. Pass
     /// <see cref="ClimateProject.Application.Email.EmailBrand.None"/> to mean it deliberately.
     /// </param>
+    /// <param name="surveyName">
+    /// Which survey these details open, when they open exactly one; null in `shared` mode,
+    /// where the account opens every survey its holder is targeted by. Required, with no
+    /// default, for the same reason <paramref name="purpose"/> and <paramref name="brand"/>
+    /// are: a caller minting a per-survey credential must not be able to send an
+    /// indistinguishable message by leaving an argument off. Two "Tu acceso a OCC" in one
+    /// inbox carrying two different passwords is how somebody signs in to the wrong survey
+    /// with the right password and is told their details are invalid.
+    /// </param>
     Task<EmailSendOutcome> SendAsync(
         string toEmail, string? recipientName, string username, string password, string? companyLanguage,
-        EmailBrand? brand, CredentialsEmailPurpose purpose, CancellationToken cancellationToken);
+        EmailBrand? brand, CredentialsEmailPurpose purpose, string? surveyName, CancellationToken cancellationToken);
 }

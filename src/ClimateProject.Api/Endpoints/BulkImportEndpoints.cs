@@ -474,13 +474,16 @@ public static class BulkImportEndpoints
             // here is gone the moment this method returns.
             foreach (var (resultIndex, toEmail, name, username, password) in issued)
             {
+                // surveyName null: an imported ACCOUNT opens every survey its holder is
+                // targeted by, so naming one would be false. Per-survey credentials are
+                // minted where the survey is known -- see CreateInvitationsAsync.
                 var outcome = await credentials!.Sender.SendAsync(
                     toEmail, name, username, password, company?.Settings.Language,
                     // The company row is already loaded here, so its branding costs no query.
                     company is null
                         ? EmailBrand.None
                         : new EmailBrand(company.Branding.LogoUrl, company.Name, company.Branding.PrimaryColor),
-                    CredentialsEmailPurpose.Invitation, cancellationToken);
+                    CredentialsEmailPurpose.Invitation, surveyName: null, cancellationToken);
                 if (!outcome.Delivered)
                 {
                     var row = results[resultIndex];

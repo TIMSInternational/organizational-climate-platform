@@ -12,7 +12,7 @@ public sealed class LoggingCredentialsEmailSender(ILogger<LoggingCredentialsEmai
 {
     public Task<EmailSendOutcome> SendAsync(
         string toEmail, string? recipientName, string username, string password, string? companyLanguage,
-        EmailBrand? brand, CredentialsEmailPurpose purpose, CancellationToken cancellationToken)
+        EmailBrand? brand, CredentialsEmailPurpose purpose, string? surveyName, CancellationToken cancellationToken)
     {
         logger.LogWarning("Sign-in details for a mass-invite account were NOT sent: no email provider is configured.");
         return Task.FromResult(EmailSendOutcome.PermanentFailure(LoggingInvitationEmailSender.NotConfiguredReason));

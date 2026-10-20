@@ -69,9 +69,21 @@ public static class CredentialsEmailComposer
     /// endpoint that has a company in hand cannot send its people an unbranded message by
     /// forgetting a parameter.
     /// </param>
+    /// <param name="surveyName">
+    /// Which survey these details open, when they open exactly one -- null in `shared` mode,
+    /// where the account opens every survey its holder is targeted by and naming one would
+    /// be a lie.
+    ///
+    /// <para>ESPH asked for it on 2026-10-19: a person in Clima and Teletrabajo receives two
+    /// of these, and the only thing distinguishing them in an inbox is the subject. "Tu
+    /// acceso a OCC" twice over is two identical-looking messages carrying two different
+    /// passwords, which is how somebody signs in to the wrong survey with the right
+    /// password and is told their details are invalid.</para>
+    /// </param>
     public static EmailMessage Compose(
         string toEmail, string? recipientName, string username, string password, string loginUrl,
-        string? companyLanguage, CredentialsEmailPurpose purpose, EmailBrand? brand = null)
+        string? companyLanguage, CredentialsEmailPurpose purpose, EmailBrand? brand = null,
+        string? surveyName = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(toEmail);
         ArgumentException.ThrowIfNullOrWhiteSpace(username);
@@ -113,9 +125,39 @@ public static class CredentialsEmailComposer
             toEmail,
             // Null, so the mail is addressed to the bare address. See `recipientName`.
             ToName: null,
-            EmailMessage.ToHeaderValue(second is null ? first.Subject : $"{first.Subject} / {second.Subject}"),
+            EmailMessage.ToHeaderValue(second is null
+                ? Subject(first, surveyName, brand)
+                : $"{Subject(first, surveyName, brand)} / {Subject(second, surveyName, brand)}"),
             text.ToString(),
             EmailBranding.Document(single ?? ContentLanguages.FallbackLocale, html.ToString(), brand));
+    }
+
+    /// <summary>
+    /// What the inbox shows. The product name alone when these details open everything, and
+    /// the SURVEY and the COMPANY when they open one survey.
+    /// </summary>
+    /// <remarks>
+    /// Ruled 2026-10-19 from the call: "El correo es de encuesta de clima, de la empresa
+    /// Servicio Publico de Heredia" -- the survey and the employer, in that order, because
+    /// the respondent is deciding which of two near-identical messages to open and the
+    /// survey is what differs. The company is appended rather than led with because every
+    /// message this person receives carries the same employer, so it discriminates nothing.
+    ///
+    /// The company's own name, never the product's: `brand.CompanyName` is what the tenant
+    /// is called, and `EmailBranding.ProductName` is what WE are called.
+    /// </remarks>
+    private static string Subject(CredentialsCopy copy, string? surveyName, EmailBrand? brand)
+    {
+        if (string.IsNullOrWhiteSpace(surveyName))
+        {
+            return copy.Subject;
+        }
+
+        var prefix = copy.SubjectPrefix;
+        var company = brand?.CompanyName;
+        return string.IsNullOrWhiteSpace(company)
+            ? $"{prefix} {surveyName.Trim()}"
+            : $"{prefix} {surveyName.Trim()} \u2014 {company.Trim()}";
     }
 
     /// <summary>
@@ -179,6 +221,7 @@ public static class CredentialsEmailComposer
 
     private static readonly CredentialsCopy InvitationEnglish = new(
         Subject: $"Your access to {EmailBranding.ProductName}",
+        SubjectPrefix: "Your access to",
         Body: "Your organisation has invited you to answer a survey. Sign in with the username and password below; your organisational details are already on your account. Thank you for taking part.",
         UsernameLabel: "Username",
         PasswordLabel: "Password",
@@ -188,6 +231,7 @@ public static class CredentialsEmailComposer
 
     private static readonly CredentialsCopy InvitationSpanish = new(
         Subject: $"Tu acceso a {EmailBranding.ProductName}",
+        SubjectPrefix: "Tu acceso a",
         Body: "Tu organización te invita a responder una encuesta. Inicia sesión con el usuario y la contraseña de abajo; tus datos organizacionales ya están en tu cuenta. Gracias por participar.",
         UsernameLabel: "Usuario",
         PasswordLabel: "Contraseña",
@@ -203,6 +247,7 @@ public static class CredentialsEmailComposer
     /// </summary>
     private static readonly CredentialsCopy ReminderEnglish = new(
         Subject: $"Reminder: answer your survey on {EmailBranding.ProductName}",
+        SubjectPrefix: "Reminder: answer",
         Body: "Please sign in and answer the survey. Your username and a new password are below; the previous password stops working, so sign in with these details. If you had already started, you can carry on where you left off.",
         UsernameLabel: "Username",
         PasswordLabel: "Password",
@@ -212,6 +257,7 @@ public static class CredentialsEmailComposer
 
     private static readonly CredentialsCopy ReminderSpanish = new(
         Subject: $"Recordatorio: responde la encuesta en {EmailBranding.ProductName}",
+        SubjectPrefix: "Recordatorio: responde",
         Body: "Te pedimos que por favor ingreses y respondas la encuesta. Abajo están de nuevo tu usuario y una contraseña nueva: la anterior deja de funcionar, así que entra con estos datos. Si ya la habías empezado, puedes continuar donde la dejaste.",
         UsernameLabel: "Usuario",
         PasswordLabel: "Contraseña",
@@ -233,5 +279,12 @@ public static class CredentialsEmailComposer
 
     private sealed record CredentialsCopy(
         string Subject, string Body, string UsernameLabel, string PasswordLabel,
-        string Cta, string Keep, string Ignore);
+        string Cta, string Keep, string Ignore,
+        /// <summary>
+        /// The subject up to, but not including, the thing these details open. Used only
+        /// when a survey name is supplied; `Subject` above is the whole line otherwise.
+        /// Separate rather than derived, because trimming the product name out of `Subject`
+        /// would break the moment either string is reworded.
+        /// </summary>
+        string SubjectPrefix = "");
 }
