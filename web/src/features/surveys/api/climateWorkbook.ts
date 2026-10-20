@@ -75,7 +75,13 @@ export async function applyClimateWorkbook(baseUrl: string, plan: ClimateWorkboo
     questions: content.questions, targetAudienceCount: content.people.length,
     departmentIds: [...new Set(content.people.map(p => departmentIds.get(key(p.department ?? ''))).filter((v): v is string => Boolean(v)))],
     settings: { anonymous: content.company.anonymous, allowPartialResponses: true, showProgress: true, autoSave: true,
-      notificationSendInvitations: true, notificationSendReminders: false, invitationSendImmediately: true,
+      // No invitation email: the credentials mail the import sends each person already
+      // carries the sign-in button and "Tu organizacion te invita a responder una encuesta",
+      // and the invitation mail's own button answers the survey WITHOUT signing in. Ruled
+      // 2026-10-19; the reasoning is on `survey.Settings.NotificationSendInvitations = false`
+      // in SurveyEndpoints' create path. Sent explicitly rather than omitted because this
+      // import is the one path that used to turn it on.
+      notificationSendInvitations: false, notificationSendReminders: false, invitationSendImmediately: true,
       invitationCustomSubject: content.invitationSubject, invitationCustomMessage: content.invitationMessage },
   })).id
   await updateSurveyDistribution(baseUrl, surveyId, { accessType: 'tokenized', accessRules: { requireLogin: true, allowAnonymous: false, singleResponse: true } })

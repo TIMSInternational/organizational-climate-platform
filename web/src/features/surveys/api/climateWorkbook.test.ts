@@ -44,6 +44,18 @@ describe('complete climate workbook',()=>{
     }))
     expect(updateCompanySettings).toHaveBeenCalledWith('', 'company',expect.objectContaining({timezone:'America/Chicago'}))
   })
+  // The import mints invitation rows -- the audience artefact, and what the resend route
+  // acts on -- but the survey it creates must not MAIL them. Ruled 2026-10-19: the
+  // credentials mail this same import sends already carries the sign-in button, and the
+  // invitation mail's button opens the survey without signing in. This file is the only
+  // place the in-product import's settings are asserted, and it is the one path that used
+  // to turn the flag on explicitly, so the API's new default would not have covered it.
+  it('creates the survey with the invitation email off',async()=>{
+    await applyClimateWorkbook('',plan(1),vi.fn())
+    expect(createSurvey).toHaveBeenCalledWith('',expect.objectContaining({
+      settings:expect.objectContaining({notificationSendInvitations:false,notificationSendReminders:false}),
+    }))
+  })
   it('imports 800 accounts in bounded batches, validates every batch first and invites exactly those people',async()=>{
     const result=await applyClimateWorkbook('',plan(),vi.fn())
     expect(result).toMatchObject({total:800,created:800,reused:0,credentialsNotSent:[]})
