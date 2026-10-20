@@ -1498,6 +1498,16 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
                 StartDate = DateTimeOffset.UtcNow.AddDays(7),
                 EndDate = DateTimeOffset.UtcNow.AddDays(28),
             });
+        // Asks for the invitation mail, because since 2026-10-19 a survey is created with
+        // `NotificationSendInvitations` false. This test is about WHEN the mail a tenant
+        // asked for is scheduled -- not about whether one is sent by default, which
+        // `A_survey_is_created_with_the_invitation_email_off` is where it is pinned. It
+        // creates its survey directly rather than through `CreateActiveSurveyAsync`,
+        // because it needs a start date a week out, so it has to ask for itself.
+        (await client.PutAsJsonAsync(
+            $"/surveys/{created.Id}",
+            new UpdateSurveyRequest(Settings: new SurveySettingsInput(
+                NotificationSendInvitations: true)))).EnsureSuccessStatusCode();
         (await SurveyTestHarness.SetStatusAsync(client, created.Id, SurveyStatuses.Active)).EnsureSuccessStatusCode();
 
         var employee = await SeedEmployeeAsync(_companyAId);
@@ -1654,6 +1664,9 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
         (await client.PutAsJsonAsync(
             $"/surveys/{created.Id}",
             new UpdateSurveyRequest(Settings: new SurveySettingsInput(
+                // Same reason as the test above: the invitation mail is off on a new survey
+                // since 2026-10-19, and composing one is the whole subject here.
+                NotificationSendInvitations: true,
                 InvitationCustomSubject: SurveyTestHarness.Both("Please take part", "Por favor participa"))))).EnsureSuccessStatusCode();
         (await SurveyTestHarness.SetStatusAsync(client, created.Id, SurveyStatuses.Active)).EnsureSuccessStatusCode();
 
