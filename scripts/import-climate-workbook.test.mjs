@@ -10,7 +10,7 @@ import assert from 'node:assert/strict'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import {
-  readWorkbook, parseClimate, parseSheet, parseSharedStrings, skipDemographics, surveyWindow, roleForTitle, slug, toImportRows, toSurveyRequest, toFieldRequest, toBandsRequest, toSettingsRequest, validTimeZone, validScale, decodeXml, parseStyles, applyCompanyName, existingOptionInputs, mergeFieldOptions, chunkRows, surveyDepartmentIds, IMPORT_CHUNK_ROWS, validLanguage, credentialDelivery,
+  readWorkbook, parseClimate, parseSheet, parseSharedStrings, skipDemographics, surveyWindow, roleForTitle, slug, toImportRows, toSurveyRequest, toFieldRequest, toBandsRequest, toSettingsRequest, validTimeZone, validScale, decodeXml, parseStyles, applyCompanyName, existingOptionInputs, mergeFieldOptions, chunkRows, surveyDepartmentIds, IMPORT_CHUNK_ROWS, validLanguage, credentialDelivery, accessDecision,
 } from './import-climate-workbook.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -580,4 +580,57 @@ test('nothing is claimed when no credential was being sent, or nobody was create
 
 test('a row with no issues array at all does not throw', () => {
   assert.equal(credentialDelivery([{ rowNumber: 6, email: 'a@b.test', status: 'created' }], true).verdict, 'all_accepted')
+})
+
+// ---------------------------------------------------------------------------------------
+// Who gets mailed, decided before anything is sent.
+// ---------------------------------------------------------------------------------------
+
+test('per_survey mails NOTHING from the import, and says so in the line that is read', () => {
+  const d = accessDecision({ credentialMode: 'per_survey', withCredentials: false })
+  assert.deepEqual(d.problems, [])
+  assert.equal(d.companyMode, 'per_survey')
+  assert.equal(d.delivery, 'none')
+  // The `acceso:` line is the one line of the review that caught this on 2026-10-20, so it
+  // must not be able to say "invitación" for a mode that sends none.
+  assert.match(d.line, /NINGÚN correo/)
+  assert.doesNotMatch(d.line, /INVITACIÓN/)
+})
+
+test('the two shared deliveries are unchanged, and neither is silent', () => {
+  const credentials = accessDecision({ credentialMode: 'shared', withCredentials: true })
+  assert.equal(credentials.delivery, 'credentials')
+  assert.match(credentials.line, /USUARIO Y CONTRASEÑA/)
+
+  const invitation = accessDecision({ credentialMode: 'shared', withCredentials: false })
+  assert.equal(invitation.delivery, 'invitation')
+  assert.match(invitation.line, /INVITACIÓN de cuenta/)
+
+  // Dropping --with-credentials is NOT "no email": it is the other account email. That
+  // belief is what the per_survey import was about to be run on.
+  assert.notEqual(invitation.delivery, 'none')
+})
+
+test('an absent --credential-mode declares shared, so a per_survey company refuses the run', () => {
+  const d = accessDecision({ credentialMode: undefined, withCredentials: false })
+  assert.deepEqual(d.problems, [])
+  // The mode the company must report back. A per_survey company reports something else and
+  // the import throws before anybody is created.
+  assert.equal(d.companyMode, 'shared')
+  assert.equal(d.delivery, 'invitation')
+})
+
+test('per_survey with --with-credentials is refused here, not by the API', () => {
+  const d = accessDecision({ credentialMode: 'per_survey', withCredentials: true })
+  assert.equal(d.problems.length, 1)
+  assert.match(d.problems[0], /per_survey no admite --with-credentials/)
+  // Wrong: the same flag is fine on a shared company, which is what it was written for.
+  assert.deepEqual(accessDecision({ credentialMode: 'shared', withCredentials: true }).problems, [])
+})
+
+test('a mode this product does not have is refused, never coerced', () => {
+  // `per-survey` for `per_survey` is the typo #607 refuses on the survey route for the same
+  // reason: coerced to shared, the first anyone hears of it is one email where two were promised.
+  assert.match(accessDecision({ credentialMode: 'per-survey' }).problems[0], /debe ser shared o per_survey/)
+  assert.match(accessDecision({ credentialMode: '' }).problems[0], /debe ser shared o per_survey/)
 })

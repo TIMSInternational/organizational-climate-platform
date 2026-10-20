@@ -18,10 +18,46 @@ public sealed record BulkImportRowResult(
 /// </summary>
 public sealed record BulkImportIssue(string Code, string? Value = null);
 
+/// <param name="Delivery">
+/// What this import did about mail, as one of <see cref="BulkImportDelivery"/>'s three values --
+/// and in a preview, what the apply would do, because a preview that described a different
+/// delivery from the one it is approving would be worth nothing.
+///
+/// <para>Here because SILENCE IS NOT EVIDENCE. The three deliveries are decided by the
+/// company's credential mode and the <c>withCredentials</c> flag together, so no caller can
+/// work out from its own request alone whether anybody was written to -- and on 2026-10-20 one
+/// tried: the climate importer dropped <c>--with-credentials</c> believing that meant "no
+/// account email", which is the OTHER account email. A client that renders "each person will
+/// receive a link" reads it from here, and the importer refuses to apply a preview whose
+/// delivery is not the one it promised on screen.</para>
+/// </param>
 public sealed record BulkImportResponse(
     IReadOnlyList<BulkImportRowResult> Rows,
     int SuccessCount,
-    int ErrorCount);
+    int ErrorCount,
+    string Delivery);
+
+/// <summary>
+/// The three things an import can do about mail. Exactly one of them is possible for any one
+/// company, because <c>per_survey</c> cannot produce either account message: the credential it
+/// hands out is minted per survey by <c>POST /surveys/{id}/invitations</c>, so an account
+/// username and password would be a key the mode exists to deny, and an account invitation
+/// would let its holder choose a password that opens every survey they are targeted by.
+/// </summary>
+public static class BulkImportDelivery
+{
+    /// <summary>An account INVITATION per person: a link to choose their own password.</summary>
+    public const string Invitation = "invitation";
+
+    /// <summary>An ACCOUNT username and password per person, mailed (mass invite, ruled 2026-10-13).</summary>
+    public const string Credentials = "credentials";
+
+    /// <summary>
+    /// Nothing. The rows in <c>users</c> are created and no message leaves -- what
+    /// <c>per_survey</c> needs, and the only delivery it has.
+    /// </summary>
+    public const string None = "none";
+}
 
 /// <param name="Demographics">
 /// Pre-assigned demographic answers keyed by field, validated and stored exactly as a single
@@ -62,6 +98,12 @@ public sealed record BulkImportRowInput(
 /// password emailed to them, instead of an invitation to choose their own. Their demographics go on
 /// the account, so the survey never asks for them. A created row's status is <c>created</c>; one
 /// whose email did not go out carries the issue <c>credentials_not_sent</c>.
+///
+/// <para>Refused with <c>credentials_not_available_per_survey</c> for a company in
+/// <c>per_survey</c> mode, which has no account credentials to mail. Such a company's import
+/// creates the accounts and sends nothing -- <see cref="BulkImportDelivery.None"/> -- whatever
+/// this flag says, and the response's <c>Delivery</c> is where a caller reads which of the
+/// three happened.</para>
 /// </param>
 public sealed record BulkImportRowsRequest(
     Guid CompanyId,

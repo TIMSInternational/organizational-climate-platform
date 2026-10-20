@@ -592,6 +592,44 @@ describe('IntakeWizard — how the people reach the survey', () => {
   })
 
   /**
+   * The done step reports what the SERVER did, not what the radio asked for.
+   *
+   * A company in `per_survey` credential mode has no account credentials and no account
+   * invitation: its import creates the accounts and mails nobody, and the codes go out one per
+   * survey when each survey is distributed. The radio cannot know that -- there is no GET for a
+   * company's credential mode -- so the response says it (`delivery`), and the old copy, "an
+   * invitation was created for each person", would be a promise of mail that never left.
+   */
+  it('says nobody was mailed when the server reports it issues codes per survey', async () => {
+    const onImported = vi.fn()
+    const user = await uploadAndUnderstand(aiUnderstanding(), 'es', onImported)
+    await continueToReview(user)
+
+    submitIntakeRows.mockImplementation(async (...args: unknown[]) => ({
+      ...allValid(args[2] as IntakeRow[]),
+      delivery: 'none' as const,
+    }))
+    await user.click(screen.getByRole('button', { name: 'Validar' }))
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: APPROVE_INVITATION }).hasAttribute('disabled')).toBe(false),
+    )
+
+    submitIntakeRows.mockImplementation(async (...args: unknown[]) => {
+      const sent = args[2] as IntakeRow[]
+      return {
+        ...allValid(sent),
+        rows: sent.map((row) => ({ ...row, status: 'created', errors: [], issues: [] })),
+        delivery: 'none' as const,
+      }
+    })
+    await user.click(screen.getByRole('button', { name: APPROVE_INVITATION }))
+    await waitFor(() => expect(onImported).toHaveBeenCalled())
+
+    expect(screen.getByText(/no se envió ningún correo/)).toBeTruthy()
+    expect(screen.queryByText(/Se creó una invitación para cada persona/)).toBeNull()
+  })
+
+  /**
    * The same property editing a cell has. A verdict is about the rows AND the mode it was asked
    * for; approving a verdict taken in the other mode would create accounts the admin was shown
    * invitations for.

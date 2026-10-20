@@ -528,6 +528,55 @@ export function surveyDepartmentIds(climate, departments) {
  *   all_accepted       say so, so a silent run is never mistaken for a clean one
  *   nothing_to_report  no credentials were being sent, or nobody was created
  */
+/**
+ * What this import does about ACCOUNT email, decided before anything is sent and printed in
+ * the review as the `acceso:` line.
+ *
+ * ## Why a declaration and not a flag that acts
+ *
+ * There are three deliveries and the company's credential mode allows exactly one of each:
+ *
+ *   shared     + --with-credentials  an ACCOUNT username and password, mailed
+ *   shared     without it            an ACCOUNT INVITATION -- a link to choose a password
+ *   per_survey (either)              NOTHING. The key is minted per survey by
+ *                                    `POST /surveys/{id}/invitations` and mailed from there.
+ *
+ * On 2026-10-20 a per_survey import was about to be run with `--with-credentials` dropped, in
+ * the belief that the flag was the account email. It is not: dropping it switches to the OTHER
+ * account email. Either one is a THIRD message for somebody in two surveys, where the
+ * 2026-10-19 ruling allows two -- one per survey, each with its own code.
+ *
+ * So `--credential-mode` is a DECLARATION about a company this script did not configure, and
+ * it is never sent: the import asserts that the company reports the same mode and refuses
+ * otherwise. A declaration that can make itself true proves nothing. Omitting it declares
+ * `shared`, which is what every client before ESPH is -- so a per_survey company stops an
+ * import whose own review line would have described the wrong thing.
+ *
+ * `delivery` is what the endpoint must report back for the same run (`BulkImportDelivery`),
+ * asserted against the PREVIEW -- which writes nothing -- before a single person is created.
+ */
+export function accessDecision({ credentialMode, withCredentials }) {
+  const problems = []
+  if (credentialMode !== undefined && credentialMode !== 'shared' && credentialMode !== 'per_survey') {
+    problems.push(`--credential-mode "${credentialMode}" debe ser shared o per_survey.`)
+  }
+  if (credentialMode === 'per_survey' && withCredentials) {
+    problems.push('--credential-mode per_survey no admite --with-credentials: en ese modo la plataforma no envía credenciales de CUENTA; las envía POR ENCUESTA al invitar. El API rechaza esa combinación (credentials_not_available_per_survey).')
+  }
+  const companyMode = credentialMode ?? 'shared'
+  const perSurvey = companyMode === 'per_survey'
+  return {
+    problems,
+    companyMode,
+    delivery: perSurvey ? 'none' : withCredentials ? 'credentials' : 'invitation',
+    line: perSurvey
+      ? '  acceso: NINGÚN correo en este paso — las credenciales se envían POR ENCUESTA (per_survey) al invitar, una por encuesta'
+      : withCredentials
+        ? '  acceso: USUARIO Y CONTRASEÑA generados por la plataforma, enviados en el correo de credenciales'
+        : '  acceso: INVITACIÓN de cuenta — cada persona abre el enlace y elige su propia contraseña',
+  }
+}
+
 export function credentialDelivery(rows, withCredentials) {
   const all = rows ?? []
   const created = all.filter((row) => row.status === 'created').length
@@ -782,6 +831,9 @@ async function main() {
       // INVITATION instead -- "use the link below to set up your account" -- and chooses
       // their own password, which is a different product decision wearing the same name.
       'with-credentials': { type: 'boolean', default: false },
+      // NO default on purpose: see accessDecision. Absent declares `shared`, and a company
+      // that is actually per_survey then refuses this run instead of being described wrongly.
+      'credential-mode': { type: 'string' },
       'skip-demographic': { type: 'string', multiple: true, default: [] },
       anonymous: { type: 'string', default: 'true' },
       // Defaults to the behaviour every import before it had: OFF. Turning it on is a
@@ -805,6 +857,7 @@ async function main() {
   }
   const randomizeQuestions = values['randomize-questions'] === 'true'
   const withCredentials = values['with-credentials'] === true
+  const access = accessDecision({ credentialMode: values['credential-mode'], withCredentials })
 
   const parsed = parseClimate(readWorkbook(values.file))
   const skipping = skipDemographics(parsed.climate, values['skip-demographic'])
@@ -815,7 +868,7 @@ async function main() {
   // the language only when it is non-blank (`CompanyEndpoints.cs:259`), so a typo would leave
   // the company on its "en" default and the only sign would be 642 English-first emails.
   const languageProblems = validLanguage(values.language) ? [] : [`--language "${values.language}" debe ser es o en.`]
-  const problems = [...parsed.problems, ...skipping.problems, ...window.problems, ...zoneProblems, ...scaleProblems, ...languageProblems]
+  const problems = [...parsed.problems, ...skipping.problems, ...window.problems, ...zoneProblems, ...scaleProblems, ...languageProblems, ...access.problems]
   const climate = applyCompanyName(skipping.climate, values['company-name'])
   log(`import-climate-workbook: ${values.file}`)
   for (const line of summarise(climate)) log(`  ${line}`)
@@ -824,9 +877,8 @@ async function main() {
   log(`  escala de resultados: ${values.scale === 'percent' ? 'percent — 0 a 100 (promedio × 20)' : values.scale === 'mean' ? 'mean — promedio de 1,00 a 5,00' : values.scale}`)
   log(`  idioma de la empresa: ${values.language}${values.language === 'es' ? ' — el correo de credenciales abre en español' : ' — ⚠️ el correo de credenciales abre en inglés'}`)
   if (!window.problems.length) log(`  ventana de la encuesta: ${window.startDate} → ${window.endDate}${values.start ? '' : ' (por defecto: sin --start/--end)'}`)
-  log(withCredentials
-    ? '  acceso: USUARIO Y CONTRASEÑA generados por la plataforma, enviados en el correo de credenciales'
-    : '  acceso: INVITACIÓN de cuenta — cada persona abre el enlace y elige su propia contraseña')
+  log(access.line)
+  log(`  modo de credenciales declarado: ${access.companyMode}${values['credential-mode'] ? '' : ' (por defecto: sin --credential-mode)'} — la empresa debe reportar lo mismo o no se importa a nadie`)
   log(anonymous
     ? '  anonimato: ANÓNIMA — no se guarda quién respondió, así que nada impide que alguien la responda otra vez'
     : '  anonimato: IDENTIFICADA — se guarda quién respondió, así que el servidor permite UNA sola respuesta por persona (los resultados siguen siendo solo agregados)')
@@ -897,6 +949,16 @@ async function main() {
     const got = applied?.settings?.[field]
     if (got !== want) throw new Error(`company ${field}: asked for "${want}", the company now reports "${got}" — the accounts this import creates would inherit the wrong one`)
   }
+  // ASSERTED, never set. `credentialMode` is omitted from the request above, so this reads
+  // back what somebody decided for this company (`set-credential-mode.sh`) rather than what
+  // this run asked for -- which is the only way the two can be independent sources. An API
+  // that predates per-survey credentials reports nothing here and is refused too, because an
+  // import written for per_survey against that API would mail an account message.
+  const storedMode = applied?.settings?.credentialMode
+  if (storedMode !== access.companyMode) {
+    throw new Error(`credential mode: this import is written for "${access.companyMode}" and the company reports "${storedMode ?? '(ausente — ¿el API es anterior a las credenciales por encuesta?)'}" — NOBODY was imported. Pass --credential-mode ${storedMode ?? 'shared'}, or set the company's mode first with set-credential-mode.sh.`)
+  }
+  log(`credential mode: ${storedMode} (confirmed by the response)${storedMode === 'per_survey' ? ' — este import NO envía ningún correo; las credenciales salen por encuesta al invitar' : ''}`)
   log(`time zone set: ${values.timezone}`)
   log(`result scale set: ${values.scale}`)
   log(`company language set: ${values.language} (confirmed by the response) — every account this import creates inherits it`)
@@ -956,6 +1018,13 @@ async function main() {
   const preview = rows.length
     ? await call('POST', '/admin/users/bulk-import/rows', { companyId, preview: true, rows, newDepartments, withCredentials }, token)
     : { rows: [] }
+  // The server's own answer to "who gets mailed", read from the PREVIEW -- which hashes
+  // nothing, mails nothing and creates nothing -- and refused here rather than discovered in
+  // an inbox. The `acceso:` line above is this script's belief; this is the endpoint's.
+  if (rows.length && preview.delivery !== access.delivery) {
+    throw new Error(`delivery: the review promised "${access.delivery}" and the API's preview reports "${preview.delivery ?? '(ausente)'}" — NOBODY was imported. These must agree before anyone is written to.`)
+  }
+  if (rows.length) log(`delivery confirmada por el API (preview): ${preview.delivery}${preview.delivery === 'none' ? ' — ningún correo sale de este import' : ''}`)
   // BulkImportResponse { rows: [{ rowNumber, email, status: valid|error|invited, errors[], issues[{code}] }] }.
   // The natural key of a person is the email: one already invited or already registered is
   // ALREADY THERE (a re-run), not a failure — it is left out of the import, never re-sent.
@@ -1015,6 +1084,13 @@ async function main() {
     log('   it generates a FRESH password, because the one minted here is already gone.')
   } else if (delivery.verdict === 'all_accepted') {
     log(`credential emails: ${delivery.created} accepted by the provider for delivery (none failed at send time)`)
+  }
+  // Stated, because an import that says nothing about mail is indistinguishable from one
+  // whose mail failed. The NEXT step is where this roster is written to, once per survey.
+  if (access.delivery === 'none' && !climate.linkOnly) {
+    log('correos: NINGUNO. Las cuentas existen sin usuario ni contraseña; cada persona recibe')
+    log('  su clave al invitar la encuesta (POST /surveys/{id}/invitations), una por encuesta,')
+    log('  como máximo 100 destinatarios por petición.')
   }
 
   // 5. The survey, as a draft, matched by title.

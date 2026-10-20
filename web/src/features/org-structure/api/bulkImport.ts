@@ -23,6 +23,20 @@ export interface BulkImportResponse {
   rows: BulkImportRowResult[]
   successCount: number
   errorCount: number
+  /**
+   * What the import did about mail: `invitation` (a link to choose a password),
+   * `credentials` (an account username and password) or `none` — and in a preview, what the
+   * apply would do.
+   *
+   * The server decides it from the company's credential mode and the request together, so
+   * the chosen access mode is NOT enough to say what happened: a company in `per_survey`
+   * mode has no account credentials at all, and its import creates the accounts and mails
+   * nobody. Read this, not the radio, before telling somebody an email went out.
+   *
+   * Optional only so that a client against an older API renders its old copy rather than
+   * nothing.
+   */
+  delivery?: 'invitation' | 'credentials' | 'none'
 }
 
 export async function bulkImportUsers(baseUrl: string, companyId: string, file: File, preview: boolean): Promise<BulkImportResponse> {

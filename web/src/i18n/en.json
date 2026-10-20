@@ -4648,6 +4648,7 @@
       "fixBeforeApproving": "Fix the rows marked with an error, then validate again.",
       "doneBody": "An invitation was created for each person. On accepting it, each one sets their own name and password.",
       "doneBodyCredentials": "An account was created for each person, and their username and password were emailed to them along with the link to the survey. Nobody has to accept anything.",
+      "doneBodyPerSurvey": "An account was created for each person and no email was sent: in this company sign-in details are issued per survey. Each person receives a username and a password for each survey when that survey is distributed.",
       "doneCredentialsNotSentOne": "1 person did not get their sign-in details: their account was created, but the email did not go out. Find them in the people list and use \u201cResend sign-in details\u201d.",
       "doneCredentialsNotSentMany": "{count} people did not get their sign-in details: their accounts were created, but the email did not go out. Find them in the people list and use \u201cResend sign-in details\u201d.",
       "importingProgress": "Importing… {done} of {total} people. Keep this page open.",

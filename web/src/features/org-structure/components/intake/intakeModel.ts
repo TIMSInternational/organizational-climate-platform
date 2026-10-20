@@ -275,5 +275,8 @@ export function mergeImportResponses(parts: readonly BulkImportResponse[]): Bulk
     rows: parts.flatMap((part) => part.rows),
     successCount: parts.reduce((total, part) => total + part.successCount, 0),
     errorCount: parts.reduce((total, part) => total + part.errorCount, 0),
+    // One company and one request shape per import, so every batch answers this the same
+    // way; the first that landed is the answer for all of them.
+    delivery: parts.find((part) => part.delivery !== undefined)?.delivery,
   }
 }
