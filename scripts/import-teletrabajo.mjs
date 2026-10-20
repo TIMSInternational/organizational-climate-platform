@@ -337,6 +337,32 @@ export function toSurveyBody(payload, { companyId, startDate, endDate, userIds }
 
 const titleOf = (value) => (typeof value === 'string' ? value : value?.es ?? value?.en ?? '')
 
+/**
+ * What phase 1 may send, by the company's credential mode (2026-10-20).
+ *
+ * `shared` (the default, and what every run before per-survey credentials did): each new account
+ * gets a generated username and password by email, `withCredentials: true`.
+ *
+ * `per_survey`: the import mails NOTHING. The accounts exist without a username or password, and
+ * each person receives one code PER SURVEY when invited (`POST /surveys/{id}/invitations`). The
+ * API refuses `withCredentials` on such a company (400 `credentials_not_available_per_survey`), so
+ * the flag is off, and the preview must report `delivery: "none"` -- which is also the server's
+ * own measurement of the company's mode: on a `shared` company the same request reports
+ * `invitation`, an account email, and the run is refused before anybody is written.
+ *
+ * `per_survey` is people-only. Phase 2 forces `notificationSendInvitations` on, the invitation
+ * mail the 2026-10-19 ruling removed; in per_survey mode the survey is created by
+ * `create-teletrabajo.sh`, which leaves it off and asserts the frozen mode.
+ */
+export function peopleAccess({ credentialMode, phase }) {
+  const problems = []
+  const mode = credentialMode ?? 'shared'
+  if (mode !== 'shared' && mode !== 'per_survey') problems.push(`--credential-mode must be shared or per_survey (got "${credentialMode}")`)
+  if (mode === 'per_survey' && phase !== 'people') problems.push('--credential-mode per_survey requires --phase people: the survey is created by create-teletrabajo.sh, which keeps the invitation mail off')
+  const perSurvey = mode === 'per_survey'
+  return { problems, mode, withCredentials: !perSurvey, delivery: perSurvey ? 'none' : 'credentials' }
+}
+
 async function main() {
   const { values } = parseArgs({
     options: {
@@ -350,6 +376,7 @@ async function main() {
       expect: { type: 'string', default: '240' },
       'new-department': { type: 'string', multiple: true, default: [] },
       phase: { type: 'string', default: 'both' },
+      'credential-mode': { type: 'string' },
       api: { type: 'string', default: 'http://localhost:5000' },
       email: { type: 'string' },
       password: { type: 'string' },
@@ -364,6 +391,8 @@ async function main() {
   if (!values['company-id'] && !values.domain) throw new Error('--company-id or --domain is required')
   if (values['company-id'] && !GUID.test(values['company-id'])) throw new Error('--company-id is not a GUID')
   if (!['both', 'people', 'survey'].includes(values.phase)) throw new Error('--phase must be both, people or survey')
+  const access = peopleAccess({ credentialMode: values['credential-mode'], phase: values.phase })
+  if (access.problems.length) throw new Error(access.problems.join('; '))
   const expect = Number(values.expect)
   if (!Number.isInteger(expect) || expect < 1) throw new Error('--expect must be a positive whole number')
   for (const iso of [values.start, values.end]) {
@@ -396,7 +425,10 @@ async function main() {
   const leaders = people.filter((p) => roleForTitle(p.puesto) === 'leader')
   log(`roles    : ${people.length - leaders.length} employee, ${leaders.length} leader`)
   log(`window   : ${values.start} → ${values.end}`)
-  log(values.apply ? 'mode     : *** APPLY — this WRITES and SENDS EMAIL ***' : 'mode     : review only, nothing is written and nothing is sent')
+  log(values.apply ? `mode     : *** APPLY — this WRITES${access.withCredentials ? ' and SENDS EMAIL' : ''} ***` : 'mode     : review only, nothing is written and nothing is sent')
+  log(access.withCredentials
+    ? 'access   : USERNAME AND PASSWORD emailed to each new account (shared)'
+    : 'access   : NO email from this import — codes are sent PER SURVEY when invited (per_survey)')
 
   const API = values.api
   const call = async (method, path, body, token) => {
@@ -524,9 +556,19 @@ async function main() {
       ...fresh.map((person) => toImportRow(person, fields)),
       ...existing.map((person) => ({ rowNumber: person.row, name: person.name, email: person.email, role: roleForTitle(person.puesto), department: null, demographics: {} })),
     ]
-    const preview = await call('POST', '/admin/users/bulk-import/rows', { companyId, preview: true, rows: previewRows, newDepartments: missing, withCredentials: true }, token)
+    const preview = await call('POST', '/admin/users/bulk-import/rows', { companyId, preview: true, rows: previewRows, newDepartments: missing, withCredentials: access.withCredentials }, token)
     const byStatus = (preview.rows ?? []).reduce((acc, row) => ({ ...acc, [row.status]: (acc[row.status] ?? 0) + 1 }), {})
     log(`\npreview  : ${JSON.stringify(byStatus)}`)
+    // per_survey: the server's own word that nothing is mailed, read before anybody is written.
+    if (!access.withCredentials) {
+      if (preview.delivery !== access.delivery) {
+        log(`\ndelivery: this run is written for "${access.delivery}" and the API's preview reports "${preview.delivery ?? '(absent)'}" — refusing, NOBODY was imported.`)
+        log('  "invitation" or "credentials" means the company is not per_survey: an account email would leave.')
+        process.exitCode = 1
+        return
+      }
+      log('delivery : none (confirmed by the API preview) — this import sends no email')
+    }
 
     // The options are in place only on an apply run; see splitRefusals.
     const pendingValueEmails = new Set([...unknown.values()].flatMap((byValue) => [...byValue.values()].flat().map((person) => person.email)))
@@ -555,7 +597,7 @@ async function main() {
     }
 
     if (!values.apply) {
-      log(`\nDRY RUN — ${fresh.length} account(s) would be created (and ${fresh.length} credential email(s) sent), ${existing.length} left as they are.`)
+      log(`\nDRY RUN — ${fresh.length} account(s) would be created${access.withCredentials ? ` (and ${fresh.length} credential email(s) sent)` : ' (no email)'}, ${existing.length} left as they are.`)
     } else if (fresh.length === 0) {
       log('\nevery person already has an account — nothing to import.')
     } else {
@@ -567,7 +609,7 @@ async function main() {
       for (const [index, batch] of chunkRows(fresh.map((person) => toImportRow(person, fields)), IMPORT_CHUNK_ROWS).entries()) {
         let response
         try {
-          response = await call('POST', '/admin/users/bulk-import/rows', { companyId, preview: false, rows: batch, newDepartments: missing, withCredentials: true }, token)
+          response = await call('POST', '/admin/users/bulk-import/rows', { companyId, preview: false, rows: batch, newDepartments: missing, withCredentials: access.withCredentials }, token)
         } catch (error) {
           log(`\nrequest ${index + 1} FAILED after ${all.filter((r) => r.status === 'created').length} of ${fresh.length} were created: ${error.message}`)
           log('  Those accounts are COMMITTED. Re-run this command: the people who exist are')
