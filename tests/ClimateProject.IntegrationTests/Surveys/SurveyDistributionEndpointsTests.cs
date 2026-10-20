@@ -633,9 +633,15 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
 
         Assert.Equal(1, result.Created);
         Assert.Equal(0, result.NotificationsQueued);
-        // No note: nothing is WRONG with this batch. "No mail was queued" stopped being news
-        // when the invitation email was deleted -- it is true of every batch now.
-        Assert.Null(result.Note);
+        // The note no longer MENTIONS the mail. "No mail was queued" stopped being news when
+        // the invitation email was deleted -- it is true of every batch now -- so the field
+        // is reserved for what is actually wrong with this one.
+        //
+        // Not Assert.Null: `SeedEmployeeAsync` mints a reserved-domain address, so the
+        // undeliverable warning legitimately fires here. Asserting null made this test about
+        // the seed helper rather than about the setting. What it must prove is that no note
+        // claims a survey-level mail setting is the reason.
+        Assert.DoesNotContain("notificationSendInvitations", result.Note ?? string.Empty, StringComparison.Ordinal);
 
         Assert.False(await _harness.WithDbAsync(db => db.Notifications
             .AnyAsync(n => n.Type == NotificationTypes.SurveyInvitation && n.UserId == employee)));
