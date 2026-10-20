@@ -1108,6 +1108,17 @@ async function main() {
     const created = await call('POST', '/surveys', body, token)
     const id = created?.id ?? created?.survey?.id
     if (!id) throw new Error(`survey create: unexpected body ${JSON.stringify(created).slice(0, 200)}`)
+    // The mode is resolved at survey-CREATE time and FROZEN onto this row (#607), so this is
+    // the only measurement of it that will ever matter for this survey -- changing the company
+    // afterwards reaches only the next one, and nothing can re-shape a survey whose people are
+    // already holding passwords. Read back from the response rather than assumed from the
+    // company: a draft that comes back `shared` would mail ONE code for every survey its
+    // holder is in, which is this requirement inverted.
+    const surveyMode = (created?.settings ?? created?.survey?.settings)?.credentialMode
+    if (surveyMode !== access.companyMode) {
+      throw new Error(`survey ${id} froze credentialMode "${surveyMode ?? '(ausente)'}" where this import declared "${access.companyMode}". The survey is a DRAFT with no responses, so delete it, fix the company's mode and run again — the mode cannot be changed on the row.`)
+    }
+    log(`survey credentialMode (frozen on the row): ${surveyMode}`)
     log(`survey created as a DRAFT: ${surveyTitle} (${id}), ${body.questions.length} questions, targeted at ${departmentIds.length} department(s): ${audience.wanted.join(', ')} — review and launch it in the product`)
   }
 }
