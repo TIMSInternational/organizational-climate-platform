@@ -586,7 +586,11 @@ export default function SurveyRespondForm({
         // work by itself, and then never hear about it again: on a fifty-question
         // instrument, a polite region that says "saved" every fifteen seconds talks
         // over the questions it is meant to protect.
-        if (!announcedAutosave.current) {
+        //
+        // Never on a public entry: the sentence ends "Puede cerrar esta página y volver más
+        // tarde", and a QR / shared-link respondent who leaves starts again from scratch
+        // (ruled 2026-10-20 — the same reason the save row is not drawn for them).
+        if (!announcedAutosave.current && !publicEntry) {
           announcedAutosave.current = true
           announce(t('progressAutosaved'))
         }
@@ -599,7 +603,7 @@ export default function SurveyRespondForm({
         setSaveState((previous) => ({ status: 'error', savedAt: previous.savedAt, message }))
       }
     },
-    [announce, baseUrl, enqueue, recordServerAnswers, sessionId, t, tRoot],
+    [announce, baseUrl, enqueue, publicEntry, recordServerAnswers, sessionId, t, tRoot],
   )
 
   async function send(isComplete: boolean): Promise<void> {

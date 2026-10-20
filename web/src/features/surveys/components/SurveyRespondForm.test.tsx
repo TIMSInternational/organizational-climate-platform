@@ -2006,6 +2006,26 @@ describe('SurveyRespondForm — Eagle corrections', () => {
     expect(screen.getByRole('button', { name: copy.es('surveyRespond.saveAndFinishLater') })).toBeTruthy()
   })
 
+  // The screen-reader half of the same promise: the first autosave is announced as "Puede cerrar
+  // esta página y volver más tarde", which a QR respondent cannot do.
+  it('does not announce "volver más tarde" to a public respondent after the autosave', async () => {
+    respondWith(twoQuestions())
+    renderForm({ publicEntry: true })
+    await userEvent.click(await screen.findByRole('radio', { name: 'Muy de acuerdo' }))
+    await waitForPartialSave()
+
+    expect(document.body.textContent).not.toContain(copy.es('surveyRespond.progressAutosaved'))
+  })
+
+  it('still announces it to a signed-in respondent, who can come back', async () => {
+    respondWith(twoQuestions())
+    renderForm()
+    await userEvent.click(await screen.findByRole('radio', { name: 'Muy de acuerdo' }))
+    await waitForPartialSave()
+
+    await waitFor(() => expect(document.body.textContent).toContain(copy.es('surveyRespond.progressAutosaved')))
+  })
+
   it('does not tell a public respondent to use a save button they do not have when the autosave fails', async () => {
     const payload = view({ allowPartialResponses: true, questions: [question(), question({ id: 'q2', order: 1 })] })
     // Only the first POST fails. A retry still pending when the test ends must be answered by
