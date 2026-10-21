@@ -63,6 +63,7 @@ public static class EmailBranding
             <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e4e7eb;border-radius:12px;padding:32px;">
             {Masthead(brand)}{bodyHtml}
             </div>
+            <p style="max-width:560px;margin:16px auto 0;text-align:center;font-size:12px;line-height:1.5;color:#616e7c;">{Escape(Credit(language))}</p>
             </body>
             </html>
             """;
@@ -160,6 +161,21 @@ public static class EmailBranding
     /// </summary>
     public static string Footer(string html)
         => $"""<hr style="border:none;border-top:1px solid #e4e7eb;margin:28px 0 16px;"><div style="font-size:12px;line-height:1.5;color:#616e7c;">{html}<div style="margin-top:10px;color:#9aa5b1;">{Escape(ProductName)}</div></div>""";
+
+    /// <summary>
+    /// Who built the platform, under the card of every message: "Desarrollado por Nexadev" in
+    /// Spanish, "Powered by Nexadev" otherwise. Ruled 2026-10-21 by Federico, with the same line
+    /// on every screen of the web app (<c>PoweredByNexadev.tsx</c>).
+    /// </summary>
+    /// <remarks>
+    /// Text, not the mark: an image here needs an absolute URL, which is only known at send
+    /// time (<see cref="EmailBrand.ResolvedAgainst"/>), and Gmail and Outlook block images by
+    /// default -- the reason <see cref="Footer"/> already names the product in text. Under the
+    /// card rather than inside <see cref="Footer"/> so it is on every message, including any
+    /// that ends without one. <c>#616e7c</c> on the <c>#f4f5f7</c> ground is 4.8:1; the
+    /// footer's lighter <c>#9aa5b1</c> would be 2.3:1 there.
+    /// </remarks>
+    public static string Credit(string? language) => Localization.NexadevCredit.For(language);
 
     public static string Escape(string? value) => WebUtility.HtmlEncode(value ?? string.Empty);
 }

@@ -2979,6 +2979,7 @@
   },
   "shell": {
     "companyLogoAlt": "Logotipo de {company}",
+    "poweredByNexadev": "Desarrollado por Nexadev",
     "account": "Cuenta",
     "settings": "Configuración",
     "signOut": "Cerrar sesión",

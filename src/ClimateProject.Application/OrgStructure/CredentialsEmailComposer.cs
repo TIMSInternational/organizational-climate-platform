@@ -128,7 +128,8 @@ public static class CredentialsEmailComposer
             EmailMessage.ToHeaderValue(second is null
                 ? Subject(first, surveyName, brand)
                 : $"{Subject(first, surveyName, brand)} / {Subject(second, surveyName, brand)}"),
-            text.ToString(),
+            // The credit closes the text part too, in the language the HTML document is in.
+            text.Append("\n\n").Append(EmailBranding.Credit(single ?? ContentLanguages.FallbackLocale)).ToString(),
             EmailBranding.Document(single ?? ContentLanguages.FallbackLocale, html.ToString(), brand));
     }
 

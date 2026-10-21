@@ -88,6 +88,18 @@ public sealed class PdfDocument
     /// <summary>How many pages the document has so far. One before anything is written.</summary>
     public int PageCount => _pages.Count;
 
+    /// <summary>
+    /// One line at the foot of every page -- "Desarrollado por Nexadev" / "Powered by Nexadev",
+    /// ruled 2026-10-21 with the same credit on every screen and every email. Null draws nothing.
+    /// </summary>
+    /// <remarks>
+    /// Text only: this writer draws no images, by design (see the class summary). It is added
+    /// as each page is written out rather than into the page while laying it out, so it sits in
+    /// the bottom margin of every page however the content broke, and <see cref="ToBytes"/>
+    /// stays free of side effects.
+    /// </remarks>
+    public string? Credit { get; set; }
+
     /// <summary>The document's main title, set once at the top of the first page.</summary>
     public void Title(string? text)
     {
@@ -294,7 +306,7 @@ public sealed class PdfDocument
                 + "/Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> "
                 + $"/Contents {contentNumber.ToString(CultureInfo.InvariantCulture)} 0 R >>\nendobj\n");
 
-            var stream = Encoding.ASCII.GetBytes(_pages[i].ToString());
+            var stream = Encoding.ASCII.GetBytes(_pages[i].ToString() + CreditOperators());
             BeginObject(contentNumber);
             Write($"<< /Length {stream.Length.ToString(CultureInfo.InvariantCulture)} >>\nstream\n");
             buffer.Write(stream);
@@ -433,6 +445,25 @@ public sealed class PdfDocument
         }
 
         _content.Append(CultureInfo.InvariantCulture, $"BT /{PdfStandardFontMetrics.ResourceName(font)} {Num(size)} Tf 1 0 0 1 {Num(x)} {Num(y)} Tm {LiteralString(text)} Tj ET\n");
+    }
+
+    /// <summary>
+    /// The credit as page-content operators: 7.5pt, centred, mid-grey (0.45), halfway down the
+    /// bottom margin. Empty when there is none.
+    /// </summary>
+    private string CreditOperators()
+    {
+        if (string.IsNullOrWhiteSpace(Credit))
+        {
+            return string.Empty;
+        }
+
+        const double size = 7.5;
+        var x = (PageWidth - PdfStandardFontMetrics.MeasureText(Credit, PdfStandardFont.Regular, size)) / 2;
+        var y = Margin / 2;
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"q 0.45 g BT /{PdfStandardFontMetrics.ResourceName(PdfStandardFont.Regular)} {Num(size)} Tf 1 0 0 1 {Num(x)} {Num(y)} Tm {LiteralString(Credit)} Tj ET Q\n");
     }
 
     // ------------------------------------------------------------------

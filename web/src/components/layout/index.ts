@@ -17,6 +17,7 @@
 
 export { PageTopBar, type PageTopBarProps, type PageBreadcrumb } from './PageTopBar'
 export { CompanyLogo } from './CompanyLogo'
+export { PoweredByNexadev } from './PoweredByNexadev'
 export { MobileNav, type MobileNavProps } from './MobileNav'
 export {
   DashboardGrid,
