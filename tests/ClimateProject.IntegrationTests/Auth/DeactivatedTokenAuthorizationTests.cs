@@ -78,7 +78,7 @@ public class DeactivatedTokenAuthorizationTests : IAsyncLifetime
             SecurityStamp: _user.SecurityStamp),
             // A window wide open, so the only thing that can refuse these tokens is the
             // isActive claim this class is about.
-            new SessionWindow(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1)));
+            new SessionWindow(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1), DateTimeOffset.UtcNow));
     }
 
     private HttpClient ClientWith(string token)
