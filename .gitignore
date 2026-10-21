@@ -47,3 +47,9 @@ __pycache__/
 # CI run and on any local run that copies the CI command. Nothing tracked has ever lived
 # under this path (`git ls-files artifacts/` was empty when this was added).
 /artifacts/
+
+# Generated client deliverables -- workbooks, packets and inspection dumps written by the
+# scripts in ~/Desktop/TIMS-NEXA-Clima. 11.3 MB of them were committed by accident on
+# 2026-10-20 by a `git add -A` that swept an untracked directory into an unrelated commit.
+# They are build output, not source, and some carry recipient addresses.
+/outputs/
