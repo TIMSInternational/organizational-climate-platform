@@ -10,7 +10,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   clean, edadBand, antiguedadBand, parseRoster, toImportRow, splitByExisting,
-  unknownValues, classifyDepartments, toSurveyBody, ROSTER_COLUMNS, splitRefusals,
+  unknownValues, classifyDepartments, toSurveyBody, ROSTER_COLUMNS, splitRefusals, peopleAccess,
 } from './import-teletrabajo.mjs'
 
 /** A sheet from rows of [letter, value] pairs — row 1 is the header. */
@@ -299,4 +299,24 @@ test('only an unlisted VALUE is deferred — any other problem, or anyone else, 
   assert.deepEqual(splitRefusals([row(9, 'ealfaro@esph-sa.com', 'error', [])], pending, false).refused.map((r) => r.rowNumber), [9])
   // Matching is case-insensitive on the address, as every other email comparison here is.
   assert.deepEqual(splitRefusals([row(55, 'EAlfaro@ESPH-SA.com', 'error', ['invalid_demographic'])], pending, false).deferred.length, 1)
+})
+
+test('peopleAccess: shared (the default) mails account credentials, as every earlier run did', () => {
+  assert.deepEqual(peopleAccess({ credentialMode: undefined, phase: 'both' }), { problems: [], mode: 'shared', withCredentials: true, delivery: 'credentials' })
+})
+
+test('peopleAccess: per_survey mails nothing and expects the API to report delivery none', () => {
+  assert.deepEqual(peopleAccess({ credentialMode: 'per_survey', phase: 'people' }), { problems: [], mode: 'per_survey', withCredentials: false, delivery: 'none' })
+})
+
+test('peopleAccess: per_survey refuses any phase that would create the survey here', () => {
+  for (const phase of ['both', 'survey']) {
+    const { problems } = peopleAccess({ credentialMode: 'per_survey', phase })
+    assert.equal(problems.length, 1, phase)
+    assert.match(problems[0], /requires --phase people/)
+  }
+})
+
+test('peopleAccess: an unknown mode is refused, not read as shared', () => {
+  assert.match(peopleAccess({ credentialMode: 'per-survey', phase: 'people' }).problems[0], /shared or per_survey/)
 })
