@@ -638,4 +638,22 @@
     color: var(--admin-font-on-accent);
     background: rgb(255 255 255 / 0.22);
   }
+
+  /* `PoweredByNexadev` draws both marks and lets these pick one. The coloured mark's navy
+     half vanishes on the dark page and on the rail, which is navy in BOTH themes -- so
+     `.on-shell` swaps as well as the dark theme, which a theme hook alone could not do. */
+  .nexadev-mark--light {
+    display: inline;
+  }
+  .nexadev-mark--dark {
+    display: none;
+  }
+  :root[data-admin-theme='dark'] .nexadev-mark--light,
+  .on-shell .nexadev-mark--light {
+    display: none;
+  }
+  :root[data-admin-theme='dark'] .nexadev-mark--dark,
+  .on-shell .nexadev-mark--dark {
+    display: inline;
+  }
 }
