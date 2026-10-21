@@ -87,3 +87,19 @@ describe('where the badge is drawn', () => {
     )
   })
 })
+
+describe('one wording on screen, in email and in PDF', () => {
+  it('the catalogue sentences are the C# constants the API uses (NexadevCredit.cs)', async () => {
+    // The API composes the email and PDF credit; the web catalogues hold the screen's. Two
+    // languages, two codebases, so this reads the C# and compares, rather than trusting a comment.
+    const cs = readFileSync(
+      join(__dirname, '../../../../src/ClimateProject.Application/Localization/NexadevCredit.cs'),
+      'utf8',
+    )
+    const constant = (name: string) => cs.match(new RegExp(`const string ${name} = "([^"]+)"`))?.[1]
+    const en = (await import('../../i18n/en.json')).default as { shell: { poweredByNexadev: string } }
+    const es = (await import('../../i18n/es.json')).default as { shell: { poweredByNexadev: string } }
+    expect(constant('English')).toBe(en.shell.poweredByNexadev)
+    expect(constant('Spanish')).toBe(es.shell.poweredByNexadev)
+  })
+})

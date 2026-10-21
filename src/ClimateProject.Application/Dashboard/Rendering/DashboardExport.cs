@@ -408,7 +408,7 @@ public static class DashboardExport
         ArgumentNullException.ThrowIfNull(document);
 
         var copy = DashboardExportCopy.For(document.Locale);
-        var pdf = new PdfDocument(document.Title);
+        var pdf = new PdfDocument(document.Title) { Credit = Localization.NexadevCredit.For(document.Locale) };
 
         pdf.Title(document.Title);
         pdf.Paragraph(document.Subtitle);
