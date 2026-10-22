@@ -58,6 +58,12 @@ public sealed record UpdateUserRequest(
     Dictionary<string, string?>? Demographics = null,
     // Null means "leave the address alone". Trimmed and lower-cased like an import row, then
     // checked for format, for a reserved domain and against every account on the platform.
-    string? Email = null);
+    string? Email = null,
+    // A null DepartmentId / ManagerId means "leave it alone", so a JSON null cannot also mean
+    // "remove it" without changing what every existing caller's omission does. These say it
+    // explicitly instead (audit G6): true unsets the link. Sending one together with a value
+    // for the same link is a contradiction and is refused.
+    bool ClearDepartment = false,
+    bool ClearManager = false);
 
 public sealed record UpdateUserRoleRequest(string Role);

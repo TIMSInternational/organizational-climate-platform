@@ -25,6 +25,8 @@ export interface UserDetail extends User {
   // became Guid? in #191, so this can genuinely arrive as null.
   companyId: string | null
   managerId: string | null
+  /** The person's demographic answers, keyed by the field's `field` key, values as stored. */
+  demographics: Record<string, string>
   /** Present only on the answer to an update that actually changed the address. */
   emailChange?: UserEmailChange | null
 }
@@ -48,6 +50,19 @@ export interface UpdateUserInput {
   isActive?: boolean
   /** Omit to leave the address alone. The API trims and lower-cases it. */
   email?: string
+  /**
+   * An omitted `departmentId` / `managerId` means "leave it alone", so removing one takes these
+   * (`UpdateUserRequest.ClearDepartment` / `ClearManager`). Never sent with a value for the same
+   * link: the API refuses the pair.
+   */
+  clearDepartment?: boolean
+  clearManager?: boolean
+  /**
+   * The person's COMPLETE set of answers to the company's active fields: the API replaces the set,
+   * so an omitted or blank key clears that answer, and a required field must be present. Answers
+   * to retired fields are kept by the API. Omit to leave demographics alone.
+   */
+  demographics?: Record<string, string>
 }
 
 /** The four reasons `PUT /admin/users/{id}` refuses an address, as the API's `code`. */
@@ -181,4 +196,26 @@ export async function resendCredentialsBatch(
     body: JSON.stringify({ userIds }),
   })
   return response.json() as Promise<CredentialsResendBatchResult>
+}
+
+/**
+ * `POST /auth/admin/reset-credentials`: replaces the account's password with a temporary one and
+ * hands it back IN THE RESPONSE. It SENDS NOTHING -- no email to the person, no email to the
+ * admin -- so the screen is the only place the password exists, and the admin passes it on.
+ * Every open session of the account ends.
+ *
+ * A company administrator may reset anyone in their company who is not an administrator, and
+ * themselves; another administrator's account is the super administrator's to reset (403).
+ */
+export interface ResetCredentialsResult {
+  email: string
+  temporaryPassword: string
+}
+
+export async function resetCredentials(baseUrl: string, userId: string): Promise<ResetCredentialsResult> {
+  const response = await authFetch(`${baseUrl}/auth/admin/reset-credentials`, {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  })
+  return response.json() as Promise<ResetCredentialsResult>
 }

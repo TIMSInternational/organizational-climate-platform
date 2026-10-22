@@ -460,6 +460,19 @@ public static class AuthEndpoints
             return Results.Json(new ErrorResponse("User not found"), statusCode: 404);
         }
 
+        // The rule `PUT /admin/users/{id}` applies to an address and to deactivation, for the
+        // stronger reason here: this response HANDS THE CALLER a working password. A
+        // company_admin's CompanyId can match a super_admin's (signup assigns it from the email
+        // domain), so without this a company_admin could reset a super_admin's -- or a peer
+        // admin's -- password, read the new one off the response and sign in as them. Their own
+        // account stays theirs to reset, which is the case the comment below describes.
+        if (currentUser.Role != Roles.SuperAdmin
+            && Roles.Admin.Contains(user.Role)
+            && !string.Equals(user.Id.ToString(), currentUser.Sub, StringComparison.OrdinalIgnoreCase))
+        {
+            return Results.Forbid();
+        }
+
         // A password the product itself would accept: the old Guid-derived twelve hex
         // characters failed the default policy (no uppercase) the moment the holder tried to
         // change it, and never met a tenant policy that required a special character.

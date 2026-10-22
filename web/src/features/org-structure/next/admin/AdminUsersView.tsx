@@ -30,6 +30,8 @@ import { updateUser, type User, type UserEmailChange } from '../../api/users'
 import { EmailChangeOutcome } from '../../components/EmailChangeOutcome'
 import { updateErrorText } from '../../components/emailRefusal'
 import { ResendCredentials } from '../../components/ResendCredentials'
+import { DeactivationConfirm, PersonDetailsFields, ResetPassword } from '../../components/PersonDetails'
+import { departmentChange, usePersonDetails } from '../../components/usePersonDetails'
 import type { Department } from '../../api/departments'
 import IntakeWizard from '../../components/IntakeWizard'
 import InvitationForm, { type InvitationFormValues } from '../../components/InvitationForm'
@@ -240,6 +242,8 @@ export default function AdminUsersView() {
                     <EditPerson
                       key={editing.id}
                       user={editing}
+                      people={state.users}
+                      companyId={companyId}
                       departments={state.departments ?? []}
                       canAssignRoles={capabilities.canAssignRoles}
                       onClose={() => {
@@ -726,6 +730,8 @@ function Roster({
 
 function EditPerson({
   user,
+  people,
+  companyId,
   departments,
   canAssignRoles,
   onClose,
@@ -734,6 +740,8 @@ function EditPerson({
   onEmailChanged,
 }: {
   user: User
+  people: readonly User[]
+  companyId: string | undefined
   departments: readonly Department[]
   canAssignRoles: boolean
   onClose: () => void
@@ -749,6 +757,8 @@ function EditPerson({
   const [email, setEmail] = useState(user.email)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [confirmingDeactivation, setConfirmingDeactivation] = useState(false)
+  const details = usePersonDetails(baseUrl, user, companyId)
   // Set when a save changed the address: the panel then stays open to say what the change did
   // NOT do (send anything) and what is left (codes mailed to the old address).
   const emailChange = emailOutcome
@@ -756,12 +766,27 @@ function EditPerson({
   // Deactivating an administrator is the super administrator's alone (`UserEndpoints.cs:147-149`):
   // the server refuses even an unchanged `isActive` for one, so it is only ever sent when changed.
   const accountLocked = isAdminRole(user.role) && !canAssignRoles
-  // The API can move a person to a department but not out of one (`UpdateUserInput` carries a
-  // department only when set), so "none" is offered only to someone who has none.
+  // "Sin departamento" is offered to everyone: choosing it on someone who has one sends
+  // `clearDepartment` (`UpdateUserRequest.ClearDepartment`), the explicit unset a null cannot say.
   const options = departments.filter((unit) => unit.isActive || unit.id === user.departmentId)
   const created = calendarDay(Date.parse(user.createdAt), locale)
 
+  // Deactivating is confirmed first, in a dialog that says what happens to their codes (G5).
+  function requestSave() {
+    if (isActive !== user.isActive && !isActive) setConfirmingDeactivation(true)
+    else void save()
+  }
+
   async function save() {
+    const extra = details.changes()
+    if (extra.missing) {
+      setError(t('users.next.edit.demographicRequired', { field: extra.missing }))
+      return
+    }
+    if (extra.invalid) {
+      setError(t('users.next.edit.demographicNumber', { field: extra.invalid }))
+      return
+    }
     setSaving(true)
     setError(null)
     try {
@@ -770,8 +795,9 @@ function EditPerson({
       const updated = await updateUser(baseUrl, user.id, {
         name: name.trim(),
         ...(isActive !== user.isActive ? { isActive } : {}),
-        ...(departmentId && departmentId !== user.departmentId ? { departmentId } : {}),
+        ...departmentChange(user, departmentId),
         ...(nextEmail.toLowerCase() !== user.email.toLowerCase() ? { email: nextEmail } : {}),
+        ...extra.input,
       })
       if (updated.emailChange) {
         onEmailChanged({ userId: user.id, change: updated.emailChange, current: updated.email })
@@ -841,7 +867,7 @@ function EditPerson({
         </Field>
         <Field fieldLabel={t('users.next.edit.department')} htmlFor={ids.department} helper={t('users.next.edit.departmentHelper')}>
           <CanvasSelect id={ids.department} className="w-full" value={departmentId} onChange={(event) => setDepartmentId(event.target.value)}>
-            {!user.departmentId && <option value="">{t('users.next.rail.none')}</option>}
+            <option value="">{t('users.next.rail.none')}</option>
             {options.map((unit) => (
               <option key={unit.id} value={unit.id}>
                 {unit.name}
@@ -875,12 +901,22 @@ function EditPerson({
           </span>
         </Field>
       </div>
+      <PersonDetailsFields user={user} people={people} state={details} />
       <ResendCredentials user={user} baseUrl={baseUrl} />
+      {/* An administrator's password is the super administrator's to reset: the API refuses a
+          company administrator one (`AuthEndpoints.ResetCredentialsAsync`), as it does their email. */}
+      <ResetPassword user={user} baseUrl={baseUrl} allowed={!accountLocked} />
+      <DeactivationConfirm
+        open={confirmingDeactivation}
+        name={user.name}
+        onOpenChange={setConfirmingDeactivation}
+        onConfirm={save}
+      />
       <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line-light pt-3">
         <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
           {emailChange ? t('users.next.edit.done') : t('common.cancel')}
         </Button>
-        <Button type="button" variant="outline" onClick={() => void save()} disabled={saving || !name.trim() || !email.trim()}>
+        <Button type="button" variant="outline" onClick={requestSave} disabled={saving || !name.trim() || !email.trim()}>
           <Check aria-hidden="true" />
           {t('users.next.edit.save')}
         </Button>

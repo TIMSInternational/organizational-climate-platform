@@ -220,4 +220,85 @@ public class ResetCredentialsEndpointTests : IAsyncLifetime
             new LoginRequest(_otherCompanyEmployee.Email, body.TemporaryPassword));
         Assert.Equal(HttpStatusCode.OK, loginResponse.StatusCode);
     }
+
+    // ------------------------------------------------- admin-role targets (audit G29)
+    //
+    // The response hands the caller a working password, so the endpoint is only as safe as who
+    // it lets reset whom. A company_admin's CompanyId can match a super_admin's (signup assigns
+    // it from the email domain): the tenant filter alone let them take over that account.
+
+    private async Task<User> SeedPeerAdminAsync(string password)
+    {
+        var hasher = new ClimateProject.Infrastructure.Auth.BcryptPasswordHasher();
+        var peer = new User
+        {
+            Id = Guid.NewGuid(),
+            CompanyId = _company.Id,
+            Email = $"peer-admin-{Guid.NewGuid():N}@{_company.EmailDomain}",
+            Name = "Peer Admin",
+            PasswordHash = hasher.Hash(password),
+            Role = "company_admin",
+            IsActive = true,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+        };
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        db.Users.Add(peer);
+        await db.SaveChangesAsync();
+        return peer;
+    }
+
+    [Fact]
+    public async Task Company_admin_cannot_reset_a_super_admin_who_shares_their_company()
+    {
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _adminToken);
+
+        var response = await client.PostAsJsonAsync("/auth/admin/reset-credentials", new ResetCredentialsRequest(_superAdmin.Id));
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        // Nothing was replaced: the super admin's own password still opens their account.
+        var login = await _factory.CreateClient().PostAsJsonAsync("/auth/login", new LoginRequest(_superAdmin.Email, "super-admin-password"));
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+    }
+
+    [Fact]
+    public async Task Company_admin_cannot_reset_a_peer_company_admin()
+    {
+        var peer = await SeedPeerAdminAsync("peer-admin-password");
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _adminToken);
+
+        var response = await client.PostAsJsonAsync("/auth/admin/reset-credentials", new ResetCredentialsRequest(peer.Id));
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        var login = await _factory.CreateClient().PostAsJsonAsync("/auth/login", new LoginRequest(peer.Email, "peer-admin-password"));
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+    }
+
+    [Fact]
+    public async Task Company_admin_may_still_reset_their_own_credentials()
+    {
+        var peer = await SeedPeerAdminAsync("peer-admin-password");
+        var login = await _factory.CreateClient().PostAsJsonAsync("/auth/login", new LoginRequest(peer.Email, "peer-admin-password"));
+        var token = (await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.PostAsJsonAsync("/auth/admin/reset-credentials", new ResetCredentialsRequest(peer.Id));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Super_admin_can_reset_a_company_admin()
+    {
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _superAdminToken);
+
+        var response = await client.PostAsJsonAsync("/auth/admin/reset-credentials", new ResetCredentialsRequest(_admin.Id));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
 }
