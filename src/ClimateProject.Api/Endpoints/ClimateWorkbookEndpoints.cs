@@ -3,6 +3,7 @@ using ClimateProject.Api.Infrastructure;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.OrgStructure;
 using ClimateProject.Application.Surveys;
+using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,8 +12,14 @@ namespace ClimateProject.Api.Endpoints;
 public sealed record WorkbookExistingPerson(Guid Id,string Email,string Role);
 public sealed record WorkbookFieldPlan(Guid? Id,string Field,string Label,IReadOnlyList<WorkbookOptionPlan> Options);
 public sealed record WorkbookOptionPlan(string Value,string Label,IReadOnlyDictionary<string,string>? LabelInput=null);
+/// <param name="CredentialMode">The target company's stored credential mode (<see cref="CredentialModes"/>),
+/// which decides what the import may mail: <c>shared</c> mails each NEW account its username and
+/// password now; <c>per_survey</c> mails nothing (each person's key is minted and mailed per survey
+/// when the invitations are sent). Null when the company does not exist yet: the import creates it
+/// and <c>Company.Settings.CredentialMode</c> defaults to <c>shared</c>.</param>
 public sealed record ClimateWorkbookPreview(ClimateWorkbookContent Content,Guid? CompanyId,Guid? SurveyId,string? SurveyStatus,
-    IReadOnlyList<WorkbookFieldPlan> Fields,IReadOnlyList<WorkbookExistingPerson> ExistingPeople,IReadOnlyList<string> Errors);
+    IReadOnlyList<WorkbookFieldPlan> Fields,IReadOnlyList<WorkbookExistingPerson> ExistingPeople,IReadOnlyList<string> Errors,
+    string? CredentialMode);
 
 public static class ClimateWorkbookEndpoints
 {
@@ -55,6 +62,11 @@ public static class ClimateWorkbookEndpoints
         if(parsed.Content is not { } content)return Results.BadRequest(new {message=string.Join(" ",parsed.Errors)});
         var errors=parsed.Errors.ToList();
         var company=await db.Companies.SingleOrDefaultAsync(c=>c.EmailDomain==content.Company.EmailDomain,ct);
+        // Resolved exactly as the bulk import resolves it (`BulkImportEndpoints.CredentialModeOfAsync`
+        // then `CredentialModes.Resolve`), so the client is told the mode the import will act on.
+        // Null only when there is no company yet: the one the import creates carries the entity
+        // default, shared.
+        var credentialMode=company is null?null:CredentialModes.Resolve(surveyMode:null,companyMode:company.Settings.CredentialMode);
         if(actor.Role!=Roles.SuperAdmin&&(company is null||actor.CompanyId!=company.Id.ToString()))return Results.Forbid();
         var emails=content.People.Select(p=>p.Email).ToArray();
         var users=await db.Users.Where(u=>emails.Contains(u.Email.ToLower())).ToListAsync(ct);
@@ -105,7 +117,7 @@ public static class ClimateWorkbookEndpoints
                     if(person.Demographics?.ContainsKey(source.Field)!=true)errors.Add($"DEMOGRAFICOS fila {person.RowNumber}: falta {source.Label}.");
         }
         if(errors.Count>0)return Results.Ok(new ClimateWorkbookPreview(content,company?.Id,null,null,fieldPlans,
-            users.Where(u=>u.CompanyId==company?.Id).Select(u=>new WorkbookExistingPerson(u.Id,u.Email,u.Role)).ToArray(),errors.Distinct().ToArray()));
+            users.Where(u=>u.CompanyId==company?.Id).Select(u=>new WorkbookExistingPerson(u.Id,u.Email,u.Role)).ToArray(),errors.Distinct().ToArray(),credentialMode));
         var remapped=content.People.Select(p=>p with {Demographics=p.Demographics?.ToDictionary(kv=>
         {
             var source=content.Fields.First(f=>f.Field==kv.Key);
@@ -127,8 +139,14 @@ public static class ClimateWorkbookEndpoints
                 var questionIds=questions.Select(q=>q.Id).ToArray();
                 var savedOptions=await db.QuestionOptions.Where(o=>questionIds.Contains(o.QuestionId)).OrderBy(o=>o.Order).ToListAsync(ct);
                 string? Text(string? en,string? es)=>content.Company.Language=="es"?es:en;
-                var same=survey.Language==content.Company.Language&&survey.Type=="periodic"&&survey.Settings.NotificationSendInvitations
-                    &&survey.Settings.InvitationSendImmediately
+                // "The same survey" is decided by what the workbook itself states -- language, type,
+                // description, invitation texts, window, anonymity and every question with its
+                // options -- and never by delivery flags. The import creates its survey with
+                // `notificationSendInvitations:false` (ruled 2026-10-19), so a test on that flag
+                // made every interrupted run re-preview as "a different survey" and the import
+                // could never be resumed. Matching on the workbook's own fields is what lets a
+                // re-run of the same file pick the draft up and skip the people already imported.
+                var same=survey.Language==content.Company.Language&&survey.Type=="periodic"
                     &&Text(survey.DescriptionEn,survey.DescriptionEs)==content.Description
                     &&Text(survey.Settings.InvitationCustomSubjectEn,survey.Settings.InvitationCustomSubjectEs)==content.InvitationSubject
                     &&(Text(survey.Settings.InvitationCustomMessageEn,survey.Settings.InvitationCustomMessageEs)??"")==(content.InvitationMessage??"")
@@ -139,6 +157,12 @@ public static class ClimateWorkbookEndpoints
                         &&savedOptions.Where(o=>o.QuestionId==pair.First.Id).Select(o=>o.Value+"\n"+Text(o.LabelEn,o.LabelEs))
                             .SequenceEqual((pair.Second.Options??[]).Select(o=>o.Value+"\n"+o.Label?.ByLocale?[content.Company.Language])));
                 if(!same||survey.Status is "closed" or "archived")errors.Add("EMPRESA: ya existe una encuesta distinta o cerrada con ese título. Use otro título.");
+                // The survey froze its mode when it was created (`SurveyEndpoints` create path);
+                // a null there is read as shared, as distribution reads it. If the company has
+                // changed mode since, this import would mail one kind of access and the survey's
+                // invitations another, so it is refused here -- before anything is written.
+                else if(CredentialModes.Resolve(survey.Settings.CredentialMode,null)!=credentialMode)
+                    errors.Add($"EMPRESA: la encuesta existente con ese título usa el modo de acceso {CredentialModes.Resolve(survey.Settings.CredentialMode,null)} y la empresa ahora usa {credentialMode}. Use otro título para crear una encuesta nueva.");
                 else {surveyId=survey.Id;status=survey.Status;}
             }
         }
@@ -146,6 +170,6 @@ public static class ClimateWorkbookEndpoints
         foreach(var department in content.People.Select(p=>p.Department).Distinct())
             if(inactiveDepartments.Any(d=>ClimateWorkbook.Key(d)==ClimateWorkbook.Key(department??"")))errors.Add($"DEMOGRAFICOS: el departamento {department} está inactivo.");
         return Results.Ok(new ClimateWorkbookPreview(content with {People=remapped},company?.Id,surveyId,status,fieldPlans,
-            users.Where(u=>u.CompanyId==company?.Id).Select(u=>new WorkbookExistingPerson(u.Id,u.Email,u.Role)).ToArray(),errors.Distinct().ToArray()));
+            users.Where(u=>u.CompanyId==company?.Id).Select(u=>new WorkbookExistingPerson(u.Id,u.Email,u.Role)).ToArray(),errors.Distinct().ToArray(),credentialMode));
     }
 }
