@@ -1,6 +1,10 @@
 using System.Security.Claims;
+using System.Text.RegularExpressions;
+using ClimateProject.Api.Infrastructure.Auditing;
 using ClimateProject.Application.Auth;
+using ClimateProject.Application.Email;
 using ClimateProject.Application.OrgStructure;
+using ClimateProject.Application.Surveys;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -26,6 +30,20 @@ public static class UserEndpoints
     // are completely unaffected.
     private static bool CanAccessCompany(CurrentUser currentUser, Guid? companyId)
         => CompanyScope.CanAccess(currentUser, companyId);
+
+    // The same pattern sign-up and invitation acceptance check an address against
+    // (AuthEndpoints.EmailFormatPattern, InvitationAcceptEndpoints.EmailFormatPattern): no
+    // whitespace, one '@', a dot in the domain. Both copies are private, hence a third.
+    private const string EmailFormatPattern = @"^[^\s@]+@[^\s@]+\.[^\s@]+$";
+
+    // users.email is varchar(255) (UserConfiguration). Refused here rather than left to
+    // Postgres, which would answer a longer value with a 500.
+    private const int EmailMaxLength = 255;
+
+    // A refusal the screen has to tell apart from the others, so it carries a code as well as
+    // the English message every other refusal in this file carries.
+    private static IResult EmailRefusal(int statusCode, string code, string message)
+        => Results.Json(new { message, code }, statusCode: statusCode);
 
     private static UserListItem ToListItem(User u)
         => new(u.Id, u.Email, u.Name, u.Role, u.DepartmentId, u.IsActive, u.LastLoginAt, u.CreatedAt);
@@ -126,6 +144,7 @@ public static class UserEndpoints
         UpdateUserRequest request,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
+        AuditEntry audit,
         CancellationToken cancellationToken)
     {
         var currentUser = principal.GetCurrentUser();
@@ -138,6 +157,63 @@ public static class UserEndpoints
         if (!CanAccessCompany(currentUser, user.CompanyId))
         {
             return Results.Forbid();
+        }
+
+        // Correcting an address (audit gap G3: ESPH sent a nonexistent address and full
+        // mailboxes, and nothing in the product could change one). Decided before anything
+        // below writes to the entity, so a refused address leaves the whole request unapplied.
+        //
+        // Normalised exactly as an import row is -- the parsers Trim() the cell and
+        // BulkImportEndpoints lower-cases it -- so an address entered here and the same
+        // address imported are the same string, and the global unique index on users.email
+        // sees them as one.
+        string? newEmail = null;
+        if (request.Email is not null)
+        {
+            var candidate = request.Email.Trim().ToLowerInvariant();
+            if (!string.Equals(candidate, user.Email, StringComparison.Ordinal))
+            {
+                // The IsActive rule below, for the same reason and more: an address is where a
+                // password reset and every sign-in detail go, so a company_admin who could
+                // re-point a super_admin's -- or a peer admin's -- would own that account.
+                if (currentUser.Role != Roles.SuperAdmin && Roles.Admin.Contains(user.Role))
+                {
+                    return Results.Forbid();
+                }
+
+                if (candidate.Length > EmailMaxLength || !Regex.IsMatch(candidate, EmailFormatPattern))
+                {
+                    return EmailRefusal(400, "email_invalid", "Invalid email format");
+                }
+
+                // RFC 2606 / 6761 names: every send path refuses them already, so accepting one
+                // here would store an address no message can ever reach.
+                if (UndeliverableAddresses.IsUndeliverable(candidate))
+                {
+                    return EmailRefusal(400, "email_undeliverable", UndeliverableAddresses.ReasonFor(candidate));
+                }
+
+                // GLOBAL, like the index it pre-empts (UserConfiguration: HasIndex(Email).IsUnique()
+                // with no company in it) and like the bulk importer's own check. Scoping this to
+                // the company would only move the refusal to SaveChanges as a bare 409.
+                if (await db.Users.AnyAsync(u => u.Email == candidate && u.Id != user.Id, cancellationToken))
+                {
+                    return EmailRefusal(409, "email_taken", "A user with this email already exists");
+                }
+
+                // The importer's second check (BulkImportEndpoints: invitedEmails). An open
+                // invitation is a promise of a users row for this address; taking the address
+                // here would make that invitation fail at acceptance with a 409 nobody expects.
+                var checkedAt = DateTimeOffset.UtcNow;
+                if (await db.UserInvitations.AnyAsync(
+                        i => i.Email == candidate && i.AcceptedAt == null && i.ExpiresAt > checkedAt,
+                        cancellationToken))
+                {
+                    return EmailRefusal(409, "email_invited", "This email already holds a pending invitation");
+                }
+
+                newEmail = candidate;
+            }
         }
 
         // Deactivating an admin-role account (company_admin or super_admin) is a
@@ -267,10 +343,68 @@ public static class UserEndpoints
             demographics = DemographicValueStore.ToMap(validation.Values);
         }
 
+        UserEmailChange? emailChange = null;
+        if (newEmail is not null)
+        {
+            var previousEmail = user.Email;
+            user.Email = newEmail;
+
+            // A token carries the address it was minted with (the "email" claim, CurrentUser),
+            // and several handlers still find the acting user by it (InvitationEndpoints,
+            // ActionPlanEndpoints, MicroclimateEndpoints, SurveyEndpoints ...). A session that
+            // outlived this change would resolve to nobody -- or, once someone else is given the
+            // freed address, to THAT person. Rotating the stamp ends every session minted before
+            // this save (SecurityStampValidation), the same rotation deactivation uses above.
+            // Mass-invite and per-survey respondents sign in by USERNAME, which this does not
+            // touch, so their sign-in details keep working; they only sign in again.
+            user.SecurityStamp = Guid.NewGuid();
+
+            // Pending ACCOUNT invitations to the old address. While this user held it, accepting
+            // one was a 409 (InvitationAcceptEndpoints: "A user with this email already exists").
+            // Freed, it would succeed and create a second person under the address the admin
+            // just said was wrong. Expired rather than deleted: the row is the record that it
+            // was sent.
+            var orphaned = await db.UserInvitations
+                .Where(i => i.Email == previousEmail && i.AcceptedAt == null && i.ExpiresAt > now)
+                .ToListAsync(cancellationToken);
+            foreach (var invitation in orphaned)
+            {
+                invitation.ExpiresAt = now;
+            }
+
+            // Deliberately left alone: survey_invitations.email and microclimate_invitations.email.
+            // Those are the address a message was SENT to; rewriting them would make a "sent" row
+            // claim delivery to an address that never received anything. Every send path reads
+            // users.email at send time (NotificationRecipient.From, MassInviteEndpoints,
+            // SurveyDistributionEndpoints), so future mail goes to the new address regardless.
+            //
+            // Codes already mailed to the old address and never used: counted, NOT re-sent. This
+            // request sends no email at all; the screen points the admin at each survey's roster.
+            var unusedSurveyCodes = await db.SurveyCredentials
+                .Where(c => c.UserId == user.Id && c.LastSignInAt == null)
+                .Join(
+                    db.Surveys.Where(s => s.Status == SurveyStatuses.Scheduled || s.Status == SurveyStatuses.Active),
+                    c => c.SurveyId,
+                    s => s.Id,
+                    (c, _) => c)
+                .CountAsync(cancellationToken);
+
+            emailChange = new UserEmailChange(previousEmail, unusedSurveyCodes, orphaned.Count);
+        }
+
         user.UpdatedAt = now;
         await db.SaveChangesAsync(cancellationToken);
 
-        return Results.Ok(ToDetail(user, demographics));
+        // After the save, as DepartmentEndpoints does: a request that failed on the way out
+        // records no change it did not make. An address is not a secret, and every admin who
+        // can read this tenant's trail can already read the users list it came from.
+        if (emailChange is not null)
+        {
+            audit.SetResourceId(user.Id);
+            audit.RecordChange("email", emailChange.PreviousEmail, user.Email);
+        }
+
+        return Results.Ok(ToDetail(user, demographics) with { EmailChange = emailChange });
     }
 
     private static async Task<IResult> UpdateRoleAsync(

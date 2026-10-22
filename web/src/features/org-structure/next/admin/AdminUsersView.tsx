@@ -26,7 +26,9 @@ import { calendarDay } from '../../../../lib/calendarDay'
 import { cn } from '../../../../lib/cn'
 import { countWord } from '../../../../lib/countWord'
 import { createInvitation, createShareableLink, resendInvitation, type Invitation } from '../../api/invitations'
-import { updateUser, type User } from '../../api/users'
+import { updateUser, type User, type UserEmailChange } from '../../api/users'
+import { EmailChangeOutcome } from '../../components/EmailChangeOutcome'
+import { updateErrorText } from '../../components/emailRefusal'
 import { ResendCredentials } from '../../components/ResendCredentials'
 import type { Department } from '../../api/departments'
 import IntakeWizard from '../../components/IntakeWizard'
@@ -58,6 +60,13 @@ export const GROUP_PARAM = 'departamento'
 export const EDIT_PARAM = 'editar'
 
 type OpenPanel = 'none' | 'invite' | 'import'
+
+/** What saving a corrected address did, for the person it was saved on. */
+interface EmailOutcome {
+  userId: string
+  change: UserEmailChange
+  current: string
+}
 
 /**
  * `/admin/companies/:companyId/users` for a company administrator — the canvas's *Usuarios*
@@ -109,6 +118,10 @@ export default function AdminUsersView() {
   const visible = inSelection.filter((user) => matchesSearch(user, search))
   const editingId = params.get(EDIT_PARAM)
   const editing = editingId ? (state.users.find((user) => user.id === editingId) ?? null) : null
+  // What the last address correction did, held HERE and not in the panel: the save reloads the
+  // roster, the reload swaps the page for its skeleton, and the panel -- with any state of its
+  // own -- unmounts. Keyed by person so it is never shown on someone else's panel.
+  const [emailOutcome, setEmailOutcome] = useState<EmailOutcome | null>(null)
 
   async function handleCreateInvitation(values: InvitationFormValues) {
     if (!companyId) return
@@ -229,8 +242,13 @@ export default function AdminUsersView() {
                       user={editing}
                       departments={state.departments ?? []}
                       canAssignRoles={capabilities.canAssignRoles}
-                      onClose={() => setParam(EDIT_PARAM, null)}
+                      onClose={() => {
+                        setEmailOutcome(null)
+                        setParam(EDIT_PARAM, null)
+                      }}
                       onReload={state.reload}
+                      emailOutcome={emailOutcome?.userId === editing.id ? emailOutcome : null}
+                      onEmailChanged={setEmailOutcome}
                     />
                   )}
                   <Roster
@@ -712,21 +730,29 @@ function EditPerson({
   canAssignRoles,
   onClose,
   onReload,
+  emailOutcome,
+  onEmailChanged,
 }: {
   user: User
   departments: readonly Department[]
   canAssignRoles: boolean
   onClose: () => void
   onReload: () => void
+  emailOutcome: EmailOutcome | null
+  onEmailChanged: (outcome: EmailOutcome) => void
 }) {
   const { t, locale } = useTranslation()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const [name, setName] = useState(user.name)
   const [departmentId, setDepartmentId] = useState(user.departmentId ?? '')
   const [isActive, setIsActive] = useState(user.isActive)
+  const [email, setEmail] = useState(user.email)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const ids = { name: useId(), department: useId(), role: useId(), active: useId() }
+  // Set when a save changed the address: the panel then stays open to say what the change did
+  // NOT do (send anything) and what is left (codes mailed to the old address).
+  const emailChange = emailOutcome
+  const ids = { name: useId(), email: useId(), department: useId(), role: useId(), active: useId() }
   // Deactivating an administrator is the super administrator's alone (`UserEndpoints.cs:147-149`):
   // the server refuses even an unchanged `isActive` for one, so it is only ever sent when changed.
   const accountLocked = isAdminRole(user.role) && !canAssignRoles
@@ -739,17 +765,27 @@ function EditPerson({
     setSaving(true)
     setError(null)
     try {
-      await updateUser(baseUrl, user.id, {
+      // The address only when it was edited, so an ordinary save never carries one.
+      const nextEmail = email.trim()
+      const updated = await updateUser(baseUrl, user.id, {
         name: name.trim(),
         ...(isActive !== user.isActive ? { isActive } : {}),
         ...(departmentId && departmentId !== user.departmentId ? { departmentId } : {}),
+        ...(nextEmail.toLowerCase() !== user.email.toLowerCase() ? { email: nextEmail } : {}),
       })
-      onClose()
+      if (updated.emailChange) {
+        onEmailChanged({ userId: user.id, change: updated.emailChange, current: updated.email })
+        setEmail(updated.email)
+      } else {
+        onClose()
+      }
+      onReload()
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('users.next.edit.saveFailed'))
+      // No reload on a refusal: the API applied nothing, and a reload swaps the page for its
+      // skeleton, which unmounts this panel and takes the error -- and what was typed -- with it.
+      setError(updateErrorText(t, err, t('users.next.edit.saveFailed')))
     } finally {
       setSaving(false)
-      onReload()
     }
   }
 
@@ -779,9 +815,29 @@ function EditPerson({
           </AlertDescription>
         </Alert>
       )}
+      {emailChange && <EmailChangeOutcome change={emailChange.change} current={emailChange.current} />}
       <div className="grid grid-cols-1 items-start gap-x-4 gap-y-3 md:grid-cols-2 xl:grid-cols-4">
         <Field fieldLabel={t('users.next.edit.name')} htmlFor={ids.name}>
           <Input id={ids.name} value={name} onChange={(event) => setName(event.target.value)} className="w-full" />
+        </Field>
+        <Field
+          fieldLabel={t('users.next.edit.email')}
+          htmlFor={ids.email}
+          // Two columns on the wide grid: an address is the longest value in the panel, and one
+          // column cut a plain `luis.mora@meridiano.test` mid-domain.
+          className="xl:col-span-2"
+          helper={accountLocked ? t('users.next.edit.emailLocked') : t('users.next.edit.emailHelper')}
+        >
+          <Input
+            id={ids.email}
+            type="email"
+            autoComplete="off"
+            spellCheck={false}
+            value={email}
+            disabled={accountLocked}
+            onChange={(event) => setEmail(event.target.value)}
+            className="w-full font-mono"
+          />
         </Field>
         <Field fieldLabel={t('users.next.edit.department')} htmlFor={ids.department} helper={t('users.next.edit.departmentHelper')}>
           <CanvasSelect id={ids.department} className="w-full" value={departmentId} onChange={(event) => setDepartmentId(event.target.value)}>
@@ -822,9 +878,9 @@ function EditPerson({
       <ResendCredentials user={user} baseUrl={baseUrl} />
       <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line-light pt-3">
         <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
-          {t('common.cancel')}
+          {emailChange ? t('users.next.edit.done') : t('common.cancel')}
         </Button>
-        <Button type="button" variant="outline" onClick={() => void save()} disabled={saving || !name.trim()}>
+        <Button type="button" variant="outline" onClick={() => void save()} disabled={saving || !name.trim() || !email.trim()}>
           <Check aria-hidden="true" />
           {t('users.next.edit.save')}
         </Button>

@@ -25,7 +25,9 @@ import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { calendarDay } from '../../../../lib/calendarDay'
 import { cn } from '../../../../lib/cn'
 import { createInvitation, createShareableLink, resendInvitation, type Invitation } from '../../api/invitations'
-import { updateUser, updateUserRole, type User } from '../../api/users'
+import { updateUser, updateUserRole, type User, type UserEmailChange } from '../../api/users'
+import { EmailChangeOutcome } from '../../components/EmailChangeOutcome'
+import { updateErrorText } from '../../components/emailRefusal'
 import { ResendCredentials } from '../../components/ResendCredentials'
 import type { Department } from '../../api/departments'
 import IntakeWizard from '../../components/IntakeWizard'
@@ -500,8 +502,11 @@ function EditPerson({
   const [role, setRole] = useState(user.role)
   const [departmentId, setDepartmentId] = useState(user.departmentId ?? '')
   const [isActive, setIsActive] = useState(user.isActive)
+  const [email, setEmail] = useState(user.email)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Set when a save changed the address; the panel stays open to say what that did and did not do.
+  const [emailChange, setEmailChange] = useState<{ change: UserEmailChange; current: string } | null>(null)
   const ids = { name: useId(), email: useId(), role: useId(), department: useId(), active: useId() }
   // The API can move a person to a department but not out of one (`UpdateUserRequest`
   // carries a department only when set), so "none" is offered only to someone who has none.
@@ -513,15 +518,22 @@ function EditPerson({
     try {
       // Same sequence as `UsersListPage.handleUpdate`: the profile, then the role — two
       // requests with no transaction between them, so the roster reloads whatever happened.
-      await updateUser(baseUrl, user.id, {
+      const nextEmail = email.trim()
+      const updated = await updateUser(baseUrl, user.id, {
         name: name.trim(),
         isActive,
         ...(departmentId && departmentId !== user.departmentId ? { departmentId } : {}),
+        ...(nextEmail.toLowerCase() !== user.email.toLowerCase() ? { email: nextEmail } : {}),
       })
       if (canAssignRoles && role !== user.role) await updateUserRole(baseUrl, user.id, role)
-      onClose()
+      if (updated.emailChange) {
+        setEmailChange({ change: updated.emailChange, current: updated.email })
+        setEmail(updated.email)
+      } else {
+        onClose()
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('superadmin.next.users.saveFailed'))
+      setError(updateErrorText(t, err, t('superadmin.next.users.saveFailed')))
     } finally {
       setSaving(false)
       onReload()
@@ -550,17 +562,28 @@ function EditPerson({
           </AlertDescription>
         </Alert>
       )}
+      {emailChange && <EmailChangeOutcome change={emailChange.change} current={emailChange.current} />}
       <div className="grid grid-cols-1 items-start gap-x-4 gap-y-3 md:grid-cols-2 xl:grid-cols-4">
         <Field fieldLabel={t('superadmin.next.users.name')} htmlFor={ids.name}>
           <Input id={ids.name} value={name} onChange={(event) => setName(event.target.value)} className="w-full" />
         </Field>
-        <Field fieldLabel={t('superadmin.next.users.email')} htmlFor={ids.email} helper={t('superadmin.next.users.emailHelper')}>
+        <Field
+          fieldLabel={t('superadmin.next.users.email')}
+          htmlFor={ids.email}
+          helper={t('users.next.edit.emailHelper')}
+          // Two columns on the wide grid: editable now, and one column cut a corrected address
+          // (`luis.mora@meridiano-correo.cr`) mid-domain.
+          className="xl:col-span-2"
+        >
           <div data-slot="email-field" className="flex h-control-lg items-center gap-2 rounded-md border border-line-default bg-surface-input px-2.5">
             <Mail aria-hidden="true" className="size-3.5 shrink-0 text-fg-tertiary" />
             <input
               id={ids.email}
-              readOnly
-              value={user.email}
+              type="email"
+              autoComplete="off"
+              spellCheck={false}
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
               className="h-auto w-full min-w-0 border-0 bg-transparent p-0 font-mono text-fg-primary"
             />
           </div>
@@ -603,9 +626,9 @@ function EditPerson({
         </label>
         <div className="flex gap-2">
           <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
-            {t('common.cancel')}
+            {emailChange ? t('users.next.edit.done') : t('common.cancel')}
           </Button>
-          <Button type="button" variant="outline" onClick={() => void save()} disabled={saving || !name.trim()}>
+          <Button type="button" variant="outline" onClick={() => void save()} disabled={saving || !name.trim() || !email.trim()}>
             <Check aria-hidden="true" />
             {t('superadmin.next.users.save')}
           </Button>

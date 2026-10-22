@@ -47,14 +47,14 @@ interface Call {
 }
 let calls: Call[] = []
 
-function serve({ invitations = 'ok' as 'ok' | 'fail' } = {}) {
+function serve({ invitations = 'ok' as 'ok' | 'fail', saved = {} as object } = {}) {
   calls = []
   vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
     const method = init?.method ?? 'GET'
     calls.push({ method, url, body: typeof init?.body === 'string' ? init.body : undefined })
     const ok = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: 200 }))
-    if (method === 'PUT' && url.includes('/admin/users/')) return ok({ ...PEOPLE[1], companyId: C, managerId: null })
+    if (method === 'PUT' && url.includes('/admin/users/')) return ok({ ...PEOPLE[1], companyId: C, managerId: null, ...saved })
     if (url.includes('/admin/users')) return ok({ users: PEOPLE })
     if (url.includes('/admin/invitations')) {
       return invitations === 'ok' ? ok({ invitations: [] }) : Promise.resolve(new Response(null, { status: 500 }))
@@ -144,6 +144,30 @@ describe('SuperUsersView', () => {
     expect(JSON.parse(roleChange.body ?? '')).toEqual({ role: 'company_admin' })
   })
 
+  it('corrects an address and says what that did: nothing sent, no codes left, an old invitation cancelled', async () => {
+    serve({
+      saved: {
+        email: 'luis.mora@correo-real.cr',
+        emailChange: { previousEmail: 'luis@meridiano.test', unusedSurveyCodes: 0, pendingInvitationsExpired: 1 },
+      },
+    })
+    renderPage(`/admin/companies/${C}/users?editar=luis`)
+    await screen.findByDisplayValue('Luis Mora')
+    const email = screen.getByLabelText(copy.email)
+    await userEvent.clear(email)
+    await userEvent.type(email, 'luis.mora@correo-real.cr')
+    await userEvent.click(screen.getByRole('button', { name: copy.save }))
+
+    const edit = en.users.next.edit
+    expect(
+      await screen.findByText(edit.emailChanged.replace('{previous}', 'luis@meridiano.test').replace('{current}', 'luis.mora@correo-real.cr')),
+    ).toBeTruthy()
+    expect(screen.getByText(edit.emailCodesNone)).toBeTruthy()
+    expect(screen.getByText(edit.emailInvitationsExpiredOne)).toBeTruthy()
+    const profile = calls.find((call) => call.method === 'PUT')!
+    expect(JSON.parse(profile.body ?? '')).toMatchObject({ email: 'luis.mora@correo-real.cr' })
+  })
+
   it('offers "no department" only to someone without one — the API cannot take a department away', async () => {
     serve()
     renderPage()
@@ -171,7 +195,7 @@ describe('SuperUsersView', () => {
     expect(screen.queryByText(copy.invitations.noneMeta)).toBeNull()
   })
 
-  it('draws the read-only email as an input like the name beside it, with its mail glyph and the reason it cannot change', async () => {
+  it('draws the email as an editable input like the name beside it, with its mail glyph and what changing it does', async () => {
     serve()
     renderPage(`/admin/companies/${C}/users?editar=luis`)
     await screen.findByDisplayValue('Luis Mora')
@@ -179,7 +203,8 @@ describe('SuperUsersView', () => {
     expect(field.className.split(/\s+/)).toContain('bg-surface-input')
     expect(field.className.split(/\s+/)).not.toContain('bg-surface-icon-box')
     expect(field.querySelector('.lucide-mail')).not.toBeNull()
-    expect(screen.getByText(en.superadmin.next.users.emailHelper)).toBeTruthy()
+    expect((field.querySelector('input') as HTMLInputElement).readOnly).toBe(false)
+    expect(screen.getByText(en.users.next.edit.emailHelper)).toBeTruthy()
   })
 
   it('opens the edit panel on the person the link names (?editar=), and on nobody for an id outside the tenant', async () => {

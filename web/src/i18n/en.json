@@ -5032,7 +5032,23 @@
         "resendCredentials": "Resend sign-in details",
         "resendCredentialsHelper": "Generates a new username and password and emails them. The previous pair stops working.",
         "resendCredentialsDone": "Sign-in details sent",
-        "resendCredentialsFailed": "The sign-in details could not be sent"
+        "resendCredentialsFailed": "The sign-in details could not be sent",
+        "email": "Email",
+        "emailHelper": "Changing it sends nothing. Someone who signs in with their email will use the new one, and their open sessions end.",
+        "emailLocked": "Only a super administrator changes an administrator's email.",
+        "emailErrors": {
+          "email_invalid": "That is not a valid email address.",
+          "email_undeliverable": "That domain is reserved and can never receive mail. Use the person's real address.",
+          "email_taken": "That email already belongs to another account on the platform.",
+          "email_invited": "That email already has a pending invitation."
+        },
+        "emailChanged": "Email changed from {previous} to {current}. No email was sent.",
+        "emailCodesNone": "They hold no unused survey codes.",
+        "emailCodesOne": "They hold 1 unused survey code, mailed to the old address. Re-send it from «Who has answered» on that survey's Distribution page, with «Resend credentials».",
+        "emailCodes": "They hold {count} unused survey codes, mailed to the old address. Re-send them from «Who has answered» on each survey's Distribution page, with «Resend credentials».",
+        "emailInvitationsExpiredOne": "1 pending invitation to the old address was cancelled.",
+        "emailInvitationsExpired": "{count} pending invitations to the old address were cancelled.",
+        "done": "Done"
       },
       "roster": {
         "sub": "ordered by role and name · {never} never signed in",
