@@ -71,6 +71,13 @@ export function calendarDay(value: number | Date, locale: string, now: number | 
 /**
  * The day an INSTANT falls on, in the reader's own zone, written like `calendarDay`.
  *
+ * Every respondent screen prints a survey's close through this (or through
+ * `respondEstimate.formatDayMonth` for the long form): `/s/:token`, the invitation page and
+ * `/surveys/my`. A survey's `EndDate` is the instant the server stops taking answers
+ * (`SurveyLifecycleJob`, `EndDate <= now`), and read in UTC a close at or after 18:00 in
+ * Costa Rica printed as the next day (audit 2026-10-22, R2). The administrator's screens
+ * still read it through `calendarDay`; that is a separate decision this did not change.
+ *
  * `calendarDay` is for calendar days — a survey's `StartDate`/`EndDate` — which the API
  * stores as whole days and this product therefore reads in UTC. A microclimate's
  * `endTime` is not one: it is the minute a live session stops taking answers, and the
@@ -141,4 +148,19 @@ export function calendarDayLong(value: number | Date, locale: string, now: numbe
 export function calendarDayOf(iso: string): string {
   const time = Date.parse(iso)
   return Number.isNaN(time) ? iso : new Date(time).toISOString().slice(0, 10)
+}
+
+/**
+ * The calendar day an INSTANT falls on in the reader's own zone, as `YYYY-MM-DD` — the
+ * `instantDay` counterpart of `calendarDayOf`, for counting whole days ("en 3 días") beside
+ * a date `instantDay` printed, so the count and the date cannot disagree.
+ *
+ * `timeZone` is injectable only so a test can pin the zone; callers omit it. An unparseable
+ * value comes back as given, so a count taken from it degrades to `NaN`.
+ */
+export function instantCalendarDay(value: number | Date, timeZone?: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  // `en-CA` writes the ISO order, `2026-09-10`.
+  return date.toLocaleDateString('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' })
 }

@@ -4,6 +4,7 @@ import type {
   EmployeeLastOutcome,
 } from '../../api/dashboard'
 import { estimatedMinutes } from '../../../surveys/respondEstimate'
+import { instantCalendarDay } from '../../../../lib/calendarDay'
 import type { EmployeeHomeModel, HomeOutcome, HomeSurvey } from './model'
 
 const DAY_MS = 86_400_000
@@ -13,23 +14,23 @@ const DAY_MS = 86_400_000
  * zero — or `null` when either date is unusable.
  *
  * Calendar days, not elapsed time, because the sentence prints a calendar day beside the
- * count: "Cierra en 30 días · el 10 de octubre". The close is a calendar day stamped in
- * UTC and printed in UTC (`lib/calendarDay.ts`, `formatDayMonth`); today is the reader's
- * own date. Counted in milliseconds instead, Q4's close (02:03 UTC on 10 Oct) read from
- * Costa Rica at 21:50 on 10 Sep is 28.9 days away and ceils to 29 — one fewer than the
- * days between the two dates the same line prints, where the canvas says "30 días".
+ * count: "Cierra en 30 días · el 10 de octubre". Both days are the reader's own: the close
+ * is the instant the server stops taking answers and `formatDayMonth` prints it in the
+ * reader's zone, so the count is taken in that zone too. Counted in UTC days, a close at or
+ * after 18:00 in Costa Rica was a day further off than it is, beside a date that was a day
+ * late (audit 2026-10-22, R2). Counted in milliseconds instead, the count disagrees with the
+ * two dates the same line prints whenever the close is earlier in its day than now.
  *
  * A deadline already past is not "-3 days left"; it is nothing left, and "Cierra hoy" says
- * so. Measured against the model's own clock rather than `Date.now()` so a test can pin it.
+ * so. Measured against the model's own clock rather than `Date.now()` so a test can pin it;
+ * `timeZone` is injectable for the same reason, and callers omit it.
  */
-export function daysUntil(closesAt: string, asOf: string): number | null {
+export function daysUntil(closesAt: string, asOf: string, timeZone?: string): number | null {
   const at = Date.parse(closesAt)
   const now = Date.parse(asOf)
   if (Number.isNaN(at) || Number.isNaN(now)) return null
-  const close = new Date(at)
-  const today = new Date(now)
-  const closeDay = Date.UTC(close.getUTCFullYear(), close.getUTCMonth(), close.getUTCDate())
-  const todayDay = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())
+  const closeDay = Date.parse(instantCalendarDay(at, timeZone))
+  const todayDay = Date.parse(instantCalendarDay(now, timeZone))
   // `round`, not `floor`: both ends are UTC midnights, so the difference is a whole number
   // of days and rounding only absorbs floating error.
   return Math.max(0, Math.round((closeDay - todayDay) / DAY_MS))

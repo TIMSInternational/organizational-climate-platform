@@ -11,13 +11,13 @@ import {
 import { outcomeLook, type EntryOutcome, type OutcomeGlyph } from './derive'
 
 export interface EntryOutcomeCardProps {
-  outcome: EntryOutcome
   /**
-   * The server's own message, used only when `outcome.bodyKey` is null — i.e. when this
-   * client has no sentence of its own for what came back. Empty when the response
-   * carried none, in which case the generic error copy stands in.
+   * What to say. When `outcome.bodyKey` is null — a status this client has no sentence of
+   * its own for: a 5xx, a 429, or no response at all — the card says `failure.load`. It
+   * never prints the server's message: that is fixed English, and it reached Spanish
+   * respondents on this card before (audit 2026-10-22, R1).
    */
-  serverMessage: string
+  outcome: EntryOutcome
 }
 
 /**
@@ -55,14 +55,12 @@ export interface EntryOutcomeCardProps {
  * sign-in form they did not ask for. The one exception is the outcome whose answer
  * genuinely is signing in, and `derive.ts` decides that, not this file.
  */
-export function EntryOutcomeCard({ outcome, serverMessage }: EntryOutcomeCardProps) {
+export function EntryOutcomeCard({ outcome }: EntryOutcomeCardProps) {
   const { t } = useTranslation('surveyRespond')
-  const { t: tRoot } = useTranslation()
 
   const success = outcome.tone === 'success'
   const look = outcomeLook(outcome.titleKey, outcome.tone)
-  const description =
-    outcome.bodyKey === null ? serverMessage || tRoot('errors.generic') : t(outcome.bodyKey)
+  const description = t(outcome.bodyKey ?? 'failure.load')
 
   return (
     <Card

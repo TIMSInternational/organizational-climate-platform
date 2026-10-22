@@ -2433,7 +2433,8 @@
         "signInBody": "Inicie sesión con su cuenta para responder. Al entrar vuelve a esta invitación.",
         "signInAction": "Iniciar sesión y volver aquí",
         "unknownLabel": "No se pudo abrir",
-        "unknownTitle": "No se pudo abrir esta invitación"
+        "unknownTitle": "No se pudo abrir esta invitación",
+        "unknownBody": "Puede ser la conexión o un problema temporal de nuestro lado. Vuelva a abrir el enlace en unos minutos; si sigue sin abrir, consulte a quien se lo envió."
       }
     }
   },
@@ -5594,6 +5595,21 @@
       "entrySignInTitle": "Esta encuesta registra quién responde",
       "entrySignInBody": "Para responder, inicie sesión con su cuenta.",
       "entryLinkUnavailableBody": "Puede que ya haya cerrado. Si cree que debería poder responderla, avise a quien le compartió el enlace."
+    },
+    "failure": {
+      "closed": "Esta encuesta ya cerró y no recibe más respuestas, así que lo que acaba de enviar no se registró. Si cree que es un error, consulte a quien le envió la encuesta.",
+      "responseLimit": "Esta encuesta ya recibió todas las respuestas que admite, así que lo que acaba de enviar no se registró. Si cree que es un error, consulte a quien le envió la encuesta.",
+      "partialNotAllowed": "Esta encuesta no guarda respuestas a medias, así que lo que lleva respondido solo está en esta pantalla. Déjela abierta y envíe sus respuestas al terminar.",
+      "rejected": "No se pudo registrar lo que acaba de enviar. Sus respuestas siguen en esta página: revíselas e inténtelo de nuevo.",
+      "signedOut": "Su sesión terminó, así que lo que acaba de enviar no se registró. Vuelva a iniciar sesión y abra la encuesta otra vez.",
+      "unavailable": "Esta encuesta ya no está disponible, así que lo que acaba de enviar no se registró. Si cree que es un error, consulte a quien le envió la encuesta.",
+      "notYours": "Esta encuesta no está asignada a su cuenta, así que lo que acaba de enviar no se registró.",
+      "notFound": "Esta encuesta ya no existe, así que lo que acaba de enviar no se registró. Consulte a quien le envió la encuesta.",
+      "conflict": "Otro guardado de esta misma encuesta estaba en curso, así que lo que acaba de enviar no se registró. Sus respuestas siguen en esta página: inténtelo de nuevo en un momento.",
+      "tooMany": "Llegaron demasiados envíos desde su conexión en poco tiempo, así que lo que acaba de enviar no se registró. Sus respuestas siguen en esta página: espere un minuto e inténtelo de nuevo.",
+      "server": "Algo falló de nuestro lado y no pudimos confirmar que se registrara lo que acaba de enviar. Sus respuestas siguen en esta página: inténtelo de nuevo en unos minutos; si ya había llegado, no se contará dos veces.",
+      "network": "No hubo conexión con el servidor y no pudimos confirmar que se registrara lo que acaba de enviar. Sus respuestas siguen en esta página: revise su conexión a internet e inténtelo de nuevo; si ya había llegado, no se contará dos veces.",
+      "load": "Puede ser la conexión o un problema temporal de nuestro lado. Vuelva a abrirla en unos minutos; si sigue sin abrir, consulte a quien se la envió."
     }
   },
   "surveyResults": {

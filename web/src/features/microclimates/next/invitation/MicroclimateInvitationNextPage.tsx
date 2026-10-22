@@ -123,7 +123,7 @@ function InvitationBody({ view, onBegin }: { view: InvitationView; onBegin: () =
     )
   }
 
-  return <DeadState dead={view.dead} serverMessage={view.serverMessage} />
+  return <DeadState dead={view.dead} />
 }
 
 /**
@@ -243,9 +243,8 @@ function SignInState() {
  * stays expired, and the visitor may never have been a user of this product. The one
  * action that ever helps is naming who to ask, which the copy does.
  */
-function DeadState({ dead, serverMessage }: { dead: DeadKind; serverMessage: string | null }) {
+function DeadState({ dead }: { dead: DeadKind }) {
   const { t } = useTranslation('microclimates')
-  const { t: tRoot } = useTranslation()
 
   const copy = deadCopy(dead)
   const shape = DEAD_SHAPE[dead]
@@ -254,11 +253,12 @@ function DeadState({ dead, serverMessage }: { dead: DeadKind; serverMessage: str
     <StateCard
       label={t(copy.labelKey)}
       title={t(copy.titleKey)}
-      // The only branch with no sentence of its own: a status this client has no copy for
-      // is in practice a 429 from the token rate limiter, a 5xx, or a network failure
-      // that produced no response at all, and the server's own message is a better answer
-      // than the nearest sentence we happen to have. Never a blank.
-      body={copy.bodyKey === null ? (serverMessage ?? tRoot('errors.generic')) : t(copy.bodyKey)}
+      // `unknown` has no sentence in `deadCopy`: a status this client has no copy for is in
+      // practice a 429 from the token rate limiter, a 5xx, or a network failure that
+      // produced no response at all. It reads `unknownBody` — never the server's own
+      // message, which is fixed English and reached Spanish respondents here before (audit
+      // 2026-10-22, R1). Never a blank.
+      body={t(copy.bodyKey ?? 'next.invitation.unknownBody')}
       icon={shape.icon}
       tone={shape.tone}
       // `alert` interrupts, `status` waits its turn. A dead link is the reason the page

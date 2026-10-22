@@ -148,9 +148,9 @@ export interface DeadCopy {
   /** A key in the `microclimates` namespace. */
   titleKey: string
   /**
-   * A key in the `microclimates` namespace, or `null` meaning "we have no better sentence
-   * than the server's own". The caller then shows `MicroclimateLinkError.message`, falling
-   * back to `errors.generic` when the response carried none.
+   * A key in the `microclimates` namespace, or `null` meaning "no sentence for this
+   * status". The page then says `next.invitation.unknownBody` — never
+   * `MicroclimateLinkError.message`, which is fixed English (audit 2026-10-22, R1).
    */
   bodyKey: string | null
 }

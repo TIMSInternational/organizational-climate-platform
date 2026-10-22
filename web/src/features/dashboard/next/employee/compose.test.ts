@@ -78,11 +78,30 @@ afterAll(() => {
 })
 
 describe('daysUntil', () => {
-  it('reads the canvas’s "Cierra en 30 días" from the Q4 close on its own evening', () => {
-    // 10 Sep in Costa Rica to 10 Oct, the day `formatDayMonth` prints beside the count.
-    // Elapsed time says 28.9 days, which is how this read 29 against a printed date 30
-    // days away.
-    expect(daysUntil('2026-10-10T02:03:39.148+00:00', CANVAS_EVENING)).toBe(30)
+  it('counts to the close’s day on the reader’s own clock, not in UTC', () => {
+    // The seeded Q4 closes at 02:03 UTC on 10 Oct: 20:03 on 9 OCTOBER in Costa Rica, the day
+    // `formatDayMonth` now prints beside the count. From 10 Sep that is 29 days. The canvas's
+    // "30 días · el 10 de octubre" was the same instant read in UTC (audit 2026-10-22, R2).
+    expect(daysUntil('2026-10-10T02:03:39.148+00:00', CANVAS_EVENING)).toBe(29)
+  })
+
+  it('reads the canvas’s "Cierra en 30 días" from a close late on 10 Oct in Costa Rica', () => {
+    // 23:59 on 10 Oct in Costa Rica is 05:59 UTC on the 11th — the shape an administrator
+    // choosing "10 Oct, 23:59" in the builder produces. Elapsed time says 30.09 days; the
+    // calendar says 30.
+    expect(daysUntil('2026-10-11T05:59:00.000Z', CANVAS_EVENING)).toBe(30)
+  })
+
+  it('pins a 00:30 UTC close to the PREVIOUS calendar day in Costa Rica (audit R2)', () => {
+    // 00:30 UTC on 12 Sep is 18:30 on 11 Sep in Costa Rica. Read at 10:00 on the 11th in
+    // Costa Rica, the survey closes TODAY. Counted in UTC days it was "1 day left" — beside a
+    // printed date of the 12th, a day after the server stops taking answers.
+    const morning = '2026-09-11T16:00:00Z'
+    expect(daysUntil('2026-09-12T00:30:00Z', morning, 'America/Costa_Rica')).toBe(0)
+    // The default is the reader's zone, pinned to Costa Rica above.
+    expect(daysUntil('2026-09-12T00:30:00Z', morning)).toBe(0)
+    // The control: the same two instants in UTC are a day apart, so the zone is what decides.
+    expect(daysUntil('2026-09-12T00:30:00Z', morning, 'UTC')).toBe(1)
   })
 
   it('counts the close’s calendar day, so tomorrow’s date is one day left however few hours remain', () => {
@@ -126,7 +145,8 @@ describe('composeEmployeeHome', () => {
       asOf: CANVAS_EVENING,
     })
     expect(model.lead?.minutes).toBe(4)
-    expect(model.lead?.daysLeft).toBe(30)
+    // 29: the fixture's close is 20:03 on 9 Oct in Costa Rica (see `daysUntil` above).
+    expect(model.lead?.daysLeft).toBe(29)
   })
 
   it('says more is outstanding only when the count exceeds the listed page', () => {

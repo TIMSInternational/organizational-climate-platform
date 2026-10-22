@@ -2433,7 +2433,8 @@
         "signInBody": "Sign in with your account to answer. Once you are in, you come back to this invitation.",
         "signInAction": "Sign in and come back here",
         "unknownLabel": "Could not be opened",
-        "unknownTitle": "This invitation could not be opened"
+        "unknownTitle": "This invitation could not be opened",
+        "unknownBody": "It may be the connection or a temporary problem on our side. Open the link again in a few minutes; if it still does not open, ask whoever sent it to you."
       }
     }
   },
@@ -5594,6 +5595,21 @@
       "entrySignInTitle": "This survey records who answers",
       "entrySignInBody": "To answer it, sign in with your account.",
       "entryLinkUnavailableBody": "It may have closed. If you think you should be able to answer it, let whoever shared the link with you know."
+    },
+    "failure": {
+      "closed": "This survey has closed and no longer accepts answers, so what you just sent was not recorded. If you think this is a mistake, ask whoever sent you the survey.",
+      "responseLimit": "This survey has already received all the responses it accepts, so what you just sent was not recorded. If you think this is a mistake, ask whoever sent you the survey.",
+      "partialNotAllowed": "This survey does not keep unfinished answers, so what you have answered so far is only on this screen. Leave it open and send your answers when you finish.",
+      "rejected": "What you just sent could not be recorded. Your answers are still on this page: check them and try again.",
+      "signedOut": "Your session ended, so what you just sent was not recorded. Sign in again and open the survey once more.",
+      "unavailable": "This survey is no longer available, so what you just sent was not recorded. If you think this is a mistake, ask whoever sent you the survey.",
+      "notYours": "This survey is not assigned to your account, so what you just sent was not recorded.",
+      "notFound": "This survey no longer exists, so what you just sent was not recorded. Ask whoever sent you the survey.",
+      "conflict": "Another save of this same survey was in progress, so what you just sent was not recorded. Your answers are still on this page: try again in a moment.",
+      "tooMany": "Too many submissions arrived from your connection in a short time, so what you just sent was not recorded. Your answers are still on this page: wait a minute and try again.",
+      "server": "Something failed on our side and we could not confirm that what you just sent was recorded. Your answers are still on this page: try again in a few minutes; if it had already arrived, it will not be counted twice.",
+      "network": "There was no connection to the server and we could not confirm that what you just sent was recorded. Your answers are still on this page: check your internet connection and try again; if it had already arrived, it will not be counted twice.",
+      "load": "It may be the connection or a temporary problem on our side. Open it again in a few minutes; if it still does not open, ask whoever sent it to you."
     }
   },
   "surveyResults": {

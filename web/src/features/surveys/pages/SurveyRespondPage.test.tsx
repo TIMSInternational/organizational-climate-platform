@@ -3,10 +3,21 @@ import { render, screen, cleanup, waitFor, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import SurveyRespondPage from './SurveyRespondPage'
+import SurveyRespondForm from '../components/SurveyRespondForm'
 import { TranslationProvider } from '../../../i18n'
-import { LOCALE_STORAGE_KEY } from '../../../i18n/locale'
+import { CATALOGUES, LOCALE_STORAGE_KEY } from '../../../i18n/locale'
+import { createTranslator } from '../../../i18n/translate'
 import type { Locale } from '../../../i18n'
 import type { SurveyRespondQuestion, SurveyRespondView } from '../api/surveyResponses'
+import {
+  SERVER_NOT_ACCEPTING,
+  SERVER_PARTIAL_NOT_ALLOWED,
+  SERVER_RESPONSE_LIMIT,
+} from '../respondFailure'
+
+/** The shipped wording, read from the catalogue the page reads. */
+const es = createTranslator(CATALOGUES.es)
+const en = createTranslator(CATALOGUES.en)
 
 function question(overrides: Partial<SurveyRespondQuestion> = {}): SurveyRespondQuestion {
   return {
@@ -40,7 +51,10 @@ function view(overrides: Partial<SurveyRespondView> = {}): SurveyRespondView {
     resolvedLocale: 'es',
     fallbackFields: [],
     startDate: '2026-01-01T00:00:00Z',
-    endDate: '2026-12-31T00:00:00Z',
+    // Noon in Costa Rica, 18:00 UTC: the 31st in every zone this suite runs in. A UTC
+    // midnight would be the 30th on any reader west of UTC, which is correct now that the
+    // close is read in the reader's own zone (audit 2026-10-22, R2).
+    endDate: '2026-12-31T18:00:00Z',
     anonymous: true,
     allowPartialResponses: false,
     autoSave: true,
@@ -1306,15 +1320,16 @@ describe('SurveyRespondPage save state', () => {
 
   /**
    * The one state a respondent has to act on, so it is a `role="alert"` panel rather
-   * than a muted line — and it carries the server's own message beside our sentence,
-   * because "the survey has reached its response limit" names something they can do
-   * something about and "not saved" does not.
+   * than a muted line — and it carries the REASON beside our sentence, because "the survey
+   * has reached its response limit" names something they can do something about and "not
+   * saved" does not. The reason is our catalogued sentence for the refusal, never the
+   * server's English (audit 2026-10-22, R1).
    */
-  it('raises an alert when a background save fails, carrying the server’s reason', async () => {
+  it('raises an alert when a background save fails, carrying the reason in the reader’s language', async () => {
     vi.mocked(fetch).mockImplementation((_input: RequestInfo | URL, init?: RequestInit) =>
       Promise.resolve(
         init?.method === 'POST'
-          ? new Response(JSON.stringify({ message: 'Se ha alcanzado el límite' }), { status: 400 })
+          ? new Response(JSON.stringify({ message: 'This survey has reached its response limit' }), { status: 400 })
           : new Response(JSON.stringify(autosaving()), { status: 200 }),
       ),
     )
@@ -1324,7 +1339,8 @@ describe('SurveyRespondPage save state', () => {
 
     const alert = await screen.findByRole('alert', {}, { timeout: 4000 })
     expect(alert.textContent).toContain('Sus respuestas no se están guardando')
-    expect(alert.textContent).toContain('Se ha alcanzado el límite')
+    expect(alert.textContent).toContain(es('surveyRespond.failure.responseLimit'))
+    expect(alert.textContent).not.toContain('This survey has reached its response limit')
   })
 
   /**
@@ -1357,15 +1373,14 @@ describe('SurveyRespondPage save state', () => {
   })
 
   /**
-   * The licensing refusal, and the one status whose server text must not reach the screen.
+   * The licensing refusal.
    *
    * `SubmitAsync` answers **402** when the company has no licence seat left for this
    * survey's service, with a fixed English body (`SurveyResponseEndpoints.cs`,
-   * `NoLicenseSeats`). Every other failure here deliberately carries the server's own
-   * sentence — see the save-failure test above, where "the survey has reached its response
-   * limit" names something the respondent can act on. 402 is different twice over: the
-   * sentence is English on a Spanish product, and what it is really about is the customer's
-   * commercial state, which a respondent must never be shown.
+   * `NoLicenseSeats`). It was the first status kept off the screen; since audit 2026-10-22
+   * R1 every status is (`respondFailure.ts`, and the table of cases below). 402 is still
+   * different in one way: what it is really about is the customer's commercial state, which
+   * a respondent must never be shown, so its sentence is about the survey.
    *
    * These three tests are why the leak survived the suite that was already here: the
    * existing failure tests feed the mock `'Se ha alcanzado el límite'`, a **Spanish**
@@ -1416,13 +1431,14 @@ describe('SurveyRespondPage save state', () => {
   })
 
   /**
-   * The control, and what gives the two above their teeth.
+   * A 400 whose message this build does not recognise is still answered in our words.
    *
-   * Without it, "never show `error.message`" would pass this file just as well as
-   * "show it only when the status is not 402" — and the first would silently throw away
-   * the actionable server reason the save-failure alert was built to carry.
+   * This used to be the opposite test — "still carries the server's own reason for a
+   * refusal that is not a licence one" — and its fixture was a SPANISH server message, the
+   * same blind spot the comment above names for the 402. The server writes English (audit
+   * 2026-10-22, R1), so the rule is now absolute: no server text on the screen.
    */
-  it('still carries the server\u2019s own reason for a refusal that is not a licence one', async () => {
+  it('never carries the server\u2019s own text, even for a 400 it does not recognise', async () => {
     refusing(400, 'Se ha alcanzado el l\u00edmite')
     renderPage()
 
@@ -1430,7 +1446,8 @@ describe('SurveyRespondPage save state', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Enviar mis respuestas' }))
 
     const alert = await screen.findByRole('alert', {}, { timeout: 4000 })
-    expect(alert.textContent).toContain('Se ha alcanzado el l\u00edmite')
+    expect(alert.textContent).toContain(es('surveyRespond.failure.rejected'))
+    expect(alert.textContent).not.toContain('Se ha alcanzado el l\u00edmite')
   })
 
   /**
@@ -1739,7 +1756,7 @@ describe('SurveyRespondPage outcomes', () => {
     expect(screen.queryByRole('radio')).toBeNull()
   })
 
-  it('surfaces the server message when a submission is refused', async () => {
+  it('names a refused submission in the reader’s language, never in the server’s English', async () => {
     vi.mocked(fetch).mockImplementation((_input: RequestInfo | URL, init?: RequestInit) =>
       Promise.resolve(
         init?.method === 'POST'
@@ -1754,13 +1771,12 @@ describe('SurveyRespondPage outcomes', () => {
     await userEvent.click(await screen.findByRole('radio', { name: 'Muy de acuerdo' }))
     await userEvent.click(screen.getByRole('button', { name: 'Enviar mis respuestas' }))
 
-    // The alert carries the server's own message; the live region repeats it so a
+    // The alert carries our sentence for the refusal; the live region repeats it so a
     // screen reader hears a failure that moves nothing into focus.
     await waitFor(() =>
-      expect(screen.getByRole('alert').textContent).toContain(
-        'This survey has reached its response limit',
-      ),
+      expect(screen.getByRole('alert').textContent).toContain(es('surveyRespond.failure.responseLimit')),
     )
+    expect(document.body.textContent).not.toContain('This survey has reached its response limit')
   })
 })
 
@@ -1794,10 +1810,18 @@ describe('SurveyRespondPage unavailable states', () => {
     expect(await screen.findByText('Vuelva a iniciar sesión')).toBeTruthy()
   })
 
-  it('falls back to the server message for a status it has no specific answer for', async () => {
+  it('answers a status it has no specific sentence for in its own words, never the server’s', async () => {
     failWith(500, 'Something exploded')
     renderPage()
-    expect(await screen.findByText('Something exploded')).toBeTruthy()
+    expect(await screen.findByText(es('surveyRespond.failure.load'))).toBeTruthy()
+    expect(document.body.textContent).not.toContain('Something exploded')
+  })
+
+  it('answers a load that got no response at all in its own words, never the browser’s', async () => {
+    vi.mocked(fetch).mockRejectedValue(new TypeError('Failed to fetch'))
+    renderPage()
+    expect(await screen.findByText(es('surveyRespond.failure.load'))).toBeTruthy()
+    expect(document.body.textContent).not.toContain('Failed to fetch')
   })
 })
 
@@ -2037,5 +2061,154 @@ describe('SurveyRespondPage as an instrument', () => {
     expect(chip.closest('legend')?.textContent).toContain('Pregunta 1 de 2')
     expect(screen.queryByRole('progressbar')).toBeNull()
     expect(positionReading()).toBe('')
+  })
+})
+
+/**
+ * Audit 2026-10-22, R1: **no server text and no browser text reaches the respondent.**
+ *
+ * One row per refusal `POST /surveys/{id}/responses` can answer (`SurveyResponseEndpoints.cs`,
+ * Program.cs's 409, the rate limiter's 429, a 5xx) and the two ways a request gets no answer
+ * at all. Each must print its catalogued sentence — which says whether what was sent was
+ * recorded — and must not print what the server or the browser said. The messages fed in are
+ * the server's own English, verbatim: a Spanish fixture is how the 402 leak survived this file.
+ */
+describe('SurveyRespondPage refusals in the reader’s language (R1)', () => {
+  const ENGLISH_TELLS = ['This survey', 'Failed to fetch', 'Load failed', 'error occurred', 'Too many']
+
+  const refusals: readonly [label: string, status: number, message: string, key: string][] = [
+    ['closed (400)', 400, SERVER_NOT_ACCEPTING, 'surveyRespond.failure.closed'],
+    ['response limit (400)', 400, SERVER_RESPONSE_LIMIT, 'surveyRespond.failure.responseLimit'],
+    ['partial not allowed (400)', 400, SERVER_PARTIAL_NOT_ALLOWED, 'surveyRespond.failure.partialNotAllowed'],
+    ['any other 400', 400, 'Question q1 requires an answer', 'surveyRespond.failure.rejected'],
+    ['signed out (401)', 401, 'This survey is not currently available', 'surveyRespond.failure.signedOut'],
+    ['no licence seat (402)', 402, 'This survey is not currently accepting new responses', 'surveyRespond.noSeatsBody'],
+    ['not yours (403)', 403, '', 'surveyRespond.failure.notYours'],
+    ['gone (404)', 404, 'Survey not found', 'surveyRespond.failure.notFound'],
+    ['conflict (409)', 409, 'The record was modified by another request', 'surveyRespond.failure.conflict'],
+    ['unprocessable (422)', 422, 'One or more validation errors occurred', 'surveyRespond.failure.rejected'],
+    ['rate limited (429)', 429, 'Too many requests. Try again later.', 'surveyRespond.failure.tooMany'],
+    ['server error (500)', 500, 'An unexpected error occurred', 'surveyRespond.failure.server'],
+    ['unavailable (503)', 503, 'Service Unavailable', 'surveyRespond.failure.server'],
+  ]
+
+  function refusingSubmit(status: number, message: string) {
+    vi.mocked(fetch).mockImplementation((_input: RequestInfo | URL, init?: RequestInit) =>
+      Promise.resolve(
+        init?.method === 'POST'
+          ? new Response(JSON.stringify({ message }), { status })
+          : new Response(JSON.stringify(view()), { status: 200 }),
+      ),
+    )
+  }
+
+  function unreachableOnPost(text: string, payload: SurveyRespondView = view()) {
+    vi.mocked(fetch).mockImplementation((_input: RequestInfo | URL, init?: RequestInit) =>
+      init?.method === 'POST'
+        ? Promise.reject(new TypeError(text))
+        : Promise.resolve(new Response(JSON.stringify(payload), { status: 200 })),
+    )
+  }
+
+  async function submitAndReadAlert(button = 'Enviar mis respuestas'): Promise<string> {
+    await userEvent.click(await screen.findByRole('radio', { name: 'Muy de acuerdo' }))
+    await userEvent.click(screen.getByRole('button', { name: button }))
+    const alert = await screen.findByRole('alert', {}, { timeout: 4000 })
+    return alert.textContent ?? ''
+  }
+
+  function expectNoForeignText(message: string) {
+    const body = document.body.textContent ?? ''
+    if (message !== '') expect(body, 'the server’s own words reached the screen').not.toContain(message)
+    for (const tell of ENGLISH_TELLS) expect(body, `English on a Spanish screen: ${tell}`).not.toContain(tell)
+  }
+
+  it.each(refusals)('a submit refused as %s reads its own sentence', async (_label, status, message, key) => {
+    refusingSubmit(status, message)
+    renderPage()
+
+    const alert = await submitAndReadAlert()
+    expect(alert).toContain(es('surveyRespond.submitFailed'))
+    expect(alert).toContain(es(key))
+    expectNoForeignText(message)
+  })
+
+  it.each(['Failed to fetch', 'Load failed'])('a submit that got no response (%s) says so in Spanish', async (text) => {
+    unreachableOnPost(text)
+    renderPage()
+
+    const alert = await submitAndReadAlert()
+    expect(alert).toContain(es('surveyRespond.failure.network'))
+    expectNoForeignText(text)
+  })
+
+  it('reads a refusal on the open link as unavailable, not as a session that ended', async () => {
+    // Nobody on `/s/:token` is signed in, so a 401 there is the server's `Unavailable()`.
+    refusingSubmit(401, 'This survey is not currently available')
+    render(
+      <TranslationProvider>
+        <MemoryRouter initialEntries={['/s/abc']}>
+          <SurveyRespondForm surveyId="s1" publicEntry />
+        </MemoryRouter>
+      </TranslationProvider>,
+    )
+
+    const alert = await submitAndReadAlert()
+    expect(alert).toContain(es('surveyRespond.failure.unavailable'))
+    expect(alert).not.toContain(es('surveyRespond.failure.signedOut'))
+    expectNoForeignText('This survey is not currently available')
+  })
+
+  it('carries the reason under a failed background save in Spanish, never the server’s English', async () => {
+    vi.mocked(fetch).mockImplementation((_input: RequestInfo | URL, init?: RequestInit) =>
+      Promise.resolve(
+        init?.method === 'POST'
+          ? new Response(JSON.stringify({ message: SERVER_NOT_ACCEPTING }), { status: 400 })
+          : new Response(JSON.stringify(view({ allowPartialResponses: true, autoSave: true })), { status: 200 }),
+      ),
+    )
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('radio', { name: 'Muy de acuerdo' }))
+    const alert = await waitFor(
+      () => {
+        const node = document.querySelector('[data-slot="respond-save-failed"]')
+        expect(node).toBeTruthy()
+        return node as HTMLElement
+      },
+      { timeout: 5000 },
+    )
+    expect(alert.textContent).toContain(es('surveyRespond.saveFailedTitle'))
+    expect(alert.textContent).toContain(es('surveyRespond.failure.closed'))
+    expectNoForeignText(SERVER_NOT_ACCEPTING)
+  })
+
+  it('carries a background save that got no response in Spanish, never the browser’s words', async () => {
+    unreachableOnPost('Failed to fetch', view({ allowPartialResponses: true, autoSave: true }))
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('radio', { name: 'Muy de acuerdo' }))
+    const alert = await waitFor(
+      () => {
+        const node = document.querySelector('[data-slot="respond-save-failed"]')
+        expect(node).toBeTruthy()
+        return node as HTMLElement
+      },
+      { timeout: 5000 },
+    )
+    expect(alert.textContent).toContain(es('surveyRespond.failure.network'))
+    expectNoForeignText('Failed to fetch')
+  })
+
+  it('says the same thing in English to a reader whose language is English', async () => {
+    window.localStorage.setItem(LOCALE_STORAGE_KEY, 'en')
+    refusingSubmit(400, SERVER_NOT_ACCEPTING)
+    renderPage()
+
+    const alert = await submitAndReadAlert('Submit my answers')
+    expect(alert).toContain(en('surveyRespond.failure.closed'))
+    // Our sentence, not the server's — the two differ, and only ours says what happened to
+    // the answers.
+    expect(alert).not.toContain(SERVER_NOT_ACCEPTING)
   })
 })
