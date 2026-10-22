@@ -664,6 +664,7 @@ app.MapSurveyEndpoints();
 app.MapSurveyResponseEndpoints();
 app.MapSurveyDistributionEndpoints();
 app.MapSurveyParticipationEndpoints();
+app.MapSurveyCredentialEndpoints();
 app.MapSurveyDraftEndpoints();
 app.MapSurveyResultsEndpoints();
 app.MapSurveyExportEndpoints();

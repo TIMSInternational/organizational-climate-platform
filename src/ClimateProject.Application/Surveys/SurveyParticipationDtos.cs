@@ -77,6 +77,13 @@ namespace ClimateProject.Application.Surveys;
 /// anonymous survey.
 /// </para>
 /// </param>
+/// <param name="CredentialMode">
+/// How this survey's people sign in: <c>shared</c> (one account per person) or
+/// <c>per_survey</c> (one key per person per survey), as frozen on the survey at create time.
+/// The roster reads differently in each: a per-survey person has no account username and signs
+/// in with <see cref="SurveyRosterRow.SurveyUsername"/>.
+/// </param>
+/// <param name="SurveyTitleEn">The survey's title, so a screen can name it in a confirmation without a second request.</param>
 public sealed record SurveyParticipationView(
     Guid SurveyId,
     bool CollectsParticipantIdentity,
@@ -88,7 +95,10 @@ public sealed record SurveyParticipationView(
     int NotStartedCount,
     IReadOnlyList<SurveyRosterRow> Roster,
     bool TracksIndividuals,
-    bool TracksCompletionOnly);
+    bool TracksCompletionOnly,
+    string CredentialMode = "shared",
+    string? SurveyTitleEn = null,
+    string? SurveyTitleEs = null);
 
 /// <param name="ParticipatedOn">A calendar day, never a time: the row holds no more.</param>
 public sealed record SurveyParticipantRow(string Name, string? Email, DateOnly ParticipatedOn);
@@ -160,6 +170,16 @@ public sealed record SurveyRosterDemographic(string Field, string? LabelEn, stri
 /// survey too (ruled 2026-10-12): a per-person timestamp that lines up with
 /// <c>responses.completion_time</c> is the join that would un-anonymise the response.
 /// </para>
+/// <para>
+/// <paramref name="SurveyUsername"/>, <paramref name="CredentialIssuedOn"/> and
+/// <paramref name="LastSignInOn"/> describe this person's KEY for this survey
+/// (<c>survey_credentials</c>) and are filled only on a <c>per_survey</c> survey; all three are
+/// null for somebody who holds no key. Days in the company's zone, never instants, for the
+/// same reason as <paramref name="LastActivityOn"/>: a sign-in instant sits seconds before a
+/// response's first save, and that is the join the 2026-10-12 ruling forbids. Answers
+/// "was it mailed" and "did they ever get in" -- the question an anonymous survey otherwise
+/// cannot answer -- and nothing finer.
+/// </para>
 /// </remarks>
 public sealed record SurveyRosterRow(
     Guid UserId,
@@ -169,4 +189,7 @@ public sealed record SurveyRosterRow(
     string Role,
     string Status,
     DateOnly? LastActivityOn,
-    IReadOnlyList<SurveyRosterDemographic> Demographics);
+    IReadOnlyList<SurveyRosterDemographic> Demographics,
+    string? SurveyUsername = null,
+    DateOnly? CredentialIssuedOn = null,
+    DateOnly? LastSignInOn = null);

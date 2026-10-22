@@ -3,6 +3,7 @@ import {
   Button,
   Checkbox,
   Chip,
+  ConfirmationDialog,
   Input,
   LoadingRegion,
   SkeletonText,
@@ -21,7 +22,12 @@ import {
   resendCredentialsBatch,
   type CredentialsResendOutcome,
 } from '../../../org-structure/api/users'
-import type { SurveyParticipantStatus, SurveyRosterRow } from '../../api/surveys'
+import {
+  reissueSurveyCredential,
+  type SurveyCredentialReissueOutcome,
+  type SurveyParticipantStatus,
+  type SurveyRosterRow,
+} from '../../api/surveys'
 import type { ParticipationState } from './useSurveyParticipation'
 import { Card, CardHeading } from './parts'
 import { formatParticipationDay } from './participationDay'
@@ -52,6 +58,21 @@ const STATUS_KEY: Record<SurveyParticipantStatus, string> = {
   started: 'statusStarted',
   not_started: 'statusNotStarted',
   not_completed: 'statusNotCompleted',
+}
+
+/** What one per-row reissue did, kept until the next one so the admin can read it. */
+type ReissueState =
+  | { phase: 'idle' }
+  | { phase: 'done'; name: string; email: string; outcome: SurveyCredentialReissueOutcome | { kind: 'error' } }
+
+const REFUSAL_KEY: Record<string, string> = {
+  not_per_survey: 'reissueRefusedNotPerSurvey',
+  survey_not_open: 'reissueRefusedNotOpen',
+  user_not_found: 'reissueRefusedNotFound',
+  user_inactive: 'reissueRefusedInactive',
+  not_in_audience: 'reissueRefusedNotInAudience',
+  no_credential: 'reissueRefusedNoCode',
+  already_signed_in: 'reissueRefusedSignedIn',
 }
 
 const OUTCOME_KEY: Record<string, string> = {
@@ -90,8 +111,28 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
   const [send, setSend] = useState<SendState>({ phase: 'idle' })
+  const [confirmBatch, setConfirmBatch] = useState(false)
+  const [reissueTarget, setReissueTarget] = useState<SurveyRosterRow | null>(null)
+  const [reissue, setReissue] = useState<ReissueState>({ phase: 'idle' })
+  // The day a key reissued from THIS page was mailed, so the row says so without refetching the
+  // whole roster -- the payload is shared with the Participación panel, which owns its fetch.
+  const [issuedHere, setIssuedHere] = useState<Readonly<Record<string, string>>>({})
 
   const roster = state.status === 'ready' ? state.view.roster : NO_ROWS
+
+  /**
+   * One key per person per survey. Such a person has no account username, so the account
+   * resend behind "Enviar recordatorio" cannot reach them -- and in this mode it must not: an
+   * account password would be a wider key than the one the mode hands out. Their sign-in is the
+   * survey key, and it is reissued per row.
+   */
+  const perSurvey = state.status === 'ready' && state.view.credentialMode === 'per_survey'
+  const surveyTitle =
+    state.status !== 'ready'
+      ? ''
+      : (locale === 'es'
+          ? (state.view.surveyTitleEs ?? state.view.surveyTitleEn)
+          : (state.view.surveyTitleEn ?? state.view.surveyTitleEs)) ?? ''
 
   /**
    * Whether a person's state on this survey means anything. An anonymous survey writes no user
@@ -119,13 +160,14 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
         row.name.toLocaleLowerCase().includes(needle)
         || row.email.toLocaleLowerCase().includes(needle)
         || (row.username ?? '').toLocaleLowerCase().includes(needle)
+        || (row.surveyUsername ?? '').toLocaleLowerCase().includes(needle)
       )
     })
   }, [roster, search, filter])
 
   // Only the people a resend can actually reach: an account that signs in by email has no
   // generated details, so offering to send it some would be an action that cannot succeed.
-  const sendable = visible.filter((row) => row.username !== null)
+  const sendable = perSurvey ? [] : visible.filter((row) => row.username !== null)
   const chosen = [...selected].filter((id) => roster.some((row) => row.userId === id))
   const allShownChosen = sendable.length > 0 && sendable.every((row) => selected.has(row.userId))
 
@@ -203,6 +245,21 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
       outcomes,
     })
     setSelected(new Set())
+  }
+
+  async function reissueFor(row: SurveyRosterRow) {
+    let outcome: SurveyCredentialReissueOutcome | { kind: 'error' }
+    try {
+      outcome = await reissueSurveyCredential(baseUrl, state.status === 'ready' ? state.view.surveyId : '', row.userId)
+    } catch {
+      outcome = { kind: 'error' }
+    }
+    if (outcome.kind === 'sent') {
+      const issuedOn = outcome.issuedOn
+      setIssuedHere((current) => ({ ...current, [row.userId]: issuedOn }))
+    }
+    setReissue({ phase: 'done', name: row.name, email: row.email, outcome })
+    setReissueTarget(null)
   }
 
   // Counts come off the roster rather than the payload's own counters, so a chip can never
@@ -289,7 +346,7 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
             {chosen.length > 0 ? (
               <div className="flex flex-wrap items-center gap-3 rounded-md border border-line-light bg-surface-icon-box px-3 py-2">
                 <span className="text-sm font-medium">{copy('selected', { count: chosen.length })}</span>
-                <Button type="button" variant="primary" disabled={send.phase === 'sending'} onClick={() => void sendCredentials()}>
+                <Button type="button" variant="primary" disabled={send.phase === 'sending'} onClick={() => setConfirmBatch(true)}>
                   {copy('send')}
                 </Button>
                 <span className="text-xs text-fg-secondary">{copy('sendNote')}</span>
@@ -323,6 +380,23 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
               </div>
             ) : null}
 
+            {reissue.phase === 'done' ? (
+              <p
+                role="status"
+                className={
+                  reissue.outcome.kind === 'sent' ? 'm-0 text-sm font-medium' : 'm-0 text-sm font-medium text-accent-red-ink'
+                }
+              >
+                {reissue.outcome.kind === 'sent'
+                  ? copy('reissueSent', { name: reissue.name, email: reissue.email })
+                  : reissue.outcome.kind === 'send_failed'
+                    ? copy('reissueSendFailed', { name: reissue.name })
+                    : reissue.outcome.kind === 'refused'
+                      ? copy(REFUSAL_KEY[reissue.outcome.code] ?? 'reissueError')
+                      : copy('reissueError')}
+              </p>
+            ) : null}
+
             {visible.length === 0 ? (
               <p className="m-0 text-sm text-fg-secondary">{copy('empty')}</p>
             ) : (
@@ -330,17 +404,22 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
                 <Table className="text-sm">
                   <TableHeader className="bg-surface-icon-box">
                     <TableRow>
-                      <TableHead scope="col" className={TH_CLASS}>
-                        <Checkbox
-                          checked={allShownChosen}
-                          disabled={sendable.length === 0}
-                          aria-label={copy('selectAll')}
-                          onCheckedChange={toggleAllShown}
-                        />
-                      </TableHead>
+                      {perSurvey ? null : (
+                        <TableHead scope="col" className={TH_CLASS}>
+                          <Checkbox
+                            checked={allShownChosen}
+                            disabled={sendable.length === 0}
+                            aria-label={copy('selectAll')}
+                            onCheckedChange={toggleAllShown}
+                          />
+                        </TableHead>
+                      )}
                       <TableHead scope="col" className={TH_CLASS}>{copy('colPerson')}</TableHead>
                       <TableHead scope="col" className={TH_CLASS}>{copy('colRole')}</TableHead>
                       <TableHead scope="col" className={TH_CLASS}>{copy('colUsuario')}</TableHead>
+                      {perSurvey ? (
+                        <TableHead scope="col" className={TH_CLASS}>{copy('colCode')}</TableHead>
+                      ) : null}
                       {showState ? (
                         <>
                           <TableHead scope="col" className={TH_CLASS}>{copy('colStatus')}</TableHead>
@@ -357,6 +436,9 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
                         row={row}
                         roleLabel={t(`superadmin.next.users.roles.${row.role}`)}
                         tracked={showState}
+                        perSurvey={perSurvey}
+                        issuedHere={issuedHere[row.userId] ?? null}
+                        onReissue={() => setReissueTarget(row)}
                         locale={locale}
                         copy={copy}
                         selected={selected.has(row.userId)}
@@ -372,6 +454,34 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
           </>
         )}
       </Card>
+
+      {/* The batch replaces every chosen person's password: the pair already in their inbox
+          stops working. That is said BEFORE the send, not only in the note beside the button. */}
+      <ConfirmationDialog
+        open={confirmBatch}
+        onOpenChange={setConfirmBatch}
+        title={copy('sendConfirmTitle', { count: chosen.length })}
+        description={copy('sendConfirmBody', { count: chosen.length })}
+        confirmText={copy('send')}
+        cancelText={t('common.cancel')}
+        onConfirm={() => sendCredentials()}
+      />
+
+      <ConfirmationDialog
+        open={reissueTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setReissueTarget(null)
+        }}
+        title={copy('reissueTitle', { name: reissueTarget?.name ?? '' })}
+        description={copy('reissueBody', {
+          email: reissueTarget?.email ?? '',
+          survey: surveyTitle,
+          username: reissueTarget?.surveyUsername ?? '',
+        })}
+        confirmText={copy('reissue')}
+        cancelText={t('common.cancel')}
+        onConfirm={() => (reissueTarget === null ? undefined : reissueFor(reissueTarget))}
+      />
     </section>
   )
 }
@@ -380,6 +490,9 @@ function RosterRows({
   row,
   roleLabel,
   tracked,
+  perSurvey,
+  issuedHere,
+  onReissue,
   locale,
   copy,
   selected,
@@ -390,6 +503,10 @@ function RosterRows({
   row: SurveyRosterRow
   roleLabel: string
   tracked: boolean
+  perSurvey: boolean
+  /** The day a reissue from this page mailed this person's key, overriding the loaded one. */
+  issuedHere: string | null
+  onReissue: () => void
   locale: string
   copy: (key: string, vars?: Record<string, string | number>) => string
   selected: boolean
@@ -400,19 +517,28 @@ function RosterRows({
   const label = (demographic: { labelEs: string | null; labelEn: string | null; field: string }) =>
     (locale === 'es' ? demographic.labelEs : demographic.labelEn) ?? demographic.field
 
+  // Absent on a payload from before the key columns existed; absent reads as "no key".
+  const surveyUsername = row.surveyUsername ?? null
+  const issuedOn = issuedHere ?? row.credentialIssuedOn ?? null
+  const signedInOn = row.lastSignInOn ?? null
+  // Five either way: per-survey trades the checkbox for the Código column.
+  const columns = 5 + (tracked ? 2 : 0)
+
   return (
     <>
       <TableRow data-user-id={row.userId}>
-        <TableCell className="px-3 py-2">
-          <Checkbox
-            checked={selected}
-            // An account that signs in by email has no generated details, so there is nothing
-            // a resend could send it.
-            disabled={row.username === null}
-            aria-label={copy('selectRow', { name: row.name })}
-            onCheckedChange={onToggle}
-          />
-        </TableCell>
+        {perSurvey ? null : (
+          <TableCell className="px-3 py-2">
+            <Checkbox
+              checked={selected}
+              // An account that signs in by email has no generated details, so there is nothing
+              // a resend could send it.
+              disabled={row.username === null}
+              aria-label={copy('selectRow', { name: row.name })}
+              onCheckedChange={onToggle}
+            />
+          </TableCell>
+        )}
         <TableCell className="px-3 py-2">
           <span className="flex min-w-0 flex-col">
             <span className="truncate font-medium">{row.name}</span>
@@ -421,12 +547,57 @@ function RosterRows({
         </TableCell>
         <TableCell className="px-3 py-2 text-fg-secondary">{roleLabel}</TableCell>
         <TableCell className="px-3 py-2">
-          {row.username === null ? (
+          {perSurvey ? (
+            // A per-survey person signs in with THIS survey's key, never their email: the
+            // account was imported keyless. "Entra con su correo" here was false.
+            surveyUsername === null ? (
+              <span className="text-xs text-fg-secondary">{copy('noCode')}</span>
+            ) : (
+              <span className="whitespace-nowrap font-mono text-xs text-fg-secondary">{surveyUsername}</span>
+            )
+          ) : row.username === null ? (
             <span className="text-xs text-fg-secondary">{copy('noUsuario')}</span>
           ) : (
             <span className="font-mono text-xs text-fg-secondary">{row.username}</span>
           )}
         </TableCell>
+        {perSurvey ? (
+          <TableCell className="px-3 py-2">
+            <span className="flex min-w-48 flex-col items-start gap-1">
+              <span className="text-xs">
+                {issuedOn === null
+                  ? copy('noCode')
+                  : copy('codeSent', { date: formatParticipationDay(issuedOn, locale) })}
+              </span>
+              {issuedOn === null ? null : (
+                <span className="text-xs text-fg-secondary">
+                  {signedInOn === null
+                    ? copy('notSignedIn')
+                    : copy('signedInOn', { date: formatParticipationDay(signedInOn, locale) })}
+                </span>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                // A used key is in that person's hands: replacing it would lock them out of a
+                // survey they may be halfway through. And with no key there is nothing to
+                // reissue -- the invitation mints the first one.
+                disabled={issuedOn === null || signedInOn !== null}
+                aria-label={copy('reissueFor', { name: row.name })}
+                aria-describedby={issuedOn === null || signedInOn !== null ? `reissue-why-${row.userId}` : undefined}
+                onClick={onReissue}
+              >
+                {copy('reissue')}
+              </Button>
+              {issuedOn === null || signedInOn !== null ? (
+                <span id={`reissue-why-${row.userId}`} className="text-xs text-fg-secondary">
+                  {issuedOn === null ? copy('reissueWhyNoCode') : copy('reissueWhySignedIn')}
+                </span>
+              ) : null}
+            </span>
+          </TableCell>
+        ) : null}
         {tracked ? (
           <>
             <TableCell className="px-3 py-2">
@@ -455,7 +626,7 @@ function RosterRows({
       </TableRow>
       {expanded ? (
         <TableRow data-details-for={row.userId}>
-          <TableCell colSpan={tracked ? 7 : 5} className="px-3 py-3">
+          <TableCell colSpan={columns} className="px-3 py-3">
             {row.demographics.length === 0 ? (
               <p className="m-0 text-sm text-fg-secondary">{copy('noDemographics')}</p>
             ) : (

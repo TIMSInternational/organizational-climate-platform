@@ -457,7 +457,20 @@ export interface SurveyParticipationView {
    * two states, `completed` and `not_completed`, and not three.
    */
   tracksCompletionOnly: boolean
+  /**
+   * How this survey's people sign in, frozen on the survey when it was created. `per_survey`
+   * means one key per person per survey: the account has no username, the person signs in with
+   * `surveyUsername`, and the key is reissued per row rather than by the account resend.
+   * Optional because a payload from before 2026-10-22 lacks it; absent reads as `shared`,
+   * which is what every survey was before the mode existed.
+   */
+  credentialMode?: SurveyCredentialMode
+  /** The survey's title, so a confirmation can name it. Either may be null on a one-language survey. */
+  surveyTitleEn?: string | null
+  surveyTitleEs?: string | null
 }
+
+export type SurveyCredentialMode = 'shared' | 'per_survey'
 
 /**
  * Where ONE invited person stands on this survey.
@@ -491,11 +504,61 @@ export interface SurveyRosterRow {
   /** A calendar day, never an instant (ruled 2026-10-12). */
   lastActivityOn: string | null
   demographics: SurveyRosterDemographic[]
+  /**
+   * This person's key for THIS survey, on a `per_survey` survey only: the username it signs in
+   * with, the day it was mailed and the day it was last used — company-zone days, never
+   * instants. All three null for somebody who holds no key, and always null on a shared survey.
+   * Optional for the same reason as `credentialMode`; absent reads as null.
+   */
+  surveyUsername?: string | null
+  credentialIssuedOn?: string | null
+  lastSignInOn?: string | null
 }
 
 export async function getSurveyParticipation(baseUrl: string, id: string): Promise<SurveyParticipationView> {
   const response = await authFetch(`${baseUrl}/surveys/${id}/participation`)
   return response.json() as Promise<SurveyParticipationView>
+}
+
+/** Why `POST /surveys/{id}/credentials/{userId}/reissue` refused, as the API names it. */
+export type SurveyCredentialReissueRefusal =
+  | 'not_per_survey'
+  | 'survey_not_open'
+  | 'user_not_found'
+  | 'user_inactive'
+  | 'not_in_audience'
+  | 'no_credential'
+  | 'already_signed_in'
+
+export type SurveyCredentialReissueOutcome =
+  /** A new password was mailed; the old one stopped working. `issuedOn` is today, company zone. */
+  | { kind: 'sent'; issuedOn: string }
+  /** The mail did not leave, so the server put the OLD key back: it still works. */
+  | { kind: 'send_failed' }
+  | { kind: 'refused'; code: SurveyCredentialReissueRefusal | 'unknown' }
+
+/**
+ * Sends ONE person a new password for ONE survey's key. The refusals (404/409) come back as
+ * a value with their code, not as a thrown English sentence, so the roster can say them in
+ * Spanish; `delivered: false` is a 200 because the server restored the old key.
+ */
+export async function reissueSurveyCredential(
+  baseUrl: string,
+  surveyId: string,
+  userId: string,
+): Promise<SurveyCredentialReissueOutcome> {
+  const response = await authFetch(
+    `${baseUrl}/surveys/${surveyId}/credentials/${userId}/reissue`,
+    { method: 'POST' },
+    { allowStatus: [404, 409] },
+  )
+  const body = (await response.json().catch(() => null)) as
+    | { delivered?: boolean; issuedOn?: string; code?: string }
+    | null
+  if (!response.ok) {
+    return { kind: 'refused', code: (body?.code as SurveyCredentialReissueRefusal | undefined) ?? 'unknown' }
+  }
+  return body?.delivered && body.issuedOn ? { kind: 'sent', issuedOn: body.issuedOn } : { kind: 'send_failed' }
 }
 
 /** `DELETE /surveys/{id}` answers 204, so there is no body to parse. */
