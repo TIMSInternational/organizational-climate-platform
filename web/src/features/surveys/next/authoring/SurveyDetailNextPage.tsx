@@ -26,20 +26,17 @@ import { Note, PanelHeading } from '../../../shared-next/parts'
 import { PreviewQuestion, PreviewSection } from './QuestionPreview'
 import { Card, CardHeading, Meter, ReadingTile } from './parts'
 import {
-  dayMonth,
-  daysFrom,
   dimensionSections,
   remindersSent,
   responseRate,
   surveyAudience,
   targetedDepartments,
-  yearOf,
   sentenceCase,
 } from './launch'
 import { useSurveyDetailModel, type SurveyDetailModel } from './useSurveyDetailModel'
 import { SurveyWindowDialog } from './SurveyWindowDialog'
 import { DeleteSurveyDialog } from './DeleteSurveyDialog'
-import { browserTimeZone, dayTimeIn, isKnownTimeZone, zoneLabel } from './zonedWindow'
+import { browserTimeZone, dayMonthIn, dayTimeIn, daysFromIn, isKnownTimeZone, yearIn, zoneLabel } from './zonedWindow'
 
 /**
  * Detalle de encuesta, redesigned (canvas board "SurveyDetail") — `/surveys/:id`.
@@ -133,8 +130,6 @@ export function SurveyDetailView({
   })
   const rate = responseRate(survey.responseCount, audience?.count ?? null)
   const targets = targetedDepartments(survey.departmentIds, departments)
-  const closesIn = daysFrom(survey.endDate, now)
-  const opensIn = daysFrom(survey.startDate, now)
   const reminders = remindersSent(invitations?.invitations ?? null)
   const sections = dimensionSections(survey.questions)
   const canAuthor = caps.canAuthorSurveys
@@ -150,6 +145,9 @@ export function SurveyDetailView({
   // The company's clock, which the window is read and written in. The browser's only when the
   // company's cannot be read -- and the editor prints whichever zone it is using.
   const timeZone = isKnownTimeZone(model.timeZone) ? model.timeZone : browserTimeZone()
+  // Counted in the same zone the sheet prints, so the tile, the sheet and "Activar" agree.
+  const closesIn = daysFromIn(survey.endDate, now, timeZone)
+  const opensIn = daysFromIn(survey.startDate, now, timeZone)
   // `canDistribute` is `AllowsScheduleEdit` (draft, scheduled, active): exactly where
   // `PUT /surveys/{id}` takes a new window.
   const windowEditable = canAuthor && onSaveWindow !== undefined && canDistribute(survey.status)
@@ -267,8 +265,8 @@ export function SurveyDetailView({
                 : copy('closed')
               : copy('closes')
           }
-          value={dayMonth(survey.endDate, locale)}
-          unit={closeLine(copy, yearOf(survey.endDate), closesIn)}
+          value={dayMonthIn(survey.endDate, timeZone, locale)}
+          unit={closeLine(copy, yearIn(survey.endDate, timeZone), closesIn)}
         >
           {reminders !== null && (
             <span className="text-sm text-fg-secondary">

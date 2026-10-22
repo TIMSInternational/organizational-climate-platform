@@ -17,6 +17,8 @@
  * Costa Rica, but the zone is a setting) lands on the reading the zone actually has.
  */
 
+import { instantCalendarDay } from '../../../../lib/calendarDay'
+
 const WALL_CLOCK = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/
 
 /** Whether `timeZone` is an IANA zone this platform knows. */
@@ -106,4 +108,34 @@ export function dayTimeIn(instant: string | number | Date, timeZone: string, loc
     .replace(/\bsept\b/, 'sep')
   const time = new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(at)
   return `${day} · ${time}`
+}
+
+/**
+ * Whole calendar days from `now` to `instant`, both read as days in `timeZone` -- the
+ * company-clock counterpart of `launch.ts`'s `daysFrom`, through wave 1's
+ * `instantCalendarDay`. The detail page's close tile and its fact sheet read the same zone, so
+ * the tile cannot say "11 oct" beside a sheet that says "10 oct · 23:59" (measured on a
+ * UTC-5 laptop before this). Null when unparseable.
+ */
+export function daysFromIn(instant: string, now: Date, timeZone: string): number | null {
+  const at = Date.parse(instant)
+  if (Number.isNaN(at) || !isKnownTimeZone(timeZone)) return null
+  const day = (value: number | Date) => Date.parse(`${instantCalendarDay(value, timeZone)}T00:00:00Z`)
+  return Math.round((day(at) - day(now)) / 86_400_000)
+}
+
+/** "10 oct" in `timeZone`, written as `launch.ts`'s `dayMonth` writes it. */
+export function dayMonthIn(instant: string, timeZone: string, locale: string): string {
+  const at = new Date(instant)
+  if (Number.isNaN(at.getTime()) || !isKnownTimeZone(timeZone)) return '—'
+  return new Intl.DateTimeFormat(locale === 'es' ? 'es-CR' : 'en-US', { timeZone, day: 'numeric', month: 'short' })
+    .format(at)
+    .replace('.', '')
+    .replace(/\bsept\b/, 'sep')
+}
+
+/** The year `instant` falls in, in `timeZone`. */
+export function yearIn(instant: string, timeZone: string): string {
+  const day = instantCalendarDay(Date.parse(instant), timeZone)
+  return /^\d{4}-/.test(day) ? day.slice(0, 4) : ''
 }

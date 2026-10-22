@@ -213,6 +213,13 @@ describe('Detalle de encuesta — the window and delete (audit G16)', () => {
     expect(screen.getByTestId('detail-sheet').textContent).toContain('America/Costa_Rica (GMT-6)')
   })
 
+  it('dates the close tile on the same clock as the sheet, so the two cannot disagree', () => {
+    // 05:59 UTC on the 11th is 23:59 on the 10th in Costa Rica.
+    renderView(duplicatedFromClosed({ endDate: '2026-10-11T05:59:00Z' }))
+    expect(screen.getByTestId('tile-closes').textContent).toContain('10 oct')
+    expect(screen.getByTestId('sheet-end').textContent).toBe('10 oct 2026 · 23:59')
+  })
+
   it('never offers "Eliminar" once somebody has answered', () => {
     renderView(survey({ responseCount: 1 }))
     expect(screen.queryByRole('button', { name: del.action })).toBeNull()

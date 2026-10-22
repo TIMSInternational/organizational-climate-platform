@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dayTimeIn, instantOfWallClock, isKnownTimeZone, wallClockIn, zoneLabel } from './zonedWindow'
+import { dayMonthIn, daysFromIn, yearIn, dayTimeIn, instantOfWallClock, isKnownTimeZone, wallClockIn, zoneLabel } from './zonedWindow'
 
 const CR = 'America/Costa_Rica'
 
@@ -41,5 +41,19 @@ describe('zonedWindow — the survey window on the company clock (G16)', () => {
     expect(zoneLabel(CR, Date.parse('2026-10-28T12:00:00Z'))).toBe('America/Costa_Rica (GMT-6)')
     expect(dayTimeIn('2026-10-29T05:59:00Z', CR, 'es')).toBe('28 oct 2026 · 23:59')
     expect(dayTimeIn('2026-10-29T05:59:00Z', CR, 'en')).toBe('Oct 28, 2026 · 23:59')
+  })
+
+  it('counts whole days and names the day and year in the company zone', () => {
+    // 05:59 UTC on 1 Jan 2027 is still 31 Dec 2026 in Costa Rica.
+    const close = '2027-01-01T05:59:00Z'
+    expect(dayMonthIn(close, CR, 'es')).toBe('31 dic')
+    expect(yearIn(close, CR)).toBe('2026')
+    expect(yearIn(close, 'UTC')).toBe('2027')
+    // 18:00 on 30 Dec in Costa Rica: the close is tomorrow there, two days away in UTC.
+    expect(daysFromIn(close, new Date('2026-12-31T00:00:00Z'), CR)).toBe(1)
+    expect(daysFromIn(close, new Date('2026-12-31T00:00:00Z'), 'UTC')).toBe(1)
+    expect(daysFromIn(close, new Date('2026-12-30T23:00:00Z'), CR)).toBe(1)
+    expect(daysFromIn(close, new Date('2026-12-30T23:00:00Z'), 'UTC')).toBe(2)
+    expect(daysFromIn('nonsense', new Date(), CR)).toBeNull()
   })
 })
