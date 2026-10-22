@@ -264,4 +264,71 @@ public class SurveyTemplateInstantiationTests
         Assert.Empty(created.EmojiOptions);
         Assert.Empty(created.ConditionalLogic);
     }
+
+    // ------------------------------------------------------------------
+    // New-survey defaults (audit gap G15): a template-built survey is born exactly as a blank
+    // one is, from the same NewSurveyDefaults.Apply.
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// The one that lets a respondent in. Respondents never sign in, and a signed-out
+    /// respondent can answer only an anonymous survey; the entity default is false.
+    /// </summary>
+    [Fact]
+    public void A_survey_from_a_template_is_anonymous()
+    {
+        var created = Instantiate();
+
+        Assert.True(created.Survey.Settings.Anonymous);
+    }
+
+    [Theory]
+    [InlineData(CredentialModes.Shared, CredentialModes.Shared)]
+    [InlineData(CredentialModes.PerSurvey, CredentialModes.PerSurvey)]
+    [InlineData(null, CredentialModes.Shared)]
+    public void A_survey_from_a_template_freezes_the_companys_credential_mode(string? companyMode, string expected)
+    {
+        var created = Instantiate(Options() with { CompanyCredentialMode = companyMode });
+
+        // Written, never left null: null reads as "inherit", and the survey has decided.
+        Assert.Equal(expected, created.Survey.Settings.CredentialMode);
+    }
+
+    [Fact]
+    public void A_survey_from_a_template_sends_no_invitation_or_reminder_mail()
+    {
+        var created = Instantiate();
+
+        Assert.False(created.Survey.Settings.NotificationSendInvitations);
+        Assert.False(created.Survey.Settings.NotificationSendReminders);
+    }
+
+    /// <summary>
+    /// Parity, at the level of the whole settings object: whatever a blank survey's defaults
+    /// are -- including any added to NewSurveyDefaults later -- a template-built survey has
+    /// the same ones, field for field.
+    /// </summary>
+    [Theory]
+    [InlineData(CredentialModes.Shared)]
+    [InlineData(CredentialModes.PerSurvey)]
+    public void A_survey_from_a_template_has_every_default_a_blank_survey_has(string companyMode)
+    {
+        var blank = new SurveySettings();
+        NewSurveyDefaults.Apply(blank, requestedCredentialMode: null, companyMode);
+
+        var created = Instantiate(Options() with { CompanyCredentialMode = companyMode });
+
+        Assert.Equal(
+            System.Text.Json.JsonSerializer.Serialize(blank),
+            System.Text.Json.JsonSerializer.Serialize(created.Survey.Settings));
+    }
+
+    [Fact]
+    public void The_service_type_comes_from_the_caller()
+    {
+        Assert.Null(Instantiate().Survey.ServiceType);
+        Assert.Equal(
+            ClimateServiceTypes.GeneralClimate,
+            Instantiate(Options() with { ServiceType = ClimateServiceTypes.GeneralClimate }).Survey.ServiceType);
+    }
 }

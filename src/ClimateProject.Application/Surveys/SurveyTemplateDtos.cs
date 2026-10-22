@@ -181,6 +181,10 @@ public sealed record UpdateSurveyTemplateRequest(
 /// template does not produce a survey that fails its own publish gate for Spanish it
 /// never had.
 /// </param>
+/// <param name="ServiceType">
+/// Optional, exactly as on <c>POST /surveys</c>: which metered service (#496) the survey is
+/// an instrument of. Unset is the norm; a value outside the metered vocabulary is a 400.
+/// </param>
 public sealed record UseSurveyTemplateRequest(
     Guid? CompanyId = null,
     LocalizedInput? Title = null,
@@ -190,4 +194,5 @@ public sealed record UseSurveyTemplateRequest(
     DateTimeOffset? EndDate = null,
     List<Guid>? DepartmentIds = null,
     int? TargetAudienceCount = null,
-    string? Language = null);
+    string? Language = null,
+    string? ServiceType = null);
