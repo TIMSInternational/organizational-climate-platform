@@ -279,6 +279,15 @@ public class ActionPlanCorrectionTests : IAsyncLifetime
         Assert.Equal(NotificationStatuses.Sent, left.Statuses[sentId]);
         Assert.Equal(NotificationStatuses.Pending, left.Statuses[otherId]);
         Assert.Contains("action-plans.delete", left.Audited);
+
+        // The database is shared by the whole "Postgres" collection, and
+        // SystemStatusEndpointsTests counts every pending notification in it: a row left
+        // pending here is a backlog that test would report as its own.
+        await WithDbAsync(async db =>
+        {
+            db.Notifications.RemoveRange(db.Notifications.Where(n => n.Id == pendingId || n.Id == sentId || n.Id == otherId));
+            return await db.SaveChangesAsync();
+        });
     }
 
     [Theory]
