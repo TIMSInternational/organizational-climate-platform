@@ -279,4 +279,77 @@ public class CompanySettingsEndpointTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
+
+    // ---- GET /admin/companies/{id}/settings (#G1) -------------------------------------
+    // The screens used to read settings by sending an empty PUT. The GET has the PUT's
+    // authorization exactly: a super admin any company, a company admin their own, no one else.
+
+    private async Task SetModeAsync(Guid companyId, string mode)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        var company = await db.Companies.FirstAsync(c => c.Id == companyId);
+        company.Settings.CredentialMode = mode;
+        await db.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task SuperAdmin_reads_any_companys_settings_including_the_credential_mode()
+    {
+        await SetModeAsync(_companyBId, CredentialModes.PerSurvey);
+        var client = _factory.CreateClient();
+        // Signed up into A: reading B is what proves "any company".
+        var token = await SignUpAndGetTokenAsync(client, Roles.SuperAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.GetAsync($"/admin/companies/{_companyBId}/settings");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var result = await response.Content.ReadFromJsonAsync<CompanySettingsResponse>();
+        Assert.Equal(_companyBId, result!.CompanyId);
+        Assert.Equal(CredentialModes.PerSurvey, result.Settings.CredentialMode);
+    }
+
+    [Fact]
+    public async Task CompanyAdmin_reads_their_own_companys_settings()
+    {
+        await SetModeAsync(_companyAId, CredentialModes.PerSurvey);
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.GetAsync($"/admin/companies/{_companyAId}/settings");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var result = await response.Content.ReadFromJsonAsync<CompanySettingsResponse>();
+        Assert.Equal(_companyAId, result!.CompanyId);
+        Assert.Equal(CredentialModes.PerSurvey, result.Settings.CredentialMode);
+    }
+
+    [Fact]
+    public async Task CompanyAdmin_cannot_read_another_companys_settings()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.GetAsync($"/admin/companies/{_companyBId}/settings");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(Roles.Employee)]
+    [InlineData(Roles.Leader)]
+    [InlineData(Roles.Supervisor)]
+    public async Task A_non_admin_cannot_read_their_own_companys_settings(string role)
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, role, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.GetAsync($"/admin/companies/{_companyAId}/settings");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
 }
