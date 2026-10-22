@@ -4303,7 +4303,36 @@
         "departmentsAlsoPeople": "y {count} personas elegidas individualmente.",
         "responsesDash": "— respuestas",
         "departmentsNote": "Los departamentos se muestran en Resultados desde una respuesta cuando la encuesta alcanza {floor} respuestas terminadas.",
-        "privacyNote": "Los resultados se calculan cada vez que se leen. Nadie ve las respuestas una por una."
+        "privacyNote": "Los resultados se calculan cada vez que se leen. Nadie ve las respuestas una por una.",
+        "delete": {
+          "action": "Eliminar",
+          "title": "¿Eliminar esta encuesta?",
+          "body": "Se borran sus preguntas, su enlace y sus invitaciones. Nadie la ha respondido todavía. No se puede deshacer.",
+          "bodyLive": "Está {status}: quien tenga el enlace o un código dejará de poder responder. Se borran sus preguntas, su enlace y sus invitaciones. Nadie la ha respondido todavía. No se puede deshacer.",
+          "typeLabel": "Escribe {word} para confirmar",
+          "word": "ELIMINAR",
+          "confirm": "Eliminar encuesta",
+          "deleting": "Eliminando…",
+          "refusedResponses": "Esta encuesta ya tiene respuestas y no se puede eliminar. Archívala para dejar de verla sin perder lo que respondieron.",
+          "refusedGone": "Esta encuesta ya no existe. Vuelve a la lista de encuestas."
+        },
+        "window": {
+          "edit": "Cambiar fechas",
+          "title": "Fechas de la encuesta",
+          "zone": "Las horas son las de la empresa: {zone}.",
+          "zoneRow": "Zona horaria",
+          "start": "Apertura",
+          "end": "Cierre",
+          "save": "Guardar fechas",
+          "startLocked": "Ya abrió: la apertura no se puede mover. Solo el cierre.",
+          "liveNote": "Está activa: quien responde verá el nuevo cierre de inmediato.",
+          "errorMissing": "Elige la fecha y la hora de apertura y de cierre.",
+          "errorOrder": "La apertura debe ser anterior al cierre.",
+          "errorPast": "El cierre debe ser posterior a este momento.",
+          "refusedOrder": "No se guardó: la apertura debe ser anterior al cierre.",
+          "refusedStatus": "No se guardó: la encuesta cambió de estado y ya no admite este cambio. Recarga la página.",
+          "refusedGone": "No se guardó: esta encuesta ya no existe."
+        }
       },
       "distribution": {
         "title": "Distribución",

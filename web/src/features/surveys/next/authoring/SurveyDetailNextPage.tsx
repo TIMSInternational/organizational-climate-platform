@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { BarChart3, Copy, Lock, Send, ShieldCheck } from 'lucide-react'
+import { BarChart3, CalendarClock, Copy, Lock, Send, ShieldCheck, Trash2 } from 'lucide-react'
 import { Link, useParams } from 'react-router'
 import { PageTopBar } from '../../../../components/layout'
 import {
@@ -29,7 +29,6 @@ import {
   dayMonth,
   daysFrom,
   dimensionSections,
-  fullDay,
   remindersSent,
   responseRate,
   surveyAudience,
@@ -38,6 +37,9 @@ import {
   sentenceCase,
 } from './launch'
 import { useSurveyDetailModel, type SurveyDetailModel } from './useSurveyDetailModel'
+import { SurveyWindowDialog } from './SurveyWindowDialog'
+import { DeleteSurveyDialog } from './DeleteSurveyDialog'
+import { browserTimeZone, dayTimeIn, isKnownTimeZone, zoneLabel } from './zonedWindow'
 
 /**
  * Detalle de encuesta, redesigned (canvas board "SurveyDetail") — `/surveys/:id`.
@@ -55,7 +57,7 @@ import { useSurveyDetailModel, type SurveyDetailModel } from './useSurveyDetailM
 export default function SurveyDetailNextPage() {
   const { id } = useParams<{ id: string }>()
   const { t } = useTranslation()
-  const { state, reload, transition, duplicate, pending, actionError } = useSurveyDetailModel(id)
+  const { state, reload, transition, duplicate, saveWindow, remove, pending, actionError } = useSurveyDetailModel(id)
 
   if (state.status === 'loading') {
     return (
@@ -84,6 +86,8 @@ export default function SurveyDetailNextPage() {
       actionError={actionError}
       onTransition={(status) => void transition(status)}
       onDuplicate={() => void duplicate()}
+      onSaveWindow={saveWindow}
+      onDelete={remove}
     />
   )
 }
@@ -94,6 +98,8 @@ export function SurveyDetailView({
   actionError,
   onTransition,
   onDuplicate,
+  onSaveWindow,
+  onDelete,
   now = new Date(),
 }: {
   model: SurveyDetailModel
@@ -101,6 +107,10 @@ export function SurveyDetailView({
   actionError: string | null
   onTransition: (status: string) => void
   onDuplicate: () => void
+  /** Moves the response window; absent, the dates are not offered for editing. */
+  onSaveWindow?: (window: { startDate?: string; endDate: string }) => Promise<void>
+  /** Deletes the survey; absent, "Eliminar" is not offered. */
+  onDelete?: () => Promise<void>
   now?: Date
 }) {
   const { t, locale } = useTranslation()
@@ -137,6 +147,16 @@ export function SurveyDetailView({
   const scope = useCompanyScope()
   const needsCompany = !canAuthor && scope.status === 'needs-selection'
   const editable = survey.isContentEditable && survey.responseCount === 0
+  // The company's clock, which the window is read and written in. The browser's only when the
+  // company's cannot be read -- and the editor prints whichever zone it is using.
+  const timeZone = isKnownTimeZone(model.timeZone) ? model.timeZone : browserTimeZone()
+  // `canDistribute` is `AllowsScheduleEdit` (draft, scheduled, active): exactly where
+  // `PUT /surveys/{id}` takes a new window.
+  const windowEditable = canAuthor && onSaveWindow !== undefined && canDistribute(survey.status)
+  // `DeleteSurveyAsync` deletes in any status while nobody has answered, and only then.
+  const deletable = canAuthor && onDelete !== undefined && survey.responseCount === 0
+  const [editingWindow, setEditingWindow] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   return (
     <div>
@@ -148,6 +168,12 @@ export function SurveyDetailView({
         tightBreadcrumb
         actions={
           <>
+            {deletable && (
+              <Button type="button" variant="outline" disabled={pending !== null} onClick={() => setDeleting(true)}>
+                <Trash2 aria-hidden="true" className="size-icon" />
+                {copy('delete.action')}
+              </Button>
+            )}
             {canAuthor && (
               <Button type="button" variant="outline" disabled={pending !== null} onClick={onDuplicate}>
                 <Copy aria-hidden="true" className="size-icon" />
@@ -256,6 +282,7 @@ export function SurveyDetailView({
           pending={pending}
           onTransition={onTransition}
           endPassed={closesIn !== null && closesIn < 0}
+          onEditWindow={windowEditable ? () => setEditingWindow(true) : undefined}
         />
       </section>
 
@@ -309,14 +336,27 @@ export function SurveyDetailView({
             />
           )}
           <Card className="flex flex-col gap-2.5 px-5 pb-4.5 pt-4" data-testid="detail-sheet">
-            <CardHeading title={copy('sheet')} />
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <CardHeading title={copy('sheet')} />
+              {windowEditable && (
+                <Button type="button" variant="outline" size="sm" disabled={pending !== null} onClick={() => setEditingWindow(true)}>
+                  <CalendarClock aria-hidden="true" className="size-3.5" />
+                  {copy('window.edit')}
+                </Button>
+              )}
+            </div>
             <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
               <dt className="text-fg-secondary">{copy('type')}</dt>
               <dd className="m-0">{sentenceCase(typeLabel(t, survey.type), locale)}</dd>
+              {/* Day AND time, on the company's clock: the window is an instant to the minute
+                  (the lifecycle job opens and closes on it), and the editor beside this writes
+                  in the same zone, so what is read here is what was typed there. */}
               <dt className="text-fg-secondary">{opensIn !== null && opensIn > 0 ? copy('opens') : copy('opened')}</dt>
-              <dd className="m-0 font-mono tabular-nums">{fullDay(survey.startDate, locale)}</dd>
+              <dd className="m-0 font-mono tabular-nums" data-testid="sheet-start">{dayTimeIn(survey.startDate, timeZone, locale)}</dd>
               <dt className="text-fg-secondary">{copy('closesRow')}</dt>
-              <dd className="m-0 font-mono tabular-nums">{fullDay(survey.endDate, locale)}</dd>
+              <dd className="m-0 font-mono tabular-nums" data-testid="sheet-end">{dayTimeIn(survey.endDate, timeZone, locale)}</dd>
+              <dt className="text-fg-secondary">{copy('window.zoneRow')}</dt>
+              <dd className="m-0 break-words">{zoneLabel(timeZone)}</dd>
               <dt className="text-fg-secondary">{copy('language')}</dt>
               <dd className="m-0">{languageLabel(t, survey.language)}</dd>
               <dt className="text-fg-secondary">{copy('floor')}</dt>
@@ -363,6 +403,20 @@ export function SurveyDetailView({
           </Note>
         </div>
       </div>
+
+      {windowEditable && onSaveWindow && (
+        <SurveyWindowDialog
+          survey={survey}
+          timeZone={timeZone}
+          open={editingWindow}
+          onOpenChange={setEditingWindow}
+          onSave={onSaveWindow}
+          now={() => now}
+        />
+      )}
+      {deletable && onDelete && (
+        <DeleteSurveyDialog status={survey.status} open={deleting} onOpenChange={setDeleting} onDelete={onDelete} />
+      )}
     </div>
   )
 }
@@ -385,6 +439,7 @@ function StatusTile({
   pending,
   onTransition,
   endPassed,
+  onEditWindow,
 }: {
   survey: SurveyDetail
   canAuthor: boolean
@@ -392,6 +447,8 @@ function StatusTile({
   onTransition: (status: string) => void
   /** The survey's end date is behind today. */
   endPassed: boolean
+  /** Opens the date editor; absent where the window cannot be moved. */
+  onEditWindow?: () => void
 }) {
   const { t } = useTranslation()
   const copy = (key: string, vars?: Record<string, string | number>) => t(`surveys.next.detail.${key}`, vars)
@@ -447,9 +504,19 @@ function StatusTile({
         </ul>
       )}
       {canAuthor && survey.allowedStatusTransitions.some(opensIntoThePast) && (
-        <p role="note" className="m-0 text-sm text-accent-amber-ink" data-testid="status-end-passed">
-          {copy('endPassedWarning')}
-        </p>
+        <div className="flex flex-col items-start gap-2" data-testid="status-end-passed-block">
+          <p role="note" className="m-0 text-sm text-accent-amber-ink" data-testid="status-end-passed">
+            {copy('endPassedWarning')}
+          </p>
+          {/* The sentence above has always said "cambia primero las fechas"; this is where. A
+              duplicated survey keeps its source's past window, and this is how it gets run. */}
+          {onEditWindow && (
+            <Button type="button" size="sm" variant="outline" disabled={pending !== null} onClick={onEditWindow}>
+              <CalendarClock aria-hidden="true" className="size-3.5" />
+              {copy('window.edit')}
+            </Button>
+          )}
+        </div>
       )}
       <ConfirmationDialog
         open={confirmClose}
