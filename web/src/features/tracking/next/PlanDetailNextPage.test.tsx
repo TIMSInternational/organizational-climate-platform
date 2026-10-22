@@ -424,3 +424,48 @@ describe('PlanDetailNextPage — the leader states', () => {
     expect(screen.queryByText(es.tracking.serviceUnavailableTitle)).toBeNull()
   })
 })
+
+/**
+ * Where "back" goes, by role (G26 follow-up). An employee reaches this page from a row of Mis
+ * tareas, and the respondent gate sends `/tracking/planes` to `/dashboard`; so a role that
+ * cannot reach the list (`canReach`) is pointed at Mis tareas, and the menu and nodo link --
+ * the board and the list -- are not offered to it either. An administrator keeps all three.
+ */
+describe('PlanDetailNextPage — the ways back, by role', () => {
+  const crumbs = () => within(screen.getByRole('navigation', { name: es.shell.breadcrumb }))
+
+  it('points an employee back to Mis tareas, not to a plans list they cannot open', async () => {
+    setToken(tokenFor({ sub: ADRIANA, name: 'Adriana Marín', role: 'employee', companyId: COMPANY, nodoId: FINANZAS, isActive: 'true' }))
+    renderPage()
+    await screen.findByRole('heading', { level: 1, name: 'Reponer la reunión de handover entre turnos' })
+
+    expect(crumbs().getByRole('link', { name: es.tracking.misTareas.title }).getAttribute('href')).toBe('/tracking/mis-tareas')
+    expect(crumbs().queryByRole('link', { name: es.tracking.planes.title })).toBeNull()
+    // No link on this page may go to the list or the board, which bounce for this role.
+    const hrefs = screen.queryAllByRole('link').map((a) => a.getAttribute('href') ?? '')
+    expect(hrefs.filter((href) => href === '/tracking/planes' || href.startsWith('/tracking/tablero'))).toEqual([])
+    expect(screen.queryByRole('button', { name: next.moreActions })).toBeNull()
+  })
+
+  it('keeps the plans list as the crumb for an administrator, with the board and list in the menu', async () => {
+    setToken(tokenFor({ sub: 'u-ana', name: 'Ana Rojas', role: 'company_admin', companyId: COMPANY, nodoId: `unassigned-${COMPANY}`, isActive: 'true' }))
+    renderPage()
+    await screen.findByRole('heading', { level: 1, name: 'Reponer la reunión de handover entre turnos' })
+
+    expect(crumbs().getByRole('link', { name: es.tracking.planes.title }).getAttribute('href')).toBe('/tracking/planes')
+    expect(crumbs().queryByRole('link', { name: es.tracking.misTareas.title })).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: next.moreActions }))
+    expect(await screen.findByRole('menuitem', { name: next.goToPlans })).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: next.openTablero })).toBeTruthy()
+  })
+
+  it('points an employee on a refused plan to Mis tareas as the one way out', async () => {
+    setToken(tokenFor({ sub: 'u-x', name: 'Otra Persona', role: 'employee', companyId: COMPANY, nodoId: FINANZAS, isActive: 'true' }))
+    routeFetch({ planStatus: 403 })
+    renderPage()
+    await screen.findByRole('heading', { level: 1, name: next.forbiddenTitle })
+
+    expect(crumbs().getByRole('link', { name: es.tracking.misTareas.title }).getAttribute('href')).toBe('/tracking/mis-tareas')
+    expect(screen.queryByRole('link', { name: next.backToPlans })).toBeNull()
+  })
+})
