@@ -83,6 +83,36 @@ describe('NotificationPreferencesNextPage', () => {
     expect(screen.getByText(T.alwaysSent)).toBeTruthy()
   })
 
+  /**
+   * On a phone (G26 follow-up). The page was a 40rem table in a horizontal scroller, and at
+   * 390px the Correo column -- every switch -- sat outside the card: readable, not changeable.
+   * The suite has no layout engine, so this pins the structure that stacks it instead: below
+   * `sm` the header row is hidden, each row and cell is a block, the table drops its minimum
+   * width, and every switch carries its own "Correo" label in its own cell. The pixels are in
+   * the PR's 390px shots.
+   */
+  it('stacks each row with its own labelled switch below sm, and is the same table from sm up', async () => {
+    routeFetch()
+    renderPage()
+    await screen.findByRole('heading', { name: T.tableHeading })
+
+    const table = document.querySelector('table') as HTMLElement
+    expect(table.className).not.toMatch(/(^|\s)min-w-\[40rem\]/)
+    expect(table.className).toContain('sm:min-w-[40rem]')
+    expect((table.querySelector('thead') as HTMLElement).className.split(/\s+/)).toEqual(
+      expect.arrayContaining(['hidden', 'sm:table-header-group']),
+    )
+
+    for (const key of ['emailSurveys', 'emailMicroclimates', 'emailActionPlans', 'emailReminders']) {
+      const tr = row(key)
+      expect(tr.className.split(/\s+/)).toEqual(expect.arrayContaining(['block', 'sm:table-row']))
+      const cell = within(tr).getByRole('switch').closest('td') as HTMLElement
+      expect(cell.className.split(/\s+/)).toEqual(expect.arrayContaining(['block', 'sm:table-cell']))
+      const label = within(cell).getByText(T.colEmail)
+      expect(label.className.split(/\s+/)).toContain('sm:hidden')
+    }
+  })
+
   it('draws Guardar and Descartar live on load, as the board does; Descartar puts back what is saved', async () => {
     const calls = routeFetch()
     renderPage()
