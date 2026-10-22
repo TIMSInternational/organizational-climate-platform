@@ -640,12 +640,18 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
         // administrator reads back on the phone, and the demographics that same administrator
         // uploaded -- and a field arriving in it without a decision is how an answer would
         // eventually ride along. Extend these lists deliberately or not at all.
+        //
+        // Extended 2026-10-22 (audit gaps G2/G7): the survey's credential mode and title, and
+        // per person the per-survey key's username and two DAYS -- when it was mailed and when
+        // it was last used. Days, never instants, so neither lines up with a response's first
+        // save; they say "was it mailed / did they get in" and nothing finer. On this shared
+        // survey all three key fields are null.
         using var document = JsonDocument.Parse(json);
         Assert.Equal(
-            ["answered", "answeredCount", "collectsParticipantIdentity", "notStartedCount", "pending", "pendingCount", "roster", "startedCount", "surveyId", "tracksCompletionOnly", "tracksIndividuals"],
+            ["answered", "answeredCount", "collectsParticipantIdentity", "credentialMode", "notStartedCount", "pending", "pendingCount", "roster", "startedCount", "surveyId", "surveyTitleEn", "surveyTitleEs", "tracksCompletionOnly", "tracksIndividuals"],
             document.RootElement.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
         Assert.Equal(
-            ["demographics", "email", "lastActivityOn", "name", "role", "status", "userId", "username"],
+            ["credentialIssuedOn", "demographics", "email", "lastActivityOn", "lastSignInOn", "name", "role", "status", "surveyUsername", "userId", "username"],
             document.RootElement.GetProperty("roster").EnumerateArray().First().EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
         Assert.DoesNotContain(_operaciones.ToString(), json, StringComparison.OrdinalIgnoreCase);
     }
