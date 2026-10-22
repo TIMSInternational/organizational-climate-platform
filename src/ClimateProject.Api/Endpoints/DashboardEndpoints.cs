@@ -96,17 +96,32 @@ public static class DashboardEndpoints
     private const string DepartmentDimension = "department";
 
     /// <summary>
-    /// The floor every response count on the department dashboard is held to. A department is
-    /// ONE dimension, so since the 2026-10-15 ruling this is
-    /// <see cref="SurveyResultsPrivacy.MinimumSingleSegmentRespondents"/> -- a team's count is
-    /// carried whenever anybody on it answered at all -- and it is still the
-    /// <c>MinimumGroupSize</c> the team's climate block reports, so a client renders the
-    /// promise the server actually kept rather than a constant of its own.
+    /// The floor every figure on the team dashboard (<c>GET /dashboard/department-admin</c> and
+    /// its export) is held to: <see cref="SurveyResultsPrivacy.MinimumSegmentRespondents"/>, 3.
+    /// It governs the team's response counts, the team's climate reading, and the
+    /// rest-of-company guard beside it, and it is the <c>MinimumGroupSize</c> the team's climate
+    /// block reports, so a client renders the promise the server actually kept.
     ///
-    /// <para>Withholding a zero is the one thing this floor still does, and it matters:
-    /// see <see cref="AtTheFloor"/>.</para>
+    /// <para><b>Ruled 2026-10-21 (Federico): the client's 2026-10-15 ruling is about
+    /// ADMINISTRATORS reading results.</b> "Single department / single demographic value from
+    /// one respondent" (<see cref="SurveyResultsPrivacy.MinimumSingleSegmentRespondents"/>) is
+    /// what a company or super admin reads on the results, climate-map and report screens. A
+    /// leader or a supervisor reading their OWN team is a different reader: they know the two
+    /// people in a team of two by name, so a reading of one or two is those people's answers.
+    /// From 2026-10-15 to 2026-10-21 this constant was the single-segment floor and a leader
+    /// read a one-person team's climate; it is the segment floor again.</para>
+    ///
+    /// <para><b>Every caller of this endpoint gets this floor, administrators included.</b> The
+    /// page is the team view; an administrator who wants a small department's reading under
+    /// the 2026-10-15 ruling reads it on the administrator's own screens, where it is printed.
+    /// One floor per page keeps the screen and its export identical whoever asks, and no web
+    /// route sends an administrator here (<c>DashboardPage.tsx</c> sends only leader and
+    /// supervisor to the team view).</para>
+    ///
+    /// <para>Withholding a zero still matters as much as withholding a two: see
+    /// <see cref="AtTheFloor"/>.</para>
     /// </summary>
-    internal const int DepartmentCountFloor = SurveyResultsPrivacy.MinimumSingleSegmentRespondents;
+    internal const int DepartmentCountFloor = SurveyResultsPrivacy.MinimumSegmentRespondents;
 
     public static void MapDashboardEndpoints(this WebApplication app)
     {
@@ -985,7 +1000,7 @@ public static class DashboardEndpoints
         {
             return new DashboardTeamClimate(
                 survey.Id, title, survey.EndDate, 0, IsSuppressed: true,
-                SurveyResultsPrivacy.MinimumSingleSegmentRespondents, []);
+                DepartmentCountFloor, []);
         }
 
         // A withheld SEGMENT still names the dimensions, with null scores.
@@ -998,7 +1013,7 @@ public static class DashboardEndpoints
         // prevent. Found by writing the test for it: the grid drew nothing at all.
         var withheld = new DashboardTeamClimate(
             survey.Id, title, survey.EndDate, 0, IsSuppressed: true,
-            SurveyResultsPrivacy.MinimumSingleSegmentRespondents,
+            DepartmentCountFloor,
             aggregate.Dimensions
                 .Select(d => new DashboardDimensionScore(d.Dimension, null))
                 .ToList());
@@ -1011,7 +1026,11 @@ public static class DashboardEndpoints
         // Absent and too-small collapse to one withheld answer on purpose: told apart, a
         // reader could difference "we did not answer" against "we were too few" and learn
         // roughly how few.
-        if (segment is null || segment.IsSuppressed) return withheld;
+        //
+        // The aggregate's own `IsSuppressed` is the ADMINISTRATOR's single-segment floor (1,
+        // ruled 2026-10-15), so it is not enough here: a team of one or two is disclosed by the
+        // aggregation and withheld by this page (ruled 2026-10-21, see DepartmentCountFloor).
+        if (segment is null || segment.IsSuppressed || segment.RespondentCount < DepartmentCountFloor) return withheld;
 
         var scores = SurveyAggregation.SegmentDimensionScores(aggregate.Questions, segment);
 
@@ -1021,7 +1040,7 @@ public static class DashboardEndpoints
             survey.EndDate,
             segment.RespondentCount,
             IsSuppressed: false,
-            SurveyResultsPrivacy.MinimumSingleSegmentRespondents,
+            DepartmentCountFloor,
             scores
                 .OrderBy(pair => pair.Key, StringComparer.Ordinal)
                 .Select(pair => new DashboardDimensionScore(pair.Key, pair.Value))
@@ -1042,21 +1061,20 @@ public static class DashboardEndpoints
     /// fewer than the floor: the company's mean and the team's, with both counts, give the
     /// rest's mean by subtraction. A team that IS the whole company leaves no rest to disclose.
     /// <para>
-    /// <b>Since 2026-10-15 the subtraction this defends against reveals nothing new, so the
-    /// floor here is the single-dimension one.</b> It existed to stop a remainder of one or two
-    /// people being differenced out of the two means. The department breakdown on the same
-    /// aggregate now discloses EVERY department at any size, so what the subtraction yields is
-    /// already printed beside it, and withholding the org side would cost a leader the
-    /// comparison this block exists for while protecting nothing. The guard is kept rather than
-    /// deleted because a ruling that moves the floor back wants this one line, not a rewrite --
-    /// at the single-dimension floor it simply cannot fire.
+    /// <b>The guard is the team floor, 3, again since 2026-10-21.</b> From 2026-10-15 it was the
+    /// single-dimension floor and could not fire, on the reasoning that the department breakdown
+    /// printed every department at any size anyway. That reasoning holds for an administrator
+    /// and not for a leader: a leader cannot read the results screens
+    /// (<c>SurveyEndpoints.CanAdminister</c>), so the rest-of-company mean is the only way a
+    /// leader could learn what the one or two people outside the team answered. Team of 5,
+    /// company of 7: (7 x company mean - 5 x team mean) / 2 is two named people's answers.
     /// </para>
     /// </remarks>
     private static DashboardOrganizationClimate? OrganizationClimate(SurveyAggregate aggregate, int teamRespondents)
     {
         var company = aggregate.Summary.CompletedCount;
         var rest = company - teamRespondents;
-        if (rest > 0 && rest < SurveyResultsPrivacy.MinimumSingleSegmentRespondents)
+        if (rest > 0 && rest < DepartmentCountFloor)
         {
             return null;
         }

@@ -214,13 +214,13 @@ public class DashboardExportTests
     /// floor -- including when no closed survey has sent a floor at all.
     ///
     /// <para>
-    /// The first half's count has moved twice with the platform floor, each time DOWN to the
+    /// The first half's count has moved three times with the platform floor, each time to the
     /// largest count the floor still withholds: 4 to 2 when the floor became 3 (ruled
-    /// 2026-10-13), and 2 to 0 when a single dimension's floor became 1 (ruled 2026-10-15).
-    /// Raising the expectation instead would have made the test agree with whatever the code
-    /// did; 0 is now the only count a team's own floor withholds, which is the point -- a
-    /// printed 0 reads as "nobody here answered". The second half names its own floor of 8 and
-    /// is independent of the platform number.
+    /// 2026-10-13), 2 to 0 when a single dimension's floor became 1 (ruled 2026-10-15), and back
+    /// to 2 when the team view was held to 3 again (ruled 2026-10-21: the 10-15 ruling is about
+    /// administrators reading results, not a leader reading their own team). 0 is kept beside
+    /// it, because a printed 0 reads as "nobody here answered". The second half names its own
+    /// floor of 8 and is independent of the platform number.
     /// </para>
     /// </summary>
     [Fact]
@@ -228,11 +228,21 @@ public class DashboardExportTests
     {
         var noClosedSurvey = DepartmentDashboard(null) with
         {
-            ActiveSurveys = [OpenSurvey("Clima Q4", responseCount: 0)],
+            ActiveSurveys =
+            [
+                OpenSurvey("Clima Q4", responseCount: 0),
+                OpenSurvey("Pulso", responseCount: SurveyResultsPrivacy.MinimumSegmentRespondents - 1),
+                OpenSurvey("Clima 2026", responseCount: SurveyResultsPrivacy.MinimumSegmentRespondents),
+            ],
         };
         var unclimated = CsvRows(DashboardExport.BuildCsv(
             DashboardExport.ForDepartmentAdmin(noClosedSurvey, ContentLanguages.English, GeneratedAt)));
         Assert.Equal("Withheld", Cell(unclimated, "Ongoing surveys", "Clima Q4 - Responses"));
+        Assert.Equal("Withheld", Cell(unclimated, "Ongoing surveys", "Pulso - Responses"));
+        Assert.Equal("3", Cell(unclimated, "Ongoing surveys", "Clima 2026 - Responses"));
+        // With no closed survey there is no minimumGroupSize on the payload, and the notice
+        // still names the floor that withheld the count -- not "fewer than 1".
+        Assert.Contains(unclimated, r => r.Value.Contains("fewer than 3 responses from this team", StringComparison.Ordinal));
 
         var raised = DepartmentDashboard(SuppressedClimate() with { MinimumGroupSize = 8 }) with
         {

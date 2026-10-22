@@ -650,8 +650,10 @@ public class DashboardEndpointsTests : IAsyncLifetime
         Assert.Equal(_engineeringId, body.DepartmentId);
         Assert.Equal("Engineering", body.DepartmentName);
         Assert.Equal(_companyAId, body.CompanyId);
-        // Only Engineering's two completed responses contribute to its disclosed count.
-        Assert.Equal(2, body.CompletedResponseCount);
+        // Engineering has two completed responses, under the team floor of 3 (ruled
+        // 2026-10-21), so the running total carries none of them -- and the incomplete one and
+        // company B's never counted at all.
+        Assert.Equal(0, body.CompletedResponseCount);
         Assert.Equal(2, body.OpenActionPlanCount);
         Assert.Equal(1, body.OverdueActionPlanCount);
 
