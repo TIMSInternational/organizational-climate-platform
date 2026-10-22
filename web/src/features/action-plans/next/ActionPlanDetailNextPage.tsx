@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
-import { Link, useParams } from 'react-router'
-import { ArrowRight, ChartColumn, ChevronDown, Clock, Ellipsis, Plus, Target } from 'lucide-react'
+import { Link, useNavigate, useParams } from 'react-router'
+import { ArrowRight, ChartColumn, ChevronDown, Clock, Ellipsis, Pencil, Plus, Target, Trash2 } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
 import { CanvasCard, FactList, HatchTag, IconBox, NoteBand, PageMeta } from '../../../components/canvas'
@@ -9,6 +9,7 @@ import {
   AlertDescription,
   Button,
   Chip,
+  ConfirmationDialog,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -16,9 +17,11 @@ import {
   DialogTitle,
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
   EmptyState,
   LoadingRegion,
@@ -36,6 +39,7 @@ import { reading } from '../../dashboard/next/derive'
 import { ANONYMITY_FLOOR, BandChip, bandOf } from '../../../components/charts'
 import { useResultBands } from '../../result-bands/useResultBands'
 import ProgressUpdateForm from '../components/ProgressUpdateForm'
+import PlanEditForm from '../components/PlanEditForm'
 import { ACTION_PLAN_PRIORITIES, ACTION_PLAN_STATUSES, kpiProgressPercent, priorityLabel, statusLabel } from '../actionPlanVocabulary'
 import { daysToDue, dueDay, elapsedShare, type PlanFinding, type PlanMove } from './planDetailDerive'
 import type { ActionPlanDetailModel, Settled } from './planDetailModel'
@@ -150,7 +154,23 @@ function ActionPlanDetailView({ state, model }: { state: ActionPlanDetailState; 
   const capabilities = useViewerCapabilities()
   const { plan, asOf } = model
   const manages = capabilities.canManageActionPlan(plan)
+  const navigate = useNavigate()
   const [progressOpen, setProgressOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
+  async function confirmDelete() {
+    setDeleteError(null)
+    try {
+      await state.deletePlan()
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : t('errors.generic'))
+      // Rethrown so the dialog stays open with the reason in it (`ConfirmationDialog`).
+      throw err
+    }
+    void navigate('/action-plans', { replace: true })
+  }
 
   const due = dueDay(plan.dueDate)
   const days = daysToDue(asOf, plan.dueDate)
@@ -221,6 +241,11 @@ function ActionPlanDetailView({ state, model }: { state: ActionPlanDetailState; 
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={() => setEditOpen(true)}>
+                    <Pencil aria-hidden="true" />
+                    {t('actionPlans.next.edit.menu')}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
                   <DropdownMenuLabel>{t('actionPlans.next.priorityMenu')}</DropdownMenuLabel>
                   <DropdownMenuRadioGroup value={plan.priority} onValueChange={(next) => void state.changePriority(next)}>
                     {ACTION_PLAN_PRIORITIES.map((priority) => (
@@ -243,6 +268,19 @@ function ActionPlanDetailView({ state, model }: { state: ActionPlanDetailState; 
                       </DropdownMenuRadioItem>
                     ))}
                   </DropdownMenuRadioGroup>
+                  {/* Deleting is administrators only on the server (`ActionPlanEndpoints.DeleteAsync`),
+                      the same rule as every write in this menu; the confirm says what goes with it. */}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onSelect={() => {
+                      setDeleteError(null)
+                      setDeleteOpen(true)
+                    }}
+                  >
+                    <Trash2 aria-hidden="true" />
+                    {t('actionPlans.next.delete.menu')}
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </>
@@ -363,6 +401,41 @@ function ActionPlanDetailView({ state, model }: { state: ActionPlanDetailState; 
             />
           </DialogContent>
         </Dialog>
+      )}
+
+      {manages && (
+        <Dialog open={editOpen} onOpenChange={setEditOpen}>
+          <DialogContent closeLabel={t('common.close')}>
+            <DialogHeader>
+              <DialogTitle>{t('actionPlans.next.edit.title')}</DialogTitle>
+              <DialogDescription>{t('actionPlans.next.edit.description')}</DialogDescription>
+            </DialogHeader>
+            {/* Mounted only while open, so every opening starts from what the plan says now. */}
+            {editOpen && (
+              <PlanEditForm
+                initial={{ title: plan.title, description: plan.description, dueDay: due, tags: plan.tags }}
+                onCancel={() => setEditOpen(false)}
+                onSubmit={async (values) => {
+                  await state.editPlan(values)
+                  setEditOpen(false)
+                }}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {manages && (
+        <ConfirmationDialog
+          open={deleteOpen}
+          onOpenChange={setDeleteOpen}
+          variant="destructive"
+          title={t('actionPlans.next.delete.title')}
+          description={deleteError ?? t('actionPlans.next.delete.body', { title: plan.title })}
+          confirmText={t('actionPlans.next.delete.confirm')}
+          cancelText={t('common.cancel')}
+          onConfirm={confirmDelete}
+        />
       )}
     </div>
   )
@@ -752,11 +825,18 @@ function LogCard({
   dueShort: string
 }) {
   const { t, locale } = useTranslation()
-  const entries = 1 + model.recorded.length
+  const history = model.history.status === 'ready' ? model.history.value : []
+  const entries = 1 + history.length
   return (
     <CanvasCard
       title={t('actionPlans.next.log.title')}
-      aside={entries === 1 ? t('actionPlans.next.log.entryOne') : t('actionPlans.next.log.entries', { count: entries })}
+      aside={
+        model.history.status === 'ready'
+          ? entries === 1
+            ? t('actionPlans.next.log.entryOne')
+            : t('actionPlans.next.log.entries', { count: entries })
+          : undefined
+      }
     >
       <ol className="m-0 flex list-none flex-col p-0">
         <li className="grid grid-cols-[96px_28px_minmax(0,1fr)] items-start gap-3 border-t border-line-light py-2.5">
@@ -788,7 +868,7 @@ function LogCard({
             </span>
           </div>
         </li>
-        {model.recorded.map((update) => (
+        {history.map((update) => (
           <li key={update.id} className="grid grid-cols-[96px_28px_minmax(0,1fr)] items-start gap-3 border-t border-line-light py-2.5">
             <span className="pt-1.5 font-mono text-sm tabular-nums text-fg-tertiary">
               {calendarDay(Date.parse(update.updateDate), locale)}
@@ -800,12 +880,26 @@ function LogCard({
               <Clock className="size-3.5" />
             </span>
             <div className="flex min-w-0 flex-col gap-0.5 pt-1">
-              <span className="text-base text-fg-primary">{t('actionPlans.next.log.progress')}</span>
+              <span className="text-base text-fg-primary">
+                {update.updatedByName ? (
+                  <>
+                    {t('actionPlans.next.log.progressBy')} <b className="font-semibold">{update.updatedByName}</b>
+                  </>
+                ) : (
+                  t('actionPlans.next.log.progress')
+                )}
+              </span>
               <span className="break-words text-sm text-fg-tertiary">{update.overallNotes}</span>
             </div>
           </li>
         ))}
       </ol>
+      {model.history.status === 'loading' && (
+        <p className="m-0 text-sm text-fg-tertiary">{t('actionPlans.next.log.historyLoading')}</p>
+      )}
+      {model.history.status === 'failed' && (
+        <p className="m-0 text-sm text-fg-tertiary">{t('actionPlans.next.log.historyFailed')}</p>
+      )}
       <p className="m-0 flex items-center gap-3 rounded-lg border border-dashed border-line-default p-3 text-base text-fg-tertiary">
         <Clock aria-hidden="true" className="size-4 shrink-0 text-fg-tertiary" />
         <span>

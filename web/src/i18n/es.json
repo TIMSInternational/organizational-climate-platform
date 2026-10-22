@@ -292,7 +292,10 @@
         "progress": "Avance registrado",
         "noteBefore": "Cada avance se registra con",
         "noteAction": "Registrar avance",
-        "noteAfter": ": una nota de qué avanzó y por qué, con su fecha. El servidor guarda cada avance pero todavía no los devuelve, así que aquí aparecen solo los registrados en esta visita."
+        "noteAfter": ": una nota de qué avanzó y por qué, con su fecha. Cada avance queda guardado aquí.",
+        "progressBy": "Avance registrado por",
+        "historyLoading": "Cargando los avances registrados…",
+        "historyFailed": "No se pudieron leer los avances registrados. El plan no se ve afectado; recarga para intentarlo de nuevo."
       },
       "sheet": {
         "title": "Ficha",
@@ -306,7 +309,23 @@
         "noTemplate": "Ninguna",
         "unknown": "sin dato"
       },
-      "guard": "Registra avance la administración. El plan apunta a una dimensión y a un departamento, nunca a respuestas individuales."
+      "guard": "Registra avance la administración. El plan apunta a una dimensión y a un departamento, nunca a respuestas individuales.",
+      "edit": {
+        "menu": "Editar plan…",
+        "title": "Editar plan",
+        "description": "Corrige el título, la descripción, la fecha de vencimiento o las etiquetas. El cambio queda registrado en la bitácora de auditoría.",
+        "tagsHint": "Separadas por comas. Las etiquetas que la plataforma añadió al crear el plan se conservan tal cual.",
+        "save": "Guardar cambios"
+      },
+      "delete": {
+        "menu": "Eliminar plan…",
+        "title": "¿Eliminar este plan?",
+        "body": "Se eliminará «{title}» junto con sus KPIs, objetivos e historial de avances. Los recordatorios que aún no se enviaron se cancelan. No se puede deshacer.",
+        "confirm": "Eliminar plan"
+      },
+      "createOwner": "Responsable",
+      "createOwnerNone": "Sin asignar",
+      "createOwnerHint": "Quién responde por el plan. Puedes cambiarlo después."
     }
   },
   "analytics": {

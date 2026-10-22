@@ -43,6 +43,7 @@ import {
 import TrendSparkline from './TrendSparkline'
 import CycleTimeline, { type CycleStep } from './CycleTimeline'
 import DashboardExportMenu from './DashboardExportMenu'
+import { actionPlansOffered } from '../../action-plans/offered'
 
 /** The target rule's hex, as the sparklines draw it, for the legend's swatch. */
 /** The band-boundary rule's ink, as the sparklines draw it, for the legend's swatch. */
@@ -713,13 +714,16 @@ function AttentionRow({
         }
         // Reading an action plan is `CanAccessCompany` (`ActionPlanEndpoints.cs:276-279`):
         // the whole-company viewer, and nobody else. Creating one is `canCreateActionPlan`.
+        // Where tracking replaces `/action-plans` in the sidebar it replaces it here too
+        // (`actionPlansOffered`): "create" goes to the tracking listing the sidebar offers,
+        // and a generic plan's page is not linked at all.
         action={
           item.plan
-            ? capabilities.seesWholeCompany
+            ? capabilities.seesWholeCompany && actionPlansOffered()
               ? { label: t('dashboard.next.openPlan'), href: `/action-plans/${item.plan.id}` }
               : undefined
             : capabilities.canCreateActionPlan
-              ? { label: t('dashboard.next.createPlan'), href: '/action-plans' }
+              ? { label: t('dashboard.next.createPlan'), href: actionPlansOffered() ? '/action-plans' : '/tracking/planes' }
               : undefined
         }
       />
