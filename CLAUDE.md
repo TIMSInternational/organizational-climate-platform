@@ -72,10 +72,19 @@ the runner and the result is meaningless — kill it, rebuild, re-run.
 - **No new dependencies without a reason that survives procurement.** The PDF writer and the CSV
   writers in `src/ClimateProject.Application/Exports/` are hand-rolled for that reason —
   `docs/decisions/pdf-rendering.md`. Prefer consuming them over adding a package.
-- **The privacy floor is 3 respondents** (ruled 2026-10-13; it was 5) and it is applied at read time. A suppressed segment
-  must never yield a number anywhere — not in a screen, an export, a report or a public link.
-  The classic leak is treating an absent count as `0`, which reads as "nobody answered".
-- **Verbatim open-text response content is never returned.** Word frequencies only.
+- **The privacy floor is 3 respondents** (ruled 2026-10-13; it was 5), applied at read time, for
+  a **cross** of two or more selectors, the **whole survey**, **public share links**, and a
+  **leader's or supervisor's view of their own team** (`GET /dashboard/department-admin` and its
+  export, every caller, ruled 2026-10-21). **One exception:** a single department or a single
+  demographic value is shown to **administrators** from 1 respondent (client ruling 2026-10-15,
+  quoted at `SurveyResultsPrivacy.MinimumSingleSegmentRespondents`). Where a floor applies, a
+  suppressed group must never yield a number — not in a screen, an export, a report or a public
+  link, and not by subtraction. The classic leak is treating an absent count as `0`, which reads
+  as "nobody answered". Source: `docs/decisions/privacy-floor-is-three.md`.
+- **Verbatim open-text response content is returned in exactly one place**: the super-admin
+  response workbook (`GET /admin/exports/responses`, ruled 2026-10-16,
+  `docs/decisions/who-may-see-an-individual-answer.md` §6). Everywhere else — results, reports,
+  dashboards, public links, company admins — word frequencies only.
 - **Migrations: session pooler, port 5432, `postgres.<project-ref>`.** Never 6543 (transaction
   mode breaks the advisory lock EF takes) and never `db.<ref>.supabase.co` (IPv6-only, and CI
   runners are IPv4). The reasoning and both guards are in `.github/workflows/deploy-prod.yml:196-223`.
