@@ -3,7 +3,7 @@ import { useParams } from 'react-router'
 import { useTranslation } from '../../../i18n'
 import { RespondCaption, RespondReading, RespondShell } from '../../../components/layout'
 import { Button } from '../../../components/ui'
-import { calendarDay } from '../../../lib/calendarDay'
+import { instantDay } from '../../../lib/calendarDay'
 import SurveyRespondForm, {
   AnonymityNotice,
   RespondSurface,
@@ -198,10 +198,7 @@ export default function SurveyInvitationPage() {
         <RespondSurface>
           {state.status === 'loading' && <LoadingNotice />}
           {state.status === 'dead' && (
-            <LinkOutcome
-              copy={invitationFailureCopy(state.error)}
-              serverMessage={state.error?.message ?? ''}
-            />
+            <LinkOutcome copy={invitationFailureCopy(state.error)} />
           )}
           {state.status === 'landing' && (
             <Landing detail={state.detail} locale={locale} onBegin={begin} />
@@ -253,20 +250,21 @@ function Landing({
         description={detail.surveyDescription}
       />
 
-      {/* `calendarDay` rather than a local formatter: both of these are days, and it is
-          the one function in this app that renders a day in UTC so that a reader west of
-          UTC is not told a deadline that is a day early. */}
+      {/* `instantDay`, in the reader's own zone: both are instants — the survey stops
+          taking answers at `surveyEndDate`, the link stops working at `expiresAt` — and
+          read in UTC a close at or after 18:00 in Costa Rica printed as the next day
+          (audit 2026-10-22, R2). */}
       <section
         aria-label={t('panelLabel')}
         className="grid gap-panel-gap sm:grid-flow-col sm:auto-cols-fr"
       >
         <RespondReading
           label={t('closesReading')}
-          value={calendarDay(Date.parse(detail.surveyEndDate), locale)}
+          value={instantDay(Date.parse(detail.surveyEndDate), locale)}
         />
         <RespondReading
           label={t('invitationExpiresReading')}
-          value={calendarDay(Date.parse(detail.expiresAt), locale)}
+          value={instantDay(Date.parse(detail.expiresAt), locale)}
         />
       </section>
 

@@ -29,10 +29,10 @@ export interface LinkFailureCopy {
   /** A key in the `surveyRespond` namespace. */
   titleKey: string
   /**
-   * A key in the `surveyRespond` namespace, or `null` meaning "we have no better
-   * sentence than the server's own". The caller then shows `SurveyLinkError.message`,
-   * falling back to `errors.generic` when the response carried none — the same rule
-   * `SurveyRespondForm`'s load failure already follows.
+   * A key in the `surveyRespond` namespace, or `null` meaning "no sentence for this
+   * status". The card then says `failure.load` — never `SurveyLinkError.message`, which
+   * is fixed English (audit 2026-10-22, R1) — the same rule `SurveyRespondForm`'s load
+   * failure follows.
    */
   bodyKey: string | null
   /**
@@ -95,8 +95,8 @@ export function invitationFailureCopy(error: SurveyLinkError | null): LinkFailur
 
   // A 404 with no reason is still a 404. Every other status is left to the generic
   // branch on purpose: a 410 whose reason this build does not recognise means the
-  // invitation is gone for a cause we cannot name, and the server's own message is a
-  // better answer than the nearest sentence we happen to have.
+  // invitation is gone for a cause we cannot name, and a sentence that says so honestly
+  // (`failure.load`) is a better answer than the nearest one we happen to have.
   return error.status === 404 ? BY_REASON.not_found : UNKNOWN
 }
 

@@ -4,7 +4,8 @@ import userEvent from '@testing-library/user-event'
 import { Link, MemoryRouter, Route, Routes } from 'react-router'
 import SurveyInvitationPage from './SurveyInvitationPage'
 import { TranslationProvider } from '../../../i18n'
-import { LOCALE_STORAGE_KEY } from '../../../i18n/locale'
+import { CATALOGUES, LOCALE_STORAGE_KEY } from '../../../i18n/locale'
+import { createTranslator } from '../../../i18n/translate'
 import { setToken, clearToken } from '../../../auth/token'
 import type { SurveyRespondView } from '../api/surveyResponses'
 import type { SurveyInvitationTokenDetail } from '../api/surveyLinks'
@@ -555,5 +556,51 @@ describe('SurveyInvitationPage', () => {
 
     await screen.findByText('No se pudo cargar esta encuesta')
     expect(window.localStorage.getItem('climate_platform_token')).toBe('stale')
+  })
+})
+
+/**
+ * Runs `body` with the process in `zone`, and proves the stub took: a test of a zone-dependent
+ * date that passes only because of the machine it runs on proves nothing (CI is UTC).
+ */
+async function inZone(zone: string, body: () => Promise<void>): Promise<void> {
+  const original = process.env.TZ
+  process.env.TZ = zone
+  try {
+    expect(Intl.DateTimeFormat().resolvedOptions().timeZone).toBe(zone)
+    await body()
+  } finally {
+    process.env.TZ = original
+  }
+}
+
+const es = createTranslator(CATALOGUES.es)
+
+describe('SurveyInvitationPage — audit 2026-10-22', () => {
+  it('prints the close and the link’s expiry on the respondent’s own clock (R2)', async () => {
+    await inZone('America/Costa_Rica', async () => {
+      // 00:30 UTC on 1 Dec is 18:30 on 30 Nov in Costa Rica; 03:00 UTC on 30 Nov is 21:00 on 29 Nov.
+      serve({
+        resolve: () =>
+          new Response(
+            JSON.stringify(invitation({ surveyEndDate: '2026-12-01T00:30:00Z', expiresAt: '2026-11-30T03:00:00Z' })),
+            { status: 200 },
+          ),
+      })
+      renderPage()
+
+      expect(await screen.findByRole('heading', { name: 'Clima laboral 2026' })).toBeTruthy()
+      expect(screen.getByText('30 nov')).toBeTruthy()
+      expect(screen.getByText('29 nov')).toBeTruthy()
+      expect(screen.queryByText('1 dic')).toBeNull()
+    })
+  })
+
+  it('answers an invitation refusal it has no sentence for in its own words, never the server’s (R1)', async () => {
+    serve({ resolve: () => new Response(JSON.stringify({ message: 'Too many requests. Try again later.' }), { status: 429 }) })
+    renderPage()
+
+    expect(await screen.findByText(es('surveyRespond.failure.load'))).toBeTruthy()
+    expect(document.body.textContent).not.toContain('Too many requests')
   })
 })

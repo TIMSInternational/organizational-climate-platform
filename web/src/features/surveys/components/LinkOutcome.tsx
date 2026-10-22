@@ -2,13 +2,8 @@ import { EntryOutcomeCard } from '../next/entry/EntryOutcomeCard'
 import type { LinkFailureCopy } from '../linkFailure'
 
 export interface LinkOutcomeProps {
+  /** What to say. A null `bodyKey` reads `failure.load`, never the server's message. */
   copy: LinkFailureCopy
-  /**
-   * `SurveyLinkError.message`, used only when `copy.bodyKey` is null — i.e. when this
-   * client has no sentence of its own for the status it got back. Empty when the
-   * response carried no message, in which case the generic error copy stands in.
-   */
-  serverMessage: string
 }
 
 /**
@@ -47,6 +42,6 @@ export interface LinkOutcomeProps {
  * `SurveyInvitationPage` is a fine follow-up; it is an edit to that page, with that
  * page's tests, rather than a side effect of redrawing the share link's entry.
  */
-export function LinkOutcome({ copy, serverMessage }: LinkOutcomeProps) {
-  return <EntryOutcomeCard outcome={{ ...copy, signIn: false }} serverMessage={serverMessage} />
+export function LinkOutcome({ copy }: LinkOutcomeProps) {
+  return <EntryOutcomeCard outcome={{ ...copy, signIn: false }} />
 }

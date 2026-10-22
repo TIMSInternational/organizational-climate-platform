@@ -157,14 +157,18 @@ describe('EmployeeHomeView', () => {
     serves()
     renderHome()
 
+    // The fixture's close is the seeded Q4's, `2026-10-10T02:03:39Z`: 20:03 on 9 OCTOBER in
+    // Costa Rica, which is when the server stops taking answers. The canvas printed "10 de
+    // octubre · 30 días" because it read that instant in UTC — the defect audit 2026-10-22
+    // R2 names. The reader's own day and the count from their own evening are these.
     const lead = await screen.findByText(
-      [es('employee.taskClosesInDays', { days: 30 }), es('employee.next.closesOnDate', { date: '10 de octubre' })].join(' · '),
+      [es('employee.taskClosesInDays', { days: 29 }), es('employee.next.closesOnDate', { date: '9 de octubre' })].join(' · '),
     )
     expect(lead).toBeTruthy()
     // Six questions, about four minutes — computed from the count, never typed.
     expect(screen.getByText('6')).toBeTruthy()
     expect(screen.getByText(es('employee.taskMinutes', { minutes: 4 }))).toBeTruthy()
-    expect(screen.getByText('10 oct')).toBeTruthy()
+    expect(screen.getByText('9 oct')).toBeTruthy()
   })
 
   /**
@@ -208,7 +212,7 @@ describe('EmployeeHomeView', () => {
     expect([...lead.querySelectorAll('dd')].map((value) => value.textContent)).toEqual([
       '6',
       es('employee.taskMinutes', { minutes: 4 }).replace(' min', '\u00a0min'),
-      '10\u00a0oct',
+      '9\u00a0oct',
     ])
     const list = lead.querySelector('dl') as HTMLElement
     const classes = list.className.split(/\s+/)
@@ -301,7 +305,7 @@ describe('EmployeeHomeView', () => {
       return node
     })
     expect(within(row).getByText('Encuesta de Clima Q4 (abierta) (Copia)')).toBeTruthy()
-    expect(within(row).getByText(es('employee.surveyMeta', { questions: 6, minutes: 4, date: '10 oct' }))).toBeTruthy()
+    expect(within(row).getByText(es('employee.surveyMeta', { questions: 6, minutes: 4, date: '9 oct' }))).toBeTruthy()
     expect(respondHrefs()).toEqual([
       '/surveys/4c9c8c8c-03e1-4033-8224-8c80b242c558/respond',
       '/surveys/801a81a4-3551-4f08-96f4-d465e05b1605/respond',
@@ -626,8 +630,11 @@ describe('EmployeeHomeView', () => {
         ].join(' '),
       ),
     ).toBeTruthy()
-    expect(within(card).getByText('6 ago')).toBeTruthy()
-    expect(within(card).getByText('10 sept')).toBeTruthy()
+    // Both instants read on the reader's own clock (audit R2): Q3 closed at 20:05 on 5 Aug in
+    // Costa Rica — "Q3 closed on 5 August", as `DashboardDtos` documents it — and the first
+    // plan opened at 20:05 on 9 Sep.
+    expect(within(card).getByText('5 ago')).toBeTruthy()
+    expect(within(card).getByText('9 sept')).toBeTruthy()
   })
 
   it('makes each count agree with its noun: "1 respuesta en 0 departamentos", never "1 respuestas"', async () => {

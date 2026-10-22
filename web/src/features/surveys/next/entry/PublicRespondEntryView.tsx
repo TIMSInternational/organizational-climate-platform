@@ -1,7 +1,7 @@
 import { useTranslation } from '../../../../i18n'
 import { RespondCaption, RespondReading } from '../../../../components/layout'
 import { Button, CanvasArrowRightIcon } from '../../../../components/ui'
-import { calendarDay } from '../../../../lib/calendarDay'
+import { instantDay } from '../../../../lib/calendarDay'
 import { AnonymityNotice } from '../../components/SurveyRespondForm'
 import type { SurveyRespondView } from '../../api/surveyResponses'
 import { entryPace } from './derive'
@@ -64,12 +64,12 @@ export function PublicRespondEntryView({ view, locale, onBegin }: PublicRespondE
           phone. `grid-cols-2` is `repeat(2, minmax(0, 1fr))`, so neither can widen the
           page — the sideways overflow a sibling lane shipped. */}
       <section aria-label={t('panelLabel')} className="grid grid-cols-2 gap-panel-gap">
-        {/* `calendarDay`, because a close date is a calendar day stamped at UTC
-            midnight: read in the reader's own zone it is the day before for the whole
-            of Costa Rica. */}
+        {/* `instantDay`, in the reader's own zone: the survey stops taking answers at
+            the instant `endDate` names, and read in UTC a close at or after 18:00 in
+            Costa Rica printed as the next day (audit 2026-10-22, R2). */}
         <RespondReading
           label={t('closesReading')}
-          value={calendarDay(Date.parse(view.endDate), locale)}
+          value={instantDay(Date.parse(view.endDate), locale)}
         />
         <RespondReading label={t('questionsReading')} value={String(count)} />
       </section>

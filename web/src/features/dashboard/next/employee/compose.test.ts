@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import type { DashboardPendingSurvey, EmployeeDashboard, EmployeeLastOutcome } from '../../api/dashboard'
-import { composeEmployeeHome, composeOutcome, daysUntil } from './compose'
+import { composeEmployeeHome, composeOutcome, daysUntil, daysUntilOnReadersClock } from './compose'
 
 /**
  * The employee Home's arithmetic, without a DOM.
@@ -102,6 +102,33 @@ describe('daysUntil', () => {
   })
 })
 
+describe('daysUntilOnReadersClock (audit 2026-10-22, R2)', () => {
+  it('counts to the close’s day on the reader’s own clock', () => {
+    // The seeded Q4 closes at 02:03 UTC on 10 Oct: 20:03 on 9 OCTOBER in Costa Rica. From the
+    // canvas's evening (10 Sep) that is 29 days; `daysUntil`, counting to the UTC day, says 30.
+    expect(daysUntilOnReadersClock('2026-10-10T02:03:39.148+00:00', CANVAS_EVENING)).toBe(29)
+    // 23:59 on 10 Oct in Costa Rica (05:59 UTC on the 11th) is the canvas's 30.
+    expect(daysUntilOnReadersClock('2026-10-11T05:59:00.000Z', CANVAS_EVENING)).toBe(30)
+  })
+
+  it('pins a 00:30 UTC close to the PREVIOUS calendar day in Costa Rica', () => {
+    // 00:30 UTC on 12 Sep is 18:30 on 11 Sep in Costa Rica. Read at 10:00 on the 11th there,
+    // the survey closes TODAY; counted to the UTC day it was "1 day left".
+    const morning = '2026-09-11T16:00:00Z'
+    expect(daysUntilOnReadersClock('2026-09-12T00:30:00Z', morning, 'America/Costa_Rica')).toBe(0)
+    // The default is the reader's zone, pinned to Costa Rica above.
+    expect(daysUntilOnReadersClock('2026-09-12T00:30:00Z', morning)).toBe(0)
+    // The control: in UTC the same two instants are a day apart, so the zone decides.
+    expect(daysUntilOnReadersClock('2026-09-12T00:30:00Z', morning, 'UTC')).toBe(1)
+    // And `daysUntil`, which the team dashboards keep, is unchanged.
+    expect(daysUntil('2026-09-12T00:30:00Z', morning)).toBe(1)
+  })
+
+  it('makes no claim for a date it cannot read', () => {
+    expect(daysUntilOnReadersClock('not a date', CANVAS_EVENING)).toBeNull()
+  })
+})
+
 describe('composeEmployeeHome', () => {
   it('leads with the first survey the server listed and keeps the rest as quieter rows', () => {
     const model = composeEmployeeHome({
@@ -126,7 +153,9 @@ describe('composeEmployeeHome', () => {
       asOf: CANVAS_EVENING,
     })
     expect(model.lead?.minutes).toBe(4)
-    expect(model.lead?.daysLeft).toBe(30)
+    // 29: the fixture's close, 02:03 UTC on 10 Oct, is 20:03 on 9 Oct in Costa Rica, and Home
+    // counts on the reader's clock (`daysUntilOnReadersClock`, audit 2026-10-22 R2).
+    expect(model.lead?.daysLeft).toBe(29)
   })
 
   it('says more is outstanding only when the count exceeds the listed page', () => {

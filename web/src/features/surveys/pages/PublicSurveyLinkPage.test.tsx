@@ -4,7 +4,8 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import PublicSurveyLinkPage from './PublicSurveyLinkPage'
 import { TranslationProvider } from '../../../i18n'
-import { LOCALE_STORAGE_KEY } from '../../../i18n/locale'
+import { CATALOGUES, LOCALE_STORAGE_KEY } from '../../../i18n/locale'
+import { createTranslator } from '../../../i18n/translate'
 import { setToken, clearToken } from '../../../auth/token'
 import type { SurveyRespondView } from '../api/surveyResponses'
 import type { SurveyPublicLinkDetail } from '../api/surveyLinks'
@@ -40,7 +41,9 @@ function respondView(overrides: Partial<SurveyRespondView> = {}): SurveyRespondV
     resolvedLocale: 'es',
     fallbackFields: [],
     startDate: '2026-01-01T00:00:00Z',
-    endDate: '2026-10-10T00:00:00Z',
+    // Noon in Costa Rica: the 10th in every zone this suite runs in. The close is read in the
+    // reader's own zone (audit 2026-10-22, R2), so a UTC midnight would be the 9th west of UTC.
+    endDate: '2026-10-10T18:00:00Z',
     anonymous: true,
     allowPartialResponses: false,
     autoSave: true,
@@ -450,5 +453,56 @@ describe('PublicSurveyLinkPage', () => {
     renderPage()
 
     expect(screen.getByRole('combobox', { name: 'Cambiar Idioma' })).toBeTruthy()
+  })
+})
+
+/**
+ * Runs `body` with the process in `zone`, and proves the stub took: a test of a zone-dependent
+ * date that passes only because of the machine it runs on proves nothing (CI is UTC).
+ */
+async function inZone(zone: string, body: () => Promise<void>): Promise<void> {
+  const original = process.env.TZ
+  process.env.TZ = zone
+  try {
+    expect(Intl.DateTimeFormat().resolvedOptions().timeZone).toBe(zone)
+    await body()
+  } finally {
+    process.env.TZ = original
+  }
+}
+
+const es = createTranslator(CATALOGUES.es)
+
+describe('PublicSurveyLinkPage — audit 2026-10-22', () => {
+  it('prints the close on the respondent’s own clock: 00:30 UTC is the previous day in Costa Rica (R2)', async () => {
+    await inZone('America/Costa_Rica', async () => {
+      // 00:30 UTC on 11 Oct is 18:30 on 10 Oct in Costa Rica, when the server stops taking answers.
+      serve({ respond: () => new Response(JSON.stringify(respondView({ endDate: '2026-10-11T00:30:00Z' })), { status: 200 }) })
+      renderPage()
+
+      expect(await screen.findByRole('heading', { name: 'Clima laboral 2026' })).toBeTruthy()
+      expect(screen.getByText('10 oct')).toBeTruthy()
+      expect(screen.queryByText('11 oct')).toBeNull()
+    })
+  })
+
+  it('answers a refusal it has no sentence for in its own words, never the server’s English (R1)', async () => {
+    serve({ resolve: () => new Response(JSON.stringify({ message: 'An unexpected error occurred' }), { status: 500 }) })
+    renderPage()
+
+    expect(await screen.findByText(es('surveyRespond.failure.load'))).toBeTruthy()
+    expect(document.body.textContent).not.toContain('An unexpected error occurred')
+  })
+
+  it('answers a respond read that got no response in its own words, never the browser’s (R1)', async () => {
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) =>
+      String(input).includes('/survey-links/')
+        ? Promise.resolve(new Response(JSON.stringify(link()), { status: 200 }))
+        : Promise.reject(new TypeError('Failed to fetch')),
+    )
+    renderPage()
+
+    expect(await screen.findByText(es('surveyRespond.failure.load'))).toBeTruthy()
+    expect(document.body.textContent).not.toContain('Failed to fetch')
   })
 })

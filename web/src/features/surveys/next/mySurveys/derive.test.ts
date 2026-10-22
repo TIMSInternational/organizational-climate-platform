@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import {
   CLOSING_SOON_DAYS,
   belongsToNoCompany,
@@ -12,9 +12,18 @@ import type { CompanyScope } from '../../../../company-context'
 import type { MySurveyListItem } from '../../api/surveys'
 
 /**
- * The pure half of `/surveys/my`. Every date here is a UTC midnight because that is what
- * `Survey.EndDate` is — a calendar day, not an instant (`lib/calendarDay.ts`).
+ * The pure half of `/surveys/my`. `Survey.EndDate` is the instant the server stops taking
+ * answers, and the page counts and prints it in the reader's own zone (audit 2026-10-22, R2),
+ * so the zone is pinned to the tenant's: CI runs in UTC, where every case below would be
+ * read from a different evening. The R2 cases pass the zone explicitly as well.
  */
+const ORIGINAL_TZ = process.env.TZ
+beforeAll(() => {
+  process.env.TZ = 'America/Costa_Rica'
+})
+afterAll(() => {
+  process.env.TZ = ORIGINAL_TZ
+})
 
 const DAY = 86_400_000
 /** 10 Sep 2026, 21:50 in Costa Rica — the canvas's evening, 03:50 UTC on the 11th. */
@@ -65,7 +74,18 @@ describe('daysUntilClose', () => {
   })
 
   it('reads a survey closing on today’s own day as zero, not as one', () => {
-    expect(daysUntilClose('2026-09-11T23:59:00.000Z', NOW)).toBe(0)
+    // 05:00 UTC on the 11th is 23:00 on 10 Sep in Costa Rica: tonight.
+    expect(daysUntilClose('2026-09-11T05:00:00.000Z', NOW)).toBe(0)
+  })
+
+  it('pins a 00:30 UTC close to the PREVIOUS calendar day in Costa Rica (audit R2)', () => {
+    // 00:30 UTC on 11 Sep is 18:30 on 10 Sep in Costa Rica. Read at 10:00 that morning, the
+    // survey closes TODAY; counted in UTC days it read "1 day left", beside a printed 11 Sep.
+    const morning = Date.parse('2026-09-10T16:00:00.000Z')
+    expect(daysUntilClose('2026-09-11T00:30:00.000Z', morning, 'America/Costa_Rica')).toBe(0)
+    expect(daysUntilClose('2026-09-11T00:30:00.000Z', morning)).toBe(0)
+    // The control: in UTC the same two instants are a day apart, so the zone decides.
+    expect(daysUntilClose('2026-09-11T00:30:00.000Z', morning, 'UTC')).toBe(1)
   })
 
   it('goes negative once the window has passed', () => {
@@ -79,7 +99,7 @@ describe('daysUntilClose', () => {
 
 describe('groupMySurveys', () => {
   it('keeps a survey closing today open — it has not closed until the day is past', () => {
-    const { open, closed } = groupMySurveys([item({ endDate: '2026-09-11T23:59:00.000Z' })], NOW)
+    const { open, closed } = groupMySurveys([item({ endDate: '2026-09-11T05:00:00.000Z' })], NOW)
     expect(open.map((entry) => entry.id)).toEqual(['s1'])
     expect(closed).toEqual([])
   })

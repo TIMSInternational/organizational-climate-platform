@@ -4,12 +4,16 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
 import MicroclimateInvitationNextPage from './MicroclimateInvitationNextPage'
 import { TranslationProvider } from '../../../../i18n'
-import { LOCALE_STORAGE_KEY } from '../../../../i18n/locale'
+import { CATALOGUES, LOCALE_STORAGE_KEY } from '../../../../i18n/locale'
+import { createTranslator } from '../../../../i18n/translate'
 import { setToken, clearToken } from '../../../../auth/token'
 import { safeReturnPath } from '../../../../auth/returnPath'
 import type { PublicMicroclimateDetail } from '../../api/microclimates'
 import type { MicroclimateInvitationTokenDetail } from '../../api/microclimateLinks'
 import { MINIMUM_RESPONDENTS } from '../../microclimatePrivacy'
+
+/** The shipped wording, read from the catalogue the page reads. */
+const es = createTranslator(CATALOGUES.es)
 
 const TOKEN = 'fixture-token-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 
@@ -287,15 +291,16 @@ describe('MicroclimateInvitationNextPage — the six states', () => {
   })
 
   /**
-   * A status this build has no copy for is a 429, a 5xx or an offline fetch. The server's
-   * own message is a better answer than the nearest sentence we happen to have — and never
-   * a blank.
+   * A status this build has no copy for is a 429, a 5xx or an offline fetch. It reads our
+   * own sentence for that, never the server's message: the server writes English, and this
+   * test used to assert that its English reached a Spanish respondent (audit 2026-10-22, R1).
    */
-  it('falls back to the server’s own words for a refusal it cannot name', async () => {
+  it('answers a refusal it cannot name in its own words, never the server’s English', async () => {
     serve({ resolve: refused(429, null, 'Too many attempts. Try again in a minute.') })
     renderPage()
     expect(await screen.findByRole('heading', { name: 'No se pudo abrir esta invitación' })).toBeTruthy()
-    expect(screen.getByText('Too many attempts. Try again in a minute.')).toBeTruthy()
+    expect(screen.getByText(es('microclimates.next.invitation.unknownBody'))).toBeTruthy()
+    expect(document.body.textContent).not.toContain('Too many attempts')
   })
 
   it('shows a sentence and not a blank when the refusal carried no message', async () => {
