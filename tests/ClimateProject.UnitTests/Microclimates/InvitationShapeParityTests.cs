@@ -77,33 +77,50 @@ public class InvitationShapeParityTests
             ShapeOf(typeof(SurveyAnonymityGuaranteeDto), Normalise),
             ShapeOf(typeof(MicroclimateAnonymityGuaranteeDto), Normalise));
 
+    /// <summary>
+    /// The summaries differ in exactly one member, named here so the difference cannot grow
+    /// quietly: the survey summary counts <c>withCode</c>, the invitees who hold a per-survey
+    /// access code (G9/G10, 2026-10-22). A microclimate has no per-survey credential, so it has
+    /// no such count. Everything else is identical.
+    /// </summary>
     [Fact]
-    public void The_two_summaries_have_the_same_shape()
-        => Assert.Equal(
-            ShapeOf(typeof(SurveyInvitationSummaryDto), Normalise),
-            ShapeOf(typeof(MicroclimateInvitationSummaryDto), Normalise));
+    public void The_two_summaries_differ_only_in_the_survey_code_count()
+    {
+        const string SurveyOnly = "WithCode:Int32";
+        var survey = ShapeOf(typeof(SurveyInvitationSummaryDto), Normalise);
+        var microclimate = ShapeOf(typeof(MicroclimateInvitationSummaryDto), Normalise);
+
+        Assert.Contains(SurveyOnly, survey);
+        Assert.DoesNotContain(SurveyOnly, microclimate);
+        Assert.Equal(survey.Where(m => m != SurveyOnly), microclimate);
+    }
 
     /// <summary>
-    /// The invitation detail differs in exactly two members and both are named here so the
+    /// The invitation detail differs in exactly three members and all are named here so the
     /// difference cannot grow quietly: the survey row points at a <c>surveyId</c> and the
     /// microclimate row at a <c>microclimateId</c>; and the survey row carries
     /// <c>completedOn</c>, the DAY a named invitee finished (ruled 2026-10-12 for surveys only --
-    /// the survey's <c>startedAt</c>/<c>completedAt</c> are kept in the shape but always null).
+    /// the survey's <c>startedAt</c>/<c>completedAt</c> are kept in the shape but always null);
+    /// and the survey row carries <c>hasCode</c>, whether the invitee holds a per-survey access
+    /// code (2026-10-22), which a microclimate invitation has no analogue for.
     /// Everything else -- the timestamps, the derived <c>isExpired</c>, the reminder counters --
     /// is identical.
     /// </summary>
     [Fact]
-    public void The_two_invitation_details_differ_only_in_which_parent_they_name_and_the_survey_day()
+    public void The_two_invitation_details_differ_only_in_which_parent_they_name_the_survey_day_and_the_code()
     {
-        const string SurveyOnly = "CompletedOn:Nullable<DateOnly>";
+        string[] surveyOnly = ["CompletedOn:Nullable<DateOnly>", "HasCode:Boolean"];
         var survey = ShapeOf(typeof(SurveyInvitationDetail), Normalise);
         var microclimate = ShapeOf(typeof(MicroclimateInvitationDetail), Normalise);
 
-        Assert.Contains(SurveyOnly, survey);
-        Assert.DoesNotContain(SurveyOnly, microclimate);
+        foreach (var member in surveyOnly)
+        {
+            Assert.Contains(member, survey);
+            Assert.DoesNotContain(member, microclimate);
+        }
 
         Assert.Equal(
-            survey.Where(m => m != SurveyOnly).Select(m => m.Replace("SurveyId:", "ParentId:", StringComparison.Ordinal)),
+            survey.Where(m => !surveyOnly.Contains(m)).Select(m => m.Replace("SurveyId:", "ParentId:", StringComparison.Ordinal)),
             microclimate.Select(m => m.Replace("MicroclimateId:", "ParentId:", StringComparison.Ordinal)));
 
         // Guard the guard: the substitution above really did fire on both sides, so a future
