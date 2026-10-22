@@ -2,7 +2,9 @@ using System.Globalization;
 using System.Security.Claims;
 using ClimateProject.Api.Infrastructure;
 using ClimateProject.Application.Auth;
+using ClimateProject.Application.Scheduling;
 using ClimateProject.Application.Surveys;
+using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -61,7 +63,16 @@ public static class SurveyParticipationEndpoints
         var survey = await db.Surveys
             .AsNoTracking()
             .Where(s => s.Id == surveyId)
-            .Select(s => new { s.Id, s.CompanyId, s.Settings.CollectParticipantIdentity, s.Settings.Anonymous })
+            .Select(s => new
+            {
+                s.Id,
+                s.CompanyId,
+                s.Settings.CollectParticipantIdentity,
+                s.Settings.Anonymous,
+                s.Settings.CredentialMode,
+                s.TitleEn,
+                s.TitleEs,
+            })
             .FirstOrDefaultAsync(cancellationToken);
         if (survey is null)
         {
@@ -79,6 +90,15 @@ public static class SurveyParticipationEndpoints
         var resumeKey = SurveyResumeSessionConfiguration.KeyFrom(configuration);
         var (roster, signInOnly) = await BuildRosterAsync(
             survey.Id, survey.CompanyId, survey.Anonymous, resumeKey, db, cancellationToken);
+
+        // Per-survey keys: who was mailed one and who has used it. Added HERE and not in
+        // `BuildRosterAsync`, which the status-report export shares -- that sheet is about
+        // answering, and a key's days are not something it was ever asked to carry.
+        var credentialMode = survey.CredentialMode ?? CredentialModes.Shared;
+        if (credentialMode == CredentialModes.PerSurvey && roster.Count > 0)
+        {
+            roster = await WithSurveyKeysAsync(roster, survey.Id, survey.CompanyId, db, cancellationToken);
+        }
 
         // Three states for a survey whose answers carry a user id, and for an anonymous one
         // that can only be answered by signing in. `BuildRosterAsync` decides the second from
@@ -144,7 +164,53 @@ public static class SurveyParticipationEndpoints
             distinguishesStarted,
             // COMPLETION alone, which is all an anonymous survey could report before and is
             // still what it reports when there is no key.
-            survey.Anonymous && !distinguishesStarted));
+            survey.Anonymous && !distinguishesStarted,
+            credentialMode,
+            survey.TitleEn,
+            survey.TitleEs));
+    }
+
+    /// <summary>
+    /// Each row with its survey key: the username it signs in with, the day the key now in force
+    /// was mailed, and the day it was last used -- days in the company's zone, never instants
+    /// (see <see cref="SurveyRosterRow"/>). A person with no key keeps three nulls, which the
+    /// screen reads as "Sin código".
+    /// </summary>
+    private static async Task<List<SurveyRosterRow>> WithSurveyKeysAsync(
+        List<SurveyRosterRow> roster,
+        Guid surveyId,
+        Guid companyId,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var keys = await db.SurveyCredentials
+            .AsNoTracking()
+            .Where(c => c.SurveyId == surveyId)
+            .Select(c => new { c.UserId, c.Username, c.CreatedAt, c.LastSignInAt })
+            .ToDictionaryAsync(c => c.UserId, cancellationToken);
+        if (keys.Count == 0)
+        {
+            return roster;
+        }
+
+        var zone = SchedulingTimeZone.Resolve(await db.Companies
+            .AsNoTracking()
+            .Where(c => c.Id == companyId)
+            .Select(c => c.Settings.Timezone)
+            .FirstOrDefaultAsync(cancellationToken));
+        DateOnly LocalDay(DateTimeOffset moment) => DateOnly.FromDateTime(SchedulingTimeZone.ToLocal(moment, zone));
+
+        return
+        [
+            .. roster.Select(row => keys.TryGetValue(row.UserId, out var key)
+                ? row with
+                {
+                    SurveyUsername = key.Username,
+                    CredentialIssuedOn = LocalDay(key.CreatedAt),
+                    LastSignInOn = key.LastSignInAt is { } signedIn ? LocalDay(signedIn) : null,
+                }
+                : row),
+        ];
     }
 
     /// <summary>

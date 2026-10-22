@@ -538,20 +538,18 @@ public static class SurveyDistributionEndpoints
         var credentialsNotSent = 0;
         if (perSurveyCredentials && recipients.Count > 0)
         {
-            var company = await db.Companies
-                .Where(c => c.Id == survey.CompanyId)
-                .Select(c => new { c.Name, c.Settings.Language, c.Branding.LogoUrl, c.Branding.PrimaryColor })
-                .FirstOrDefaultAsync(cancellationToken);
-
-            var locale = ContentLanguages.SingleLocaleOf(company?.Language) ?? ContentLanguages.FallbackLocale;
-            var surveyTitle = LocalizedContent.ResolveText(survey.TitleEn, survey.TitleEs, locale, survey.Language);
-            var brand = company is null
-                ? EmailBrand.None
-                : new EmailBrand(company.LogoUrl, company.Name, company.PrimaryColor);
+            // Minting, hashing and mailing are `SurveyCredentialIssuance`'s, shared with the
+            // reissue route (`SurveyCredentialEndpoints`) so the two cannot mint different keys.
+            var mail = SurveyCredentialIssuance.MailFor(
+                survey,
+                await db.Companies
+                    .Where(c => c.Id == survey.CompanyId)
+                    .Select(c => new SurveyCredentialCompany(c.Name, c.Settings.Language, c.Branding.LogoUrl, c.Branding.PrimaryColor))
+                    .FirstOrDefaultAsync(cancellationToken));
 
             // Both namespaces, because the two share one index each and a collision between
             // them would make sign-in ambiguous about which person and which survey.
-            var prefix = MassInviteCredentials.PrefixFor(company?.Name ?? string.Empty);
+            var prefix = mail.UsernamePrefix;
             var taken = (await db.Users
                     .Where(u => u.Username != null && u.Username.StartsWith(prefix))
                     .Select(u => u.Username!)
@@ -586,20 +584,14 @@ public static class SurveyDistributionEndpoints
             // a password they are already using.
             foreach (var recipient in recipients.Where(r => !alreadyCredentialed.Contains(r.Id)))
             {
-                string username;
-                do
-                {
-                    username = MassInviteCredentials.Username(prefix);
-                }
-                while (!taken.Add(username));
-
-                var password = MassInviteCredentials.Password();
+                var username = SurveyCredentialIssuance.NewUsername(prefix, taken);
+                var (password, passwordHash) = SurveyCredentialIssuance.NewPassword(passwordHasher);
                 var credential = new SurveyCredential
                 {
                     SurveyId = surveyId,
                     UserId = recipient.Id,
                     Username = username,
-                    PasswordHash = passwordHasher.Hash(password),
+                    PasswordHash = passwordHash,
                     CreatedAt = now,
                 };
                 db.SurveyCredentials.Add(credential);
@@ -608,9 +600,8 @@ public static class SurveyDistributionEndpoints
                 // The survey's name is the whole point: this person may be receiving a
                 // second one of these for another survey, and the subject is the only thing
                 // in an inbox that tells the two apart.
-                var outcome = await credentialsSender.SendAsync(
-                    recipient.Email, recipient.Name, username, password, company?.Language,
-                    brand, CredentialsEmailPurpose.Invitation, surveyTitle, cancellationToken);
+                var outcome = await SurveyCredentialIssuance.SendAsync(
+                    credentialsSender, mail, recipient.Email, recipient.Name, username, password, cancellationToken);
                 if (outcome.Delivered)
                 {
                     credentialsIssued++;

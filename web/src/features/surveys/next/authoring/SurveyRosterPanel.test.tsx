@@ -7,6 +7,7 @@ import { clearToken, setToken } from '../../../../auth/token'
 import { tokenFor } from '../../../../test/jwtFixture'
 import es from '../../../../i18n/es.json'
 import type { SurveyParticipationView, SurveyRosterRow } from '../../api/surveys'
+import { formatParticipationDay } from './participationDay'
 
 const T = es.surveys.next.roster
 const COMPANY = '11111111-1111-1111-1111-111111111111'
@@ -58,10 +59,25 @@ function view(over: Partial<SurveyParticipationView> = {}): SurveyParticipationV
 
 type Sent = { url: string; body: unknown }
 
-function fetchWith(participation: SurveyParticipationView, onPost?: (ids: string[]) => unknown) {
+function fetchWith(
+  participation: SurveyParticipationView,
+  onPost?: (ids: string[]) => unknown,
+  onReissue?: (userId: string) => { status: number; body: unknown },
+) {
   const sent: Sent[] = []
   const mock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
+    const reissue = /\/surveys\/[^/]+\/credentials\/([^/]+)\/reissue$/.exec(url)
+    if (reissue && (init?.method ?? 'GET').toUpperCase() === 'POST') {
+      sent.push({ url, body: null })
+      const answer = onReissue?.(reissue[1]) ?? {
+        status: 200,
+        body: { surveyId: SURVEY, userId: reissue[1], username: 'x', delivered: true, failureReason: null, issuedOn: '2026-10-22' },
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify(answer.body), { status: answer.status, headers: { 'Content-Type': 'application/json' } }),
+      )
+    }
     if ((init?.method ?? 'GET').toUpperCase() === 'POST') {
       const body = JSON.parse(String(init?.body)) as { userIds: string[] }
       sent.push({ url, body })
@@ -200,6 +216,12 @@ describe('SurveyRosterPanel', () => {
     await user.click(within(rowOf('ana')).getByRole('checkbox'))
     await user.click(screen.getByRole('button', { name: T.send }))
 
+    // It replaces passwords, so it asks first -- and nothing has gone before the answer.
+    const dialog = await screen.findByRole('alertdialog')
+    expect(within(dialog).getByText(T.sendConfirmTitle.replace('{count}', '2'))).toBeTruthy()
+    expect(sent).toHaveLength(0)
+    await user.click(within(dialog).getByRole('button', { name: T.send }))
+
     await waitFor(() => expect(sent).toHaveLength(1))
     expect((sent[0].body as { userIds: string[] }).userIds.toSorted()).toEqual(['ana', 'hugo'])
 
@@ -208,6 +230,127 @@ describe('SurveyRosterPanel', () => {
     expect(
       await screen.findByText(T.sentSome.replace('{sent}', '1').replace('{requested}', '2').replace('{failed}', '1')),
     ).toBeTruthy()
+  })
+
+  it('sends nothing when the reminder is not confirmed', async () => {
+    const payload = view()
+    const { mock, sent } = fetchWith(payload)
+    vi.stubGlobal('fetch', mock)
+    const user = userEvent.setup()
+    renderPanel(payload)
+    await screen.findByText('Marta Villalobos')
+
+    await user.click(within(rowOf('hugo')).getByRole('checkbox'))
+    await user.click(screen.getByRole('button', { name: T.send }))
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: es.common.cancel }))
+
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+    expect(sent).toHaveLength(0)
+  })
+
+  describe('a per-survey survey', () => {
+    // Ana was mailed a key and has not used it; Hugo has used his; Marta holds none yet.
+    const perSurvey = () =>
+      view({
+        credentialMode: 'per_survey',
+        surveyTitleEs: 'Clima Organizacional ESPH 2026',
+        surveyTitleEn: null,
+        roster: [
+          { ...ANA, username: null, surveyUsername: 'esph-k7m2q9xa', credentialIssuedOn: '2026-10-20', lastSignInOn: null },
+          { ...HUGO, username: null, surveyUsername: 'esph-p3r8t2wz', credentialIssuedOn: '2026-10-19', lastSignInOn: '2026-10-21' },
+          { ...MARTA, status: 'not_started' as const, username: null, surveyUsername: null, credentialIssuedOn: null, lastSignInOn: null },
+        ],
+      })
+    const day = (d: string) => formatParticipationDay(d, 'es')
+
+    it('shows the survey username, when the code went and whether it was used -- never "Entra con su correo"', async () => {
+      const payload = perSurvey()
+      vi.stubGlobal('fetch', fetchWith(payload).mock)
+      renderPanel(payload)
+      await screen.findByText('Ana Lucía Mora')
+
+      expect(within(rowOf('ana')).getByText('esph-k7m2q9xa')).toBeTruthy()
+      expect(within(rowOf('ana')).getByText(T.codeSent.replace('{date}', day('2026-10-20')))).toBeTruthy()
+      expect(within(rowOf('ana')).getByText(T.notSignedIn)).toBeTruthy()
+
+      expect(within(rowOf('hugo')).getByText(T.signedInOn.replace('{date}', day('2026-10-21')))).toBeTruthy()
+      expect(within(rowOf('marta')).getAllByText(T.noCode).length).toBeGreaterThan(0)
+
+      // The false label is gone, and so is the account resend: it cannot reach a keyless account.
+      expect(screen.queryByText(T.noUsuario)).toBeNull()
+      expect(screen.queryAllByRole('checkbox')).toHaveLength(0)
+    })
+
+    it('refuses, with the reason on screen, to reissue a code already used or never sent', async () => {
+      const payload = perSurvey()
+      vi.stubGlobal('fetch', fetchWith(payload).mock)
+      renderPanel(payload)
+      await screen.findByText('Ana Lucía Mora')
+
+      const reissueOf = (name: string) => screen.getByRole('button', { name: T.reissueFor.replace('{name}', name) })
+      expect(reissueOf('Ana Lucía Mora')).toHaveProperty('disabled', false)
+      expect(reissueOf('Hugo Peralta')).toHaveProperty('disabled', true)
+      expect(within(rowOf('hugo')).getByText(T.reissueWhySignedIn)).toBeTruthy()
+      expect(reissueOf('Marta Villalobos')).toHaveProperty('disabled', true)
+      expect(within(rowOf('marta')).getByText(T.reissueWhyNoCode)).toBeTruthy()
+    })
+
+    it('asks first, naming who, which survey and that the old code stops working, then reissues', async () => {
+      const payload = perSurvey()
+      const { mock, sent } = fetchWith(payload)
+      vi.stubGlobal('fetch', mock)
+      const user = userEvent.setup()
+      renderPanel(payload)
+      await screen.findByText('Ana Lucía Mora')
+
+      await user.click(screen.getByRole('button', { name: T.reissueFor.replace('{name}', 'Ana Lucía Mora') }))
+      const dialog = await screen.findByRole('alertdialog')
+      expect(within(dialog).getByText(T.reissueTitle.replace('{name}', 'Ana Lucía Mora'))).toBeTruthy()
+      expect(
+        within(dialog).getByText(
+          T.reissueBody
+            .replace('{email}', 'ana@esph.test')
+            .replace('{survey}', 'Clima Organizacional ESPH 2026')
+            .replace('{username}', 'esph-k7m2q9xa'),
+        ),
+      ).toBeTruthy()
+      expect(sent).toHaveLength(0)
+
+      await user.click(within(dialog).getByRole('button', { name: T.reissue }))
+
+      await waitFor(() => expect(sent).toHaveLength(1))
+      expect(sent[0].url).toBe(`${import.meta.env.VITE_API_BASE_URL}/surveys/${SURVEY}/credentials/ana/reissue`)
+      expect(
+        await screen.findByText(T.reissueSent.replace('{name}', 'Ana Lucía Mora').replace('{email}', 'ana@esph.test')),
+      ).toBeTruthy()
+      // The row now says when the NEW code went, without a refetch.
+      expect(within(rowOf('ana')).getByText(T.codeSent.replace('{date}', day('2026-10-22')))).toBeTruthy()
+    })
+
+    it('says a failed mail changed nothing, and a refusal in Spanish', async () => {
+      const payload = perSurvey()
+      let answer: { status: number; body: unknown } = {
+        status: 200,
+        body: { delivered: false, failureReason: 'mailbox full', issuedOn: '2026-10-20' },
+      }
+      vi.stubGlobal('fetch', fetchWith(payload, undefined, () => answer).mock)
+      const user = userEvent.setup()
+      renderPanel(payload)
+      await screen.findByText('Ana Lucía Mora')
+
+      const reissueAna = () => screen.getByRole('button', { name: T.reissueFor.replace('{name}', 'Ana Lucía Mora') })
+      await user.click(reissueAna())
+      await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: T.reissue }))
+      expect(await screen.findByText(T.reissueSendFailed.replace('{name}', 'Ana Lucía Mora'))).toBeTruthy()
+      // The date on the row is the old code's, because the old code is the one in force.
+      expect(within(rowOf('ana')).getByText(T.codeSent.replace('{date}', day('2026-10-20')))).toBeTruthy()
+
+      answer = { status: 409, body: { message: 'This person has already signed in…', code: 'already_signed_in' } }
+      await user.click(reissueAna())
+      await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: T.reissue }))
+      expect(await screen.findByText(T.reissueRefusedSignedIn)).toBeTruthy()
+      expect(screen.queryByText(/already signed in/)).toBeNull()
+    })
   })
 
   it('chunks a selection larger than the API cap instead of sending one oversized request', async () => {
@@ -223,6 +366,7 @@ describe('SurveyRosterPanel', () => {
 
     await user.click(screen.getByRole('checkbox', { name: T.selectAll }))
     await user.click(screen.getByRole('button', { name: T.send }))
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: T.send }))
 
     // 140 people, a cap of 100: two requests, and neither over the cap. One request of 140
     // would be refused by the API with `batch_too_large` and nobody would be mailed.
