@@ -591,7 +591,7 @@ function RosterRows({
                 {copy('reissue')}
               </Button>
               {issuedOn === null || signedInOn !== null ? (
-                <span id={`reissue-why-${row.userId}`} className="text-xs text-fg-tertiary">
+                <span id={`reissue-why-${row.userId}`} className="text-xs text-fg-secondary">
                   {issuedOn === null ? copy('reissueWhyNoCode') : copy('reissueWhySignedIn')}
                 </span>
               ) : null}
