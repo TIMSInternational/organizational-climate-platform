@@ -5199,7 +5199,7 @@
     "next": {
       "crumb": "Configuración",
       "title": "Configuración de empresa",
-      "description": "Lo que cada encuesta nueva hereda: idioma, frecuencia, anonimato, retención y marca. Se guarda al final.",
+      "description": "Lo que cada encuesta nueva hereda —idioma, zona horaria y modo de acceso— y la marca de la empresa. Se guarda al final.",
       "discard": "Descartar",
       "save": "Guardar cambios",
       "saving": "Guardando…",
@@ -5269,7 +5269,16 @@
       "departmentsActiveMany": "{count} activos",
       "departmentsInactiveOne": "{count} inactivo",
       "departmentsInactiveMany": "{count} inactivos",
-      "senderPlatform": "Lo define la plataforma para todas las empresas; aparece como remitente de invitaciones y recordatorios."
+      "senderPlatform": "Lo define la plataforma para todas las empresas; aparece como remitente de invitaciones y recordatorios.",
+      "anonymityInEffect": "Anonimato",
+      "anonymityAlwaysValue": "Siempre anónimas",
+      "anonymityAlwaysHelp": "Toda encuesta nueva se crea anónima; no es un ajuste de la empresa. Ningún administrador de la empresa ve una respuesta individual.",
+      "retentionInEffect": "Conservación de datos",
+      "retentionFixedValue": "Plazos fijos de la plataforma",
+      "retentionFixedHelp": "Las respuestas no se borran por plazo. La plataforma borra sola los borradores de encuesta sin tocar en 30 días, las notificaciones al cabo de 1 año y las invitaciones no aceptadas 90 días después de vencer.",
+      "colourEmailHelp": "El color del botón en los correos que llevan el acceso: credenciales al importar personas, la invitación masiva y la distribución de una encuesta. No colorea ninguna pantalla.",
+      "brandMetaInEffect": "el logotipo en la app y al responder; logotipo y color en los correos de acceso",
+      "logoPathHelpPublished": "Una ruta de este sitio, como /brand/esph-logo.svg. TIMS publica el archivo en el sitio; aquí solo se elige. Vacío quita el logotipo."
     }
   },
   "wizard": {

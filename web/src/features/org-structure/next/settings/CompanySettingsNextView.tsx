@@ -1,20 +1,18 @@
 import { useId, useState, type ReactNode } from 'react'
 import { useParams } from 'react-router'
-import { ArrowDownToLine, Check, FileText } from 'lucide-react'
-import { useTranslation, type TranslateFn } from '../../../../i18n'
+import { Check, FileText } from 'lucide-react'
+import { useTranslation } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
 import { ANONYMITY_FLOOR, DEFAULT_RESULT_BANDS } from '../../../../components/charts'
 import { Button, EmptyState, Input, NetworkError, SkeletonText } from '../../../../components/ui'
 import { readViewerClaims, useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { updateCompanySettings } from '../../api/companySettings'
-import { surveyFrequencyLabelKey } from '../../labels'
 import { CanvasSelect, Field, Panel } from '../super/parts'
 import {
   HEX_COLOUR,
   changesOf,
   logoValid,
   draftOf,
-  retentionOptions,
   timezoneOptions,
   utcOffset,
   type SettingsDraft,
@@ -29,7 +27,6 @@ import { byCount } from '../../../../i18n/plural'
 
 const DASH = '—'
 const LANGUAGES = ['es', 'en']
-const FREQUENCIES = ['daily', 'weekly', 'monthly', 'quarterly']
 const K = 'companySettings.next'
 
 /** The artboard's read-only box: a 32px field that is a reading, not a control. */
@@ -44,21 +41,13 @@ function Readout({ children, mono = false }: { children: ReactNode; mono?: boole
   )
 }
 
-function retentionLabel(t: TranslateFn, locale: string, days: number): string {
-  if (days % 365 !== 0) return t(`${K}.retentionDays`, { days: new Intl.NumberFormat(locale).format(days) })
-  const years = days / 365
-  return years === 1 ? t(`${K}.retentionYear`) : t(`${K}.retentionYears`, { years })
-}
-
-function frequencyHelpKey(frequency: string): string {
-  return FREQUENCIES.includes(frequency) ? `${K}.frequencyHelp.${frequency}` : `${K}.frequencyHelp.other`
-}
-
 /**
  * `/admin/companies/:id` for a company administrator — the CompanySettings artboard.
  *
- * What every new survey inherits (language, cadence, anonymity, retention, time zone), the
- * brand its invitations carry, and the company it belongs to, saved together by one button.
+ * What every new survey inherits (language, time zone, sign-in mode, result bands), the brand
+ * its sign-in mail and screens carry, and the company it belongs to, saved together by one
+ * button. Anonymity and retention are stated, not edited: no code reads the company's value
+ * for either (audit gap G18).
  * The language control is the reason this screen exists (triage row "Configuración de
  * empresa", P0): `PUT /admin/companies/{id}/settings` has always accepted `language` and no
  * screen offered it, so a Spanish tenant could not stop its surveys starting in English.
@@ -163,12 +152,6 @@ function SettingsForm({
   const logoUrl = logoOk && draft.logoUrl.trim() !== '' ? draft.logoUrl.trim() : null
   const name = model.companyName ?? DASH
   const now = new Date()
-  // The artboard's pattern, with the tenant's own survey and how it was really created.
-  const anonymityHelp = model.latestSurvey
-    ? t(model.latestSurvey.anonymous ? `${K}.anonymityHelpAnonymous` : `${K}.anonymityHelpNamed`, {
-        wave: model.latestSurvey.wave,
-      })
-    : t(`${K}.anonymityHelp`)
 
   async function save() {
     const changes = changesOf(initial, draft)
@@ -260,56 +243,6 @@ function SettingsForm({
                   ))}
                 </CanvasSelect>
               </Field>
-              <Field fieldLabel={t(`${K}.frequency`)} htmlFor={`${ids}-frequency`} helper={t(frequencyHelpKey(draft.surveyFrequency))}>
-                <CanvasSelect
-                  id={`${ids}-frequency`}
-                  className="w-full"
-                  value={draft.surveyFrequency}
-                  onChange={(event) => set({ surveyFrequency: event.target.value })}
-                >
-                  {(FREQUENCIES.includes(draft.surveyFrequency) ? FREQUENCIES : [draft.surveyFrequency, ...FREQUENCIES]).map((value) => {
-                    const key = surveyFrequencyLabelKey(value)
-                    return (
-                      <option key={value} value={value}>
-                        {key ? t(key) : value}
-                      </option>
-                    )
-                  })}
-                </CanvasSelect>
-              </Field>
-              <Field fieldLabel={t(`${K}.anonymity`)} htmlFor={`${ids}-anonymity`} helper={anonymityHelp}>
-                <CanvasSelect
-                  id={`${ids}-anonymity`}
-                  className="w-full"
-                  value={draft.anonymousSurveys ? 'anonymous' : 'named'}
-                  onChange={(event) => set({ anonymousSurveys: event.target.value === 'anonymous' })}
-                >
-                  <option value="anonymous">{t(`${K}.anonymous`)}</option>
-                  <option value="named">{t(`${K}.named`)}</option>
-                </CanvasSelect>
-              </Field>
-              <Field
-                fieldLabel={t(`${K}.retention`)}
-                htmlFor={`${ids}-retention`}
-                // The period's number and unit never split across the helper's lines ("… cerradas. 7 /
-                // años hasta …" on the first shot): the first space becomes a no-break space.
-                helper={t(`${K}.retentionHelpPeriod`, {
-                  period: retentionLabel(t, locale, draft.dataRetentionDays).replace(' ', '\u00a0'),
-                })}
-              >
-                <CanvasSelect
-                  id={`${ids}-retention`}
-                  className="w-full"
-                  value={String(draft.dataRetentionDays)}
-                  onChange={(event) => set({ dataRetentionDays: Number(event.target.value) })}
-                >
-                  {retentionOptions(draft.dataRetentionDays).map((days) => (
-                    <option key={days} value={days}>
-                      {retentionLabel(t, locale, days)}
-                    </option>
-                  ))}
-                </CanvasSelect>
-              </Field>
               <Field fieldLabel={t(`${K}.timezone`)} htmlFor={`${ids}-timezone`} helper={t(`${K}.timezoneHelp`)}>
                 <CanvasSelect
                   id={`${ids}-timezone`}
@@ -330,11 +263,19 @@ function SettingsForm({
               <Field fieldLabel={t(`${K}.floor`)} helper={t(`${K}.floorHelp`, { threshold: ANONYMITY_FLOOR })}>
                 <Readout>{t(`${K}.floorValue`, { threshold: ANONYMITY_FLOOR })}</Readout>
               </Field>
-              {/* The artboard's six fields and no more. No Microclimas / Información de IA
-                  switch: no endpoint reads either flag (`MicroclimateEnabled` and
-                  `AiInsightsEnabled` appear only on the entity, the settings PUT and its DTOs),
-                  so a switch here would change nothing; the super administrator's company view
-                  keeps the microclimate switch (`SuperCompanyDetailView`). */}
+              {/* Statements, not controls (audit gap G18). The company's `anonymousSurveys` and
+                  `dataRetentionDays` are stored by the settings PUT and read by nothing: every
+                  new survey is anonymous (`NewSurveyDefaults.Apply`) and the retention sweep
+                  runs fixed periods (`RetentionCleanupJob`, `SurveyDraftRetention`). A select
+                  for either changed nothing, so the screen says what does happen instead.
+                  No frequency, microclimate or AI control either: the first two are read by
+                  nothing, and the AI flag only by the super administrator's Analítica. */}
+              <Field fieldLabel={t(`${K}.anonymityInEffect`)} helper={t(`${K}.anonymityAlwaysHelp`)}>
+                <Readout>{t(`${K}.anonymityAlwaysValue`)}</Readout>
+              </Field>
+              <Field fieldLabel={t(`${K}.retentionInEffect`)} helper={t(`${K}.retentionFixedHelp`)}>
+                <Readout>{t(`${K}.retentionFixedValue`)}</Readout>
+              </Field>
             </div>
           </Panel>
           <CredentialModeCard
@@ -364,7 +305,7 @@ function SettingsForm({
                 {t(`${K}.brandHeading`)}
               </h2>
             }
-            meta={t(`${K}.brandMeta`)}
+            meta={t(`${K}.brandMetaInEffect`)}
             className="gap-4 pb-5"
           >
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
@@ -386,7 +327,7 @@ function SettingsForm({
                 <Field
                   fieldLabel={t(`${K}.colour`)}
                   htmlFor={`${ids}-colour`}
-                  helper={colourValid ? t(`${K}.colourHelp`) : <span className="text-accent-red">{t(`${K}.colourInvalid`)}</span>}
+                  helper={colourValid ? t(`${K}.colourEmailHelp`) : <span className="text-accent-red">{t(`${K}.colourInvalid`)}</span>}
                 >
                   <div className="flex items-center gap-2">
                     <span
@@ -407,13 +348,13 @@ function SettingsForm({
                 <Field
                   fieldLabel={t(`${K}.logoPath`)}
                   htmlFor={`${ids}-logo`}
-                  helper={logoOk ? t(`${K}.logoPathHelp`) : <span className="text-accent-red">{t(`${K}.logoPathInvalid`)}</span>}
+                  helper={logoOk ? t(`${K}.logoPathHelpPublished`) : <span className="text-accent-red">{t(`${K}.logoPathInvalid`)}</span>}
                 >
-                  {/* The field the disabled Upload button below already promises: its own
-                      helper has always said "the logo is stored as a link", and until now
-                      there was nowhere to put one. Upload stays unavailable because there is
-                      no asset store in this product and adding one is a dependency
-                      decision, not a form field. */}
+                  {/* How a logo is set today: the file is published on this site (under
+                      `web/public/brand/`, a deploy) and chosen here by its path. There is no
+                      upload — no asset store exists, and adding one is a dependency decision —
+                      so the permanently disabled "Subir logotipo" button that stood under this
+                      card is gone and the helper says how it is done instead (audit gap G19). */}
                   <Input
                     id={`${ids}-logo`}
                     value={draft.logoUrl}
@@ -435,12 +376,6 @@ function SettingsForm({
                 </Field>
               </div>
             </div>
-            <Button variant="outline" disabled title={t(`${K}.uploadUnavailable`)} className="w-full">
-              {/* The artboard's glyph for this button: an arrow down onto a line (`M8 2v8M5 7l3 3 3-3M3 13h10`). */}
-              <ArrowDownToLine aria-hidden="true" />
-              {t(`${K}.uploadLogo`)}
-            </Button>
-            <p className="sr-only">{t(`${K}.uploadUnavailable`)}</p>
           </Panel>
 
           <Panel
