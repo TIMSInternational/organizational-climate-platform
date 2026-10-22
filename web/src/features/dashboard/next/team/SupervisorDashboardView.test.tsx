@@ -11,7 +11,7 @@ import { CompanyContextProvider } from '../../../../company-context'
 import { setToken } from '../../../../auth/token'
 import { tokenFor } from '../../../../test/jwtFixture'
 import en from '../../../../i18n/en.json'
-import { SINGLE_SEGMENT_FLOOR } from '../../../../components/charts'
+import { ANONYMITY_FLOOR } from '../../../../components/charts'
 
 /**
  * The supervisor's Panel de Control — a proposal — drawn from a model composed the way the
@@ -25,7 +25,7 @@ import { SINGLE_SEGMENT_FLOOR } from '../../../../components/charts'
 const copy = en.dashboard.next.supervisor
 const DEPARTMENT = '5bfdb04e-8847-4baa-89c8-d4411654a129'
 
-function department(responseCount = SINGLE_SEGMENT_FLOOR - 1): DepartmentAdminDashboard {
+function department(responseCount = ANONYMITY_FLOOR - 1): DepartmentAdminDashboard {
   return {
     departmentId: DEPARTMENT,
     departmentName: 'Ingeniería',
@@ -89,7 +89,7 @@ interface Options {
   role?: string
 }
 
-function renderSupervisor({ responseCount = SINGLE_SEGMENT_FLOOR - 1, misTareas = { status: 'ok', value: [plan] }, mySurveys = [owed], role = 'supervisor' }: Options = {}) {
+function renderSupervisor({ responseCount = ANONYMITY_FLOOR - 1, misTareas = { status: 'ok', value: [plan] }, mySurveys = [owed], role = 'supervisor' }: Options = {}) {
   setToken(tokenFor({ sub: 'sofia', name: 'Sofía Vargas', role, companyId: 'c1', nodoId: DEPARTMENT }))
   // The one seam: the capability the page reads is the one the model is composed with.
   const mayRecord = (target: { nodoExternalId: string }) => role === 'leader' && target.nodoExternalId === DEPARTMENT
@@ -132,7 +132,7 @@ describe('SupervisorDashboardView', () => {
     expect(screen.getByText(`${copy.proposal} · Ingeniería · ${en.users.supervisor}`)).toBeTruthy()
     const note = screen.getByRole('note')
     expect(note.textContent).toContain(copy.proposalLead)
-    expect(note.textContent).toContain(copy.proposalBody.replace('{floor}', String(SINGLE_SEGMENT_FLOOR)))
+    expect(note.textContent).toContain(copy.proposalBody.replace('{floor}', String(ANONYMITY_FLOOR)))
   })
 
   /**
@@ -145,8 +145,8 @@ describe('SupervisorDashboardView', () => {
     renderSupervisor()
 
     const coverage = card(copy.coverageHeading)
-    expect(within(coverage).getByRole('img', { name: copy.respondedHiddenLabel.replace('{floor}', String(SINGLE_SEGMENT_FLOOR)) })).toBeTruthy()
-    expect(within(coverage).getByRole('img', { name: copy.remainingHiddenLabel.replace('{floor}', String(SINGLE_SEGMENT_FLOOR)) })).toBeTruthy()
+    expect(within(coverage).getByRole('img', { name: copy.respondedHiddenLabel.replace('{floor}', String(ANONYMITY_FLOOR)) })).toBeTruthy()
+    expect(within(coverage).getByRole('img', { name: copy.remainingHiddenLabel.replace('{floor}', String(ANONYMITY_FLOOR)) })).toBeTruthy()
     expect(within(coverage).queryByText('0', { exact: true })).toBeNull()
     expect(within(coverage).getByText('14')).toBeTruthy()
     expect(within(coverage).getByText(/^Encuesta de Clima Q4 · closes Oct 10$/)).toBeTruthy()

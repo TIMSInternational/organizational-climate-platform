@@ -5,7 +5,7 @@ import type { PlanAccion, TableroResponse } from '../../../tracking/api/tracking
 import { toPercent } from '../../../tracking/semaforo'
 import { todayIso } from '../../../tracking/planDates'
 import { dayDiff, hasRecordedProgress, isOverdue, type Viewer } from '../../../tracking/next/derive'
-import { SINGLE_SEGMENT_FLOOR, isSuppressed } from '../../../../components/charts/suppression'
+import { ANONYMITY_FLOOR, isSuppressed } from '../../../../components/charts/suppression'
 import { waveCode } from '../compose'
 import { daysUntil } from '../employee/compose'
 import { printedMove } from '../derive'
@@ -38,17 +38,18 @@ export type TrackingRead<T> = { status: 'off' } | { status: 'failed'; refused: b
 
 /**
  * The floor a count is held to: the server's own `minimumGroupSize` when it sent one, and
- * never lower than `SINGLE_SEGMENT_FLOOR`.
+ * never lower than `ANONYMITY_FLOOR` (3).
  *
- * **This clamped to `ANONYMITY_FLOOR` until 2026-10-15**, on the reasoning that a payload
- * saying 2 would be a bug on the wire rather than a lower promise. The ruling of 2026-10-15
- * made 1 a legitimate answer for a single dimension, and a team IS a single dimension — so the
- * clamp had become the screen withholding a reading the server had disclosed, which is the one
- * failure mode this product cannot debug from a screenshot. The clamp stays at 1 because a
- * count of 0 must still read as withheld rather than as "nobody here answered".
+ * **A leader's or supervisor's own team is held to 3 (ruled 2026-10-21)** — the 2026-10-15
+ * ruling that shows a single department from one respondent is about administrators reading
+ * results, not about a leader reading the team whose members they know by name
+ * (`DashboardEndpoints.DepartmentCountFloor`). Between those two rulings this clamped to
+ * `SINGLE_SEGMENT_FLOOR`, and with no closed survey yet — so no `minimumGroupSize` on the
+ * payload — the page printed "menos de 1 respuestas" beside a count the server had withheld
+ * at 3. The clamp is the floor the server applies, so the sentence is always the true one.
  */
 export function countFloor(climate: DashboardTeamClimate | null): number {
-  return Math.max(SINGLE_SEGMENT_FLOOR, climate?.minimumGroupSize ?? 0)
+  return Math.max(ANONYMITY_FLOOR, climate?.minimumGroupSize ?? 0)
 }
 
 /**

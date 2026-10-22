@@ -289,13 +289,20 @@ public static class DashboardExport
     /// building the one number the screen beside the button withholds.
     /// </para>
     /// <para>
-    /// The rule is the screen's, term for term: <c>Math.Max(5, minimumGroupSize)</c>, and a
+    /// <b>The team floor is 3 again since 2026-10-21</b> (a leader reading their own team is not
+    /// an administrator reading results; <c>DashboardEndpoints.DepartmentCountFloor</c> carries
+    /// the ruling). Between 2026-10-15 and then this was the single-segment floor of 1, so a
+    /// company with no closed survey yet -- no <c>minimumGroupSize</c> on the payload -- printed
+    /// "fewer than 1 response" beside a count the endpoint had withheld at 3.
+    /// </para>
+    /// <para>
+    /// The rule is the screen's, term for term: <c>Math.Max(3, minimumGroupSize)</c>, and a
     /// count under it -- zero included -- prints <see cref="ReportRenderCopy.Withheld"/>, never
     /// the number and never <c>0</c>, which would read as "nobody in this team has answered".
     /// </para>
     /// </remarks>
     private static int TeamCountFloor(DashboardTeamClimate? climate)
-        => Math.Max(SurveyResultsPrivacy.MinimumSingleSegmentRespondents, climate?.MinimumGroupSize ?? 0);
+        => Math.Max(SurveyResultsPrivacy.MinimumSegmentRespondents, climate?.MinimumGroupSize ?? 0);
 
     /// <summary>
     /// The team-climate section -- the one place in this file where a suppression decision

@@ -375,3 +375,33 @@ Tests: `ResponseExportEndpointsTests.The_words_a_respondent_typed_reach_the_supe
 company-administrator refusal, and on the web side two confirmation-screen tests proved by
 mutation — each branch inverted, the mutation observed to compile, and exactly its own test
 observed to fail.
+
+## 7. A leader's own team is held to the floor of 3, 2026-10-21
+
+**Ruled by Federico. Owner: Federico.**
+
+The client's 2026-10-15 ruling — a single department or single demographic value is reported
+from one respondent (quoted at `SurveyResultsPrivacy.MinimumSingleSegmentRespondents`) — is about
+**administrators** reading results. It had also reached the leader's and supervisor's team view,
+because `DashboardEndpoints.DepartmentCountFloor` derived from the single-segment floor: a leader
+of a one-person team read that person's climate, and the organisation mean beside it could be
+differenced into the answers of the one or two people outside the team.
+
+**The ruling:** leaders and supervisors reading their own team are held to
+`SurveyResultsPrivacy.MinimumSegmentRespondents` (3). A team of one or two reads as withheld,
+identically to a team that did not answer; the organisation side is withheld when fewer than 3
+answered outside the team; the reported `minimumGroupSize` is 3. The export follows the screen.
+
+**An administrator calling the same team view gets the same floor.** The 10-15 ruling stands for
+administrators on the administrators' own screens, which still print a single department from
+one respondent.
+
+**Why this is a §4-shaped question and lives here.** A leader knows who is on their team by
+name. For that reader a reading of one is one named person's answers — Mode C by another route,
+which §4 recommended against and §5 conceded only to TIMS as processor.
+
+Where it lives and what pins it: `docs/decisions/privacy-floor-is-three.md` (the current map of
+every floor), `DashboardEndpoints.DepartmentCountFloor`, and
+`DepartmentDashboardFloorTests` (team of 1 and 2 withheld for leader and supervisor, 3 shown,
+rest-of-company of 1 and 2 withholds the organisation side, an administrator gets 3, the export
+mirrors the screen).
