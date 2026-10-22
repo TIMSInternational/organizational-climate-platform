@@ -189,6 +189,24 @@ describe('SuperCompanyDetailView', () => {
     await waitFor(() => expect(calls.filter((call) => call.method === 'GET' && call.url.endsWith(`/admin/companies/${C}`))).toHaveLength(2))
   })
 
+  it('reads the settings with the GET — never a PUT — and saves a credential-mode change alone', async () => {
+    const modeCopy = en.companySettings.credentialMode
+    serve()
+    renderPage()
+    const card = (await screen.findByRole('heading', { name: modeCopy.heading })).closest('section') as HTMLElement
+    const settingsReads = calls.filter((call) => call.url.includes(`/admin/companies/${C}/settings`))
+    expect(settingsReads.map((call) => call.method)).toEqual(['GET'])
+    // SETTINGS carries no mode, which reads as the API default.
+    expect(within(card).getByText(modeCopy.current.replace('{mode}', modeCopy.sharedLabel))).toBeTruthy()
+
+    await userEvent.click(within(card).getByRole('radio', { name: new RegExp(modeCopy.perSurveyLabel) }))
+    await userEvent.click(screen.getByRole('button', { name: copy.save }))
+
+    await waitFor(() => expect(writes()).toHaveLength(1))
+    expect(writes()[0].url).toContain(`/admin/companies/${C}/settings`)
+    expect(JSON.parse(writes()[0].body ?? '')).toEqual({ credentialMode: 'per_survey' })
+  })
+
   it('offers País as the canvas’s select over the countries, with the tenant’s own value selected', async () => {
     serve()
     renderPage()

@@ -21,6 +21,7 @@ import {
 } from './derive'
 import { useCompanySettingsModel, type CompanySettingsModel } from './useCompanySettingsModel'
 import ResultBandsCard from './ResultBandsCard'
+import CredentialModeCard from './CredentialModeCard'
 import { bandsChanged, bandsDraftOf, bandsOut, judgeBands, type BandsDraft } from './bandsDraft'
 import { fromWire, toWire } from '../../../result-bands/api'
 import { rememberResultBands } from '../../../result-bands/useResultBands'
@@ -336,6 +337,12 @@ function SettingsForm({
                   keeps the microclimate switch (`SuperCompanyDetailView`). */}
             </div>
           </Panel>
+          <CredentialModeCard
+            saved={initial.credentialMode}
+            value={draft.credentialMode}
+            disabled={saving}
+            onChange={(credentialMode) => set({ credentialMode })}
+          />
           {savedBands && bandsDraft && (
             <ResultBandsCard
               draft={bandsDraft}

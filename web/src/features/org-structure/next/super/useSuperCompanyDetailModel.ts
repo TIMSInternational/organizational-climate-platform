@@ -5,7 +5,7 @@ import { listBenchmarks, type BenchmarkListItem } from '../../../analytics/api/b
 import { listReports, type ReportListItem } from '../../../reports/api/reports'
 import { getSurvey, listSurveys, type SurveyListItem } from '../../../surveys/api/surveys'
 import { getCompany, type CompanyDetail } from '../../api/companies'
-import { updateCompanySettings, type CompanySettingsResponse } from '../../api/companySettings'
+import { getCompanySettings, type CompanySettingsResponse } from '../../api/companySettings'
 import { listDemographicFields, type DemographicField } from '../../api/demographicFields'
 import { listDepartments, type Department } from '../../api/departments'
 import { listUsers, type User } from '../../api/users'
@@ -52,8 +52,8 @@ const hasKey = (key: string) => (value: unknown) => typeof value === 'object' &&
 
 /**
  * THE wiring seam of the super administrator's company detail. The three reads the old
- * page made — `GET /admin/companies/{id}`, the settings through `PUT …/settings` with an
- * empty body (the only read there is: `CompanyDetailPage`'s header has the argument) and
+ * page made — `GET /admin/companies/{id}`, the settings through `GET …/settings` (an
+ * empty-body `PUT` until that route existed, logged as an update on every visit) and
  * `GET /admin/departments` — plus the ones behind the canvas's readings and link cards,
  * each an existing client: users, demographic fields, reports, the tenant's own
  * benchmarks, its surveys, and `GET /dashboard/company-admin?companyId=` for the action
@@ -78,7 +78,7 @@ export function useSuperCompanyDetailModel(companyId: string | undefined): Super
         const [company, settings, departments, users, demographicFields, reports, ownBenchmarks, surveys, dashboard] =
           await Promise.all([
             getCompany(baseUrl, id),
-            optional(() => updateCompanySettings(baseUrl, id, {}), hasKey('settings')),
+            optional(() => getCompanySettings(baseUrl, id), hasKey('settings')),
             optional(() => listDepartments(baseUrl, id), isList),
             optional(() => listUsers(baseUrl, id), isList),
             optional(() => listDemographicFields(baseUrl, id, locale), isList),

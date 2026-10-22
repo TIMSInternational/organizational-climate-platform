@@ -28,6 +28,8 @@ import {
 import { ANONYMITY_FLOOR } from '../../../../components/charts'
 import { QuestionLibraryBrowser } from '../../../../components/questions'
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
+import { CREDENTIAL_MODES, type CredentialMode } from '../../../org-structure/api/companySettings'
+import { credentialModeLabel } from '../../../org-structure/next/settings/credentialModeLabel'
 import { useCompanyScope } from '../../../../company-context'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { cn } from '../../../../lib/cn'
@@ -882,6 +884,22 @@ function StepForm({
             one (`values.anonymous` defaults to true; the API defaults the same way). */}
         <CheckboxField label={t('surveys.allowPartialResponses')} checked={values.allowPartialResponses} onChange={(checked) => patch({ allowPartialResponses: checked })} />
         <CheckboxField label={t('surveys.showProgress')} checked={values.showProgress} onChange={(checked) => patch({ showProgress: checked })} />
+        {/* Blank path only: `POST /survey-templates/{id}/use` takes no settings, so on the
+            template path a choice here would be sent nowhere. Frozen once the survey exists. */}
+        {!fromTemplate && (
+          <SelectField
+            label={t('surveys.credentialModeLabel')}
+            description={[inheritLabel(t, m.companyCredentialMode, true), t('surveys.credentialModeHelp')].filter(Boolean).join(' ')}
+            value={values.credentialMode || INHERIT_MODE}
+            onChange={(next) => patch({ credentialMode: next === 'shared' || next === 'per_survey' ? next : '' })}
+            options={[
+              // Short on purpose: the trigger does not wrap, and at phone width a label naming
+              // the company's mode as well overran the panel. The mode is said in the helper.
+              { value: INHERIT_MODE, label: t('surveys.credentialModeInheritUnknown') },
+              ...CREDENTIAL_MODES.map((mode) => ({ value: mode, label: credentialModeLabel(t, mode) })),
+            ]}
+          />
+        )}
       </>
     )
   }
@@ -895,6 +913,12 @@ function StepForm({
     [t('surveys.startDate'), reviewDate(values.startDate, locale)],
     [t('surveys.endDate'), reviewDate(values.endDate, locale)],
     [t('surveys.departmentsLabel'), values.departmentIds.length === 0 ? t('surveys.departmentsAll') : named.join(', ') || t('surveys.readingDepartmentsUnlisted')],
+    ...(fromTemplate
+      ? []
+      : [[
+          t('surveys.credentialModeLabel'),
+          values.credentialMode ? credentialModeLabel(t, values.credentialMode) : inheritLabel(t, m.companyCredentialMode),
+        ] as [string, string]]),
     [copy('questionsTitle'), String(values.questions.length)],
   ]
   return (
@@ -911,6 +935,15 @@ function StepForm({
       <p className="m-0 rounded-md bg-surface-icon-box px-3.5 py-3 text-sm text-fg-secondary">{t('surveys.reviewCreatesDraft')}</p>
     </>
   )
+}
+
+/** The select's value for "inherit the company's mode" — `''` cannot be a Radix item value. */
+const INHERIT_MODE = 'inherit'
+
+/** "Esta empresa usa «…»." when the company's mode was read; otherwise "Como la empresa" (or nothing). */
+function inheritLabel(t: TranslateFn, companyMode: CredentialMode | null, onlyWhenKnown = false): string {
+  if (companyMode) return t('surveys.credentialModeCompany', { mode: credentialModeLabel(t, companyMode) })
+  return onlyWhenKnown ? '' : t('surveys.credentialModeInheritUnknown')
 }
 
 function reviewDate(value: string, locale: string): string {

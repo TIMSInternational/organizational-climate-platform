@@ -1,4 +1,4 @@
-import type { CompanySettingsResponse, UpdateCompanySettingsInput } from '../../api/companySettings'
+import { credentialModeOf, type CompanySettingsResponse, type CredentialMode, type UpdateCompanySettingsInput } from '../../api/companySettings'
 import type { Department } from '../../api/departments'
 import type { DashboardSurveySummary } from '../../../dashboard/api/dashboard'
 import type { SurveyDetail } from '../../../surveys/api/surveys'
@@ -22,6 +22,8 @@ export interface SettingsDraft {
   anonymousSurveys: boolean
   dataRetentionDays: number
   timezone: string
+  /** `shared` | `per_survey` — reaches only surveys created after it is saved. */
+  credentialMode: CredentialMode
   primaryColor: string
   /**
    * The company logo, as a root-relative path or a `data:` URI. Empty means no logo, and
@@ -77,6 +79,7 @@ export function draftOf(response: CompanySettingsResponse): SettingsDraft {
     anonymousSurveys: settings.anonymousSurveys,
     dataRetentionDays: settings.dataRetentionDays,
     timezone: settings.timezone,
+    credentialMode: credentialModeOf(settings),
     primaryColor: branding.primaryColor,
     logoUrl: branding.logoUrl ?? '',
   }
@@ -94,6 +97,7 @@ export function changesOf(initial: SettingsDraft, draft: SettingsDraft): UpdateC
   if (draft.anonymousSurveys !== initial.anonymousSurveys) changes.anonymousSurveys = draft.anonymousSurveys
   if (draft.dataRetentionDays !== initial.dataRetentionDays && draft.dataRetentionDays >= 1) changes.dataRetentionDays = draft.dataRetentionDays
   if (draft.timezone !== initial.timezone && draft.timezone.trim()) changes.timezone = draft.timezone
+  if (draft.credentialMode !== initial.credentialMode) changes.credentialMode = draft.credentialMode
   if (draft.primaryColor !== initial.primaryColor && HEX_COLOUR.test(draft.primaryColor)) changes.primaryColor = draft.primaryColor
   // Trimmed, and a blank IS sent: `UpdateSettingsAsync` assigns when the field is non-null
   // rather than non-blank for this one field, so `""` is what clears a stored logo.

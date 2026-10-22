@@ -1,6 +1,7 @@
 import { authFetch } from '../../../api/authFetch'
 import { getToken } from '../../../auth/token'
 import type { BulkImportResponse } from './bulkImport'
+import { credentialModeOf, getCompanySettings, type CredentialMode } from './companySettings'
 
 /**
  * The people intake: any spreadsheet the client already has (or our template), read and mapped
@@ -166,16 +167,38 @@ export async function submitIntakeRows(
    */
   withCredentials = false,
 ): Promise<BulkImportResponse> {
-  const response = await authFetch(`${baseUrl}/admin/users/bulk-import/rows`, {
-    method: 'POST',
-    body: JSON.stringify({ companyId, preview, rows, newDepartments, withCredentials }),
-  })
+  // 400 handed back rather than thrown: its body carries a `code` the wizard says in the
+  // reader's language (`credentials_not_available_per_survey`), and `authFetch`'s own error
+  // keeps only the server's English message.
+  const response = await authFetch(
+    `${baseUrl}/admin/users/bulk-import/rows`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ companyId, preview, rows, newDepartments, withCredentials }),
+    },
+    { allowStatus: [400] },
+  )
 
   if (!response.ok) {
     throw await failure(response)
   }
 
   return (await response.json()) as BulkImportResponse
+}
+
+/**
+ * The company's credential mode, for the access choice on the review step: a `per_survey`
+ * company refuses `withCredentials` (400 `credentials_not_available_per_survey`), so the
+ * wizard must not offer it. `null` when the settings cannot be read — the wizard then offers
+ * both choices, as it always did, and the refusal is still said in the reader's language.
+ */
+export async function getIntakeCredentialMode(baseUrl: string, companyId: string): Promise<CredentialMode | null> {
+  try {
+    const response = await getCompanySettings(baseUrl, companyId)
+    return response?.settings ? credentialModeOf(response.settings) : null
+  } catch {
+    return null
+  }
 }
 
 /**

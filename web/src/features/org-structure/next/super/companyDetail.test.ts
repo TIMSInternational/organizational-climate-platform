@@ -142,6 +142,7 @@ const settings: SettingsDraft = {
   dataRetentionDays: '2555',
   microclimateEnabled: true,
   aiInsightsEnabled: true,
+  credentialMode: 'shared',
   primaryColor: '#0d9488',
 }
 
@@ -160,6 +161,11 @@ describe('profileChanges', () => {
 })
 
 describe('settingsChanges', () => {
+  it('sends the credential mode only when it changed', () => {
+    expect(settingsChanges(settings, { ...settings })).toEqual({})
+    expect(settingsChanges(settings, { ...settings, credentialMode: 'per_survey' })).toEqual({ credentialMode: 'per_survey' })
+  })
+
   it('sends the language the triage asked for, and only it', () => {
     expect(settingsChanges(settings, { ...settings, language: 'en' })).toEqual({ language: 'en' })
   })

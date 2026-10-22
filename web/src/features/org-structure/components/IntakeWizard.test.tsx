@@ -9,6 +9,7 @@ import type { BulkImportResponse } from '../api/bulkImport'
 const understandIntakeFile = vi.fn<(...args: unknown[]) => Promise<IntakeUnderstanding>>()
 const submitIntakeRows = vi.fn<(...args: unknown[]) => Promise<BulkImportResponse>>()
 const getIntakeTemplate = vi.fn<() => Promise<Blob>>()
+const getIntakeCredentialMode = vi.fn<(...args: unknown[]) => Promise<'shared' | 'per_survey' | null>>()
 
 // The real module is spread in so `IntakeRequestError` stays the real class the wizard checks.
 vi.mock('../api/intake', async (importOriginal) => ({
@@ -16,6 +17,7 @@ vi.mock('../api/intake', async (importOriginal) => ({
   understandIntakeFile: (...args: unknown[]) => understandIntakeFile(...args),
   submitIntakeRows: (...args: unknown[]) => submitIntakeRows(...args),
   getIntakeTemplate: (...args: unknown[]) => getIntakeTemplate(...(args as [])),
+  getIntakeCredentialMode: (...args: unknown[]) => getIntakeCredentialMode(...args),
 }))
 
 const downloadBlobFile = vi.fn()
@@ -134,6 +136,8 @@ beforeEach(() => {
   understandIntakeFile.mockReset()
   submitIntakeRows.mockReset()
   getIntakeTemplate.mockReset()
+  getIntakeCredentialMode.mockReset()
+  getIntakeCredentialMode.mockResolvedValue('shared')
   downloadBlobFile.mockReset()
 })
 
@@ -627,6 +631,52 @@ describe('IntakeWizard — how the people reach the survey', () => {
 
     expect(screen.getByText(/no se envió ningún correo/)).toBeTruthy()
     expect(screen.queryByText(/Se creó una invitación para cada persona/)).toBeNull()
+  })
+
+  /**
+   * Audit G13. A `per_survey` company refuses `withCredentials` with a 400, and its import
+   * creates accounts and mails nobody — so the mass invite is not offered, and the one remaining
+   * outcome is described as what it does, not as an invitation link.
+   */
+  it('offers a per-survey company no mass invite, and says what its import really does', async () => {
+    getIntakeCredentialMode.mockResolvedValue('per_survey')
+    const user = await uploadAndUnderstand()
+    await continueToReview(user)
+
+    expect(getIntakeCredentialMode).toHaveBeenCalledWith('http://api.test', 'c1')
+    expect(screen.queryByRole('radio', { name: new RegExp(MASS_INVITE) })).toBeNull()
+    expect(screen.queryByRole('radio', { name: new RegExp(INVITATION) })).toBeNull()
+    expect(screen.getByText('Crear las cuentas sin enviar correo')).toBeTruthy()
+    expect(screen.getByText(/se crea una cuenta para cada persona y ahora no se envía nada/)).toBeTruthy()
+    // The invitation's own help is false here: nobody gets a link or chooses a password.
+    expect(screen.queryByText(/Cada persona recibe un enlace y elige su propia contraseña/)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Crear las cuentas' })).toBeTruthy()
+
+    submitIntakeRows.mockImplementation(async (...args: unknown[]) => allValid(args[2] as IntakeRow[]))
+    await user.click(screen.getByRole('button', { name: 'Validar' }))
+    await waitFor(() => expect(submitIntakeRows).toHaveBeenCalled())
+    expect((submitIntakeRows.mock.calls[0] as unknown[])[5]).toBe(false)
+  })
+
+  it('says the per-survey refusal in Spanish, and corrects the choice, when the mode could not be read first', async () => {
+    getIntakeCredentialMode.mockResolvedValue(null)
+    const user = await uploadAndUnderstand()
+    await continueToReview(user)
+    await user.click(screen.getByRole('radio', { name: new RegExp(MASS_INVITE) }))
+
+    submitIntakeRows.mockRejectedValue(
+      new IntakeRequestError(
+        'This company issues credentials per survey, so a bulk import cannot mail account credentials as well; re-send this request with withCredentials false and the accounts will be created without any email.',
+        'credentials_not_available_per_survey',
+        400,
+      ),
+    )
+    await user.click(screen.getByRole('button', { name: 'Validar' }))
+
+    expect(await screen.findByText(/Esta empresa entrega los datos de acceso por encuesta/)).toBeTruthy()
+    expect(screen.queryByText(/This company issues credentials per survey/)).toBeNull()
+    expect(screen.queryByRole('radio', { name: new RegExp(MASS_INVITE) })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Crear las cuentas' })).toBeTruthy()
   })
 
   /**

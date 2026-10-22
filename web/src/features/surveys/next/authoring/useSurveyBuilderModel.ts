@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { useTranslation } from '../../../../i18n'
 import { listDepartments, type Department } from '../../../org-structure/api/departments'
+import { credentialModeOf, getCompanySettings, type CredentialMode } from '../../../org-structure/api/companySettings'
 import { createSurvey } from '../../api/surveyCreate'
 import { getSurveyQuestionAuthoring, replaceSurveyQuestions } from '../../api/surveyQuestionAuthoring'
 import { listSurveyDimensions } from '../../api/surveys'
@@ -58,6 +59,12 @@ export function useSurveyBuilderModel(companyId: string) {
   })
   const [stepIndex, setStepIndex] = useState(0)
   const [departments, setDepartments] = useState<Department[] | null>(null)
+  /**
+   * The mode a survey created here inherits when the author leaves it alone — read only to NAME
+   * it beside "Como la empresa". `null` while unread, or for a viewer who may not read the
+   * company's settings; the option then says "Como la empresa" without a mode.
+   */
+  const [companyCredentialMode, setCompanyCredentialMode] = useState<CredentialMode | null>(null)
   const [templates, setTemplates] = useState<SurveyTemplateListItem[]>([])
   const [template, setTemplate] = useState<SurveyTemplateDetail | null>(null)
   const [templateError, setTemplateError] = useState<string | null>(null)
@@ -80,6 +87,9 @@ export function useSurveyBuilderModel(companyId: string) {
     listSurveyDimensions(baseUrl, companyId)
       .then((result) => !cancelled && setHistory(Array.isArray(result) ? result : []))
       .catch(() => undefined)
+    getCompanySettings(baseUrl, companyId)
+      .then((result) => !cancelled && setCompanyCredentialMode(result?.settings ? credentialModeOf(result.settings) : null))
+      .catch(() => !cancelled && setCompanyCredentialMode(null))
     return () => {
       cancelled = true
     }
@@ -233,6 +243,7 @@ export function useSurveyBuilderModel(companyId: string) {
     stepIndex,
     setStepIndex,
     departments,
+    companyCredentialMode,
     templates,
     template,
     templateError,
@@ -265,6 +276,8 @@ function emptyValues(language: ContentLanguage): SurveyWizardValues {
     anonymous: true,
     allowPartialResponses: true,
     showProgress: true,
+    // Inherit the company's: departing from it is a choice somebody makes, never a default.
+    credentialMode: '',
     questions: [],
   }
 }

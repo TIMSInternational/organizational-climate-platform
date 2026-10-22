@@ -3,6 +3,7 @@ import { useTranslation } from '../../../../i18n'
 import { Button, Input, Table, type ChipTone } from '../../../../components/ui'
 import { CanvasChip, CanvasSelect } from '../../next/super/parts'
 import type { IntakeDemographicTarget, IntakeRow } from '../../api/intake'
+import type { CredentialMode } from '../../api/companySettings'
 import type { BulkImportIssue, BulkImportResponse, BulkImportRowResult } from '../../api/bulkImport'
 import { ROLE_TARGETS } from './intakeModel'
 
@@ -59,6 +60,7 @@ export function ReviewStep({
   onPatch,
   onRemove,
   accessMode,
+  credentialMode = null,
   onAccessModeChange,
   onValidate,
   onApprove,
@@ -75,6 +77,12 @@ export function ReviewStep({
   onPatch: (rowNumber: number, patch: Partial<IntakeRow>) => void
   onRemove: (rowNumber: number) => void
   accessMode: 'invitation' | 'credentials'
+  /**
+   * The company's credential mode, or `null` when unknown. In `per_survey` the server refuses
+   * the mass invite and the import creates accounts and mails nobody (`BulkImportEndpoints`),
+   * so the choice is not offered and the one that remains is described as what it does.
+   */
+  credentialMode?: CredentialMode | null
   onAccessModeChange: (mode: 'invitation' | 'credentials') => void
   onValidate: () => void
   onApprove: () => void
@@ -83,6 +91,7 @@ export function ReviewStep({
   const { t } = useTranslation()
   const verdictFor = (rowNumber: number) => verdict?.rows.find((r) => r.rowNumber === rowNumber)
   const blocking = verdict ? verdict.errorCount > 0 : true
+  const perSurvey = credentialMode === 'per_survey'
   const hasDemographics = rows.some((row) => row.demographics && Object.values(row.demographics).some((v) => v))
   const fieldLabel = (field: string) => demographicTargets.find((d) => d.field === field)?.label ?? field
   // The stored value is a key ("tiempo_completo"); the admin reads its label ("Tiempo completo").
@@ -246,7 +255,13 @@ export function ReviewStep({
         <legend className="mb-1 p-0 text-base font-semibold text-fg-primary">
           {t('users.intake.access.legend')}
         </legend>
-        {(['invitation', 'credentials'] as const).map((mode) => (
+        {perSurvey ? (
+          // One outcome, so no radio: a lone checked radio reads as a choice that is not there.
+          <p data-slot="intake-access-per-survey" className="m-0 min-w-0 text-base">
+            <span className="font-medium text-fg-primary">{t('users.intake.access.perSurveyLabel')}</span>
+            <span className="block text-sm text-fg-secondary">{t('users.intake.access.perSurveyHelp')}</span>
+          </p>
+        ) : (['invitation', 'credentials'] as const).map((mode) => (
           <label key={mode} className="flex min-w-0 items-start gap-2 text-base">
             <input
               type="radio"
@@ -274,7 +289,11 @@ export function ReviewStep({
           {t('users.intake.validate')}
         </Button>
         <Button type="button" variant="primary" onClick={onApprove} disabled={busy || blocking}>
-          {accessMode === 'credentials' ? t('users.intake.access.approveCredentials') : t('users.intake.approve')}
+          {perSurvey
+            ? t('users.intake.access.approvePerSurvey')
+            : accessMode === 'credentials'
+              ? t('users.intake.access.approveCredentials')
+              : t('users.intake.approve')}
         </Button>
       </div>
       {blocking && (
@@ -282,7 +301,7 @@ export function ReviewStep({
           {verdict
             ? t('users.intake.fixBeforeApproving')
             : t(
-                accessMode === 'credentials'
+                accessMode === 'credentials' || perSurvey
                   ? 'users.intake.validateFirstCredentials'
                   : 'users.intake.validateFirst',
               )}

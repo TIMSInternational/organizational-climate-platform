@@ -102,6 +102,8 @@ export interface SurveyDraftContent {
   anonymous: boolean
   allowPartialResponses: boolean
   showProgress: boolean
+  /** `''` inherits the company's mode. Optional: a draft saved before it existed has none. */
+  credentialMode?: '' | 'shared' | 'per_survey'
   questions: DraftQuestion[]
 }
 
@@ -123,6 +125,7 @@ export function toDraftContent(values: SurveyWizardValues): SurveyDraftContent {
     anonymous: values.anonymous,
     allowPartialResponses: values.allowPartialResponses,
     showProgress: values.showProgress,
+    credentialMode: values.credentialMode ?? '',
     questions: values.questions.map((question) => ({
       textEn: question.textEn,
       textEs: question.textEs,
@@ -269,6 +272,9 @@ export function draftValuesFrom(
     anonymous: bool(content, 'anonymous', defaults.anonymous),
     allowPartialResponses: bool(content, 'allowPartialResponses', defaults.allowPartialResponses),
     showProgress: bool(content, 'showProgress', defaults.showProgress),
+    // Anything but a known mode restores as "inherit the company's", the safe default.
+    credentialMode:
+      content.credentialMode === 'shared' || content.credentialMode === 'per_survey' ? content.credentialMode : '',
     questions: questionsFrom(content, keyPrefix),
   }
 }
