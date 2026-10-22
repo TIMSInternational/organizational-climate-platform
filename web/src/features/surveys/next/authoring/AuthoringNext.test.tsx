@@ -1110,6 +1110,10 @@ describe('Nueva encuesta (SurveyBuilder artboard)', () => {
     expect((await screen.findByTestId('landed')).textContent).toBe('new-survey')
     expect(templatesApi.instantiateSurveyTemplate).toHaveBeenCalledTimes(1)
     expect(vi.mocked(templatesApi.instantiateSurveyTemplate).mock.calls[0][2]).toMatchObject({ language: 'es', title: 'Clima Q1' })
+    // G15: the page's own submit carries the settings it showed, anonymous among them.
+    expect(vi.mocked(templatesApi.instantiateSurveyTemplate).mock.calls[0][2]).toMatchObject({
+      settings: { anonymous: true, allowPartialResponses: true, showProgress: true },
+    })
     expect(questionAuthoring.getSurveyQuestionAuthoring).not.toHaveBeenCalled()
     expect(questionAuthoring.replaceSurveyQuestions).not.toHaveBeenCalled()
   })

@@ -477,6 +477,7 @@ public static class SurveyTemplateEndpoints
         UseSurveyTemplateRequest? request,
         string? lang,
         ClaimsPrincipal principal,
+        HttpContext http,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
     {
@@ -518,6 +519,33 @@ public static class SurveyTemplateEndpoints
         {
             return InvalidLanguage(request.Language);
         }
+
+        // The same vocabulary check POST /surveys makes: a value outside the metered list is
+        // refused rather than stored, never coerced to "no service".
+        var serviceType = string.IsNullOrWhiteSpace(request?.ServiceType) ? null : request.ServiceType.Trim();
+        if (!ClimateServiceTypes.IsAssignable(serviceType))
+        {
+            return Results.Json(
+                new { message = $"Invalid service type: {request?.ServiceType}. Expected one of: {string.Join(", ", ClimateServiceTypes.Metered)}, or omit it." },
+                statusCode: 400);
+        }
+
+        // Refused, not coerced, as POST /surveys refuses it: a typo would leave the survey on
+        // `shared` and nobody would hear of it until a roster got one email instead of one per survey.
+        if (request?.Settings?.CredentialMode is { } requestedMode && !CredentialModes.IsValid(requestedMode))
+        {
+            return Results.Json(
+                new { message = $"settings.credentialMode must be one of: {string.Join(", ", CredentialModes.All)}" },
+                statusCode: 400);
+        }
+
+        // The company's credential mode, frozen onto the new survey by NewSurveyDefaults
+        // exactly as POST /surveys freezes it. The company row exists: ResolveCompanyLanguageAsync
+        // has just refused an unknown one.
+        var companyCredentialMode = await db.Companies
+            .Where(c => c.Id == targetCompanyId.Value)
+            .Select(c => c.Settings.CredentialMode)
+            .FirstOrDefaultAsync(cancellationToken);
 
         var questions = await db.TemplateQuestions
             .Where(x => x.TemplateId == template.Id)
@@ -617,10 +645,10 @@ public static class SurveyTemplateEndpoints
             }
         }
 
-        // surveys.created_by is NOT NULL with a RESTRICT foreign key, so an unresolvable
-        // acting user is a 400 rather than Guid.Empty and an opaque 500.
-        var actingUserId = await SurveyEndpoints.ResolveActingUserIdAsync(currentUser, db, cancellationToken);
-        if (actingUserId is null)
+        // surveys.created_by and survey_audit_logs.user_id are NOT NULL with RESTRICT foreign
+        // keys, so an unresolvable acting user is a 400 rather than Guid.Empty and an opaque 500.
+        var actor = await SurveyAuditTrail.ResolveActorAsync(currentUser, http, db, cancellationToken);
+        if (actor is null)
         {
             return SurveyEndpoints.ActingUserRequired();
         }
@@ -633,7 +661,7 @@ public static class SurveyTemplateEndpoints
             Guid.NewGuid,
             new SurveyInstantiationOptions(
                 targetCompanyId.Value,
-                actingUserId.Value,
+                actor.UserId,
                 type,
                 language,
                 titleEn?.Trim(),
@@ -643,7 +671,21 @@ public static class SurveyTemplateEndpoints
                 startDate,
                 endDate,
                 request?.TargetAudienceCount,
-                departmentIds));
+                departmentIds,
+                companyCredentialMode,
+                serviceType,
+                request?.Settings?.CredentialMode));
+
+        // What the caller asked about, over the defaults Instantiate wrote -- the order POST
+        // /surveys uses, so an explicit request wins and silence keeps the default.
+        if (request?.Settings is { } settingsInput)
+        {
+            var settingsError = SurveyEndpoints.ApplySettings(created.Survey.Settings, settingsInput, language, credentialModeFrozen: false);
+            if (settingsError is not null)
+            {
+                return settingsError;
+            }
+        }
 
         db.Surveys.Add(created.Survey);
         db.SurveyDepartmentTargets.AddRange(created.DepartmentTargets);
@@ -652,6 +694,10 @@ public static class SurveyTemplateEndpoints
 
         template.UsageCount += 1;
         template.LastUsed = now;
+
+        // The same "Created" entry POST /surveys writes. Without it a template-built survey's
+        // history started at its first edit, as if nobody had made it.
+        SurveyAuditTrail.Record(db, created.Survey.Id, SurveyAuditActions.Created, SurveyAuditEntityTypes.Survey, actor, now);
 
         await db.SaveChangesAsync(cancellationToken);
 

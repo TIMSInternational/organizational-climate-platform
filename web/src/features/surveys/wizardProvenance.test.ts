@@ -36,6 +36,19 @@ describe('buildInstantiateInput — the content language', () => {
   })
 })
 
+describe('buildInstantiateInput — what the builder asked about reaches /use (G15)', () => {
+  it('sends the same settings buildCreateInput sends, so a template survey is anonymous like a blank one', () => {
+    const v = values({ templateId: 't1', allowPartialResponses: false, showProgress: false })
+    expect(buildInstantiateInput(v, 'c1').settings).toEqual(buildCreateInput(v, 'c1').settings)
+    expect(buildInstantiateInput(v, 'c1').settings).toEqual({ anonymous: true, allowPartialResponses: false, showProgress: false })
+  })
+
+  it('sends the chosen service, and omits the key when none is chosen', () => {
+    expect(buildInstantiateInput(values({ templateId: 't1', serviceType: 'general_climate' }), 'c1').serviceType).toBe('general_climate')
+    expect('serviceType' in buildInstantiateInput(values({ templateId: 't1', serviceType: '' }), 'c1')).toBe(false)
+  })
+})
+
 describe('the draft round trip', () => {
   it('keeps where a row came from, and restores a row that never had either without them', () => {
     const rows = [

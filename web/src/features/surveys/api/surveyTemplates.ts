@@ -1,5 +1,5 @@
 import { authFetch } from '../../../api/authFetch'
-import type { LocalizedInput } from './surveyCreate'
+import type { CreateSurveySettingsInput, LocalizedInput } from './surveyCreate'
 import type { SurveyDetail } from './surveys'
 
 /**
@@ -151,6 +151,14 @@ export interface InstantiateSurveyTemplateInput {
   endDate?: string
   departmentIds?: string[]
   targetAudienceCount?: number
+  /** `UseSurveyTemplateRequest.ServiceType` — validated as `POST /surveys` validates it; omitted = no service. */
+  serviceType?: string
+  /**
+   * `UseSurveyTemplateRequest.Settings`, applied over the same new-survey defaults a blank
+   * survey gets (`NewSurveyDefaults`): anonymous, the company's credential mode, no invitation or
+   * reminder mail. Omitted fields keep those defaults.
+   */
+  settings?: CreateSurveySettingsInput
 }
 
 function withQuery(baseUrl: string, path: string, params: Record<string, string | undefined>): string {

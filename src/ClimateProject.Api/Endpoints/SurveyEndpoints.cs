@@ -342,12 +342,6 @@ public static class SurveyEndpoints
                 statusCode: 400);
         }
 
-        // Survey's own choice, else the company's, else `shared` -- resolved HERE and frozen
-        // onto the row, exactly as `language` is two statements above. Resolving it at read
-        // time instead would let a company settings change re-shape a survey whose
-        // credentials have already been mailed, and credentials are mailed exactly once.
-        var credentialMode = CredentialModes.Resolve(request.Settings?.CredentialMode, company.CredentialMode);
-
         var type = request.Type?.Trim();
         if (string.IsNullOrWhiteSpace(type))
         {
@@ -474,71 +468,10 @@ public static class SurveyEndpoints
             UpdatedAt = now,
         };
 
-        // Anonymous unless the caller says otherwise. Respondents never log in (ruled
-        // 2026-10-12), and an unauthenticated respondent can answer ONLY an anonymous survey
-        // (`ResolveRespondentAsync`), so a survey created without a word about it must be one
-        // they can answer. The entity's own default (false) is the legacy shape and stays,
-        // because changing it would silently re-read every row materialised without the flag.
-        survey.Settings.Anonymous = true;
-
-        // Frozen now. Null would have meant "inherit", and inheriting is a decision this
-        // survey has already made.
-        survey.Settings.CredentialMode = credentialMode;
-
-        // Who answered is NOT asked. The 2026-10-12 ruling that put a name and email step on
-        // every new survey was superseded on 2026-10-13: there are three ways to answer -- a
-        // mass invite with a generated username and password, a climate QR that asks
-        // demographics and nothing else, and a microclimate link that asks nothing -- and
-        // "name and email are NEVER collected directly" holds in all three. So nothing is set
-        // here: the entity default (false) is now also the product's answer, and
-        // SurveyResponseEndpoints.AsksParticipantIdentity refuses the step for the surveys
-        // already carrying the column true.
-
-        // NO INVITATION EMAIL. Ruled 2026-10-19 by Federico, from the rehearsal's own mail:
-        // "we ONLY WANT THE ONE WITH THE CODE... it opens up the survey without them needing
-        // to log in. This should never happen."
-        //
-        // Three measurements make it the right default rather than a preference.
-        //
-        // It is a SECOND DOOR. The invitation mail's button is `/survey-invitations/{token}`,
-        // and `SurveyInvitationPage` renders the respond form with `publicEntry` set "even
-        // though this visitor is named" -- so the holder answers as that person without
-        // signing in. On a mass invite, where the platform generated a username and a
-        // password for everyone (ruled 2026-10-13), that is a third way in that nobody
-        // designed, and it travels with a forwarded email.
-        //
-        // It is a DUPLICATE. `CredentialsEmailComposer` already says "Tu organizacion te
-        // invita a responder una encuesta. Inicia sesion con el usuario y la contrasena de
-        // abajo" over a sign-in button. The same rehearsal's FIRST finding (2026-10-17) was
-        // that duplicated access instructions read as two different accounts: "Ingreso con
-        // los accesos de arriba o los de abajo?".
-        //
-        // And it COSTS NO TRACKING, which is the part that looks like it should block this.
-        // `SurveyInvitationStatuses.AnonymityCeiling` is `opened`, so on an anonymous survey
-        // -- every climate survey this product sends -- `started` and `completed` are never
-        // persisted and `AdvanceInvitationAsync` returns before it writes. The only state an
-        // invitation could record is `opened`, which happens when somebody opens the mail
-        // this removes. Participation is `surveys.response_count` against
-        // `target_audience_count`, an aggregate, which is the only shape of that number that
-        // names nobody.
-        //
-        // The entity default stays `true` for the same reason Anonymous's stays false: it is
-        // the legacy shape and changing it would re-read every row materialised without the
-        // flag. A tenant that wants the mail turns it on per survey -- `ApplySettings` still
-        // honours it, and `POST /invitations/{id}/resend` is still a deliberate act.
-        survey.Settings.NotificationSendInvitations = false;
-
-        // And no reminder mail, for the same sentence: "just one email, with the credentials
-        // to login". A reminder is a SECOND message to the same person, and on an ANONYMOUS
-        // survey it is one that cannot even be correct -- `InvitationReminderJob` selects on
-        // `completed_on IS NULL`, and `SurveyInvitationStatuses.AnonymityCeiling` forbids
-        // ever writing that column there, so every invitee stays a reminder candidate for the
-        // whole window however many of them have answered.
-        //
-        // Still a per-survey setting, not a removal: a three-week window with a nudge at day
-        // three is a reasonable thing for a tenant to ask for, and `ApplySettings` honours it.
-        // What changes is that nobody gets one by default.
-        survey.Settings.NotificationSendReminders = false;
+        // Anonymous, the company's credential mode frozen onto the row, no invitation or
+        // reminder mail -- the reasons are in NewSurveyDefaults, which the template path
+        // (`POST /survey-templates/{id}/use`) calls too, so the two cannot drift apart.
+        NewSurveyDefaults.Apply(survey.Settings, request.Settings?.CredentialMode, company.CredentialMode);
 
         if (request.Settings is not null)
         {
@@ -1555,7 +1488,7 @@ public static class SurveyEndpoints
         }
     }
 
-    private static IResult? ApplySettings(SurveySettings settings, SurveySettingsInput input, string language, bool credentialModeFrozen)
+    internal static IResult? ApplySettings(SurveySettings settings, SurveySettingsInput input, string language, bool credentialModeFrozen)
     {
         // The create path resolves and freezes the mode itself, above. On update it used to
         // be accepted and dropped -- a 200 that changed nothing, so a caller believed a

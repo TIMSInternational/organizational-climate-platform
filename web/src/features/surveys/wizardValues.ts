@@ -776,8 +776,17 @@ export function buildInstantiateInput(
     language: values.language,
     title: localizedFor(values.language, values.titleEn, values.titleEs) as LocalizedInput,
     type: values.type,
+    // The Service select and the two checkboxes are on the template path too, and until G15
+    // (2026-10-22) this body dropped them: the server built the survey on the entity defaults.
+    // Same rule as buildCreateInput — omitted when unset, never sent as ''.
+    ...(values.serviceType ? { serviceType: values.serviceType } : {}),
     startDate: new Date(values.startDate).toISOString(),
     endDate: new Date(values.endDate).toISOString(),
+    settings: {
+      anonymous: values.anonymous,
+      allowPartialResponses: values.allowPartialResponses,
+      showProgress: values.showProgress,
+    },
   }
 
   if (description !== undefined) input.description = description
