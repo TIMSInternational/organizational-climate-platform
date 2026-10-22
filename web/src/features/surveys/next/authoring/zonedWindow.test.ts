@@ -19,7 +19,10 @@ describe('zonedWindow — the survey window on the company clock (G16)', () => {
     // New York: EDT (UTC-4) until 1 Nov 2026, EST (UTC-5) after.
     expect(instantOfWallClock('2026-10-31T12:00', 'America/New_York')?.toISOString()).toBe('2026-10-31T16:00:00.000Z')
     expect(instantOfWallClock('2026-11-02T12:00', 'America/New_York')?.toISOString()).toBe('2026-11-02T17:00:00.000Z')
-    for (const wall of ['2026-10-31T12:00', '2026-11-02T12:00', '2026-03-09T08:30']) {
+    // An hour after the fall-back (02:00 EDT → 01:00 EST): the offset at the naive guess is the
+    // summer one, and only asking again at the candidate lands on the winter reading.
+    expect(instantOfWallClock('2026-11-01T03:00', 'America/New_York')?.toISOString()).toBe('2026-11-01T08:00:00.000Z')
+    for (const wall of ['2026-10-31T12:00', '2026-11-02T12:00', '2026-03-09T08:30', '2026-11-01T03:00']) {
       const instant = instantOfWallClock(wall, 'America/New_York')!
       expect(wallClockIn(instant, 'America/New_York')).toBe(wall)
     }
