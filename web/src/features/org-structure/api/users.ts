@@ -1,4 +1,4 @@
-import { authFetch } from '../../../api/authFetch'
+import { ApiError, authFetch } from '../../../api/authFetch'
 
 export interface User {
   id: string
@@ -25,6 +25,20 @@ export interface UserDetail extends User {
   // became Guid? in #191, so this can genuinely arrive as null.
   companyId: string | null
   managerId: string | null
+  /** Present only on the answer to an update that actually changed the address. */
+  emailChange?: UserEmailChange | null
+}
+
+/**
+ * What correcting an address did (`UserEmailChange`, `UserDtos.cs`). The change SENDS NOTHING:
+ * `unusedSurveyCodes` counts per-survey sign-ins on scheduled or active surveys that were mailed
+ * to the OLD address and never used, so the screen can tell the admin to re-send them from each
+ * survey's roster.
+ */
+export interface UserEmailChange {
+  previousEmail: string
+  unusedSurveyCodes: number
+  pendingInvitationsExpired: number
 }
 
 export interface UpdateUserInput {
@@ -32,6 +46,30 @@ export interface UpdateUserInput {
   departmentId?: string
   managerId?: string
   isActive?: boolean
+  /** Omit to leave the address alone. The API trims and lower-cases it. */
+  email?: string
+}
+
+/** The four reasons `PUT /admin/users/{id}` refuses an address, as the API's `code`. */
+export const USER_EMAIL_REFUSALS = ['email_invalid', 'email_undeliverable', 'email_taken', 'email_invited'] as const
+export type UserEmailRefusal = (typeof USER_EMAIL_REFUSALS)[number]
+
+/**
+ * A refused address. Still an `ApiError` (so `err.message` keeps working for every other caller),
+ * plus the code a screen translates -- the API's message is English.
+ */
+export class UserEmailError extends ApiError {
+  readonly code: UserEmailRefusal
+
+  constructor(status: number, message: string, code: UserEmailRefusal) {
+    super(status, message)
+    this.name = 'UserEmailError'
+    this.code = code
+  }
+}
+
+function isEmailRefusal(code: unknown): code is UserEmailRefusal {
+  return typeof code === 'string' && (USER_EMAIL_REFUSALS as readonly string[]).includes(code)
 }
 
 export async function listUsers(baseUrl: string, companyId: string): Promise<User[]> {
@@ -46,10 +84,21 @@ export async function getUser(baseUrl: string, id: string): Promise<UserDetail> 
 }
 
 export async function updateUser(baseUrl: string, id: string, input: UpdateUserInput): Promise<UserDetail> {
-  const response = await authFetch(`${baseUrl}/admin/users/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(input),
-  })
+  const response = await authFetch(
+    `${baseUrl}/admin/users/${id}`,
+    { method: 'PUT', body: JSON.stringify(input) },
+    // Handed back rather than thrown so the refusal's `code` survives; anything else is
+    // re-thrown exactly as authFetch would have.
+    { allowStatus: [400, 409] },
+  )
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as { message?: string; code?: unknown } | null
+    const message = body?.message || `Request failed: ${response.status}`
+    if (isEmailRefusal(body?.code)) {
+      throw new UserEmailError(response.status, message, body.code)
+    }
+    throw new ApiError(response.status, message)
+  }
   return response.json() as Promise<UserDetail>
 }
 

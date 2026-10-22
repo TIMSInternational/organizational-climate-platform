@@ -5023,7 +5023,23 @@
         "resendCredentials": "Reenviar datos de acceso",
         "resendCredentialsHelper": "Genera un usuario y una contraseña nuevos y los envía por correo. Los anteriores dejan de servir.",
         "resendCredentialsDone": "Datos de acceso enviados",
-        "resendCredentialsFailed": "No se pudieron enviar los datos de acceso"
+        "resendCredentialsFailed": "No se pudieron enviar los datos de acceso",
+        "email": "Correo",
+        "emailHelper": "Cambiarlo no envía nada. Quien entra con su correo usará el nuevo, y sus sesiones abiertas se cierran.",
+        "emailLocked": "Solo un super administrador cambia el correo de un administrador.",
+        "emailErrors": {
+          "email_invalid": "Esa no es una dirección de correo válida.",
+          "email_undeliverable": "Ese dominio está reservado y nunca puede recibir correo. Use la dirección real de la persona.",
+          "email_taken": "Ese correo ya pertenece a otra cuenta de la plataforma.",
+          "email_invited": "Ese correo ya tiene una invitación pendiente."
+        },
+        "emailChanged": "Correo cambiado de {previous} a {current}. No se envió ningún correo.",
+        "emailCodesNone": "No tiene códigos de encuesta sin usar.",
+        "emailCodesOne": "Tiene 1 código de encuesta sin usar, enviado a la dirección anterior. Reenvíelo desde «Quién ya respondió», en la página Distribución de esa encuesta, con «Reenviar credenciales».",
+        "emailCodes": "Tiene {count} códigos de encuesta sin usar, enviados a la dirección anterior. Reenvíelos desde «Quién ya respondió», en la página Distribución de cada encuesta, con «Reenviar credenciales».",
+        "emailInvitationsExpiredOne": "Se anuló 1 invitación pendiente a la dirección anterior.",
+        "emailInvitationsExpired": "Se anularon {count} invitaciones pendientes a la dirección anterior.",
+        "done": "Listo"
       },
       "roster": {
         "sub": "ordenadas por rol y nombre · {never} nunca han entrado",

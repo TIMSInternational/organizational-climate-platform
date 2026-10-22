@@ -152,6 +152,69 @@ describe('AdminUsersView (company administrator)', () => {
     expect(screen.getByText(T.edit.accountLocked)).toBeTruthy()
   })
 
+  it('corrects an address, says nothing was sent, and points at each survey’s roster for the unused codes', async () => {
+    const luis = USERS.find((person) => person.id === LUIS_MORA_ID)!
+    const corrected = 'luis.mora@correo-real.cr'
+    const fetchMock = fetchWith({
+      [`PUT /admin/users/${LUIS_MORA_ID}`]: () =>
+        new Response(
+          JSON.stringify({
+            ...luis,
+            companyId: MERIDIANO_ID,
+            managerId: null,
+            email: corrected,
+            demographics: {},
+            emailChange: { previousEmail: luis.email, unusedSurveyCodes: 2, pendingInvitationsExpired: 0 },
+          }),
+          { status: 200 },
+        ),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    renderAt(`${ROUTE}?editar=${LUIS_MORA_ID}`)
+    await screen.findByRole('heading', { name: fill(T.edit.title, { name: 'Luis Mora' }) })
+    expect(screen.getByText(T.edit.emailHelper)).toBeTruthy()
+    const email = screen.getByLabelText(T.edit.email)
+    await user.clear(email)
+    await user.type(email, `  ${corrected.toUpperCase()} `)
+    await user.click(screen.getByRole('button', { name: T.edit.save }))
+
+    expect(await screen.findByText(fill(T.edit.emailChanged, { previous: luis.email, current: corrected }))).toBeTruthy()
+    expect(screen.getByText(fill(T.edit.emailCodes, { count: 2 }))).toBeTruthy()
+    // The panel stays open on the outcome rather than closing over it.
+    expect(screen.getByRole('button', { name: T.edit.done })).toBeTruthy()
+    const put = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith(`/admin/users/${LUIS_MORA_ID}`) && init?.method === 'PUT')!
+    expect(JSON.parse(String(put[1]!.body))).toEqual({ name: 'Luis Mora', email: corrected.toUpperCase() })
+  })
+
+  it('says in Spanish why an address was refused, never the server’s English', async () => {
+    vi.stubGlobal(
+      'fetch',
+      fetchWith({
+        [`PUT /admin/users/${LUIS_MORA_ID}`]: () =>
+          new Response(JSON.stringify({ message: 'A user with this email already exists', code: 'email_taken' }), { status: 409 }),
+      }),
+    )
+    const user = userEvent.setup()
+    renderAt(`${ROUTE}?editar=${LUIS_MORA_ID}`)
+    await screen.findByRole('heading', { name: fill(T.edit.title, { name: 'Luis Mora' }) })
+    const email = screen.getByLabelText(T.edit.email)
+    await user.clear(email)
+    await user.type(email, 'ocupado@correo-real.cr')
+    await user.click(screen.getByRole('button', { name: T.edit.save }))
+
+    expect(await screen.findByText(`${T.edit.saveFailed}: ${T.edit.emailErrors.email_taken}`)).toBeTruthy()
+    expect(screen.queryByText(/already exists/)).toBeNull()
+  })
+
+  it('locks the email of an administrator, which only a super administrator may change', async () => {
+    vi.stubGlobal('fetch', fetchWith())
+    renderAt(`${ROUTE}?editar=${ANA_ROJAS_ID}`)
+    await screen.findByRole('heading', { name: fill(T.edit.title, { name: 'Ana Rojas' }) })
+    expect((screen.getByLabelText(T.edit.email) as HTMLInputElement).disabled).toBe(true)
+    expect(screen.getByText(T.edit.emailLocked)).toBeTruthy()
+  })
+
   it('never offers the company-administrator setup invitation, which the server refuses this role', async () => {
     vi.stubGlobal('fetch', fetchWith())
     const user = userEvent.setup()
