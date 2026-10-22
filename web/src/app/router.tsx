@@ -53,6 +53,7 @@ import TemplateDetailNextPage from '../features/surveys/next/authoring/TemplateD
 import AnalyticsNextPage from '../features/analytics/next/AnalyticsNextPage'
 import QuestionBankNextPage from '../features/questions/next/QuestionBankNextPage'
 import QuestionLibraryNextPage from '../features/questions/next/QuestionLibraryNextPage'
+import AuditLogPage from '../features/audit/AuditLogPage'
 import { resolveInitialRoute } from './resolveInitialRoute'
 
 // /admin/companies (the old unconditional target) is SuperAdmin-only -- a
@@ -411,6 +412,9 @@ export const router = createBrowserRouter([
               // The page dispatches by role: the super administrator's global catalogue (the
               // per-role canvas, 10 Sep) is its own view, `questions/next/super/SuperQuestionLibraryView`.
               { path: '/admin/question-library', element: <QuestionLibraryNextPage /> },
+              // G21, the audit log. Ungated at the route like its siblings: `GET /audit/logs`
+              // admits the two admin roles and 403s the rest, which the page says in Spanish.
+              { path: '/admin/audit', element: <AuditLogPage /> },
               // Flat, with no company id in the path (#142), like /surveys and
               // /action-plans: the page takes its company from `company-context`,
               // so one route and one nav entry serve both admin roles.
