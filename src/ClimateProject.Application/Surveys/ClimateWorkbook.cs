@@ -167,7 +167,10 @@ public static partial class ClimateWorkbook
                 dimension = text; dimensionQuestions = 0; continue;
             }
             if (dimension is null) { errors.Add($"PREGUNTAS fila {r}: falta el título de dimensión."); continue; }
-            var open = Key(dimension) == "preguntas abiertas";
+            // Singular or plural, as `scripts/import-climate-workbook.mjs` reads it
+            // (`/^preguntas? abiertas?$/`): ESPH's own questionnaire heads its last section
+            // "Pregunta abierta", and an exact plural match imported those as likert items.
+            var open = IsOpenSection(dimension);
             questions.Add(new CreateSurveyQuestionInput(Local(text, language), open ? "open_ended" : "likert",
                 Options: open ? null : labels.Select((label,i) => new CreateSurveyQuestionOptionInput((i+1).ToString(CultureInfo.InvariantCulture), Local(label,language))).ToList(),
                 ScaleMin: open ? null : 1, ScaleMax: open ? null : 5,
@@ -224,6 +227,11 @@ public static partial class ClimateWorkbook
         var company=new ClimateWorkbookCompany(name,domain,industry,size,country,language,timezone,anonymousText=="anonima",bandRequest);
         return new(new(company,title,description,start,end,subject,message,questions,fields,people),errors.Distinct().ToArray());
     }
+
+    /// <summary>A dimension heading that holds open-ended questions: "Pregunta(s) abierta(s)".</summary>
+    public static bool IsOpenSection(string heading) => OpenSection().IsMatch(Key(heading));
+    [GeneratedRegex(@"^preguntas? abiertas?$")]
+    private static partial Regex OpenSection();
 
     public static LocalizedInput Local(string text,string language)=>LocalizedInput.FromLocales(new Dictionary<string,string?>{{language=="en"?"en":"es",text}});
     public static string Key(string text)=>Regex.Replace(string.Concat(text.Normalize(NormalizationForm.FormD).Where(c=>CharUnicodeInfo.GetUnicodeCategory(c)!=UnicodeCategory.NonSpacingMark)).ToLowerInvariant(),"[^a-z0-9]+"," ").Trim();

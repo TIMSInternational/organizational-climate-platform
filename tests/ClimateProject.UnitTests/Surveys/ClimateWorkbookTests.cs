@@ -76,4 +76,24 @@ public class ClimateWorkbookTests
         Assert.Equal("employee",Read(book).Content!.People[0].Role);
         using var missing=Filled();missing.Worksheet("PREGUNTAS").Delete();Assert.Contains(Read(missing).Errors,e=>e.Contains("PREGUNTAS"));
     }
+    // ESPH's questionnaire heads its last section "Pregunta abierta" (singular). The reader
+    // matched only the plural and imported those questions as 1-5 likert items; the script
+    // reading the same workbook accepts both (`/^preguntas? abiertas?$/`).
+    [Theory]
+    [InlineData("Pregunta abierta")]
+    [InlineData("Preguntas abiertas")]
+    [InlineData("PREGUNTA ABIERTA")]
+    public void An_open_section_is_open_ended_in_the_singular_and_the_plural(string heading)
+    {
+        using var book=Filled();book.Worksheet("PREGUNTAS").Cell("B9").Value=heading;
+        var result=Read(book);Assert.Empty(result.Errors);
+        var question=result.Content!.Questions[1];
+        Assert.Equal("open_ended",question.Type);Assert.Null(question.Options);Assert.Null(question.ScaleMax);
+        Assert.Equal("likert",result.Content.Questions[0].Type);
+    }
+    [Fact] public void A_heading_that_only_mentions_open_questions_is_still_a_likert_dimension()
+    {
+        using var book=Filled();book.Worksheet("PREGUNTAS").Cell("B9").Value="Comentarios sobre preguntas abiertas";
+        Assert.Equal("likert",Read(book).Content!.Questions[1].Type);
+    }
 }
