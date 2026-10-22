@@ -313,6 +313,66 @@ public class SurveyDuplicationEndpointTests : IAsyncLifetime
     }
 
     // ------------------------------------------------------------------
+    // Audit G14: the copy goes to the same people, meters the same service and
+    // signs them in the same way as the run it repeats.
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task A_survey_aimed_at_named_people_duplicates_to_the_same_people_not_to_the_whole_company()
+    {
+        var client = await AdminAsync();
+        var (_, personA) = await _harness.IdentifiedTokenAsync(Roles.Employee, _companyId);
+        var (_, personB) = await _harness.IdentifiedTokenAsync(Roles.Employee, _companyId);
+        var original = await SurveyTestHarness.CreateSurveyAsync(
+            client,
+            BilingualRequest() with { DepartmentIds = null, UserIds = [personA, personB] });
+
+        var copy = await DuplicateAsync(client, original.Id);
+
+        Assert.Empty(copy.DepartmentIds);
+        Assert.Equal(new[] { personA, personB }.Order(), copy.UserIds.Order());
+        var stored = await _harness.WithDbAsync(db => db.SurveyUserTargets
+            .Where(t => t.SurveyId == copy.Id)
+            .Select(t => t.UserId)
+            .ToListAsync());
+        Assert.Equal(new[] { personA, personB }.Order(), stored.Order());
+        // The source keeps its own rows: the copy's are new ones, not the source's moved.
+        Assert.Equal(2, await _harness.WithDbAsync(db => db.SurveyUserTargets.CountAsync(t => t.SurveyId == original.Id)));
+    }
+
+    [Fact]
+    public async Task The_copy_keeps_the_sources_service_and_frozen_credential_mode_after_the_company_default_changes()
+    {
+        var client = await AdminAsync();
+        await SetCompanyCredentialModeAsync(CredentialModes.PerSurvey);
+        var original = await SurveyTestHarness.CreateSurveyAsync(
+            client,
+            BilingualRequest() with { ServiceType = ClimateServiceTypes.GeneralClimate });
+        Assert.Equal(CredentialModes.PerSurvey, original.Settings.CredentialMode);
+
+        // The company moves back to shared after the source's codes went out. The copy is
+        // "run it again", so it repeats the source's per-survey codes, not today's default.
+        await SetCompanyCredentialModeAsync(CredentialModes.Shared);
+
+        var copy = await DuplicateAsync(client, original.Id);
+
+        Assert.Equal(ClimateServiceTypes.GeneralClimate, copy.ServiceType);
+        Assert.Equal(CredentialModes.PerSurvey, copy.Settings.CredentialMode);
+        var stored = await _harness.WithDbAsync(db => db.Surveys.FirstAsync(s => s.Id == copy.Id));
+        Assert.Equal(ClimateServiceTypes.GeneralClimate, stored.ServiceType);
+        Assert.Equal(CredentialModes.PerSurvey, stored.Settings.CredentialMode);
+    }
+
+    // Through the endpoint the settings screen calls, not a row write: the mode a company
+    // admin can actually set is the one this test should be measuring against.
+    private async Task SetCompanyCredentialModeAsync(string mode)
+    {
+        var client = await AdminAsync();
+        (await client.PutAsJsonAsync($"/admin/companies/{_companyId}/settings", new { credentialMode = mode }))
+            .EnsureSuccessStatusCode();
+    }
+
+    // ------------------------------------------------------------------
     // Overrides and authorization
     // ------------------------------------------------------------------
 

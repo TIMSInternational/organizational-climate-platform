@@ -9,7 +9,15 @@ public sealed record SurveyStructure(
     IReadOnlyList<QuestionOption> Options,
     IReadOnlyList<QuestionEmojiOption> EmojiOptions,
     IReadOnlyList<QuestionConditionalLogic> ConditionalLogic,
-    IReadOnlyList<SurveyDepartmentTarget> DepartmentTargets);
+    IReadOnlyList<SurveyDepartmentTarget> DepartmentTargets)
+{
+    /// <summary>
+    /// The people this survey is aimed at by name -- the other half of the audience, a UNION
+    /// with <see cref="DepartmentTargets"/>. An init property rather than a positional one
+    /// only because a template-built survey has none and its constructor call predates it.
+    /// </summary>
+    public IReadOnlyList<SurveyUserTarget> UserTargets { get; init; } = [];
+}
 
 /// <summary>Caller-supplied overrides for the copy. Anything null keeps the original's value.</summary>
 public sealed record SurveyDuplicateOptions(
@@ -73,6 +81,13 @@ public static class SurveyDuplication
             Language = original.Language,
 
             Type = original.Type,
+
+            // The licensed service the source metered against. A duplicate is "run it
+            // again", and the run it repeats was counted against this service; dropping it
+            // made every copy unmetered, so its completed responses spent no seat
+            // (`CompanyLicenses.TryConsumeSeatAsync` keys on it) (audit G14).
+            ServiceType = original.ServiceType,
+
             StartDate = opts.StartDate ?? original.StartDate,
             EndDate = opts.EndDate ?? original.EndDate,
 
@@ -178,10 +193,21 @@ public static class SurveyDuplication
             .Select(t => new SurveyDepartmentTarget { SurveyId = newSurveyId, DepartmentId = t.DepartmentId })
             .ToList();
 
+        // The people the source was aimed at by name. Copying the departments alone turned a
+        // survey sent to 240 named people into one aimed at the whole company: an empty
+        // target set means "everyone" (`SurveyQueries.Audience`), so the copy did not lose its
+        // audience, it silently widened it (audit G14, Teletrabajo).
+        var userTargets = source.UserTargets
+            .Select(t => new SurveyUserTarget { SurveyId = newSurveyId, UserId = t.UserId })
+            .ToList();
+
         // Responses, invitations, distributions, drafts, versions and audit logs are
         // absent by construction rather than by filter: they are not inputs to this
         // function, so there is no code path that could copy one.
-        return new SurveyStructure(survey, questions, options, emojiOptions, conditionalLogic, departmentTargets);
+        return new SurveyStructure(survey, questions, options, emojiOptions, conditionalLogic, departmentTargets)
+        {
+            UserTargets = userTargets,
+        };
     }
 
     private static Guid? Remap(IReadOnlyDictionary<Guid, Guid> map, Guid? id)
@@ -212,6 +238,14 @@ public static class SurveyDuplication
         InvitationCustomSubjectEs = s.InvitationCustomSubjectEs,
         InvitationBrandingEnabled = s.InvitationBrandingEnabled,
         OneSessionOnly = s.OneSessionOnly,
+        // The SOURCE's frozen credential mode, not the company's current one, and not
+        // re-resolved through NewSurveyDefaults. A duplicate is "run it again": a survey
+        // whose people were each mailed a per-survey code is repeated the same way, even if
+        // the company has since switched its default. Null stays null -- a legacy row that
+        // never froze a mode keeps reading as `shared`, exactly as its source does
+        // (`SurveyDistributionEndpoints`). Dropping it (as this did until audit G14) made
+        // every copy inherit at read time, i.e. `shared`, whatever its source had been.
+        CredentialMode = s.CredentialMode,
         // The survey's own respondent texts travel with the copy, both languages.
         RespondentIntroEn = s.RespondentIntroEn,
         RespondentIntroEs = s.RespondentIntroEs,
