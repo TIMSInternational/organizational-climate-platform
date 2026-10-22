@@ -1,7 +1,7 @@
 import { waveCode } from '../../../dashboard/next/compose'
 import type { SurveyListItem } from '../../../surveys/api/surveys'
 import type { CompanyDetail, UpdateCompanyInput } from '../../api/companies'
-import type { CompanySettingsResponse, UpdateCompanySettingsInput } from '../../api/companySettings'
+import { credentialModeOf, type CompanySettingsResponse, type CredentialMode, type UpdateCompanySettingsInput } from '../../api/companySettings'
 import type { Department } from '../../api/departments'
 import type { User } from '../../api/users'
 
@@ -82,6 +82,8 @@ export interface SettingsDraft {
   dataRetentionDays: string
   microclimateEnabled: boolean
   aiInsightsEnabled: boolean
+  /** `shared` | `per_survey` — reaches only surveys created after it is saved. */
+  credentialMode: CredentialMode
   primaryColor: string
 }
 
@@ -104,6 +106,7 @@ export function settingsDraftOf(response: CompanySettingsResponse): SettingsDraf
     dataRetentionDays: String(response.settings.dataRetentionDays),
     microclimateEnabled: response.settings.microclimateEnabled,
     aiInsightsEnabled: response.settings.aiInsightsEnabled,
+    credentialMode: credentialModeOf(response.settings),
     primaryColor: response.branding.primaryColor,
   }
 }
@@ -143,6 +146,7 @@ export function settingsChanges(initial: SettingsDraft, draft: SettingsDraft): U
   if (draft.anonymousSurveys !== initial.anonymousSurveys) changes.anonymousSurveys = draft.anonymousSurveys
   if (draft.microclimateEnabled !== initial.microclimateEnabled) changes.microclimateEnabled = draft.microclimateEnabled
   if (draft.aiInsightsEnabled !== initial.aiInsightsEnabled) changes.aiInsightsEnabled = draft.aiInsightsEnabled
+  if (draft.credentialMode !== initial.credentialMode) changes.credentialMode = draft.credentialMode
   const days = parseRetention(draft.dataRetentionDays)
   if (days !== null && days !== parseRetention(initial.dataRetentionDays)) changes.dataRetentionDays = days
   if (draft.primaryColor !== initial.primaryColor && HEX_COLOUR.test(draft.primaryColor)) {

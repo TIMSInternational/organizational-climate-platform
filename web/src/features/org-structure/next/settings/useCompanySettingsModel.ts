@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from '../../../../i18n'
-import { updateCompanySettings, type CompanySettingsResponse } from '../../api/companySettings'
+import { getCompanySettings, type CompanySettingsResponse } from '../../api/companySettings'
 import { listDepartments } from '../../api/departments'
 import { getCompanyAdminDashboard } from '../../../dashboard/api/dashboard'
 import { getSurvey } from '../../../surveys/api/surveys'
@@ -35,10 +35,8 @@ export interface CompanySettingsModelState {
 /**
  * The wiring seam of the CompanySettings artboard. Three existing clients, read together:
  *
- * - the settings and branding — `PUT /admin/companies/{id}/settings` with an EMPTY body, which is
- *   how this API reads them (no `GET` exists; every member of `UpdateCompanySettingsRequest` is
- *   nullable and `CompanyEndpoints.UpdateSettingsAsync` assigns only the ones present, so `{}`
- *   writes nothing and answers the current record — the same read the old page made);
+ * - the settings and branding — `GET /admin/companies/{id}/settings`. Until that route existed
+ *   this read was an empty-body `PUT`, which the audit trail logged as an update on every visit;
  * - the department counts — `GET /admin/departments`;
  * - the survey counts and the tenant's name — `GET /dashboard/company-admin`;
  * - how the running survey was created — `GET /surveys/{id}` for the latest of that payload's
@@ -61,7 +59,7 @@ export function useCompanySettingsModel(companyId: string | null): CompanySettin
     if (!companyId) return
     setState((current) => ({ ...current, status: 'loading', error: null }))
     const [settings, departments, dashboard] = await Promise.allSettled([
-      updateCompanySettings(baseUrl, companyId, {}),
+      getCompanySettings(baseUrl, companyId),
       listDepartments(baseUrl, companyId),
       getCompanyAdminDashboard(baseUrl, { lang: locale }),
     ])

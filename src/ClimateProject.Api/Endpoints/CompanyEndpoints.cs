@@ -17,6 +17,7 @@ public static class CompanyEndpoints
         group.MapPost("", CreateAsync);
         group.MapGet("/{id:guid}", GetAsync);
         group.MapPut("/{id:guid}", UpdateAsync);
+        group.MapGet("/{id:guid}/settings", GetSettingsAsync);
         group.MapPut("/{id:guid}/settings", UpdateSettingsAsync);
         group.MapGet("/{id:guid}/result-bands", GetResultBandsAsync);
     }
@@ -216,7 +217,7 @@ public static class CompanyEndpoints
         CancellationToken cancellationToken)
     {
         var currentUser = principal.GetCurrentUser();
-        if (!Roles.Admin.Contains(currentUser.Role) || (currentUser.Role != Roles.SuperAdmin && currentUser.CompanyId != id.ToString()))
+        if (!CanManageSettings(currentUser.Role, currentUser.CompanyId, id))
         {
             return Results.Forbid();
         }
@@ -287,12 +288,43 @@ public static class CompanyEndpoints
 
         await db.SaveChangesAsync(cancellationToken);
 
-        return Results.Ok(new CompanySettingsResponse(
-            company.Id,
-            new CompanySettingsDto(company.Settings.SurveyFrequency, company.Settings.MicroclimateEnabled, company.Settings.AiInsightsEnabled, company.Settings.AnonymousSurveys, company.Settings.DataRetentionDays, company.Settings.Timezone, company.Settings.Language, company.Settings.CredentialMode),
-            new CompanyBrandingDto(company.Branding.LogoUrl, company.Branding.PrimaryColor, company.Branding.SecondaryColor, company.Branding.FontFamily, company.Branding.CustomCss),
-            ResultBandsDto.From(company.Settings)));
+        return Results.Ok(ToSettingsResponse(company));
     }
+
+    /// <summary>
+    /// The company's settings, read without writing. Every screen that shows them used to
+    /// read them by sending an empty <c>PUT</c>, so each page view was a write. Same rule as
+    /// the PUT: a super admin reads any company, a company admin only their own, nobody else.
+    /// </summary>
+    private static async Task<IResult> GetSettingsAsync(
+        Guid id,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var currentUser = principal.GetCurrentUser();
+        if (!CanManageSettings(currentUser.Role, currentUser.CompanyId, id))
+        {
+            return Results.Forbid();
+        }
+
+        var company = await db.Companies.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+        if (company is null)
+        {
+            return Results.Json(new { message = "Company not found" }, statusCode: 404);
+        }
+
+        return Results.Ok(ToSettingsResponse(company));
+    }
+
+    private static bool CanManageSettings(string role, string? companyId, Guid id) =>
+        Roles.Admin.Contains(role) && (role == Roles.SuperAdmin || companyId == id.ToString());
+
+    private static CompanySettingsResponse ToSettingsResponse(Company company) => new(
+        company.Id,
+        new CompanySettingsDto(company.Settings.SurveyFrequency, company.Settings.MicroclimateEnabled, company.Settings.AiInsightsEnabled, company.Settings.AnonymousSurveys, company.Settings.DataRetentionDays, company.Settings.Timezone, company.Settings.Language, company.Settings.CredentialMode),
+        new CompanyBrandingDto(company.Branding.LogoUrl, company.Branding.PrimaryColor, company.Branding.SecondaryColor, company.Branding.FontFamily, company.Branding.CustomCss),
+        ResultBandsDto.From(company.Settings));
 
     /// <summary>
     /// The company's result bands, for every screen that colours a mean — so every member of

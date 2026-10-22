@@ -164,6 +164,13 @@ describe('buildCreateInput', () => {
     expect(input.settings?.anonymous).toBe(false)
   })
 
+  it('inherits the company’s credential mode by omitting it, and sends a chosen one in settings', () => {
+    expect(buildCreateInput(complete(), COMPANY).settings).not.toHaveProperty('credentialMode')
+    expect(buildCreateInput(complete({ credentialMode: '' }), COMPANY).settings).not.toHaveProperty('credentialMode')
+    expect(buildCreateInput(complete({ credentialMode: 'per_survey' }), COMPANY).settings?.credentialMode).toBe('per_survey')
+    expect(buildCreateInput(complete({ credentialMode: 'shared' }), COMPANY).settings?.credentialMode).toBe('shared')
+  })
+
   /**
    * Omitted rather than sent empty: `departmentIds: []` and `targetAudienceCount: 0`
    * are both meaningful values server-side, and neither is what "the admin left this

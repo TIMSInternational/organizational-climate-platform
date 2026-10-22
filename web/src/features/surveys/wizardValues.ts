@@ -5,6 +5,7 @@ import type {
   LocalizedInput,
 } from './api/surveyCreate'
 import type { InstantiateSurveyTemplateInput } from './api/surveyTemplates'
+import type { CredentialMode } from '../org-structure/api/companySettings'
 import type { QuestionLibraryItemDetail } from '../questions/api/questionLibrary'
 import { DEFAULT_SURVEY_QUESTION_TYPE, needsOptions, needsScaleLabels } from './surveyVocabulary'
 
@@ -194,6 +195,13 @@ export interface SurveyWizardValues {
   anonymous: boolean
   allowPartialResponses: boolean
   showProgress: boolean
+  /**
+   * This survey's credential mode, or `''` to inherit the company's — the default, so a survey
+   * only departs from its company when somebody chose that. Frozen at create; blank path only
+   * (`POST /survey-templates/{id}/use` takes no settings). Optional so a draft saved before the
+   * field existed restores as "inherit".
+   */
+  credentialMode?: '' | CredentialMode
   questions: SurveyQuestionValues[]
 }
 
@@ -359,6 +367,7 @@ export function emptyWizardValues(language: ContentLanguage): SurveyWizardValues
     anonymous: true,
     allowPartialResponses: true,
     showProgress: true,
+    credentialMode: '',
     questions: [],
   }
 }
@@ -721,6 +730,8 @@ export function buildCreateInput(
       anonymous: values.anonymous,
       allowPartialResponses: values.allowPartialResponses,
       showProgress: values.showProgress,
+      // Omitted unless chosen: absence is how the API is told to inherit the company's mode.
+      ...(values.credentialMode ? { credentialMode: values.credentialMode } : {}),
     },
   }
 

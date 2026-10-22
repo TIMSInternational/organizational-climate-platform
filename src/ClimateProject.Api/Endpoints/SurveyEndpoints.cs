@@ -542,7 +542,7 @@ public static class SurveyEndpoints
 
         if (request.Settings is not null)
         {
-            var settingsError = ApplySettings(survey.Settings, request.Settings, language);
+            var settingsError = ApplySettings(survey.Settings, request.Settings, language, credentialModeFrozen: false);
             if (settingsError is not null)
             {
                 return settingsError;
@@ -786,7 +786,7 @@ public static class SurveyEndpoints
 
         if (request.Settings is not null)
         {
-            var settingsError = ApplySettings(survey.Settings, request.Settings, survey.Language);
+            var settingsError = ApplySettings(survey.Settings, request.Settings, survey.Language, credentialModeFrozen: true);
             if (settingsError is not null)
             {
                 return settingsError;
@@ -1555,8 +1555,23 @@ public static class SurveyEndpoints
         }
     }
 
-    private static IResult? ApplySettings(SurveySettings settings, SurveySettingsInput input, string language)
+    private static IResult? ApplySettings(SurveySettings settings, SurveySettingsInput input, string language, bool credentialModeFrozen)
     {
+        // The create path resolves and freezes the mode itself, above. On update it used to
+        // be accepted and dropped -- a 200 that changed nothing, so a caller believed a
+        // survey had switched to one code per person while its roster stayed on one shared
+        // account. Refused before any other field is touched, so nothing is half-applied.
+        if (credentialModeFrozen && input.CredentialMode is not null)
+        {
+            return Results.Json(
+                new
+                {
+                    code = "credential_mode_frozen",
+                    message = "settings.credentialMode cannot be changed after a survey is created: it is fixed at create, because credentials may already have been issued under it. Create a new survey to use a different mode.",
+                },
+                statusCode: 400);
+        }
+
         if (input.Anonymous.HasValue) settings.Anonymous = input.Anonymous.Value;
         if (input.AllowPartialResponses.HasValue) settings.AllowPartialResponses = input.AllowPartialResponses.Value;
         if (input.RandomizeQuestions.HasValue) settings.RandomizeQuestions = input.RandomizeQuestions.Value;

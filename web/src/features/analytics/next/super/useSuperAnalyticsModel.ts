@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from '../../../../i18n'
 import { listCompanies, type Company } from '../../../org-structure/api/companies'
-import { updateCompanySettings } from '../../../org-structure/api/companySettings'
+import { getCompanySettings } from '../../../org-structure/api/companySettings'
 import { listSurveys, type SurveyListItem } from '../../../surveys/api/surveys'
 import { listBenchmarks, type BenchmarkListItem } from '../../api/benchmarks'
 import { listAIInsights, type AIInsightListItem } from '../../api/insights'
@@ -37,7 +37,7 @@ const isList = (value: unknown) => Array.isArray(value)
  * `GET /admin/benchmarks?companyId=` and `GET /admin/ai-insights?companyId=` — plus, each
  * from an existing client: the unfiltered benchmark list (for this role it holds every
  * tenant's and the global ones, `BenchmarkEndpoints.ListAsync`), the tenant's settings for
- * `aiInsightsEnabled` (the empty-body `PUT` that is the only settings read), its surveys
+ * `aiInsightsEnabled` (`GET …/settings`), its surveys
  * for the last closed wave, and the tenant list for the context strip. There is no page to
  * lose: every region stands or falls on its own read and says which.
  */
@@ -65,7 +65,7 @@ export function useSuperAnalyticsModel(companyId: string | undefined): SuperAnal
         optional(() => listBenchmarks(baseUrl, id, locale), isList),
         optional(() => listBenchmarks(baseUrl, undefined, locale), isList),
         optional(() => listAIInsights(baseUrl, id), isList),
-        optional(() => updateCompanySettings(baseUrl, id, {}), (value) => typeof value === 'object' && value !== null && 'settings' in value),
+        optional(() => getCompanySettings(baseUrl, id), (value) => typeof value === 'object' && value !== null && 'settings' in value),
         optional(() => listSurveys(baseUrl, { companyId: id }, locale), isList),
       ])
       if (cancelled) return

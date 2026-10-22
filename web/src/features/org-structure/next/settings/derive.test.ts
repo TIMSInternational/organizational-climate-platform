@@ -41,7 +41,7 @@ describe('changesOf', () => {
 
   it('never carries the microclimate or AI flag — the form has no control for either', () => {
     const initial = draftOf(response)
-    expect(Object.keys(initial).sort()).toEqual(['anonymousSurveys', 'dataRetentionDays', 'language', 'logoUrl', 'primaryColor', 'surveyFrequency', 'timezone'])
+    expect(Object.keys(initial).sort()).toEqual(['anonymousSurveys', 'credentialMode', 'dataRetentionDays', 'language', 'logoUrl', 'primaryColor', 'surveyFrequency', 'timezone'])
     expect(changesOf(initial, { ...initial, language: 'es' })).toEqual({ language: 'es' })
   })
 
@@ -65,5 +65,16 @@ describe('changesOf', () => {
     expect(changesOf(initial, { ...initial, logoUrl: 'https://cdn.example.com/logo.png' })).toEqual({})
     expect(changesOf(initial, { ...initial, logoUrl: '/brand/notes.txt' })).toEqual({})
     expect(changesOf(initial, { ...initial, logoUrl: '/brand/esph-logo.png' })).toEqual({ logoUrl: '/brand/esph-logo.png' })
+  })
+
+  it('reads the credential mode, and an absent one as the API default `shared`', () => {
+    expect(draftOf(response).credentialMode).toBe('shared')
+    expect(draftOf({ ...response, settings: { ...response.settings, credentialMode: 'per_survey' } }).credentialMode).toBe('per_survey')
+  })
+
+  it('sends the credential mode only when it changed', () => {
+    const initial = draftOf(response)
+    expect(changesOf(initial, { ...initial })).toEqual({})
+    expect(changesOf(initial, { ...initial, credentialMode: 'per_survey' })).toEqual({ credentialMode: 'per_survey' })
   })
 })

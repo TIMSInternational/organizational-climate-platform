@@ -6,7 +6,7 @@ import { TranslationProvider } from '../../../../i18n'
 import { setToken, clearToken } from '../../../../auth/token'
 import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../../company-context'
 import { tokenFor } from '../../../../test/jwtFixture'
-import { updateCompanySettings, type CompanySettingsResponse } from '../../api/companySettings'
+import { getCompanySettings, updateCompanySettings, type CompanySettingsResponse } from '../../api/companySettings'
 import { listDepartments, type Department } from '../../api/departments'
 import { getCompanyAdminDashboard, type CompanyAdminDashboard } from '../../../dashboard/api/dashboard'
 import { getSurvey, type SurveyDetail } from '../../../surveys/api/surveys'
@@ -18,6 +18,7 @@ const copy = en.companySettings.next
 
 vi.mock('../../api/companySettings', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../api/companySettings')>()),
+  getCompanySettings: vi.fn(),
   updateCompanySettings: vi.fn(),
 }))
 vi.mock('../../api/departments', async (importOriginal) => ({
@@ -94,6 +95,8 @@ describe('CompanySettingsNextView (/admin/companies/:id for a company administra
   beforeEach(() => {
     window.localStorage.clear()
     window.localStorage.setItem('preferredLocale', 'en')
+    vi.mocked(getCompanySettings).mockReset()
+    vi.mocked(getCompanySettings).mockImplementation(async () => stored)
     vi.mocked(updateCompanySettings).mockReset()
     vi.mocked(updateCompanySettings).mockImplementation(async (_base, _id, input) => ({
       ...stored,
@@ -116,17 +119,20 @@ describe('CompanySettingsNextView (/admin/companies/:id for a company administra
     window.localStorage.removeItem(COMPANY_CONTEXT_STORAGE_KEY)
   })
 
-  it('reads the settings with an empty body, then saves the language — and only the language — on the settings PUT', async () => {
+  it('reads the settings with the GET — never a PUT — then saves the language, and only the language, on the settings PUT', async () => {
     renderAs({ role: 'company_admin', companyId: 'c1' })
     const language = await screen.findByLabelText(new RegExp(copy.language))
-    expect(vi.mocked(updateCompanySettings).mock.calls[0].slice(1)).toEqual(['c1', {}])
+    expect(vi.mocked(getCompanySettings).mock.calls[0].slice(1)).toEqual(['c1'])
+    // Reading is not a write: the page used to read by sending an empty PUT, which the audit
+    // trail logged as an update on every visit.
+    expect(vi.mocked(updateCompanySettings)).not.toHaveBeenCalled()
     expect((language as HTMLSelectElement).value).toBe('en')
 
     await userEvent.selectOptions(language, 'es')
     await userEvent.click(screen.getByRole('button', { name: copy.save }))
 
-    expect(vi.mocked(updateCompanySettings)).toHaveBeenCalledTimes(2)
-    expect(vi.mocked(updateCompanySettings).mock.calls[1].slice(1)).toEqual(['c1', { language: 'es' }])
+    expect(vi.mocked(updateCompanySettings)).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(updateCompanySettings).mock.calls[0].slice(1)).toEqual(['c1', { language: 'es' }])
     expect(await screen.findByText(copy.saved)).toBeTruthy()
     expect((screen.getByLabelText(new RegExp(copy.language)) as HTMLSelectElement).value).toBe('es')
   })
@@ -135,13 +141,37 @@ describe('CompanySettingsNextView (/admin/companies/:id for a company administra
     renderAs({ role: 'company_admin', companyId: 'c1' })
     await screen.findByLabelText(new RegExp(copy.language))
     await userEvent.click(screen.getByRole('button', { name: copy.save }))
-    expect(vi.mocked(updateCompanySettings)).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(updateCompanySettings)).not.toHaveBeenCalled()
     expect(screen.getByText(copy.nothingToSave)).toBeTruthy()
+  })
+
+  it('shows the company’s credential mode, and saves a change to it — and only it — saying it reaches new surveys only', async () => {
+    const modeCopy = en.companySettings.credentialMode
+    vi.mocked(getCompanySettings).mockImplementation(async () => ({
+      ...stored,
+      settings: { ...stored.settings, credentialMode: 'per_survey' },
+    }))
+    renderAs({ role: 'company_admin', companyId: 'c1' })
+    const card = (await screen.findByRole('heading', { name: modeCopy.heading })).closest('section') as HTMLElement
+    expect(within(card).getByText(modeCopy.current.replace('{mode}', modeCopy.perSurveyLabel))).toBeTruthy()
+    expect(within(card).getByText(modeCopy.appliesToNew, { exact: false })).toBeTruthy()
+    const perSurvey = within(card).getByRole('radio', { name: new RegExp(modeCopy.perSurveyLabel) })
+    expect(perSurvey.getAttribute('aria-checked')).toBe('true')
+    // Nothing pending until the choice differs from what is stored.
+    expect(within(card).queryByText(modeCopy.pending.replace('{mode}', modeCopy.sharedLabel), { exact: false })).toBeNull()
+
+    await userEvent.click(within(card).getByRole('radio', { name: new RegExp(modeCopy.sharedLabel) }))
+    expect(within(card).getByText(modeCopy.pending.replace('{mode}', modeCopy.sharedLabel), { exact: false })).toBeTruthy()
+    await userEvent.click(screen.getByRole('button', { name: copy.save }))
+
+    expect(vi.mocked(updateCompanySettings)).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(updateCompanySettings).mock.calls[0].slice(1)).toEqual(['c1', { credentialMode: 'shared' }])
   })
 
   it('offers another company’s administrator nothing, and asks the server nothing', async () => {
     renderAs({ role: 'company_admin', companyId: 'c2' })
     expect(await screen.findByText(copy.notAllowedTitle)).toBeTruthy()
+    expect(vi.mocked(getCompanySettings)).not.toHaveBeenCalled()
     expect(vi.mocked(updateCompanySettings)).not.toHaveBeenCalled()
     expect(screen.queryByRole('button', { name: copy.save })).toBeNull()
   })
@@ -149,6 +179,7 @@ describe('CompanySettingsNextView (/admin/companies/:id for a company administra
   it('offers a leader nothing either: the settings PUT is Roles.Admin', async () => {
     renderAs({ role: 'leader', companyId: 'c1' })
     expect(await screen.findByText(copy.notAllowedTitle)).toBeTruthy()
+    expect(vi.mocked(getCompanySettings)).not.toHaveBeenCalled()
     expect(vi.mocked(updateCompanySettings)).not.toHaveBeenCalled()
   })
 
@@ -241,6 +272,7 @@ describe('CompanySettingsNextView (/admin/companies/:id for a company administra
     }
     const bandsCopy = en.resultBands.settings
     beforeEach(() => {
+      vi.mocked(getCompanySettings).mockImplementation(async () => withBands)
       vi.mocked(updateCompanySettings).mockImplementation(async (_base, _id, input) => ({
         ...withBands,
         ...(input.resultBands ? { resultBands: input.resultBands } : {}),
@@ -282,7 +314,7 @@ describe('CompanySettingsNextView (/admin/companies/:id for a company administra
       expect(within(card).getByTestId('band-scale').textContent).toContain('60')
       expect(within(card).getByTestId('band-scale').textContent).not.toContain('3.00')
       await userEvent.click(screen.getByRole('button', { name: copy.save }))
-      expect(vi.mocked(updateCompanySettings).mock.calls[1].slice(1)).toEqual([
+      expect(vi.mocked(updateCompanySettings).mock.calls[0].slice(1)).toEqual([
         'c1',
         { resultBands: { opportunityMin: 3, strengthMin: 4, criticalName: null, opportunityName: null, strengthName: null, scale: 'percent' } },
       ])
@@ -308,7 +340,7 @@ describe('CompanySettingsNextView (/admin/companies/:id for a company administra
       expect(screen.queryByRole('alert')).toBeNull()
       await userEvent.click(screen.getByRole('button', { name: copy.save }))
       // The whole scale, as two boundaries and three names — the defaults sent as null.
-      expect(vi.mocked(updateCompanySettings).mock.calls[1].slice(1)).toEqual([
+      expect(vi.mocked(updateCompanySettings).mock.calls[0].slice(1)).toEqual([
         'c1',
         { resultBands: { opportunityMin: 3.1, strengthMin: 4, criticalName: null, opportunityName: null, strengthName: null, scale: 'mean' } },
       ])
@@ -326,13 +358,13 @@ describe('CompanySettingsNextView (/admin/companies/:id for a company administra
       await userEvent.clear(box(bandsCopy.nameLabel.replace('{colour}', 'red')))
       await userEvent.type(box(bandsCopy.nameLabel.replace('{colour}', 'red')), 'Zona roja')
       await userEvent.click(screen.getByRole('button', { name: copy.save }))
-      expect(vi.mocked(updateCompanySettings).mock.calls[1][2]).toEqual({
+      expect(vi.mocked(updateCompanySettings).mock.calls[0][2]).toEqual({
         resultBands: { opportunityMin: 3, strengthMin: 4, criticalName: 'Zona roja', opportunityName: null, strengthName: null, scale: 'mean' },
       })
     })
 
     it('draws no card over an API that sends no scale, rather than a default in the company’s name', async () => {
-      vi.mocked(updateCompanySettings).mockImplementation(async () => stored)
+      vi.mocked(getCompanySettings).mockImplementation(async () => stored)
       renderAs({ role: 'company_admin', companyId: 'c1' })
       await screen.findByLabelText(new RegExp(copy.language))
       expect(screen.queryByRole('heading', { name: bandsCopy.heading })).toBeNull()

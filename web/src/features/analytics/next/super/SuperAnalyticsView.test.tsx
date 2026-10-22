@@ -51,7 +51,7 @@ interface Serve {
 function serve({ own = [], all = [benchmark()], insights = [], aiEnabled = true }: Serve = {}) {
   vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
-    if ((init?.method ?? 'GET') === 'PUT' && url.includes('/settings')) {
+    if ((init?.method ?? 'GET') === 'GET' && url.includes('/settings')) {
       return json({
         companyId: 'c1',
         settings: { surveyFrequency: 'quarterly', microclimateEnabled: true, aiInsightsEnabled: aiEnabled, anonymousSurveys: true, dataRetentionDays: 730, timezone: 'UTC', language: 'es' },

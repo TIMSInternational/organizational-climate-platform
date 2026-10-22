@@ -36,6 +36,7 @@ import { CanvasSelect, Field, IconBox, LinkCard, Panel } from './parts'
 import CompanyServiceLicensesPanel from './CompanyServiceLicensesPanel'
 import { useSuperCompanyDetailModel, type SuperCompanyDetailModel } from './useSuperCompanyDetailModel'
 import ResultBandsCard from '../settings/ResultBandsCard'
+import CredentialModeCard from '../settings/CredentialModeCard'
 import { bandsChanged, bandsDraftOf, bandsOut, judgeBands, type BandsDraft } from '../settings/bandsDraft'
 import { fromWire, toWire } from '../../../result-bands/api'
 import { rememberResultBands } from '../../../result-bands/useResultBands'
@@ -204,6 +205,17 @@ function DetailForm({ model, onSaved }: { model: SuperCompanyDetailModel; onSave
       <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-12">
         <div className="flex min-w-0 flex-col gap-4 xl:col-span-7">
           <SurveysCard model={model} draft={draft} setDraft={setDraft} />
+          {initialSettings && draft && (
+            <CredentialModeCard
+              saved={initialSettings.credentialMode}
+              value={draft.credentialMode}
+              disabled={saving}
+              onChange={(credentialMode) => {
+                setNothing(false)
+                setDraft({ ...draft, credentialMode })
+              }}
+            />
+          )}
           {savedBands && bands && (
             <ResultBandsCard
               draft={bands}

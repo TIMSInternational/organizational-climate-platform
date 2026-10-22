@@ -3634,6 +3634,10 @@
     "custom": "Custom Survey",
     "serviceLabel": "Licensed service",
     "serviceNone": "None — this survey does not use a licence",
+    "credentialModeLabel": "How people sign in",
+    "credentialModeCompany": "This company uses “{mode}”.",
+    "credentialModeInheritUnknown": "Company default",
+    "credentialModeHelp": "Fixed when the survey is created and cannot be changed afterwards. “One account for every survey”: each person uses the same username and password for all of them. “One code per survey”: each person gets a username and password for this survey alone when invited to it.",
     "serviceGeneralClimate": "General climate",
     "serviceOrganizationalCulture": "Organizational culture",
     "serviceMicroclimate": "Microclimate",
@@ -4655,7 +4659,10 @@
           "label": "Mass invite with sign-in details",
           "help": "The platform generates a username and password for each person and emails them with the link. The demographics in your file are already on the account, so the survey never asks for them."
         },
-        "approveCredentials": "Create accounts and email sign-in details"
+        "approveCredentials": "Create accounts and email sign-in details",
+        "perSurveyLabel": "Create the accounts without sending email",
+        "perSurveyHelp": "This company issues sign-in details per survey: an account is created for each person and nothing is sent now. Each person will get a username and password for each survey when invited to that survey.",
+        "approvePerSurvey": "Create the accounts"
       },
       "validateFirst": "Validate the rows before creating invitations.",
       "validateFirstCredentials": "Validate the rows before creating the accounts.",
@@ -4846,7 +4853,8 @@
         "not_a_spreadsheet": "This file could not be read as a spreadsheet. If it is an old Excel file (.xls), save it as .xlsx or .csv and upload it again.",
         "empty_file": "The file has no rows. Check that you chose the right file.",
         "no_file": "No file arrived. Choose it again.",
-        "bad_mapping": "The adjusted mapping could not be read. Go back and upload the file again."
+        "bad_mapping": "The adjusted mapping could not be read. Go back and upload the file again.",
+        "credentials_not_available_per_survey": "This company issues sign-in details per survey, so it does not allow a mass invite with sign-in details. No account was created. The option has been switched to “Create the accounts without sending email”: validate again and approve."
       }
     },
     "userManagement": "User Management",
@@ -5092,6 +5100,17 @@
     "floorExplanation": "No role, including the account owner, can view a result computed from fewer than {threshold} responses. Raising it is allowed; lowering it is not, and the control says so rather than failing silently.",
     "floorLockedHint": "Fixed at {threshold}. A higher floor is accepted; a lower one is refused.",
     "settingsUnavailable": "Reporting settings could not be loaded.",
+    "credentialMode": {
+      "heading": "How people sign in",
+      "meta": "How this company’s people get their sign-in details for surveys.",
+      "current": "Current mode: {mode}",
+      "appliesToNew": "A change applies only to surveys created after you save it. Existing surveys keep the mode they were created with.",
+      "pending": "Once saved, surveys created from then on will use “{mode}”.",
+      "sharedLabel": "One account for every survey",
+      "sharedHelp": "Each person gets one username and password, once, and uses them to answer every survey.",
+      "perSurveyLabel": "One code per survey",
+      "perSurveyHelp": "Each person gets a different username and password for each survey, when invited to that survey."
+    },
     "editReporting": "Edit reporting",
     "enabled": "Enabled",
     "disabled": "Disabled",
