@@ -25,6 +25,16 @@ describe('the respondent surface', () => {
   })
 
   /**
+   * G26. The two destinations the product links an employee to from outside the shell:
+   * the preferences link in every notification email's footer, and each Mis tareas row's
+   * plan. Before this they bounced to the dashboard.
+   */
+  it('admits the preferences link from the email footer and the plan behind a task', () => {
+    expect(respondentMayReach('/settings/notifications')).toBe(true)
+    expect(respondentMayReach('/tracking/planes/7d1c2f7e-3b7a-4f37-9a43-6c9f3c7a1b52')).toBe(true)
+  })
+
+  /**
    * `/surveys/my` is the one that a prefix check would wave through, and it is exactly
    * the page the workspace used to link to twice. Pattern matching, not `startsWith`.
    */
@@ -33,8 +43,9 @@ describe('the respondent surface', () => {
       '/surveys/my',
       '/profile',
       '/settings/privacy',
-      '/settings/notifications',
       '/notifications',
+      '/tracking/planes',
+      '/tracking/tablero',
       '/admin/companies',
       '/results',
       '/action-plans',

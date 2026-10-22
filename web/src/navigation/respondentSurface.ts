@@ -32,11 +32,34 @@ import { matchesRoute, reachableRoutes } from './roleCapabilities'
  * ESPH does not use the tracking module and nothing links to that page for them, so it
  * costs them nothing. Removing it would lock a CLIO/PROCOMER employee out of their own
  * task list, which is a different client's product and not what this rule is about.
+ *
+ * ## Two links the product itself hands an employee (G26, 2026-10-22)
+ *
+ * The set was "pages the shell offers", and two links reach an employee from OUTSIDE the
+ * shell. Both landed on `/dashboard` -- measured in `RequireAuth.test.tsx` before this
+ * change -- so following them did nothing the reader could understand:
+ *
+ * - `/settings/notifications`: the footer of EVERY notification email reads "Gestiona tus
+ *   preferencias de notificación" and links here (`NotificationEmailComposer.PreferencesPath`).
+ *   It is the opt-out for mail the employee is receiving; a link to it that silently opens
+ *   the dashboard is a broken unsubscribe. `GET/PUT /notifications/preferences` resolve the
+ *   caller from the token and take no user id.
+ * - `/tracking/planes/:id`: every row of Mis tareas links to its plan. `GET
+ *   /api/planes-accion/{id}` admits the responsable and every involucrado read-only
+ *   (`PlanAccessHandler`) -- the same predicate `MisTareasAsync` lists by, so every row
+ *   the employee is shown opens. A plan they are not named on is refused by the API and
+ *   the page says so (`forbidden`), which is the API's line, not a wider one.
+ *
+ * What did NOT change is the 2026-10-18 ruling on the SHELL: no rail, no account menu, no
+ * link in the strip to either page (`AdminLayout.test.tsx` still asserts it). Reachable
+ * from the link someone was mailed is not the same as offered while they answer a survey.
  */
 export const RESPONDENT_SURFACE: readonly string[] = [
   '/dashboard',
   '/surveys/:id/respond',
   '/tracking/mis-tareas',
+  '/tracking/planes/:id',
+  '/settings/notifications',
 ]
 
 /** The role this rule applies to. `Roles.cs` spells it exactly this way. */
