@@ -638,7 +638,7 @@ function BrandCard({
       {draft === null ? (
         <p className="m-0 text-xs text-fg-secondary">{t('companySettings.settingsUnavailable')}</p>
       ) : (
-        <div className="flex flex-wrap items-start gap-4 sm:flex-nowrap">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
           <div
             data-slot="logo-box"
             className="flex h-22 w-28 shrink-0 flex-col items-center justify-center gap-1.5 overflow-hidden rounded-xl border border-dashed border-line-default text-center text-2xs text-fg-tertiary"
