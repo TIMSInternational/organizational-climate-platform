@@ -30,10 +30,12 @@
     "settings": {
       "invitationCustomSubject": "Your invitation",
       "invitationCustomMessage": "Please answer.",
-      "anonymous": false,
+      "anonymous": true,
       "selfDeclaredDemographics": true,
-      "collectParticipantIdentity": true
-    }
+      "collectParticipantIdentity": true,
+      "credentialMode": "per_survey"
+    },
+    "userIds": []
   },
   "GET /surveys/s1/distribution": {
     "id": "dist-1",
@@ -50,14 +52,15 @@
     "uniqueVisitors": 219,
     "lastAccessedAt": "2026-08-17T18:22:00Z",
     "invitations": {
-      "total": 208,
-      "pending": 4,
-      "sent": 61,
-      "opened": 33,
-      "started": 12,
-      "completed": 96,
-      "revoked": 2,
-      "expired": 0
+      "total": 6,
+      "pending": 6,
+      "sent": 0,
+      "opened": 0,
+      "started": 0,
+      "completed": 0,
+      "revoked": 0,
+      "expired": 0,
+      "withCode": 5
     },
     "anonymity": {
       "anonymous": false,
@@ -75,64 +78,68 @@
         "surveyId": "s1",
         "userId": "u1",
         "email": "ada.lovelace@northwind.example",
-        "status": "opened",
+        "status": "pending",
         "isExpired": false,
-        "sentAt": "2026-08-01T09:00:00Z",
-        "openedAt": "2026-08-01T11:20:00Z",
+        "sentAt": null,
+        "openedAt": null,
         "startedAt": null,
         "completedAt": null,
         "reminderCount": 0,
         "lastReminderSent": null,
         "expiresAt": "2026-09-01T09:00:00Z",
-        "createdAt": "2026-08-01T09:00:00Z"
+        "createdAt": "2026-08-01T09:00:00Z",
+        "hasCode": true
       },
       {
         "id": "i2",
         "surveyId": "s1",
         "userId": "u2",
         "email": "grace.hopper@northwind.example",
-        "status": "opened",
+        "status": "pending",
         "isExpired": false,
-        "sentAt": "2026-08-01T09:00:00Z",
-        "openedAt": "2026-08-02T08:05:00Z",
+        "sentAt": null,
+        "openedAt": null,
         "startedAt": null,
         "completedAt": null,
         "reminderCount": 1,
         "lastReminderSent": "2026-08-09T09:00:00Z",
         "expiresAt": "2026-09-01T09:00:00Z",
-        "createdAt": "2026-08-01T09:00:00Z"
+        "createdAt": "2026-08-01T09:00:00Z",
+        "hasCode": true
       },
       {
         "id": "i3",
         "surveyId": "s1",
         "userId": "u3",
         "email": "alan.turing@northwind.example",
-        "status": "opened",
+        "status": "pending",
         "isExpired": false,
-        "sentAt": "2026-08-01T09:00:00Z",
-        "openedAt": "2026-08-03T14:41:00Z",
-        "startedAt": null,
-        "completedAt": null,
-        "reminderCount": 2,
-        "lastReminderSent": "2026-08-14T09:00:00Z",
-        "expiresAt": "2026-09-01T09:00:00Z",
-        "createdAt": "2026-08-01T09:00:00Z"
-      },
-      {
-        "id": "i4",
-        "surveyId": "s1",
-        "userId": "u4",
-        "email": "katherine.johnson@northwind.example",
-        "status": "sent",
-        "isExpired": false,
-        "sentAt": "2026-08-01T09:00:00Z",
+        "sentAt": null,
         "openedAt": null,
         "startedAt": null,
         "completedAt": null,
         "reminderCount": 2,
         "lastReminderSent": "2026-08-14T09:00:00Z",
         "expiresAt": "2026-09-01T09:00:00Z",
-        "createdAt": "2026-08-01T09:00:00Z"
+        "createdAt": "2026-08-01T09:00:00Z",
+        "hasCode": true
+      },
+      {
+        "id": "i4",
+        "surveyId": "s1",
+        "userId": "u4",
+        "email": "katherine.johnson@northwind.example",
+        "status": "pending",
+        "isExpired": false,
+        "sentAt": null,
+        "openedAt": null,
+        "startedAt": null,
+        "completedAt": null,
+        "reminderCount": 2,
+        "lastReminderSent": "2026-08-14T09:00:00Z",
+        "expiresAt": "2026-09-01T09:00:00Z",
+        "createdAt": "2026-08-01T09:00:00Z",
+        "hasCode": false
       },
       {
         "id": "i5",
@@ -148,41 +155,45 @@
         "reminderCount": 0,
         "lastReminderSent": null,
         "expiresAt": "2026-09-04T09:00:00Z",
-        "createdAt": "2026-08-15T16:30:00Z"
+        "createdAt": "2026-08-15T16:30:00Z",
+        "hasCode": true
       },
       {
         "id": "i6",
         "surveyId": "s1",
         "userId": "u6",
         "email": "dorothy.vaughan@northwind.example",
-        "status": "revoked",
+        "status": "pending",
         "isExpired": false,
-        "sentAt": "2026-08-01T09:00:00Z",
+        "sentAt": null,
         "openedAt": null,
         "startedAt": null,
         "completedAt": null,
         "reminderCount": 0,
         "lastReminderSent": null,
         "expiresAt": "2026-09-01T09:00:00Z",
-        "createdAt": "2026-08-01T09:00:00Z"
+        "createdAt": "2026-08-01T09:00:00Z",
+        "hasCode": true
       }
     ],
     "summary": {
-      "total": 208,
-      "pending": 4,
-      "sent": 61,
-      "opened": 141,
+      "total": 6,
+      "pending": 6,
+      "sent": 0,
+      "opened": 0,
       "started": 0,
       "completed": 0,
-      "revoked": 2,
-      "expired": 0
+      "revoked": 0,
+      "expired": 0,
+      "withCode": 5
     },
     "anonymity": {
       "anonymous": false,
       "highestRecordableState": "completed",
       "suppressedStates": [],
       "guarantee": "El seguimiento llega hasta el final: de cada invitación se registra cuándo se abrió, cuándo se empezó y el día en que se completó. Nunca se guarda qué respondió nadie."
-    }
+    },
+    "credentialMode": "per_survey"
   },
   "GET /admin/departments": {
     "departments": [
@@ -277,7 +288,8 @@
     "email": "ada.lovelace@northwind.example",
     "role": "super_admin",
     "companyId": "11111111-1111-1111-1111-111111111111",
-    "companyName": "Northwind Logistics", "companyLogoUrl": null
+    "companyName": "Northwind Logistics",
+    "companyLogoUrl": null
   },
   "GET /surveys/*/participation": {
     "surveyId": "x",

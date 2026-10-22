@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useTranslation, type Locale } from '../../../../i18n'
+import { useTranslation } from '../../../../i18n'
 import { useCompanyScope } from '../../../../company-context'
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { listDepartments, type Department } from '../../../org-structure/api/departments'
@@ -14,24 +14,17 @@ import {
 import {
   createSurveyInvitations,
   getSurveyDistribution,
+  isPerSurvey,
   listSurveyInvitations,
   regenerateSurveyLink,
-  resendSurveyInvitation,
   revokeSurveyInvitation,
   revokeSurveyLink,
-  sendSurveyReminders,
   updateSurveyDistribution,
   type SurveyAudienceSelection,
   type SurveyDistributionDetail,
+  type SurveyInvitationBatchResult,
   type SurveyInvitationList,
 } from '../../api/surveyDistribution'
-import {
-  getSurveyInvitationCopy,
-  saveSurveyInvitationCopy,
-  type InvitationCopyByLocale,
-  type InvitationCopyField,
-  type SurveyInvitationCopy,
-} from '../../api/surveyInvitationCopy'
 
 export interface DistributionModel {
   survey: SurveyDetail
@@ -50,31 +43,49 @@ export type DistributionState =
   | { status: 'error'; message: string }
   | { status: 'ready'; model: DistributionModel }
 
-/** The invitation's own words, read on demand: the editor is a dialog most visits never open. */
-export type InvitationCopyState =
-  | { status: 'idle' }
-  | { status: 'loading' }
-  | { status: 'error' }
-  | { status: 'ready'; context: SurveyInvitationCopy; draft: InvitationCopyByLocale }
+/**
+ * Calls one send may make before it gives up on its own. 100 keys a call (`MaxCredentialBatch`)
+ * makes this 5,000 people -- eight times ESPH's 617 -- so it is a guard against a server that
+ * keeps answering "remaining" without progress, never a limit anybody meets.
+ */
+export const MAX_SEND_CALLS = 50
 
-/** Every write the page offers — each one the previous page's (`pages/SurveyDistributionPage.tsx`). */
+/** A send in flight: keys mailed so far over the people who held none when it started. */
+export interface SendProgress {
+  done: number
+  /** Null until the first call answers: before that nobody knows how many still need a key. */
+  total: number | null
+}
+
+/**
+ * What one press of "Enviar" did, summed over every call it made — the server's numbers, not the
+ * page's: `issued` is `credentialsIssued`, `remaining` is the last call's `remaining`.
+ */
+export type SendOutcome =
+  | {
+      kind: 'per_survey'
+      issued: number
+      /** Null when no call answered at all: then nobody knows how many still need a key. */
+      remaining: number | null
+      /** Every address whose mail failed during this send, once each. */
+      failedEmails: string[]
+      /** A call failed: the send stopped with people still to reach. Running it again resumes. */
+      stopped: boolean
+    }
+  | { kind: 'shared'; created: number; skipped: number }
+
+/** Every write the page offers. */
 export interface DistributionActions {
   invite: (selection: SurveyAudienceSelection) => void
-  remind: () => void
   createLink: () => void
   regenerateLink: () => void
   revokeLink: () => void
-  resendInvitation: (invitationId: string) => void
   revokeInvitation: (invitationId: string) => void
   /** Turns the public link's self-declared demographic questions on or off. */
   setSelfDeclaredDemographics: (next: boolean) => void
   /** Turns "ask who is answering" on the public link on or off. */
   setCollectParticipantIdentity: (next: boolean) => void
   setOneSessionOnly: (next: boolean) => void
-  openCopy: () => void
-  editCopy: (locale: Locale, field: InvitationCopyField, text: string) => void
-  /** Resolves true once saved, so the dialog closes on success and stays open on a failure. */
-  saveCopy: () => Promise<boolean>
 }
 
 /**
@@ -82,9 +93,11 @@ export interface DistributionActions {
  * redesigned. The reads and writes are the previous page's (`pages/SurveyDistributionPage.tsx`,
  * kept as the wiring reference): the survey first, because its `companyId` decides whether the
  * directory may be asked for at all; then the distribution (null on 404) and the invitation list
- * in the reader's language, whose `anonymity.guarantee` is the sentence the server writes. The
- * share link's replace and delete, each invitation's resend and revoke, and the invitation's own
- * text are the old page's writes too, so nothing the old route reached is lost at this one.
+ * in the reader's language, whose `anonymity.guarantee` is the sentence the server writes.
+ *
+ * Three of the old page's writes are deliberately NOT here, because none of them can do what it
+ * says: the per-invitation resend (the server answers 410 since the invitation email was deleted),
+ * the reminder (it answers zeros by design), and the invitation's own text (no email reads it).
  */
 export function useDistributionModel(surveyId: string) {
   const { t, locale } = useTranslation()
@@ -96,7 +109,8 @@ export function useDistributionModel(surveyId: string) {
   const [busyInvitationId, setBusyInvitationId] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
-  const [copy, setCopy] = useState<InvitationCopyState>({ status: 'idle' })
+  const [progress, setProgress] = useState<SendProgress | null>(null)
+  const [outcome, setOutcome] = useState<SendOutcome | null>(null)
 
   const load = useCallback(async () => {
     setState({ status: 'loading' })
@@ -139,6 +153,7 @@ export function useDistributionModel(surveyId: string) {
       setBusy(true)
       setActionError(null)
       setNotice(null)
+      setOutcome(null)
       try {
         setNotice(await action())
         if (state.status === 'ready') {
@@ -163,6 +178,62 @@ export function useDistributionModel(surveyId: string) {
     [baseUrl, locale, state, surveyId, t],
   )
 
+  const send = async (selection: SurveyAudienceSelection) => {
+    if (state.status !== 'ready') return
+    const perSurvey = isPerSurvey(state.model.invitations)
+    setBusy(true)
+    setActionError(null)
+    setNotice(null)
+    setOutcome(null)
+    setProgress(perSurvey ? { done: 0, total: null } : null)
+    let issued = 0
+    let remaining: number | null = null
+    let total: number | null = null
+    let created = 0
+    let skipped = 0
+    const failed = new Set<string>()
+    let stopped = false
+    try {
+      for (let call = 0; call < MAX_SEND_CALLS; call += 1) {
+        const result: SurveyInvitationBatchResult = await createSurveyInvitations(baseUrl, surveyId, selection)
+        created += result.created
+        skipped += result.skippedUserIds.length
+        if (!perSurvey) break
+        issued += result.credentialsIssued
+        remaining = result.remaining ?? 0
+        // Everyone who held no key when this started: this call's keys plus everyone still
+        // without one -- which counts the ones whose mail just failed, as it should.
+        if (total === null) total = result.credentialsIssued + remaining
+        for (const email of result.credentialsNotSentEmails ?? []) failed.add(email)
+        setProgress({ done: issued, total })
+        if (remaining === 0 || result.credentialsIssued === 0) break
+      }
+    } catch {
+      // The server's message is English and about one call; the page says what it means for
+      // the whole send, which is that it can be resumed.
+      stopped = true
+    }
+    setOutcome(
+      perSurvey
+        ? { kind: 'per_survey', issued, remaining, failedEmails: [...failed].sort(), stopped }
+        : stopped
+          ? null
+          : { kind: 'shared', created, skipped },
+    )
+    if (!perSurvey && stopped) setActionError(t('surveys.next.distribution.send.sharedFailed'))
+    setProgress(null)
+    try {
+      const [distribution, invitations] = await Promise.all([
+        getSurveyDistribution(baseUrl, surveyId),
+        listSurveyInvitations(baseUrl, surveyId, {}, locale),
+      ])
+      setState({ status: 'ready', model: { ...state.model, distribution, invitations } })
+    } catch {
+      // The outcome above is already true; a failed re-read leaves the previous counts on screen.
+    }
+    setBusy(false)
+  }
+
   const perInvitation = (invitationId: string, act: (id: string) => Promise<unknown>) => {
     setBusyInvitationId(invitationId)
     void run(async () => {
@@ -172,21 +243,22 @@ export function useDistributionModel(surveyId: string) {
   }
 
   const actions: DistributionActions = {
-    /** `POST /surveys/{id}/invitations`. "Queued", never "sent": the call writes notification rows. */
-    invite: (selection) =>
-      void run(async () => {
-        const result = await createSurveyInvitations(baseUrl, surveyId, selection)
-        const skipped = result.requested - result.created
-        return skipped > 0
-          ? t('surveys.distribution.invitationsQueuedWithSkips', { count: result.created, skipped })
-          : t('surveys.distribution.invitationsQueued', { count: result.created })
-      }),
-    /** `POST /surveys/{id}/invitations/reminders` — only to those who have not answered. */
-    remind: () =>
-      void run(async () => {
-        const result = await sendSurveyReminders(baseUrl, surveyId)
-        return t('surveys.distribution.remindersQueued', { count: result.queued, skipped: result.skippedTooSoon })
-      }),
+    /**
+     * `POST /surveys/{id}/invitations`, repeated until nobody is left (#G9).
+     *
+     * `per_survey` mints and mails at most 100 keys per call -- each costs a bcrypt hash and a
+     * message against App Runner's 120 s request ceiling -- and answers how many people in the
+     * audience still hold none. So the SAME request is sent again while that is above zero and
+     * the last call made progress. Stopping on a call that issued nothing is what ends a send
+     * whose last few addresses refuse every message, instead of retrying them for ever.
+     *
+     * It is resumable by construction: the server skips anybody who already holds a key, so
+     * pressing it again after a failure -- or after the page was closed mid-send -- carries on
+     * from where it stopped and mails nobody twice.
+     *
+     * `shared` mints invitation rows only, in one call, and mails nothing.
+     */
+    invite: (selection) => void send(selection),
     /** `PUT /surveys/{id}/distribution` with `accessType: 'public'` mints the share link. */
     createLink: () =>
       void run(async () => {
@@ -205,7 +277,6 @@ export function useDistributionModel(surveyId: string) {
         await revokeSurveyLink(baseUrl, surveyId)
         return null
       }),
-    resendInvitation: (invitationId) => perInvitation(invitationId, (id) => resendSurveyInvitation(baseUrl, surveyId, id)),
     revokeInvitation: (invitationId) => perInvitation(invitationId, (id) => revokeSurveyInvitation(baseUrl, surveyId, id)),
     /**
      * `PUT /surveys/{id}` with only `settings.selfDeclaredDemographics`. Legal while the
@@ -239,29 +310,7 @@ export function useDistributionModel(surveyId: string) {
         },
         { refreshSurvey: true },
       ),
-    openCopy: () => {
-      setCopy({ status: 'loading' })
-      getSurveyInvitationCopy(baseUrl, surveyId, locale as Locale)
-        .then((context) => setCopy({ status: 'ready', context, draft: context.copy }))
-        .catch(() => setCopy({ status: 'error' }))
-    },
-    editCopy: (target, field, text) =>
-      setCopy((current) =>
-        current.status !== 'ready'
-          ? current
-          : { ...current, draft: { ...current.draft, [target]: { ...current.draft[target], [field]: { text, authored: true } } } },
-      ),
-    saveCopy: async () => {
-      if (copy.status !== 'ready') return false
-      const { context, draft } = copy
-      return run(async () => {
-        await saveSurveyInvitationCopy(baseUrl, surveyId, draft, context.requiredLocales)
-        const refreshed = await getSurveyInvitationCopy(baseUrl, surveyId, locale as Locale)
-        setCopy({ status: 'ready', context: refreshed, draft: refreshed.copy })
-        return t('surveys.distribution.copySaved')
-      })
-    },
   }
 
-  return { state, reload: load, busy, busyInvitationId, notice, actionError, copy, actions }
+  return { state, reload: load, busy, busyInvitationId, notice, actionError, progress, outcome, actions }
 }

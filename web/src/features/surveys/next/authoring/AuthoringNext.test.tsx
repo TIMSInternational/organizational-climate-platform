@@ -380,17 +380,12 @@ describe('Detalle de encuesta (SurveyDetail artboard)', () => {
 const noop: DistributionActions = {
   invite: () => undefined,
   setOneSessionOnly: () => undefined,
-  remind: () => undefined,
   createLink: () => undefined,
   regenerateLink: () => undefined,
   revokeLink: () => undefined,
-  resendInvitation: () => undefined,
   revokeInvitation: () => undefined,
   setSelfDeclaredDemographics: () => undefined,
   setCollectParticipantIdentity: () => undefined,
-  openCopy: () => undefined,
-  editCopy: () => undefined,
-  saveCopy: async () => true,
 }
 
 const distribution = (
@@ -429,14 +424,14 @@ describe('Distribución (Distribution artboard)', () => {
     expect(screen.getByText('Frase del servidor sobre lo que se registra.').getAttribute('class')).toContain('text-[1.125rem]')
   })
 
-  it('reads 4 of 4 with a working link and nobody invited yet, and keeps naming the audience', () => {
+  it('reads 3 of 3 with a working link and nobody invited yet, and keeps naming the audience', () => {
     // Was 3 of 4 with `invitations: missing`. The share link is a door, so the survey is
     // launchable and the checklist no longer says otherwise -- the change that stopped a
     // link-distributed survey reading "Falta que las invitaciones salgan" forever.
     // The audience line is unchanged: this company HAS a directory, 6 people in two
     // departments, so nothing about it became inapplicable.
     distribution(invitationList())
-    expect(reading('tile-ready')).toBe('4')
+    expect(reading('tile-ready')).toBe('3')
     expect(screen.getByTestId('tile-ready').textContent).toContain('Todo listo para lanzar')
     expect(screen.getByTestId('tile-ready').textContent).not.toContain('Falta que las invitaciones salgan')
     expect(screen.getByTestId('step-invitations').getAttribute('data-state')).toBe('idle')
@@ -493,7 +488,7 @@ describe('Distribución (Distribution artboard)', () => {
 
   it('offers an administrator of another company no way to change the audience, send, or act on an invitation or the link', async () => {
     distribution(invitationList(2), 'company_admin', false)
-    for (const name of [/Cambiar audiencia/, /Enviar invitaciones/, /Enviar recordatorio/, /Más acciones de las invitaciones/, /Acciones de la invitación/]) {
+    for (const name of [/Cambiar audiencia/, /Enviar códigos/, /Registrar la audiencia/, /Acciones de la invitación/]) {
       expect(screen.queryByRole('button', { name })).toBeNull()
     }
     await userEvent.click(screen.getByRole('button', { name: 'Opciones del enlace' }))
@@ -563,45 +558,27 @@ describe('Distribución (Distribution artboard)', () => {
     expect(reading('tile-reach')).toBe('41')
   })
 
-  it('dates the next automatic reminder from the schedule the worker runs, in the artboard\'s words, and never says they go by hand', () => {
-    // Sent 10 Sep, every 3 days: due 13 Sep; the survey closes 10 Oct — 27 days later.
+  it('offers no reminder and promises none: the sweep was deleted and the route answers zeros (G11)', () => {
     distribution(invitationList(2, { sentAt: '2026-09-10T12:00:00Z' }))
-    const text = screen.getByTestId('step-reminders').textContent ?? ''
-    expect(text).toContain(
-      'Ningún recordatorio enviado todavía. Uno programado para el 13 sep, 27 días antes del cierre, solo a quienes no hayan respondido.',
-    )
-    expect(text).not.toContain('a mano')
-    cleanup()
-    // Sent 6 Oct: due 9 Oct, the day before the close.
-    distribution(invitationList(2, { sentAt: '2026-10-06T12:00:00Z' }))
-    expect(screen.getByTestId('step-reminders').textContent).toContain('Uno programado para el 9 oct, un día antes del cierre,')
+    expect(screen.queryByTestId('step-reminders')).toBeNull()
+    expect(screen.queryByRole('button', { name: /Enviar recordatorio/ })).toBeNull()
+    expect(document.body.textContent).not.toContain('Salen solos')
+    expect(document.body.textContent).not.toContain('Recordatorios')
   })
 
-  it('says the reminders are off when the survey turned them off', () => {
-    distribution(invitationList(2, { sentAt: '2026-09-10T15:30:00Z' }), 'company_admin', true, {
-      survey: survey({ settings: { anonymous: false, notificationSendReminders: false, notificationReminderFrequencyDays: 3 } as SurveyDetail['settings'] }),
-    })
-    expect(screen.getByTestId('step-reminders').textContent).toContain('Los recordatorios automáticos están apagados para esta encuesta.')
-  })
-
-  it("offers each invitation's resend and revoke to its administrator, never a resend the server refuses", async () => {
-    const resendInvitation = vi.fn()
-    const list = invitationList(3)
-    list.invitations[1] = { ...list.invitations[1], status: 'completed' }
-    distribution(list, 'company_admin', true, {}, { ...noop, resendInvitation })
+  it("offers each invitation's revoke only: the resend the server answers with a 410 is gone (G11)", async () => {
+    const revokeInvitation = vi.fn()
+    distribution(invitationList(3), 'company_admin', true, {}, { ...noop, revokeInvitation })
     await userEvent.click(screen.getByRole('button', { name: 'Acciones de la invitación de persona0@meridiano.test' }))
-    await userEvent.click(await screen.findByRole('menuitem', { name: 'Reenviar' }))
-    expect(resendInvitation).toHaveBeenCalledWith('i0')
-    await userEvent.click(screen.getByRole('button', { name: 'Acciones de la invitación de persona1@meridiano.test' }))
-    expect((await screen.findByRole('menuitem', { name: 'Reenviar' })).getAttribute('data-disabled')).not.toBeNull()
+    expect((await screen.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual(['Revocar'])
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Revocar' }))
+    expect(revokeInvitation).toHaveBeenCalledWith('i0')
   })
 
-  it("opens the invitation's own text from the invitations step", async () => {
-    const openCopy = vi.fn()
-    distribution(invitationList(), 'company_admin', true, {}, { ...noop, openCopy })
-    await userEvent.click(screen.getByRole('button', { name: 'Más acciones de las invitaciones' }))
-    await userEvent.click(await screen.findByRole('menuitem', { name: 'Texto de la invitación' }))
-    expect(openCopy).toHaveBeenCalledTimes(1)
+  it("no longer offers the invitation's own text, which no email reads (G11)", () => {
+    distribution(invitationList())
+    expect(screen.queryByRole('button', { name: 'Más acciones de las invitaciones' })).toBeNull()
+    expect(document.body.textContent).not.toContain('Texto de la invitación')
   })
 
   it("keeps the Estado column to its chip, as the artboard does: an invitation's menu shows on the row's hover or focus, and always where nothing can hover", async () => {
@@ -634,8 +611,7 @@ describe('Distribución (Distribution artboard)', () => {
     const action = step.querySelector<HTMLElement>('[data-slot="step-action"]')
     expect(action?.className.split(' ')).toEqual(expect.arrayContaining(['col-start-2', 'sm:col-start-3', 'sm:row-start-1', 'sm:flex-col']))
     expect(within(action as HTMLElement).getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent)).toEqual([
-      'Enviar invitaciones',
-      'Más acciones de las invitaciones',
+      'Registrar la audiencia',
     ])
     // The artboard's 14px step title (`text-lg` in this scale; `text-base` is 13px).
     expect(within(step).getByRole('heading', { level: 3 }).className.split(' ')).toContain('text-lg')
@@ -731,13 +707,13 @@ describe('Distribución — the role half of the rule, through the page model', 
   it('offers an administrator of the survey company the audience and send controls (the control)', async () => {
     page('company_admin')
     expect(await screen.findByRole('button', { name: 'Cambiar audiencia' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /Enviar invitaciones/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Registrar la audiencia/ })).toBeTruthy()
   })
 
   it("offers a leader of the survey's own company no audience, send, reminder or link control", async () => {
     page('leader')
     await screen.findByTestId('step-audience')
-    for (const name of [/Cambiar audiencia/, /Enviar invitaciones/, /Enviar recordatorio/, /Crear enlace/, /Más acciones de las invitaciones/]) {
+    for (const name of [/Cambiar audiencia/, /Enviar invitaciones/, /Enviar códigos/, /Registrar la audiencia/, /Enviar recordatorio/, /Crear enlace/]) {
       expect(screen.queryByRole('button', { name })).toBeNull()
     }
     expect(usersApi.listUsers).not.toHaveBeenCalled()

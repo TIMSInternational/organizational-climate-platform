@@ -115,6 +115,12 @@ export interface SurveyInvitationSummary {
   completed: number
   revoked: number
   expired: number
+  /**
+   * Invitees (revoked ones excluded) who hold a key for this survey -- `per_survey` only; 0 on
+   * a `shared` survey. A key exists only once its mail went: a key whose send failed is
+   * withdrawn (`CreateInvitationsAsync`). Optional because an API older than it does not send it.
+   */
+  withCode?: number
 }
 
 export interface SurveyDistributionDetail {
@@ -172,6 +178,8 @@ export interface SurveyInvitationDetail {
   lastReminderSent: string | null
   expiresAt: string
   createdAt: string
+  /** The invitee holds a key for this survey (`per_survey`). False on a `shared` survey. */
+  hasCode?: boolean
 }
 
 /**
@@ -189,10 +197,23 @@ export function invitationIsFinished(
   )
 }
 
+/** `CredentialModes`: one account that opens every survey, or one key per person per survey. */
+export type CredentialMode = 'shared' | 'per_survey'
+
 export interface SurveyInvitationList {
   invitations: SurveyInvitationDetail[]
   summary: SurveyInvitationSummary
   anonymity: SurveyAnonymityGuarantee
+  /**
+   * The survey's credential mode -- what an invitation means on it. A plain string on the read
+   * shape (see the module comment); `isPerSurvey` is the one place it is compared.
+   */
+  credentialMode?: string
+}
+
+/** Whether invitations on this survey carry a per-survey key. Anything else is `shared`. */
+export function isPerSurvey(list: Pick<SurveyInvitationList, 'credentialMode'>): boolean {
+  return list.credentialMode === 'per_survey'
 }
 
 export interface SurveyInvitationBatchResult {
@@ -200,7 +221,10 @@ export interface SurveyInvitationBatchResult {
   created: number
   invitationIds: string[]
   skippedUserIds: string[]
-  /** Rows added to `notifications`, **not** mails delivered. Delivery is the sweep's job. */
+  /**
+   * Always 0: the survey invitation email was deleted on 2026-10-19 and nothing composes one.
+   * Kept because the API still sends it; no screen should print it.
+   */
   notificationsQueued: number
   /**
    * How many of the invitations just created are addressed to a domain that can never receive
@@ -211,6 +235,18 @@ export interface SurveyInvitationBatchResult {
    */
   undeliverableRecipients: number
   note: string | null
+  /** `per_survey`: keys minted AND mailed by this call (one event -- an unsent key is withdrawn). */
+  credentialsIssued: number
+  /** `per_survey`: keys whose mail did not go and were withdrawn; those people hold no key. */
+  credentialsNotSent: number
+  /**
+   * `per_survey`: people in the resolved audience still holding no key after this call. The
+   * server processes at most 100 per call, so the client repeats the same request while this is
+   * above 0 and the last call made progress. Always 0 in `shared` mode.
+   */
+  remaining?: number
+  /** The addresses behind `credentialsNotSent`. */
+  credentialsNotSentEmails?: string[] | null
 }
 
 export interface SurveyReminderResult {

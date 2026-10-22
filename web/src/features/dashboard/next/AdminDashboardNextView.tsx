@@ -798,10 +798,12 @@ function AttentionRow({
           count: item.remindersSent ?? 0,
         },
       )}
-      // A reminder is a distribution write on the survey, gated like authoring it.
+      // Not "Enviar recordatorio": there is no reminder to send. The sweep was deleted with the
+      // invitation email and the manual route answers zeros by design (#G11). What the page it
+      // leads to CAN do is show who has not answered -- the roster -- so that is what it says.
       action={
         capabilities.canAuthorSurveys
-          ? { label: t('dashboard.next.sendReminder'), href: `/surveys/${survey.id}/distribution` }
+          ? { label: t('surveys.next.distribution.send.seeWhoIsMissing'), href: `/surveys/${survey.id}/distribution` }
           : undefined
       }
     />
