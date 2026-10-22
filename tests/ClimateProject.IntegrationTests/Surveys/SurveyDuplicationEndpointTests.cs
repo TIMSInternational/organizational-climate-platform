@@ -227,6 +227,35 @@ public class SurveyDuplicationEndpointTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_duplicate_of_a_closed_survey_keeps_its_past_window_and_launches_once_the_dates_move()
+    {
+        // The path the survey detail's date editor exists for (audit G16): the copy carries the
+        // source's window, which is behind us, and PUT /surveys/{id} with the two instants the
+        // editor sends is what makes it runnable again.
+        var client = await AdminAsync();
+        var original = await SurveyTestHarness.CreateSurveyAsync(client, BilingualRequest() with
+        {
+            StartDate = DateTimeOffset.UtcNow.AddDays(-20),
+            EndDate = DateTimeOffset.UtcNow.AddDays(-5),
+        });
+        (await SurveyTestHarness.SetStatusAsync(client, original.Id, SurveyStatuses.Active)).EnsureSuccessStatusCode();
+        (await SurveyTestHarness.SetStatusAsync(client, original.Id, SurveyStatuses.Closed)).EnsureSuccessStatusCode();
+
+        var copy = await DuplicateAsync(client, original.Id);
+        Assert.True(copy.EndDate < DateTimeOffset.UtcNow);
+
+        var start = DateTimeOffset.UtcNow.AddMinutes(-1);
+        var end = DateTimeOffset.UtcNow.AddDays(14);
+        var moved = await client.PutAsJsonAsync($"/surveys/{copy.Id}", new UpdateSurveyRequest(StartDate: start, EndDate: end));
+        Assert.Equal(HttpStatusCode.OK, moved.StatusCode);
+        var detail = (await moved.Content.ReadFromJsonAsync<SurveyDetail>())!;
+        Assert.Equal(end.ToUnixTimeSeconds(), detail.EndDate.ToUnixTimeSeconds());
+
+        var activate = await SurveyTestHarness.SetStatusAsync(client, copy.Id, SurveyStatuses.Active);
+        Assert.Equal(HttpStatusCode.OK, activate.StatusCode);
+    }
+
+    [Fact]
     public async Task Conditional_logic_is_rewired_to_the_copys_own_questions()
     {
         var client = await AdminAsync();
