@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using ClimateProject.Application.Email;
 using ClimateProject.Application.Localization;
@@ -80,10 +81,17 @@ public static class CredentialsEmailComposer
     /// passwords, which is how somebody signs in to the wrong survey with the right
     /// password and is told their details are invalid.</para>
     /// </param>
+    /// <param name="surveyClosesOn">
+    /// The day the survey closes, already converted to the COMPANY's zone by the caller
+    /// (<see cref="ClimateProject.Application.Surveys.SurveyCredentialIssuance.MailFor"/>) --
+    /// a day, not an instant, because the composer has no zone and a UTC date is the R2 defect
+    /// (a close at or after 18:00 in Costa Rica is the next day in UTC). Printed only beside a
+    /// <paramref name="surveyName"/>: "the survey closes" with no survey named says nothing.
+    /// </param>
     public static EmailMessage Compose(
         string toEmail, string? recipientName, string username, string password, string loginUrl,
         string? companyLanguage, CredentialsEmailPurpose purpose, EmailBrand? brand = null,
-        string? surveyName = null)
+        string? surveyName = null, DateOnly? surveyClosesOn = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(toEmail);
         ArgumentException.ThrowIfNullOrWhiteSpace(username);
@@ -102,23 +110,29 @@ public static class CredentialsEmailComposer
         // Every link in the message carries the username; see `WithUsername`.
         var signInUrl = WithUsername(loginUrl, username);
 
+        // One survey or every survey. Blank counts as none, so a title that resolved to an
+        // empty string is sent the `shared` copy rather than "la encuesta «»".
+        var survey = string.IsNullOrWhiteSpace(surveyName)
+            ? null
+            : new SurveyScope(surveyName.Trim(), surveyClosesOn);
+
         var html = new StringBuilder();
-        AppendHtml(html, first, username, password, signInUrl, brand);
+        AppendHtml(html, first, survey, username, password, signInUrl, brand);
         if (second is not null)
         {
             html.Append("""<hr style="border:none;border-top:1px solid #e4e7eb;margin:28px 0;">""");
-            AppendHtml(html, second, username, password, signInUrl, brand);
+            AppendHtml(html, second, survey, username, password, signInUrl, brand);
         }
 
         html.Append(EmailBranding.Footer(EmailBranding.Escape(
             second is null ? first.Ignore : $"{first.Ignore} / {second.Ignore}")));
 
         var text = new StringBuilder();
-        AppendText(text, first, username, password, signInUrl);
+        AppendText(text, first, survey, brand, username, password, signInUrl);
         if (second is not null)
         {
             text.Append("\n--\n\n");
-            AppendText(text, second, username, password, signInUrl);
+            AppendText(text, second, survey, brand, username, password, signInUrl);
         }
 
         return new EmailMessage(
@@ -126,8 +140,8 @@ public static class CredentialsEmailComposer
             // Null, so the mail is addressed to the bare address. See `recipientName`.
             ToName: null,
             EmailMessage.ToHeaderValue(second is null
-                ? Subject(first, surveyName, brand)
-                : $"{Subject(first, surveyName, brand)} / {Subject(second, surveyName, brand)}"),
+                ? Subject(first, survey, brand)
+                : $"{Subject(first, survey, brand)} / {Subject(second, survey, brand)}"),
             // The credit closes the text part too, in the language the HTML document is in.
             text.Append("\n\n").Append(EmailBranding.Credit(single ?? ContentLanguages.FallbackLocale)).ToString(),
             EmailBranding.Document(single ?? ContentLanguages.FallbackLocale, html.ToString(), brand));
@@ -147,9 +161,9 @@ public static class CredentialsEmailComposer
     /// The company's own name, never the product's: `brand.CompanyName` is what the tenant
     /// is called, and `EmailBranding.ProductName` is what WE are called.
     /// </remarks>
-    private static string Subject(CredentialsCopy copy, string? surveyName, EmailBrand? brand)
+    private static string Subject(CredentialsCopy copy, SurveyScope? survey, EmailBrand? brand)
     {
-        if (string.IsNullOrWhiteSpace(surveyName))
+        if (survey is null)
         {
             return copy.Subject;
         }
@@ -157,9 +171,94 @@ public static class CredentialsEmailComposer
         var prefix = copy.SubjectPrefix;
         var company = brand?.CompanyName;
         return string.IsNullOrWhiteSpace(company)
-            ? $"{prefix} {surveyName.Trim()}"
-            : $"{prefix} {surveyName.Trim()} \u2014 {company.Trim()}";
+            ? $"{prefix} {survey.Name}"
+            : $"{prefix} {survey.Name} \u2014 {company.Trim()}";
     }
+
+    /// <summary>
+    /// The body, naming the survey these details open when they open exactly one, and the day
+    /// it closes when that is known.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The subject has named the survey since #607, and that is what tells two messages apart
+    /// in an INBOX. It is not what tells them apart once opened: measured on 2026-10-20 by
+    /// reading the mail the product actually composed, both messages to one person opened
+    /// "Tu acceso a OCC — Organizational Climate Check" and said "te invita a responder una
+    /// encuesta", so the only difference inside was the code itself (audit 2026-10-22, R3).
+    /// Somebody holding two then has no way to tell which is which, and signing in to the
+    /// wrong survey with the right password is answered "datos inválidos".
+    /// </para>
+    /// <para>
+    /// `{0}` is the survey and `{1}` the closing sentence (or nothing). The format is per copy
+    /// rather than appended generically because a sentence spliced onto the end of an existing
+    /// paragraph reads as an afterthought in one language and as a grammatical error in the
+    /// other. <c>Every_copy_names_the_survey_and_its_close</c> renders all four and fails if a
+    /// placeholder is ever dropped.
+    /// </para>
+    /// </remarks>
+    private static string Body(CredentialsCopy copy, SurveyScope? survey)
+    {
+        if (survey is null)
+        {
+            return copy.Body;
+        }
+
+        var closes = survey.ClosesOn is { } day
+            ? " " + string.Format(CultureInfo.InvariantCulture, copy.ClosesOn, Day(day, copy.Spanish))
+            : string.Empty;
+        return string.Format(CultureInfo.InvariantCulture, copy.SurveyBody, survey.Name, closes);
+    }
+
+    /// <summary>
+    /// The line under the button: what to do with this message. Per mode, because what an
+    /// administrator can do about lost details differs by mode (audit 2026-10-22, R4).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>`shared`</b>: "ask your administrator to send new ones" is true at any time --
+    /// <c>POST /admin/users/{id}/credentials</c> regenerates an account's password, and the
+    /// people screen calls it (<c>ResendCredentials.tsx</c>).
+    /// </para>
+    /// <para>
+    /// <b>`per_survey`</b>: the details are a key to ONE survey, not an account, and the only
+    /// route that replaces one -- <c>POST /surveys/{id}/credentials/{userId}/reissue</c>
+    /// (#620) -- refuses a key that has already signed in (<c>already_signed_in</c>), because
+    /// replacing it would lock out somebody halfway through. So the promise is true only
+    /// BEFORE the first sign-in, and the sentence says exactly that rather than promising a
+    /// replacement the route will refuse.
+    /// </para>
+    /// </remarks>
+    private static string Keep(CredentialsCopy copy, SurveyScope? survey)
+        => survey is null ? copy.Keep : copy.SurveyKeep;
+
+    /// <summary>
+    /// A day the way the respondent screens print one inside a sentence -- what
+    /// <c>Intl.DateTimeFormat(locale, { dateStyle: 'long' })</c> renders: "27 de octubre de
+    /// 2026" and "October 27, 2026".
+    /// </summary>
+    /// <remarks>
+    /// Spelled here rather than by <c>CultureInfo("es-CR")</c>, for the reason
+    /// <c>SurveyExportCopy</c> gives: a culture's month names come from whatever ICU the host
+    /// carries, and a container built with invariant globalization would silently print
+    /// English. This is deterministic and testable.
+    /// </remarks>
+    private static string Day(DateOnly day, bool spanish)
+        => spanish
+            ? $"{day.Day} de {SpanishMonths[day.Month - 1]} de {day.Year}"
+            : $"{EnglishMonths[day.Month - 1]} {day.Day}, {day.Year}";
+
+    private static readonly string[] SpanishMonths =
+    [
+        "enero", "febrero", "marzo", "abril", "mayo", "junio",
+        "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+    ];
+
+    private static readonly string[] EnglishMonths =
+    [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December",
+    ];
 
     /// <summary>
     /// The sign-in link with the username on it, so the field arrives filled.
@@ -193,11 +292,14 @@ public static class CredentialsEmailComposer
     }
 
     private static void AppendHtml(
-        StringBuilder html, CredentialsCopy copy, string username, string password, string loginUrl,
-        EmailBrand? brand)
+        StringBuilder html, CredentialsCopy copy, SurveyScope? survey, string username, string password,
+        string loginUrl, EmailBrand? brand)
     {
-        html.Append(EmailBranding.Heading(copy.Subject));
-        html.Append(EmailBranding.Paragraphs(copy.Body));
+        // The SAME line the inbox showed, not a third variant of it: somebody who clicked
+        // "Tu acceso a Teletrabajo ESPH 2026 — ESPH Ensayo" should find that sentence at the
+        // top of what opens. One builder for both, so they cannot drift apart.
+        html.Append(EmailBranding.Heading(Subject(copy, survey, brand)));
+        html.Append(EmailBranding.Paragraphs(Body(copy, survey)));
         html.Append("""<p style="margin:0 0 16px;font-size:15px;line-height:1.8;">""");
         html.Append(EmailBranding.Escape(copy.UsernameLabel)).Append(": ")
             .Append("""<strong style="font-family:Menlo,Consolas,monospace;font-size:16px;">""").Append(EmailBranding.Escape(username)).Append("</strong><br>");
@@ -205,39 +307,53 @@ public static class CredentialsEmailComposer
             .Append("""<strong style="font-family:Menlo,Consolas,monospace;font-size:16px;">""").Append(EmailBranding.Escape(password)).Append("</strong>");
         html.Append("</p>");
         html.Append(EmailBranding.Button(loginUrl, copy.Cta, brand));
-        html.Append(EmailBranding.Paragraphs(copy.Keep));
+        html.Append(EmailBranding.Paragraphs(Keep(copy, survey)));
     }
 
     private static void AppendText(
-        StringBuilder text, CredentialsCopy copy, string username, string password, string loginUrl)
+        StringBuilder text, CredentialsCopy copy, SurveyScope? survey, EmailBrand? brand,
+        string username, string password, string loginUrl)
     {
-        text.Append(copy.Subject).Append("\n\n");
-        text.Append(copy.Body).Append("\n\n");
+        text.Append(Subject(copy, survey, brand)).Append("\n\n");
+        text.Append(Body(copy, survey)).Append("\n\n");
         text.Append(copy.UsernameLabel).Append(": ").Append(username).Append('\n');
         text.Append(copy.PasswordLabel).Append(": ").Append(password).Append("\n\n");
         text.Append(copy.Cta).Append(": ").Append(loginUrl).Append("\n\n");
-        text.Append(copy.Keep).Append('\n');
+        text.Append(Keep(copy, survey)).Append('\n');
         text.Append(copy.Ignore).Append('\n');
     }
 
+    // The `per_survey` sentences ("SurveyBody", "SurveyKeep") say what one key does: it opens
+    // ONE survey, and it can be replaced only until it is first used. "Estos datos abren solo
+    // esta encuesta" is what lets a person holding two of these tell them apart once opened;
+    // the survey's name in the body says which one this is.
+
     private static readonly CredentialsCopy InvitationEnglish = new(
+        Spanish: false,
         Subject: $"Your access to {EmailBranding.ProductName}",
         SubjectPrefix: "Your access to",
         Body: "Your organisation has invited you to answer a survey. Sign in with the username and password below; your organisational details are already on your account. Thank you for taking part.",
+        SurveyBody: "Your organisation has invited you to answer the survey \u201c{0}\u201d. Sign in with the username and password below; your organisational details are already on your account.{1} Thank you for taking part.",
+        ClosesOn: "The survey closes on {0}.",
         UsernameLabel: "Username",
         PasswordLabel: "Password",
         Cta: "Sign in",
         Keep: "Keep this message: these are your sign-in details. If you lose them, ask your administrator to send new ones.",
+        SurveyKeep: SurveyKeepEnglish,
         Ignore: "If you were not expecting this message you can ignore it.");
 
     private static readonly CredentialsCopy InvitationSpanish = new(
+        Spanish: true,
         Subject: $"Tu acceso a {EmailBranding.ProductName}",
         SubjectPrefix: "Tu acceso a",
         Body: "Tu organización te invita a responder una encuesta. Inicia sesión con el usuario y la contraseña de abajo; tus datos organizacionales ya están en tu cuenta. Gracias por participar.",
+        SurveyBody: "Tu organización te invita a responder la encuesta \u00ab{0}\u00bb. Inicia sesión con el usuario y la contraseña de abajo; tus datos organizacionales ya están en tu cuenta.{1} Gracias por participar.",
+        ClosesOn: "La encuesta cierra el {0}.",
         UsernameLabel: "Usuario",
         PasswordLabel: "Contraseña",
         Cta: "Iniciar sesión",
         Keep: "Guarda este mensaje: son tus datos de acceso. Si los pierdes, pide a tu administrador que te envíe unos nuevos.",
+        SurveyKeep: SurveyKeepSpanish,
         Ignore: "Si no esperabas este mensaje, puedes ignorarlo.");
 
     /// <summary>
@@ -247,24 +363,38 @@ public static class CredentialsEmailComposer
     /// <c>ResendManyAsync</c> regenerates it for everyone it mails.
     /// </summary>
     private static readonly CredentialsCopy ReminderEnglish = new(
+        Spanish: false,
         Subject: $"Reminder: answer your survey on {EmailBranding.ProductName}",
         SubjectPrefix: "Reminder: answer",
         Body: "Please sign in and answer the survey. Your username and a new password are below; the previous password stops working, so sign in with these details. If you had already started, you can carry on where you left off.",
+        SurveyBody: "Please sign in and answer the survey \u201c{0}\u201d. Your username and a new password are below; the previous password stops working, so sign in with these details.{1} If you had already started, you can carry on where you left off.",
+        ClosesOn: "The survey closes on {0}.",
         UsernameLabel: "Username",
         PasswordLabel: "Password",
         Cta: "Sign in",
         Keep: "Keep this message: these are your sign-in details. If you lose them, ask your administrator to send new ones.",
+        SurveyKeep: SurveyKeepEnglish,
         Ignore: "If you were not expecting this message you can ignore it.");
 
     private static readonly CredentialsCopy ReminderSpanish = new(
+        Spanish: true,
         Subject: $"Recordatorio: responde la encuesta en {EmailBranding.ProductName}",
         SubjectPrefix: "Recordatorio: responde",
         Body: "Te pedimos que por favor ingreses y respondas la encuesta. Abajo están de nuevo tu usuario y una contraseña nueva: la anterior deja de funcionar, así que entra con estos datos. Si ya la habías empezado, puedes continuar donde la dejaste.",
+        SurveyBody: "Te pedimos que por favor ingreses y respondas la encuesta \u00ab{0}\u00bb. Abajo están de nuevo tu usuario y una contraseña nueva: la anterior deja de funcionar, así que entra con estos datos.{1} Si ya la habías empezado, puedes continuar donde la dejaste.",
+        ClosesOn: "La encuesta cierra el {0}.",
         UsernameLabel: "Usuario",
         PasswordLabel: "Contraseña",
         Cta: "Iniciar sesión",
         Keep: "Guarda este mensaje: son tus datos de acceso. Si los pierdes, pide a tu administrador que te envíe unos nuevos.",
+        SurveyKeep: SurveyKeepSpanish,
         Ignore: "Si no esperabas este mensaje, puedes ignorarlo.");
+
+    private const string SurveyKeepEnglish =
+        "Keep this message: this username and password open this survey only. If you lose them before you first sign in, ask your administrator to send new ones.";
+
+    private const string SurveyKeepSpanish =
+        "Guarda este mensaje: este usuario y esta contraseña abren solo esta encuesta. Si los pierdes antes de ingresar por primera vez, pide a tu administrador que te envíe unos nuevos.";
 
     /// <summary>
     /// The copy one purpose reads in one language. A purpose this does not know throws rather
@@ -278,14 +408,32 @@ public static class CredentialsEmailComposer
         _ => throw new ArgumentOutOfRangeException(nameof(purpose), purpose, "Unknown credentials email purpose."),
     };
 
+    /// <summary>The one survey a per-survey key opens, and the day (company zone) it closes.</summary>
+    private sealed record SurveyScope(string Name, DateOnly? ClosesOn);
+
+    /// <param name="Spanish">Which month names <see cref="Day"/> prints.</param>
+    /// <param name="Subject">The whole subject when the details open every survey (`shared`).</param>
+    /// <param name="SubjectPrefix">
+    /// The subject up to, but not including, the survey these details open. Separate rather
+    /// than derived, because trimming the product name out of `Subject` would break the moment
+    /// either string is reworded.
+    /// </param>
+    /// <param name="Body">The paragraph for `shared` details, which open every survey.</param>
+    /// <param name="SurveyBody">The paragraph for a `per_survey` key: <c>{0}</c> the survey, <c>{1}</c> the closing sentence or nothing.</param>
+    /// <param name="ClosesOn">The closing sentence, <c>{0}</c> the day.</param>
+    /// <param name="Keep">What to do with the message, `shared` -- see <see cref="Keep(CredentialsCopy, SurveyScope?)"/>.</param>
+    /// <param name="SurveyKeep">The same for a `per_survey` key.</param>
     private sealed record CredentialsCopy(
-        string Subject, string Body, string UsernameLabel, string PasswordLabel,
-        string Cta, string Keep, string Ignore,
-        /// <summary>
-        /// The subject up to, but not including, the thing these details open. Used only
-        /// when a survey name is supplied; `Subject` above is the whole line otherwise.
-        /// Separate rather than derived, because trimming the product name out of `Subject`
-        /// would break the moment either string is reworded.
-        /// </summary>
-        string SubjectPrefix = "");
+        bool Spanish,
+        string Subject,
+        string SubjectPrefix,
+        string Body,
+        string SurveyBody,
+        string ClosesOn,
+        string UsernameLabel,
+        string PasswordLabel,
+        string Cta,
+        string Keep,
+        string SurveyKeep,
+        string Ignore);
 }

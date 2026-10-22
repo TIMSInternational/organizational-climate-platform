@@ -23,7 +23,9 @@ public sealed record SentCredentials(
     /// </summary>
     string? SurveyName = null,
     /// <summary>The company as the mail will name it, for the same reason.</summary>
-    string? CompanyName = null);
+    string? CompanyName = null,
+    /// <summary>The day the named survey closes, in the company's zone, as the mail will print it.</summary>
+    DateOnly? SurveyClosesOn = null);
 
 /// <summary>
 /// A host whose <see cref="ICredentialsEmailSender"/> records instead of sending.
@@ -60,7 +62,8 @@ internal sealed class CapturingCredentialsSender(ConcurrentQueue<SentCredentials
 {
     public Task<EmailSendOutcome> SendAsync(
         string toEmail, string? recipientName, string username, string password, string? companyLanguage,
-        EmailBrand? brand, CredentialsEmailPurpose purpose, string? surveyName, CancellationToken cancellationToken)
+        EmailBrand? brand, CredentialsEmailPurpose purpose, string? surveyName, DateOnly? surveyClosesOn,
+        CancellationToken cancellationToken)
     {
         if (failFor.Contains(toEmail))
         {
@@ -68,7 +71,8 @@ internal sealed class CapturingCredentialsSender(ConcurrentQueue<SentCredentials
         }
 
         sent.Enqueue(new SentCredentials(
-            toEmail, username, password, companyLanguage, purpose, recipientName, surveyName, brand?.CompanyName));
+            toEmail, username, password, companyLanguage, purpose, recipientName, surveyName, brand?.CompanyName,
+            surveyClosesOn));
         return Task.FromResult(EmailSendOutcome.Success());
     }
 }
