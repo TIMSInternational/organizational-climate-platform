@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
-  MAX_REMINDERS,
+  canSend,
   daysFrom,
   dimensionSections,
-  invitationBuckets,
+  invitationCoverage,
   launchChecklist,
   maskedLink,
-  nextReminder,
   readySteps,
   remindersSent,
   responseRate,
@@ -57,82 +56,100 @@ describe('remindersSent', () => {
   })
 })
 
-describe('invitationBuckets', () => {
-  it('counts as sent every invitation that left and was not withdrawn', () => {
-    expect(invitationBuckets(summary({ total: 9, pending: 2, sent: 3, opened: 1, started: 1, completed: 1, revoked: 1 }))).toEqual({
-      left: 6,
-      pending: 2,
+describe('invitationCoverage', () => {
+  it('counts a per-survey invitee as covered only once they hold a key, against the whole audience', () => {
+    // 617 in the audience, 300 invited so far, 290 of them with a key: the 327 never reached and
+    // the 10 whose mail failed are both "sin código".
+    expect(invitationCoverage({ summary: summary({ total: 300, pending: 300, withCode: 290 }), audience: 617, perSurvey: true })).toEqual({
+      covered: 290,
+      uncovered: 327,
+      revoked: 0,
+    })
+  })
+
+  it('counts a shared invitee as covered by the invitation record alone — nothing is ever mailed', () => {
+    // Every row `pending` with a null sentAt, as every row has been since 2026-10-19: covered.
+    expect(invitationCoverage({ summary: summary({ total: 6, pending: 5, revoked: 1 }), audience: 6, perSurvey: false })).toEqual({
+      covered: 5,
+      uncovered: 1,
       revoked: 1,
+    })
+  })
+
+  it('falls back to the live invitations when the audience cannot be read', () => {
+    expect(invitationCoverage({ summary: summary({ total: 41, pending: 41, withCode: 40 }), audience: null, perSurvey: true })).toEqual({
+      covered: 40,
+      uncovered: 1,
+      revoked: 0,
     })
   })
 })
 
+describe('canSend', () => {
+  it('is the server\'s RespondentVisible: scheduled and active, never a draft (409) or a closed survey', () => {
+    expect(['draft', 'scheduled', 'active', 'closed', 'archived'].filter(canSend)).toEqual(['scheduled', 'active'])
+  })
+})
+
 describe('launchChecklist', () => {
-  it('reads the Meridiano Q4 state as 4 of 4: a working link is a door, so uninvited is not unready', () => {
-    // Was 3 of 4 with `invitations: missing`. A survey reachable by its link IS launchable,
-    // and demanding invitations as well told a link-distributed survey it was never ready.
-    const steps = launchChecklist({ audience: 41, publicLink: '/s/abc', summary: summary(), reminders: 0 })
+  it('reads the Meridiano Q4 state as 3 of 3: a working link is a door, so uninvited is not unready', () => {
+    const steps = launchChecklist({ audience: 41, publicLink: '/s/abc', summary: summary(), perSurvey: false })
     expect(steps.map((step) => [step.id, step.state])).toEqual([
       ['audience', 'done'],
       ['link', 'done'],
       ['invitations', 'idle'],
-      ['reminders', 'idle'],
     ])
-    expect(readySteps(steps)).toBe(4)
+    expect(readySteps(steps)).toBe(3)
   })
 
   it('calls a link-distributed survey with no roster at all ready — the whole point', () => {
-    // Igoal: operarios with no email, so there is no directory to resolve and nobody to
-    // invite. Every step but the link is inapplicable, and none of them blocks.
-    const steps = launchChecklist({ audience: 0, publicLink: '/s/abc', summary: summary(), reminders: null })
+    const steps = launchChecklist({ audience: 0, publicLink: '/s/abc', summary: summary(), perSurvey: false })
     expect(steps.map((step) => [step.id, step.state])).toEqual([
       ['audience', 'idle'],
       ['link', 'done'],
       ['invitations', 'idle'],
-      ['reminders', 'idle'],
     ])
-    expect(readySteps(steps)).toBe(4)
     expect(steps.some((step) => step.state === 'missing')).toBe(false)
   })
 
   it('still blocks when NEITHER door is open, because then nobody can answer', () => {
-    const steps = launchChecklist({ audience: 0, publicLink: null, summary: summary(), reminders: null })
+    const steps = launchChecklist({ audience: 0, publicLink: null, summary: summary(), perSurvey: false })
     expect(steps.find((step) => step.id === 'link')?.state).toBe('missing')
     expect(steps.find((step) => step.id === 'invitations')?.state).toBe('missing')
     expect(steps.find((step) => step.id === 'audience')?.state).toBe('missing')
   })
 
-  it('keeps the nudge for invitations created but not yet sent, which are not a door yet', () => {
-    // `doorOpen` is invitationsDONE, not "invitations exist". A pending invitation has gone
-    // nowhere, so with no link the survey really is unreachable and must still say so.
-    const steps = launchChecklist({ audience: 10, publicLink: null, summary: summary({ total: 4, sent: 3, pending: 1 }), reminders: null })
-    expect(steps.find((step) => step.id === 'invitations')?.state).toBe('missing')
-    expect(steps.find((step) => step.id === 'link')?.state).toBe('missing')
-  })
-
-  it('stops demanding a link once invitations have actually gone out', () => {
-    const steps = launchChecklist({ audience: 41, publicLink: null, summary: summary({ total: 41, sent: 41 }), reminders: 0 })
+  it('completes a shared survey once everyone in the audience has an invitation, though none was ever "sent"', () => {
+    // The state every shared survey has been in since the invitation email was deleted: every
+    // row pending, sentAt null. It used to read `missing` for ever.
+    const steps = launchChecklist({ audience: 41, publicLink: null, summary: summary({ total: 41, pending: 41 }), perSurvey: false })
+    expect(steps.find((step) => step.id === 'invitations')?.state).toBe('done')
     expect(steps.find((step) => step.id === 'link')?.state).toBe('idle')
-    expect(readySteps(steps)).toBe(4)
+    expect(readySteps(steps)).toBe(3)
   })
 
-  it('meets the invitations step only when invitations exist and none is pending', () => {
-    const state = (s: ReturnType<typeof summary>) =>
-      launchChecklist({ audience: 1, publicLink: null, summary: s, reminders: null })[2].state
-    expect(state(summary({ total: 4, sent: 4 }))).toBe('done')
-    expect(state(summary({ total: 4, sent: 3, pending: 1 }))).toBe('missing')
+  it('completes a per-survey survey only once everyone in the audience holds a key', () => {
+    const state = (s: ReturnType<typeof summary>, audience: number | null = 617) =>
+      launchChecklist({ audience, publicLink: null, summary: s, perSurvey: true })[2].state
+    expect(state(summary({ total: 617, pending: 617, withCode: 617 }))).toBe('done')
+    // Mid-send: 300 invited, all with keys, 317 not reached yet.
+    expect(state(summary({ total: 300, pending: 300, withCode: 300 }))).toBe('missing')
+    // Everyone invited, ten mails failed.
+    expect(state(summary({ total: 617, pending: 617, withCode: 607 }))).toBe('missing')
     expect(state(summary())).toBe('missing')
+    // A directory this viewer cannot read: the live invitations are the audience.
+    expect(state(summary({ total: 41, pending: 41, withCode: 41 }), null)).toBe('done')
   })
 
   it('calls an audience it could not read unknown — never missing, never met — and an empty one missing', () => {
-    const unread = launchChecklist({ audience: null, publicLink: null, summary: null, reminders: null })
+    const unread = launchChecklist({ audience: null, publicLink: null, summary: null, perSurvey: false })
     expect(unread[0].state).toBe('unknown')
-    expect(readySteps(unread)).toBe(1)
-    expect(launchChecklist({ audience: 0, publicLink: null, summary: null, reminders: null })[0].state).toBe('missing')
+    expect(readySteps(unread)).toBe(0)
+    expect(launchChecklist({ audience: 0, publicLink: null, summary: null, perSurvey: false })[0].state).toBe('missing')
   })
 
-  it('meets the audience step on invitations that went out, even when the directory is unread', () => {
-    expect(launchChecklist({ audience: null, publicLink: null, summary: summary({ total: 41, sent: 41 }), reminders: 0 })[0].state).toBe('done')
+  it('meets the audience step on invitations that exist, even when the directory is unread', () => {
+    expect(launchChecklist({ audience: null, publicLink: null, summary: summary({ total: 41, pending: 41 }), perSurvey: false })[0].state).toBe('done')
   })
 })
 
@@ -142,57 +159,6 @@ describe('surveyAudience', () => {
     expect(surveyAudience({ invited: 0, resolved: 41, stated: 24 })).toEqual({ count: 41, source: 'directory' })
     expect(surveyAudience({ invited: null, resolved: null, stated: 24 })).toEqual({ count: 24, source: 'stated' })
     expect(surveyAudience({ invited: 0, resolved: null, stated: null })).toBeNull()
-  })
-})
-
-describe('nextReminder (ReminderSchedule.Evaluate over the invitation list)', () => {
-  const now = new Date('2026-09-11T12:00:00Z')
-  const row = (over: Record<string, unknown> = {}) => ({
-    id: 'i', status: 'sent', sentAt: '2026-09-10T12:00:00Z', completedAt: null, reminderCount: 0,
-    lastReminderSent: null, expiresAt: '2026-10-10T12:00:00Z', ...over,
-  }) as never
-  const outlook = (invitations: never[] | null, over: Record<string, unknown> = {}) =>
-    nextReminder({ invitations, status: 'active', endDate: '2026-10-10T12:00:00Z', sendReminders: true, frequencyDays: 3, now, ...over })
-
-  it('schedules the first reminder frequencyDays after the invitation went out, and counts the days left to the close', () => {
-    expect(outlook([row()])).toEqual({ kind: 'scheduled', at: '2026-09-13T12:00:00.000Z', beforeClose: 27 })
-  })
-
-  it('anchors on the last reminder once one went out, and takes the earliest due', () => {
-    expect(outlook([row({ reminderCount: 1, lastReminderSent: '2026-09-12T12:00:00Z' }), row({ sentAt: '2026-09-11T12:00:00Z' })])).toEqual({
-      kind: 'scheduled',
-      at: '2026-09-14T12:00:00.000Z',
-      beforeClose: 26,
-    })
-  })
-
-  it('counts a reminder due the day before the close as one day before it', () => {
-    expect(outlook([row({ sentAt: '2026-10-06T12:00:00Z' })])).toEqual({ kind: 'scheduled', at: '2026-10-09T12:00:00.000Z', beforeClose: 1 })
-  })
-
-  it('stops at the cap, skips the answered and the revoked, and never schedules past the close or the expiry', () => {
-    expect(outlook([row({ reminderCount: MAX_REMINDERS })])).toEqual({ kind: 'none' })
-    expect(outlook([row({ completedAt: '2026-09-11T09:00:00Z' })])).toEqual({ kind: 'none' })
-    // The current API records only the day a named invitee finished, never the time; an API
-    // older than that sent the time. Either marks the invitee answered, as does the status.
-    expect(outlook([row({ completedOn: '2026-09-11' })])).toEqual({ kind: 'none' })
-    expect(outlook([row({ status: 'completed', completedAt: null, completedOn: null })])).toEqual({ kind: 'none' })
-    expect(outlook([row({ status: 'revoked' })])).toEqual({ kind: 'none' })
-    expect(outlook([row()], { endDate: '2026-09-12T00:00:00Z' })).toEqual({ kind: 'none' })
-    expect(outlook([row({ expiresAt: '2026-09-12T00:00:00Z' })])).toEqual({ kind: 'none' })
-  })
-
-  it('says why none is scheduled: off, inactive, or nothing sent yet — and null while unread', () => {
-    expect(outlook([row()], { sendReminders: false })).toEqual({ kind: 'off' })
-    expect(outlook([row()], { status: 'scheduled' })).toEqual({ kind: 'inactive' })
-    expect(outlook([row({ sentAt: null, status: 'pending' })])).toEqual({ kind: 'awaiting' })
-    expect(outlook([])).toEqual({ kind: 'awaiting' })
-    expect(outlook(null)).toBeNull()
-  })
-
-  it('floors the interval at one day and dates an overdue reminder today, not in the past', () => {
-    expect(outlook([row()], { frequencyDays: 0 })).toEqual({ kind: 'scheduled', at: '2026-09-11T12:00:00.000Z', beforeClose: 29 })
-    expect(outlook([row({ sentAt: '2026-09-01T12:00:00Z' })])).toEqual({ kind: 'scheduled', at: now.toISOString(), beforeClose: 29 })
   })
 })
 

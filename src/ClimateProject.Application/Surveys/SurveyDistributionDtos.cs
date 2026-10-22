@@ -56,7 +56,13 @@ public sealed record SurveyInvitationSummaryDto(
     int Started,
     int Completed,
     int Revoked,
-    int Expired);
+    int Expired,
+    /// <summary>
+    /// Invitees -- revoked ones excluded -- who hold a key for this survey (`per_survey`).
+    /// A key exists only once its mail went: one whose send failed is withdrawn. Always 0 on
+    /// a `shared` survey, which mints none.
+    /// </summary>
+    int WithCode = 0);
 
 public sealed record SurveyDistributionDetail(
     Guid Id,
@@ -104,12 +110,22 @@ public sealed record SurveyInvitationDetail(
     int ReminderCount,
     DateTimeOffset? LastReminderSent,
     DateTimeOffset ExpiresAt,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    /// <summary>
+    /// The invitee holds a key for this survey (`per_survey`). False on every row of a
+    /// `shared` survey, whose people sign in with their own account.
+    /// </summary>
+    bool HasCode = false);
 
 public sealed record SurveyInvitationListResponse(
     IReadOnlyList<SurveyInvitationDetail> Invitations,
     SurveyInvitationSummaryDto Summary,
-    SurveyAnonymityGuaranteeDto Anonymity);
+    SurveyAnonymityGuaranteeDto Anonymity,
+    /// <summary>
+    /// The survey's credential mode, `shared` or `per_survey`, so the page that lists the
+    /// invitations can say what an invitation means on this survey.
+    /// </summary>
+    string CredentialMode = "shared");
 
 /// <summary>
 /// What the holder of an invitation token is shown before they answer. Unauthenticated, so
@@ -208,7 +224,22 @@ public sealed record SurveyInvitationBatchResult(
     /// route would skip on every later call. They are left invited with no key, which is the
     /// state a re-run of this same request repairs by minting a fresh pair.
     /// </summary>
-    int CredentialsNotSent = 0);
+    int CredentialsNotSent = 0,
+    /// <summary>
+    /// People in the audience this request resolved who still hold no key for this survey
+    /// AFTER this call -- the number a client loops on. `per_survey` processes at most 100
+    /// recipients per call (each costs a bcrypt hash and a message against App Runner's 120 s
+    /// request ceiling), so a 617-person audience is seven calls of the same request, and this
+    /// says when to stop. It counts the ones whose mail failed too: they hold no key either.
+    /// Always 0 in `shared` mode.
+    /// </summary>
+    int Remaining = 0,
+    /// <summary>
+    /// The addresses behind <see cref="CredentialsNotSent"/>, so the admin can be told WHO did
+    /// not receive a key and not merely how many. An admin of this company already reads every
+    /// invitee's address on the invitation list; this names no one that list does not.
+    /// </summary>
+    IReadOnlyList<string>? CredentialsNotSentEmails = null);
 
 /// <param name="Eligible">Outstanding invitations whose reminder cadence had elapsed.</param>
 /// <param name="Queued">Reminder notifications added. Equal to <paramref name="Eligible"/> unless something failed validation.</param>

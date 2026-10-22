@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { AlertCircle, Check, ClipboardList, Clock, HelpCircle, Mail, MoreHorizontal, Send, ShieldCheck } from 'lucide-react'
+import { AlertCircle, Check, ClipboardList, Clock, HelpCircle, KeyRound, MoreHorizontal, ShieldCheck, Users } from 'lucide-react'
 import { Link, useParams } from 'react-router'
 import { PageTopBar } from '../../../../components/layout'
 import {
@@ -30,7 +30,6 @@ import {
 import { ANONYMITY_FLOOR } from '../../../../components/charts'
 import {
   AudienceSelector,
-  InvitationCopyEditor,
   audienceSelection,
   estimateAudience,
   targetsWholeCompany,
@@ -39,9 +38,9 @@ import {
 import { useTranslation } from '../../../../i18n'
 import { cn } from '../../../../lib/cn'
 import { canDistribute } from '../../api/surveyInvitationCopy'
-import { isKnownInvitationStatus } from '../../api/surveyDistribution'
+import { isKnownInvitationStatus, isPerSurvey, type SurveyInvitationDetail } from '../../api/surveyDistribution'
 import { IconBox, TH_CLASS } from '../../../shared-next/parts'
-import { Card, Meter, ReadingTile, WithReading, type ShareLinkAction } from './parts'
+import { Card, Meter, ReadingTile, type ShareLinkAction } from './parts'
 import SharePanel from './SharePanel'
 import ParticipationPanel from './ParticipationPanel'
 import SurveyRosterPanel from './SurveyRosterPanel'
@@ -49,25 +48,23 @@ import { RespondentTextsDialog } from './RespondentTextsDialog'
 import { useSurveyParticipation } from './useSurveyParticipation'
 import {
   INVITATION_COLUMNS,
-  MAX_REMINDERS,
+  canSend,
   dayMonth,
   daysFrom,
-  invitationBuckets,
+  invitationCoverage,
   launchChecklist,
-  nextReminder,
   readySteps,
-  remindersSent,
   responseRate,
   surveyAudience,
   targetedDepartments,
   type LaunchStepState,
-  type ReminderOutlook,
 } from './launch'
 import {
   useDistributionModel,
   type DistributionActions,
   type DistributionModel,
-  type InvitationCopyState,
+  type SendOutcome,
+  type SendProgress,
 } from './useDistributionModel'
 import { byCount } from '../../../../i18n/plural'
 
@@ -77,11 +74,11 @@ export const INVITATION_PREVIEW_ROWS = 4
 /**
  * Distribución, redesigned (canvas board "Distribution") — `/surveys/:surveyId/distribution`.
  *
- * A launch checklist: who the survey reaches, the share link, the invitations that went out and
- * the reminders — each a step that is met or names what is missing — closed by the sentence the
- * server writes about what this survey records (`anonymity.guarantee`, in the reader's language).
- * Every write is the previous page's (`pages/SurveyDistributionPage.tsx`, the wiring reference),
- * offered only to an administrator of the survey's own company.
+ * A launch checklist: who the survey reaches, the share link, and what each person in the
+ * audience holds (a per-survey key, or on a `shared` survey an invitation record) — each a step
+ * that is met or names what is missing — closed by the sentence the server writes about what this
+ * survey records (`anonymity.guarantee`, in the reader's language). Writes are offered only to an
+ * administrator of the survey's own company.
  */
 export default function SurveyDistributionNextPage() {
   const { surveyId = '' } = useParams()
@@ -116,7 +113,8 @@ export default function SurveyDistributionNextPage() {
       busyInvitationId={model.busyInvitationId}
       notice={model.notice}
       actionError={model.actionError}
-      copyState={model.copy}
+      progress={model.progress}
+      outcome={model.outcome}
       actions={model.actions}
     />
   )
@@ -128,7 +126,8 @@ export function DistributionView({
   busyInvitationId = null,
   notice,
   actionError,
-  copyState = { status: 'idle' },
+  progress = null,
+  outcome = null,
   actions,
   now = new Date(),
 }: {
@@ -137,7 +136,10 @@ export function DistributionView({
   busyInvitationId?: string | null
   notice: string | null
   actionError: string | null
-  copyState?: InvitationCopyState
+  /** A per-survey send in flight, or null. */
+  progress?: SendProgress | null
+  /** What the last send did, or null. */
+  outcome?: SendOutcome | null
   actions: DistributionActions
   now?: Date
 }) {
@@ -151,7 +153,6 @@ export function DistributionView({
   const [audienceOpen, setAudienceOpen] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [linkConfirm, setLinkConfirm] = useState<'regenerate' | 'revoke' | null>(null)
-  const [copyOpen, setCopyOpen] = useState(false)
   const [textsOpen, setTextsOpen] = useState(false)
   const [textsSaved, setTextsSaved] = useState<string | null>(null)
   const [showAll, setShowAll] = useState(false)
@@ -162,6 +163,10 @@ export function DistributionView({
   const participation = useSurveyParticipation(survey.id, scoped)
 
   const actionable = scoped && canDistribute(survey.status)
+  // Narrower than `actionable`: a draft keeps its link and its settings editable, but the server
+  // refuses an invitation to it with a 409, so nothing here offers to send one.
+  const sendable = actionable && canSend(survey.status)
+  const perSurvey = isPerSurvey(invitations)
   // The survey's own targets, BOTH kinds. Passing the departments alone is what made a
   // survey aimed at 240 people by name read as "the whole company · 642 personas".
   const surveyTargets = { departmentIds: survey.departmentIds, userIds: survey.userIds }
@@ -178,9 +183,13 @@ export function DistributionView({
   ).length
   const selection = audienceSelection(mode, selectedDepartmentIds, selectedUserIds)
   const summary = invitations.summary
-  const buckets = invitationBuckets(summary)
-  const reminders = remindersSent(invitations.invitations)
-  const steps = launchChecklist({ audience: resolved, publicLink: distribution?.publicLink ?? null, summary, reminders })
+  const read = invitationCoverage({ summary, audience: resolved, perSurvey })
+  // The list is re-read once the send ends, not after every call; while it runs, the keys this
+  // send has mailed so far move from one bucket to the other, so the buckets never contradict the
+  // progress line beneath them ("0 con código" over "Enviando códigos: 200 de 617").
+  const sentSoFar = progress?.done ?? 0
+  const coverage = { ...read, covered: read.covered + sentSoFar, uncovered: Math.max(0, read.uncovered - sentSoFar) }
+  const steps = launchChecklist({ audience: resolved, publicLink: distribution?.publicLink ?? null, summary, perSurvey })
   const ready = readySteps(steps)
   const firstMissing = steps.find((step) => step.state === 'missing')
   const firstUnknown = steps.find((step) => step.state === 'unknown')
@@ -193,21 +202,22 @@ export function DistributionView({
   // ONE audience, shared with the detail page (`surveyAudience`): the invited once invitations
   // exist, the directory's resolution before that, the stated target only when neither is known.
   // It is the reach, the response rate's denominator and the audience line's count at once.
-  const audience = surveyAudience({ invited: summary.total, resolved, stated: survey.targetAudienceCount })
+  //
+  // A per-survey send goes out 100 at a time, so part-way through (or after one that stopped)
+  // fewer people are invited than the audience holds. The invited count is the audience only
+  // once it has caught up with the directory; before that it would print 200 as the reach of a
+  // 617-person survey and inflate its response rate threefold.
+  const audience = surveyAudience({
+    invited: resolved !== null && summary.total < resolved ? null : summary.total,
+    resolved,
+    stated: survey.targetAudienceCount,
+  })
   const rate = responseRate(survey.responseCount, audience?.count ?? null)
   // A survey handed out by link has no roster, so its reach is UNKNOWN rather than zero.
   // Printing a literal 0 beside "37 respuestas" reads as a contradiction, and it is the
   // directory's emptiness being reported as the survey's reach.
   const reach =
     audience !== null && audience.count === 0 && (distribution?.publicLink ?? null) !== null ? null : audience
-  const outlook = nextReminder({
-    invitations: invitations.invitations,
-    status: survey.status,
-    endDate: survey.endDate,
-    sendReminders: survey.settings.notificationSendReminders,
-    frequencyDays: survey.settings.notificationReminderFrequencyDays,
-    now,
-  })
   // No QR entry: the code is rendered on the panel, and a menu item that opened a dialog of
   // the same code would be a second door to a room the reader is already standing in.
   const linkActions: ShareLinkAction[] = []
@@ -288,7 +298,11 @@ export function DistributionView({
           <span
             className={cn('text-sm', firstMissing ? 'text-accent-amber-ink' : firstUnknown ? 'text-fg-secondary' : 'text-chip-good-ink')}
           >
-            {firstMissing ? copy(`missing.${firstMissing.id}`) : firstUnknown ? copy(`unknown.${firstUnknown.id}`) : copy('allReady')}
+            {firstMissing
+              ? firstMissing.id === 'invitations'
+                ? copy(perSurvey ? 'send.missingCodes' : 'send.missingShared')
+                : copy(`missing.${firstMissing.id}`)
+              : firstUnknown ? copy(`unknown.${firstUnknown.id}`) : copy('allReady')}
           </span>
         </ReadingTile>
       </section>
@@ -401,7 +415,8 @@ export function DistributionView({
                   : copy('audienceMissingTitle')
           }
           action={
-            actionable && (
+            // The dialog behind it ends in a send, so it is offered exactly where a send is.
+            sendable && (
               <Button type="button" variant="outline" disabled={busy} onClick={() => setAudienceOpen(true)}>
                 {copy('changeAudience')}
               </Button>
@@ -458,50 +473,43 @@ export function DistributionView({
         <Step
           testId="step-invitations"
           state={stateOf('invitations')}
-          title={copy('invitationsTitle')}
+          title={perSurvey ? copy('send.codesTitle') : copy('invitationsTitle')}
           action={
-            actionable && (
-              <>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={busy || resolved === 0}
-                  onClick={() => {
-                    setMode('allTargeted')
-                    setConfirming(true)
-                  }}
-                >
-                  <Mail aria-hidden="true" className="size-icon" />
-                  {copy('sendInvitations')}
-                </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button type="button" variant="outline" size="icon" aria-label={copy('invitationsMenu')}>
-                      <MoreHorizontal aria-hidden="true" className="size-icon" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                      onSelect={() => {
-                        setCopyOpen(true)
-                        actions.openCopy()
-                      }}
-                    >
-                      {t('surveys.distribution.copyTitle')}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </>
+            sendable && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy || resolved === 0}
+                onClick={() => {
+                  setMode('allTargeted')
+                  setConfirming(true)
+                }}
+              >
+                {perSurvey ? <KeyRound aria-hidden="true" className="size-icon" /> : <Users aria-hidden="true" className="size-icon" />}
+                {perSurvey ? copy('send.sendCodes') : copy('send.register')}
+              </Button>
             )
           }
         >
-          <div className="grid gap-2.5 sm:grid-cols-3">
-            <Bucket label={copy('left')} value={buckets.left} />
-            <Bucket label={copy('pending')} value={buckets.pending} warn={buckets.pending > 0} />
-            <Bucket label={copy('revoked')} value={buckets.revoked} warn={buckets.revoked > 0} />
+          <p className="m-0 text-sm text-fg-secondary">
+            {perSurvey ? copy('send.codesHelp') : copy('send.sharedHelp')}
+            {actionable && !sendable ? ` ${copy('send.draftHelp')}` : ''}
+          </p>
+          <div className="grid gap-2.5 sm:grid-cols-3" data-testid="invitation-buckets">
+            <Bucket label={perSurvey ? copy('send.withCode') : copy('send.registered')} value={coverage.covered} />
+            <Bucket
+              label={perSurvey ? copy('send.withoutCode') : copy('send.unregistered')}
+              value={coverage.uncovered}
+              warn={coverage.uncovered > 0}
+            />
+            <Bucket label={copy('revoked')} value={coverage.revoked} warn={coverage.revoked > 0} />
           </div>
+          {progress !== null && <SendProgressLine progress={progress} copy={copy} />}
+          {outcome !== null && progress === null && (
+            <SendOutcomePanel outcome={outcome} copy={copy} resume={sendable ? () => selection !== null && actions.invite(selection) : undefined} busy={busy} />
+          )}
           {invitations.invitations.length === 0 ? (
-            <p className="m-0 text-sm text-fg-secondary">{copy('invitationsNone')}</p>
+            progress === null && <p className="m-0 text-sm text-fg-secondary">{perSurvey ? copy('send.codesNone') : copy('send.sharedNone')}</p>
           ) : (
             <div className="rounded-md border border-line-light">
               <Table className="min-w-[36rem] table-fixed text-sm" data-testid="invitation-table">
@@ -522,6 +530,7 @@ export function DistributionView({
                   {rows.map((invitation) => {
                     const person = userById.get(invitation.userId)
                     const rowBusy = busy || busyInvitationId === invitation.id
+                    const state = rowState(invitation, perSurvey)
                     return (
                       <TableRow key={invitation.id} className="group/row border-t border-line-light">
                         <TableCell className="truncate px-3 py-2 font-medium">{person?.name ?? '—'}</TableCell>
@@ -532,12 +541,8 @@ export function DistributionView({
                         <TableCell className="px-3 py-1.5">
                           <span className="flex items-center justify-between gap-2">
                             <Chip
-                              tone={invitation.status === 'revoked' || invitation.status === 'pending' ? 'warning' : 'neutral'}
-                              label={
-                                isKnownInvitationStatus(invitation.status)
-                                  ? t(`surveys.distribution.status.${invitation.status}`)
-                                  : invitation.status
-                              }
+                              tone={state.warn ? 'warning' : 'neutral'}
+                              label={state.key === null ? invitation.status : state.key.startsWith('send.') ? copy(state.key) : t(state.key)}
                             />
                             {actionable && (
                               <DropdownMenu>
@@ -546,10 +551,9 @@ export function DistributionView({
                                     type="button"
                                     variant="ghost"
                                     size="icon"
-                                    // The artboard's Estado cell holds the chip alone. The menu is the old
-                                    // route's resend and revoke (#22), so it stays: hidden only where a
-                                    // pointer can hover, and shown on the row's hover, on focus inside the
-                                    // row and while open. A touch screen, which cannot hover, always shows it.
+                                    // The artboard's Estado cell holds the chip alone. The menu is hidden
+                                    // only where a pointer can hover, and shown on the row's hover, on focus
+                                    // inside the row and while open. A touch screen always shows it.
                                     className="size-7 [@media(hover:hover)]:opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100 data-[state=open]:opacity-100"
                                     aria-label={copy('rowMenu', { email: invitation.email })}
                                   >
@@ -557,14 +561,9 @@ export function DistributionView({
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
-                                  {/* The server refuses a resend on a completed invitation with a 409
-                                      (`ResendInvitationAsync`), so it is never offered on one. */}
-                                  <DropdownMenuItem
-                                    disabled={rowBusy || invitation.status === 'completed'}
-                                    onSelect={() => actions.resendInvitation(invitation.id)}
-                                  >
-                                    {t('surveys.distribution.resend')}
-                                  </DropdownMenuItem>
+                                  {/* Revoke only. The per-row resend is gone: the server answers it
+                                      with a 410 since the invitation email was deleted, and a code
+                                      cannot be re-sent from here (its plaintext is never kept). */}
                                   <DropdownMenuItem
                                     disabled={rowBusy || invitation.status === 'revoked'}
                                     onSelect={() => actions.revokeInvitation(invitation.id)}
@@ -602,36 +601,6 @@ export function DistributionView({
               )}
             </div>
           )}
-        </Step>
-
-        <Step
-          testId="step-reminders"
-          state={stateOf('reminders')}
-          title={copy('remindersTitle')}
-          action={
-            actionable && (
-              <Button type="button" variant="primary" disabled={busy || summary.total === 0} onClick={actions.remind}>
-                <Send aria-hidden="true" className="size-icon" />
-                {copy('sendReminder')}
-              </Button>
-            )
-          }
-        >
-          <p className="m-0 text-sm text-fg-secondary">
-            {reminders === null || reminders === 0
-              ? copy('remindersNone')
-              : reminders === 1
-                ? copy('remindersOne')
-                : copy('remindersSome', { count: reminders })}{' '}
-            {outlook !== null && (
-              <ReminderLine
-                outlook={outlook}
-                days={survey.settings.notificationReminderFrequencyDays}
-                locale={locale}
-                copy={copy}
-              />
-            )}
-          </p>
         </Step>
 
         <div
@@ -681,37 +650,13 @@ export function DistributionView({
                 setConfirming(true)
               }}
             >
-              {t('surveys.distribution.sendInvitations')}
+              {perSurvey ? copy('send.sendCodes') : copy('send.register')}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
       <RespondentTextsDialog surveyId={survey.id} open={textsOpen} onOpenChange={setTextsOpen} onSaved={setTextsSaved} />
-
-      <Dialog open={copyOpen} onOpenChange={setCopyOpen}>
-        <DialogContent closeLabel={t('common.close')} className="max-h-[90vh] max-w-3xl overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{t('surveys.distribution.copyTitle')}</DialogTitle>
-          </DialogHeader>
-          {copyState.status === 'error' ? (
-            <Alert variant="destructive" role="alert">
-              <AlertDescription>{copy('copyLoadFailed')}</AlertDescription>
-            </Alert>
-          ) : copyState.status === 'ready' ? (
-            <InvitationCopyEditor
-              copy={copyState.draft}
-              requiredLocales={copyState.context.requiredLocales}
-              onChange={actions.editCopy}
-              onSave={() => void actions.saveCopy().then((saved) => saved && setCopyOpen(false))}
-              saving={busy}
-              editable={copyState.context.editable}
-            />
-          ) : (
-            <SkeletonText lines={4} />
-          )}
-        </DialogContent>
-      </Dialog>
 
       <ConfirmationDialog
         open={linkConfirm !== null}
@@ -731,9 +676,11 @@ export function DistributionView({
       <ConfirmationDialog
         open={confirming}
         onOpenChange={setConfirming}
-        title={t('surveys.distribution.confirmTitle')}
-        description={t('surveys.distribution.confirmBody', { count: recipients })}
-        confirmText={t('surveys.distribution.sendInvitations')}
+        title={perSurvey ? copy('send.confirmCodesTitle') : copy('send.confirmSharedTitle')}
+        description={
+          perSurvey ? copy('send.confirmCodesBody', { count: recipients }) : copy('send.confirmSharedBody', { count: recipients })
+        }
+        confirmText={perSurvey ? copy('send.sendCodes') : copy('send.register')}
         cancelText={t('common.cancel')}
         onConfirm={() => {
           setConfirming(false)
@@ -746,44 +693,100 @@ export function DistributionView({
 
 const REACH_UNIT = { invited: 'reachInvited', directory: 'reachAudience', stated: 'reachStated' } as const
 
+type Copy = (key: string, vars?: Record<string, string | number>) => string
+
 /**
- * The reminders' second sentence: when the next automatic one leaves, in the artboard's words
- * ("Uno programado para el 7 oct, tres días antes del cierre, …") with the real date and the real
- * distance to the close — or why none is scheduled.
+ * The Estado chip of one invitation row, as a translation key. What a row can truthfully say is
+ * what the server records: revoked, completed (an identified survey), and on a `per_survey`
+ * survey whether the person holds a key. "Sin enviar" / "Enviada" are gone: since the invitation
+ * email was deleted nothing is sent and `sentAt` is never written, so every row read "Sin enviar"
+ * for ever.
  */
-function ReminderLine({
-  outlook,
-  days,
-  locale,
+function rowState(invitation: SurveyInvitationDetail, perSurvey: boolean): { key: string | null; warn: boolean } {
+  if (invitation.status === 'revoked') return { key: 'surveys.distribution.status.revoked', warn: true }
+  if (invitation.status === 'completed') return { key: 'surveys.distribution.status.completed', warn: false }
+  if (perSurvey) return invitation.hasCode ? { key: 'send.rowHasCode', warn: false } : { key: 'send.rowNoCode', warn: true }
+  return isKnownInvitationStatus(invitation.status) ? { key: 'send.rowInAudience', warn: false } : { key: null, warn: false }
+}
+
+/** "Enviando códigos: 200 de 617…", with the meter, while a per-survey send is in flight. */
+function SendProgressLine({ progress, copy }: { progress: SendProgress; copy: Copy }) {
+  const percent = progress.total === null || progress.total === 0 ? 0 : Math.round((progress.done / progress.total) * 100)
+  return (
+    <div role="status" data-testid="send-progress" className="flex flex-col gap-1.5 rounded-md border border-line-light px-3 py-2.5">
+      <p className="m-0 text-sm font-medium text-fg-primary">
+        {progress.total === null ? copy('send.progressStarting') : copy('send.progress', { done: progress.done, total: progress.total })}
+      </p>
+      <Meter percent={percent} label={copy('send.progressLabel')} />
+      <p className="m-0 text-sm text-fg-secondary">{copy('send.progressHelp')}</p>
+    </div>
+  )
+}
+
+/** What the last send did, in the server's numbers, and who did not get their key. */
+function SendOutcomePanel({
+  outcome,
   copy,
+  resume,
+  busy,
 }: {
-  outlook: ReminderOutlook
-  days: number
-  locale: string
-  copy: (key: string, vars?: Record<string, string | number>) => string
+  outcome: SendOutcome
+  copy: Copy
+  /** Offered when a send can be repeated; absent for a viewer who may not send. */
+  resume?: () => void
+  busy: boolean
 }) {
-  const every = Math.max(1, days)
-  if (outlook.kind === 'scheduled') {
-    const before = outlook.beforeClose
+  if (outcome.kind === 'shared') {
     return (
-      <WithReading
-        reading={dayMonth(outlook.at, locale)}
-        text={(date) =>
-          before === null || before < 0
-            ? copy('reminder.scheduledPlain', { date })
-            : before === 0
-              ? copy('reminder.scheduledCloseDay', { date })
-              : before === 1
-                ? copy('reminder.scheduledOneDay', { date })
-                : copy('reminder.scheduled', { date, days: before })
-        }
-      />
+      <p role="status" data-testid="send-outcome" className="m-0 text-sm text-fg-secondary">
+        {outcome.skipped > 0
+          ? copy('send.sharedDoneSkips', { count: outcome.created, skipped: outcome.skipped })
+          : copy('send.sharedDone', { count: outcome.created })}
+      </p>
     )
   }
-  if (outlook.kind === 'awaiting') {
-    return <>{every === 1 ? copy('reminder.awaitingOneDay', { max: MAX_REMINDERS }) : copy('reminder.awaiting', { days: every, max: MAX_REMINDERS })}</>
-  }
-  return <>{copy(`reminder.${outlook.kind}`)}</>
+  const sentence = outcome.stopped
+    ? outcome.remaining === null
+      ? copy('send.stoppedUnknown', { count: outcome.issued })
+      : copy(outcome.remaining === 1 ? 'send.stoppedOne' : 'send.stopped', { count: outcome.issued, remaining: outcome.remaining })
+    : outcome.remaining === 0 || outcome.remaining === null
+      ? outcome.issued === 0
+        ? copy('send.doneNone')
+        : copy('send.doneAll', { count: outcome.issued })
+      : copy(outcome.remaining === 1 ? 'send.doneSomeOne' : 'send.doneSome', { count: outcome.issued, remaining: outcome.remaining })
+  const unfinished = outcome.stopped || (outcome.remaining ?? 0) > 0
+  return (
+    <div
+      role="status"
+      data-testid="send-outcome"
+      className={cn(
+        'flex flex-col gap-2 rounded-md border px-3 py-2.5',
+        unfinished ? 'border-accent-amber-ring bg-chip-warning-fill' : 'border-line-light',
+      )}
+    >
+      <p className={cn('m-0 text-sm', unfinished ? 'text-chip-warning-ink' : 'text-fg-primary')}>{sentence}</p>
+      {outcome.failedEmails.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <p className="m-0 text-sm font-medium text-fg-primary">{copy('send.failedTitle', { count: outcome.failedEmails.length })}</p>
+          <ul className="m-0 flex list-none flex-col gap-0.5 p-0" data-testid="send-failed">
+            {outcome.failedEmails.map((email) => (
+              <li key={email} className="break-all font-mono text-xs text-fg-secondary">
+                {email}
+              </li>
+            ))}
+          </ul>
+          <p className="m-0 text-sm text-fg-secondary">{copy('send.failedHelp')}</p>
+        </div>
+      )}
+      {unfinished && resume && (
+        <div>
+          <Button type="button" variant="outline" disabled={busy} onClick={resume}>
+            {copy('send.resume')}
+          </Button>
+        </div>
+      )}
+    </div>
+  )
 }
 
 function joinNames(names: string[], and: string): string {

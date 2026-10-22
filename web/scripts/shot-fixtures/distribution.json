@@ -1,5 +1,11 @@
 {
-  "GET /admin/companies/*/result-bands": {"opportunityMin": 3, "strengthMin": 4, "criticalName": null, "opportunityName": null, "strengthName": null},
+  "GET /admin/companies/*/result-bands": {
+    "opportunityMin": 3,
+    "strengthMin": 4,
+    "criticalName": null,
+    "opportunityName": null,
+    "strengthName": null
+  },
   "GET /notifications/mine": {
     "notifications": []
   },
@@ -24,7 +30,8 @@
     "settings": {
       "invitationCustomSubject": "Your invitation",
       "invitationCustomMessage": "Please answer."
-    }
+    },
+    "userIds": []
   },
   "GET /surveys/s1/distribution": {
     "id": "dist-1",
@@ -268,6 +275,7 @@
     "email": "ada.lovelace@northwind.example",
     "role": "super_admin",
     "companyId": "11111111-1111-1111-1111-111111111111",
-    "companyName": "Northwind Logistics", "companyLogoUrl": null
+    "companyName": "Northwind Logistics",
+    "companyLogoUrl": null
   }
 }

@@ -1,8 +1,4 @@
-import {
-  invitationIsFinished,
-  type SurveyInvitationDetail,
-  type SurveyInvitationSummary,
-} from '../../api/surveyDistribution'
+import { type SurveyInvitationDetail, type SurveyInvitationSummary } from '../../api/surveyDistribution'
 import type { Department } from '../../../org-structure/api/departments'
 
 /**
@@ -63,20 +59,45 @@ export function remindersSent(invitations: readonly SurveyInvitationDetail[] | n
 }
 
 /**
- * The invitation buckets the checklist prints. `left` is every invitation that went out and was
- * not withdrawn — sent or further along the ladder. There is no "rejected" bucket because the
- * API has none (`SurveyInvitationStatuses`: pending, sent, opened, started, completed, revoked).
+ * Who in the audience has what this survey hands out — the invitations step's buckets and the
+ * checklist's verdict, from one rule.
+ *
+ * What an invitation IS depends on the survey's credential mode, and neither is "an email that
+ * went out": the survey invitation email was deleted on 2026-10-19 (#606), nothing sets
+ * `sentAt` any more, and the old "Enviadas 0 / Pendientes = everyone" read that absence as a
+ * backlog that would never clear.
+ *
+ * - **per_survey** — the person holds a key for THIS survey (`summary.withCode`). A key exists
+ *   only once its mail went: one whose send failed is withdrawn on the server.
+ * - **shared** — the person has an invitation row: a record that they are in the audience.
+ *   Nothing is mailed; they sign in with the account they already have.
+ *
+ * `uncovered` is counted against the audience when it is known (the directory's resolution),
+ * because people with no invitation row at all hold nothing either; otherwise against the live
+ * invitations, which is all an out-of-scope viewer can see. Revoked invitations are neither.
  */
-export function invitationBuckets(summary: SurveyInvitationSummary): {
-  left: number
-  pending: number
-  revoked: number
-} {
-  return {
-    left: summary.sent + summary.opened + summary.started + summary.completed,
-    pending: summary.pending,
-    revoked: summary.revoked,
-  }
+export function invitationCoverage(input: {
+  summary: SurveyInvitationSummary
+  /** The audience resolved from the directory, or null when this viewer cannot read it. */
+  audience: number | null
+  perSurvey: boolean
+}): { covered: number; uncovered: number; revoked: number } {
+  const { summary } = input
+  const live = summary.total - summary.revoked
+  const covered = input.perSurvey ? (summary.withCode ?? 0) : live
+  const whole = input.audience ?? live
+  return { covered, uncovered: Math.max(0, whole - covered), revoked: summary.revoked }
+}
+
+/**
+ * The statuses an invitation can be created in: `SurveyStatuses.RespondentVisible`. A draft
+ * may still have its link and settings edited (`canDistribute`), but the server answers an
+ * invitation to it with a 409, so nothing on the page offers one.
+ */
+export const SENDABLE_STATUSES: readonly string[] = ['scheduled', 'active']
+
+export function canSend(status: string): boolean {
+  return SENDABLE_STATUSES.includes(status)
 }
 
 /** Where the one audience figure both screens print comes from. */
@@ -102,73 +123,7 @@ export function surveyAudience(input: {
   return null
 }
 
-/** `ReminderSchedule.DefaultMaxReminders` (ReminderSchedule.cs:23) — the job passes no override. */
-export const MAX_REMINDERS = 3
-/** `ReminderSchedule.MinimumFrequencyDays` (ReminderSchedule.cs:32) — the interval's floor. */
-const MIN_FREQUENCY_DAYS = 1
-/** `ReminderSchedule.InvitationIsOutstanding` (ReminderSchedule.cs:115-119). */
-const OUTSTANDING: ReadonlySet<string> = new Set(['pending', 'sent', 'opened', 'started'])
-
-export type ReminderOutlook =
-  /**
-   * The earliest reminder the sweep will raise, as an ISO instant, and how many calendar days
-   * before the close it leaves (the dates the line prints, in the reader's timezone) — null when
-   * the close cannot be read.
-   */
-  | { kind: 'scheduled'; at: string; beforeClose: number | null }
-  /** `settings.notificationSendReminders` is off: the sweep skips the survey. */
-  | { kind: 'off' }
-  /** The sweep reads active surveys only (`InvitationReminderJob.SweepSurveysAsync`). */
-  | { kind: 'inactive' }
-  /** No invitation has gone out, so there is nothing to remind anybody of. */
-  | { kind: 'awaiting' }
-  /** Every outstanding invitation is capped, expired, answered, or due after the close. */
-  | { kind: 'none' }
-
-/**
- * When the next automatic reminder goes out. Reminders are not sent by hand only:
- * `InvitationReminderWorker` (Workers/Jobs.cs:72-95) sweeps every 15 minutes
- * (`WorkerSchedulingOptions.InvitationReminderInterval`, :59) and raises one for each outstanding
- * invitation that `ReminderSchedule.Evaluate` (ReminderSchedule.cs:40-102) finds due — at
- * `(lastReminderSent ?? sentAt) + max(1, frequencyDays)` days, at most three, never once the
- * invitation expired or the survey closed. This is that rule, read over the invitation list;
- * null while the list is unread.
- */
-export function nextReminder(input: {
-  invitations: readonly SurveyInvitationDetail[] | null
-  status: string
-  endDate: string
-  sendReminders: boolean
-  frequencyDays: number
-  now: Date
-}): ReminderOutlook | null {
-  if (input.invitations === null) return null
-  if (!input.sendReminders) return { kind: 'off' }
-  if (input.status !== 'active') return { kind: 'inactive' }
-  const closes = Date.parse(input.endDate)
-  const days = Math.max(MIN_FREQUENCY_DAYS, input.frequencyDays)
-  let earliest: number | null = null
-  for (const invitation of input.invitations) {
-    if (invitationIsFinished(invitation) || !OUTSTANDING.has(invitation.status) || invitation.sentAt === null) continue
-    if (invitation.reminderCount >= MAX_REMINDERS) continue
-    const since = Date.parse(invitation.lastReminderSent ?? invitation.sentAt)
-    if (Number.isNaN(since)) continue
-    const due = since + days * DAY_MS
-    const expires = Date.parse(invitation.expiresAt)
-    if (due >= closes || (!Number.isNaN(expires) && due >= expires)) continue
-    if (earliest === null || due < earliest) earliest = due
-  }
-  if (earliest !== null) {
-    // An overdue reminder leaves on the sweep's next tick, so it is today's, not a past date's.
-    const at = new Date(Math.max(earliest, input.now.getTime()))
-    // The artboard's clause — "tres días antes del cierre" — with the real distance, counted
-    // over the two dates the line and the tiles print.
-    return { kind: 'scheduled', at: at.toISOString(), beforeClose: daysFrom(input.endDate, at) }
-  }
-  return input.invitations.some((invitation) => invitation.sentAt !== null) ? { kind: 'none' } : { kind: 'awaiting' }
-}
-
-export type LaunchStepId = 'audience' | 'link' | 'invitations' | 'reminders'
+export type LaunchStepId = 'audience' | 'link' | 'invitations'
 /**
  * `unknown` is its own state, never `missing`: a viewer who cannot read the directory (a
  * super_admin working in another company's context, whom `CanAdminister` still lets read this
@@ -182,7 +137,7 @@ export interface LaunchStep {
 }
 
 /**
- * The four steps of the launch checklist and whether each is met.
+ * The three steps of the launch checklist and whether each is met.
  *
  * ## A survey needs ONE open door, not every door
  *
@@ -192,26 +147,25 @@ export interface LaunchStep {
  * client whose respondents have no email — the case the public link and its QR exist for —
  * that is not a nudge, it is a permanent and false "not ready".
  *
- * So a door that works makes the other doors non-blocking. `doorOpen` is deliberately
- * `invitationsDone` and not merely "invitations exist": an invitation still `pending` has
- * not gone anywhere, so it is not yet a way in and the nudge to send it survives.
- *
- * This was chosen over detecting a "link-only survey" from the data, which cannot be done
- * honestly: a survey with a link and no invitations is indistinguishable from one whose
- * administrator simply has not invited anyone **yet**, and the obvious tiebreak — an empty
- * audience — fails for the very client it is for, because `estimateAudience` counts every
- * active user including administrators when a survey targets no department.
+ * So a door that works makes the other doors non-blocking. `doorOpen` is `invitationsDone`,
+ * not merely "invitations exist": a `per_survey` audience half of whom still hold no key is not
+ * yet a way in for the other half.
  *
  * - **audience** — somebody would receive the survey: the resolved audience is not empty. A
- *   directory this viewer cannot read is `unknown` — unless invitations already went out, which
+ *   directory this viewer cannot read is `unknown` — unless invitations already exist, which
  *   is an audience with people in it however it was chosen. Empty is only `missing` when no
  *   door is open: with a working link, a survey needs no roster at all.
  * - **link** — the survey has a share link (`publicLink`), or `idle` when invitations are the
  *   door being used.
- * - **invitations** — invitations exist and none is still pending, or `idle` when the link is
- *   the door being used.
- * - **reminders** — never blocking: `idle` until one is sent. They are raised automatically on
- *   a schedule (`nextReminder`) and a survey is ready to launch before the first is due.
+ * - **invitations** — everyone in the audience holds what this survey hands out
+ *   (`invitationCoverage`: a key on a `per_survey` survey, an invitation on a `shared` one), or
+ *   `idle` when the link is the door being used. It used to require every invitation to have
+ *   left `pending`, which nothing has done since the invitation email was deleted — so it could
+ *   never complete.
+ *
+ * There is no reminders step. The reminder sweep was deleted with the invitation email, and the
+ * manual route answers zeros by design, so a step about reminders could only ever describe
+ * something that does not happen.
  *
  * With neither door open both are `missing`, which is the one state that genuinely blocks:
  * the survey has no way to be answered.
@@ -221,11 +175,12 @@ export function launchChecklist(input: {
   audience: number | null
   publicLink: string | null
   summary: SurveyInvitationSummary | null
-  reminders: number | null
+  perSurvey: boolean
 }): LaunchStep[] {
-  const invitationsDone =
-    input.summary !== null && input.summary.total > 0 && input.summary.pending === 0
-  /** A way in that actually works today. A pending invitation is not one yet. */
+  const coverage =
+    input.summary === null ? null : invitationCoverage({ summary: input.summary, audience: input.audience, perSurvey: input.perSurvey })
+  const invitationsDone = coverage !== null && coverage.covered > 0 && coverage.uncovered === 0
+  /** A way in that actually works today. */
   const doorOpen = input.publicLink !== null || invitationsDone
   const audience: LaunchStepState =
     input.audience === null
@@ -241,7 +196,6 @@ export function launchChecklist(input: {
     { id: 'audience', state: audience },
     { id: 'link', state: input.publicLink !== null ? 'done' : doorOpen ? 'idle' : 'missing' },
     { id: 'invitations', state: invitationsDone ? 'done' : doorOpen ? 'idle' : 'missing' },
-    { id: 'reminders', state: input.reminders !== null && input.reminders > 0 ? 'done' : 'idle' },
   ]
 }
 

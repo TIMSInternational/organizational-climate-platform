@@ -1,9 +1,14 @@
 {
-  "GET /admin/companies/*/result-bands": {"opportunityMin": 3, "strengthMin": 4, "criticalName": null, "opportunityName": null, "strengthName": null},
+  "GET /admin/companies/*/result-bands": {
+    "opportunityMin": 3,
+    "strengthMin": 4,
+    "criticalName": null,
+    "opportunityName": null,
+    "strengthName": null
+  },
   "GET /notifications/mine": {
     "notifications": []
   },
-
   "GET /surveys/s1": {
     "id": "s1",
     "companyId": "11111111-1111-1111-1111-111111111111",
@@ -17,9 +22,9 @@
     "settings": {
       "invitationCustomSubject": "Your invitation",
       "invitationCustomMessage": "Please answer."
-    }
+    },
+    "userIds": []
   },
-
   "GET /surveys/s1/invitations": {
     "invitations": [],
     "summary": {
@@ -39,11 +44,9 @@
       "guarantee": "Tracking runs to completion."
     }
   },
-
   "GET /admin/departments": {
     "departments": []
   },
-
   "GET /admin/users": {
     "users": []
   }

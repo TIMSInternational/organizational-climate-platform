@@ -372,12 +372,20 @@ public static class SurveyDistributionEndpoints
             .ToListAsync(cancellationToken);
 
         var now = UtcNow();
-        var invitations = rows.Select(i => ToInvitationDetail(i, now)).ToList();
+        var holders = (await db.SurveyCredentials.AsNoTracking()
+                .Where(c => c.SurveyId == surveyId)
+                .Select(c => c.UserId)
+                .ToListAsync(cancellationToken))
+            .ToHashSet();
+        var invitations = rows
+            .Select(i => ToInvitationDetail(i, now) with { HasCode = holders.Contains(i.UserId) })
+            .ToList();
 
         return Results.Ok(new SurveyInvitationListResponse(
             invitations,
             await SummariseAsync(db, surveyId, now, cancellationToken),
-            AnonymityOf(survey!, SurveyContent.ResolveRequestLocale(lang, survey!.Language))));
+            AnonymityOf(survey!, SurveyContent.ResolveRequestLocale(lang, survey!.Language)),
+            survey!.Settings.CredentialMode ?? CredentialModes.Shared));
     }
 
     private static async Task<IResult> CreateInvitationsAsync(
@@ -436,12 +444,31 @@ public static class SurveyDistributionEndpoints
         // thirteen of these rather than three, each comfortably inside the ceiling.
         var credentialMode = survey.Settings.CredentialMode ?? CredentialModes.Shared;
         var perSurveyCredentials = credentialMode == CredentialModes.PerSurvey;
-        var maxBatch = perSurveyCredentials ? MaxCredentialBatch : MaxInvitationBatch;
+        var resolvedCount = userIds!.Count;
 
-        if (userIds!.Count > maxBatch)
+        // How many of the resolved audience still hold no key once this call is done -- the
+        // number a client loops on. Always 0 in `shared` mode, which never mints a key.
+        var withoutCodeBefore = 0;
+        HashSet<Guid> credentialedBefore = [];
+
+        if (perSurveyCredentials)
+        {
+            // BATCHED, not refused (#G9). The cap is the bcrypt-and-mail cost of ONE request,
+            // so it is counted against the people this request would actually hash and mail
+            // for -- those who still hold no key -- and never against the whole audience:
+            // somebody already holding a key is skipped by the loop below whatever this says,
+            // and refusing a 617-person audience outright is what sent ESPH's launch to a
+            // shell script. At most `MaxCredentialBatch` of them are processed per call; the
+            // response says how many remain, and the client calls again until none do.
+            var (batch, withoutCode, credentialed) = await NextCredentialBatchAsync(db, surveyId, userIds, cancellationToken);
+            withoutCodeBefore = withoutCode;
+            credentialedBefore = credentialed;
+            userIds = batch;
+        }
+        else if (userIds.Count > MaxInvitationBatch)
         {
             return Results.Json(
-                new { message = $"This request resolves to {userIds.Count} recipients; the maximum per request is {maxBatch}." },
+                new { message = $"This request resolves to {userIds.Count} recipients; the maximum per request is {MaxInvitationBatch}." },
                 statusCode: 400);
         }
 
@@ -652,9 +679,28 @@ public static class SurveyDistributionEndpoints
             note = note is null ? warning : $"{note} {warning}";
         }
 
+        // Who in THIS batch was meant to get a key and holds none now: their mail did not go
+        // and the key was withdrawn. Read back from the table rather than counted in the loop
+        // above, so the list is what the database says and not what the loop believed.
+        var notSentEmails = new List<string>();
+        if (perSurveyCredentials && credentialsNotSent > 0)
+        {
+            var batchIds = recipients.Select(r => r.Id).ToList();
+            var holdingNow = (await db.SurveyCredentials
+                    .Where(c => c.SurveyId == surveyId && batchIds.Contains(c.UserId))
+                    .Select(c => c.UserId)
+                    .ToListAsync(cancellationToken))
+                .ToHashSet();
+            notSentEmails = recipients
+                .Where(r => !credentialedBefore.Contains(r.Id) && !holdingNow.Contains(r.Id))
+                .Select(r => r.Email)
+                .OrderBy(e => e, StringComparer.Ordinal)
+                .ToList();
+        }
+
         return Results.Json(
             new SurveyInvitationBatchResult(
-                userIds.Count,
+                resolvedCount,
                 created.Count,
                 created.Select(i => i.Id).ToList(),
                 alreadyInvited,
@@ -662,8 +708,57 @@ public static class SurveyDistributionEndpoints
                 undeliverable,
                 note,
                 credentialsIssued,
-                credentialsNotSent),
+                credentialsNotSent,
+                Remaining: perSurveyCredentials ? Math.Max(0, withoutCodeBefore - credentialsIssued) : 0,
+                CredentialsNotSentEmails: notSentEmails),
             statusCode: 201);
+    }
+
+    /// <summary>
+    /// The next per-survey batch out of a resolved audience: at most
+    /// <see cref="MaxCredentialBatch"/> people who still need something from this route.
+    ///
+    /// <para><b>Who is in it.</b> Everyone with no key for this survey, plus anyone with a key
+    /// and no invitation row (the invitation is the completion-tracking artefact). A revoked
+    /// invitee is left out: revoking was a decision to take them out of the audience, and
+    /// minting them a key would undo it.</para>
+    ///
+    /// <para><b>In what order.</b> People never attempted -- no invitation row yet -- come
+    /// first, and people already attempted whose mail failed come last. Otherwise a handful of
+    /// addresses that refuse every send would sit at the head of every batch, be retried on
+    /// each call, and a client stopping when a batch issues nothing could stop with untouched
+    /// people still behind them. Within each group the order is the user id, so the batches are
+    /// stable across calls.</para>
+    /// </summary>
+    private static async Task<(List<Guid> Batch, int WithoutCode, HashSet<Guid> Credentialed)> NextCredentialBatchAsync(
+        ClimateProjectDbContext db,
+        Guid surveyId,
+        List<Guid> audience,
+        CancellationToken cancellationToken)
+    {
+        var credentialed = (await db.SurveyCredentials
+                .Where(c => c.SurveyId == surveyId && audience.Contains(c.UserId))
+                .Select(c => c.UserId)
+                .ToListAsync(cancellationToken))
+            .ToHashSet();
+        var invitations = await db.SurveyInvitations
+            .Where(i => i.SurveyId == surveyId && audience.Contains(i.UserId))
+            .Select(i => new { i.UserId, i.Status })
+            .ToListAsync(cancellationToken);
+        var invited = invitations.Select(i => i.UserId).ToHashSet();
+        var revoked = invitations
+            .Where(i => i.Status == SurveyInvitationStatuses.Revoked)
+            .Select(i => i.UserId)
+            .ToHashSet();
+
+        var pending = audience
+            .Where(id => !revoked.Contains(id) && (!credentialed.Contains(id) || !invited.Contains(id)))
+            .OrderBy(id => invited.Contains(id))
+            .ThenBy(id => id)
+            .ToList();
+
+        var withoutCode = audience.Count(id => !revoked.Contains(id) && !credentialed.Contains(id));
+        return (pending.Take(MaxCredentialBatch).ToList(), withoutCode, credentialed);
     }
 
     /// <summary>
@@ -1455,7 +1550,12 @@ public static class SurveyDistributionEndpoints
     {
         var rows = await db.SurveyInvitations.AsNoTracking()
             .Where(i => i.SurveyId == surveyId)
-            .Select(i => new { i.Status, i.ExpiresAt })
+            .Select(i => new
+            {
+                i.Status,
+                i.ExpiresAt,
+                HasCode = db.SurveyCredentials.Any(c => c.SurveyId == surveyId && c.UserId == i.UserId),
+            })
             .ToListAsync(cancellationToken);
 
         int CountOf(string status) => rows.Count(r => r.Status == status);
@@ -1472,7 +1572,8 @@ public static class SurveyDistributionEndpoints
             // Expired is derived, and overlaps the status buckets on purpose: an invitation
             // is both 'sent' and expired. Counting it as its own status would need a sweep to
             // keep true, which is the dependency this design does not take.
-            rows.Count(r => r.Status != SurveyInvitationStatuses.Revoked && r.ExpiresAt <= now));
+            rows.Count(r => r.Status != SurveyInvitationStatuses.Revoked && r.ExpiresAt <= now),
+            rows.Count(r => r.Status != SurveyInvitationStatuses.Revoked && r.HasCode));
     }
 
     private static async Task<SurveyDistributionDetail> ToDistributionDetailAsync(
