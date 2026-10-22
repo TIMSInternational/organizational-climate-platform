@@ -295,6 +295,18 @@ public class SurveyTemplateInstantiationTests
     }
 
     [Fact]
+    public void A_requested_credential_mode_wins_over_the_companys()
+    {
+        var created = Instantiate(Options() with
+        {
+            CompanyCredentialMode = CredentialModes.Shared,
+            RequestedCredentialMode = CredentialModes.PerSurvey,
+        });
+
+        Assert.Equal(CredentialModes.PerSurvey, created.Survey.Settings.CredentialMode);
+    }
+
+    [Fact]
     public void A_survey_from_a_template_sends_no_invitation_or_reminder_mail()
     {
         var created = Instantiate();

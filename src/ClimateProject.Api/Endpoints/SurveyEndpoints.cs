@@ -1488,7 +1488,7 @@ public static class SurveyEndpoints
         }
     }
 
-    private static IResult? ApplySettings(SurveySettings settings, SurveySettingsInput input, string language, bool credentialModeFrozen)
+    internal static IResult? ApplySettings(SurveySettings settings, SurveySettingsInput input, string language, bool credentialModeFrozen)
     {
         // The create path resolves and freezes the mode itself, above. On update it used to
         // be accepted and dropped -- a 200 that changed nothing, so a caller believed a

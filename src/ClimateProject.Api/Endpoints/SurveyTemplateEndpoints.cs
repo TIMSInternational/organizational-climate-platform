@@ -530,6 +530,15 @@ public static class SurveyTemplateEndpoints
                 statusCode: 400);
         }
 
+        // Refused, not coerced, as POST /surveys refuses it: a typo would leave the survey on
+        // `shared` and nobody would hear of it until a roster got one email instead of one per survey.
+        if (request?.Settings?.CredentialMode is { } requestedMode && !CredentialModes.IsValid(requestedMode))
+        {
+            return Results.Json(
+                new { message = $"settings.credentialMode must be one of: {string.Join(", ", CredentialModes.All)}" },
+                statusCode: 400);
+        }
+
         // The company's credential mode, frozen onto the new survey by NewSurveyDefaults
         // exactly as POST /surveys freezes it. The company row exists: ResolveCompanyLanguageAsync
         // has just refused an unknown one.
@@ -664,7 +673,19 @@ public static class SurveyTemplateEndpoints
                 request?.TargetAudienceCount,
                 departmentIds,
                 companyCredentialMode,
-                serviceType));
+                serviceType,
+                request?.Settings?.CredentialMode));
+
+        // What the caller asked about, over the defaults Instantiate wrote -- the order POST
+        // /surveys uses, so an explicit request wins and silence keeps the default.
+        if (request?.Settings is { } settingsInput)
+        {
+            var settingsError = SurveyEndpoints.ApplySettings(created.Survey.Settings, settingsInput, language, credentialModeFrozen: false);
+            if (settingsError is not null)
+            {
+                return settingsError;
+            }
+        }
 
         db.Surveys.Add(created.Survey);
         db.SurveyDepartmentTargets.AddRange(created.DepartmentTargets);

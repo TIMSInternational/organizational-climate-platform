@@ -154,7 +154,11 @@ public class TemplateSurveyDefaultsTests : IAsyncLifetime
     public async Task A_blank_survey_and_a_template_survey_agree_on_every_default(string companyMode)
     {
         var (client, fromTemplate) = await FromTemplateAsync(companyMode);
-        var blank = await SurveyTestHarness.CreateSurveyAsync(client, SurveyTestHarness.MinimalRequest(CompanyFor(companyMode)));
+        // MinimalRequest says `Anonymous: false` out loud for its legacy callers; here the blank
+        // survey must say NOTHING about settings, exactly as the template one does.
+        var blank = await SurveyTestHarness.CreateSurveyAsync(
+            client,
+            SurveyTestHarness.MinimalRequest(CompanyFor(companyMode)) with { Settings = null });
 
         var blankSettings = await StoredSettingsAsync(blank.Id);
         var templateSettings = await StoredSettingsAsync(fromTemplate);
@@ -197,5 +201,51 @@ public class TemplateSurveyDefaultsTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal(before, await _harness.WithDbAsync(db => db.Surveys.CountAsync(s => s.CompanyId == _sharedCompanyId)));
+    }
+
+    /// <summary>
+    /// The builder's two checkboxes reach the template path, applied OVER the defaults: what was
+    /// asked about changes, and anonymity -- not mentioned -- stays on.
+    /// </summary>
+    [Fact]
+    public async Task Settings_sent_to_the_template_path_are_applied_over_the_defaults()
+    {
+        var (_, surveyId) = await FromTemplateAsync(
+            CredentialModes.Shared,
+            new UseSurveyTemplateRequest(
+                CompanyId: _sharedCompanyId,
+                Settings: new SurveySettingsInput(AllowPartialResponses: false, ShowProgress: false)));
+
+        var settings = await StoredSettingsAsync(surveyId);
+        Assert.False(settings.AllowPartialResponses);
+        Assert.False(settings.ShowProgress);
+        Assert.True(settings.Anonymous);
+        Assert.False(settings.NotificationSendInvitations);
+    }
+
+    [Fact]
+    public async Task An_explicit_credential_mode_on_the_template_path_overrides_the_company()
+    {
+        var (_, surveyId) = await FromTemplateAsync(
+            CredentialModes.Shared,
+            new UseSurveyTemplateRequest(
+                CompanyId: _sharedCompanyId,
+                Settings: new SurveySettingsInput(CredentialMode: CredentialModes.PerSurvey)));
+
+        Assert.Equal(CredentialModes.PerSurvey, (await StoredSettingsAsync(surveyId)).CredentialMode);
+    }
+
+    [Fact]
+    public async Task An_unknown_credential_mode_on_the_template_path_is_a_400()
+    {
+        var client = await _harness.ClientAsync(Roles.CompanyAdmin, _sharedCompanyId);
+        var createdTemplate = await client.PostAsJsonAsync("/survey-templates", TemplateRequest(_sharedCompanyId));
+        var template = (await createdTemplate.Content.ReadFromJsonAsync<SurveyTemplateDetail>())!;
+
+        var response = await client.PostAsJsonAsync(
+            $"/survey-templates/{template.Id}/use",
+            new UseSurveyTemplateRequest(CompanyId: _sharedCompanyId, Settings: new SurveySettingsInput(CredentialMode: "per-survey")));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 }

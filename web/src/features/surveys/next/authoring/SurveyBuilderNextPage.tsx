@@ -881,7 +881,8 @@ function StepForm({
         />
         {/* No "Anónima" checkbox: respondents never log in (ruled 2026-10-12), and only an
             anonymous survey can be answered without an account, so every survey built here is
-            one (`values.anonymous` defaults to true; the API defaults the same way). */}
+            one (`values.anonymous` defaults to true; both create routes default the same way, through
+            `NewSurveyDefaults` — `POST /surveys` and, since G15, `POST /survey-templates/{id}/use`). */}
         <CheckboxField label={t('surveys.allowPartialResponses')} checked={values.allowPartialResponses} onChange={(checked) => patch({ allowPartialResponses: checked })} />
         <CheckboxField label={t('surveys.showProgress')} checked={values.showProgress} onChange={(checked) => patch({ showProgress: checked })} />
         {/* Blank path only: `POST /survey-templates/{id}/use` takes no settings, so on the
