@@ -6,6 +6,7 @@ import { getMicroclimate, listMicroclimates } from '../api/microclimates'
 import { flowStepOf, groupSessions } from './derive'
 import type { InProgressSession, MicroclimatesListNextModel } from './model'
 import { describeApiError } from '../../../api/describeApiError'
+import { companyZone } from './companyZone'
 
 export type MicroclimatesListStatus =
   | 'loading'
@@ -22,6 +23,11 @@ export interface MicroclimatesListState {
   status: MicroclimatesListStatus
   model: MicroclimatesListNextModel
   error: string | null
+  /**
+   * The company's IANA zone the dates and times are printed on (`companyZone.ts`), or `null`
+   * when its settings could not be read -- the page then prints the browser's and says so.
+   */
+  timeZone: string | null
   reload: () => void
 }
 
@@ -66,6 +72,7 @@ export function useMicroclimatesListModel(): MicroclimatesListState {
   const [model, setModel] = useState<MicroclimatesListNextModel>(EMPTY)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [error, setError] = useState<string | null>(null)
+  const [timeZone, setTimeZone] = useState<string | null>(null)
   // The newest request wins: a switched company must never be overwritten by the
   // answer to the previous one arriving late.
   const latest = useRef(0)
@@ -76,12 +83,16 @@ export function useMicroclimatesListModel(): MicroclimatesListState {
     setStatus('loading')
     setError(null)
     try {
+      // Read beside the list, never throwing: the page is drawn once, on the clock it names.
+      const zone = companyZone(baseUrl, companyId)
       const rows = await listMicroclimates(baseUrl, companyId, locale)
       const { inProgress, past } = groupSessions(rows)
       const details = await Promise.allSettled(
         inProgress.map((row) => getMicroclimate(baseUrl, row.id, locale)),
       )
+      const readZone = await zone
       if (request !== latest.current) return
+      setTimeZone(readZone)
       const sessions: InProgressSession[] = inProgress.map((row, index) => {
         const read = details[index]
         return { row, detail: read.status === 'fulfilled' ? read.value : null }
@@ -109,6 +120,7 @@ export function useMicroclimatesListModel(): MicroclimatesListState {
     status: gate ?? status,
     model,
     error,
+    timeZone,
     reload: () => {
       void reload()
     },

@@ -123,6 +123,19 @@ describe('SurveyHistoryPage (/surveys/:id/history)', () => {
     expect(time.textContent).toMatch(/6:00|06:00/)
   })
 
+  it('names an audience edit (#638 records "userIds") as "Personas específicas", not "Otro campo"', async () => {
+    vi.mocked(getSurveyHistory).mockResolvedValue({
+      surveyId: 's-esph',
+      entries: [entry({ id: 'e5', action: 'updated', changes: { fields: ['userIds'] }, timestamp: '2026-10-21T16:05:00Z' }), ...entries],
+    })
+    renderPage()
+    expect(await screen.findByText('Editó la encuesta (1 campo)')).toBeTruthy()
+    const row = document.querySelector('[data-slot="history-entry"]') as HTMLElement
+    expect(within(row).getAllByRole('listitem').map((node) => node.textContent)).toEqual([copy.field.userIds])
+    expect(copy.field.userIds).toBe('Personas específicas')
+    expect(within(row).queryByText(copy.field.other)).toBeNull()
+  })
+
   it('never prints a response count, the "collected responses" flag or an IP address', async () => {
     renderPage()
     await screen.findByRole('heading', { name: new RegExp(copy.title) })

@@ -427,25 +427,29 @@ export function liveWordBars(
   }
 }
 
-function format(value: string | Date, locale: string, options: Intl.DateTimeFormatOptions): string | null {
+/**
+ * `timeZone` is an IANA zone: the administrator's list passes the company's (`companyZone.ts`).
+ * Left out, the reader's own zone -- what the respondent's invitation and the live board read.
+ */
+function format(value: string | Date, locale: string, options: Intl.DateTimeFormatOptions, timeZone?: string): string | null {
   const instant = value instanceof Date ? value.getTime() : Date.parse(value)
   if (Number.isNaN(instant)) return null
-  return new Intl.DateTimeFormat(locale, options).format(instant)
+  return new Intl.DateTimeFormat(locale, timeZone ? { ...options, timeZone } : options).format(instant)
 }
 
 /** "11 sept" — the list row's close date. `null` for an unreadable instant, never "Invalid Date". */
-export function dayMonth(value: string, locale: string): string | null {
-  return format(value, locale, { day: 'numeric', month: 'short' })
+export function dayMonth(value: string, locale: string, timeZone?: string): string | null {
+  return format(value, locale, { day: 'numeric', month: 'short' }, timeZone)
 }
 
 /** "11 de septiembre" — a date in a sentence. */
-export function dayMonthLong(value: string, locale: string): string | null {
-  return format(value, locale, { day: 'numeric', month: 'long' })
+export function dayMonthLong(value: string, locale: string, timeZone?: string): string | null {
+  return format(value, locale, { day: 'numeric', month: 'long' }, timeZone)
 }
 
 /** "21:06" — the hour a session opens or closes. */
-export function clock(value: string | Date, locale: string): string | null {
-  return format(value, locale, { hour: 'numeric', minute: '2-digit' })
+export function clock(value: string | Date, locale: string, timeZone?: string): string | null {
+  return format(value, locale, { hour: 'numeric', minute: '2-digit' }, timeZone)
 }
 
 /** "21:50:42" — when the live figure was last read. */

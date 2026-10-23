@@ -1,34 +1,57 @@
 /**
  * How the microclimate boards write an instant. A microclimate's `startTime` and `endTime`
- * are minutes, not calendar days (`lib/calendarDay.ts` `instantDay` carries the argument),
- * so every one of these reads the instant in the reader's own zone — which is why the board,
- * drawn on a machine in America/Chicago, says the demo pulse opened "9 sept, 21:06".
+ * are minutes, not calendar days (`lib/calendarDay.ts` `instantDay` carries the argument).
+ *
+ * Each day/time writer takes an optional IANA `timeZone`. The administrator's list and detail
+ * pass the company's (`companyZone.ts`, read from its settings, as Crear does since #635), so
+ * the close an administrator in America/Chicago reads is the close the company's people read.
+ * Left out, the instant is read in the reader's own zone -- what every other caller (live,
+ * results, analytics) still does -- which is why a board drawn on a machine in
+ * America/Chicago says the demo pulse opened "9 sept, 21:06".
  */
 
-function sameYear(date: Date, now: Date = new Date()): boolean {
-  return date.getFullYear() === now.getFullYear()
+function yearOf(date: Date, timeZone?: string): string {
+  return new Intl.DateTimeFormat('en-US', { year: 'numeric', ...(timeZone ? { timeZone } : {}) }).format(date)
+}
+
+function sameYear(date: Date, timeZone?: string, now: Date = new Date()): boolean {
+  return yearOf(date, timeZone) === yearOf(now, timeZone)
+}
+
+function zoned(timeZone?: string): Intl.DateTimeFormatOptions {
+  return timeZone ? { timeZone } : {}
 }
 
 /** "11 de septiembre" — the month written out, the year only when it is not this one. */
-export function longDay(iso: string, locale: string): string {
+export function longDay(iso: string, locale: string, timeZone?: string): string {
   const date = new Date(iso)
-  return date.toLocaleDateString(locale, { day: 'numeric', month: 'long', ...(sameYear(date) ? {} : { year: 'numeric' }) })
+  return date.toLocaleDateString(locale, {
+    ...zoned(timeZone),
+    day: 'numeric',
+    month: 'long',
+    ...(sameYear(date, timeZone) ? {} : { year: 'numeric' }),
+  })
 }
 
 /** "21:06" — a 24-hour clock in every locale, as the boards print it. */
-export function clock(iso: string, locale: string): string {
-  return new Date(iso).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+export function clock(iso: string, locale: string, timeZone?: string): string {
+  return new Date(iso).toLocaleTimeString(locale, { ...zoned(timeZone), hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
 }
 
 /** "9 sept 2026" — the Ficha's day, always with its year. */
-export function shortDayYear(iso: string, locale: string): string {
-  return new Date(iso).toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' })
+export function shortDayYear(iso: string, locale: string, timeZone?: string): string {
+  return new Date(iso).toLocaleDateString(locale, { ...zoned(timeZone), day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 /** "9 sept" — the year only when it is not this one. */
-export function shortDay(iso: string, locale: string): string {
+export function shortDay(iso: string, locale: string, timeZone?: string): string {
   const date = new Date(iso)
-  return date.toLocaleDateString(locale, { day: 'numeric', month: 'short', ...(sameYear(date) ? {} : { year: 'numeric' }) })
+  return date.toLocaleDateString(locale, {
+    ...zoned(timeZone),
+    day: 'numeric',
+    month: 'short',
+    ...(sameYear(date, timeZone) ? {} : { year: 'numeric' }),
+  })
 }
 
 /** "9–11 sept": the locale's own range format, so English reads "Sep 9 – 11". */
