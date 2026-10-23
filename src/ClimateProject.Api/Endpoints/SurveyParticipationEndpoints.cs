@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Security.Claims;
 using ClimateProject.Api.Infrastructure;
+using ClimateProject.Api.Infrastructure.Auditing;
+using ClimateProject.Application.Auditing;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Scheduling;
 using ClimateProject.Application.Surveys;
@@ -38,9 +40,14 @@ public static class SurveyParticipationEndpoints
     {
         ArgumentNullException.ThrowIfNull(app);
 
-        app.MapGroup("/surveys")
-            .RequireAuthorization()
-            .MapGet("/{surveyId:guid}/participation", GetAsync);
+        var group = app.MapGroup("/surveys").RequireAuthorization();
+        group.MapGet("/{surveyId:guid}/participation", GetAsync);
+
+        // The roster as a file (audit gap G20). A list of named people leaving the server is
+        // the disclosure "who exported this data" is asked about, so the read is audited --
+        // the same marker the survey and dashboard exports carry.
+        group.MapGet("/{surveyId:guid}/participation/export", ExportAsync)
+            .WithMetadata(new AuditSensitiveReadAttribute(AuditVerbs.Export));
     }
 
     /// <summary>
@@ -53,7 +60,27 @@ public static class SurveyParticipationEndpoints
         CultureInfo.GetCultureInfo("es"),
         CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace | CompareOptions.NumericOrdering);
 
-    private static async Task<IResult> GetAsync(
+    /// <summary>
+    /// What both routes read: the survey, after the authorization check, and its roster with
+    /// the per-survey key columns. One loader, so the download and the screen cannot disagree
+    /// about a single person or a single column.
+    /// </summary>
+    private sealed record LoadedRoster(
+        Guid Id,
+        Guid CompanyId,
+        bool Anonymous,
+        bool CollectParticipantIdentity,
+        string CredentialMode,
+        string? TitleEn,
+        string? TitleEs,
+        List<SurveyRosterRow> Roster,
+        bool DistinguishesStarted)
+    {
+        /// <summary>COMPLETION alone -- see the view's <c>TracksCompletionOnly</c>.</summary>
+        public bool TracksCompletionOnly => Anonymous && !DistinguishesStarted;
+    }
+
+    private static async Task<(LoadedRoster? Loaded, IResult? Failure)> LoadAsync(
         Guid surveyId,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
@@ -76,12 +103,12 @@ public static class SurveyParticipationEndpoints
             .FirstOrDefaultAsync(cancellationToken);
         if (survey is null)
         {
-            return Results.Json(new { message = "Survey not found" }, statusCode: 404);
+            return (null, Results.Json(new { message = "Survey not found" }, statusCode: 404));
         }
 
         if (!SurveyEndpoints.CanAdminister(principal.GetCurrentUser(), survey.CompanyId))
         {
-            return Results.Forbid();
+            return (null, Results.Forbid());
         }
 
         // The key an anonymous survey's partials are findable by. Null only where none is
@@ -104,6 +131,35 @@ public static class SurveyParticipationEndpoints
         // that can only be answered by signing in. `BuildRosterAsync` decides the second from
         // the data rather than from a setting -- see the reasoning on `signInOnly` there.
         var distinguishesStarted = !survey.Anonymous || signInOnly;
+
+        return (new LoadedRoster(
+            survey.Id,
+            survey.CompanyId,
+            survey.Anonymous,
+            survey.CollectParticipantIdentity,
+            credentialMode,
+            survey.TitleEn,
+            survey.TitleEs,
+            roster,
+            distinguishesStarted), null);
+    }
+
+    private static async Task<IResult> GetAsync(
+        Guid surveyId,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        IConfiguration configuration,
+        CancellationToken cancellationToken)
+    {
+        var (loaded, failure) = await LoadAsync(surveyId, principal, db, configuration, cancellationToken);
+        if (failure is not null)
+        {
+            return failure;
+        }
+
+        var survey = loaded!;
+        var roster = survey.Roster;
+        var distinguishesStarted = survey.DistinguishesStarted;
 
         // Respondents with NO account. `survey_participations` is written only for them
         // (`participation-is-not-linked-to-answers.md`), and the 2026-10-13 identity ruling
@@ -164,10 +220,54 @@ public static class SurveyParticipationEndpoints
             distinguishesStarted,
             // COMPLETION alone, which is all an anonymous survey could report before and is
             // still what it reports when there is no key.
-            survey.Anonymous && !distinguishesStarted,
-            credentialMode,
+            survey.TracksCompletionOnly,
+            survey.CredentialMode,
             survey.TitleEn,
             survey.TitleEs));
+    }
+
+    /// <summary>
+    /// <c>GET /surveys/{id}/participation/export</c>: the roster the screen shows, as a CSV
+    /// (<see cref="SurveyRosterCsv"/>). Same loader, so the same authorization -- a super_admin
+    /// or the survey's own company_admin, everyone else 403 -- and the same rows.
+    /// </summary>
+    /// <remarks>
+    /// Headers, words and the survey title follow the COMPANY's language, not the caller's:
+    /// the file is forwarded to the client's own staff, and ESPH reads Spanish whoever
+    /// downloaded it. The day in the file name is the company's day for the same reason.
+    /// </remarks>
+    private static async Task<IResult> ExportAsync(
+        Guid surveyId,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        IConfiguration configuration,
+        CancellationToken cancellationToken)
+    {
+        var (loaded, failure) = await LoadAsync(surveyId, principal, db, configuration, cancellationToken);
+        if (failure is not null)
+        {
+            return failure;
+        }
+
+        var survey = loaded!;
+        var company = await db.Companies
+            .AsNoTracking()
+            .Where(c => c.Id == survey.CompanyId)
+            .Select(c => new { c.Settings.Language, c.Settings.Timezone })
+            .FirstOrDefaultAsync(cancellationToken);
+        var spanish = SurveyRosterCsv.IsSpanish(company?.Language);
+        var perSurvey = survey.CredentialMode == CredentialModes.PerSurvey;
+        // The screen's rule for drawing Estado (`SurveyRosterPanel.tsx`: tracked || completionOnly).
+        var showState = survey.DistinguishesStarted || survey.TracksCompletionOnly;
+
+        var title = spanish ? survey.TitleEs ?? survey.TitleEn : survey.TitleEn ?? survey.TitleEs;
+        var today = DateOnly.FromDateTime(
+            SchedulingTimeZone.ToLocal(DateTimeOffset.UtcNow, SchedulingTimeZone.Resolve(company?.Timezone)));
+
+        return Results.File(
+            SurveyRosterCsv.Build(survey.Roster, spanish, perSurvey, showState),
+            "text/csv",
+            SurveyRosterCsv.FileName(title, survey.Id, today, spanish));
     }
 
     /// <summary>
