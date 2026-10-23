@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { ChevronDown, ChevronUp, FileClock, History, Lock } from 'lucide-react'
 import { PageTopBar } from '../../../components/layout'
-import { Button, Chip, ErrorState, LoadingRegion, SkeletonText } from '../../../components/ui'
+import { Button, Chip, ErrorState, LoadingRegion, SkeletonText, Table } from '../../../components/ui'
 import { isApiStatus } from '../../../api/authFetch'
 import { useTranslation } from '../../../i18n'
 import { getCompanySettings } from '../../org-structure/api/companySettings'
@@ -218,7 +218,7 @@ function EntryRow({ entry, ctx }: { entry: SurveyAuditEntry; ctx: ValueContext }
           </ul>
         )}
         {entry.action === 'duplicated' && entry.entityId && (
-          <Link to={`/surveys/${entry.entityId}`} className="text-xs text-accent-blue-ink underline underline-offset-2">
+          <Link to={`/surveys/${entry.entityId}`} className="text-xs text-accent-blue underline underline-offset-2">
             {t(`${K}.openCopy`)}
           </Link>
         )}
@@ -245,10 +245,10 @@ function VersionRow({
 }) {
   const { t, locale } = ctx
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
-  const [open, setOpen] = useState(false)
+  const comparable = previous !== null && version.changes.length > 0
+  const [open, setOpen] = useState(initiallyOpen && comparable)
   const [compare, setCompare] = useState<Compare>({ status: 'idle' })
   const diffId = `version-diff-${version.versionNumber}`
-  const comparable = previous !== null && version.changes.length > 0
   const previousNumber = previous?.versionNumber ?? null
 
   const fetchComparison = useCallback(async () => {
@@ -263,10 +263,7 @@ function VersionRow({
   }, [baseUrl, surveyId, previousNumber, version.versionNumber, locale])
 
   useEffect(() => {
-    if (initiallyOpen && comparable) {
-      setOpen(true)
-      void fetchComparison()
-    }
+    if (initiallyOpen && comparable) void fetchComparison()
   }, [initiallyOpen, comparable, fetchComparison])
 
   function toggle() {
@@ -335,7 +332,7 @@ function DiffTable({ ctx, comparison }: { ctx: ValueContext; comparison: SurveyV
   const rows = changeRows(ctx, comparison.from, comparison.to, comparison.changes)
   return (
     <div className="overflow-hidden rounded-md border border-line-light">
-      <table className="w-full table-fixed border-collapse text-sm">
+      <Table className="table-fixed text-sm">
         <caption className="sr-only">
           {t(`${K}.diffCaption`, { from: comparison.from.versionNumber, to: comparison.to.versionNumber })}
         </caption>
@@ -360,16 +357,16 @@ function DiffTable({ ctx, comparison }: { ctx: ValueContext; comparison: SurveyV
               </th>
               <td className="break-words px-3 align-top text-fg-secondary sm:py-2">
                 <span className="mr-1 text-2xs font-bold uppercase tracking-wider text-fg-label sm:hidden">{t(`${K}.diffBeforeShort`)}</span>
-                {row.before === null ? <em className="text-fg-tertiary">{t(`${K}.absent`)}</em> : <span className="line-through decoration-fg-tertiary">{row.before}</span>}
+                {row.before === null ? <em className="text-fg-secondary">{t(`${K}.absent`)}</em> : <span className="line-through decoration-fg-tertiary">{row.before}</span>}
               </td>
               <td className="break-words px-3 pb-2 align-top text-fg-primary sm:py-2">
                 <span className="mr-1 text-2xs font-bold uppercase tracking-wider text-fg-label sm:hidden">{t(`${K}.diffAfterShort`)}</span>
-                {row.after === null ? <em className="text-fg-tertiary">{t(`${K}.absent`)}</em> : row.after}
+                {row.after === null ? <em className="text-fg-secondary">{t(`${K}.absent`)}</em> : row.after}
               </td>
             </tr>
           ))}
         </tbody>
-      </table>
+      </Table>
     </div>
   )
 }
