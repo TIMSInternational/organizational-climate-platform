@@ -428,8 +428,8 @@ export function liveWordBars(
 }
 
 /**
- * `timeZone` is an IANA zone: the administrator's list passes the company's (`companyZone.ts`).
- * Left out, the reader's own zone -- what the respondent's invitation and the live board read.
+ * `timeZone` is an IANA zone: the administrator's pages pass the company's (`companyZone.ts`).
+ * Left out, the reader's own zone -- what the respondent's invitation reads.
  */
 function format(value: string | Date, locale: string, options: Intl.DateTimeFormatOptions, timeZone?: string): string | null {
   const instant = value instanceof Date ? value.getTime() : Date.parse(value)
@@ -453,17 +453,22 @@ export function clock(value: string | Date, locale: string, timeZone?: string): 
 }
 
 /** "21:50:42" — when the live figure was last read. */
-export function clockSeconds(value: Date, locale: string): string | null {
-  return format(value, locale, { hour: 'numeric', minute: '2-digit', second: '2-digit' })
+export function clockSeconds(value: Date, locale: string, timeZone?: string): string | null {
+  return format(value, locale, { hour: 'numeric', minute: '2-digit', second: '2-digit' }, timeZone)
 }
 
 /** "9 sept 2026, 21:06" — the facts under the link. */
-export function stamp(value: string, locale: string): string | null {
-  return format(value, locale, {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  })
+export function stamp(value: string, locale: string, timeZone?: string): string | null {
+  return format(
+    value,
+    locale,
+    {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    },
+    timeZone,
+  )
 }

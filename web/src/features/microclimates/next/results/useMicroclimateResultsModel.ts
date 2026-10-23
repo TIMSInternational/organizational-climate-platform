@@ -4,12 +4,18 @@ import { downloadBlobFile } from '../../../../lib/downloadBlobFile'
 import { getLiveResults, getMicroclimate, type LiveResults, type MicroclimateDetail } from '../../api/microclimates'
 import { getMicroclimateCsv, microclimateCsvFileName } from '../../api/microclimateExport'
 import { describeApiError } from '../../../../api/describeApiError'
+import { companyZone } from '../companyZone'
 
 export interface MicroclimateResultsState {
   status: 'loading' | 'ready' | 'error'
   error: string | null
   detail: MicroclimateDetail | null
   live: LiveResults | null
+  /**
+   * The session's company's IANA zone every date and time is printed on (`companyZone.ts`),
+   * or `null` when it could not be read -- the page then prints the browser's and says so.
+   */
+  timeZone: string | null
   reload: () => void
   exporting: boolean
   exportError: string | null
@@ -32,6 +38,7 @@ export function useMicroclimateResultsModel(id: string | undefined): Microclimat
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const [detail, setDetail] = useState<MicroclimateDetail | null>(null)
   const [live, setLive] = useState<LiveResults | null>(null)
+  const [timeZone, setTimeZone] = useState<string | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [error, setError] = useState<string | null>(null)
   const [generation, setGeneration] = useState(0)
@@ -45,11 +52,17 @@ export function useMicroclimateResultsModel(id: string | undefined): Microclimat
     setError(null)
     // Both at once and both required: the count lives on `/live-results`, the questions on
     // the detail, and half a page for as long as the second request takes helps nobody.
-    Promise.all([getMicroclimate(baseUrl, id, locale), getLiveResults(baseUrl, id)])
-      .then(([loadedDetail, loadedLive]) => {
+    // The zone is the session's own company's, read before the page is drawn so no time is
+    // printed on the wrong clock first; `companyZone` never throws (unreadable is `null`).
+    Promise.all([
+      getMicroclimate(baseUrl, id, locale).then(async (loaded) => ({ loaded, zone: await companyZone(baseUrl, loaded.companyId) })),
+      getLiveResults(baseUrl, id),
+    ])
+      .then(([{ loaded: loadedDetail, zone }, loadedLive]) => {
         if (cancelled) return
         setDetail(loadedDetail)
         setLive(loadedLive)
+        setTimeZone(zone)
         setStatus('ready')
       })
       .catch((err: unknown) => {
@@ -80,6 +93,7 @@ export function useMicroclimateResultsModel(id: string | undefined): Microclimat
     error,
     detail,
     live,
+    timeZone,
     reload: () => setGeneration((value) => value + 1),
     exporting,
     exportError,

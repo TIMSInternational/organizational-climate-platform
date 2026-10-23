@@ -21,6 +21,7 @@ import {
   SkeletonText,
 } from '../../../components/ui'
 import { PROTECTED_HATCH } from '../../../components/charts/suppression'
+import { PageMetaSentences } from '../../../components/canvas'
 import { cn } from '../../../lib/cn'
 import type { LiveResults, MicroclimateDetail } from '../api/microclimates'
 import { MINIMUM_RESPONDENTS } from '../microclimatePrivacy'
@@ -39,6 +40,7 @@ import {
 } from './derive'
 import type { MicroclimateLiveNextModel } from './model'
 import { useCopyLink } from './useCopyLink'
+import { displayZone, zoneNote } from './companyZone'
 import { useMicroclimateLiveModel } from './useMicroclimateLiveModel'
 import { describeApiError } from '../../../api/describeApiError'
 
@@ -120,6 +122,8 @@ export default function MicroclimateLiveNextPage() {
   const model = state.model
   const { detail } = model
   const title = detail.title ?? t('microclimates.untitled')
+  // Every date and time on the company's clock, or the browser's when it could not be read.
+  const zone = displayZone(state.timeZone)
 
   return (
     <div>
@@ -133,7 +137,7 @@ export default function MicroclimateLiveNextPage() {
           { label: t('microclimates.next.live.crumb') },
         ]}
         tightBreadcrumb
-        meta={<SessionLine detail={detail} />}
+        meta={<SessionLine detail={detail} zone={zone} note={zoneNote(t, state.timeZone)} />}
         metaClassName="mt-1 gap-2"
         actions={
           <>
@@ -161,8 +165,8 @@ export default function MicroclimateLiveNextPage() {
       )}
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
-        <ArrivalsCard model={model} />
-        <RespondCard detail={detail} />
+        <ArrivalsCard model={model} zone={zone} />
+        <RespondCard detail={detail} zone={zone} />
       </div>
 
       <ConfirmationDialog
@@ -186,13 +190,16 @@ export default function MicroclimateLiveNextPage() {
   )
 }
 
-/** "En vivo · abierta hasta el 11 de septiembre a las 21:06", under the description. */
-function SessionLine({ detail }: { detail: MicroclimateDetail }) {
+/**
+ * "En vivo · abierta hasta el 11 de septiembre a las 21:06", under the description, on
+ * `zone`'s clock -- and the sentence naming that zone.
+ */
+function SessionLine({ detail, zone, note }: { detail: MicroclimateDetail; zone: string; note: string }) {
   const { t, locale } = useTranslation()
   const isOpen = detail.status === 'active'
   const instant = detail.status === 'draft' ? detail.startTime : detail.endTime
-  const date = dayMonthLong(instant, locale)
-  const time = clock(instant, locale)
+  const date = dayMonthLong(instant, locale, zone)
+  const time = clock(instant, locale, zone)
   const key =
     detail.status === 'draft'
       ? 'microclimates.next.live.opensOn'
@@ -203,10 +210,18 @@ function SessionLine({ detail }: { detail: MicroclimateDetail }) {
   return (
     <>
       <Chip
+        className="self-start"
         tone={isOpen ? 'good' : 'neutral'}
         label={isOpen ? t('microclimates.next.chipLive') : statusLabel(t, detail.status)}
       />
-      {date && time && <span className="text-sm text-fg-tertiary">{t(key, { date, time })}</span>}
+      <span className="flex min-w-0 flex-1 basis-0 text-sm text-fg-tertiary">
+        <PageMetaSentences
+          sentences={[
+            ...(date && time ? [{ id: 'when', text: t(key, { date, time }) }] : []),
+            { id: 'zone', text: note },
+          ]}
+        />
+      </span>
     </>
   )
 }
@@ -218,7 +233,7 @@ function SessionLine({ detail }: { detail: MicroclimateDetail }) {
  * The figure is the latest poll's; before the first poll lands it is the detail's own
  * count, which is the same reading fetched a moment earlier, never a placeholder zero.
  */
-function ArrivalsCard({ model }: { model: MicroclimateLiveNextModel }) {
+function ArrivalsCard({ model, zone }: { model: MicroclimateLiveNextModel; zone: string }) {
   const { t, locale } = useTranslation()
   const { detail, live } = model
   const isOpen = detail.status === 'active'
@@ -238,7 +253,7 @@ function ArrivalsCard({ model }: { model: MicroclimateLiveNextModel }) {
         <h2 id="mc-arrivals" className="m-0 text-2xl">
           {t('microclimates.next.live.arrivalsTitle')}
         </h2>
-        {isOpen && <LiveStamp lastUpdatedAt={model.lastUpdatedAt} isStale={model.isStale} />}
+        {isOpen && <LiveStamp lastUpdatedAt={model.lastUpdatedAt} isStale={model.isStale} zone={zone} />}
       </div>
 
       {/* No wrap, as the artboard draws the row (flex, items at the end): the sentence
@@ -287,9 +302,11 @@ function ArrivalsCard({ model }: { model: MicroclimateLiveNextModel }) {
 }
 
 /** "● En vivo · actualizado a las 21:50:42" — or, after a failed read, when the figure was last good. */
-function LiveStamp({ lastUpdatedAt, isStale }: { lastUpdatedAt: Date | null; isStale: boolean }) {
+function LiveStamp({ lastUpdatedAt, isStale, zone }: { lastUpdatedAt: Date | null; isStale: boolean; zone: string }) {
   const { t, locale } = useTranslation()
-  const time = lastUpdatedAt ? clockSeconds(lastUpdatedAt, locale) : null
+  // On the same clock as every other time on the page, so "actualizado a las 21:50:42" and
+  // "abierta hasta las 22:00" are never read in two zones.
+  const time = lastUpdatedAt ? clockSeconds(lastUpdatedAt, locale, zone) : null
 
   if (isStale && time) {
     return (
@@ -411,15 +428,15 @@ function WordsBlock({ live, responses }: { live: LiveResults | null; responses: 
  * holds 16.90:1 and 18.94:1 on the paper where the red holds 5.08:1. A projector washes contrast
  * out, and the artboard draws this box in its neutral greys with no red in it.
  */
-function RespondCard({ detail }: { detail: MicroclimateDetail }) {
+function RespondCard({ detail, zone }: { detail: MicroclimateDetail; zone: string }) {
   const { t, locale } = useTranslation()
   const { outcome, copy } = useCopyLink()
   const origin = window.location.origin
   const link = respondUrl(origin, detail.id)
   const shareable = detail.status === 'active' && detail.anonymousResponses
   const copied = outcome?.key === detail.id ? outcome : null
-  const opensDate = dayMonthLong(detail.startTime, locale)
-  const opensTime = clock(detail.startTime, locale)
+  const opensDate = dayMonthLong(detail.startTime, locale, zone)
+  const opensTime = clock(detail.startTime, locale, zone)
 
   return (
     <section aria-labelledby="mc-respond" className={CARD}>
@@ -469,7 +486,7 @@ function RespondCard({ detail }: { detail: MicroclimateDetail }) {
         </p>
       )}
 
-      <Facts detail={detail} t={t} locale={locale} />
+      <Facts detail={detail} t={t} locale={locale} zone={zone} />
     </section>
   )
 }
@@ -499,7 +516,7 @@ function QrPlate({ url, label }: { url: string; label: string }) {
 }
 
 /** Apertura, Cierre, Preguntas, Responden — a definition list, so the pairing is real markup. */
-function Facts({ detail, t, locale }: { detail: MicroclimateDetail; t: TranslateFn; locale: string }) {
+function Facts({ detail, t, locale, zone }: { detail: MicroclimateDetail; t: TranslateFn; locale: string; zone: string }) {
   const kinds = questionKinds(detail.questions)
     .map(({ kindKey, count, optional }) => {
       const kind = t(kindKey, { count })
@@ -511,9 +528,9 @@ function Facts({ detail, t, locale }: { detail: MicroclimateDetail; t: Translate
   return (
     <dl className="m-0 grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2 border-t border-line-light pt-1 text-base">
       <dt className="text-fg-tertiary">{t('microclimates.next.live.factOpens')}</dt>
-      <dd className="m-0 font-mono tabular-nums">{stamp(detail.startTime, locale)}</dd>
+      <dd className="m-0 font-mono tabular-nums">{stamp(detail.startTime, locale, zone)}</dd>
       <dt className="text-fg-tertiary">{t('microclimates.next.live.factCloses')}</dt>
-      <dd className="m-0 font-mono tabular-nums">{stamp(detail.endTime, locale)}</dd>
+      <dd className="m-0 font-mono tabular-nums">{stamp(detail.endTime, locale, zone)}</dd>
       <dt className="text-fg-tertiary">{t('microclimates.next.live.factQuestions')}</dt>
       <dd className="m-0">
         {kinds ? t('microclimates.next.live.questionsValue', { count, kinds }) : count}
