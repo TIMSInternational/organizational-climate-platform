@@ -763,6 +763,11 @@ public static class SurveyEndpoints
             }
         }
 
+        // The named people are not in the version snapshot (`SurveyVersioning.Capture` takes the
+        // departments only), so the content diff below cannot see them. Without this a live
+        // survey's audience could be rewritten from the detail page with no history entry at
+        // all -- who may answer is the change an audit trail most needs to hold.
+        var userTargetsChanged = false;
         if (request.UserIds is not null)
         {
             var userIds = request.UserIds.Distinct().ToList();
@@ -773,6 +778,7 @@ public static class SurveyEndpoints
             }
 
             var existingUsers = await db.SurveyUserTargets.Where(t => t.SurveyId == survey.Id).ToListAsync(cancellationToken);
+            userTargetsChanged = !existingUsers.Select(t => t.UserId).ToHashSet().SetEquals(userIds);
             db.SurveyUserTargets.RemoveRange(existingUsers);
             foreach (var userId in userIds)
             {
@@ -831,7 +837,12 @@ public static class SurveyEndpoints
         // so the post-state only exists once it has been written. Hence the second save --
         // a cost paid on updates only, and only when something actually moved.
         var contentAfter = await SurveyAuditTrail.LoadContentAsync(db, survey, cancellationToken);
-        var changedFields = SurveyVersioning.Diff(contentBefore, contentAfter);
+        var changedFields = SurveyVersioning.Diff(contentBefore, contentAfter).ToList();
+        if (userTargetsChanged)
+        {
+            changedFields.Add("userIds");
+        }
+
         if (changedFields.Count > 0)
         {
             SurveyAuditTrail.Record(
