@@ -14,6 +14,7 @@ import {
   updateSurveyWindow,
   type SurveyDetail,
 } from '../../api/surveys'
+import { updateSurveyAudience } from '../../api/surveyAudience'
 import {
   getSurveyDistribution,
   listSurveyInvitations,
@@ -150,6 +151,21 @@ export function useSurveyDetailModel(id: string | undefined) {
     [baseUrl, id, locale, state],
   )
 
+  /**
+   * `PUT /surveys/{id}` with the survey's new targets ("Editar audiencia"). `departmentIds` is
+   * sent only when the dialog passes it, which it does only on a draft nobody has answered.
+   * Throws so the dialog can say why; on success the page reads the detail the server answered
+   * with, so the audience tile and card move with it.
+   */
+  const saveAudience = useCallback(
+    async (targets: { departmentIds?: string[]; userIds: string[] }) => {
+      if (!id || state.status !== 'ready') return
+      const survey = await updateSurveyAudience(baseUrl, id, targets, locale)
+      setState({ status: 'ready', model: { ...state.model, survey } })
+    },
+    [baseUrl, id, locale, state],
+  )
+
   /** `DELETE /surveys/{id}`, then back to the list. Throws so the confirmation can say why. */
   const remove = useCallback(async () => {
     if (!id) return
@@ -157,5 +173,5 @@ export function useSurveyDetailModel(id: string | undefined) {
     navigate('/surveys')
   }, [baseUrl, id, navigate])
 
-  return { state, reload: load, transition, duplicate, saveWindow, remove, pending, actionError }
+  return { state, reload: load, transition, duplicate, saveWindow, saveAudience, remove, pending, actionError }
 }
