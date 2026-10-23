@@ -263,13 +263,24 @@ describe('PlanDetailNextPage — who may write, as PlanAccessHandler rules it', 
     expect(card.textContent).not.toContain(next.noAvancesLead)
   })
 
-  it('gives the leader of the plan nodo the write controls but not the directory picker', async () => {
+  /**
+   * G25: the pickers answer the node's leader with their own nodo's people
+   * (`TrackingPickerEndpoints.ScopeFor`), so the leader who may add involucrados
+   * (`PlanAccessHandler`, Write) is now offered the picker rather than told to ask an
+   * administrator. Only the persona directory is asked — the nodo comes from `/profile`.
+   */
+  it('gives the leader of the plan nodo the write controls and a picker of their own nodo people', async () => {
     setToken(tokenFor({ sub: 'u-leader', name: 'Jefa de Finanzas', role: 'leader', companyId: COMPANY, nodoId: FINANZAS, isActive: 'true' }))
     renderPage()
     expect(await screen.findByRole('button', { name: es.tracking.actions.registrarAvance })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: es.tracking.actions.abrirAgregarInvolucrados })).toBeNull()
-    expect(screen.getByText(next.addByAdmin)).toBeTruthy()
-    expect(calls().some((call) => call.url.includes('/tracking/picker/'))).toBe(false)
+    const open = await screen.findByRole('button', { name: es.tracking.actions.abrirAgregarInvolucrados })
+    expect(screen.queryByText(next.addByAdmin)).toBeNull()
+    expect(calls().some((call) => call.url.includes(`/tracking/picker/personas?companyId=${COMPANY}`))).toBe(true)
+    expect(calls().some((call) => call.url.includes('/tracking/picker/nodos'))).toBe(false)
+
+    await userEvent.setup().click(open)
+    // Adriana is already on the plan: offered, ticked and locked, because nothing removes one.
+    expect(await screen.findByText(es.tracking.involucrados.alreadyOnPlan)).toBeTruthy()
   })
 
   /**
