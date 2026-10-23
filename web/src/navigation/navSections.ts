@@ -7,6 +7,7 @@ import {
   Tags,
   Inbox,
   ListChecks,
+  ScrollText,
 } from 'lucide-react'
 import {
   RailAnalyticsIcon,
@@ -236,6 +237,16 @@ const QUESTION_LIBRARY_ITEM: NavItem = {
   icon: RailQuestionLibraryIcon,
 }
 
+// The audit log (G21). Both admin roles: `GET /audit/logs` admits a super_admin (the page
+// sends the company chosen in the header) and a company_admin held to their own tenant, and
+// 403s everyone else. Appended LAST in each Workspace group, like the question bank, so the
+// mobile tab bar's first four leaves do not move.
+const AUDIT_LOG_ITEM: NavItem = {
+  labelKey: 'audit.title',
+  href: '/admin/audit',
+  icon: ScrollText,
+}
+
 // Departments (#142). Admin-only: `/admin/departments` allows a super_admin
 // always and a company_admin on their own company, and 403s everyone else, so it
 // belongs to the two admin branches and not the fallback.
@@ -457,6 +468,7 @@ export function buildNavSections(
           },
           QUESTION_BANK_ITEM,
           QUESTION_LIBRARY_ITEM,
+          AUDIT_LOG_ITEM,
         ],
       },
       {
@@ -547,6 +559,7 @@ export function buildNavSections(
           DEPARTMENTS_ITEM,
           QUESTION_BANK_ITEM,
           QUESTION_LIBRARY_ITEM,
+          AUDIT_LOG_ITEM,
         ],
       },
       {
