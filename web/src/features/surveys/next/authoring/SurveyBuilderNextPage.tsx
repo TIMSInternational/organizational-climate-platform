@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
   EmptyState,
   ErrorState,
+  RadioField,
   Select,
   SelectContent,
   SelectField,
@@ -52,6 +53,7 @@ import {
 import {
   CONTENT_LANGUAGES,
   SURVEY_WIZARD_STEPS,
+  audienceChoiceOf,
   chosenDimensions,
   derivedOptionValue,
   emptyOption,
@@ -61,6 +63,7 @@ import {
   scheduledDays,
   startsFromTemplate,
   wizardStepErrors,
+  type AudienceChoice,
   type ContentLanguage,
   type SurveyQuestionValues,
   type SurveyWizardStepId,
@@ -73,6 +76,8 @@ import { Card } from './parts'
 import { dimensionSections } from './launch'
 import { templateCovers } from './templateRows'
 import { useSurveyBuilderModel } from './useSurveyBuilderModel'
+import { PeoplePicker } from './PeoplePicker'
+import { browserTimeZone, zoneLabel } from './zonedWindow'
 
 const NO_TEMPLATE = '__none__'
 // Radix Select has no empty-string value, so "no licensed service" needs a sentinel,
@@ -129,7 +134,7 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
   const [bankOpen, setBankOpen] = useState(false)
 
   const fromTemplate = startsFromTemplate(values)
-  const baseErrors = wizardStepErrors(values, t, template === null ? null : template.questions.length)
+  const baseErrors = wizardStepErrors(values, t, template === null ? null : template.questions.length, m.activePeople)
   // A template's questions are rows once they arrive (`templateRows.ts`), so they are validated
   // as rows; until then the wizard's own "the template is loading" stands.
   const questionErrors =
@@ -214,10 +219,17 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
       )}
       {m.unsaved && (
         <Alert variant="destructive" role="alert" className="mb-4">
-          <AlertDescription>
-            {copy('questionsNotSaved', { message: m.unsaved.message })}{' '}
-            <Link to={`/surveys/${m.unsaved.id}/questions`}>{copy('openQuestionEditor')}</Link>
-          </AlertDescription>
+          {m.unsaved.kind === 'people' ? (
+            <AlertDescription>
+              {copy('audience.peopleNotSaved', { message: m.unsaved.message })}{' '}
+              <Link to={`/surveys/${m.unsaved.id}`}>{copy('audience.openSurvey')}</Link>
+            </AlertDescription>
+          ) : (
+            <AlertDescription>
+              {copy('questionsNotSaved', { message: m.unsaved.message })}{' '}
+              <Link to={`/surveys/${m.unsaved.id}/questions`}>{copy('openQuestionEditor')}</Link>
+            </AlertDescription>
+          )}
         </Alert>
       )}
       {draft.recovery !== null && (
@@ -768,9 +780,13 @@ function StepForm({
   const { t, locale } = useTranslation()
   const { values, patch, departments, templates, template } = m
   const fromTemplate = startsFromTemplate(values)
+  // The zone the schedule's wall clocks are read on: the company's, or -- unread -- the browser's,
+  // named either way so nobody has to guess whose 23:59 it is (G16).
+  const zone = m.timeZone ?? browserTimeZone()
+  const zoneNote = copy(m.timeZone === null ? 'zoneBrowser' : 'zoneCompany', { zone: zoneLabel(zone) })
+  const choice = audienceChoiceOf(values)
   const days = scheduledDays(values)
   const columns: ('en' | 'es')[] = both ? ['es', 'en'] : [values.language === 'es' ? 'es' : 'en']
-  const headcount = (departments ?? []).reduce((sum, d) => sum + d.employeeCount, 0)
 
   if (step === 'basics') {
     return (
@@ -830,6 +846,7 @@ function StepForm({
           <TextField required type="datetime-local" label={t('surveys.startDate')} value={values.startDate} onChange={(next) => patch({ startDate: next })} />
           <TextField required type="datetime-local" label={t('surveys.endDate')} value={values.endDate} onChange={(next) => patch({ endDate: next })} />
         </div>
+        <p className="m-0 text-sm text-fg-secondary" data-testid="builder-zone">{zoneNote}</p>
         {days !== null && (
           <p className="m-0 text-sm text-fg-secondary">
             <span className="font-mono text-fg-primary tabular-nums">{days}</span> {copy('daysOpen')}
@@ -842,6 +859,30 @@ function StepForm({
     return (
       <>
         <PanelHeading title={t('surveys.stepAudience')} />
+        <RadioField
+          label={copy('audience.legend')}
+          value={choice}
+          onChange={(next) => patch({ audienceMode: next as AudienceChoice })}
+          options={[
+            { value: 'company', label: copy('audience.company') },
+            // No department to tick is no way to finish this choice: offered only when there is one.
+            { value: 'departments', label: copy('audience.departments'), disabled: departments === null || departments.length === 0 },
+            { value: 'people', label: copy('audience.people') },
+          ]}
+        />
+        {choice === 'company' && (
+          <p className="m-0 text-sm text-fg-secondary" data-testid="audience-company">
+            {m.people ? copy('audience.companyCount', { count: m.people.length }) : copy('audience.companyAll')}
+          </p>
+        )}
+        {choice === 'people' && (
+          m.people === undefined ? (
+            <p className="m-0 text-sm text-fg-secondary">{copy('audience.peopleLoading')}</p>
+          ) : (
+            <PeoplePicker people={m.people} users={m.users} chosen={values.userIds ?? []} onChange={(ids) => patch({ userIds: ids })} />
+          )
+        )}
+        {choice === 'departments' && (
         <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
           <legend className="mb-1.5 text-sm font-medium">{t('surveys.departmentsLabel')}</legend>
           {departments === null || departments.length === 0 ? (
@@ -864,10 +905,15 @@ function StepForm({
               ))}
             </div>
           )}
-          {departments !== null && departments.length > 0 && values.departmentIds.length === 0 && (
-            <p className="m-0 text-sm text-fg-secondary">{copy('reachesEveryone', { count: headcount })}</p>
+          {departments !== null && departments.length > 0 && values.departmentIds.length > 0 && (
+            <p className="m-0 text-sm text-fg-secondary">
+              {copy('audience.departmentsCount', {
+                count: departments.filter((d) => values.departmentIds.includes(d.id)).reduce((sum, d) => sum + d.employeeCount, 0),
+              })}
+            </p>
           )}
         </fieldset>
+        )}
         <p className="m-0 flex items-start gap-2 rounded-md bg-surface-icon-box px-3.5 py-3 text-sm text-fg-secondary">
           <ShieldCheck aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
           {copy('floorNote', { floor: ANONYMITY_FLOOR })}
@@ -913,7 +959,15 @@ function StepForm({
     [t('surveys.contentLanguage'), languageLabel(t, values.language)],
     [t('surveys.startDate'), reviewDate(values.startDate, locale)],
     [t('surveys.endDate'), reviewDate(values.endDate, locale)],
-    [t('surveys.departmentsLabel'), values.departmentIds.length === 0 ? t('surveys.departmentsAll') : named.join(', ') || t('surveys.readingDepartmentsUnlisted')],
+    [copy('zoneLabel'), zoneLabel(zone)],
+    [
+      copy('audience.legend'),
+      choice === 'people'
+        ? copy((values.userIds ?? []).length === 1 ? 'audience.reviewPeopleOne' : 'audience.reviewPeople', { count: (values.userIds ?? []).length })
+        : choice === 'departments'
+          ? named.join(', ') || t('surveys.readingDepartmentsUnlisted')
+          : copy('audience.company'),
+    ],
     ...(fromTemplate
       ? []
       : [[
