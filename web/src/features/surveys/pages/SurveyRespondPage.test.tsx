@@ -212,8 +212,9 @@ describe('SurveyRespondPage language', () => {
 
     expect(await screen.findByRole('button', { name: 'Enviar mis respuestas' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Submit my answers' })).toBeNull()
-    // What assistive tech and the browser's own translation prompt read.
-    expect(document.documentElement.lang).toBe('es')
+    // What assistive tech and the browser's own translation prompt read. It is set in a
+    // passive effect (`TranslationProvider`), which may flush after the render above.
+    await waitFor(() => expect(document.documentElement.lang).toBe('es'))
   })
 
   it('adopts the survey language without remembering it as a preference', async () => {
