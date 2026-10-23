@@ -110,7 +110,7 @@ public static class DepartmentEndpoints
             cancellationToken);
         if (duplicate is not null)
         {
-            return Results.Json(new { message = "Department with this name already exists at this level" }, statusCode: 400);
+            return Results.Json(new { message = "Department with this name already exists at this level", code = AdminRefusals.DepartmentNameTaken }, statusCode: 400);
         }
 
         var department = new Department
@@ -226,7 +226,7 @@ public static class DepartmentEndpoints
                 cancellationToken);
             if (duplicate is not null)
             {
-                return Results.Json(new { message = "Department with this name already exists at this level" }, statusCode: 400);
+                return Results.Json(new { message = "Department with this name already exists at this level", code = AdminRefusals.DepartmentNameTaken }, statusCode: 400);
             }
 
             department.Name = name;

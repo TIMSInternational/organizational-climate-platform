@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Localization;
 using ClimateProject.Application.Questions;
@@ -1014,6 +1015,17 @@ public class QuestionBankEndpointsTests : IAsyncLifetime
         var refused = await admin.DeleteAsync($"/admin/question-bank/{item.Id}");
         Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
 
+        // A stable code beside the unchanged English message, so the bank screen can say the
+        // refusal in the reader's language (AdminRefusals).
+        using (var body = JsonDocument.Parse(await refused.Content.ReadAsStringAsync()))
+        {
+            Assert.Equal("question_bank_item_in_use", body.RootElement.GetProperty("code").GetString());
+            Assert.Equal(
+                "This question has been used in 1 survey question(s) and cannot be deleted. "
+                + "Retire it instead, through PUT /admin/question-bank/{id}/lifecycle.",
+                body.RootElement.GetProperty("message").GetString());
+        }
+
         // The row survived -- asserted as a count, because the previous form
         // (Assert.NotNull over a FirstAsync) could only ever throw or pass, never fail.
         Assert.Equal(1, await _harness.WithDbAsync(db => db.QuestionBankItems.CountAsync(i => i.Id == item.Id)));
@@ -1022,6 +1034,25 @@ public class QuestionBankEndpointsTests : IAsyncLifetime
         Assert.Equal(
             1,
             await _harness.WithDbAsync(db => db.Questions.CountAsync(q => q.SourceQuestionBankItemId == item.Id)));
+    }
+
+    [Fact]
+    public async Task A_question_with_variations_cannot_be_deleted_and_the_refusal_carries_its_code()
+    {
+        var admin = await AdminAsync();
+        var parent = await CreateItemAsync(admin, Item(_companyId, text: "Parent probe", category: "delete-probe"));
+        (await admin.PostAsJsonAsync(
+            $"/admin/question-bank/{parent.Id}/variations",
+            new CreateQuestionBankVariationRequest("Another way to ask it"))).EnsureSuccessStatusCode();
+
+        var refused = await admin.DeleteAsync($"/admin/question-bank/{parent.Id}");
+
+        Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+        using var body = JsonDocument.Parse(await refused.Content.ReadAsStringAsync());
+        Assert.Equal("question_bank_item_has_variations", body.RootElement.GetProperty("code").GetString());
+        Assert.Equal(
+            "This question has 1 variation(s) hanging off it. Delete or re-parent them first.",
+            body.RootElement.GetProperty("message").GetString());
     }
 
     [Fact]

@@ -413,6 +413,7 @@ public static class SurveyDistributionEndpoints
                 {
                     message = $"A survey in status '{survey.Status}' cannot be distributed. "
                               + $"Publish it first via PUT /surveys/{{id}}/status ({string.Join(" or ", SurveyStatuses.RespondentVisible)}).",
+                    code = AdminRefusals.SurveyNotDistributable,
                 },
                 statusCode: 409);
         }
@@ -421,7 +422,7 @@ public static class SurveyDistributionEndpoints
         if (survey.EndDate <= now)
         {
             return Results.Json(
-                new { message = "This survey's response window has already closed; there is nothing to invite anyone to." },
+                new { message = "This survey's response window has already closed; there is nothing to invite anyone to.", code = AdminRefusals.SurveyWindowClosed },
                 statusCode: 409);
         }
 
@@ -786,14 +787,14 @@ public static class SurveyDistributionEndpoints
             // 409 rather than a 200 with a zero count: an admin who explicitly asked for
             // reminders and silently got none would conclude the feature is broken.
             return Results.Json(
-                new { message = "This survey has notificationSendReminders turned off. Turn it on before sending reminders." },
+                new { message = "This survey has notificationSendReminders turned off. Turn it on before sending reminders.", code = AdminRefusals.SurveyRemindersOff },
                 statusCode: 409);
         }
 
         if (!SurveyStatuses.AcceptsResponses(survey.Status))
         {
             return Results.Json(
-                new { message = $"A survey in status '{survey.Status}' is not collecting responses; there is nothing to remind anyone about." },
+                new { message = $"A survey in status '{survey.Status}' is not collecting responses; there is nothing to remind anyone about.", code = AdminRefusals.SurveyNotCollecting },
                 statusCode: 409);
         }
 

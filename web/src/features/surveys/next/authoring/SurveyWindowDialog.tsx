@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ApiError } from '../../../../api/authFetch'
+import { describeKnownRefusal } from '../../../../api/describeApiError'
 import { useTranslation } from '../../../../i18n'
 import {
   Alert,
@@ -92,7 +93,7 @@ export function SurveyWindowDialog({
       )
       onOpenChange(false)
     } catch (cause) {
-      setProblem(refusal(cause, copy, t('errors.generic')))
+      setProblem(describeKnownRefusal(cause, t) ?? refusal(cause, copy, t('errors.generic')))
     } finally {
       setSaving(false)
     }

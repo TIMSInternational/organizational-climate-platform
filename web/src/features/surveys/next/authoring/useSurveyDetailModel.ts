@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useTranslation } from '../../../../i18n'
+import { describeApiError } from '../../../../api/describeApiError'
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { useCompanyScope } from '../../../../company-context'
 import { listDepartments, type Department } from '../../../org-structure/api/departments'
@@ -115,7 +116,7 @@ export function useSurveyDetailModel(id: string | undefined) {
         const survey = await updateSurveyStatus(baseUrl, id, status, locale)
         setState({ status: 'ready', model: { ...state.model, survey } })
       } catch (error) {
-        setActionError(error instanceof Error ? error.message : t('errors.generic'))
+        setActionError(describeApiError(error, t))
       } finally {
         setPending(null)
       }
@@ -131,7 +132,7 @@ export function useSurveyDetailModel(id: string | undefined) {
       const copy = await duplicateSurvey(baseUrl, id, locale)
       navigate(`/surveys/${copy.id}`)
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : t('errors.generic'))
+      setActionError(describeApiError(error, t))
     } finally {
       setPending(null)
     }

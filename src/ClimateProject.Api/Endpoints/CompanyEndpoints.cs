@@ -65,7 +65,7 @@ public static class CompanyEndpoints
         var domain = request.EmailDomain.Trim().ToLowerInvariant();
         if (!CompanyValidation.IsValidDomain(domain))
         {
-            return Results.Json(new { message = $"Invalid domain format: {domain}" }, statusCode: 400);
+            return Results.Json(new { message = $"Invalid domain format: {domain}", code = AdminRefusals.CompanyDomainInvalid }, statusCode: 400);
         }
 
         if (!CompanyValidation.ValidSizes.Contains(request.Size))
@@ -82,7 +82,7 @@ public static class CompanyEndpoints
         var existing = await db.Companies.FirstOrDefaultAsync(c => c.EmailDomain == domain, cancellationToken);
         if (existing is not null)
         {
-            return Results.Json(new { message = $"Domain already exists: {domain}" }, statusCode: 409);
+            return Results.Json(new { message = $"Domain already exists: {domain}", code = AdminRefusals.CompanyDomainTaken }, statusCode: 409);
         }
 
         var company = new Company
@@ -154,13 +154,13 @@ public static class CompanyEndpoints
             {
                 if (!CompanyValidation.IsValidDomain(domain))
                 {
-                    return Results.Json(new { message = $"Invalid domain format: {domain}" }, statusCode: 400);
+                    return Results.Json(new { message = $"Invalid domain format: {domain}", code = AdminRefusals.CompanyDomainInvalid }, statusCode: 400);
                 }
 
                 var existing = await db.Companies.FirstOrDefaultAsync(c => c.EmailDomain == domain && c.Id != id, cancellationToken);
                 if (existing is not null)
                 {
-                    return Results.Json(new { message = "Domain already exists" }, statusCode: 409);
+                    return Results.Json(new { message = "Domain already exists", code = AdminRefusals.CompanyDomainTaken }, statusCode: 409);
                 }
 
                 company.EmailDomain = domain;

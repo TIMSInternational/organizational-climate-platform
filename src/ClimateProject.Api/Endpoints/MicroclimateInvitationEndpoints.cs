@@ -280,7 +280,7 @@ public static class MicroclimateInvitationEndpoints
         if (microclimate.Scheduling.EndTime <= now)
         {
             return Results.Json(
-                new { message = "This microclimate's response window has already closed; there is nothing to invite anyone to." },
+                new { message = "This microclimate's response window has already closed; there is nothing to invite anyone to.", code = AdminRefusals.MicroclimateInviteWindowClosed },
                 statusCode: 409);
         }
 

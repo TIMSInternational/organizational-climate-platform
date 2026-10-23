@@ -626,7 +626,7 @@ public static class SurveyTemplateEndpoints
         var endDate = request?.EndDate ?? startDate + DefaultSurveyWindow;
         if (startDate >= endDate)
         {
-            return Results.Json(new { message = "StartDate must be before EndDate" }, statusCode: 400);
+            return Results.Json(new { message = "StartDate must be before EndDate", code = AdminRefusals.SurveyDatesOutOfOrder }, statusCode: 400);
         }
 
         var departmentIds = (request?.DepartmentIds ?? []).Distinct().ToList();
