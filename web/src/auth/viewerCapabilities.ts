@@ -105,8 +105,10 @@ export interface ViewerCapabilities {
    */
   canManageOrg: boolean
   /**
-   * The tracking directory pickers are admin-only: `TrackingPickerEndpoints.cs:19-21`
-   * (`CanAccessCompany`), refused at `:30-32` and `:54-56`.
+   * The tracking directory pickers answer this viewer with the WHOLE company: an
+   * administrator (`TrackingPickerEndpoints.ScopeFor`). A node leader is answered too, but
+   * with their own nodo and its people only (G25) — that is `leadsANodo`, and only the plan
+   * forms ask on it; a screen that names every nodo of the company still asks on this.
    */
   canUseDirectoryPickers: boolean
   /**

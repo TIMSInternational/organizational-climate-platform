@@ -1,3 +1,4 @@
+using ClimateProject.Application.Auth;
 using ClimateProject.Application.Localization;
 using ClimateProject.Application.Notifications;
 using ClimateProject.Application.Scheduling;
@@ -183,8 +184,11 @@ public static class ActionPlanDueJob
                 Priority = nudge.Overdue ? NotificationPriorities.High : NotificationPriorities.Medium,
                 Status = NotificationStatuses.Pending,
                 Title = ScheduledNotificationCopy.PlanDueTitleFor(locale, nudge.Overdue),
+                // Whether the owner may act on the plan themselves decides what the body
+                // asks of them -- the same `Roles.Admin` rule ActionPlanEndpoints enforces.
                 Message = ScheduledNotificationCopy.PlanDueBodyFor(
-                    locale, title, nudge.Plan.DueDate, nudge.Overdue),
+                    locale, title, nudge.Plan.DueDate, nudge.Overdue,
+                    recipientAdministers: Roles.Admin.Contains(nudge.Owner.Role)),
 
                 // The instant the nudge became OWED, computed from the plan's own date, never
                 // from the wall clock of the tick that noticed. Two instances racing compute

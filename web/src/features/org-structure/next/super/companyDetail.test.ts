@@ -1,21 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import type { SurveyListItem } from '../../../surveys/api/surveys'
 import type { Department } from '../../api/departments'
 import type { User } from '../../api/users'
 import {
   departmentSummary,
   draftProblems,
   foldCommonPrefix,
-  parseRetention,
   peopleReading,
   profileChanges,
   reportWave,
-  retentionYears,
-  settingsChanges,
-  wavesByMonth,
   type ProfileDraft,
-  type SettingsDraft,
 } from './companyDetail'
+import type { SettingsDraft } from '../settings/derive'
 
 function department(name: string, isActive: boolean, employeeCount: number): Department {
   return { id: name, companyId: 'm', name, description: null, parentDepartmentId: null, isActive, employeeCount }
@@ -77,55 +72,6 @@ describe('peopleReading', () => {
   })
 })
 
-describe('wavesByMonth', () => {
-  const survey = (status: string, title: string, endDate: string): SurveyListItem => ({
-    id: title,
-    title,
-    companyId: 'm',
-    type: 'periodic',
-    status,
-    language: 'both',
-    startDate: endDate,
-    endDate,
-    responseCount: 24,
-    targetAudienceCount: null,
-    questionCount: 6,
-    createdAt: endDate,
-  })
-
-  it("names Meridiano's four waves by the month they close, skipping the archived copy and drafts", () => {
-    const surveys = [
-      survey('archived', 'Encuesta de Clima Q4 (abierta) (Copia)', '2026-12-10T02:03:39Z'),
-      survey('closed', 'Encuesta de Clima Q3', '2026-08-06T02:05:22Z'),
-      survey('active', 'Encuesta de Clima Q4 (abierta)', '2026-10-10T02:03:39Z'),
-      survey('closed', 'Encuesta de Clima Q2', '2026-05-13T02:03:12Z'),
-      survey('closed', 'Encuesta de Clima Q1', '2026-02-12T03:02:44Z'),
-      survey('draft', 'Pulso', '2026-11-01T00:00:00Z'),
-    ]
-    expect(wavesByMonth(surveys, 'es')).toEqual([
-      { code: 'Q1', month: 'febrero' },
-      { code: 'Q2', month: 'mayo' },
-      { code: 'Q3', month: 'agosto' },
-      { code: 'Q4', month: 'octubre' },
-    ])
-  })
-})
-
-describe('retention', () => {
-  it('turns days into years, one decimal at most', () => {
-    expect(retentionYears(2555, 'es')).toBe('7')
-    expect(retentionYears(400, 'en')).toBe('1.1')
-  })
-
-  it('accepts whole days only, at least one', () => {
-    expect(parseRetention('2555')).toBe(2555)
-    expect(parseRetention(' 30 ')).toBe(30)
-    expect(parseRetention('0')).toBeNull()
-    expect(parseRetention('12.5')).toBeNull()
-    expect(parseRetention('siete')).toBeNull()
-  })
-})
-
 const profile: ProfileDraft = {
   name: 'Grupo Meridiano S.A.',
   emailDomain: 'meridiano.test',
@@ -137,13 +83,10 @@ const profile: ProfileDraft = {
 
 const settings: SettingsDraft = {
   language: 'es',
-  surveyFrequency: 'quarterly',
-  anonymousSurveys: true,
-  dataRetentionDays: '2555',
-  microclimateEnabled: true,
-  aiInsightsEnabled: true,
+  timezone: 'America/Costa_Rica',
   credentialMode: 'shared',
   primaryColor: '#0d9488',
+  logoUrl: '',
 }
 
 describe('profileChanges', () => {
@@ -160,39 +103,12 @@ describe('profileChanges', () => {
   })
 })
 
-describe('settingsChanges', () => {
-  it('sends the credential mode only when it changed', () => {
-    expect(settingsChanges(settings, { ...settings })).toEqual({})
-    expect(settingsChanges(settings, { ...settings, credentialMode: 'per_survey' })).toEqual({ credentialMode: 'per_survey' })
-  })
-
-  it('sends the language the triage asked for, and only it', () => {
-    expect(settingsChanges(settings, { ...settings, language: 'en' })).toEqual({ language: 'en' })
-  })
-
-  it('sends a valid retention as a number and never an invalid one', () => {
-    expect(settingsChanges(settings, { ...settings, dataRetentionDays: '365' })).toEqual({ dataRetentionDays: 365 })
-    expect(settingsChanges(settings, { ...settings, dataRetentionDays: 'abc' })).toEqual({})
-  })
-
-  it('sends a colour only when it is a whole hex colour', () => {
-    expect(settingsChanges(settings, { ...settings, primaryColor: '#dd0c15' })).toEqual({ primaryColor: '#dd0c15' })
-    expect(settingsChanges(settings, { ...settings, primaryColor: '#dd0' })).toEqual({})
-  })
-
-  it('sends the switches when they flip', () => {
-    expect(settingsChanges(settings, { ...settings, aiInsightsEnabled: false, anonymousSurveys: false })).toEqual({
-      aiInsightsEnabled: false,
-      anonymousSurveys: false,
-    })
-  })
-})
-
 describe('draftProblems', () => {
-  it('blocks the save on an empty name, a bad retention or a bad colour', () => {
+  it('blocks the save on an empty name, a bad colour or a logo path the API would refuse', () => {
     expect(draftProblems({ ...profile, name: ' ' }, settings)).toBe(true)
-    expect(draftProblems(profile, { ...settings, dataRetentionDays: '0' })).toBe(true)
     expect(draftProblems(profile, { ...settings, primaryColor: 'red' })).toBe(true)
+    expect(draftProblems(profile, { ...settings, logoUrl: 'https://cdn.example.com/logo.png' })).toBe(true)
+    expect(draftProblems(profile, { ...settings, logoUrl: '/brand/meridiano.svg' })).toBe(false)
     expect(draftProblems(profile, settings)).toBe(false)
   })
 

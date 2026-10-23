@@ -292,7 +292,10 @@
         "progress": "Progress recorded",
         "noteBefore": "Each update is recorded with",
         "noteAction": "Record progress",
-        "noteAfter": ": a note on what moved and why, with its date. The server keeps every update but does not return them yet, so only those recorded during this visit appear here."
+        "noteAfter": ": a note on what moved and why, with its date. Every update stays here.",
+        "progressBy": "Progress recorded by",
+        "historyLoading": "Loading the recorded progress…",
+        "historyFailed": "The recorded progress could not be read. The plan itself is unaffected; reload to try again."
       },
       "sheet": {
         "title": "Details",
@@ -306,7 +309,23 @@
         "noTemplate": "None",
         "unknown": "not available"
       },
-      "guard": "Progress is recorded by the administration. The plan points at a dimension and a department, never at individual responses."
+      "guard": "Progress is recorded by the administration. The plan points at a dimension and a department, never at individual responses.",
+      "edit": {
+        "menu": "Edit plan…",
+        "title": "Edit plan",
+        "description": "Correct the title, description, due date or tags. The change is recorded in the audit log.",
+        "tagsHint": "Separated by commas. Tags the platform added when it raised the plan are kept as they are.",
+        "save": "Save changes"
+      },
+      "delete": {
+        "menu": "Delete plan…",
+        "title": "Delete this plan?",
+        "body": "“{title}” will be deleted together with its KPIs, objectives and progress history. Reminders not yet sent are cancelled. This cannot be undone.",
+        "confirm": "Delete plan"
+      },
+      "createOwner": "Owner",
+      "createOwnerNone": "Unassigned",
+      "createOwnerHint": "Who is answerable for the plan. You can change it later."
     }
   },
   "analytics": {
@@ -2209,7 +2228,13 @@
         "inviteDepartments": "By department",
         "inviteNoDepartments": "This company has no active departments.",
         "inviteSend": "Send invitations",
-        "inviteCreated": "{count} invitations were created."
+        "inviteCreated": "{count} invitations were created.",
+        "editDraft": "Edit draft",
+        "discardDraft": "Discard draft",
+        "discardConfirmTitle": "Discard this draft?",
+        "discardConfirmBody": "“{title}” and all its questions will be deleted. Nobody has answered it or been invited to it. This cannot be undone.",
+        "invitationsListLabel": "Invitation list ({count})",
+        "invitationsShowing": "{shown} of {total} invitations"
       },
       "analytics": {
         "title": "Microclimate analytics",
@@ -2435,6 +2460,27 @@
         "unknownLabel": "Could not be opened",
         "unknownTitle": "This invitation could not be opened",
         "unknownBody": "It may be the connection or a temporary problem on our side. Open the link again in a few minutes; if it still does not open, ask whoever sent it to you."
+      },
+      "seats": {
+        "title": "Seats",
+        "loading": "Reading the microclimate seats…",
+        "failed": "The remaining microclimate seats could not be read. Responses are still counted as usual.",
+        "availableTitle": "Seats available: {remaining} of {total} ({used} used)",
+        "availableBody": "Each completed response uses one seat. When they run out, anyone who answers is told on sending that the session cannot accept new responses, and nothing they send is recorded, until the platform's administrator grants more seats.",
+        "exhaustedTitle": "No seats left: {used} of {total} used",
+        "exhaustedBody": "While there are no seats, nobody can answer any microclimate: anyone who answers is told on sending that the session cannot accept new responses. Ask the platform's administrator for more seats.",
+        "suspendedTitle": "The microclimate licence is suspended",
+        "suspendedBody": "While it is suspended, nobody can answer any microclimate. Ask the platform's administrator to reactivate it.",
+        "unmeteredTitle": "No seat limit",
+        "unmeteredBody": "Your company has no microclimate licence with seats, so no response is refused for lack of seats."
+      },
+      "edit": {
+        "title": "Edit draft",
+        "description": "Change what you need before launching. Saving replaces the draft's content; nobody has seen it yet.",
+        "save": "Save changes",
+        "notDraftTitle": "This session is no longer a draft",
+        "notDraftBody": "Once launched, its questions are the ones people answered and cannot be changed. You can close it and create a new one.",
+        "backToSession": "Back to the session"
       }
     }
   },
@@ -4303,7 +4349,36 @@
         "departmentsAlsoPeople": "and {count} people chosen individually.",
         "responsesDash": "— responses",
         "departmentsNote": "Departments appear in Results from one response once the whole survey reaches {floor} completed responses.",
-        "privacyNote": "Results are computed every time they are read. Nobody sees the responses one by one."
+        "privacyNote": "Results are computed every time they are read. Nobody sees the responses one by one.",
+        "delete": {
+          "action": "Delete",
+          "title": "Delete this survey?",
+          "body": "Its questions, link and invitations are deleted. Nobody has answered it yet. This cannot be undone.",
+          "bodyLive": "It is {status}: anyone holding its link or a code will no longer be able to answer. Its questions, link and invitations are deleted. Nobody has answered it yet. This cannot be undone.",
+          "typeLabel": "Type {word} to confirm",
+          "word": "DELETE",
+          "confirm": "Delete survey",
+          "deleting": "Deleting…",
+          "refusedResponses": "This survey already has responses and cannot be deleted. Archive it to stop seeing it without losing what people answered.",
+          "refusedGone": "This survey no longer exists. Go back to the survey list."
+        },
+        "window": {
+          "edit": "Change dates",
+          "title": "Survey dates",
+          "zone": "Times are the company's: {zone}.",
+          "zoneRow": "Time zone",
+          "start": "Opens",
+          "end": "Closes",
+          "save": "Save dates",
+          "startLocked": "It has opened: the opening cannot move. Only the close.",
+          "liveNote": "It is active: respondents see the new close immediately.",
+          "errorMissing": "Choose the opening and closing date and time.",
+          "errorOrder": "The opening must be before the close.",
+          "errorPast": "The close must be after this moment.",
+          "refusedOrder": "Not saved: the opening must be before the close.",
+          "refusedStatus": "Not saved: the survey changed status and no longer accepts this change. Reload the page.",
+          "refusedGone": "Not saved: this survey no longer exists."
+        }
       },
       "distribution": {
         "title": "Distribution",
@@ -4510,7 +4585,48 @@
           "writtenIn": "Written in {language}"
         },
         "questionsNotSaved": "The survey was created with the template's questions, but your changes to them were not saved ({message}). Make them again in Edit questions.",
-        "openQuestionEditor": "Open Edit questions"
+        "openQuestionEditor": "Open Edit questions",
+        "zoneCompany": "Dates and times in the company's time zone: {zone}.",
+        "zoneBrowser": "The company's time zone could not be read: dates and times in this browser's, {zone}.",
+        "zoneLabel": "Time zone",
+        "audience": {
+          "legend": "Who it reaches",
+          "company": "The whole company",
+          "departments": "Departments",
+          "people": "Specific people",
+          "companyCount": "It reaches the whole company. Active people today: {count}.",
+          "companyAll": "It reaches the whole company.",
+          "departmentsCount": "People in the ticked departments: {count}.",
+          "departmentsRequired": "Tick at least one department, or choose “The whole company”.",
+          "peopleRequired": "Choose at least one person, or choose “The whole company”. With nobody chosen, the survey would reach the whole company.",
+          "peopleInactive": "Chosen people who are no longer active in the company: {count}. With them on the list, the survey cannot be created.",
+          "removeInactive": "Remove them from the list",
+          "peopleUnreadable": "The company's people could not be read, so nobody can be chosen by name right now. Try again later or choose another audience.",
+          "peopleLoading": "Reading the company's people…",
+          "chosenOne": "person chosen",
+          "chosenMany": "people chosen",
+          "searchLabel": "Search people",
+          "searchHelp": "By name, email or department. Only the company's active people are offered.",
+          "chooseResults": "Choose the results ({count})",
+          "unchooseResults": "Remove the results ({count})",
+          "onlyChosen": "Show only the chosen",
+          "nobodyActive": "The company has no active people.",
+          "noResults": "Nobody matches the search.",
+          "resultsLabel": "Search results: {count}",
+          "listCapped": "Showing {shown} of {count} results. Narrow the search to see the rest; “Choose the results” includes them all.",
+          "pasteLabel": "Paste a list of emails",
+          "pasteHelp": "One per line, or separated by commas or semicolons. Before they are added, the ones that match no active person are listed.",
+          "pasteMatched": "Emails read: {count}. Matching an active person: {matched}.",
+          "pasteUnmatched": "No match with an active person in the company ({count}):",
+          "reasonInactive": "the account is inactive",
+          "reasonUnknown": "nobody in the company has this email",
+          "pasteAdd": "Add to the selection ({count})",
+          "reviewPeople": "{count} people, by name",
+          "reviewPeopleOne": "1 person, by name",
+          "peopleNotSavedRemoved": "The list of people could not be saved on the survey ({message}), so the copy was deleted and no survey was created. Your draft is still here: try again.",
+          "peopleNotSaved": "The survey was created as a draft, but without the chosen people ({message}): as it stands it would reach the whole company. Do not launch it.",
+          "openSurvey": "Open the survey"
+        }
       },
       "share": {
         "title": "Share the survey",
@@ -4671,7 +4787,23 @@
         "newCategory": "Category",
         "newCreate": "Create template",
         "newCreating": "Creating…",
-        "newFailed": "The template could not be created. Check the fields and try again."
+        "newFailed": "The template could not be created. Check the fields and try again.",
+        "edit": "Edit",
+        "editFor": "Edit the template {name}",
+        "editTitle": "Edit template",
+        "editDescription": "Change the name, description or category the template is listed under in the library.",
+        "editLoadFailed": "The template could not be read. Close and try again.",
+        "editKeepsSurveys": "Surveys already created from this template do not change: each keeps its own copy of the questions.",
+        "editSave": "Save changes",
+        "editSaving": "Saving…",
+        "editFailed": "The changes could not be saved. Check the fields and try again.",
+        "delete": "Delete",
+        "deleteFor": "Delete the template {name}",
+        "deleteTitle": "Delete “{name}”?",
+        "deleteBody": "The template and its questions are deleted and it leaves the library. The {count} surveys created from it do not change and are not deleted: each keeps its own copy.",
+        "deleteBodyOne": "The template and its questions are deleted and it leaves the library. The survey created from it does not change and is not deleted: it keeps its own copy.",
+        "deleteConfirm": "Delete template",
+        "deleteFailed": "The template could not be deleted. Try again."
       },
       "respondentTexts": {
         "title": "Texts for respondents",
@@ -4684,6 +4816,131 @@
         "openHelp": "This survey's anonymity box text and closing message.",
         "loadFailed": "This survey's texts could not be loaded. Close and try again.",
         "saved": "Texts saved. Anyone who opens the survey from now on will see them."
+      },
+      "history": {
+        "open": "History",
+        "title": "Change history",
+        "crumb": "History",
+        "descriptionCompanyZone": "Who changed what, and when. Times are the company's ({zone}).",
+        "descriptionBrowserZone": "Who changed what, and when. The company's time zone could not be read; times are this browser's ({zone}).",
+        "forbiddenTitle": "No access to this history",
+        "forbiddenBody": "Only an administrator of this survey's company can see its history.",
+        "missingTitle": "This survey does not exist",
+        "missingBody": "It may have been deleted. Go back to the survey list.",
+        "backToSurveys": "Back to surveys",
+        "loadFailed": "The survey's history could not be read.",
+        "changesHeading": "Changes",
+        "noChanges": "No changes are recorded for this survey.",
+        "limitReached": "Showing the {count} most recent changes.",
+        "versionsHeading": "Published versions",
+        "versionsLead": "Each time the survey is published an exact copy of its content is kept: what the people who answered saw.",
+        "noVersions": "No versions yet",
+        "noVersionsBody": "The first is kept when the survey is published.",
+        "noRestore": "Versions are a record and cannot be restored. This page shows no responses and no response counts.",
+        "by": "By {name} · {role}",
+        "changedFields": "Changed fields",
+        "openCopy": "Open the copy",
+        "unknownAuthor": "Author unavailable",
+        "versionNumber": "Version {number}",
+        "current": "Current",
+        "versionMeta": "{name} · {when} · {questions}",
+        "questions": "{count} questions",
+        "questionsOne": "{count} question",
+        "firstVersion": "First published version.",
+        "sameAsPrevious": "Same as version {number}.",
+        "changesSince": "{count} changes since version {number}.",
+        "changesSinceOne": "{count} change since version {number}.",
+        "showChanges": "Show changes",
+        "hideChanges": "Hide changes",
+        "compareFailed": "The versions could not be compared.",
+        "diffCaption": "Changes from version {from} to version {to}",
+        "diffField": "Field",
+        "diffBefore": "Version {number}",
+        "diffAfter": "Version {number}",
+        "diffBeforeShort": "Before",
+        "diffAfterShort": "After",
+        "absent": "Did not exist",
+        "field": {
+          "title": "Title",
+          "description": "Description",
+          "type": "Survey type",
+          "language": "Language",
+          "startDate": "Opens",
+          "endDate": "Closes",
+          "targetAudienceCount": "Stated audience",
+          "departmentIds": "Departments",
+          "other": "Other field"
+        },
+        "setting": {
+          "anonymous": "Anonymous",
+          "allowPartialResponses": "Partial responses",
+          "randomizeQuestions": "Questions in random order",
+          "showProgress": "Progress bar",
+          "autoSave": "Autosave",
+          "timeLimitMinutes": "Time limit",
+          "responseLimit": "Response limit",
+          "selfDeclaredDemographics": "Self-declared demographics",
+          "collectParticipantIdentity": "Ask for a name on the public link",
+          "notificationSendInvitations": "Send invitations",
+          "notificationSendReminders": "Send reminders",
+          "notificationReminderFrequencyDays": "Reminder frequency",
+          "invitationCustomMessage": "Invitation message",
+          "invitationCustomSubject": "Invitation subject",
+          "invitationIncludeCredentials": "Credentials in the invitation",
+          "invitationSendImmediately": "Send the invitation immediately",
+          "invitationBrandingEnabled": "Branding in the invitation",
+          "oneSessionOnly": "One session only",
+          "respondentIntro": "Introduction for respondents",
+          "closingMessage": "Closing message"
+        },
+        "question": {
+          "added": "Question {number} added",
+          "removed": "Question {number} removed",
+          "type": "Question {number} · type",
+          "text": "Question {number} · text",
+          "scaleMin": "Question {number} · scale minimum",
+          "scaleMax": "Question {number} · scale maximum",
+          "scaleLabelMin": "Question {number} · minimum label",
+          "scaleLabelMax": "Question {number} · maximum label",
+          "required": "Question {number} · required",
+          "commentRequired": "Question {number} · comment required",
+          "commentPrompt": "Question {number} · comment prompt",
+          "category": "Question {number} · dimension",
+          "options": "Question {number} · options"
+        },
+        "value": {
+          "yes": "Yes",
+          "no": "No",
+          "minutes": "{count} min",
+          "days": "Every {count} days",
+          "wholeCompany": "Whole company",
+          "departments": "{count} departments",
+          "departmentsOne": "{count} department"
+        },
+        "role": {
+          "super_admin": "Super administrator",
+          "company_admin": "Company administrator",
+          "leader": "Leader",
+          "supervisor": "Supervisor",
+          "employee": "Employee"
+        },
+        "action": {
+          "created": "Created the survey",
+          "updated": "Edited the survey ({count} fields)",
+          "updatedOne": "Edited the survey ({count} field)",
+          "updatedNoFields": "Edited the survey",
+          "statusChanged": "Changed the status: {from} → {to}",
+          "statusChangedBare": "Changed the status",
+          "duplicated": "Duplicated the survey",
+          "versionCreated": "Kept version {number}",
+          "versionCreatedBare": "Kept a version",
+          "other": "Other change"
+        },
+        "reason": {
+          "publish": "Publication",
+          "republish": "Republication",
+          "other": "Version"
+        }
       }
     }
   },
@@ -5116,7 +5373,31 @@
         "emailCodes": "They hold {count} unused survey codes, mailed to the old address. Re-send them from «Who has answered» on each survey's Distribution page, with «Resend credentials».",
         "emailInvitationsExpiredOne": "1 pending invitation to the old address was cancelled.",
         "emailInvitationsExpired": "{count} pending invitations to the old address were cancelled.",
-        "done": "Done"
+        "done": "Done",
+        "manager": "Reports to",
+        "managerNone": "No manager assigned",
+        "managerHelper": "Who they report to in the org chart.",
+        "demographics": "Demographics",
+        "demographicsHelper": "They define the groups results are broken down by; a group with fewer than {floor} responses never shows figures.",
+        "demographicsNone": "This company has no active demographic fields.",
+        "demographicEmpty": "No answer",
+        "demographicRequired": "«{field}» is required and missing. Fill it in to save the demographics.",
+        "demographicNumber": "«{field}» must be a number.",
+        "detailsUnavailable": "This person's manager and demographics could not be loaded. Saving keeps them as they are.",
+        "deactivateTitle": "Deactivate {name}?",
+        "deactivateBody": "They will not be able to sign in: neither with their email nor with the survey codes they already received. Anyone typing one of those codes sees the same message as for a wrong password. Their open sessions end at once and they stop receiving new surveys, invitations and codes. The responses they already sent are kept. If you reactivate them, those same codes work again.",
+        "deactivateConfirm": "Deactivate and save",
+        "resetPassword": "Reset password",
+        "resetPasswordHelper": "Generates a temporary password and shows it to you. No email is sent.",
+        "resetTitle": "Reset {name}'s password?",
+        "resetBody": "Their current password stops working and their open sessions end. The platform sends no email: the temporary password appears here once and you pass it on to the owner of {email}.",
+        "resetConfirm": "Reset",
+        "resetDone": "{name}'s password was reset. No email was sent, to them or to you.",
+        "resetPasswordLabel": "Temporary password",
+        "resetSignIn": "{name} signs in with their email {email} and this password. Give it to them over a secure channel: once this panel closes it cannot be shown again.",
+        "resetSurveyCodes": "Their survey codes, if they have any, do not change.",
+        "resetFailed": "The password could not be reset",
+        "resetPerSurvey": "They sign in only with survey codes, one per survey, so there is no password to reset: giving them one would open all their surveys with their email. Re-send their code from «Who has answered» on the survey's Distribution page."
       },
       "roster": {
         "sub": "ordered by role and name · {never} never signed in",
@@ -5203,7 +5484,7 @@
     "next": {
       "crumb": "Settings",
       "title": "Company settings",
-      "description": "What every new survey inherits: language, cadence, anonymity, retention and brand. Saved at the end.",
+      "description": "What every new survey inherits — language, time zone and sign-in mode — and the company's brand. Saved at the end.",
       "discard": "Discard",
       "save": "Save changes",
       "saving": "Saving…",
@@ -5273,7 +5554,16 @@
       "departmentsActiveMany": "{count} active",
       "departmentsInactiveOne": "{count} inactive",
       "departmentsInactiveMany": "{count} inactive",
-      "senderPlatform": "The platform sets it for every company; it appears as the sender of invitations and reminders."
+      "senderPlatform": "The platform sets it for every company; it appears as the sender of invitations and reminders.",
+      "anonymityInEffect": "Anonymity",
+      "anonymityAlwaysValue": "Always anonymous",
+      "anonymityAlwaysHelp": "Every new survey is created anonymous; it is not a company setting. No company administrator sees an individual answer.",
+      "retentionInEffect": "Data retention",
+      "retentionFixedValue": "The platform's fixed periods",
+      "retentionFixedHelp": "Responses are not deleted after a period. The platform itself deletes survey drafts untouched for 30 days, notifications after 1 year, and unaccepted invitations 90 days after they expire.",
+      "colourEmailHelp": "The button colour in the mail that carries sign-in details: credentials when people are imported, the mass invite, and distributing a survey. It colours no screen.",
+      "brandMetaInEffect": "the logo in the app and when answering; logo and colour in sign-in mail",
+      "logoPathHelpPublished": "A path on this site, like /brand/esph-logo.svg. TIMS publishes the file on the site; here it is only chosen. Empty removes the logo."
     }
   },
   "wizard": {
@@ -6338,7 +6628,11 @@
       "fechaAvance": "Fecha del avance",
       "fechaAvanceHint": "El día al que corresponde este avance.",
       "comentario": "Comentario",
-      "comentarioHint": "Queda registrado en la bitácora del plan. Opcional."
+      "comentarioHint": "Queda registrado en la bitácora del plan. Opcional.",
+      "hallazgoPickHint": "El hallazgo de encuesta al que responde el plan, de las encuestas cerradas del nodo. Opcional.",
+      "hallazgoPlaceholder": "Seleccione un hallazgo",
+      "hallazgoNone": "Sin hallazgo vinculado",
+      "hallazgoOption": "{dimension} · {survey} (cerrada el {closed})"
     },
     "involucrados": {
       "filterPlaceholder": "Buscar por nombre o correo",
@@ -7673,7 +7967,9 @@
       "microclimate-templates__use__create": "Created a microclimate from a template",
       "microclimates__activate__create": "Activated a microclimate",
       "microclimates__bulk__create": "Created microclimates in bulk",
+      "microclimates__content__update": "Edited a draft microclimate",
       "microclimates__create": "Created a microclimate",
+      "microclimates__delete": "Discarded a draft microclimate",
       "microclimates__invitations__create": "Invited people to a microclimate",
       "microclimates__invitations__reinstate__create": "Reinstated a microclimate invitation",
       "microclimates__invitations__resend__create": "Resent a microclimate invitation",

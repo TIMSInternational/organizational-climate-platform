@@ -30,7 +30,12 @@ public sealed record UserDetail(
     IReadOnlyDictionary<string, string> Demographics,
     // Only on the response to an update that actually changed the address; null everywhere
     // else (a GET, or an update that left the email alone).
-    UserEmailChange? EmailChange = null);
+    UserEmailChange? EmailChange = null,
+    // True for a person whose only way in is a per-survey code: their company hands out
+    // sign-ins per survey and they have no account password. An admin password reset is
+    // refused for them (it would give them an email sign-in that opens every survey), so
+    // the screen does not offer one. Set on GET /admin/users/{id}; false elsewhere.
+    bool SurveyCodesOnly = false);
 
 /// <summary>
 /// What an email correction did and did not do, so the screen can say what is left to do.
@@ -58,6 +63,12 @@ public sealed record UpdateUserRequest(
     Dictionary<string, string?>? Demographics = null,
     // Null means "leave the address alone". Trimmed and lower-cased like an import row, then
     // checked for format, for a reserved domain and against every account on the platform.
-    string? Email = null);
+    string? Email = null,
+    // A null DepartmentId / ManagerId means "leave it alone", so a JSON null cannot also mean
+    // "remove it" without changing what every existing caller's omission does. These say it
+    // explicitly instead (audit G6): true unsets the link. Sending one together with a value
+    // for the same link is a contradiction and is refused.
+    bool ClearDepartment = false,
+    bool ClearManager = false);
 
 public sealed record UpdateUserRoleRequest(string Role);

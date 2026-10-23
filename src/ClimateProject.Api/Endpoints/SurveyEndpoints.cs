@@ -607,6 +607,26 @@ public static class SurveyEndpoints
             }
         }
 
+        // Who a survey was sent to, and which service it metered against, are facts about a
+        // run that has ENDED once it is closed or archived: rewriting either afterwards would
+        // re-label who was asked and which licence the answers spent. Neither is in
+        // touchesContent (a live survey may still gain a named person, and a draft its
+        // service), so without this a closed survey accepted both with a 200 (audit G14).
+        // A 400 with a stable code, not the 409 of the status rules: the request is one this
+        // survey can never accept, whatever state it moves to next -- `closed` leads only to
+        // `archived`.
+        if ((request.UserIds is not null || request.ServiceType is not null)
+            && !SurveyStatuses.AllowsScheduleEdit(survey.Status))
+        {
+            return Results.Json(
+                new
+                {
+                    code = "survey_ended_audience_frozen",
+                    message = $"A survey in status '{survey.Status}' has ended: its userIds and serviceType can no longer be changed. Duplicate it to run it again.",
+                },
+                statusCode: 400);
+        }
+
         if (touchesSchedule && !SurveyStatuses.AllowsScheduleEdit(survey.Status))
         {
             return Results.Json(
@@ -1097,8 +1117,12 @@ public static class SurveyEndpoints
         var emojiOptions = await db.QuestionEmojiOptions.Where(o => questionIds.Contains(o.QuestionId)).ToListAsync(cancellationToken);
         var conditionalLogic = await db.QuestionConditionalLogics.Where(c => questionIds.Contains(c.QuestionId)).ToListAsync(cancellationToken);
         var departmentTargets = await db.SurveyDepartmentTargets.Where(t => t.SurveyId == survey.Id).ToListAsync(cancellationToken);
+        var userTargets = await db.SurveyUserTargets.Where(t => t.SurveyId == survey.Id).ToListAsync(cancellationToken);
 
-        var source = new SurveyStructure(survey, questions, options, emojiOptions, conditionalLogic, departmentTargets);
+        var source = new SurveyStructure(survey, questions, options, emojiOptions, conditionalLogic, departmentTargets)
+        {
+            UserTargets = userTargets,
+        };
 
         // Detached from the change tracker before anything is added: the copy's rows are
         // brand-new instances, and the source's rows must not be marked modified by having
@@ -1114,6 +1138,7 @@ public static class SurveyEndpoints
 
         db.Surveys.Add(copy.Survey);
         db.SurveyDepartmentTargets.AddRange(copy.DepartmentTargets);
+        db.SurveyUserTargets.AddRange(copy.UserTargets);
         db.Questions.AddRange(copy.Questions);
         db.QuestionOptions.AddRange(copy.Options);
         db.QuestionEmojiOptions.AddRange(copy.EmojiOptions);

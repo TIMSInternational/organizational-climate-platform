@@ -50,6 +50,7 @@ import SurveyQuestionsEditorPage from '../features/surveys/next/authoring/Survey
 import MySurveysNextPage from '../features/surveys/next/mySurveys/MySurveysNextPage'
 import SurveyTemplatesNextPage from '../features/surveys/next/templates/SurveyTemplatesNextPage'
 import TemplateDetailNextPage from '../features/surveys/next/authoring/TemplateDetailNextPage'
+import SurveyHistoryPage from '../features/surveys/history/SurveyHistoryPage'
 import AnalyticsNextPage from '../features/analytics/next/AnalyticsNextPage'
 import QuestionBankNextPage from '../features/questions/next/QuestionBankNextPage'
 import QuestionLibraryNextPage from '../features/questions/next/QuestionLibraryNextPage'
@@ -448,6 +449,7 @@ export const router = createBrowserRouter([
               // `MicroclimateLivePage` here; the old page stays unrouted as the wiring reference.
               { path: '/microclimates/:id/live', element: <MicroclimateLiveNextPage /> },
               { path: '/microclimates/:id/results', element: <MicroclimateResultsNextPage /> },
+              { path: '/microclimates/:id/edit', element: <MicroclimateCreateNextPage /> },
               // The redesigned Todas las Encuestas replaced `SurveysListPage` on this route
               // (ruled 10 Sep). The old page stays in the tree, unrouted, as the wiring
               // reference — its module comment says what it still pins.
@@ -492,6 +494,10 @@ export const router = createBrowserRouter([
               // `pages/SurveyResultsPage.tsx` stays in the tree unrouted, as the wiring
               // reference — its header says until when.
               { path: '/surveys/:id/results', element: <SurveyResultsNextPage /> },
+              // G17. Same rule as results: a per-survey destination, reached from the survey's
+              // detail page ("Historial"), no nav entry. The page asks the API, which admits only
+              // `CanAdminister`, and renders its refusal.
+              { path: '/surveys/:id/history', element: <SurveyHistoryPage /> },
               // #273. Same rule as `/surveys/:id/results` above: no nav entry, because it
               // is a per-survey destination reached from a survey. The way in is on
               // `SurveyDetailPage`, offered only when the survey can actually be edited —

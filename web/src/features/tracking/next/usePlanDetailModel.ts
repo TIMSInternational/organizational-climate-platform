@@ -33,7 +33,11 @@ export interface PlanDetailState {
    * `null` until it answers, and for an administrator, who is not asked.
    */
   ownNodoName: string | null
-  /** The directory for the involucrados picker — empty unless the seam allows the picker. */
+  /**
+   * The directory for the involucrados picker — empty unless the seam allows the picker. An
+   * administrator's is the company; a node leader's is their own nodo's people, the only
+   * ones `TrackingPickerEndpoints` lists them (G25).
+   */
   directory: readonly PersonaPickerItem[]
   reload: () => void
   recordAvance: (input: RegistrarAvanceInput) => Promise<void>
@@ -70,6 +74,8 @@ export function usePlanDetailModel(id: string | undefined): PlanDetailState {
   const companyId = scope.companyId
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const withDirectory = capabilities.canUseDirectoryPickers && companyId !== undefined
+  /** A node leader: the persona picker answers them with their own nodo's people only. */
+  const withOwnNodo = !withDirectory && capabilities.leadsANodo && companyId !== undefined
   const viewer = useMemo(() => readViewer(), [])
 
   const [plan, setPlan] = useState<PlanAccion | null>(null)
@@ -127,11 +133,20 @@ export function usePlanDetailModel(id: string | undefined): PlanDetailState {
           if (!cancelled) setOwnDepartment({ id: profile.departmentId, name: profile.departmentName })
         })
         .catch(() => undefined)
+      // Never for an employee or a supervisor: `leadsANodo` is `role === 'leader'` with a real
+      // nodo, and the endpoint refuses everyone else anyway.
+      if (withOwnNodo && companyId) {
+        void listPersonaOptions(companyId)
+          .then((items) => {
+            if (!cancelled) setDirectory(items)
+          })
+          .catch(() => undefined)
+      }
     }
     return () => {
       cancelled = true
     }
-  }, [baseUrl, companyId, withDirectory])
+  }, [baseUrl, companyId, withDirectory, withOwnNodo])
 
   const model = useMemo<PlanDetailModel | null>(() => {
     if (!plan) return null
@@ -181,7 +196,7 @@ export function usePlanDetailModel(id: string | undefined): PlanDetailState {
     model,
     error,
     ownNodoName: ownDepartment?.name ?? null,
-    directory: withDirectory ? directory : [],
+    directory: withDirectory || withOwnNodo ? directory : [],
     reload: () => {
       void reload()
     },

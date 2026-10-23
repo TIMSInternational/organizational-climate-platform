@@ -1,8 +1,5 @@
 import { credentialModeOf, type CompanySettingsResponse, type CredentialMode, type UpdateCompanySettingsInput } from '../../api/companySettings'
 import type { Department } from '../../api/departments'
-import type { DashboardSurveySummary } from '../../../dashboard/api/dashboard'
-import type { SurveyDetail } from '../../../surveys/api/surveys'
-import { plainTitle, waveOf } from '../../../dashboard/next/super/derive'
 
 /**
  * Pure rules behind the CompanySettings artboard (`/admin/companies/:id` for a company
@@ -11,16 +8,21 @@ import { plainTitle, waveOf } from '../../../dashboard/next/super/derive'
  */
 
 /**
- * Every field the form edits, as the controls hold it — the artboard's fields that a
- * company administrator may change on `PUT /admin/companies/{id}/settings`. The microclimate
- * and AI flags are not among them: the artboard draws no control for either and no endpoint
- * reads them, so this form never sends them.
+ * Every company setting a screen edits, as the controls hold it — the same on Configuración
+ * de empresa (company administrator) and on the super administrator's company detail, so the
+ * two cannot drift into editing different things.
+ *
+ * Only settings something READS are here. Five more are accepted by
+ * `PUT /admin/companies/{id}/settings` and stored, and no screen offers them (audit gap G18,
+ * re-measured 2026-10-22 by grep across `src/`, `services/` and `web/src`):
+ * `surveyFrequency`, `anonymousSurveys`, `dataRetentionDays` and `microclimateEnabled` have no
+ * reader at all — every new survey is created anonymous by `NewSurveyDefaults.Apply`, and
+ * `RetentionCleanupJob` applies fixed periods — and `aiInsightsEnabled` is read only by the super
+ * administrator's Analítica, which no form here changes. A control for any of them would
+ * change nothing, so the form never sends them.
  */
 export interface SettingsDraft {
   language: string
-  surveyFrequency: string
-  anonymousSurveys: boolean
-  dataRetentionDays: number
   timezone: string
   /** `shared` | `per_survey` — reaches only surveys created after it is saved. */
   credentialMode: CredentialMode
@@ -75,9 +77,6 @@ export function draftOf(response: CompanySettingsResponse): SettingsDraft {
   const { settings, branding } = response
   return {
     language: settings.language,
-    surveyFrequency: settings.surveyFrequency,
-    anonymousSurveys: settings.anonymousSurveys,
-    dataRetentionDays: settings.dataRetentionDays,
     timezone: settings.timezone,
     credentialMode: credentialModeOf(settings),
     primaryColor: branding.primaryColor,
@@ -93,9 +92,6 @@ export function draftOf(response: CompanySettingsResponse): SettingsDraft {
 export function changesOf(initial: SettingsDraft, draft: SettingsDraft): UpdateCompanySettingsInput {
   const changes: UpdateCompanySettingsInput = {}
   if (draft.language !== initial.language && draft.language.trim()) changes.language = draft.language
-  if (draft.surveyFrequency !== initial.surveyFrequency && draft.surveyFrequency.trim()) changes.surveyFrequency = draft.surveyFrequency
-  if (draft.anonymousSurveys !== initial.anonymousSurveys) changes.anonymousSurveys = draft.anonymousSurveys
-  if (draft.dataRetentionDays !== initial.dataRetentionDays && draft.dataRetentionDays >= 1) changes.dataRetentionDays = draft.dataRetentionDays
   if (draft.timezone !== initial.timezone && draft.timezone.trim()) changes.timezone = draft.timezone
   if (draft.credentialMode !== initial.credentialMode) changes.credentialMode = draft.credentialMode
   if (draft.primaryColor !== initial.primaryColor && HEX_COLOUR.test(draft.primaryColor)) changes.primaryColor = draft.primaryColor
@@ -146,45 +142,6 @@ export function utcOffset(timeZone: string, at: Date): string | null {
   } catch {
     return null
   }
-}
-
-/** Whole years the select offers; the stored number of days is always offered too. */
-export const RETENTION_DAYS: readonly number[] = [365, 730, 1095, 1825, 2555, 3650]
-
-export function retentionOptions(current: number): readonly number[] {
-  return current >= 1 && !RETENTION_DAYS.includes(current)
-    ? [...RETENTION_DAYS, current].sort((a, b) => a - b)
-    : RETENTION_DAYS
-}
-
-/**
- * The survey the anonymity helper names — the artboard's "La encuesta Q4 sembrada se creó como
- * no anónima": of the surveys running now (`ongoingSurveys` on `GET /dashboard/company-admin`),
- * the one that started last; `null` when none is running.
- *
- * The helper keeps that sentence without "sembrada". Meridiano's Q4 does say it was seeded,
- * but only in its free-text `description` ("… Sembrada para que las pantallas de respuesta y
- * distribución tengan una encuesta viva.", `GET /surveys/{id}`); no field marks a survey as
- * seeded, and the sentence is every tenant's, so it states only what `settings.anonymous`
- * says rather than parse prose.
- */
-export function latestOngoing(surveys: readonly DashboardSurveySummary[]): DashboardSurveySummary | null {
-  return surveys.reduce<DashboardSurveySummary | null>(
-    (latest, survey) => (latest === null || survey.startDate > latest.startDate ? survey : latest),
-    null,
-  )
-}
-
-export interface SurveyAnonymity {
-  /** "Q4" for "Encuesta de Clima Q4 (abierta)"; the title without its parentheticals otherwise. */
-  wave: string
-  anonymous: boolean
-}
-
-/** What `GET /surveys/{id}` says about that survey: its wave and whether it was created anonymous. */
-export function anonymityOf(detail: Pick<SurveyDetail, 'title' | 'settings'>): SurveyAnonymity | null {
-  const wave = waveOf(detail.title) ?? plainTitle(detail.title)
-  return wave === null ? null : { wave, anonymous: detail.settings.anonymous }
 }
 
 export interface DepartmentReading {

@@ -52,9 +52,9 @@ import { byCount } from '../../../i18n/plural'
  * `canRecordProgress(plan)` from the seam — `PlanAccessHandler` at `AccessLevel.Write`,
  * claim for claim: an administrator, or the leader of this plan's nodo. That viewer gets
  * "Registrar avance" and "Agregar personas al plan"; the responsable and the involucrados
- * read, and the rail says who records progress. Adding people also needs the directory,
- * which only an administrator may list (`canUseDirectoryPickers`), so a leader is told who
- * does it rather than offered an empty picker.
+ * read, and the rail says who records progress. Adding people also needs the directory:
+ * an administrator lists the company (`canUseDirectoryPickers`), the node's leader their own
+ * nodo's people (`leadsANodo`, G25) — the only people `TrackingPickerEndpoints` lists them.
  *
  * **"Marcar cumplido" is not on that list.** Since 2026-09-14 `POST …/cumplir` requires
  * `AccessLevel.Approve`, which `PlanAccessHandler` grants to `Roles.Admin` and to nobody
@@ -235,7 +235,8 @@ function PlanDetail({ model, state }: { model: PlanDetailModel; state: PlanDetai
   /** The plan names this viewer — `PlanAccessHandler`'s `isInvolved`, which is Read only. */
   const named = isNamedOnPlan(plan, claims)
   const readOnlyAsNamed = !writable && named
-  const mayAddPeople = writable && capabilities.canUseDirectoryPickers
+  // G25: the node's own leader picks from their nodo's people; an administrator from everyone.
+  const mayAddPeople = writable && (capabilities.canUseDirectoryPickers || capabilities.leadsANodo)
   const percent = toPercent(plan.porcentajeAvance)
   const overdue = isOverdue(plan, model.asOf)
   const progressed = hasRecordedProgress(plan)

@@ -45,3 +45,28 @@ export function shapeOf(detail: Pick<SurveyTemplateDetail, 'questions'>): Templa
     questions.every((question) => question.type === 'likert' && question.scaleMin === first.scaleMin && question.scaleMax === first.scaleMax)
   return { dimensions, likert: shared ? { min: first.scaleMin as number, max: first.scaleMax as number } : null }
 }
+
+/**
+ * The client mirror of `SurveyTemplateEndpoints.CanWriteTemplate`: a super administrator writes
+ * any template; a company administrator only a template of their own company — never a GLOBAL
+ * one, which every tenant reads. The server refuses the rest with 403 whatever this says; this
+ * only decides whether "Editar" and "Eliminar" are drawn.
+ */
+export function canWriteTemplate(
+  claims: { role?: string; companyId?: string },
+  template: Pick<SurveyTemplateListItem, 'companyId' | 'isGlobal'>,
+): boolean {
+  if (claims.role === 'super_admin') return true
+  if (claims.role !== 'company_admin') return false
+  return !template.isGlobal && template.companyId !== null && claims.companyId !== undefined && template.companyId === claims.companyId
+}
+
+/**
+ * The half of a localized name or description the reader is looking at, so an edit writes back
+ * to that half and leaves the other language alone. The detail is read in `requested`; a field
+ * listed in `fallbackFields` was printed from the OTHER language.
+ */
+export function editedHalf(field: 'name' | 'description', requested: 'en' | 'es', fallbackFields: readonly string[]): 'en' | 'es' {
+  if (!fallbackFields.includes(field)) return requested
+  return requested === 'es' ? 'en' : 'es'
+}

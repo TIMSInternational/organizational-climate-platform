@@ -5,7 +5,15 @@ import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { useCompanyScope } from '../../../../company-context'
 import { listDepartments, type Department } from '../../../org-structure/api/departments'
 import { listUsers, type User } from '../../../org-structure/api/users'
-import { duplicateSurvey, getSurvey, updateSurveyStatus, type SurveyDetail } from '../../api/surveys'
+import { getCompanySettings } from '../../../org-structure/api/companySettings'
+import {
+  deleteSurvey,
+  duplicateSurvey,
+  getSurvey,
+  updateSurveyStatus,
+  updateSurveyWindow,
+  type SurveyDetail,
+} from '../../api/surveys'
 import {
   getSurveyDistribution,
   listSurveyInvitations,
@@ -27,6 +35,11 @@ export interface SurveyDetailModel {
    * survey's company), so the two pages resolve the same audience for the same viewer.
    */
   users: User[] | null
+  /**
+   * The company's IANA zone (`GET /admin/companies/{id}/settings` → `settings.timezone`), the
+   * clock the window editor reads and writes in, or null when unread.
+   */
+  timeZone?: string | null
 }
 
 export type SurveyDetailState =
@@ -61,15 +74,16 @@ export function useSurveyDetailModel(id: string | undefined) {
     try {
       const survey = await getSurvey(baseUrl, id, locale)
       if (!readsContext) {
-        setState({ status: 'ready', model: { survey, departments: null, distribution: undefined, invitations: null, users: null } })
+        setState({ status: 'ready', model: { survey, departments: null, distribution: undefined, invitations: null, users: null, timeZone: null } })
         return
       }
       const scoped = scope.status === 'ready' && scope.companyId === survey.companyId
-      const [distribution, invitations, departments, users] = await Promise.allSettled([
+      const [distribution, invitations, departments, users, settings] = await Promise.allSettled([
         getSurveyDistribution(baseUrl, id),
         listSurveyInvitations(baseUrl, id, {}, locale),
         listDepartments(baseUrl, survey.companyId),
         scoped ? listUsers(baseUrl, survey.companyId) : Promise.resolve(null),
+        getCompanySettings(baseUrl, survey.companyId),
       ])
       setState({
         status: 'ready',
@@ -79,6 +93,7 @@ export function useSurveyDetailModel(id: string | undefined) {
           invitations: invitations.status === 'fulfilled' ? invitations.value : null,
           departments: departments.status === 'fulfilled' && Array.isArray(departments.value) ? departments.value : null,
           users: users.status === 'fulfilled' && Array.isArray(users.value) ? users.value : null,
+          timeZone: settings.status === 'fulfilled' ? (settings.value?.settings?.timezone ?? null) : null,
         },
       })
     } catch (error) {
@@ -121,5 +136,26 @@ export function useSurveyDetailModel(id: string | undefined) {
     }
   }, [baseUrl, id, locale, navigate, t])
 
-  return { state, reload: load, transition, duplicate, pending, actionError }
+  /**
+   * `PUT /surveys/{id}` with the new window. Throws so the editor can say why, in its own words;
+   * on success the page reads the detail the server answered with, so every tile -- the close,
+   * "Activar" enabled or not -- moves with it.
+   */
+  const saveWindow = useCallback(
+    async (window: { startDate?: string; endDate: string }) => {
+      if (!id || state.status !== 'ready') return
+      const survey = await updateSurveyWindow(baseUrl, id, window, locale)
+      setState({ status: 'ready', model: { ...state.model, survey } })
+    },
+    [baseUrl, id, locale, state],
+  )
+
+  /** `DELETE /surveys/{id}`, then back to the list. Throws so the confirmation can say why. */
+  const remove = useCallback(async () => {
+    if (!id) return
+    await deleteSurvey(baseUrl, id)
+    navigate('/surveys')
+  }, [baseUrl, id, navigate])
+
+  return { state, reload: load, transition, duplicate, saveWindow, remove, pending, actionError }
 }

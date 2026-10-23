@@ -292,7 +292,10 @@
         "progress": "Avance registrado",
         "noteBefore": "Cada avance se registra con",
         "noteAction": "Registrar avance",
-        "noteAfter": ": una nota de qué avanzó y por qué, con su fecha. El servidor guarda cada avance pero todavía no los devuelve, así que aquí aparecen solo los registrados en esta visita."
+        "noteAfter": ": una nota de qué avanzó y por qué, con su fecha. Cada avance queda guardado aquí.",
+        "progressBy": "Avance registrado por",
+        "historyLoading": "Cargando los avances registrados…",
+        "historyFailed": "No se pudieron leer los avances registrados. El plan no se ve afectado; recarga para intentarlo de nuevo."
       },
       "sheet": {
         "title": "Ficha",
@@ -306,7 +309,23 @@
         "noTemplate": "Ninguna",
         "unknown": "sin dato"
       },
-      "guard": "Registra avance la administración. El plan apunta a una dimensión y a un departamento, nunca a respuestas individuales."
+      "guard": "Registra avance la administración. El plan apunta a una dimensión y a un departamento, nunca a respuestas individuales.",
+      "edit": {
+        "menu": "Editar plan…",
+        "title": "Editar plan",
+        "description": "Corrige el título, la descripción, la fecha de vencimiento o las etiquetas. El cambio queda registrado en la bitácora de auditoría.",
+        "tagsHint": "Separadas por comas. Las etiquetas que la plataforma añadió al crear el plan se conservan tal cual.",
+        "save": "Guardar cambios"
+      },
+      "delete": {
+        "menu": "Eliminar plan…",
+        "title": "¿Eliminar este plan?",
+        "body": "Se eliminará «{title}» junto con sus KPIs, objetivos e historial de avances. Los recordatorios que aún no se enviaron se cancelan. No se puede deshacer.",
+        "confirm": "Eliminar plan"
+      },
+      "createOwner": "Responsable",
+      "createOwnerNone": "Sin asignar",
+      "createOwnerHint": "Quién responde por el plan. Puedes cambiarlo después."
     }
   },
   "analytics": {
@@ -2209,7 +2228,13 @@
         "inviteDepartments": "Por departamento",
         "inviteNoDepartments": "Esta empresa no tiene departamentos activos.",
         "inviteSend": "Enviar invitaciones",
-        "inviteCreated": "Se crearon {count} invitaciones."
+        "inviteCreated": "Se crearon {count} invitaciones.",
+        "editDraft": "Editar borrador",
+        "discardDraft": "Descartar borrador",
+        "discardConfirmTitle": "¿Descartar este borrador?",
+        "discardConfirmBody": "Se eliminará «{title}» con todas sus preguntas. Nadie lo ha respondido ni ha sido invitado. No se puede deshacer.",
+        "invitationsListLabel": "Lista de invitaciones ({count})",
+        "invitationsShowing": "{shown} de {total} invitaciones"
       },
       "analytics": {
         "title": "Analítica de microclimas",
@@ -2435,6 +2460,27 @@
         "unknownLabel": "No se pudo abrir",
         "unknownTitle": "No se pudo abrir esta invitación",
         "unknownBody": "Puede ser la conexión o un problema temporal de nuestro lado. Vuelva a abrir el enlace en unos minutos; si sigue sin abrir, consulte a quien se lo envió."
+      },
+      "seats": {
+        "title": "Cupos",
+        "loading": "Leyendo los cupos de microclimas…",
+        "failed": "No se pudo leer cuántos cupos de microclimas quedan. Las respuestas se siguen contando igual.",
+        "availableTitle": "Cupos disponibles: {remaining} de {total} ({used} usados)",
+        "availableBody": "Cada respuesta completada usa un cupo. Cuando se acaben, quien responda verá al enviar que la sesión no puede aceptar nuevas respuestas, y no se registrará nada de lo que envíe, hasta que quien administra la plataforma le asigne más cupos.",
+        "exhaustedTitle": "No quedan cupos: {used} de {total} usados",
+        "exhaustedBody": "Mientras no haya cupos, nadie podrá responder ningún microclima: quien responda verá al enviar que la sesión no puede aceptar nuevas respuestas. Pida más cupos a quien administra la plataforma.",
+        "suspendedTitle": "La licencia de microclimas está suspendida",
+        "suspendedBody": "Mientras esté suspendida, nadie podrá responder ningún microclima. Pida a quien administra la plataforma que la reactive.",
+        "unmeteredTitle": "Sin límite de cupos",
+        "unmeteredBody": "Su empresa no tiene una licencia de microclimas con cupos, así que ninguna respuesta se rechaza por falta de cupos."
+      },
+      "edit": {
+        "title": "Editar borrador",
+        "description": "Cambie lo que necesite antes de lanzar. Al guardar se reemplaza el contenido del borrador; nadie lo ha visto todavía.",
+        "save": "Guardar cambios",
+        "notDraftTitle": "Esta sesión ya no es un borrador",
+        "notDraftBody": "Una vez lanzada, sus preguntas son las que respondieron las personas y no se pueden cambiar. Puede cerrarla y crear una nueva.",
+        "backToSession": "Volver a la sesión"
       }
     }
   },
@@ -4303,7 +4349,36 @@
         "departmentsAlsoPeople": "y {count} personas elegidas individualmente.",
         "responsesDash": "— respuestas",
         "departmentsNote": "Los departamentos se muestran en Resultados desde una respuesta cuando la encuesta alcanza {floor} respuestas terminadas.",
-        "privacyNote": "Los resultados se calculan cada vez que se leen. Nadie ve las respuestas una por una."
+        "privacyNote": "Los resultados se calculan cada vez que se leen. Nadie ve las respuestas una por una.",
+        "delete": {
+          "action": "Eliminar",
+          "title": "¿Eliminar esta encuesta?",
+          "body": "Se borran sus preguntas, su enlace y sus invitaciones. Nadie la ha respondido todavía. No se puede deshacer.",
+          "bodyLive": "Está {status}: quien tenga el enlace o un código dejará de poder responder. Se borran sus preguntas, su enlace y sus invitaciones. Nadie la ha respondido todavía. No se puede deshacer.",
+          "typeLabel": "Escribe {word} para confirmar",
+          "word": "ELIMINAR",
+          "confirm": "Eliminar encuesta",
+          "deleting": "Eliminando…",
+          "refusedResponses": "Esta encuesta ya tiene respuestas y no se puede eliminar. Archívala para dejar de verla sin perder lo que respondieron.",
+          "refusedGone": "Esta encuesta ya no existe. Vuelve a la lista de encuestas."
+        },
+        "window": {
+          "edit": "Cambiar fechas",
+          "title": "Fechas de la encuesta",
+          "zone": "Las horas son las de la empresa: {zone}.",
+          "zoneRow": "Zona horaria",
+          "start": "Apertura",
+          "end": "Cierre",
+          "save": "Guardar fechas",
+          "startLocked": "Ya abrió: la apertura no se puede mover. Solo el cierre.",
+          "liveNote": "Está activa: quien responde verá el nuevo cierre de inmediato.",
+          "errorMissing": "Elige la fecha y la hora de apertura y de cierre.",
+          "errorOrder": "La apertura debe ser anterior al cierre.",
+          "errorPast": "El cierre debe ser posterior a este momento.",
+          "refusedOrder": "No se guardó: la apertura debe ser anterior al cierre.",
+          "refusedStatus": "No se guardó: la encuesta cambió de estado y ya no admite este cambio. Recarga la página.",
+          "refusedGone": "No se guardó: esta encuesta ya no existe."
+        }
       },
       "distribution": {
         "title": "Distribución",
@@ -4510,7 +4585,48 @@
           "writtenIn": "Escrita en {language}"
         },
         "questionsNotSaved": "La encuesta se creó con las preguntas de la plantilla, pero sus cambios a las preguntas no se guardaron ({message}). Repítalos en Editar preguntas.",
-        "openQuestionEditor": "Abrir Editar preguntas"
+        "openQuestionEditor": "Abrir Editar preguntas",
+        "zoneCompany": "Fechas y horas en la zona de la empresa: {zone}.",
+        "zoneBrowser": "No se pudo leer la zona horaria de la empresa: fechas y horas en la de este navegador, {zone}.",
+        "zoneLabel": "Zona horaria",
+        "audience": {
+          "legend": "A quién llega",
+          "company": "Toda la empresa",
+          "departments": "Departamentos",
+          "people": "Personas específicas",
+          "companyCount": "Llega a toda la empresa. Personas activas hoy: {count}.",
+          "companyAll": "Llega a toda la empresa.",
+          "departmentsCount": "Personas en los departamentos marcados: {count}.",
+          "departmentsRequired": "Marque al menos un departamento, o elija «Toda la empresa».",
+          "peopleRequired": "Elija al menos una persona, o elija «Toda la empresa». Sin nadie elegido, la encuesta llegaría a toda la empresa.",
+          "peopleInactive": "Personas elegidas que ya no están activas en la empresa: {count}. Con ellas en la lista, la encuesta no se puede crear.",
+          "removeInactive": "Quitarlas de la lista",
+          "peopleUnreadable": "No se pudo leer la lista de personas de la empresa, así que ahora no se puede elegir a nadie por nombre. Vuelva a intentarlo más tarde o elija otra audiencia.",
+          "peopleLoading": "Leyendo la lista de personas…",
+          "chosenOne": "persona elegida",
+          "chosenMany": "personas elegidas",
+          "searchLabel": "Buscar personas",
+          "searchHelp": "Por nombre, correo o departamento. Solo se ofrecen las personas activas de la empresa.",
+          "chooseResults": "Elegir los resultados ({count})",
+          "unchooseResults": "Quitar los resultados ({count})",
+          "onlyChosen": "Mostrar solo las elegidas",
+          "nobodyActive": "La empresa no tiene personas activas.",
+          "noResults": "Nadie coincide con la búsqueda.",
+          "resultsLabel": "Resultados de la búsqueda: {count}",
+          "listCapped": "Se muestran {shown} de {count} resultados. Afine la búsqueda para ver el resto; «Elegir los resultados» los incluye a todos.",
+          "pasteLabel": "Pegar una lista de correos",
+          "pasteHelp": "Uno por línea, o separados por comas o punto y coma. Antes de agregarlos se listan los que no coinciden con una persona activa.",
+          "pasteMatched": "Correos leídos: {count}. Coinciden con una persona activa: {matched}.",
+          "pasteUnmatched": "Sin coincidencia con una persona activa de la empresa ({count}):",
+          "reasonInactive": "la cuenta está inactiva",
+          "reasonUnknown": "nadie en la empresa tiene este correo",
+          "pasteAdd": "Agregar a la selección ({count})",
+          "reviewPeople": "{count} personas, por nombre",
+          "reviewPeopleOne": "1 persona, por nombre",
+          "peopleNotSavedRemoved": "No se pudo guardar la lista de personas en la encuesta ({message}), así que la copia se eliminó y no se creó ninguna encuesta. Su borrador sigue aquí: vuelva a intentarlo.",
+          "peopleNotSaved": "La encuesta se creó como borrador, pero sin las personas elegidas ({message}): tal como está, llegaría a toda la empresa. No la active.",
+          "openSurvey": "Abrir la encuesta"
+        }
       },
       "share": {
         "title": "Compartir la encuesta",
@@ -4671,7 +4787,23 @@
         "newCategory": "Categoría",
         "newCreate": "Crear plantilla",
         "newCreating": "Creando…",
-        "newFailed": "No se pudo crear la plantilla. Revise los campos e inténtelo de nuevo."
+        "newFailed": "No se pudo crear la plantilla. Revise los campos e inténtelo de nuevo.",
+        "edit": "Editar",
+        "editFor": "Editar la plantilla {name}",
+        "editTitle": "Editar plantilla",
+        "editDescription": "Cambie el nombre, la descripción o la categoría con que la plantilla aparece en la biblioteca.",
+        "editLoadFailed": "No se pudo leer la plantilla. Cierre e inténtelo de nuevo.",
+        "editKeepsSurveys": "Las encuestas ya creadas con esta plantilla no cambian: cada una guarda su propia copia de las preguntas.",
+        "editSave": "Guardar cambios",
+        "editSaving": "Guardando…",
+        "editFailed": "No se pudieron guardar los cambios. Revise los campos e inténtelo de nuevo.",
+        "delete": "Eliminar",
+        "deleteFor": "Eliminar la plantilla {name}",
+        "deleteTitle": "¿Eliminar «{name}»?",
+        "deleteBody": "Se eliminan la plantilla y sus preguntas, y deja de aparecer en la biblioteca. Las {count} encuestas creadas con ella no cambian ni se eliminan: cada una guarda su propia copia.",
+        "deleteBodyOne": "Se eliminan la plantilla y sus preguntas, y deja de aparecer en la biblioteca. La encuesta creada con ella no cambia ni se elimina: guarda su propia copia.",
+        "deleteConfirm": "Eliminar plantilla",
+        "deleteFailed": "No se pudo eliminar la plantilla. Inténtelo de nuevo."
       },
       "respondentTexts": {
         "title": "Textos para quien responde",
@@ -4684,6 +4816,131 @@
         "openHelp": "El texto del recuadro de anonimato y el mensaje final de esta encuesta.",
         "loadFailed": "No se pudieron cargar los textos de esta encuesta. Cierre y vuelva a intentarlo.",
         "saved": "Textos guardados. Quien abra la encuesta desde ahora los verá."
+      },
+      "history": {
+        "open": "Historial",
+        "title": "Historial de cambios",
+        "crumb": "Historial",
+        "descriptionCompanyZone": "Quién cambió qué y cuándo. Horas de la empresa ({zone}).",
+        "descriptionBrowserZone": "Quién cambió qué y cuándo. No se pudo leer la zona horaria de la empresa; las horas están en la de este navegador ({zone}).",
+        "forbiddenTitle": "Sin acceso al historial",
+        "forbiddenBody": "Solo quien administra la empresa de esta encuesta puede ver su historial.",
+        "missingTitle": "La encuesta no existe",
+        "missingBody": "Puede que se haya eliminado. Vuelva a la lista de encuestas.",
+        "backToSurveys": "Volver a encuestas",
+        "loadFailed": "No se pudo leer el historial de la encuesta.",
+        "changesHeading": "Cambios",
+        "noChanges": "Esta encuesta no tiene cambios registrados.",
+        "limitReached": "Se muestran los {count} cambios más recientes.",
+        "versionsHeading": "Versiones publicadas",
+        "versionsLead": "Cada vez que la encuesta se publica se guarda una copia exacta de su contenido: lo que vieron las personas que respondieron.",
+        "noVersions": "Todavía no hay versiones",
+        "noVersionsBody": "La primera se guarda al publicar la encuesta.",
+        "noRestore": "Las versiones son un registro y no se pueden restaurar. Esta página no muestra respuestas ni conteos de respuestas.",
+        "by": "Por {name} · {role}",
+        "changedFields": "Campos cambiados",
+        "openCopy": "Abrir la copia",
+        "unknownAuthor": "Autor no disponible",
+        "versionNumber": "Versión {number}",
+        "current": "Actual",
+        "versionMeta": "{name} · {when} · {questions}",
+        "questions": "{count} preguntas",
+        "questionsOne": "{count} pregunta",
+        "firstVersion": "Primera versión publicada.",
+        "sameAsPrevious": "Igual que la versión {number}.",
+        "changesSince": "{count} cambios desde la versión {number}.",
+        "changesSinceOne": "{count} cambio desde la versión {number}.",
+        "showChanges": "Ver cambios",
+        "hideChanges": "Ocultar cambios",
+        "compareFailed": "No se pudieron comparar las versiones.",
+        "diffCaption": "Cambios de la versión {from} a la versión {to}",
+        "diffField": "Campo",
+        "diffBefore": "Versión {number}",
+        "diffAfter": "Versión {number}",
+        "diffBeforeShort": "Antes",
+        "diffAfterShort": "Después",
+        "absent": "No existía",
+        "field": {
+          "title": "Título",
+          "description": "Descripción",
+          "type": "Tipo de encuesta",
+          "language": "Idioma",
+          "startDate": "Apertura",
+          "endDate": "Cierre",
+          "targetAudienceCount": "Audiencia declarada",
+          "departmentIds": "Departamentos",
+          "other": "Otro campo"
+        },
+        "setting": {
+          "anonymous": "Anónima",
+          "allowPartialResponses": "Respuestas parciales",
+          "randomizeQuestions": "Preguntas en orden aleatorio",
+          "showProgress": "Barra de progreso",
+          "autoSave": "Guardado automático",
+          "timeLimitMinutes": "Tiempo límite",
+          "responseLimit": "Límite de respuestas",
+          "selfDeclaredDemographics": "Datos demográficos declarados",
+          "collectParticipantIdentity": "Pedir nombre en el enlace público",
+          "notificationSendInvitations": "Enviar invitaciones",
+          "notificationSendReminders": "Enviar recordatorios",
+          "notificationReminderFrequencyDays": "Frecuencia de recordatorios",
+          "invitationCustomMessage": "Mensaje de la invitación",
+          "invitationCustomSubject": "Asunto de la invitación",
+          "invitationIncludeCredentials": "Credenciales en la invitación",
+          "invitationSendImmediately": "Enviar invitación de inmediato",
+          "invitationBrandingEnabled": "Marca en la invitación",
+          "oneSessionOnly": "Una sola sesión",
+          "respondentIntro": "Introducción para quien responde",
+          "closingMessage": "Mensaje de cierre"
+        },
+        "question": {
+          "added": "Pregunta {number} agregada",
+          "removed": "Pregunta {number} eliminada",
+          "type": "Pregunta {number} · tipo",
+          "text": "Pregunta {number} · texto",
+          "scaleMin": "Pregunta {number} · mínimo de la escala",
+          "scaleMax": "Pregunta {number} · máximo de la escala",
+          "scaleLabelMin": "Pregunta {number} · etiqueta del mínimo",
+          "scaleLabelMax": "Pregunta {number} · etiqueta del máximo",
+          "required": "Pregunta {number} · obligatoria",
+          "commentRequired": "Pregunta {number} · comentario obligatorio",
+          "commentPrompt": "Pregunta {number} · indicación del comentario",
+          "category": "Pregunta {number} · dimensión",
+          "options": "Pregunta {number} · opciones"
+        },
+        "value": {
+          "yes": "Sí",
+          "no": "No",
+          "minutes": "{count} min",
+          "days": "Cada {count} días",
+          "wholeCompany": "Toda la empresa",
+          "departments": "{count} departamentos",
+          "departmentsOne": "{count} departamento"
+        },
+        "role": {
+          "super_admin": "Superadministración",
+          "company_admin": "Administración de la empresa",
+          "leader": "Liderazgo",
+          "supervisor": "Supervisión",
+          "employee": "Colaborador"
+        },
+        "action": {
+          "created": "Creó la encuesta",
+          "updated": "Editó la encuesta ({count} campos)",
+          "updatedOne": "Editó la encuesta ({count} campo)",
+          "updatedNoFields": "Editó la encuesta",
+          "statusChanged": "Cambió el estado: {from} → {to}",
+          "statusChangedBare": "Cambió el estado",
+          "duplicated": "Duplicó la encuesta",
+          "versionCreated": "Guardó la versión {number}",
+          "versionCreatedBare": "Guardó una versión",
+          "other": "Otro cambio"
+        },
+        "reason": {
+          "publish": "Publicación",
+          "republish": "Nueva publicación",
+          "other": "Versión"
+        }
       }
     }
   },
@@ -5116,7 +5373,31 @@
         "emailCodes": "Tiene {count} códigos de encuesta sin usar, enviados a la dirección anterior. Reenvíelos desde «Quién ya respondió», en la página Distribución de cada encuesta, con «Reenviar credenciales».",
         "emailInvitationsExpiredOne": "Se anuló 1 invitación pendiente a la dirección anterior.",
         "emailInvitationsExpired": "Se anularon {count} invitaciones pendientes a la dirección anterior.",
-        "done": "Listo"
+        "done": "Listo",
+        "manager": "Jefatura directa",
+        "managerNone": "Sin jefatura asignada",
+        "managerHelper": "A quién reporta en el organigrama.",
+        "demographics": "Datos demográficos",
+        "demographicsHelper": "Definen los grupos en que se desglosan los resultados; un grupo con menos de {floor} respuestas nunca muestra cifras.",
+        "demographicsNone": "Esta empresa no tiene campos demográficos activos.",
+        "demographicEmpty": "Sin respuesta",
+        "demographicRequired": "Falta «{field}», que es obligatorio. Complételo para guardar los datos demográficos.",
+        "demographicNumber": "«{field}» debe ser un número.",
+        "detailsUnavailable": "No se pudieron cargar la jefatura ni los datos demográficos de esta persona. Al guardar se conservan como están.",
+        "deactivateTitle": "¿Desactivar a {name}?",
+        "deactivateBody": "No podrá entrar a la plataforma: ni con su correo ni con los códigos de encuesta que ya recibió. Quien escriba uno de esos códigos verá el mismo aviso que con una contraseña equivocada. Sus sesiones abiertas se cierran de inmediato y deja de recibir encuestas, invitaciones y códigos nuevos. Las respuestas que ya envió se conservan. Si la reactiva, esos mismos códigos vuelven a funcionar.",
+        "deactivateConfirm": "Desactivar y guardar",
+        "resetPassword": "Restablecer contraseña",
+        "resetPasswordHelper": "Genera una contraseña temporal y se la muestra a usted. No se envía ningún correo.",
+        "resetTitle": "¿Restablecer la contraseña de {name}?",
+        "resetBody": "Su contraseña actual deja de servir y sus sesiones abiertas se cierran. La plataforma no envía ningún correo: la contraseña temporal aparece aquí una sola vez y usted se la hace llegar a la persona dueña de {email}.",
+        "resetConfirm": "Restablecer",
+        "resetDone": "Contraseña de {name} restablecida. No se envió ningún correo, ni a esa persona ni a usted.",
+        "resetPasswordLabel": "Contraseña temporal",
+        "resetSignIn": "{name} entra con su correo {email} y esta contraseña. Désela por un canal seguro: al cerrar este panel no se puede volver a ver.",
+        "resetSurveyCodes": "Sus códigos de encuesta, si tiene, no cambian.",
+        "resetFailed": "No se pudo restablecer la contraseña",
+        "resetPerSurvey": "Entra solo con códigos de encuesta, uno por encuesta, así que no tiene contraseña que restablecer: darle una le abriría todas sus encuestas con su correo. Reenvíe su código desde «Quién ya respondió», en la página Distribución de la encuesta."
       },
       "roster": {
         "sub": "ordenadas por rol y nombre · {never} nunca han entrado",
@@ -5203,7 +5484,7 @@
     "next": {
       "crumb": "Configuración",
       "title": "Configuración de empresa",
-      "description": "Lo que cada encuesta nueva hereda: idioma, frecuencia, anonimato, retención y marca. Se guarda al final.",
+      "description": "Lo que cada encuesta nueva hereda —idioma, zona horaria y modo de acceso— y la marca de la empresa. Se guarda al final.",
       "discard": "Descartar",
       "save": "Guardar cambios",
       "saving": "Guardando…",
@@ -5273,7 +5554,16 @@
       "departmentsActiveMany": "{count} activos",
       "departmentsInactiveOne": "{count} inactivo",
       "departmentsInactiveMany": "{count} inactivos",
-      "senderPlatform": "Lo define la plataforma para todas las empresas; aparece como remitente de invitaciones y recordatorios."
+      "senderPlatform": "Lo define la plataforma para todas las empresas; aparece como remitente de invitaciones y recordatorios.",
+      "anonymityInEffect": "Anonimato",
+      "anonymityAlwaysValue": "Siempre anónimas",
+      "anonymityAlwaysHelp": "Toda encuesta nueva se crea anónima; no es un ajuste de la empresa. Ningún administrador de la empresa ve una respuesta individual.",
+      "retentionInEffect": "Conservación de datos",
+      "retentionFixedValue": "Plazos fijos de la plataforma",
+      "retentionFixedHelp": "Las respuestas no se borran por plazo. La plataforma borra sola los borradores de encuesta sin tocar en 30 días, las notificaciones al cabo de 1 año y las invitaciones no aceptadas 90 días después de vencer.",
+      "colourEmailHelp": "El color del botón en los correos que llevan el acceso: credenciales al importar personas, la invitación masiva y la distribución de una encuesta. No colorea ninguna pantalla.",
+      "brandMetaInEffect": "el logotipo en la app y al responder; logotipo y color en los correos de acceso",
+      "logoPathHelpPublished": "Una ruta de este sitio, como /brand/esph-logo.svg. TIMS publica el archivo en el sitio; aquí solo se elige. Vacío quita el logotipo."
     }
   },
   "wizard": {
@@ -6338,7 +6628,11 @@
       "fechaAvance": "Fecha del avance",
       "fechaAvanceHint": "El día al que corresponde este avance.",
       "comentario": "Comentario",
-      "comentarioHint": "Queda registrado en la bitácora del plan. Opcional."
+      "comentarioHint": "Queda registrado en la bitácora del plan. Opcional.",
+      "hallazgoPickHint": "El hallazgo de encuesta al que responde el plan, de las encuestas cerradas del nodo. Opcional.",
+      "hallazgoPlaceholder": "Seleccione un hallazgo",
+      "hallazgoNone": "Sin hallazgo vinculado",
+      "hallazgoOption": "{dimension} · {survey} (cerrada el {closed})"
     },
     "involucrados": {
       "filterPlaceholder": "Buscar por nombre o correo",
@@ -7673,7 +7967,9 @@
       "microclimate-templates__use__create": "Creó un microclima desde una plantilla",
       "microclimates__activate__create": "Activó un microclima",
       "microclimates__bulk__create": "Creó microclimas en bloque",
+      "microclimates__content__update": "Editó el borrador de un microclima",
       "microclimates__create": "Creó un microclima",
+      "microclimates__delete": "Descartó un borrador de microclima",
       "microclimates__invitations__create": "Invitó personas a un microclima",
       "microclimates__invitations__reinstate__create": "Restituyó una invitación a un microclima",
       "microclimates__invitations__resend__create": "Reenvió una invitación a un microclima",

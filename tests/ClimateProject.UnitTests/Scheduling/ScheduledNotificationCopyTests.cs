@@ -126,4 +126,60 @@ public class ScheduledNotificationCopyTests
             },
             title => Assert.InRange(title.Length, 1, 500));
     }
+
+    // -- G28: the plan-due nudge asks only for what its recipient can do ------------------
+    //
+    // Recording progress and changing the date are `Roles.Admin` writes. The nudge told every
+    // owner to do both, so a leader or employee who owned a plan was sent to a screen that
+    // refuses them. An administrator keeps the instruction; anyone else is told who can.
+
+    private static readonly DateTimeOffset PlanDue = new(2026, 10, 30, 0, 0, 0, TimeSpan.Zero);
+
+    [Fact]
+    public void An_admin_owner_is_told_to_record_progress_or_move_the_date_in_spanish()
+        => Assert.Equal(
+            "\"Reducir rotación\" vence el 2026-10-30. Registra un avance o cambia la fecha antes de que venza.",
+            ScheduledNotificationCopy.PlanDueBodyFor("es", "Reducir rotación", PlanDue, overdue: false, recipientAdministers: true));
+
+    [Fact]
+    public void A_non_admin_owner_is_told_to_ask_whoever_administers_the_platform_in_spanish()
+        => Assert.Equal(
+            "\"Reducir rotación\" vence el 2026-10-30. Pide a quien administra la plataforma que registre un avance o cambie la fecha antes de que venza.",
+            ScheduledNotificationCopy.PlanDueBodyFor("es", "Reducir rotación", PlanDue, overdue: false, recipientAdministers: false));
+
+    [Fact]
+    public void A_non_admin_owner_is_told_to_ask_whoever_administers_the_platform_in_english()
+    {
+        var body = ScheduledNotificationCopy.PlanDueBodyFor("en", "Reduce turnover", PlanDue, overdue: false, recipientAdministers: false);
+
+        Assert.Equal(
+            "\"Reduce turnover\" is due on 2026-10-30. Ask whoever administers the platform to record progress or move the date before it lapses.",
+            body);
+    }
+
+    [Fact]
+    public void An_admin_owner_is_told_to_record_progress_in_english()
+        => Assert.Equal(
+            "\"Reduce turnover\" is due on 2026-10-30. Record progress or move the date before it lapses.",
+            ScheduledNotificationCopy.PlanDueBodyFor("en", "Reduce turnover", PlanDue, overdue: false, recipientAdministers: true));
+
+    [Theory]
+    [InlineData("es", "Pide a quien administra la plataforma que registre un avance o cambie la fecha")]
+    [InlineData("en", "Ask whoever administers the platform to record progress or move the date")]
+    public void The_untitled_phrasing_asks_a_non_admin_owner_the_same_way(string locale, string ask)
+    {
+        var body = ScheduledNotificationCopy.PlanDueBodyFor(locale, null, PlanDue, overdue: false, recipientAdministers: false);
+
+        Assert.Contains(ask, body);
+        Assert.DoesNotContain("Registra un avance", body);
+        Assert.DoesNotContain("Record progress or move", body);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void The_overdue_body_asks_for_nothing_and_reads_the_same_for_both(bool administers)
+        => Assert.Equal(
+            "\"Reducir rotación\" venció el 2026-10-30 y sigue abierto.",
+            ScheduledNotificationCopy.PlanDueBodyFor("es", "Reducir rotación", PlanDue, overdue: true, recipientAdministers: administers));
 }

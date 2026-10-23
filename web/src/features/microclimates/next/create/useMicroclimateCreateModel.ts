@@ -6,6 +6,7 @@ import {
   createMicroclimate,
   getMicroclimate,
   listMicroclimates,
+  replaceMicroclimateContent,
   updateMicroclimate,
   type MicroclimateDetail,
   type Question,
@@ -13,9 +14,11 @@ import {
 import { listMicroclimateTemplates, type MicroclimateTemplate } from '../../api/microclimateTemplates'
 import {
   buildCreateInput,
+  buildReplaceInput,
   emptyQuestion,
   emptyWizardValues,
   wizardStepErrors,
+  wizardValuesFromDraft,
   type ContentLanguage,
   type MicroclimateWizardValues,
   type WizardQuestionValues,
@@ -27,7 +30,16 @@ import { shortDay } from '../format'
 /** Where the questions come from: the last session, a template (which brings none), or nothing. */
 export type StartFrom = 'previous' | 'template' | 'blank'
 
+/**
+ * Editing a draft (G23), at `/microclimates/:id/edit`: the same form, filled from the draft.
+ * `notDraft` is a session that has been launched — its content is history and the server would
+ * refuse the save with a 409, so the page says so instead of offering a form.
+ */
+export type DraftLoad = { status: 'none' } | { status: 'loading' } | { status: 'ready'; companyId: string } | { status: 'failed'; error: string } | { status: 'notDraft'; id: string }
+
 export interface MicroclimateCreateState {
+  /** The draft being edited, when there is one. */
+  draft: DraftLoad
   /** The previous session and the templates are still being read. */
   loading: boolean
   /** The newest session's detail — what "La sesión anterior" copies — or `null`. */
@@ -81,7 +93,7 @@ export function questionFromPrevious(question: Question, key: string, language: 
  * which reads the newest session (`GET /microclimates`, then its detail) and copies its
  * questions, its expected count, its anonymity and the length of its window.
  */
-export function useMicroclimateCreateModel(): MicroclimateCreateState {
+export function useMicroclimateCreateModel(editId?: string): MicroclimateCreateState {
   const { t, locale } = useTranslation()
   const navigate = useNavigate()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
@@ -106,6 +118,7 @@ export function useMicroclimateCreateModel(): MicroclimateCreateState {
   const [previous, setPrevious] = useState<MicroclimateDetail | null>(null)
   const [templates, setTemplates] = useState<MicroclimateTemplate[]>([])
   const [loading, setLoading] = useState(true)
+  const [draft, setDraft] = useState<DraftLoad>(editId ? { status: 'loading' } : { status: 'none' })
   const [attempted, setAttempted] = useState(false)
   const [submitting, setSubmitting] = useState<'draft' | 'launch' | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -139,8 +152,40 @@ export function useMicroclimateCreateModel(): MicroclimateCreateState {
     [locale, nextKey, t],
   )
 
+  // Editing: the draft is the starting point, so neither "the previous session" nor a template
+  // is read. A bilingual draft is read in both languages -- see `wizardValuesFromDraft`.
   useEffect(() => {
-    if (!companyId) return
+    if (!editId) return
+    let cancelled = false
+    setDraft({ status: 'loading' })
+    const read = async () => {
+      const first = await getMicroclimate(baseUrl, editId, 'es')
+      if (first.status !== 'draft' || first.responseCount > 0) return { first, en: null, es: null }
+      if (first.language === 'both') return { first, en: await getMicroclimate(baseUrl, editId, 'en'), es: first }
+      if (first.language === 'es') return { first, en: null, es: first }
+      return { first, en: await getMicroclimate(baseUrl, editId, 'en'), es: null }
+    }
+    read()
+      .then(({ first, en, es }) => {
+        if (cancelled) return
+        if (!en && !es) {
+          setDraft({ status: 'notDraft', id: first.id })
+          return
+        }
+        setValues(wizardValuesFromDraft(en, es, nextKey))
+        setDraft({ status: 'ready', companyId: first.companyId })
+        setLoading(false)
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setDraft({ status: 'failed', error: err instanceof Error ? err.message : t('errors.generic') })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [baseUrl, editId, nextKey, t])
+
+  useEffect(() => {
+    if (!companyId || editId) return
     let cancelled = false
     setLoading(true)
     const readPrevious = async (): Promise<MicroclimateDetail | null> => {
@@ -165,7 +210,7 @@ export function useMicroclimateCreateModel(): MicroclimateCreateState {
     return () => {
       cancelled = true
     }
-  }, [baseUrl, companyId, copyPrevious, locale])
+  }, [baseUrl, companyId, copyPrevious, editId, locale])
 
   const patch = useCallback((next: Partial<MicroclimateWizardValues>) => {
     touched.current = true
@@ -196,11 +241,13 @@ export function useMicroclimateCreateModel(): MicroclimateCreateState {
   const submit = useCallback(
     async (mode: 'draft' | 'launch') => {
       setAttempted(true)
-      if (!companyId || errors.length > 0) return
+      if ((!companyId && !editId) || errors.length > 0) return
       setSubmitError(null)
       setSubmitting(mode)
       try {
-        const created = await createMicroclimate(baseUrl, buildCreateInput(values, companyId))
+        const created = editId
+          ? await replaceMicroclimateContent(baseUrl, editId, buildReplaceInput(values))
+          : await createMicroclimate(baseUrl, buildCreateInput(values, companyId as string))
         if (mode === 'launch') {
           try {
             await updateMicroclimate(baseUrl, created.id, { status: 'active' })
@@ -221,10 +268,11 @@ export function useMicroclimateCreateModel(): MicroclimateCreateState {
         setSubmitting(null)
       }
     },
-    [baseUrl, companyId, errors.length, navigate, t, values],
+    [baseUrl, companyId, editId, errors.length, navigate, t, values],
   )
 
   return {
+    draft,
     loading,
     previous,
     templates,

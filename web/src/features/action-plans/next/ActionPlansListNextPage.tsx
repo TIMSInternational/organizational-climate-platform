@@ -204,6 +204,7 @@ function ActionPlansListBody({ ownerView }: { ownerView: boolean }) {
           <CardContent>
             <ActionPlanForm
               templates={[...state.templates]}
+              owners={state.owners}
               onSubmit={async (values) => {
                 const plan = await state.create(values)
                 setShowCreate(false)

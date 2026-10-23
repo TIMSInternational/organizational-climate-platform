@@ -106,6 +106,12 @@ export interface CreateSurveyInput {
   endDate: string
   description?: LocalizedInput
   departmentIds?: string[]
+  /**
+   * People aimed at by name (`CreateSurveyRequest.UserIds`, G14). A UNION with `departmentIds`
+   * on the server; the builder sends one or the other. Every id must be an ACTIVE person of
+   * `companyId`, or the server refuses the whole request with a 400.
+   */
+  userIds?: string[]
   questions?: CreateSurveyQuestionInput[]
   settings?: CreateSurveySettingsInput
   targetAudienceCount?: number
@@ -138,4 +144,19 @@ export async function createSurvey(
     body: JSON.stringify(input),
   })
   return response.json() as Promise<SurveyDetail>
+}
+
+/**
+ * Writes the people a survey is aimed at by name: `PUT /surveys/{id}` carrying ONLY `userIds`,
+ * so no other column is touched (every field of that body is nullable, and an omitted one is left
+ * alone). It REPLACES the survey's user targets.
+ *
+ * The template path's half of G14: `POST /survey-templates/{id}/use` takes no `UserIds`, so the
+ * builder writes them onto the copy right after creating it, while it is still a draft.
+ */
+export async function setSurveyUserTargets(baseUrl: string, id: string, userIds: string[]): Promise<void> {
+  await authFetch(`${baseUrl}/surveys/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ userIds }),
+  })
 }

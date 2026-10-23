@@ -29,6 +29,8 @@ import { updateUser, updateUserRole, type User, type UserEmailChange } from '../
 import { EmailChangeOutcome } from '../../components/EmailChangeOutcome'
 import { updateErrorText } from '../../components/emailRefusal'
 import { ResendCredentials } from '../../components/ResendCredentials'
+import { DeactivationConfirm, PersonDetailsFields, ResetPassword } from '../../components/PersonDetails'
+import { departmentChange, usePersonDetails } from '../../components/usePersonDetails'
 import type { Department } from '../../api/departments'
 import IntakeWizard from '../../components/IntakeWizard'
 import InvitationForm, { type InvitationFormValues } from '../../components/InvitationForm'
@@ -251,6 +253,8 @@ export default function SuperUsersView() {
         <EditPerson
           key={editing.id}
           user={editing}
+          people={state.users}
+          companyId={companyId}
           departments={state.departments}
           canAssignRoles={capabilities.canAssignRoles}
           onClose={() => setEditing(null)}
@@ -485,12 +489,16 @@ function RosterFooter({
 
 function EditPerson({
   user,
+  people,
+  companyId,
   departments,
   canAssignRoles,
   onClose,
   onReload,
 }: {
   user: User
+  people: readonly User[]
+  companyId: string | undefined
   departments: readonly Department[]
   canAssignRoles: boolean
   onClose: () => void
@@ -507,12 +515,29 @@ function EditPerson({
   const [error, setError] = useState<string | null>(null)
   // Set when a save changed the address; the panel stays open to say what that did and did not do.
   const [emailChange, setEmailChange] = useState<{ change: UserEmailChange; current: string } | null>(null)
+  const [confirmingDeactivation, setConfirmingDeactivation] = useState(false)
+  const details = usePersonDetails(baseUrl, user, companyId)
   const ids = { name: useId(), email: useId(), role: useId(), department: useId(), active: useId() }
-  // The API can move a person to a department but not out of one (`UpdateUserRequest`
-  // carries a department only when set), so "none" is offered only to someone who has none.
+  // "Sin departamento" is offered to everyone: choosing it on someone who has one sends
+  // `clearDepartment` (`UpdateUserRequest.ClearDepartment`), the explicit unset a null cannot say.
   const options = departments.filter((unit) => unit.isActive || unit.id === user.departmentId)
 
+  // Deactivating is confirmed first, in a dialog that says what happens to their codes (G5).
+  function requestSave() {
+    if (user.isActive && !isActive) setConfirmingDeactivation(true)
+    else void save()
+  }
+
   async function save() {
+    const extra = details.changes()
+    if (extra.missing) {
+      setError(t('users.next.edit.demographicRequired', { field: extra.missing }))
+      return
+    }
+    if (extra.invalid) {
+      setError(t('users.next.edit.demographicNumber', { field: extra.invalid }))
+      return
+    }
     setSaving(true)
     setError(null)
     try {
@@ -522,8 +547,9 @@ function EditPerson({
       const updated = await updateUser(baseUrl, user.id, {
         name: name.trim(),
         isActive,
-        ...(departmentId && departmentId !== user.departmentId ? { departmentId } : {}),
+        ...departmentChange(user, departmentId),
         ...(nextEmail.toLowerCase() !== user.email.toLowerCase() ? { email: nextEmail } : {}),
+        ...extra.input,
       })
       if (canAssignRoles && role !== user.role) await updateUserRole(baseUrl, user.id, role)
       if (updated.emailChange) {
@@ -607,7 +633,7 @@ function EditPerson({
           helper={t('superadmin.next.users.departmentHelper', { floor: ANONYMITY_FLOOR })}
         >
           <CanvasSelect id={ids.department} className="w-full" value={departmentId} onChange={(event) => setDepartmentId(event.target.value)}>
-            {!user.departmentId && <option value="">{t('superadmin.next.users.noDepartment')}</option>}
+            <option value="">{t('superadmin.next.users.noDepartment')}</option>
             {options.map((unit) => (
               <option key={unit.id} value={unit.id}>
                 {unit.name}
@@ -616,7 +642,15 @@ function EditPerson({
           </CanvasSelect>
         </Field>
       </div>
+      <PersonDetailsFields user={user} people={people} state={details} />
       <ResendCredentials user={user} baseUrl={baseUrl} />
+      <ResetPassword user={user} baseUrl={baseUrl} allowed details={details} />
+      <DeactivationConfirm
+        open={confirmingDeactivation}
+        name={user.name}
+        onOpenChange={setConfirmingDeactivation}
+        onConfirm={save}
+      />
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-light pt-2.5">
         <label htmlFor={ids.active} className="m-0 inline-flex items-center gap-2 text-xs text-fg-secondary">
           <Switch id={ids.active} checked={isActive} onCheckedChange={setIsActive} className="data-[state=checked]:bg-accent-green" />
@@ -628,7 +662,7 @@ function EditPerson({
           <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
             {emailChange ? t('users.next.edit.done') : t('common.cancel')}
           </Button>
-          <Button type="button" variant="outline" onClick={() => void save()} disabled={saving || !name.trim() || !email.trim()}>
+          <Button type="button" variant="outline" onClick={requestSave} disabled={saving || !name.trim() || !email.trim()}>
             <Check aria-hidden="true" />
             {t('superadmin.next.users.save')}
           </Button>
