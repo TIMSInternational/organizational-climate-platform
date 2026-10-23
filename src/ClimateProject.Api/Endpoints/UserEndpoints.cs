@@ -45,6 +45,29 @@ public static class UserEndpoints
     private static IResult EmailRefusal(int statusCode, string code, string message)
         => Results.Json(new { message, code }, statusCode: statusCode);
 
+    /// <summary>
+    /// A person whose only key is a per-survey code (<c>survey_credentials</c>): their company
+    /// is in <c>per_survey</c> mode and the account has no password of its own. That is the
+    /// exact shape a per_survey import mints (<c>BulkImportEndpoints</c>: no username, no
+    /// password hash -- "a username and a password hash here would be a second, wider key").
+    /// Read from the company's CURRENT mode: the reset this guards mints an account-wide key
+    /// now, whatever mode the person's existing surveys froze.
+    /// </summary>
+    internal static async Task<bool> IsSurveyCodesOnlyAsync(
+        ClimateProjectDbContext db, User user, CancellationToken cancellationToken)
+    {
+        if (user.PasswordHash is not null || user.CompanyId is not { } companyId)
+        {
+            return false;
+        }
+
+        var mode = await db.Companies
+            .Where(c => c.Id == companyId)
+            .Select(c => c.Settings.CredentialMode)
+            .FirstOrDefaultAsync(cancellationToken);
+        return mode == CredentialModes.PerSurvey;
+    }
+
     private static UserListItem ToListItem(User u)
         => new(u.Id, u.Email, u.Name, u.Role, u.DepartmentId, u.IsActive, u.LastLoginAt, u.CreatedAt);
 
@@ -136,7 +159,10 @@ public static class UserEndpoints
         }
 
         var demographics = await DemographicValueStore.LoadForUserAsync(db, user.Id, cancellationToken);
-        return Results.Ok(ToDetail(user, demographics));
+        return Results.Ok(ToDetail(user, demographics) with
+        {
+            SurveyCodesOnly = await IsSurveyCodesOnlyAsync(db, user, cancellationToken),
+        });
     }
 
     private static async Task<IResult> UpdateAsync(
@@ -238,9 +264,44 @@ public static class UserEndpoints
                 statusCode: 400);
         }
 
+        // "Set it to X" and "remove it" in one request: no order of applying them is what the
+        // caller meant, so neither is applied.
+        if (request.ClearDepartment && request.DepartmentId.HasValue)
+        {
+            return Results.Json(
+                new { message = "Send either departmentId or clearDepartment, not both" },
+                statusCode: 400);
+        }
+
+        if (request.ClearManager && request.ManagerId.HasValue)
+        {
+            return Results.Json(
+                new { message = "Send either managerId or clearManager, not both" },
+                statusCode: 400);
+        }
+
+        // A person reporting to themselves is a loop every org-chart reader (the tracking sync's
+        // ManagerId, the subject-access export's "reports") would have to special-case.
+        if (request.ManagerId == user.Id)
+        {
+            return Results.Json(new { message = "A person cannot be their own manager" }, statusCode: 400);
+        }
+
         if (!string.IsNullOrWhiteSpace(request.Name))
         {
             user.Name = request.Name.Trim();
+        }
+
+        // Unsetting is the one department edit with no lookup: nothing to validate, and the
+        // company-less guard above does not apply (such a user has no department to remove).
+        if (request.ClearDepartment)
+        {
+            user.DepartmentId = null;
+        }
+
+        if (request.ClearManager)
+        {
+            user.ManagerId = null;
         }
 
         if (request.DepartmentId.HasValue)
@@ -339,8 +400,27 @@ public static class UserEndpoints
                 return Results.Json(new { message = string.Join("; ", validation.Errors) }, statusCode: 400);
             }
 
-            await DemographicValueStore.ReplaceForUserAsync(db, user.Id, validation.Values, now, cancellationToken);
-            demographics = DemographicValueStore.ToMap(validation.Values);
+            // An answer to a RETIRED field cannot be submitted (validation refuses an inactive
+            // field), so a full replace would delete it as "omitted" -- an edit screen, which only
+            // offers the active fields, would silently erase what the person answered under a
+            // field the company has since switched off, and the segment it fed. Those answers are
+            // not part of what this request can say, so they are carried through unchanged.
+            var retiredFieldIds = definitions.Where(d => !d.IsActive).Select(d => d.Id).ToList();
+            List<ResolvedDemographicValue> retiredAnswers = retiredFieldIds.Count == 0
+                ? []
+                : (await db.UserDemographics
+                        .Where(d => d.UserId == user.Id && retiredFieldIds.Contains(d.DemographicFieldId))
+                        .Select(d => new { d.DemographicFieldId, d.Value })
+                        .ToListAsync(cancellationToken))
+                    .Select(d => new ResolvedDemographicValue(
+                        d.DemographicFieldId,
+                        definitions.First(f => f.Id == d.DemographicFieldId).Field,
+                        d.Value))
+                    .ToList();
+            var kept = validation.Values.Concat(retiredAnswers).ToList();
+
+            await DemographicValueStore.ReplaceForUserAsync(db, user.Id, kept, now, cancellationToken);
+            demographics = DemographicValueStore.ToMap(kept);
         }
 
         UserEmailChange? emailChange = null;
