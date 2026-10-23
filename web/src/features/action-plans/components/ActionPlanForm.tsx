@@ -25,6 +25,8 @@ export interface ActionPlanFormValues {
   dueDate: string
   priority: string
   templateId?: string
+  /** Who is answerable for the plan; omitted leaves it unassigned. */
+  ownerId?: string
   kpis: CreateKpiInput[]
   objectives: CreateObjectiveInput[]
 }
@@ -51,11 +53,21 @@ interface KpiDraft {
  */
 const NO_TEMPLATE = '__none__'
 
+/** The same sentinel, for "nobody yet" in the owner picker. */
+const NO_OWNER = '__unassigned__'
+
 const EMPTY_KPI: KpiDraft = { name: '', targetValue: '', unit: '', measurementFrequency: 'monthly' }
 const EMPTY_OBJECTIVE: CreateObjectiveInput = { description: '', successCriteria: '' }
 
 interface ActionPlanFormProps {
   templates?: ActionPlanTemplate[]
+  /**
+   * The people the plan can be handed to: every user of the company, because the server's
+   * only rule is that an owner belongs to the plan's tenant (`RefuseInvalidOwnerAsync`). The
+   * picker is drawn only when there is somebody to offer; a plan created without an owner is
+   * honestly unassigned and can be handed over from its own page.
+   */
+  owners?: readonly { id: string; name: string }[]
   onSubmit: (values: ActionPlanFormValues) => Promise<void>
   onCancel?: () => void
 }
@@ -79,13 +91,14 @@ interface ActionPlanFormProps {
  * than pre-empted — the client does not restate `CreateAsync`'s rules, it only adds
  * the ones `CreateAsync` has none of.
  */
-export default function ActionPlanForm({ templates = [], onSubmit, onCancel }: ActionPlanFormProps) {
+export default function ActionPlanForm({ templates = [], owners = [], onSubmit, onCancel }: ActionPlanFormProps) {
   const { t } = useTranslation()
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [dueDate, setDueDate] = useState('')
   const [priority, setPriority] = useState<string>('medium')
   const [templateId, setTemplateId] = useState<string>(NO_TEMPLATE)
+  const [ownerId, setOwnerId] = useState<string>(NO_OWNER)
   const [kpis, setKpis] = useState<KpiDraft[]>([])
   const [objectives, setObjectives] = useState<CreateObjectiveInput[]>([])
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
@@ -134,6 +147,7 @@ export default function ActionPlanForm({ templates = [], onSubmit, onCancel }: A
         dueDate,
         priority,
         templateId: templateId === NO_TEMPLATE ? undefined : templateId,
+        ownerId: ownerId === NO_OWNER ? undefined : ownerId,
         kpis: kpis.map((kpi) => ({
           name: kpi.name.trim(),
           targetValue: Number(kpi.targetValue),
@@ -207,6 +221,19 @@ export default function ActionPlanForm({ templates = [], onSubmit, onCancel }: A
           }))}
         />
       </div>
+
+      {owners.length > 0 && (
+        <SelectField
+          label={t('actionPlans.next.createOwner')}
+          description={t('actionPlans.next.createOwnerHint')}
+          value={ownerId}
+          onChange={setOwnerId}
+          options={[
+            { value: NO_OWNER, label: t('actionPlans.next.createOwnerNone') },
+            ...owners.map((owner) => ({ value: owner.id, label: owner.name })),
+          ]}
+        />
+      )}
 
       {templates.length > 0 && (
         // Reference-only: selecting a template just sets templateId on the create

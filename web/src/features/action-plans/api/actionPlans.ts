@@ -131,6 +131,12 @@ export interface CreateActionPlanInput {
   sourceSurveyId?: string
   kpis?: CreateKpiInput[]
   objectives?: CreateObjectiveInput[]
+  /**
+   * Who is answerable for the plan from the start. `CreateAsync` validates it like
+   * `sourceSurveyId`: the user must exist and belong to the plan's company, or it is a 400.
+   * Omitted means unassigned, which is honest for a plan raised before anybody took it.
+   */
+  ownerId?: string
 }
 
 export interface UpdateActionPlanInput {
@@ -173,6 +179,11 @@ export interface ProgressUpdateDetail {
   updateDate: string
   overallNotes: string
   updatedBy: string
+  /**
+   * Who recorded it, joined by the server so the Bitácora can name them without the
+   * administrator-only user directory. Null when that user no longer resolves.
+   */
+  updatedByName?: string | null
 }
 
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/
@@ -268,4 +279,25 @@ export async function recordProgress(baseUrl: string, id: string, input: RecordP
     body: JSON.stringify(input),
   })
   return response.json() as Promise<ProgressUpdateDetail>
+}
+
+/**
+ * `GET /action-plans/{id}/progress` — every progress note recorded on the plan, oldest first.
+ *
+ * Readable by whoever may read the plan (an administrator of its company, or its owner). Before
+ * this endpoint existed the POST wrote these rows and nothing read them back, so the Bitácora
+ * forgot every note on reload.
+ */
+export async function listProgress(baseUrl: string, id: string): Promise<ProgressUpdateDetail[]> {
+  const response = await authFetch(`${baseUrl}/action-plans/${id}/progress`)
+  const body = (await response.json()) as { updates: ProgressUpdateDetail[] }
+  return body.updates
+}
+
+/**
+ * `DELETE /action-plans/{id}` — administrators of the plan's company only. The plan's KPIs,
+ * objectives and progress history go with it; its unsent due-date nudges are cancelled.
+ */
+export async function deleteActionPlan(baseUrl: string, id: string): Promise<void> {
+  await authFetch(`${baseUrl}/action-plans/${id}`, { method: 'DELETE' })
 }

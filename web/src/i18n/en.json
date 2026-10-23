@@ -292,7 +292,10 @@
         "progress": "Progress recorded",
         "noteBefore": "Each update is recorded with",
         "noteAction": "Record progress",
-        "noteAfter": ": a note on what moved and why, with its date. The server keeps every update but does not return them yet, so only those recorded during this visit appear here."
+        "noteAfter": ": a note on what moved and why, with its date. Every update stays here.",
+        "progressBy": "Progress recorded by",
+        "historyLoading": "Loading the recorded progress…",
+        "historyFailed": "The recorded progress could not be read. The plan itself is unaffected; reload to try again."
       },
       "sheet": {
         "title": "Details",
@@ -306,7 +309,23 @@
         "noTemplate": "None",
         "unknown": "not available"
       },
-      "guard": "Progress is recorded by the administration. The plan points at a dimension and a department, never at individual responses."
+      "guard": "Progress is recorded by the administration. The plan points at a dimension and a department, never at individual responses.",
+      "edit": {
+        "menu": "Edit plan…",
+        "title": "Edit plan",
+        "description": "Correct the title, description, due date or tags. The change is recorded in the audit log.",
+        "tagsHint": "Separated by commas. Tags the platform added when it raised the plan are kept as they are.",
+        "save": "Save changes"
+      },
+      "delete": {
+        "menu": "Delete plan…",
+        "title": "Delete this plan?",
+        "body": "“{title}” will be deleted together with its KPIs, objectives and progress history. Reminders not yet sent are cancelled. This cannot be undone.",
+        "confirm": "Delete plan"
+      },
+      "createOwner": "Owner",
+      "createOwnerNone": "Unassigned",
+      "createOwnerHint": "Who is answerable for the plan. You can change it later."
     }
   },
   "analytics": {

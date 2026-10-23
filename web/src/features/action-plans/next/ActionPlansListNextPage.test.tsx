@@ -70,6 +70,8 @@ function routeFetch() {
     if (url.startsWith(`${API}/action-plans?`)) return json(ACTION_PLANS)
     if (url.startsWith(`${API}/admin/departments`)) return json(DEPARTMENTS)
     if (url.includes('/action-plan-templates')) return json({ templates: [] })
+    if (url.startsWith(`${API}/admin/users`)) return json({ users: [{ id: 'u-luis', name: 'Luis Mora' }, { id: 'u-ana', name: 'Ana Rojas' }] })
+    if (url === `${API}/action-plans` && init?.method === 'POST') return json({ ...ACTION_PLANS.actionPlans[0], id: 'p-new', title: 'Turnos rotativos' }, 201)
     if (url.startsWith(`${TRACKING}/api/planes-accion`)) return json(TRACKING_PLANES)
     if (url.includes('/tracking/picker/nodos')) return json({ nodos: [{ id: FINANZAS, name: 'Finanzas' }] })
     if (/\/profile(\?|$)/.test(url)) return json({ companyName: 'Grupo Meridiano S.A.' })
@@ -400,6 +402,41 @@ describe('ActionPlansListNextPage — company_admin', () => {
     expect(JSON.parse(put?.body ?? '{}')).toEqual({ status: 'cancelled' })
   })
 
+  /** G24: `CreateAsync` has taken an owner since the column existed; no form offered one. */
+  it('creates a plan with its owner chosen on the form, from the company’s people by name', async () => {
+    renderPage()
+    await userEvent.click(await screen.findByRole('button', { name: next.newPlan }))
+    await userEvent.type(screen.getByRole('textbox', { name: new RegExp(es.actionPlans.planTitle) }), 'Turnos rotativos')
+    await userEvent.type(screen.getByRole('textbox', { name: new RegExp(es.actionPlans.description) }), 'Rotar los turnos de noche')
+    const due = document.querySelector('input[type="date"]') as HTMLInputElement
+    await userEvent.type(due, '2026-11-30')
+
+    const owner = await screen.findByRole('combobox', { name: new RegExp(next.createOwner) })
+    await userEvent.click(owner)
+    const options = await screen.findAllByRole('option')
+    // Unassigned first, then the people sorted by name.
+    expect(options.map((option) => option.textContent)).toEqual([next.createOwnerNone, 'Ana Rojas', 'Luis Mora'])
+    await userEvent.click(screen.getByRole('option', { name: 'Luis Mora' }))
+    await userEvent.click(screen.getByRole('button', { name: es.actionPlans.createActionPlan }))
+
+    await waitFor(() => expect(calls().some((call) => call.method === 'POST')).toBe(true))
+    const post = calls().find((call) => call.method === 'POST')
+    expect(JSON.parse(post?.body ?? '{}')).toMatchObject({ title: 'Turnos rotativos', ownerId: 'u-luis', companyId: COMPANY })
+  })
+
+  it('sends no owner when the plan is left unassigned', async () => {
+    renderPage()
+    await userEvent.click(await screen.findByRole('button', { name: next.newPlan }))
+    await userEvent.type(screen.getByRole('textbox', { name: new RegExp(es.actionPlans.planTitle) }), 'Turnos rotativos')
+    await userEvent.type(screen.getByRole('textbox', { name: new RegExp(es.actionPlans.description) }), 'Rotar los turnos de noche')
+    await userEvent.type(document.querySelector('input[type="date"]') as HTMLInputElement, '2026-11-30')
+    await screen.findByRole('combobox', { name: new RegExp(next.createOwner) })
+    await userEvent.click(screen.getByRole('button', { name: es.actionPlans.createActionPlan }))
+
+    await waitFor(() => expect(calls().some((call) => call.method === 'POST')).toBe(true))
+    expect(JSON.parse(calls().find((call) => call.method === 'POST')?.body ?? '{}')).not.toHaveProperty('ownerId')
+  })
+
   it('narrows by title in the browser, without a request per keystroke', async () => {
     renderPage()
     await screen.findByRole('link', { name: 'Programa de reconocimiento entre pares' })
@@ -421,7 +458,10 @@ describe('ActionPlansListNextPage — an owner who is not an administrator', () 
   function adminOnlyCalls() {
     return calls().filter(
       (call) =>
-        call.url.includes('/admin/departments') || call.url.includes('/action-plan-templates') || call.url.startsWith(TRACKING),
+        call.url.includes('/admin/departments') ||
+        call.url.includes('/admin/users') ||
+        call.url.includes('/action-plan-templates') ||
+        call.url.startsWith(TRACKING),
     )
   }
 

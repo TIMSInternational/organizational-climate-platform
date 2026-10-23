@@ -28,6 +28,7 @@ import { calendarDay } from '../../../lib/calendarDay'
 import { deltaInkOf } from './tint'
 import FollowUpPlanForm from './FollowUpPlanForm'
 import { lowShare, type ResultsCellDetail, type ResultsDistributionPoint } from './derive'
+import { actionPlansOffered } from '../../action-plans/offered'
 
 /** The artboard's `.label`: 10px, bold, uppercase, 0.06em, the tertiary ink. */
 const LABEL = 'm-0 text-2xs font-bold uppercase tracking-label text-fg-label'
@@ -299,13 +300,17 @@ export default function ResultsCellPanel({
           <div className="flex flex-wrap gap-2">
             {plan ? (
               // Reading a plan is `CanAccessCompany`, the whole-company viewer — the
-              // one this page admits (`SurveyResultsNextPage.tsx`).
+              // one this page admits (`SurveyResultsNextPage.tsx`). Not linked where the
+              // deployment does not offer `/action-plans` (`actionPlansOffered`, the
+              // sidebar's rule): the sentence above still names the plan.
+              actionPlansOffered() && (
               <Button variant="outline" asChild>
                 <Link to={`/action-plans/${plan.id}`}>
                   <Target aria-hidden="true" />
                   {t('surveyResults.next.openPlan')}
                 </Link>
               </Button>
+              )
             ) : (
               // Opens the form HERE, pre-scoped to this group and this dimension.
               //
@@ -357,10 +362,15 @@ export default function ResultsCellPanel({
           )}
           {createdHere && (
             <p className="m-0 text-sm text-fg-primary">
-              {t('surveyResults.cross.created', { title: createdHere.title })}{' '}
-              <Link className="underline" to={`/action-plans/${createdHere.id}`}>
-                {t('surveyResults.cross.viewPlan')}
-              </Link>
+              {t('surveyResults.cross.created', { title: createdHere.title })}
+              {actionPlansOffered() && (
+                <>
+                  {' '}
+                  <Link className="underline" to={`/action-plans/${createdHere.id}`}>
+                    {t('surveyResults.cross.viewPlan')}
+                  </Link>
+                </>
+              )}
             </p>
           )}
           {/* The answer, not a way to go looking for it.
