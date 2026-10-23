@@ -111,6 +111,14 @@ export interface SurveyDraftContent {
   showProgress: boolean
   /** `''` inherits the company's mode. Optional: a draft saved before it existed has none. */
   credentialMode?: '' | 'shared' | 'per_survey'
+  /**
+   * The builder's settings step (G16). Additive, without a version bump: a draft saved before
+   * them has none and restores with the server's own defaults (`emptyWizardValues`).
+   */
+  randomizeQuestions?: boolean
+  autoSave?: boolean
+  timeLimitMinutes?: string
+  responseLimit?: string
   questions: DraftQuestion[]
 }
 
@@ -135,6 +143,10 @@ export function toDraftContent(values: SurveyWizardValues): SurveyDraftContent {
     allowPartialResponses: values.allowPartialResponses,
     showProgress: values.showProgress,
     credentialMode: values.credentialMode ?? '',
+    ...(values.randomizeQuestions !== undefined ? { randomizeQuestions: values.randomizeQuestions } : {}),
+    ...(values.autoSave !== undefined ? { autoSave: values.autoSave } : {}),
+    ...(values.timeLimitMinutes !== undefined ? { timeLimitMinutes: values.timeLimitMinutes } : {}),
+    ...(values.responseLimit !== undefined ? { responseLimit: values.responseLimit } : {}),
     questions: values.questions.map((question) => ({
       textEn: question.textEn,
       textEs: question.textEs,
@@ -290,6 +302,10 @@ export function draftValuesFrom(
     // Anything but a known mode restores as "inherit the company's", the safe default.
     credentialMode:
       content.credentialMode === 'shared' || content.credentialMode === 'per_survey' ? content.credentialMode : '',
+    randomizeQuestions: bool(content, 'randomizeQuestions', defaults.randomizeQuestions ?? false),
+    autoSave: bool(content, 'autoSave', defaults.autoSave ?? true),
+    timeLimitMinutes: str(content, 'timeLimitMinutes'),
+    responseLimit: str(content, 'responseLimit'),
     questions: questionsFrom(content, keyPrefix),
   }
 }

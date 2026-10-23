@@ -17,7 +17,8 @@ import {
 import { useSurveyDraft } from '../../useSurveyDraft'
 import {
   CONTENT_LANGUAGES,
-  SURVEY_WIZARD_STEPS,
+  builderIndexOfDraftStep,
+  draftStepOfBuilderIndex,
   audienceTargets,
   buildCreateInput,
   buildInstantiateInput,
@@ -201,7 +202,7 @@ export function useSurveyBuilderModel(companyId: string) {
     // draft from before template rows existed holds none, and gets them copied in.
     materialisedFor.current = restored.questions.length > 0 ? restored.templateId : null
     setValues(restored)
-    setStepIndex(Math.min(Math.max(restoredStep - 1, 0), SURVEY_WIZARD_STEPS.length - 1))
+    setStepIndex(builderIndexOfDraftStep(restoredStep))
   }, [])
 
   const draft = useSurveyDraft({
@@ -211,7 +212,8 @@ export function useSurveyBuilderModel(companyId: string) {
     enabled: true,
     keyPrefix,
     values,
-    currentStep: stepIndex + 1,
+    // The five-step numbering every stored draft already uses (`draftStepOfBuilderIndex`).
+    currentStep: draftStepOfBuilderIndex(stepIndex),
     onRestore: applyRestored,
   })
 
@@ -338,6 +340,11 @@ function emptyValues(language: ContentLanguage): SurveyWizardValues {
     showProgress: true,
     // Inherit the company's: departing from it is a choice somebody makes, never a default.
     credentialMode: '',
+    // The settings step (G16): the entity's own defaults, so an untouched step sends nothing.
+    randomizeQuestions: false,
+    autoSave: true,
+    timeLimitMinutes: '',
+    responseLimit: '',
     questions: [],
   }
 }

@@ -83,6 +83,12 @@ export interface CreateSurveySettingsInput {
   allowPartialResponses?: boolean
   showProgress?: boolean
   autoSave?: boolean
+  /** Random order per respondent AND no dimension heading -- one promise (`respondDimensions.ts`). */
+  randomizeQuestions?: boolean
+  /** A suggested time shown to the respondent; nothing is submitted or cut off when it runs out. */
+  timeLimitMinutes?: number
+  /** Completed responses after which nobody new may start (`SurveyResponseEndpoints`). */
+  responseLimit?: number
   notificationSendInvitations?: boolean
   notificationSendReminders?: boolean
   invitationSendImmediately?: boolean

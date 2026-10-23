@@ -1228,6 +1228,8 @@ describe('Nueva encuesta (SurveyBuilder artboard)', () => {
     await within(list).findByText('Confío en la dirección.')
     await userEvent.click(within(list).getAllByRole('switch')[0])
     await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+    // Through the settings step (G16), left untouched, to the review.
+    await userEvent.click(await screen.findByRole('button', { name: 'Siguiente' }))
     await userEvent.click(await screen.findByRole('button', { name: 'Crear el borrador' }))
     await waitFor(() => expect(questionAuthoring.replaceSurveyQuestions).toHaveBeenCalledTimes(1))
     const [, id, sent] = vi.mocked(questionAuthoring.replaceSurveyQuestions).mock.calls[0]
@@ -1262,6 +1264,8 @@ describe('Nueva encuesta (SurveyBuilder artboard)', () => {
     await userEvent.keyboard('{Escape}')
     await within(screen.getByTestId('builder-questions')).findByText('Me siento escuchado.')
     await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+    // Through the settings step (G16), left untouched, to the review.
+    await userEvent.click(await screen.findByRole('button', { name: 'Siguiente' }))
     await userEvent.click(await screen.findByRole('button', { name: 'Crear el borrador' }))
     await waitFor(() => expect(creating.createSurvey).toHaveBeenCalledTimes(1))
     const sent = vi.mocked(creating.createSurvey).mock.calls[0][1]
