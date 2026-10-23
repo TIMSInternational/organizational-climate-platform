@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { audienceSelection, estimateAudience, targetsWholeCompany } from './audience'
+import { audienceChange, audienceSelection, estimateAudience, targetsWholeCompany } from './audience'
 import type { User } from '../../features/org-structure/api/users'
 
 function user(id: string, departmentId: string | null, isActive = true): User {
@@ -162,5 +162,46 @@ describe('audienceSelection', () => {
     const selection = audienceSelection('users', [], chosen)
     chosen.push('b')
     expect(selection).toEqual({ userIds: ['a'] })
+  })
+})
+
+describe('audienceChange', () => {
+  const t = (departmentIds: string[], userIds: string[] = []) => ({ departmentIds, userIds })
+
+  it('names who gains and who loses when the named people are swapped', () => {
+    const change = audienceChange(USERS, t([], ['a', 'b']), t([], ['b', 'c']))
+    expect(change.before).toEqual(['a', 'b'])
+    expect(change.after).toEqual(['b', 'c'])
+    expect(change.gained).toEqual(['c'])
+    expect(change.lost).toEqual(['a'])
+    expect(change.widensToCompany).toBe(false)
+    expect(change.narrowsFromCompany).toBe(false)
+  })
+
+  it('unticking the last named person opens the survey to the whole company, not to nobody', () => {
+    const change = audienceChange(USERS, t([], ['a']), t([], []))
+    expect(change.after).toEqual(['a', 'b', 'c', 'd'])
+    expect(change.gained).toEqual(['b', 'c', 'd'])
+    expect(change.lost).toEqual([])
+    expect(change.widensToCompany).toBe(true)
+  })
+
+  it('naming one person on a company-wide survey closes it to everybody else', () => {
+    const change = audienceChange(USERS, t([]), t([], ['d']))
+    expect(change.after).toEqual(['d'])
+    expect(change.lost).toEqual(['a', 'b', 'c'])
+    expect(change.narrowsFromCompany).toBe(true)
+  })
+
+  it('a person already reached through a department neither gains nor loses by being named', () => {
+    const change = audienceChange(USERS, t(['eng']), t(['eng'], ['a', 'c']))
+    expect(change.gained).toEqual(['c'])
+    expect(change.lost).toEqual([])
+  })
+
+  it('never counts an inactive account on either side', () => {
+    const change = audienceChange(USERS, t([], ['e']), t([], ['e', 'a']))
+    expect(change.before).toEqual([])
+    expect(change.gained).toEqual(['a'])
   })
 })

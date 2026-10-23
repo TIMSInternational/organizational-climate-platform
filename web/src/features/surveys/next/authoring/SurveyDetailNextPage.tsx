@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { BarChart3, CalendarClock, Copy, Lock, Send, ShieldCheck, Trash2 } from 'lucide-react'
+import { BarChart3, CalendarClock, Copy, Lock, Send, ShieldCheck, Trash2, Users } from 'lucide-react'
 import { Link, useParams } from 'react-router'
 import { PageTopBar } from '../../../../components/layout'
 import {
@@ -36,6 +36,8 @@ import {
 import { useSurveyDetailModel, type SurveyDetailModel } from './useSurveyDetailModel'
 import { SurveyWindowDialog } from './SurveyWindowDialog'
 import { DeleteSurveyDialog } from './DeleteSurveyDialog'
+import { EditAudienceDialog } from './EditAudienceDialog'
+import { audienceEditability } from './audienceEdit'
 import { browserTimeZone, dayMonthIn, dayTimeIn, daysFromIn, isKnownTimeZone, yearIn, zoneLabel } from './zonedWindow'
 
 /**
@@ -54,7 +56,7 @@ import { browserTimeZone, dayMonthIn, dayTimeIn, daysFromIn, isKnownTimeZone, ye
 export default function SurveyDetailNextPage() {
   const { id } = useParams<{ id: string }>()
   const { t } = useTranslation()
-  const { state, reload, transition, duplicate, saveWindow, remove, pending, actionError } = useSurveyDetailModel(id)
+  const { state, reload, transition, duplicate, saveWindow, saveAudience, remove, pending, actionError } = useSurveyDetailModel(id)
 
   if (state.status === 'loading') {
     return (
@@ -84,6 +86,7 @@ export default function SurveyDetailNextPage() {
       onTransition={(status) => void transition(status)}
       onDuplicate={() => void duplicate()}
       onSaveWindow={saveWindow}
+      onSaveAudience={saveAudience}
       onDelete={remove}
     />
   )
@@ -96,6 +99,7 @@ export function SurveyDetailView({
   onTransition,
   onDuplicate,
   onSaveWindow,
+  onSaveAudience,
   onDelete,
   now = new Date(),
 }: {
@@ -106,6 +110,8 @@ export function SurveyDetailView({
   onDuplicate: () => void
   /** Moves the response window; absent, the dates are not offered for editing. */
   onSaveWindow?: (window: { startDate?: string; endDate: string }) => Promise<void>
+  /** Rewrites the survey's targets; absent, "Editar audiencia" is not offered. */
+  onSaveAudience?: (targets: { departmentIds?: string[]; userIds: string[] }) => Promise<void>
   /** Deletes the survey; absent, "Eliminar" is not offered. */
   onDelete?: () => Promise<void>
   now?: Date
@@ -154,6 +160,12 @@ export function SurveyDetailView({
   // `DeleteSurveyAsync` deletes in any status while nobody has answered, and only then.
   const deletable = canAuthor && onDelete !== undefined && survey.responseCount === 0
   const [editingWindow, setEditingWindow] = useState(false)
+  // "Editar audiencia": offered to an author wherever the page can save it, DISABLED with the
+  // reason once the survey has ended (`survey_ended_audience_frozen`, #627) rather than hidden,
+  // so the reader learns why the audience no longer moves.
+  const audienceOffered = canAuthor && onSaveAudience !== undefined
+  const audienceFrozen = audienceEditability(survey) === 'ended'
+  const [editingAudience, setEditingAudience] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
   return (
@@ -365,7 +377,27 @@ export function SurveyDetailView({
             </dl>
           </Card>
           <Card className="flex flex-col gap-2.5 px-5 pb-4.5 pt-4" data-testid="detail-departments">
-            <CardHeading title={copy('departments')} />
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <CardHeading title={copy('departments')} />
+              {audienceOffered && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={pending !== null || audienceFrozen}
+                  aria-describedby={audienceFrozen ? 'audience-frozen-reason' : undefined}
+                  onClick={() => setEditingAudience(true)}
+                >
+                  <Users aria-hidden="true" className="size-3.5" />
+                  {copy('audienceEdit.action')}
+                </Button>
+              )}
+            </div>
+            {audienceOffered && audienceFrozen && (
+              <p id="audience-frozen-reason" className="m-0 text-sm text-fg-secondary" data-testid="audience-frozen">
+                {copy('audienceEdit.endedReason')}
+              </p>
+            )}
             {targetsWholeCompany(surveyTargets) ? (
               <p className="m-0 text-sm">{copy('wholeCompany')}</p>
             ) : survey.departmentIds.length === 0 ? (
@@ -411,6 +443,17 @@ export function SurveyDetailView({
           onOpenChange={setEditingWindow}
           onSave={onSaveWindow}
           now={() => now}
+        />
+      )}
+      {audienceOffered && !audienceFrozen && onSaveAudience && (
+        <EditAudienceDialog
+          survey={survey}
+          departments={departments}
+          users={users}
+          hasPublicLink={Boolean(distribution?.publicLink)}
+          open={editingAudience}
+          onOpenChange={setEditingAudience}
+          onSave={onSaveAudience}
         />
       )}
       {deletable && onDelete && (
