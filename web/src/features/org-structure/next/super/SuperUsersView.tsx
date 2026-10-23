@@ -644,7 +644,7 @@ function EditPerson({
       </div>
       <PersonDetailsFields user={user} people={people} state={details} />
       <ResendCredentials user={user} baseUrl={baseUrl} />
-      <ResetPassword user={user} baseUrl={baseUrl} allowed />
+      <ResetPassword user={user} baseUrl={baseUrl} allowed details={details} />
       <DeactivationConfirm
         open={confirmingDeactivation}
         name={user.name}

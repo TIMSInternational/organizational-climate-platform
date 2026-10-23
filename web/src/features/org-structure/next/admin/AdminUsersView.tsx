@@ -905,7 +905,7 @@ function EditPerson({
       <ResendCredentials user={user} baseUrl={baseUrl} />
       {/* An administrator's password is the super administrator's to reset: the API refuses a
           company administrator one (`AuthEndpoints.ResetCredentialsAsync`), as it does their email. */}
-      <ResetPassword user={user} baseUrl={baseUrl} allowed={!accountLocked} />
+      <ResetPassword user={user} baseUrl={baseUrl} allowed={!accountLocked} details={details} />
       <DeactivationConfirm
         open={confirmingDeactivation}
         name={user.name}

@@ -473,6 +473,18 @@ public static class AuthEndpoints
             return Results.Forbid();
         }
 
+        // One code, one survey (ruled 2026-10-22, ESPH and EAGLE live). A per_survey person has
+        // no account password; their only keys are per-survey codes, each opening one survey.
+        // A reset would mint an account password, and with it an email sign-in whose session is
+        // scoped to NO survey -- every survey they are targeted by, which is the thing the mode
+        // denies. Their codes are re-sent per survey from the roster instead (G2).
+        if (await UserEndpoints.IsSurveyCodesOnlyAsync(db, user, cancellationToken))
+        {
+            return Results.Json(
+                new { message = "This person signs in only with per-survey codes; re-send their code from the survey's roster instead.", code = "per_survey_person" },
+                statusCode: 400);
+        }
+
         // A password the product itself would accept: the old Guid-derived twelve hex
         // characters failed the default policy (no uppercase) the moment the holder tried to
         // change it, and never met a tenant policy that required a special character.

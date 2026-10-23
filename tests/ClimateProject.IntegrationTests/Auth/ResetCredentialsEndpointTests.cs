@@ -301,4 +301,114 @@ public class ResetCredentialsEndpointTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
+
+    // ------------------------------------------- one code, one survey (per_survey mode)
+    //
+    // A per_survey person has no account password; each of their keys opens one survey. A reset
+    // would mint an account password and with it an email sign-in scoped to no survey at all.
+
+    private async Task<(Company Company, User Person)> SeedCompanyWithPersonAsync(string mode, string? passwordHash)
+    {
+        var company = new Company
+        {
+            Id = Guid.NewGuid(),
+            Name = "Modo " + mode,
+            EmailDomain = $"mode-{Guid.NewGuid():N}.test",
+            CreatedAt = DateTimeOffset.UtcNow,
+            Settings = new CompanySettings { CredentialMode = mode },
+        };
+        var person = new User
+        {
+            Id = Guid.NewGuid(),
+            CompanyId = company.Id,
+            Email = $"person@{company.EmailDomain}",
+            Name = "Person",
+            // Null hash and null username: the exact shape a per_survey import mints.
+            PasswordHash = passwordHash,
+            Role = "employee",
+            IsActive = true,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+        };
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        db.Companies.Add(company);
+        db.Users.Add(person);
+        await db.SaveChangesAsync();
+        return (company, person);
+    }
+
+    private async Task<User> ReadUserAsync(Guid id)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        return await db.Users.AsNoTracking().FirstAsync(u => u.Id == id);
+    }
+
+    private HttpClient SuperAdminClient()
+    {
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _superAdminToken);
+        return client;
+    }
+
+    [Fact]
+    public async Task A_per_survey_person_with_no_password_cannot_be_reset_and_keeps_no_account_password()
+    {
+        var (_, person) = await SeedCompanyWithPersonAsync("per_survey", passwordHash: null);
+        var before = await ReadUserAsync(person.Id);
+
+        var response = await SuperAdminClient().PostAsJsonAsync("/auth/admin/reset-credentials", new ResetCredentialsRequest(person.Id));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<Dictionary<string, string>>();
+        Assert.Equal("per_survey_person", body!["code"]);
+        var after = await ReadUserAsync(person.Id);
+        Assert.Null(after.PasswordHash);
+        // Nothing else was touched either: their sessions were not ended for a refused request.
+        Assert.Equal(before.SecurityStamp, after.SecurityStamp);
+        // And the email sign-in the reset would have opened does not exist.
+        var login = await _factory.CreateClient().PostAsJsonAsync("/auth/login", new LoginRequest(person.Email, "anything"));
+        Assert.Equal(HttpStatusCode.Unauthorized, login.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_shared_mode_person_with_no_password_still_resets()
+    {
+        // The other half of the rule: the same row shape in a SHARED company (an account that
+        // used Google sign-in, say) is not a per-survey person, and resets as before.
+        var (_, person) = await SeedCompanyWithPersonAsync("shared", passwordHash: null);
+
+        var response = await SuperAdminClient().PostAsJsonAsync("/auth/admin/reset-credentials", new ResetCredentialsRequest(person.Id));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull((await ReadUserAsync(person.Id)).PasswordHash);
+    }
+
+    [Fact]
+    public async Task A_person_with_their_own_password_in_a_per_survey_company_still_resets()
+    {
+        // An administrator (or anyone) who already signs in with a password of their own: the
+        // reset replaces a key they have, it does not create a wider one.
+        var hasher = new ClimateProject.Infrastructure.Auth.BcryptPasswordHasher();
+        var (_, person) = await SeedCompanyWithPersonAsync("per_survey", hasher.Hash("own-password"));
+
+        var response = await SuperAdminClient().PostAsJsonAsync("/auth/admin/reset-credentials", new ResetCredentialsRequest(person.Id));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task The_user_detail_says_who_signs_in_only_with_survey_codes()
+    {
+        var (_, codesOnly) = await SeedCompanyWithPersonAsync("per_survey", passwordHash: null);
+        var (_, shared) = await SeedCompanyWithPersonAsync("shared", passwordHash: null);
+        var client = SuperAdminClient();
+
+        var codesOnlyDetail = await client.GetFromJsonAsync<ClimateProject.Application.OrgStructure.UserDetail>($"/admin/users/{codesOnly.Id}");
+        var sharedDetail = await client.GetFromJsonAsync<ClimateProject.Application.OrgStructure.UserDetail>($"/admin/users/{shared.Id}");
+
+        Assert.True(codesOnlyDetail!.SurveyCodesOnly);
+        Assert.False(sharedDetail!.SurveyCodesOnly);
+    }
 }

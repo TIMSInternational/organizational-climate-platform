@@ -3,7 +3,7 @@ import { KeyRound } from 'lucide-react'
 import { useTranslation } from '../../../i18n'
 import { ANONYMITY_FLOOR } from '../../../components/charts'
 import { Alert, AlertDescription, Button, ConfirmationDialog, Input } from '../../../components/ui'
-import { resetCredentials, type ResetCredentialsResult, type User } from '../api/users'
+import { PerSurveyPersonError, resetCredentials, type ResetCredentialsResult, type User } from '../api/users'
 import type { PersonDetailsState } from './usePersonDetails'
 import { CanvasSelect, Field } from '../next/super/parts'
 
@@ -140,21 +140,46 @@ export function DeactivationConfirm({
  * Offered only to an active account that signs in by email: a mass-invite account has
  * `ResendCredentials`, which mails a new pair, and an inactive one cannot sign in at all.
  */
-export function ResetPassword({ user, baseUrl, allowed }: { user: User; baseUrl: string; allowed: boolean }) {
+export function ResetPassword({
+  user,
+  baseUrl,
+  allowed,
+  details,
+}: {
+  user: User
+  baseUrl: string
+  allowed: boolean
+  /** The detail read: whether this person signs in only with per-survey codes. */
+  details: Pick<PersonDetailsState, 'status' | 'surveyCodesOnly'>
+}) {
   const { t } = useTranslation()
   const [confirming, setConfirming] = useState(false)
   const [result, setResult] = useState<ResetCredentialsResult | null>(null)
-  const [failed, setFailed] = useState(false)
+  const [failed, setFailed] = useState<null | 'generic' | 'perSurvey'>(null)
   const passwordId = useId()
 
-  if (!allowed || user.username || !user.isActive) return null
+  // Not until the detail says who this is: offering the button and then withdrawing it would
+  // be worse than drawing it a moment later. If the read FAILED the button stays, and the API's
+  // refusal is said in Spanish below.
+  if (!allowed || user.username || !user.isActive || details.status === 'loading') return null
+
+  // One code, one survey: a reset would give them an email sign-in that opens every survey.
+  if (details.surveyCodesOnly) {
+    return (
+      <p data-slot="reset-password-per-survey" className="m-0 text-xs text-fg-tertiary">
+        {t('users.next.edit.resetPerSurvey')}
+      </p>
+    )
+  }
 
   async function reset() {
-    setFailed(false)
+    setFailed(null)
     try {
       setResult(await resetCredentials(baseUrl, user.id))
     } catch (err) {
-      setFailed(true)
+      setFailed(err instanceof PerSurveyPersonError ? 'perSurvey' : 'generic')
+      // Closes the dialog rather than leaving it open on a refusal that will not change.
+      if (err instanceof PerSurveyPersonError) return
       throw err
     }
   }
@@ -189,7 +214,7 @@ export function ResetPassword({ user, baseUrl, allowed }: { user: User; baseUrl:
           <span className="text-xs text-fg-tertiary">{t('users.next.edit.resetPasswordHelper')}</span>
           {failed && (
             <span role="status" className="text-xs text-accent-red">
-              {t('users.next.edit.resetFailed')}
+              {failed === 'perSurvey' ? t('users.next.edit.resetPerSurvey') : t('users.next.edit.resetFailed')}
             </span>
           )}
         </div>

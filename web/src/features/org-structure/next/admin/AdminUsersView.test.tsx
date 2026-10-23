@@ -529,4 +529,28 @@ describe('AdminUsersView (company administrator)', () => {
     expect(screen.getByRole('button', { name: T.edit.resendCredentials })).toBeTruthy()
     expect(screen.queryByRole('button', { name: T.edit.resetPassword })).toBeNull()
   })
+
+  it('offers no reset to a person who signs in only with survey codes, and says why', async () => {
+    vi.stubGlobal('fetch', fetchWith({ [`GET /admin/users/${LUIS_MORA_ID}`]: luisDetail({ surveyCodesOnly: true }) }))
+    renderAt(`${ROUTE}?editar=${LUIS_MORA_ID}`)
+    expect(await screen.findByText(T.edit.resetPerSurvey)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: T.edit.resetPassword })).toBeNull()
+  })
+
+  it('says the per-survey refusal in Spanish when the detail could not be read and the API refuses', async () => {
+    const fetchMock = fetchWith({
+      [`GET /admin/users/${LUIS_MORA_ID}`]: () => new Response(null, { status: 500 }),
+      'POST /auth/admin/reset-credentials': () =>
+        new Response(JSON.stringify({ message: 'This person signs in only with per-survey codes', code: 'per_survey_person' }), {
+          status: 400,
+        }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    renderAt(`${ROUTE}?editar=${LUIS_MORA_ID}`)
+    await user.click(await screen.findByRole('button', { name: T.edit.resetPassword }))
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: T.edit.resetConfirm }))
+    expect(await screen.findByText(T.edit.resetPerSurvey)).toBeTruthy()
+    expect(screen.queryByText(/per-survey codes/)).toBeNull()
+  })
 })

@@ -45,6 +45,29 @@ public static class UserEndpoints
     private static IResult EmailRefusal(int statusCode, string code, string message)
         => Results.Json(new { message, code }, statusCode: statusCode);
 
+    /// <summary>
+    /// A person whose only key is a per-survey code (<c>survey_credentials</c>): their company
+    /// is in <c>per_survey</c> mode and the account has no password of its own. That is the
+    /// exact shape a per_survey import mints (<c>BulkImportEndpoints</c>: no username, no
+    /// password hash -- "a username and a password hash here would be a second, wider key").
+    /// Read from the company's CURRENT mode: the reset this guards mints an account-wide key
+    /// now, whatever mode the person's existing surveys froze.
+    /// </summary>
+    internal static async Task<bool> IsSurveyCodesOnlyAsync(
+        ClimateProjectDbContext db, User user, CancellationToken cancellationToken)
+    {
+        if (user.PasswordHash is not null || user.CompanyId is not { } companyId)
+        {
+            return false;
+        }
+
+        var mode = await db.Companies
+            .Where(c => c.Id == companyId)
+            .Select(c => c.Settings.CredentialMode)
+            .FirstOrDefaultAsync(cancellationToken);
+        return mode == CredentialModes.PerSurvey;
+    }
+
     private static UserListItem ToListItem(User u)
         => new(u.Id, u.Email, u.Name, u.Role, u.DepartmentId, u.IsActive, u.LastLoginAt, u.CreatedAt);
 
@@ -136,7 +159,10 @@ public static class UserEndpoints
         }
 
         var demographics = await DemographicValueStore.LoadForUserAsync(db, user.Id, cancellationToken);
-        return Results.Ok(ToDetail(user, demographics));
+        return Results.Ok(ToDetail(user, demographics) with
+        {
+            SurveyCodesOnly = await IsSurveyCodesOnlyAsync(db, user, cancellationToken),
+        });
     }
 
     private static async Task<IResult> UpdateAsync(

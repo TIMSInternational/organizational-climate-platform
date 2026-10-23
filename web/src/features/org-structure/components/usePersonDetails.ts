@@ -13,6 +13,8 @@ import { listDemographicFields, type DemographicField } from '../api/demographic
  */
 export interface PersonDetailsState {
   status: 'loading' | 'ready' | 'error'
+  /** From the user detail: a per-survey-code person, whom the password reset refuses. */
+  surveyCodesOnly: boolean
   managerId: string
   setManagerId: (id: string) => void
   fields: readonly DemographicField[]
@@ -35,6 +37,7 @@ export function usePersonDetails(baseUrl: string, user: User, companyId: string 
   const [fields, setFields] = useState<DemographicField[]>([])
   const [original, setOriginal] = useState<Record<string, string>>({})
   const [answers, setAnswers] = useState<Record<string, string>>({})
+  const [surveyCodesOnly, setSurveyCodesOnly] = useState(false)
 
   useEffect(() => {
     let live = true
@@ -43,6 +46,7 @@ export function usePersonDetails(baseUrl: string, user: User, companyId: string 
         if (!live) return
         const manager = detail.managerId ?? ''
         const stored = detail.demographics ?? {}
+        setSurveyCodesOnly(detail.surveyCodesOnly === true)
         setOriginalManager(manager)
         setManagerId(manager)
         setFields(activeFields(defined))
@@ -60,6 +64,7 @@ export function usePersonDetails(baseUrl: string, user: User, companyId: string 
 
   return {
     status,
+    surveyCodesOnly,
     managerId,
     setManagerId,
     fields,

@@ -1417,7 +1417,8 @@
       "fecha_ingreso": "2021-03-15",
       "turno": "noche"
     },
-    "emailChange": null
+    "emailChange": null,
+    "surveyCodesOnly": false
   },
   "POST /auth/admin/reset-credentials": {
     "email": "luis.mora@meridiano.test",

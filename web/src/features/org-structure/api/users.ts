@@ -27,6 +27,11 @@ export interface UserDetail extends User {
   managerId: string | null
   /** The person's demographic answers, keyed by the field's `field` key, values as stored. */
   demographics: Record<string, string>
+  /**
+   * True when this person's only way in is a per-survey code (a `per_survey` company and no
+   * account password). The admin password reset refuses them, so no screen offers it.
+   */
+  surveyCodesOnly?: boolean
   /** Present only on the answer to an update that actually changed the address. */
   emailChange?: UserEmailChange | null
 }
@@ -212,10 +217,29 @@ export interface ResetCredentialsResult {
   temporaryPassword: string
 }
 
+/**
+ * The refusal for a person who signs in only with per-survey codes (400 `per_survey_person`):
+ * a reset would give them an email sign-in that opens every survey, which "one code, one
+ * survey" denies. Their code is re-sent from the survey's roster instead.
+ */
+export class PerSurveyPersonError extends ApiError {
+  constructor(message: string) {
+    super(400, message)
+    this.name = 'PerSurveyPersonError'
+  }
+}
+
 export async function resetCredentials(baseUrl: string, userId: string): Promise<ResetCredentialsResult> {
-  const response = await authFetch(`${baseUrl}/auth/admin/reset-credentials`, {
-    method: 'POST',
-    body: JSON.stringify({ userId }),
-  })
+  const response = await authFetch(
+    `${baseUrl}/auth/admin/reset-credentials`,
+    { method: 'POST', body: JSON.stringify({ userId }) },
+    { allowStatus: [400] },
+  )
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as { message?: string; code?: unknown } | null
+    const message = body?.message || `Request failed: ${response.status}`
+    if (body?.code === 'per_survey_person') throw new PerSurveyPersonError(message)
+    throw new ApiError(response.status, message)
+  }
   return response.json() as Promise<ResetCredentialsResult>
 }

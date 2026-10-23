@@ -5135,7 +5135,8 @@
         "resetPasswordLabel": "Contraseña temporal",
         "resetSignIn": "{name} entra con su correo {email} y esta contraseña. Désela por un canal seguro: al cerrar este panel no se puede volver a ver.",
         "resetSurveyCodes": "Sus códigos de encuesta, si tiene, no cambian.",
-        "resetFailed": "No se pudo restablecer la contraseña"
+        "resetFailed": "No se pudo restablecer la contraseña",
+        "resetPerSurvey": "Entra solo con códigos de encuesta, uno por encuesta, así que no tiene contraseña que restablecer: darle una le abriría todas sus encuestas con su correo. Reenvíe su código desde «Quién ya respondió», en la página Distribución de la encuesta."
       },
       "roster": {
         "sub": "ordenadas por rol y nombre · {never} nunca han entrado",

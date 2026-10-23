@@ -5135,7 +5135,8 @@
         "resetPasswordLabel": "Temporary password",
         "resetSignIn": "{name} signs in with their email {email} and this password. Give it to them over a secure channel: once this panel closes it cannot be shown again.",
         "resetSurveyCodes": "Their survey codes, if they have any, do not change.",
-        "resetFailed": "The password could not be reset"
+        "resetFailed": "The password could not be reset",
+        "resetPerSurvey": "They sign in only with survey codes, one per survey, so there is no password to reset: giving them one would open all their surveys with their email. Re-send their code from «Who has answered» on the survey's Distribution page."
       },
       "roster": {
         "sub": "ordered by role and name · {never} never signed in",
