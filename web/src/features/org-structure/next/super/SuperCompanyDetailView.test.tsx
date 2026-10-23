@@ -15,6 +15,7 @@ import en from '../../../../i18n/en.json'
  * `CompanyDetailPage.test.tsx` keeps pinning the page a company administrator gets.
  */
 const copy = en.superadmin.next.companyDetail
+const ca = en.companySettings.next
 const C = 'c1'
 
 const DETAIL = {
@@ -132,9 +133,7 @@ describe('SuperCompanyDetailView', () => {
     expect(await screen.findByRole('heading', { level: 1, name: copy.title })).toBeTruthy()
     expect((screen.getByLabelText(new RegExp(`^${copy.company.name}( \\*)?$`)) as HTMLInputElement).value).toBe('Grupo Meridiano S.A.')
     expect((screen.getByLabelText(new RegExp(`^${copy.surveys.language}`)) as HTMLSelectElement).value).toBe('es')
-    expect((screen.getByLabelText(copy.surveys.retention) as HTMLInputElement).value).toBe('2555')
-    // As wide as its digits (monospace), so the unit follows the value instead of the field's edge.
-    expect((screen.getByLabelText(copy.surveys.retention) as HTMLInputElement).style.width).toBe('4ch')
+    expect((screen.getByLabelText(ca.timezone) as HTMLSelectElement).value).toBe('America/Costa_Rica')
   })
 
   it('offers both actions from the start, and a save with nothing changed sends nothing and says so', async () => {
@@ -149,14 +148,45 @@ describe('SuperCompanyDetailView', () => {
     expect(writes()).toEqual([])
   })
 
-  it('names the open wave’s own anonymity under the default, read from its detail', async () => {
+  it('states what the platform does where four controls wrote values nothing reads, and reads no survey to say it', async () => {
     serve({ openWave: true })
     renderPage()
-    expect(
-      await screen.findByText(
-        copy.surveys.anonymityHelperOpen.replace('{code}', 'Q4').replace('{state}', copy.surveys.stateNamed),
-      ),
-    ).toBeTruthy()
+    await screen.findByRole('heading', { level: 1, name: copy.title })
+    expect(screen.getByText(ca.anonymityAlwaysValue)).toBeTruthy()
+    expect(screen.getByText(ca.anonymityAlwaysHelp)).toBeTruthy()
+    expect(screen.getByText(ca.retentionFixedValue)).toBeTruthy()
+    expect(screen.getByText(ca.retentionFixedHelp)).toBeTruthy()
+    // No frequency select, no retention input, no microclimate switch, no anonymity select.
+    expect(screen.queryByLabelText(copy.surveys.frequency)).toBeNull()
+    expect(screen.queryByLabelText(copy.surveys.retention)).toBeNull()
+    expect(screen.queryByLabelText(copy.surveys.anonymity)).toBeNull()
+    expect(screen.queryAllByRole('switch')).toHaveLength(0)
+    expect(calls.some((call) => call.url.includes('/surveys/s-open'))).toBe(false)
+  })
+
+  it('edits the time zone and the logo path Configuración de empresa edits, sent alone on the settings PUT', async () => {
+    serve()
+    renderPage()
+    const zone = (await screen.findByLabelText(ca.timezone)) as HTMLSelectElement
+    await userEvent.selectOptions(zone, 'America/Panama')
+    await userEvent.type(screen.getByLabelText(ca.logoPath), '/brand/meridiano.svg')
+    // The box previews the draft, as on Configuración de empresa.
+    const preview = screen.getByRole('img', { name: ca.logoAlt.replace('{company}', DETAIL.name) })
+    expect(preview.getAttribute('src')).toBe('/brand/meridiano.svg')
+    await userEvent.click(screen.getByRole('button', { name: copy.save }))
+
+    await waitFor(() => expect(writes()).toHaveLength(1))
+    expect(writes()[0].url).toMatch(new RegExp(`/admin/companies/${C}/settings$`))
+    expect(JSON.parse(writes()[0].body ?? '')).toEqual({ timezone: 'America/Panama', logoUrl: '/brand/meridiano.svg' })
+  })
+
+  it('says the colour is the button of the sign-in mail and nothing on screen — the words Configuración de empresa uses', async () => {
+    serve()
+    renderPage()
+    await screen.findByRole('heading', { level: 1, name: copy.title })
+    expect(screen.getByText(ca.colourEmailHelp)).toBeTruthy()
+    expect(screen.queryByText(copy.brand.colorHelper)).toBeNull()
+    expect(screen.getByText(ca.brandMetaInEffect)).toBeTruthy()
   })
 
   it('reaches the four pages this role opens only from here, each with its own reading', async () => {
@@ -216,7 +246,7 @@ describe('SuperCompanyDetailView', () => {
     expect([...country.options].map((option) => option.value)).toContain('Colombia')
   })
 
-  it('puts the form back on Discard, and offers no save for a retention it would refuse', async () => {
+  it('puts the form back on Discard, and offers no save for a logo path the API would refuse', async () => {
     serve()
     renderPage()
     const name = await screen.findByLabelText(new RegExp(`^${copy.company.name}( \\*)?$`))
@@ -225,9 +255,8 @@ describe('SuperCompanyDetailView', () => {
     await userEvent.click(screen.getByRole('button', { name: copy.discard }))
     expect((name as HTMLInputElement).value).toBe('Grupo Meridiano S.A.')
 
-    const retention = screen.getByLabelText(copy.surveys.retention)
-    await userEvent.clear(retention)
-    await userEvent.type(retention, 'siete')
+    await userEvent.type(screen.getByLabelText(ca.logoPath), 'https://cdn.example.com/logo.png')
+    expect(screen.getByText(ca.logoPathInvalid)).toBeTruthy()
     expect(screen.getByRole('button', { name: copy.save }).hasAttribute('disabled')).toBe(true)
   })
 
