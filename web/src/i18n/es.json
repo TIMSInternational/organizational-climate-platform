@@ -4949,6 +4949,7 @@
           "endDate": "Cierre",
           "targetAudienceCount": "Audiencia declarada",
           "departmentIds": "Departamentos",
+          "userIds": "Personas específicas",
           "other": "Otro campo"
         },
         "setting": {

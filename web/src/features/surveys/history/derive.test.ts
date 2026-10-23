@@ -60,6 +60,20 @@ describe('history labels', () => {
     expect(fieldLabel(tEs, 'questions[1].somethingNew')).toBe('Otro campo')
   })
 
+  it.each([['es', tEs, 'Personas específicas'], ['en', tEn, 'Specific people']] as const)(
+    'names the audit-only "userIds" path (a change to the named people, #638) in %s',
+    (_lang, t, label) => {
+      expect(parsePath('userIds').kind).toBe('auditOnly')
+      expect(fieldLabel(t, 'userIds')).toBe(label)
+    },
+  )
+
+  it('reads an audience edit as one named field, not "Otro campo"', () => {
+    const base = { id: 'e', surveyId: 's', entityType: 'survey', entityId: null, userId: 'u', userName: 'Ana', userEmail: 'a@acme.test', userRole: 'company_admin', timestamp: '2026-10-23T18:40:00Z', ipAddress: null }
+    expect(entryHeadline(tEs, { ...base, action: 'updated', changes: { fields: ['userIds'] } })).toBe('Editó la encuesta (1 campo)')
+    expect(fieldLabel(tEs, 'userIds')).not.toBe('Otro campo')
+  })
+
   it('counts questions from 1 by their place in the version, whatever the stored order starts at', () => {
     expect(positionOf([q(0, 'a'), q(1, 'b'), q(2, 'c')], 2)).toBe(3)
     expect(positionOf([q(5, 'a'), q(9, 'b')], 9)).toBe(2)

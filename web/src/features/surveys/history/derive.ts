@@ -58,14 +58,24 @@ type QuestionPart = (typeof QUESTION_PARTS)[number]
 const TOP_LEVEL = ['title', 'description', 'type', 'language', 'startDate', 'endDate', 'targetAudienceCount', 'departmentIds'] as const
 type TopLevel = (typeof TOP_LEVEL)[number]
 
+/**
+ * Paths the audit trail records that no version diff can emit: `PUT /surveys/{id}` adds
+ * `userIds` to its `updated` entry when the survey's named people change
+ * (`SurveyEndpoints.cs`), and a version snapshot stores no user targets. Labelled, never valued.
+ */
+const AUDIT_ONLY = ['userIds'] as const
+type AuditOnly = (typeof AUDIT_ONLY)[number]
+
 export type ParsedPath =
   | { kind: 'field'; field: TopLevel }
+  | { kind: 'auditOnly'; field: AuditOnly }
   | { kind: 'setting'; name: string }
   | { kind: 'question'; order: number; part: QuestionPart }
   | { kind: 'unknown' }
 
 export function parsePath(path: string): ParsedPath {
   if ((TOP_LEVEL as readonly string[]).includes(path)) return { kind: 'field', field: path as TopLevel }
+  if ((AUDIT_ONLY as readonly string[]).includes(path)) return { kind: 'auditOnly', field: path as AuditOnly }
   if (path.startsWith('settings.') && path.slice('settings.'.length) in SETTINGS) {
     return { kind: 'setting', name: path.slice('settings.'.length) }
   }
@@ -97,6 +107,7 @@ export function fieldLabel(t: TranslateFn, path: string, position?: number | nul
   const parsed = parsePath(path)
   switch (parsed.kind) {
     case 'field':
+    case 'auditOnly':
       return t(`${K}.field.${parsed.field}`)
     case 'setting':
       return t(`${K}.setting.${parsed.name}`)
