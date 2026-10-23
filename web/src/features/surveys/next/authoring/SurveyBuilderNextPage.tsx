@@ -52,7 +52,7 @@ import {
 } from '../../surveyVocabulary'
 import {
   CONTENT_LANGUAGES,
-  SURVEY_WIZARD_STEPS,
+  SURVEY_BUILDER_STEPS,
   audienceChoiceOf,
   chosenDimensions,
   derivedOptionValue,
@@ -61,12 +61,13 @@ import {
   positionsWithoutDimension,
   questionFromLibrary,
   scheduledDays,
+  settingsErrors,
   startsFromTemplate,
   wizardStepErrors,
   type AudienceChoice,
   type ContentLanguage,
   type SurveyQuestionValues,
-  type SurveyWizardStepId,
+  type SurveyBuilderStepId,
   type SurveyWizardValues,
 } from '../../wizardValues'
 import { Eyebrow, PanelHeading } from '../../../shared-next/parts'
@@ -76,6 +77,7 @@ import { Card } from './parts'
 import { dimensionSections } from './launch'
 import { templateCovers } from './templateRows'
 import { useSurveyBuilderModel } from './useSurveyBuilderModel'
+import { BuilderSettingsStep } from './BuilderSettingsStep'
 import { PeoplePicker } from './PeoplePicker'
 import { browserTimeZone, zoneLabel } from './zonedWindow'
 
@@ -126,7 +128,7 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
   const m = useSurveyBuilderModel(companyId)
   const { values, patch, setQuestions, stepIndex, setStepIndex, template, draft } = m
   const copy = (key: string, vars?: Record<string, string | number>) => t(`surveys.next.builder.${key}`, vars)
-  const [attempted, setAttempted] = useState<ReadonlySet<SurveyWizardStepId>>(new Set())
+  const [attempted, setAttempted] = useState<ReadonlySet<SurveyBuilderStepId>>(new Set())
   const [selected, setSelected] = useState(0)
   const [editing, setEditing] = useState<string | null>(null)
   const [dragFrom, setDragFrom] = useState<number | null>(null)
@@ -141,13 +143,15 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
     fromTemplate && template === null && values.questions.length === 0
       ? baseErrors.questions
       : wizardStepErrors({ ...values, templateId: '' }, t).questions
-  const errors = {
+  const settingErrors = settingsErrors(values, t)
+  const errors: Record<SurveyBuilderStepId, string[]> = {
     ...baseErrors,
     questions: questionErrors,
-    review: [...baseErrors.basics, ...baseErrors.schedule, ...baseErrors.audience, ...questionErrors],
+    settings: settingErrors,
+    review: [...baseErrors.basics, ...baseErrors.schedule, ...baseErrors.audience, ...questionErrors, ...settingErrors],
   }
-  const step = SURVEY_WIZARD_STEPS[stepIndex]
-  const last = stepIndex === SURVEY_WIZARD_STEPS.length - 1
+  const step = SURVEY_BUILDER_STEPS[stepIndex]
+  const last = stepIndex === SURVEY_BUILDER_STEPS.length - 1
   const both = values.language === 'both'
   // The reader's column when the survey is bilingual; the survey's own language otherwise.
   const shown: 'en' | 'es' = values.language === 'both' ? (locale === 'es' ? 'es' : 'en') : values.language
@@ -158,7 +162,7 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
   const focus = Math.min(selected, Math.max(previewQuestions.length - 1, 0))
   const focusSection = sections.find((section) => section.questions.some((entry) => entry.position === focus + 1))
   const reachable = (index: number) =>
-    index <= stepIndex || SURVEY_WIZARD_STEPS.slice(0, index).every((id) => errors[id].length === 0)
+    index <= stepIndex || SURVEY_BUILDER_STEPS.slice(0, index).every((id) => errors[id].length === 0)
 
   function goNext() {
     if (errors[step].length > 0) {
@@ -195,7 +199,7 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
           className: 'h-5.5 rounded border border-line-default bg-surface-icon-box px-2 font-store-serif text-xs font-normal text-fg-primary',
         }}
         tightBreadcrumb
-        description={`${copy(`stepLine.${step}`)} ${copy('stepOf', { current: stepIndex + 1, total: SURVEY_WIZARD_STEPS.length })}`}
+        description={`${copy(`stepLine.${step}`)} ${copy('stepOf', { current: stepIndex + 1, total: SURVEY_BUILDER_STEPS.length })}`}
         breadcrumbs={[{ label: t('navigation.surveys'), href: '/surveys' }, { label: copy('title') }]}
         actions={
           <Button
@@ -246,11 +250,11 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
           artboard puts the rail 20px under the hairline (measured: 198 → 218). */}
       <Card className="-mt-1 flex flex-wrap items-center gap-x-6 gap-y-3 px-5 py-3.5" data-testid="builder-rail">
         <ol aria-label={t('surveys.wizardStepList')} className="m-0 flex min-w-0 flex-1 list-none flex-wrap items-center gap-x-3.5 gap-y-2 p-0">
-          {SURVEY_WIZARD_STEPS.map((id, index) => {
+          {SURVEY_BUILDER_STEPS.map((id, index) => {
             const state = index < stepIndex ? (errors[id].length === 0 ? 'done' : 'open') : index === stepIndex ? 'current' : 'pending'
             return (
               // `mb-0`: index.css gives every <li> a 4px bottom margin, which made the rail 4px taller.
-              <li key={id} className={cn('mb-0 flex min-w-0 items-center gap-3.5', index < SURVEY_WIZARD_STEPS.length - 1 && 'xl:flex-1')}>
+              <li key={id} className={cn('mb-0 flex min-w-0 items-center gap-3.5', index < SURVEY_BUILDER_STEPS.length - 1 && 'xl:flex-1')}>
                 <button
                   type="button"
                   aria-current={state === 'current' ? 'step' : undefined}
@@ -288,7 +292,7 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                     </span>
                   </span>
                 </button>
-                {index < SURVEY_WIZARD_STEPS.length - 1 && (
+                {index < SURVEY_BUILDER_STEPS.length - 1 && (
                   <span aria-hidden="true" className={cn('hidden h-px min-w-6 flex-1 xl:block', index < stepIndex ? 'bg-accent-green' : 'bg-line-default')} />
                 )}
               </li>
@@ -529,7 +533,11 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
               <p className="m-0 font-store-serif text-[1.125rem] leading-tight text-fg-primary">{title || copy('untitled')}</p>
               {description && <p className="m-0 text-sm text-fg-secondary">{description}</p>}
             </div>
-            {focusSection ? (
+            {focusSection && values.randomizeQuestions ? (
+              // A randomised survey prints no dimension over any question (`respondDimensions`),
+              // so the preview does not either.
+              <PreviewQuestion question={previewQuestions[focus]} position={focus + 1} total={previewQuestions.length} />
+            ) : focusSection ? (
               <PreviewSection category={focusSection.category} index={focusSection.index} count={focusSection.count}>
                 <PreviewQuestion question={previewQuestions[focus]} position={focus + 1} total={previewQuestions.length} />
               </PreviewSection>
@@ -772,7 +780,7 @@ function StepForm({
   both,
   copy,
 }: {
-  step: SurveyWizardStepId
+  step: SurveyBuilderStepId
   m: ReturnType<typeof useSurveyBuilderModel>
   both: boolean
   copy: (key: string, vars?: Record<string, string | number>) => string
@@ -950,6 +958,9 @@ function StepForm({
       </>
     )
   }
+  if (step === 'settings') {
+    return <BuilderSettingsStep values={values} patch={patch} />
+  }
   // review
   const named = (departments ?? []).filter((d) => values.departmentIds.includes(d.id)).map((d) => d.name)
   const rows: [string, string][] = [
@@ -975,6 +986,11 @@ function StepForm({
           values.credentialMode ? credentialModeLabel(t, values.credentialMode) : inheritLabel(t, m.companyCredentialMode),
         ] as [string, string]]),
     [copy('questionsTitle'), String(values.questions.length)],
+    // The settings step (G16), each row in the respondent's terms.
+    [copy('settings.reviewOrder'), values.randomizeQuestions ? copy('settings.reviewRandom') : copy('settings.reviewAuthored')],
+    [copy('settings.autoSaveLabel'), values.allowPartialResponses && values.autoSave !== false ? copy('settings.reviewOn') : copy('settings.reviewOff')],
+    [copy('settings.timeLimitLabel'), values.timeLimitMinutes?.trim() ? copy('settings.reviewMinutes', { count: values.timeLimitMinutes.trim() }) : copy('settings.noLimit')],
+    [copy('settings.responseLimitLabel'), values.responseLimit?.trim() ? values.responseLimit.trim() : copy('settings.noLimit')],
   ]
   return (
     <>

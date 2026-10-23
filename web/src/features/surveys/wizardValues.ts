@@ -229,8 +229,63 @@ export interface SurveyWizardValues {
    * field existed restores as "inherit".
    */
   credentialMode?: '' | CredentialMode
+  /**
+   * The builder's settings step (G16). All four optional, so a draft saved before the step
+   * existed restores as the server's own defaults -- which is also what `emptyWizardValues`
+   * holds, and what `buildCreateInput` leaves unsent: a survey nobody touched the step for is
+   * byte-for-byte the request it was before.
+   *
+   * `randomizeQuestions` is ONE respondent-side promise, not two: a random order per person
+   * AND no dimension heading over any question (`respondDimensions.ts`, reversed #556 on
+   * 2026-10-18). Open questions still come last (`orderQuestions`).
+   */
+  randomizeQuestions?: boolean
+  /** Background saving on the respond form; only ever effective with `allowPartialResponses`. */
+  autoSave?: boolean
+  /** Text, as `targetAudienceCount`: blank is "no limit". Shown as a SUGGESTED time; nothing is cut off. */
+  timeLimitMinutes?: string
+  /** Text: blank is "no limit". Completed responses after which nobody new may start. */
+  responseLimit?: string
   questions: SurveyQuestionValues[]
 }
+
+/**
+ * The builder's own rail (`/surveys/new`): the wizard's five steps plus `settings`, before the
+ * review. A separate list rather than a sixth entry in `SURVEY_WIZARD_STEPS`, because the
+ * previous wizard (`SurveyCreatePage`) walks that one and has no settings step to show.
+ */
+export const SURVEY_BUILDER_STEPS = [
+  'basics',
+  'schedule',
+  'audience',
+  'questions',
+  'settings',
+  'review',
+] as const
+
+export type SurveyBuilderStepId = (typeof SURVEY_BUILDER_STEPS)[number]
+
+/**
+ * A draft's `currentStep` is stored in the FIVE-step numbering (`SURVEY_WIZARD_STEPS`, 1-based):
+ * drafts saved before the settings step existed say `5` for the review, and so does the previous
+ * wizard, which shares the draft store. So the builder writes and reads that numbering, and the
+ * settings step is saved as the questions step it follows (`4`) -- a restored draft lands one step
+ * early, never past a step it has not seen.
+ */
+export function draftStepOfBuilderIndex(index: number): number {
+  const id = SURVEY_BUILDER_STEPS[Math.min(Math.max(index, 0), SURVEY_BUILDER_STEPS.length - 1)]
+  const legacy = (SURVEY_WIZARD_STEPS as readonly string[]).indexOf(id === 'settings' ? 'questions' : id)
+  return legacy + 1
+}
+
+/** The builder's step index for a draft's stored `currentStep` (see `draftStepOfBuilderIndex`). */
+export function builderIndexOfDraftStep(step: number): number {
+  const legacy = SURVEY_WIZARD_STEPS[Math.min(Math.max(step - 1, 0), SURVEY_WIZARD_STEPS.length - 1)]
+  return SURVEY_BUILDER_STEPS.indexOf(legacy)
+}
+
+/** The largest time limit the builder accepts, in minutes: ten hours is no longer a suggestion. */
+export const MAX_TIME_LIMIT_MINUTES = 600
 
 /**
  * The same order as the microclimate wizard's, so an admin who has made one already
@@ -397,6 +452,11 @@ export function emptyWizardValues(language: ContentLanguage): SurveyWizardValues
     allowPartialResponses: true,
     showProgress: true,
     credentialMode: '',
+    // The entity's own defaults (`SurveySettings`), so an untouched settings step sends nothing.
+    randomizeQuestions: false,
+    autoSave: true,
+    timeLimitMinutes: '',
+    responseLimit: '',
     questions: [],
   }
 }
@@ -513,6 +573,53 @@ function scheduleErrors(values: SurveyWizardValues, t: TranslateFn): string[] {
   return end <= start ? [t('surveys.validationEndAfterStart')] : []
 }
 
+/** A typed box that is not a whole number in [min, max]; blank is never an error. */
+function badWholeNumber(raw: string | undefined, min: number, max = Number.MAX_SAFE_INTEGER): boolean {
+  if (raw === undefined || isBlank(raw)) return false
+  const value = Number(raw)
+  return !Number.isInteger(value) || value < min || value > max
+}
+
+/**
+ * The settings step (G16). Every control is optional; only a limit that was typed and is
+ * not a whole number in range is refused. The API itself accepts any integer here --
+ * `ApplySettings` writes `TimeLimitMinutes`/`ResponseLimit` unchecked -- and a response
+ * limit of 0 would turn away every respondent, so the range is held here.
+ */
+export function settingsErrors(values: SurveyWizardValues, t: TranslateFn): string[] {
+  const errors: string[] = []
+  if (badWholeNumber(values.timeLimitMinutes, 1, MAX_TIME_LIMIT_MINUTES)) {
+    errors.push(t('surveys.next.builder.settings.timeLimitInvalid', { max: MAX_TIME_LIMIT_MINUTES }))
+  }
+  if (badWholeNumber(values.responseLimit, 1)) {
+    errors.push(t('surveys.next.builder.settings.responseLimitInvalid'))
+  }
+  return errors
+}
+
+/**
+ * The settings the settings step chose, as `SurveySettingsInput` members -- and ONLY those
+ * that depart from the server's defaults. An untouched step therefore adds no key at all, so
+ * the request is the one the builder sent before the step existed.
+ */
+export function builderSettingsInput(values: SurveyWizardValues): {
+  randomizeQuestions?: boolean
+  autoSave?: boolean
+  timeLimitMinutes?: number
+  responseLimit?: number
+} {
+  const out: { randomizeQuestions?: boolean; autoSave?: boolean; timeLimitMinutes?: number; responseLimit?: number } = {}
+  if (values.randomizeQuestions === true) out.randomizeQuestions = true
+  if (values.autoSave === false) out.autoSave = false
+  if (values.timeLimitMinutes !== undefined && !isBlank(values.timeLimitMinutes) && !badWholeNumber(values.timeLimitMinutes, 1, MAX_TIME_LIMIT_MINUTES)) {
+    out.timeLimitMinutes = Number(values.timeLimitMinutes)
+  }
+  if (values.responseLimit !== undefined && !isBlank(values.responseLimit) && !badWholeNumber(values.responseLimit, 1)) {
+    out.responseLimit = Number(values.responseLimit)
+  }
+  return out
+}
+
 /**
  * The audience step is optional in the DTO and therefore optional here: no
  * departments means every department, and no target means the server does not record
@@ -623,7 +730,9 @@ export function wizardStepErrors(
     schedule,
     audience,
     questions,
-    review: [...basics, ...schedule, ...audience, ...questions],
+    // The settings step's errors join the backstop: `SURVEY_WIZARD_STEPS` has no settings
+    // step, but the builder's rail does, and nothing invalid may reach `onSubmit` either way.
+    review: [...basics, ...schedule, ...audience, ...questions, ...settingsErrors(values, t)],
   }
 }
 
@@ -814,6 +923,8 @@ export function buildCreateInput(
       showProgress: values.showProgress,
       // Omitted unless chosen: absence is how the API is told to inherit the company's mode.
       ...(values.credentialMode ? { credentialMode: values.credentialMode } : {}),
+      // The settings step (G16): only what departs from the server's defaults.
+      ...builderSettingsInput(values),
     },
   }
 
@@ -872,6 +983,8 @@ export function buildInstantiateInput(
       anonymous: values.anonymous,
       allowPartialResponses: values.allowPartialResponses,
       showProgress: values.showProgress,
+      // `/use` applies settings through the same `ApplySettings` as `POST /surveys`.
+      ...builderSettingsInput(values),
     },
   }
 
