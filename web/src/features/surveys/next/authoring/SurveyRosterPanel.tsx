@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Download } from 'lucide-react'
 import {
   Button,
   Checkbox,
@@ -31,6 +32,8 @@ import {
 import type { ParticipationState } from './useSurveyParticipation'
 import { Card, CardHeading } from './parts'
 import { formatParticipationDay } from './participationDay'
+import { getSurveyRosterCsv, surveyRosterCsvFileName } from './rosterExport'
+import { downloadBlobFile } from '../../../../lib/downloadBlobFile'
 
 type Filter = 'all' | SurveyParticipantStatus
 
@@ -117,6 +120,7 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
   // The day a key reissued from THIS page was mailed, so the row says so without refetching the
   // whole roster -- the payload is shared with the Participación panel, which owns its fetch.
   const [issuedHere, setIssuedHere] = useState<Readonly<Record<string, string>>>({})
+  const [download, setDownload] = useState<'idle' | 'busy' | 'failed'>('idle')
 
   const roster = state.status === 'ready' ? state.view.roster : NO_ROWS
 
@@ -247,6 +251,24 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
     setSelected(new Set())
   }
 
+  /**
+   * The roster as a CSV, written by the server from the same rows this panel draws
+   * (`GET /surveys/{id}/participation/export`). The whole roster, not the filtered view: the
+   * file is the status report ESPH asked for twice, and a search box left typed in would
+   * silently send them half of it.
+   */
+  async function downloadRoster() {
+    if (state.status !== 'ready') return
+    setDownload('busy')
+    try {
+      const blob = await getSurveyRosterCsv(baseUrl, state.view.surveyId)
+      downloadBlobFile(surveyRosterCsvFileName(copy('downloadFilePrefix'), surveyTitle, new Date()), blob)
+      setDownload('idle')
+    } catch {
+      setDownload('failed')
+    }
+  }
+
   async function reissueFor(row: SurveyRosterRow) {
     let outcome: SurveyCredentialReissueOutcome | { kind: 'error' }
     try {
@@ -339,9 +361,21 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
               />
             </div>
 
-            <p className="m-0 text-xs text-fg-secondary">
-              {copy('shown', { shown: visible.length, total: state.view.roster.length })}
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="m-0 text-xs text-fg-secondary">
+                {copy('shown', { shown: visible.length, total: state.view.roster.length })}
+              </p>
+              <Button type="button" variant="outline" size="sm" disabled={download === 'busy'} onClick={() => downloadRoster()}>
+                <Download aria-hidden="true" />
+                {download === 'busy' ? copy('downloading') : copy('download')}
+              </Button>
+            </div>
+
+            {download === 'failed' ? (
+              <p role="alert" className="m-0 text-sm text-accent-red-ink">
+                {copy('downloadFailed')}
+              </p>
+            ) : null}
 
             {chosen.length > 0 ? (
               <div className="flex flex-wrap items-center gap-3 rounded-md border border-line-light bg-surface-icon-box px-3 py-2">
