@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from 'react'
+import { useId, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import * as RadioGroupPrimitive from '@radix-ui/react-radio-group'
 import { Clock, Ellipsis, GripVertical, Plus, Send, Users } from 'lucide-react'
@@ -50,8 +50,9 @@ import {
 } from '../../wizardValues'
 import { JourneyRail } from '../JourneyRail'
 import { MicroclimateGate } from '../MicroclimateGate'
-import { FLOOR, typeCounts, windowLength, windowMs } from '../derive'
-import { clock, shortDay, weekdayDay, weekdayLong } from '../format'
+import { FLOOR, typeCounts, windowLength } from '../derive'
+import { zoneLabel } from '../../../surveys/next/authoring/zonedWindow'
+import { clockIn, instantIn, sessionZone, shortDayIn, weekdayDayIn, weekdayIn, zonedWindowMs } from './companyClock'
 import { canvasTypeLabel } from '../vocabulary'
 import { DateTimeField } from './DateTimeField'
 import { useMicroclimateCreateModel, type MicroclimateCreateState, type StartFrom } from './useMicroclimateCreateModel'
@@ -135,10 +136,18 @@ function CreateForm({ state, editId }: { state: MicroclimateCreateState; editId?
   const expectedId = useId()
   const startId = useId()
   const endId = useId()
-  const timezone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, [])
-  const window = windowMs(values.startTime, values.endTime)
-  const start = new Date(values.startTime)
-  const end = new Date(values.endTime)
+  // The zone Apertura and Cierre are read on: the company's, or -- unread -- the browser's,
+  // which the line under them then says (G16, as Nueva encuesta does since #630).
+  const zone = sessionZone(state.timeZone)
+  const window = zonedWindowMs(values.startTime, values.endTime, zone)
+  const start = instantIn(values.startTime, zone) ?? new Date(Number.NaN)
+  const end = instantIn(values.endTime, zone) ?? new Date(Number.NaN)
+  const zoneNote =
+    state.timeZone === undefined
+      ? null
+      : t(state.timeZone === null ? 'microclimates.next.create.timezoneBrowser' : 'microclimates.next.create.timezoneCompany', {
+          zone: zoneLabel(zone),
+        })
   const titleError = state.attempted && !textIn(values.language, values.titleEn, values.titleEs).trim()
 
   return (
@@ -409,11 +418,11 @@ function CreateForm({ state, editId }: { state: MicroclimateCreateState; editId?
               </div>
               <p className="m-0 flex items-center gap-2 text-sm text-fg-tertiary">
                 <Clock aria-hidden="true" className="size-3.5 shrink-0" />
-                <span>
-                  {t('microclimates.next.create.timezone', { timezone })}{' '}
+                <span data-testid="microclimate-zone">
+                  {zoneNote && `${zoneNote} `}
                   {window === null
                     ? t('microclimates.validationEndAfterStart')
-                    : windowSentence(t, locale, window, start, end)}
+                    : windowSentence(t, locale, window, start, end, zone)}
                 </span>
               </p>
             </CanvasCard>
@@ -450,8 +459,8 @@ function CreateForm({ state, editId }: { state: MicroclimateCreateState; editId?
                         ? t('microclimates.next.create.summaryOpenUnset')
                         : t('microclimates.next.create.summaryOpenValue', {
                             length: lengthPhrase(t, window),
-                            from: weekdayDay(start, locale),
-                            to: weekdayDay(end, locale),
+                            from: weekdayDayIn(start, locale, zone),
+                            to: weekdayDayIn(end, locale, zone),
                           }),
                   },
                   {
@@ -468,7 +477,7 @@ function CreateForm({ state, editId }: { state: MicroclimateCreateState; editId?
                 <Send aria-hidden="true" />
                 {state.submitting === 'launch' ? (editing ? t('common.saving') : t('common.creating')) : t('microclimates.next.create.launch')}
               </Button>
-              <span className="text-sm text-fg-tertiary">{launchNote(t, locale, values)}</span>
+              <span className="text-sm text-fg-tertiary">{launchNote(t, locale, values, zone)}</span>
             </CanvasCard>
           </div>
         </div>
@@ -784,9 +793,9 @@ function lengthPhrase(t: TranslateFn, ms: number): string {
 }
 
 /** "Abierto 48 horas, de lunes a miércoles." */
-function windowSentence(t: TranslateFn, locale: string, ms: number, start: Date, end: Date): string {
-  const from = weekdayLong(start, locale)
-  const to = weekdayLong(end, locale)
+function windowSentence(t: TranslateFn, locale: string, ms: number, start: Date, end: Date, zone: string): string {
+  const from = weekdayIn(start, locale, zone)
+  const to = weekdayIn(end, locale, zone)
   return from === to && ms < 24 * 3_600_000
     ? t('microclimates.next.create.openSameDay', { length: lengthPhrase(t, ms), day: from })
     : t('microclimates.next.create.openFromTo', { length: lengthPhrase(t, ms), from, to })
@@ -798,19 +807,20 @@ function windowSentence(t: TranslateFn, locale: string, ms: number, start: Date,
  * end (`MicroclimateLifecycleSchedule.cs`). A future opening time does not delay it, so the
  * line says that too instead of promising the board's "lista para abrir el 14 sept".
  */
-function launchNote(t: TranslateFn, locale: string, values: MicroclimateWizardValues): string {
-  const window = windowMs(values.startTime, values.endTime)
-  if (window === null) return t('microclimates.next.create.launchNoteUnset')
-  const start = new Date(values.startTime)
-  const end = new Date(values.endTime)
+function launchNote(t: TranslateFn, locale: string, values: MicroclimateWizardValues, zone: string): string {
+  const window = zonedWindowMs(values.startTime, values.endTime, zone)
+  const start = instantIn(values.startTime, zone)
+  const end = instantIn(values.endTime, zone)
+  if (window === null || !start || !end) return t('microclimates.next.create.launchNoteUnset')
+  // "Now" is an instant: the opening is compared as the instant it is on the company's clock.
   if (start.getTime() > Date.now() + 60_000) {
     return t('microclimates.next.create.launchNoteFuture', {
-      date: shortDay(start.toISOString(), locale),
-      time: clock(start.toISOString(), locale),
+      date: shortDayIn(start, locale, zone),
+      time: clockIn(start, locale, zone),
     })
   }
   return t('microclimates.next.create.launchNote', {
-    date: shortDay(end.toISOString(), locale),
-    time: clock(end.toISOString(), locale),
+    date: shortDayIn(end, locale, zone),
+    time: clockIn(end, locale, zone),
   })
 }

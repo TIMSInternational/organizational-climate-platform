@@ -8,6 +8,7 @@ import type {
 } from './api/microclimates'
 import type { QuestionLibraryItemDetail } from '../questions/api/questionLibrary'
 import { DEFAULT_QUESTION_TYPE } from './questionTypes'
+import { browserTimeZone, instantOfWallClock, isKnownTimeZone, wallClockIn } from '../surveys/next/authoring/zonedWindow'
 
 /**
  * The creation wizard's state, and the rules that decide when a step is finished.
@@ -103,7 +104,11 @@ export interface MicroclimateWizardValues {
   titleEs: string
   descriptionEn: string
   descriptionEs: string
-  /** `<input type="datetime-local">` text, e.g. `2026-08-07T10:30`. Local wall clock. */
+  /**
+   * `<input type="datetime-local">` text, e.g. `2026-08-07T10:30`: the COMPANY's wall clock (its
+   * settings timezone), turned into an instant only when the request is built (`buildCreateInput`),
+   * the rule Nueva encuesta follows since #630 (G16).
+   */
   startTime: string
   endTime: string
   targetParticipantCount: string
@@ -453,18 +458,34 @@ function toCreateQuestion(
   }
 }
 
+/** The zone the form's wall clocks are read on: `timeZone` when the platform knows it, else the browser's. */
+export function sessionZone(timeZone: string | null | undefined): string {
+  return isKnownTimeZone(timeZone) ? timeZone : browserTimeZone()
+}
+
+/**
+ * The instant a form wall clock names on `timeZone`'s clock, as ISO 8601 with a `Z` -- which
+ * `createMicroclimate`'s `toUtcIso` passes through unchanged (`new Date(iso).toISOString()`).
+ * An unparseable value is left to that function, as before.
+ */
+export function sessionInstant(wallClock: string, timeZone?: string | null): string {
+  const at = instantOfWallClock(wallClock, sessionZone(timeZone))
+  return at ? at.toISOString() : wallClock
+}
+
 /**
  * The POST body.
  *
- * `timezone` is left off on purpose: `createMicroclimate` fills it from
- * `Intl.DateTimeFormat().resolvedOptions().timeZone`, and it also converts the two
- * `datetime-local` strings to UTC there. Doing either here would be a second place
- * that has to know about the offset problem, which is exactly how the wall-clock bug
- * that comment describes comes back.
+ * The two wall clocks become instants HERE, on the company's zone (`timeZone`, from its
+ * settings), and `timezone` names that zone: the browser's zone -- what `createMicroclimate`
+ * would otherwise fill and convert on -- is the company's only while the administrator sits
+ * where the company is (G16). A zone that cannot be read falls back to the browser's, which
+ * is what this form always did, and the schedule card says so.
  */
 export function buildCreateInput(
   values: MicroclimateWizardValues,
   companyId: string,
+  timeZone?: string | null,
 ): CreateMicroclimateInput {
   const description = localizedFor(values.language, values.descriptionEn, values.descriptionEs)
   const hasDescription =
@@ -476,8 +497,9 @@ export function buildCreateInput(
     title: localizedFor(values.language, values.titleEn, values.titleEs) ?? '',
     description: hasDescription ? description : undefined,
     companyId,
-    startTime: values.startTime,
-    endTime: values.endTime,
+    startTime: sessionInstant(values.startTime, timeZone),
+    endTime: sessionInstant(values.endTime, timeZone),
+    timezone: sessionZone(timeZone),
     targetParticipantCount: Number(values.targetParticipantCount),
     anonymousResponses: values.anonymousResponses,
     templateId: values.templateId === '' ? undefined : values.templateId,
@@ -493,17 +515,15 @@ export function buildCreateInput(
  * function, minus the two fields a draft does not change. One builder, so an edited draft and a
  * new one cannot be sent in two different shapes.
  */
-export function buildReplaceInput(values: MicroclimateWizardValues): ReplaceMicroclimateContentInput {
-  const { title, description, startTime, endTime, targetParticipantCount, anonymousResponses, questions, language } =
-    buildCreateInput(values, '')
-  return { title, description, startTime, endTime, targetParticipantCount, anonymousResponses, questions, language }
+export function buildReplaceInput(values: MicroclimateWizardValues, timeZone?: string | null): ReplaceMicroclimateContentInput {
+  const { title, description, startTime, endTime, timezone, targetParticipantCount, anonymousResponses, questions, language } =
+    buildCreateInput(values, '', timeZone)
+  return { title, description, startTime, endTime, timezone, targetParticipantCount, anonymousResponses, questions, language }
 }
 
-/** `new Date(iso)` as `datetime-local` text in the browser's own zone, which is how the form edits it. */
-function localInputOf(iso: string): string {
-  const date = new Date(iso)
-  const pad = (value: number) => String(value).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+/** An instant as the wall clock the form edits, read on `timeZone` (the company's; G16). */
+function wallClockOf(iso: string, timeZone: string | null | undefined): string {
+  return wallClockIn(iso, sessionZone(timeZone)) ?? ''
 }
 
 /**
@@ -519,6 +539,8 @@ export function wizardValuesFromDraft(
   en: MicroclimateDetail | null,
   es: MicroclimateDetail | null,
   nextKey: () => string,
+  /** The company's IANA zone: the draft's instants are shown as its wall clocks (G16). */
+  timeZone?: string | null,
 ): MicroclimateWizardValues {
   const base = (en ?? es) as MicroclimateDetail
   const language: ContentLanguage = base.language === 'es' || base.language === 'both' ? base.language : 'en'
@@ -533,8 +555,8 @@ export function wizardValuesFromDraft(
     titleEs: own(es, 'title', es?.title),
     descriptionEn: own(en, 'description', en?.description),
     descriptionEs: own(es, 'description', es?.description),
-    startTime: localInputOf(base.startTime),
-    endTime: localInputOf(base.endTime),
+    startTime: wallClockOf(base.startTime, timeZone),
+    endTime: wallClockOf(base.endTime, timeZone),
     targetParticipantCount: String(base.targetParticipantCount),
     anonymousResponses: base.anonymousResponses,
     templateId: '',

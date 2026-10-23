@@ -2169,7 +2169,9 @@
         "titleFromPrevious": "{name} — week of {date}",
         "pickDateTime": "Pick a date and time",
         "time": "Time",
-        "timeInvalid": "Type the time on a 24-hour clock, like 08:00."
+        "timeInvalid": "Type the time on a 24-hour clock, like 08:00.",
+        "timezoneCompany": "Dates and times in the company's time zone: {zone}.",
+        "timezoneBrowser": "The company's time zone could not be read: dates and times in this browser's, {zone}."
       },
       "detail": {
         "eyebrow": "Workspace · Share",
