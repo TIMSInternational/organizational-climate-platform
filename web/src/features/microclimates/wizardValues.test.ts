@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   buildCreateInput,
+  sessionInstant,
   defaultEmojiScale,
   derivedOptionValue,
   emptyEmojiOption,
@@ -318,16 +319,42 @@ describe('buildCreateInput', () => {
       'startTime',
       'targetParticipantCount',
       'templateId',
+      'timezone',
       'title',
     ])
   })
 
-  it('leaves the timezone to the API client rather than stamping a second one', () => {
-    // `createMicroclimate` fills `timezone` and converts both datetime-local strings
-    // to UTC. Doing either here would be a second place that has to know about the
-    // offset problem.
-    expect('timezone' in buildCreateInput(values(), 'company-1')).toBe(false)
-    expect(buildCreateInput(values(), 'company-1').startTime).toBe('2026-08-07T10:00')
+  /*
+   * G16, as #630 ruled for Nueva encuesta: the wall clocks are the COMPANY's. This used to leave
+   * both to `createMicroclimate`, which converts on -- and stamps -- the BROWSER's zone; that is
+   * the company's only while the administrator sits in Costa Rica. Every zone here is named, so
+   * the assertions hold on any machine (run under TZ=America/Chicago and TZ=UTC).
+   */
+  it("turns the wall clocks into the instants they are in the company's zone, and names that zone", () => {
+    const input = buildCreateInput(values({ startTime: '2026-10-28T08:00', endTime: '2026-10-28T23:59' }), 'company-1', 'America/Costa_Rica')
+    expect(input.startTime).toBe('2026-10-28T14:00:00.000Z')
+    expect(input.endTime).toBe('2026-10-29T05:59:00.000Z')
+    expect(input.timezone).toBe('America/Costa_Rica')
+  })
+
+  it('reads the same wall clock as a different instant in a different company zone', () => {
+    const input = buildCreateInput(values({ startTime: '2026-10-28T08:00' }), 'company-1', 'America/Bogota')
+    expect(input.startTime).toBe('2026-10-28T13:00:00.000Z')
+    expect(input.timezone).toBe('America/Bogota')
+  })
+
+  it('lands on the reading the zone has across a daylight-saving change', () => {
+    // America/Chicago is UTC-5 on 31 Oct 2026 and UTC-6 on 2 Nov.
+    expect(sessionInstant('2026-10-31T08:00', 'America/Chicago')).toBe('2026-10-31T13:00:00.000Z')
+    expect(sessionInstant('2026-11-02T08:00', 'America/Chicago')).toBe('2026-11-02T14:00:00.000Z')
+  })
+
+  it("falls back to the browser's zone only when the company's cannot be read", () => {
+    const browser = Intl.DateTimeFormat().resolvedOptions().timeZone
+    const local = new Date('2026-10-20T08:00').toISOString()
+    expect(sessionInstant('2026-10-20T08:00', null)).toBe(local)
+    expect(sessionInstant('2026-10-20T08:00', 'Not/AZone')).toBe(local)
+    expect(buildCreateInput(values(), 'company-1', null).timezone).toBe(browser)
   })
 
   it('omits an untouched description rather than sending an empty one', () => {

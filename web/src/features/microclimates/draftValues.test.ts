@@ -27,6 +27,28 @@ function draft(overrides: Partial<MicroclimateDetail>): MicroclimateDetail {
 let n = 0
 const nextKey = () => `k${++n}`
 
+describe("a draft's window on the company's clock (G16)", () => {
+  it("shows the draft's instants as the company's wall clocks, whatever zone the machine is in", () => {
+    const values = wizardValuesFromDraft(draft({}), null, nextKey, 'America/Costa_Rica')
+    // 15:00Z and 17:00Z are 09:00 and 11:00 in Costa Rica (UTC-6) -- 10:00 and 12:00 on a UTC-5 laptop.
+    expect([values.startTime, values.endTime]).toEqual(['2026-10-23T09:00', '2026-10-23T11:00'])
+  })
+
+  it('round-trips: an untouched draft is saved back at the same instants, in the same zone', () => {
+    const values = wizardValuesFromDraft(draft({}), null, nextKey, 'America/Costa_Rica')
+    expect(buildReplaceInput(values, 'America/Costa_Rica')).toMatchObject({
+      startTime: '2026-10-23T15:00:00.000Z',
+      endTime: '2026-10-23T17:00:00.000Z',
+      timezone: 'America/Costa_Rica',
+    })
+  })
+
+  it('crosses midnight where the company does, not where UTC does', () => {
+    const values = wizardValuesFromDraft(draft({ startTime: '2026-10-23T04:30:00Z', endTime: '2026-10-24T04:30:00Z' }), null, nextKey, 'America/Costa_Rica')
+    expect([values.startTime, values.endTime]).toEqual(['2026-10-22T22:30', '2026-10-23T22:30'])
+  })
+})
+
 describe('a draft as the form edits it (G23)', () => {
   it('takes each column of a bilingual draft from its own read, and leaves a fallback empty', () => {
     const question = { id: 'q1', type: 'multiple_choice', required: true, order: 1, emojiOptions: null }

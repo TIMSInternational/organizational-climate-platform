@@ -2169,7 +2169,9 @@
         "titleFromPrevious": "{name} — semana del {date}",
         "pickDateTime": "Elegir fecha y hora",
         "time": "Hora",
-        "timeInvalid": "Escriba la hora en formato de 24 horas, como 08:00."
+        "timeInvalid": "Escriba la hora en formato de 24 horas, como 08:00.",
+        "timezoneCompany": "Fechas y horas en la zona de la empresa: {zone}.",
+        "timezoneBrowser": "No se pudo leer la zona horaria de la empresa: fechas y horas en la de este navegador, {zone}."
       },
       "detail": {
         "eyebrow": "Espacio de trabajo · Compartir",

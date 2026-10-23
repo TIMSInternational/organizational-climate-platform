@@ -17,6 +17,8 @@ import {
   type MicroclimateDetail,
 } from '../../api/microclimates'
 import { listMicroclimateTemplates } from '../../api/microclimateTemplates'
+import { getCompanySettings, type CompanySettingsResponse } from '../../../org-structure/api/companySettings'
+import { browserTimeZone, zoneLabel } from '../../../surveys/next/authoring/zonedWindow'
 import MicroclimateCreateNextPage from './MicroclimateCreateNextPage'
 import es from '../../../../i18n/es.json'
 import { ANONYMITY_FLOOR } from '../../../../components/charts'
@@ -35,6 +37,11 @@ vi.mock('../../api/microclimates', async (importOriginal) => ({
 vi.mock('../../api/microclimateTemplates', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../api/microclimateTemplates')>()),
   listMicroclimateTemplates: vi.fn(),
+}))
+// The company's zone (G16): Apertura and Cierre are its wall clocks.
+vi.mock('../../../org-structure/api/companySettings', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../org-structure/api/companySettings')>()),
+  getCompanySettings: vi.fn(),
 }))
 // `useCompanyName` reads `GET /profile` for the template note's company.
 vi.mock('../../../profile/api/profile', async (importOriginal) => ({
@@ -112,9 +119,13 @@ async function nameField(): Promise<HTMLInputElement> {
 
 describe('MicroclimateCreateNextPage', () => {
   beforeEach(() => {
-    // Thursday 10 Sep at 21:07, the reader's own clock.
+    // Thursday 10 Sep at 21:07 in Costa Rica (UTC-6), the company's clock -- pinned as an
+    // instant, so the machine's own zone decides nothing here (G16).
     vi.useFakeTimers({ toFake: ['Date'] })
-    vi.setSystemTime(new Date(2026, 8, 10, 21, 7))
+    vi.setSystemTime(new Date('2026-09-11T03:07:00Z'))
+    vi.mocked(getCompanySettings)
+      .mockReset()
+      .mockResolvedValue({ companyId: COMPANY, settings: { timezone: 'America/Costa_Rica' } } as CompanySettingsResponse)
     window.localStorage.clear()
     window.localStorage.setItem('preferredLocale', 'es')
     vi.mocked(listMicroclimates)
@@ -210,7 +221,7 @@ describe('MicroclimateCreateNextPage', () => {
     expect(screen.getByText(copy.previewSubmit, { selector: 'span' }).className.split(' ')).toContain('h-control-canvas')
   })
 
-  it('moves Cierre through its picker — a day, then an hh:mm — and the save carries the datetime-local string', async () => {
+  it('moves Cierre through its picker — a day, then an hh:mm — and the save carries the instant that wall clock is in the company', async () => {
     const { baseElement } = renderAs({ role: 'company_admin', companyId: COMPANY })
     await waitFor(async () => expect((await nameField()).value).not.toBe(''))
     await userEvent.click(screen.getByRole('button', { name: new RegExp(`^${copy.closes} `) }))
@@ -237,9 +248,11 @@ describe('MicroclimateCreateNextPage', () => {
     expect(screen.getByRole('button', { name: new RegExp(`^${copy.closes} `) }).textContent).toBe('11/09/2026 · 08:30')
     await userEvent.click(screen.getByRole('button', { name: copy.saveDraft }))
     await waitFor(() => expect(createMicroclimate).toHaveBeenCalledTimes(1))
+    // 21:00 and 08:30 in Costa Rica (UTC-6), whatever zone the machine running this is in.
     expect(vi.mocked(createMicroclimate).mock.calls[0]?.[1]).toMatchObject({
-      startTime: '2026-09-10T21:00',
-      endTime: '2026-09-11T08:30',
+      startTime: '2026-09-11T03:00:00.000Z',
+      endTime: '2026-09-11T14:30:00.000Z',
+      timezone: 'America/Costa_Rica',
     })
   })
 
@@ -278,8 +291,9 @@ describe('MicroclimateCreateNextPage', () => {
       targetParticipantCount: 20,
       anonymousResponses: true,
       language: 'es',
-      startTime: '2026-09-10T21:00',
-      endTime: '2026-09-12T21:00',
+      startTime: '2026-09-11T03:00:00.000Z',
+      endTime: '2026-09-13T03:00:00.000Z',
+      timezone: 'America/Costa_Rica',
     })
     expect(input?.questions?.map((question) => [question.text, question.type, question.required])).toEqual([
       ['¿Cómo se sintió esta semana?', 'likert', true],
@@ -387,5 +401,80 @@ describe('MicroclimateCreateNextPage', () => {
     expect(await screen.findByText(es.microclimates.next.edit.notDraftTitle)).toBeTruthy()
     expect(screen.queryByRole('textbox')).toBeNull()
     expect(screen.getByRole('link', { name: es.microclimates.next.edit.backToSession }).getAttribute('href')).toBe('/microclimates/d1')
+  })
+})
+
+describe('Crear — the company clock (G16)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    // 22 Oct at 23:30 in Costa Rica is already 23 Oct in UTC and 00:30 on a UTC-5 laptop.
+    vi.setSystemTime(new Date('2026-10-23T05:30:00Z'))
+    window.localStorage.clear()
+    window.localStorage.setItem('preferredLocale', 'es')
+    vi.mocked(listMicroclimates).mockReset().mockResolvedValue([])
+    vi.mocked(getMicroclimate).mockReset().mockResolvedValue(draft)
+    vi.mocked(createMicroclimate).mockReset().mockResolvedValue({ ...previous, id: 'm2', status: 'draft' })
+    vi.mocked(updateMicroclimate).mockReset().mockResolvedValue({ ...previous, id: 'm2' })
+    vi.mocked(listMicroclimateTemplates).mockReset().mockResolvedValue([])
+    vi.mocked(replaceMicroclimateContent).mockReset().mockResolvedValue(draft)
+    vi.mocked(getMicroclimateSeats)
+      .mockReset()
+      .mockResolvedValue({ licensed: true, status: 'active', seatsTotal: 200, seatsUsed: 37, seatsRemaining: 163 })
+    vi.mocked(getCompanySettings)
+      .mockReset()
+      .mockResolvedValue({ companyId: COMPANY, settings: { timezone: 'America/Costa_Rica' } } as CompanySettingsResponse)
+  })
+
+  afterEach(() => {
+    cleanup()
+    clearToken()
+    clearCompanyNameCache()
+    vi.useRealTimers()
+    window.localStorage.removeItem(COMPANY_CONTEXT_STORAGE_KEY)
+  })
+
+  const fieldText = (label: string) => screen.getByRole('button', { name: new RegExp(`^${label} `) }).textContent
+
+  it("draws a new session's default window on the company's clock and names the zone beside it", async () => {
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    await waitFor(() => expect(screen.getByTestId('microclimate-zone').textContent).toContain('America/Costa_Rica (GMT-6)'))
+    expect(screen.getByTestId('microclimate-zone').textContent).toContain(
+      copy.timezoneCompany.replace('{zone}', 'America/Costa_Rica (GMT-6)'),
+    )
+    // The current quarter hour in Costa Rica: 22 Oct, 23:30 -- not 23 Oct, as UTC or a UTC-5 laptop reads it.
+    expect(fieldText(copy.opens)).toBe('22/10/2026 · 23:30')
+    expect(fieldText(copy.closes)).toBe('24/10/2026 · 23:30')
+    expect(vi.mocked(getCompanySettings).mock.calls[0]?.[1]).toBe(COMPANY)
+    // Launching opens now, so the note says when it closes -- on the company's clock too.
+    expect(screen.getByText(/se cierra sola el 24 oct a las 23:30/)).toBeTruthy()
+  })
+
+  it("opens a draft on the company's clock and saves the same instants back", async () => {
+    renderAs({ role: 'company_admin', companyId: COMPANY }, '/microclimates/d1/edit')
+    await nameField()
+    // The draft's 15:00Z and 17:00Z are 09:00 and 11:00 in Costa Rica.
+    await waitFor(() => expect(fieldText(copy.opens)).toBe('23/10/2026 · 09:00'))
+    expect(fieldText(copy.closes)).toBe('23/10/2026 · 11:00')
+    // Read for the draft's own company.
+    expect(vi.mocked(getCompanySettings).mock.calls[0]?.[1]).toBe(draft.companyId)
+    expect(screen.getByTestId('microclimate-zone').textContent).toContain('America/Costa_Rica (GMT-6)')
+
+    await userEvent.click(screen.getByRole('button', { name: es.microclimates.next.edit.save }))
+    await waitFor(() => expect(replaceMicroclimateContent).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(replaceMicroclimateContent).mock.calls[0]?.[2]).toMatchObject({
+      startTime: '2026-10-23T15:00:00.000Z',
+      endTime: '2026-10-23T17:00:00.000Z',
+      timezone: 'America/Costa_Rica',
+    })
+  })
+
+  it("says it fell back to the browser's zone when the company's cannot be read", async () => {
+    vi.mocked(getCompanySettings).mockRejectedValue(new Error('403'))
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    const label = zoneLabel(browserTimeZone())
+    await waitFor(() =>
+      expect(screen.getByTestId('microclimate-zone').textContent).toContain(copy.timezoneBrowser.replace('{zone}', label)),
+    )
+    expect(screen.getByTestId('microclimate-zone').textContent).not.toContain(copy.timezoneCompany.split(':')[0])
   })
 })

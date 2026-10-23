@@ -23,9 +23,25 @@ import {
   type MicroclimateWizardValues,
   type WizardQuestionValues,
 } from '../../wizardValues'
+import { getCompanySettings } from '../../../org-structure/api/companySettings'
+import { isKnownTimeZone } from '../../../surveys/next/authoring/zonedWindow'
 import { nameHead } from '../../../dashboard/next/derive'
-import { defaultWindow, newestFirst, toLocalInput } from '../derive'
-import { shortDay } from '../format'
+import { newestFirst } from '../derive'
+import { defaultWallWindow, sessionZone, shortDayIn } from './companyClock'
+
+/**
+ * The company's IANA zone from its settings (`GET /admin/companies/{id}/settings`, the read
+ * Nueva encuesta makes for the same purpose), or `null` when it cannot be read or is not a zone
+ * this platform knows. Never throws: the form works on the browser's zone without it.
+ */
+async function companyZone(baseUrl: string, companyId: string): Promise<string | null> {
+  try {
+    const zone = (await getCompanySettings(baseUrl, companyId))?.settings?.timezone
+    return isKnownTimeZone(zone) ? zone : null
+  } catch {
+    return null
+  }
+}
 
 /** Where the questions come from: the last session, a template (which brings none), or nothing. */
 export type StartFrom = 'previous' | 'template' | 'blank'
@@ -40,6 +56,12 @@ export type DraftLoad = { status: 'none' } | { status: 'loading' } | { status: '
 export interface MicroclimateCreateState {
   /** The draft being edited, when there is one. */
   draft: DraftLoad
+  /**
+   * The company's IANA zone (`settings.timezone`), which Apertura and Cierre are read on (G16):
+   * `undefined` while it is being read, `null` when it could not be (the browser's zone is used,
+   * and the schedule card says so).
+   */
+  timeZone: string | null | undefined
   /** The previous session and the templates are still being read. */
   loading: boolean
   /** The newest session's detail — what "La sesión anterior" copies — or `null`. */
@@ -105,15 +127,18 @@ export function useMicroclimateCreateModel(editId?: string): MicroclimateCreateS
     return `k${keyCounter.current}`
   }, [])
 
+  // Until the company's zone is read, the default window is drawn on the browser's; it is
+  // redrawn on the company's when the read lands, unless the author has typed by then.
   const [values, setValues] = useState<MicroclimateWizardValues>(() => {
-    const { start, end } = defaultWindow(new Date())
+    const { startTime, endTime } = defaultWallWindow(new Date(), sessionZone(null))
     return {
       ...emptyWizardValues(locale === 'es' ? 'es' : 'en'),
-      startTime: toLocalInput(start),
-      endTime: toLocalInput(end),
+      startTime,
+      endTime,
       questions: [emptyQuestion('k0')],
     }
   })
+  const [timeZone, setTimeZone] = useState<string | null | undefined>(undefined)
   const [startFrom, setStartFromState] = useState<StartFrom>('blank')
   const [previous, setPrevious] = useState<MicroclimateDetail | null>(null)
   const [templates, setTemplates] = useState<MicroclimateTemplate[]>([])
@@ -126,12 +151,13 @@ export function useMicroclimateCreateModel(editId?: string): MicroclimateCreateS
   const touched = useRef(false)
 
   const copyPrevious = useCallback(
-    (session: MicroclimateDetail, current: MicroclimateWizardValues): MicroclimateWizardValues => {
-      const { start, end } = defaultWindow(new Date(), session)
+    (session: MicroclimateDetail, current: MicroclimateWizardValues, zone: string | null | undefined): MicroclimateWizardValues => {
+      const clockZone = sessionZone(zone)
+      const { start, startTime, endTime } = defaultWallWindow(new Date(), clockZone, session)
       const title = session.title
         ? t('microclimates.next.create.titleFromPrevious', {
             name: nameHead(session.title),
-            date: shortDay(start.toISOString(), locale),
+            date: shortDayIn(start, locale, clockZone),
           })
         : ''
       const inEs = current.language === 'es'
@@ -139,8 +165,8 @@ export function useMicroclimateCreateModel(editId?: string): MicroclimateCreateS
         ...current,
         titleEn: inEs ? current.titleEn : title,
         titleEs: inEs ? title : current.titleEs,
-        startTime: toLocalInput(start),
-        endTime: toLocalInput(end),
+        startTime,
+        endTime,
         targetParticipantCount: String(session.targetParticipantCount > 0 ? session.targetParticipantCount : current.targetParticipantCount),
         anonymousResponses: session.anonymousResponses,
         templateId: '',
@@ -160,19 +186,22 @@ export function useMicroclimateCreateModel(editId?: string): MicroclimateCreateS
     setDraft({ status: 'loading' })
     const read = async () => {
       const first = await getMicroclimate(baseUrl, editId, 'es')
-      if (first.status !== 'draft' || first.responseCount > 0) return { first, en: null, es: null }
-      if (first.language === 'both') return { first, en: await getMicroclimate(baseUrl, editId, 'en'), es: first }
-      if (first.language === 'es') return { first, en: null, es: first }
-      return { first, en: await getMicroclimate(baseUrl, editId, 'en'), es: null }
+      if (first.status !== 'draft' || first.responseCount > 0) return { first, en: null, es: null, zone: null }
+      // The draft's own company's zone: a super administrator edits whichever tenant it is in.
+      const zone = companyZone(baseUrl, first.companyId)
+      if (first.language === 'both') return { first, en: await getMicroclimate(baseUrl, editId, 'en'), es: first, zone: await zone }
+      if (first.language === 'es') return { first, en: null, es: first, zone: await zone }
+      return { first, en: await getMicroclimate(baseUrl, editId, 'en'), es: null, zone: await zone }
     }
     read()
-      .then(({ first, en, es }) => {
+      .then(({ first, en, es, zone }) => {
         if (cancelled) return
         if (!en && !es) {
           setDraft({ status: 'notDraft', id: first.id })
           return
         }
-        setValues(wizardValuesFromDraft(en, es, nextKey))
+        setTimeZone(zone)
+        setValues(wizardValuesFromDraft(en, es, nextKey, zone))
         setDraft({ status: 'ready', companyId: first.companyId })
         setLoading(false)
       })
@@ -197,14 +226,20 @@ export function useMicroclimateCreateModel(editId?: string): MicroclimateCreateS
       // A template is attribution only; a failed read hides the picker rather than blocking
       // the form (the old page's one silent catch, kept for its reason).
       listMicroclimateTemplates(baseUrl, companyId).catch(() => [] as MicroclimateTemplate[]),
-    ]).then(([session, list]) => {
+      companyZone(baseUrl, companyId),
+    ]).then(([session, list, zone]) => {
       if (cancelled) return
       setPrevious(session)
       setTemplates(list)
+      setTimeZone(zone)
       setLoading(false)
-      if (session && !touched.current) {
+      if (touched.current) return
+      if (session) {
         setStartFromState('previous')
-        setValues((current) => copyPrevious(session, current))
+        setValues((current) => copyPrevious(session, current, zone))
+      } else {
+        const { startTime, endTime } = defaultWallWindow(new Date(), sessionZone(zone))
+        setValues((current) => ({ ...current, startTime, endTime }))
       }
     })
     return () => {
@@ -227,13 +262,13 @@ export function useMicroclimateCreateModel(editId?: string): MicroclimateCreateS
       touched.current = true
       setStartFromState(next)
       setValues((current) => {
-        if (next === 'previous' && previous) return copyPrevious(previous, current)
+        if (next === 'previous' && previous) return copyPrevious(previous, current, timeZone)
         // A template brings no questions (`MicroclimateTemplate` has none), so both other
         // starts are an empty question to write.
         return { ...current, templateId: next === 'template' ? current.templateId : '', questions: [emptyQuestion(nextKey())] }
       })
     },
-    [copyPrevious, nextKey, previous],
+    [copyPrevious, nextKey, previous, timeZone],
   )
 
   const errors = useMemo(() => wizardStepErrors(values, t).review, [values, t])
@@ -246,8 +281,8 @@ export function useMicroclimateCreateModel(editId?: string): MicroclimateCreateS
       setSubmitting(mode)
       try {
         const created = editId
-          ? await replaceMicroclimateContent(baseUrl, editId, buildReplaceInput(values))
-          : await createMicroclimate(baseUrl, buildCreateInput(values, companyId as string))
+          ? await replaceMicroclimateContent(baseUrl, editId, buildReplaceInput(values, timeZone))
+          : await createMicroclimate(baseUrl, buildCreateInput(values, companyId as string, timeZone))
         if (mode === 'launch') {
           try {
             await updateMicroclimate(baseUrl, created.id, { status: 'active' })
@@ -268,11 +303,12 @@ export function useMicroclimateCreateModel(editId?: string): MicroclimateCreateS
         setSubmitting(null)
       }
     },
-    [baseUrl, companyId, editId, errors.length, navigate, t, values],
+    [baseUrl, companyId, editId, errors.length, navigate, t, timeZone, values],
   )
 
   return {
     draft,
+    timeZone,
     loading,
     previous,
     templates,
