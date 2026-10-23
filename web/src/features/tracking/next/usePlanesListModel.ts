@@ -28,6 +28,13 @@ export interface PlanesListState {
    * had to name the nodo by its external id or not at all.
    */
   ownNodoName: string | null
+  /**
+   * What the create form picks from (G25). An administrator's is the directory above; a node
+   * leader's is the pickers' answer to them — their own nodo and its people
+   * (`TrackingPickerEndpoints.ScopeFor`), asked separately so the board's names and filters
+   * stay exactly what they were. `unavailable` when it was asked and did not answer.
+   */
+  form: { nodos: readonly NodoPickerItem[]; personas: readonly PersonaPickerItem[]; unavailable: boolean }
   asOf: string
   viewer: Viewer
   reload: () => void
@@ -46,6 +53,8 @@ export function usePlanesListModel(): PlanesListState {
   const scope = useCompanyScope()
   const companyId = scope.companyId
   const withDirectory = capabilities.canUseDirectoryPickers && companyId !== undefined
+  /** A node leader: the pickers answer them with their own nodo only. */
+  const withOwnNodo = !withDirectory && capabilities.leadsANodo && companyId !== undefined
   const viewer = useMemo(() => readViewer(), [])
   const [status, setStatus] = useState<PlanesListState['status']>('loading')
   const [plans, setPlans] = useState<readonly PlanAccion[]>([])
@@ -53,6 +62,7 @@ export function usePlanesListModel(): PlanesListState {
   const [personas, setPersonas] = useState<readonly PersonaPickerItem[]>([])
   const [directoryUnavailable, setDirectoryUnavailable] = useState(false)
   const [ownNodoName, setOwnNodoName] = useState<string | null>(null)
+  const [ownNodoForm, setOwnNodoForm] = useState<PlanesListState['form']>({ nodos: [], personas: [], unavailable: false })
   const [attempt, setAttempt] = useState(0)
   const asOf = useMemo(() => todayIso(), [])
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
@@ -73,6 +83,24 @@ export function usePlanesListModel(): PlanesListState {
       cancelled = true
     }
   }, [baseUrl, withDirectory])
+
+  // The leader's create form. Its own effect, and silent beyond `unavailable`: the board does
+  // not wait on it, and a refusal costs the form its dropdowns, never the list.
+  useEffect(() => {
+    if (!withOwnNodo || !companyId) return
+    let cancelled = false
+    void Promise.allSettled([listNodoOptions(companyId), listPersonaOptions(companyId)]).then(([nodoItems, personaItems]) => {
+      if (cancelled) return
+      setOwnNodoForm({
+        nodos: nodoItems.status === 'fulfilled' ? nodoItems.value : [],
+        personas: personaItems.status === 'fulfilled' ? personaItems.value : [],
+        unavailable: nodoItems.status === 'rejected' || personaItems.status === 'rejected',
+      })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [attempt, companyId, withOwnNodo])
 
   useEffect(() => {
     let cancelled = false
@@ -104,5 +132,13 @@ export function usePlanesListModel(): PlanesListState {
 
   const reload = useCallback(() => setAttempt((value) => value + 1), [])
 
-  return { status, plans, nodos, personas, directoryUnavailable, ownNodoName, asOf, viewer, reload }
+  const form = useMemo<PlanesListState['form']>(
+    () =>
+      withOwnNodo
+        ? ownNodoForm
+        : { nodos: nodos ?? [], personas, unavailable: directoryUnavailable || nodos === null },
+    [directoryUnavailable, nodos, ownNodoForm, personas, withOwnNodo],
+  )
+
+  return { status, plans, nodos, personas, directoryUnavailable, ownNodoName, form, asOf, viewer, reload }
 }

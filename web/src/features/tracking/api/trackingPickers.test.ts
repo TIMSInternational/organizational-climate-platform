@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { getNodoNames, listNodoOptions, listPersonaOptions } from './trackingPickers'
+import { getNodoNames, listHallazgoOptions, listNodoOptions, listPersonaOptions } from './trackingPickers'
 
 /**
  * The pickers are on climate-project, not on climate-tracking, and their responses
@@ -35,6 +35,21 @@ describe('the tracking pickers', () => {
     return expect(listPersonaOptions('company-1', 'https://api.test')).resolves.toEqual([
       { id: 'persona-1', name: 'Ana', email: 'ana@acme.test' },
     ])
+  })
+
+  it('asks for one nodo\'s findings and unwraps the hallazgos envelope', async () => {
+    const item = {
+      id: 'hal-1',
+      surveyId: 'survey-1',
+      surveyTitle: 'Clima 2026',
+      surveyClosedOn: '2026-09-30T00:00:00Z',
+      dimension: 'comunicacion',
+    }
+    vi.mocked(fetch).mockReturnValue(ok({ hallazgos: [item] }))
+    await expect(listHallazgoOptions('company-1', 'nodo a', 'es', 'https://api.test')).resolves.toEqual([item])
+    expect(String(vi.mocked(fetch).mock.calls[0][0])).toBe(
+      'https://api.test/tracking/picker/hallazgos?companyId=company-1&nodoId=nodo+a&lang=es',
+    )
   })
 
   it('hands back an empty list rather than undefined when the envelope is missing', () => {

@@ -15,14 +15,19 @@ import { authFetch } from '../../../api/authFetch'
  * So `baseUrl` here defaults to `VITE_API_BASE_URL`, not to
  * `getTrackingApiBaseUrl()`. Passing the tracking base URL to these would 404.
  *
- * ## Admin-only, and the create form has to say so
+ * ## Who is answered, and with what (G25)
  *
- * `CanAccessCompany` in that endpoint file allows `super_admin` and a
- * `company_admin` on their own company — **and nobody else**. A `leader` is
- * allowed to create a plan (`Roles.PlanCreator` includes them) but is refused by
- * both pickers, so the create form cannot offer a leader a list of people to
- * involve. That is a real gap in the service, not something this client can paper
- * over; `PlanDeAccionForm` degrades to typed external ids and says why rather than
+ * `TrackingPickerEndpoints.ScopeFor` answers a `super_admin`, and a `company_admin` on
+ * their own company, with the whole company — and a `leader` of the company with
+ * **exactly what climate-tracking lets them act on**: the one nodo their `nodoId` claim
+ * names (`PlanAccessHandler` compares nodos for equality, so not its descendants) and
+ * the active people in it. Everyone else is refused (403). So the same two requests
+ * mean "the directory" to an administrator and "my own nodo" to a leader; callers that
+ * decorate a company-wide screen with names still ask only as an administrator
+ * (`canUseDirectoryPickers`), and the plan forms ask as either (`leadsANodo`).
+ *
+ * A leader whose claim names no real department is answered with empty lists, and
+ * `PlanDeAccionForm` then degrades to typed external ids and says why rather than
  * rendering two empty dropdowns.
  *
  * Optional `baseUrl` goes LAST, after the required `companyId` — the house rule,
@@ -38,6 +43,19 @@ export interface PersonaPickerItem {
   id: string
   name: string
   email: string
+}
+
+/**
+ * One finding a plan can be written against (`HallazgoPickerItem`): a survey's dimension
+ * for one nodo. No score — the picker needs only enough to recognise it.
+ */
+export interface HallazgoPickerItem {
+  id: string
+  surveyId: string
+  surveyTitle: string
+  /** ISO instant the survey closed. */
+  surveyClosedOn: string
+  dimension: string
 }
 
 /** `NodoPickerResponse` — the array is under `nodos`, not at the root. */
@@ -78,6 +96,30 @@ export async function listPersonaOptions(
   )
   const body = (await response.json()) as PersonaPickerResponse
   return body.personas ?? []
+}
+
+/** `HallazgoPickerResponse` — the array is under `hallazgos`. */
+interface HallazgoPickerResponse {
+  hallazgos: HallazgoPickerItem[]
+}
+
+/**
+ * The findings of one nodo's closed surveys, newest survey first
+ * (`GET /tracking/picker/hallazgos`). `nodoId` is required by the endpoint: a plan belongs
+ * to one nodo and can only answer that nodo's findings. A leader is refused (403) any nodo
+ * but their own. `lang` picks the survey title's language when it has two.
+ */
+export async function listHallazgoOptions(
+  companyId: string,
+  nodoId: string,
+  lang?: string,
+  baseUrl: string = defaultBaseUrl(),
+): Promise<HallazgoPickerItem[]> {
+  const query = new URLSearchParams({ companyId, nodoId })
+  if (lang) query.set('lang', lang)
+  const response = await authFetch(`${baseUrl}/tracking/picker/hallazgos?${query.toString()}`)
+  const body = (await response.json()) as HallazgoPickerResponse
+  return body.hallazgos ?? []
 }
 
 /**

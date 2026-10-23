@@ -6624,7 +6624,11 @@
       "fechaAvance": "Fecha del avance",
       "fechaAvanceHint": "El día al que corresponde este avance.",
       "comentario": "Comentario",
-      "comentarioHint": "Queda registrado en la bitácora del plan. Opcional."
+      "comentarioHint": "Queda registrado en la bitácora del plan. Opcional.",
+      "hallazgoPickHint": "El hallazgo de encuesta al que responde el plan, de las encuestas cerradas del nodo. Opcional.",
+      "hallazgoPlaceholder": "Seleccione un hallazgo",
+      "hallazgoNone": "Sin hallazgo vinculado",
+      "hallazgoOption": "{dimension} · {survey} (cerrada el {closed})"
     },
     "involucrados": {
       "filterPlaceholder": "Buscar por nombre o correo",
