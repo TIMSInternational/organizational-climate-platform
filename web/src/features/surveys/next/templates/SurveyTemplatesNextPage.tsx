@@ -1,16 +1,17 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { ArrowRight, Download, FileText, Filter, Plus, Rows2 } from 'lucide-react'
+import { ArrowRight, Download, FileText, Filter, Pencil, Plus, Rows2, Trash2 } from 'lucide-react'
 import { RailQuestionLibraryIcon } from '../../../../navigation/railIcons'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
-import { Button, EmptyState, Input, NetworkError, SkeletonText, chipVariants } from '../../../../components/ui'
-import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
+import { Alert, AlertDescription, Button, ConfirmationDialog, EmptyState, Input, NetworkError, SkeletonText, chipVariants } from '../../../../components/ui'
+import { readViewerClaims, useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { useCompanyScope } from '../../../../company-context'
 import { cn } from '../../../../lib/cn'
 import { CanvasChip } from '../../../org-structure/next/super/parts'
-import type { SurveyTemplateListItem } from '../../api/surveyTemplates'
-import { KNOWN_CATEGORIES, byUsage, categoriesOf, countByCategory, type TemplateShape } from './derive'
+import { deleteSurveyTemplate, type SurveyTemplateListItem } from '../../api/surveyTemplates'
+import { KNOWN_CATEGORIES, byUsage, canWriteTemplate, categoriesOf, countByCategory, type TemplateShape } from './derive'
+import EditTemplateDialog from './EditTemplateDialog'
 import NewTemplateDialog from './NewTemplateDialog'
 import { useTemplatesModel } from './useTemplatesModel'
 
@@ -37,6 +38,13 @@ function dimensionName(t: TranslateFn, key: string): string {
  * who may author a survey (`canAuthorSurveys` — `POST /survey-templates/{id}/use` is
  * `CanAdminister`); "Vista previa" opens the template's own page for any admin. "Nueva plantilla"
  * makes one from a company survey's questions (`NewTemplateDialog`).
+ *
+ * "Editar" and "Eliminar" are drawn on a template the viewer may write (`canWriteTemplate`, the
+ * mirror of `CanWriteTemplate`: a super admin any; a company admin their own company's, never a
+ * global one). Editing changes the name, description and category (`EditTemplateDialog`);
+ * deleting removes the template and its questions after a confirmation. Neither reaches a survey
+ * already built from the template — each holds its own copy of the questions, and the API test
+ * `A_survey_built_from_a_template_is_unchanged_by_the_templates_edit_and_by_its_delete` pins it.
  */
 export default function SurveyTemplatesNextPage() {
   const { t, locale } = useTranslation()
@@ -46,6 +54,11 @@ export default function SurveyTemplatesNextPage() {
   const [q, setQ] = useState('')
   const [category, setCategory] = useState('')
   const [creating, setCreating] = useState(false)
+  const [editing, setEditing] = useState<SurveyTemplateListItem | null>(null)
+  const [deleting, setDeleting] = useState<SurveyTemplateListItem | null>(null)
+  const [deletePending, setDeletePending] = useState(false)
+  const [deleteFailed, setDeleteFailed] = useState(false)
+  const claims = readViewerClaims()
   const state = useTemplatesModel(q)
   const counts = countByCategory(state.templates)
   const visible = byUsage(
@@ -74,6 +87,39 @@ export default function SurveyTemplatesNextPage() {
         }
       />
       {createFor && <NewTemplateDialog open={creating} onOpenChange={setCreating} companyId={createFor} />}
+      <EditTemplateDialog template={editing} onOpenChange={(open) => !open && setEditing(null)} onSaved={state.reload} />
+      <ConfirmationDialog
+        open={deleting !== null}
+        onOpenChange={(open) => {
+          if (!open && !deletePending) setDeleting(null)
+        }}
+        title={t(`${K}.deleteTitle`, { name: deleting?.name ?? '' })}
+        description={t(deleting?.usageCount === 1 ? `${K}.deleteBodyOne` : `${K}.deleteBody`, { count: deleting?.usageCount ?? 0 })}
+        confirmText={t(`${K}.deleteConfirm`)}
+        cancelText={t('common.cancel')}
+        variant="destructive"
+        loading={deletePending}
+        onConfirm={async () => {
+          if (!deleting) return
+          setDeletePending(true)
+          setDeleteFailed(false)
+          try {
+            await deleteSurveyTemplate(import.meta.env.VITE_API_BASE_URL as string, deleting.id)
+            setDeleting(null)
+            state.reload()
+          } catch {
+            setDeleting(null)
+            setDeleteFailed(true)
+          } finally {
+            setDeletePending(false)
+          }
+        }}
+      />
+      {deleteFailed && (
+        <Alert variant="destructive" role="alert" className="mb-4">
+          <AlertDescription>{t(`${K}.deleteFailed`)}</AlertDescription>
+        </Alert>
+      )}
 
       <form
         role="search"
@@ -149,6 +195,12 @@ export default function SurveyTemplatesNextPage() {
                 template={template}
                 shape={state.shapes.get(template.id) ?? null}
                 canUse={capabilities.canAuthorSurveys}
+                canWrite={canWriteTemplate(claims, template)}
+                onEdit={() => setEditing(template)}
+                onDelete={() => {
+                  setDeleteFailed(false)
+                  setDeleting(template)
+                }}
               />
             ))
           )}
@@ -180,7 +232,21 @@ export default function SurveyTemplatesNextPage() {
   )
 }
 
-function TemplateCard({ template, shape, canUse }: { template: SurveyTemplateListItem; shape: TemplateShape | null; canUse: boolean }) {
+function TemplateCard({
+  template,
+  shape,
+  canUse,
+  canWrite,
+  onEdit,
+  onDelete,
+}: {
+  template: SurveyTemplateListItem
+  shape: TemplateShape | null
+  canUse: boolean
+  canWrite: boolean
+  onEdit: () => void
+  onDelete: () => void
+}) {
   const { t } = useTranslation()
   const facts = [
     categoryLabel(t, template.category),
@@ -218,7 +284,7 @@ function TemplateCard({ template, shape, canUse }: { template: SurveyTemplateLis
         <span className="text-2xs font-bold uppercase tracking-label text-fg-label">{t(`${K}.timesUsed`)}</span>
         <span className="font-mono text-xl leading-tight tabular-nums">{template.usageCount}</span>
       </div>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button asChild variant="outline" size="canvas">
           <Link to={`/surveys/templates/${template.id}`}>
             <FileText aria-hidden="true" />
@@ -232,6 +298,18 @@ function TemplateCard({ template, shape, canUse }: { template: SurveyTemplateLis
               {t(`${K}.use`)}
             </Link>
           </Button>
+        )}
+        {canWrite && (
+          <>
+            <Button type="button" variant="outline" size="canvas" onClick={onEdit} aria-label={t(`${K}.editFor`, { name: template.name })}>
+              <Pencil aria-hidden="true" />
+              {t(`${K}.edit`)}
+            </Button>
+            <Button type="button" variant="outline" size="canvas" onClick={onDelete} aria-label={t(`${K}.deleteFor`, { name: template.name })}>
+              <Trash2 aria-hidden="true" />
+              {t(`${K}.delete`)}
+            </Button>
+          </>
         )}
       </div>
     </article>

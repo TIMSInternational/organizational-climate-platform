@@ -170,6 +170,7 @@ export function SurveyDetailView({
                 </Link>
               </Button>
             )}
+            {caps.canOpenResults(survey) && <Button asChild variant="outline"><Link to={`/surveys/${survey.id}/history`}>{t('surveys.next.history.open')}</Link></Button>}
           </>
         }
       />
