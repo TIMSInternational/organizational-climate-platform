@@ -767,4 +767,87 @@ public class SurveyTemplateEndpointsTests : IAsyncLifetime
         Assert.Equal("The baseline", row.DescriptionEn);
         Assert.Equal("La línea base", row.DescriptionEs);
     }
+    // ------------------------------------------------------------------
+    // A template edit or delete never reaches a survey already built from it
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// Everything a survey is, read from the rows: the survey (settings included), its
+    /// questions and their options, its department targets. Serialised whole so a change to ANY
+    /// column -- not just the ones a test thought to name -- shows up as a difference.
+    /// </summary>
+    private Task<string> SurveySnapshotAsync(Guid surveyId) => _harness.WithDbAsync(async db =>
+    {
+        var survey = await db.Surveys.AsNoTracking().SingleAsync(s => s.Id == surveyId);
+        var questions = await db.Questions.AsNoTracking()
+            .Where(q => q.SurveyId == surveyId)
+            .OrderBy(q => q.Order)
+            .ToListAsync();
+        var questionIds = questions.Select(q => q.Id).ToList();
+        var options = await db.QuestionOptions.AsNoTracking()
+            .Where(o => questionIds.Contains(o.QuestionId))
+            .OrderBy(o => o.QuestionId).ThenBy(o => o.Order)
+            .ToListAsync();
+        var targets = await db.SurveyDepartmentTargets.AsNoTracking()
+            .Where(t => t.SurveyId == surveyId)
+            .Select(t => t.DepartmentId)
+            .OrderBy(id => id)
+            .ToListAsync();
+        return System.Text.Json.JsonSerializer.Serialize(new { survey, questions, options, targets });
+    });
+
+    [Fact]
+    public async Task A_survey_built_from_a_template_is_unchanged_by_the_templates_edit_and_by_its_delete()
+    {
+        var client = await AdminAsync();
+        var template = await CreateAsync(client, BilingualRequest(_companyId));
+        var survey = await UseAsync(client, template.Id, new UseSurveyTemplateRequest(
+            Title: Both("Q3 Climate Survey", "Encuesta de Clima Q3"),
+            DepartmentIds: [_departmentId],
+            Language: ContentLanguages.Both));
+
+        var before = await SurveySnapshotAsync(survey.Id);
+        Assert.Contains("Are you satisfied?", before);
+
+        // Every field the edit screen sends, plus the questions the API also accepts.
+        var edited = await client.PutAsJsonAsync(
+            $"/survey-templates/{template.Id}",
+            new UpdateSurveyTemplateRequest(
+                Name: Both("Renamed instrument", "Instrumento renombrado"),
+                Description: Both("Rewritten", "Reescrita"),
+                Category: "pulse",
+                Tags: ["changed"],
+                Questions:
+                [
+                    new CreateSurveyTemplateQuestionInput(Both("Are you satisfied?", "Estas satisfecho?"), QuestionTypes.OpenEnded, Order: 0),
+                ],
+                Language: ContentLanguages.Both));
+        edited.EnsureSuccessStatusCode();
+
+        Assert.Equal(before, await SurveySnapshotAsync(survey.Id));
+
+        var deleted = await client.DeleteAsync($"/survey-templates/{template.Id}");
+        Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
+
+        Assert.Equal(before, await SurveySnapshotAsync(survey.Id));
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/surveys/{survey.Id}")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Deleting_a_template_made_from_a_survey_leaves_that_survey_in_place()
+    {
+        // The other direction a template touches a survey: `source_survey_id`. The foreign key
+        // runs template -> survey, so deleting the template must not take its source with it.
+        var client = await AdminAsync();
+        var source = await UseAsync(client, (await CreateAsync(client, SpanishRequest(_companyId))).Id);
+        var before = await SurveySnapshotAsync(source.Id);
+
+        var request = SpanishRequest(_companyId) with { SourceSurveyId = source.Id };
+        var template = await CreateAsync(client, request);
+
+        var deleted = await client.DeleteAsync($"/survey-templates/{template.Id}");
+        Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
+
+        Assert.Equal(before, await SurveySnapshotAsync(source.Id));
+    }
 }
