@@ -138,6 +138,48 @@ public sealed record CreateMicroclimateRequest(
     // opt-in rather than something every survey inherits.
     string? Language = null);
 
+/// <summary>
+/// The whole authored content of a DRAFT microclimate, replaced in one write (G23):
+/// <c>PUT /microclimates/{id}/content</c>.
+/// </summary>
+/// <remarks>
+/// The fields <see cref="CreateMicroclimateRequest"/> authors, minus the two a draft does not
+/// get to change -- <c>CompanyId</c> (a session never moves tenant) and <c>TemplateId</c>
+/// (attribution of where it started, kept as it was). Validated by the same code as create.
+/// <see cref="Questions"/> REPLACES the draft's questions; it is not a patch.
+/// <see cref="Language"/> omitted keeps the draft's own language.
+/// </remarks>
+public sealed record ReplaceMicroclimateContentRequest(
+    LocalizedInput? Title,
+    LocalizedInput? Description,
+    DateTimeOffset StartTime,
+    DateTimeOffset EndTime,
+    int TargetParticipantCount,
+    bool AnonymousResponses,
+    List<CreateQuestionInput>? Questions,
+    string? Timezone = null,
+    string? Language = null);
+
+/// <summary>
+/// A company's <c>microclimate</c> licence as its own administrator sees it (G23):
+/// <c>GET /microclimates/seats</c>. Read-only.
+/// </summary>
+/// <param name="Licensed">
+/// False when no licence row exists: the service is unmetered (grandfathered) and no response
+/// is refused for want of a seat. The counts are then zero and mean nothing.
+/// </param>
+/// <param name="Status"><c>active</c> or <c>suspended</c>. A suspended licence refuses every new response.</param>
+/// <param name="SeatsRemaining">
+/// <c>max(0, SeatsTotal - SeatsUsed)</c>. At zero, every new completed response is refused with
+/// a 402 until a super admin grants more seats.
+/// </param>
+public sealed record MicroclimateSeatsView(
+    bool Licensed,
+    string Status,
+    int SeatsTotal,
+    int SeatsUsed,
+    int SeatsRemaining);
+
 public sealed record UpdateMicroclimateRequest(
     LocalizedInput? Title,
     LocalizedInput? Description,

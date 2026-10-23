@@ -2228,7 +2228,13 @@
         "inviteDepartments": "By department",
         "inviteNoDepartments": "This company has no active departments.",
         "inviteSend": "Send invitations",
-        "inviteCreated": "{count} invitations were created."
+        "inviteCreated": "{count} invitations were created.",
+        "editDraft": "Edit draft",
+        "discardDraft": "Discard draft",
+        "discardConfirmTitle": "Discard this draft?",
+        "discardConfirmBody": "“{title}” and all its questions will be deleted. Nobody has answered it or been invited to it. This cannot be undone.",
+        "invitationsListLabel": "Invitation list ({count})",
+        "invitationsShowing": "{shown} of {total} invitations"
       },
       "analytics": {
         "title": "Microclimate analytics",
@@ -2454,6 +2460,27 @@
         "unknownLabel": "Could not be opened",
         "unknownTitle": "This invitation could not be opened",
         "unknownBody": "It may be the connection or a temporary problem on our side. Open the link again in a few minutes; if it still does not open, ask whoever sent it to you."
+      },
+      "seats": {
+        "title": "Seats",
+        "loading": "Reading the microclimate seats…",
+        "failed": "The remaining microclimate seats could not be read. Responses are still counted as usual.",
+        "availableTitle": "Seats available: {remaining} of {total} ({used} used)",
+        "availableBody": "Each completed response uses one seat. When they run out, anyone who answers is told on sending that the session cannot accept new responses, and nothing they send is recorded, until the platform's administrator grants more seats.",
+        "exhaustedTitle": "No seats left: {used} of {total} used",
+        "exhaustedBody": "While there are no seats, nobody can answer any microclimate: anyone who answers is told on sending that the session cannot accept new responses. Ask the platform's administrator for more seats.",
+        "suspendedTitle": "The microclimate licence is suspended",
+        "suspendedBody": "While it is suspended, nobody can answer any microclimate. Ask the platform's administrator to reactivate it.",
+        "unmeteredTitle": "No seat limit",
+        "unmeteredBody": "Your company has no microclimate licence with seats, so no response is refused for lack of seats."
+      },
+      "edit": {
+        "title": "Edit draft",
+        "description": "Change what you need before launching. Saving replaces the draft's content; nobody has seen it yet.",
+        "save": "Save changes",
+        "notDraftTitle": "This session is no longer a draft",
+        "notDraftBody": "Once launched, its questions are the ones people answered and cannot be changed. You can close it and create a new one.",
+        "backToSession": "Back to the session"
       }
     }
   },
@@ -7674,6 +7701,12 @@
       "people": "Participant accounts",
       "invitations": "Survey invitations (from Distribution)",
       "done": "Completed"
+    }
+  },
+  "audit": {
+    "actions": {
+      "microclimates__content__update": "Edited a draft microclimate",
+      "microclimates__delete": "Discarded a draft microclimate"
     }
   }
 }

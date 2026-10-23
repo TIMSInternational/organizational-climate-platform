@@ -444,6 +444,7 @@ export const router = createBrowserRouter([
               // `MicroclimateLivePage` here; the old page stays unrouted as the wiring reference.
               { path: '/microclimates/:id/live', element: <MicroclimateLiveNextPage /> },
               { path: '/microclimates/:id/results', element: <MicroclimateResultsNextPage /> },
+              { path: '/microclimates/:id/edit', element: <MicroclimateCreateNextPage /> },
               // The redesigned Todas las Encuestas replaced `SurveysListPage` on this route
               // (ruled 10 Sep). The old page stays in the tree, unrouted, as the wiring
               // reference — its module comment says what it still pins.

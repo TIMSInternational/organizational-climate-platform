@@ -3,6 +3,8 @@ import type {
   CreateMicroclimateInput,
   CreateQuestionInput,
   LocalizedInput,
+  MicroclimateDetail,
+  ReplaceMicroclimateContentInput,
 } from './api/microclimates'
 import type { QuestionLibraryItemDetail } from '../questions/api/questionLibrary'
 import { DEFAULT_QUESTION_TYPE } from './questionTypes'
@@ -483,5 +485,90 @@ export function buildCreateInput(
       toCreateQuestion(question, values.language, index + 1),
     ),
     language: values.language,
+  }
+}
+
+/**
+ * The `PUT /microclimates/{id}/content` body (G23): exactly the create body, built by the same
+ * function, minus the two fields a draft does not change. One builder, so an edited draft and a
+ * new one cannot be sent in two different shapes.
+ */
+export function buildReplaceInput(values: MicroclimateWizardValues): ReplaceMicroclimateContentInput {
+  const { title, description, startTime, endTime, targetParticipantCount, anonymousResponses, questions, language } =
+    buildCreateInput(values, '')
+  return { title, description, startTime, endTime, targetParticipantCount, anonymousResponses, questions, language }
+}
+
+/** `new Date(iso)` as `datetime-local` text in the browser's own zone, which is how the form edits it. */
+function localInputOf(iso: string): string {
+  const date = new Date(iso)
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+/**
+ * A draft, as the values the create form edits (G23).
+ *
+ * The admin read resolves every field for ONE locale, so a bilingual draft is read twice --
+ * `en` and `es` -- and each column is taken from its own read. A field the server lists in that
+ * read's `fallbackFields` had no text in that language (it was filled from the other one), so it
+ * is empty here: the form shows the gap, and the publish gate still names it on launch.
+ * A single-language draft is read once, in its own language.
+ */
+export function wizardValuesFromDraft(
+  en: MicroclimateDetail | null,
+  es: MicroclimateDetail | null,
+  nextKey: () => string,
+): MicroclimateWizardValues {
+  const base = (en ?? es) as MicroclimateDetail
+  const language: ContentLanguage = base.language === 'es' || base.language === 'both' ? base.language : 'en'
+  const own = (read: MicroclimateDetail | null, path: string, text: string | null | undefined): string =>
+    read && text != null && !read.fallbackFields.includes(path) ? text : ''
+  const enQuestions = new Map((en?.questions ?? []).map((question) => [question.id, question]))
+  const esQuestions = new Map((es?.questions ?? []).map((question) => [question.id, question]))
+
+  return {
+    language,
+    titleEn: own(en, 'title', en?.title),
+    titleEs: own(es, 'title', es?.title),
+    descriptionEn: own(en, 'description', en?.description),
+    descriptionEs: own(es, 'description', es?.description),
+    startTime: localInputOf(base.startTime),
+    endTime: localInputOf(base.endTime),
+    targetParticipantCount: String(base.targetParticipantCount),
+    anonymousResponses: base.anonymousResponses,
+    templateId: '',
+    questions: [...base.questions]
+      .sort((a, b) => a.order - b.order)
+      .map((question) => {
+        const key = nextKey()
+        const path = `questions[${question.order}]`
+        const inEn = enQuestions.get(question.id) ?? null
+        const inEs = esQuestions.get(question.id) ?? null
+        const optionLabel = (
+          read: MicroclimateDetail | null,
+          list: readonly { order: number; label: string | null }[] | null | undefined,
+          kind: 'options' | 'emojiOptions',
+          order: number,
+        ) => own(read, `${path}.${kind}[${order}].label`, list?.find((option) => option.order === order)?.label)
+        return {
+          key,
+          textEn: own(en, `${path}.text`, inEn?.text),
+          textEs: own(es, `${path}.text`, inEs?.text),
+          type: question.type,
+          required: question.required,
+          options: (question.options ?? []).map((option, index) => ({
+            key: `${key}-o${index}`,
+            labelEn: optionLabel(en, inEn?.options, 'options', option.order),
+            labelEs: optionLabel(es, inEs?.options, 'options', option.order),
+          })),
+          emojiOptions: (question.emojiOptions ?? []).map((face, index) => ({
+            key: `${key}-e${index}`,
+            emoji: face.emoji,
+            labelEn: optionLabel(en, inEn?.emojiOptions, 'emojiOptions', face.order),
+            labelEs: optionLabel(es, inEs?.emojiOptions, 'emojiOptions', face.order),
+          })),
+        }
+      }),
   }
 }

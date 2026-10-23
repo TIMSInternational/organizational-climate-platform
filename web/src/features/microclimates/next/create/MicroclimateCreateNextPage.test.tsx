@@ -10,7 +10,9 @@ import { tokenFor } from '../../../../test/jwtFixture'
 import {
   createMicroclimate,
   getMicroclimate,
+  getMicroclimateSeats,
   listMicroclimates,
+  replaceMicroclimateContent,
   updateMicroclimate,
   type MicroclimateDetail,
 } from '../../api/microclimates'
@@ -27,6 +29,8 @@ vi.mock('../../api/microclimates', async (importOriginal) => ({
   getMicroclimate: vi.fn(),
   createMicroclimate: vi.fn(),
   updateMicroclimate: vi.fn(),
+  replaceMicroclimateContent: vi.fn(),
+  getMicroclimateSeats: vi.fn(),
 }))
 vi.mock('../../api/microclimateTemplates', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../api/microclimateTemplates')>()),
@@ -63,19 +67,37 @@ const previous: MicroclimateDetail = {
   fallbackFields: [],
 }
 
+/** A Spanish-only draft of the tenant, as `GET /microclimates/d1?lang=es` answers it. */
+const draft: MicroclimateDetail = {
+  ...previous,
+  id: 'd1',
+  title: 'Pulso de octubre',
+  status: 'draft',
+  language: 'es',
+  resolvedLocale: 'es',
+  targetParticipantCount: 15,
+  anonymousResponses: false,
+  startTime: '2026-10-23T15:00:00Z',
+  endTime: '2026-10-23T17:00:00Z',
+  questions: [
+    { id: 'dq1', text: '¿Qué cambiaría esta semana?', type: 'open_ended', options: null, required: true, order: 1, emojiOptions: null },
+  ],
+}
+
 function Landed() {
   const location = useLocation()
   return <div data-testid="landed">{`${location.pathname} ${JSON.stringify(location.state ?? null)}`}</div>
 }
 
-function renderAs(claims: Record<string, unknown>) {
+function renderAs(claims: Record<string, unknown>, path = '/microclimates/new') {
   setToken(tokenFor({ sub: 'u-ana', nodoId: '', ...claims }))
   return render(
     <TranslationProvider>
-      <MemoryRouter initialEntries={['/microclimates/new']}>
+      <MemoryRouter initialEntries={[path]}>
         <CompanyContextProvider>
           <Routes>
             <Route path="/microclimates/new" element={<MicroclimateCreateNextPage />} />
+            <Route path="/microclimates/:id/edit" element={<MicroclimateCreateNextPage />} />
             <Route path="/microclimates/:id" element={<Landed />} />
           </Routes>
         </CompanyContextProvider>
@@ -113,6 +135,10 @@ describe('MicroclimateCreateNextPage', () => {
     vi.mocked(createMicroclimate).mockReset().mockResolvedValue({ ...previous, id: 'm2', status: 'draft' })
     vi.mocked(updateMicroclimate).mockReset().mockResolvedValue({ ...previous, id: 'm2' })
     vi.mocked(listMicroclimateTemplates).mockReset().mockResolvedValue([])
+    vi.mocked(replaceMicroclimateContent).mockReset().mockResolvedValue({ ...draft, title: 'Pulso de octubre, corregido' })
+    vi.mocked(getMicroclimateSeats)
+      .mockReset()
+      .mockResolvedValue({ licensed: true, status: 'active', seatsTotal: 200, seatsUsed: 37, seatsRemaining: 163 })
   })
 
   afterEach(() => {
@@ -310,5 +336,56 @@ describe('MicroclimateCreateNextPage', () => {
     expect(await screen.findByText(es.microclimates.next.noAccessTitle)).toBeTruthy()
     expect(listMicroclimates).not.toHaveBeenCalled()
     expect(listMicroclimateTemplates).not.toHaveBeenCalled()
+  })
+  // ---- G23: a draft is edited on this same page ----
+
+  it('shows the company’s seats where a session is launched', async () => {
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    expect(await screen.findByText('Cupos disponibles: 163 de 200 (37 usados)')).toBeTruthy()
+    expect(screen.getByText(es.microclimates.next.seats.availableBody)).toBeTruthy()
+  })
+
+  it('opens a draft filled in, and saves it through PUT /content — never a second create', async () => {
+    vi.mocked(getMicroclimate).mockResolvedValue(draft)
+    renderAs({ role: 'company_admin', companyId: COMPANY }, '/microclimates/d1/edit')
+    const name = await nameField()
+    expect(name.value).toBe('Pulso de octubre')
+    expect(screen.getByRole('heading', { level: 1, name: es.microclimates.next.edit.title })).toBeTruthy()
+    // The draft is the starting point: no "start from" picker, and the previous session is not read.
+    expect(screen.queryByRole('radio', { name: copy.startPrevious })).toBeNull()
+    expect(listMicroclimates).not.toHaveBeenCalled()
+    expect(vi.mocked(getMicroclimate).mock.calls[0]?.slice(1)).toEqual(['d1', 'es'])
+
+    await userEvent.clear(name)
+    await userEvent.type(name, 'Pulso de octubre, corregido')
+    await userEvent.click(screen.getByRole('button', { name: es.microclimates.next.edit.save }))
+
+    await waitFor(() => expect(replaceMicroclimateContent).toHaveBeenCalledTimes(1))
+    const [, id, input] = vi.mocked(replaceMicroclimateContent).mock.calls[0]!
+    expect(id).toBe('d1')
+    expect(input).toMatchObject({ title: 'Pulso de octubre, corregido', language: 'es', targetParticipantCount: 15, anonymousResponses: false })
+    expect(input.questions?.map((question) => question.text)).toEqual(['¿Qué cambiaría esta semana?'])
+    expect(input).not.toHaveProperty('companyId')
+    expect(createMicroclimate).not.toHaveBeenCalled()
+    expect(updateMicroclimate).not.toHaveBeenCalled()
+    expect((await screen.findByTestId('landed')).textContent).toBe('/microclimates/d1 null')
+  })
+
+  it('launches an edited draft: the save, then the status write', async () => {
+    vi.mocked(getMicroclimate).mockResolvedValue(draft)
+    vi.mocked(replaceMicroclimateContent).mockResolvedValue(draft)
+    renderAs({ role: 'company_admin', companyId: COMPANY }, '/microclimates/d1/edit')
+    await nameField()
+    await userEvent.click(screen.getByRole('button', { name: copy.launch }))
+    await waitFor(() => expect(vi.mocked(updateMicroclimate).mock.calls[0]?.slice(1)).toEqual(['d1', { status: 'active' }]))
+    expect(createMicroclimate).not.toHaveBeenCalled()
+  })
+
+  it('offers no form for a session that is no longer a draft', async () => {
+    vi.mocked(getMicroclimate).mockResolvedValue({ ...draft, status: 'active' })
+    renderAs({ role: 'company_admin', companyId: COMPANY }, '/microclimates/d1/edit')
+    expect(await screen.findByText(es.microclimates.next.edit.notDraftTitle)).toBeTruthy()
+    expect(screen.queryByRole('textbox')).toBeNull()
+    expect(screen.getByRole('link', { name: es.microclimates.next.edit.backToSession }).getAttribute('href')).toBe('/microclimates/d1')
   })
 })

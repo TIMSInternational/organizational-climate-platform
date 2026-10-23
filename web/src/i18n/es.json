@@ -2228,7 +2228,13 @@
         "inviteDepartments": "Por departamento",
         "inviteNoDepartments": "Esta empresa no tiene departamentos activos.",
         "inviteSend": "Enviar invitaciones",
-        "inviteCreated": "Se crearon {count} invitaciones."
+        "inviteCreated": "Se crearon {count} invitaciones.",
+        "editDraft": "Editar borrador",
+        "discardDraft": "Descartar borrador",
+        "discardConfirmTitle": "¿Descartar este borrador?",
+        "discardConfirmBody": "Se eliminará «{title}» con todas sus preguntas. Nadie lo ha respondido ni ha sido invitado. No se puede deshacer.",
+        "invitationsListLabel": "Lista de invitaciones ({count})",
+        "invitationsShowing": "{shown} de {total} invitaciones"
       },
       "analytics": {
         "title": "Analítica de microclimas",
@@ -2454,6 +2460,27 @@
         "unknownLabel": "No se pudo abrir",
         "unknownTitle": "No se pudo abrir esta invitación",
         "unknownBody": "Puede ser la conexión o un problema temporal de nuestro lado. Vuelva a abrir el enlace en unos minutos; si sigue sin abrir, consulte a quien se lo envió."
+      },
+      "seats": {
+        "title": "Cupos",
+        "loading": "Leyendo los cupos de microclimas…",
+        "failed": "No se pudo leer cuántos cupos de microclimas quedan. Las respuestas se siguen contando igual.",
+        "availableTitle": "Cupos disponibles: {remaining} de {total} ({used} usados)",
+        "availableBody": "Cada respuesta completada usa un cupo. Cuando se acaben, quien responda verá al enviar que la sesión no puede aceptar nuevas respuestas, y no se registrará nada de lo que envíe, hasta que quien administra la plataforma le asigne más cupos.",
+        "exhaustedTitle": "No quedan cupos: {used} de {total} usados",
+        "exhaustedBody": "Mientras no haya cupos, nadie podrá responder ningún microclima: quien responda verá al enviar que la sesión no puede aceptar nuevas respuestas. Pida más cupos a quien administra la plataforma.",
+        "suspendedTitle": "La licencia de microclimas está suspendida",
+        "suspendedBody": "Mientras esté suspendida, nadie podrá responder ningún microclima. Pida a quien administra la plataforma que la reactive.",
+        "unmeteredTitle": "Sin límite de cupos",
+        "unmeteredBody": "Su empresa no tiene una licencia de microclimas con cupos, así que ninguna respuesta se rechaza por falta de cupos."
+      },
+      "edit": {
+        "title": "Editar borrador",
+        "description": "Cambie lo que necesite antes de lanzar. Al guardar se reemplaza el contenido del borrador; nadie lo ha visto todavía.",
+        "save": "Guardar cambios",
+        "notDraftTitle": "Esta sesión ya no es un borrador",
+        "notDraftBody": "Una vez lanzada, sus preguntas son las que respondieron las personas y no se pueden cambiar. Puede cerrarla y crear una nueva.",
+        "backToSession": "Volver a la sesión"
       }
     }
   },
@@ -7674,6 +7701,12 @@
       "people": "Cuentas de las personas",
       "invitations": "Invitaciones al clima (desde Distribución)",
       "done": "Completado"
+    }
+  },
+  "audit": {
+    "actions": {
+      "microclimates__content__update": "Editó el borrador de un microclima",
+      "microclimates__delete": "Descartó un borrador de microclima"
     }
   }
 }

@@ -72,9 +72,36 @@ export interface MicroclimateInvitationBatchResult {
 export async function listMicroclimateInvitations(
   baseUrl: string,
   microclimateId: string,
+  offset = 0,
 ): Promise<MicroclimateInvitationList> {
-  const response = await authFetch(`${baseUrl}/microclimates/${encodeURIComponent(microclimateId)}/invitations`)
+  const query = offset > 0 ? `?offset=${offset}` : ''
+  const response = await authFetch(`${baseUrl}/microclimates/${encodeURIComponent(microclimateId)}/invitations${query}`)
   return response.json() as Promise<MicroclimateInvitationList>
+}
+
+/** Rows one `GET /microclimates/{id}/invitations` page carries (`MaxInvitationPageSize`). */
+export const INVITATION_PAGE_SIZE = 500
+
+/** A ceiling on pages, so a server that never shortens a page cannot loop this for ever. */
+const MAX_INVITATION_PAGES = 40
+
+/**
+ * The WHOLE invitation list (G23): every page of `GET /microclimates/{id}/invitations?offset=`,
+ * concatenated. The summary and the anonymity contract are the first page's — they describe
+ * the session, not the page.
+ */
+export async function listAllMicroclimateInvitations(
+  baseUrl: string,
+  microclimateId: string,
+): Promise<MicroclimateInvitationList> {
+  const first = await listMicroclimateInvitations(baseUrl, microclimateId)
+  const invitations = [...first.invitations]
+  let page = first.invitations
+  for (let pages = 1; page.length >= INVITATION_PAGE_SIZE && invitations.length < first.summary.total && pages < MAX_INVITATION_PAGES; pages++) {
+    page = (await listMicroclimateInvitations(baseUrl, microclimateId, invitations.length)).invitations
+    invitations.push(...page)
+  }
+  return { ...first, invitations }
 }
 
 export async function createMicroclimateInvitations(

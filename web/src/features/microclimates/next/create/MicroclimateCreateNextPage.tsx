@@ -1,4 +1,5 @@
 import { useId, useMemo, useState } from 'react'
+import { Link, useParams } from 'react-router'
 import * as RadioGroupPrimitive from '@radix-ui/react-radio-group'
 import { Clock, Ellipsis, GripVertical, Plus, Send, Users } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
@@ -19,12 +20,16 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  EmptyState,
   Input,
+  LoadingRegion,
+  NetworkError,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SkeletonText,
   Switch,
 } from '../../../../components/ui'
 import { useCompanyScope } from '../../../../company-context'
@@ -50,6 +55,8 @@ import { clock, shortDay, weekdayDay, weekdayLong } from '../format'
 import { canvasTypeLabel } from '../vocabulary'
 import { DateTimeField } from './DateTimeField'
 import { useMicroclimateCreateModel, type MicroclimateCreateState, type StartFrom } from './useMicroclimateCreateModel'
+import { MicroclimateSeatsNote } from '../seats/MicroclimateSeats'
+import { useMicroclimateSeats } from '../seats/useMicroclimateSeats'
 import { byCount } from '../../../../i18n/plural'
 
 /**
@@ -59,9 +66,12 @@ import { byCount } from '../../../../i18n/plural'
  * this route; that page stays in the tree, unrouted, as the wiring reference.
  */
 export default function MicroclimateCreateNextPage() {
+  // `/microclimates/:id/edit` renders this same page over a draft (G23); `/microclimates/new`
+  // has no `:id`. A draft names its own company, so editing does not need one chosen.
+  const { id } = useParams<{ id: string }>()
   return (
-    <MicroclimateGate needsCompany>
-      <CreateScreen />
+    <MicroclimateGate needsCompany={!id}>
+      <CreateScreen editId={id} />
     </MicroclimateGate>
   )
 }
@@ -79,11 +89,43 @@ function textIn(language: ContentLanguage, en: string, es: string): string {
   return language === 'es' ? es : language === 'en' ? en : es || en
 }
 
-function CreateScreen() {
+function CreateScreen({ editId }: { editId?: string }) {
+  const { t } = useTranslation()
+  const state = useMicroclimateCreateModel(editId)
+  if (state.draft.status === 'loading') {
+    return (
+      <LoadingRegion loading label={t('common.loading')}>
+        <SkeletonText lines={6} />
+      </LoadingRegion>
+    )
+  }
+  if (state.draft.status === 'failed') {
+    return <NetworkError title={t('microclimates.errorLoadingMicroclimate')} description={state.draft.error} />
+  }
+  if (state.draft.status === 'notDraft') {
+    return (
+      <EmptyState
+        title={t('microclimates.next.edit.notDraftTitle')}
+        description={t('microclimates.next.edit.notDraftBody')}
+        action={
+          <Button asChild variant="outline" size="canvas">
+            <Link to={`/microclimates/${state.draft.id}`}>{t('microclimates.next.edit.backToSession')}</Link>
+          </Button>
+        }
+      />
+    )
+  }
+  return <CreateForm state={state} editId={editId} />
+}
+
+function CreateForm({ state, editId }: { state: MicroclimateCreateState; editId?: string }) {
   const { t, locale } = useTranslation()
-  const state = useMicroclimateCreateModel()
   const { values } = state
-  const companyId = useCompanyScope().companyId
+  const scopeCompanyId = useCompanyScope().companyId
+  const companyId = state.draft.status === 'ready' ? state.draft.companyId : scopeCompanyId
+  const seats = useMicroclimateSeats(companyId)
+  const editing = Boolean(editId)
+  const pageTitle = editing ? t('microclimates.next.edit.title') : t('microclimates.next.create.title')
   const companyName = useCompanyName()
   const [libraryOpen, setLibraryOpen] = useState(false)
   const busy = state.submitting !== null
@@ -103,17 +145,24 @@ function CreateScreen() {
     <div>
       <PageTopBar
         compact
-        title={t('microclimates.next.create.title')}
+        title={pageTitle}
         eyebrow={t('microclimates.next.create.eyebrow')}
-        description={t('microclimates.next.create.description')}
+        description={editing ? t('microclimates.next.edit.description') : t('microclimates.next.create.description')}
         breadcrumbs={[
           { label: t('navigation.microclimates'), href: '/microclimates' },
-          { label: t('microclimates.next.create.title') },
+          ...(editId ? [{ label: textIn(values.language, values.titleEn, values.titleEs) || t('microclimates.untitled'), href: `/microclimates/${editId}` }] : []),
+          { label: pageTitle },
         ]}
         actions={
           <Button variant="outline" size="canvas" disabled={busy} onClick={state.saveDraft}>
             <RailReportsIcon strokeWidth={2} />
-            {state.submitting === 'draft' ? t('common.creating') : t('microclimates.next.create.saveDraft')}
+            {state.submitting === 'draft'
+              ? editing
+                ? t('common.saving')
+                : t('common.creating')
+              : editing
+                ? t('microclimates.next.edit.save')
+                : t('microclimates.next.create.saveDraft')}
           </Button>
         }
       />
@@ -214,7 +263,7 @@ function CreateScreen() {
                 </div>
               </div>
 
-              <StartFromRow state={state} />
+              {!editing && <StartFromRow state={state} />}
 
               {state.startFrom === 'template' && state.templates.length > 0 && (
                 <Select
@@ -414,9 +463,10 @@ function CreateScreen() {
                   },
                 ]}
               />
+              <MicroclimateSeatsNote state={seats} />
               <Button variant="primary" size="canvas" className="w-full" disabled={busy} onClick={state.launch}>
                 <Send aria-hidden="true" />
-                {state.submitting === 'launch' ? t('common.creating') : t('microclimates.next.create.launch')}
+                {state.submitting === 'launch' ? (editing ? t('common.saving') : t('common.creating')) : t('microclimates.next.create.launch')}
               </Button>
               <span className="text-sm text-fg-tertiary">{launchNote(t, locale, values)}</span>
             </CanvasCard>
