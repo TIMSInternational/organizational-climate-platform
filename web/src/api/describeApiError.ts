@@ -27,7 +27,7 @@ import { ApiError } from './authFetch'
  *    fallback. The server's text is never shown.
  *
  * The cost is stated, not hidden: an English reader loses the server's specific sentence for
- * a 400 ("A person cannot be their own manager") and gets the screen's fallback instead. The
+ * a 400 whose refusal carries no code ("Send either departmentId or clearDepartment, not both") and gets the screen's fallback instead. The
  * catalogue has no locale flag this function could branch on without the caller passing one,
  * and a screen that needs a specific refusal should map its `code` (as `emailRefusal.ts` and
  * the intake wizard already do) rather than lean on English prose.
@@ -36,9 +36,9 @@ import { ApiError } from './authFetch'
  * (`respondFailure.ts`, `derive.ts` under the invitation pages) and are deliberately untouched.
  */
 export function describeApiError(error: unknown, t: TranslateFn, fallbackKey?: string): string {
+  const known = describeKnownRefusal(error, t)
+  if (known !== null) return known
   if (error instanceof ApiError) {
-    const codeKey = error.code ? CODE_KEYS[error.code] : undefined
-    if (codeKey) return t(codeKey)
     const statusKey = statusKeyFor(error.status)
     return t(statusKey ?? fallbackKey ?? 'errors.api.rejected')
   }
@@ -46,6 +46,17 @@ export function describeApiError(error: unknown, t: TranslateFn, fallbackKey?: s
     return t('errors.networkError')
   }
   return t(fallbackKey ?? 'errors.generic')
+}
+
+/**
+ * The sentence for a refusal whose `code` this module knows, or null. For a screen that keeps
+ * its own status-based copy (the survey window and audience dialogs) but should still say a
+ * specific refusal when the API names one.
+ */
+export function describeKnownRefusal(error: unknown, t: TranslateFn): string | null {
+  if (!(error instanceof ApiError) || !error.code) return null
+  const codeKey = CODE_KEYS[error.code]
+  return codeKey ? t(codeKey) : null
 }
 
 /**
@@ -61,7 +72,47 @@ const CODE_KEYS: Readonly<Record<string, string>> = {
   inactive: 'errors.api.codes.inactive',
   batch_too_large: 'errors.api.codes.batch_too_large',
   per_survey_person: 'errors.api.codes.per_survey_person',
+  // Org structure, company and people (AdminRefusals.cs)
+  department_name_taken: 'errors.api.codes.department_name_taken',
+  demographic_field_key_taken: 'errors.api.codes.demographic_field_key_taken',
+  demographic_field_key_reserved: 'errors.api.codes.demographic_field_key_reserved',
+  demographic_field_options_required: 'errors.api.codes.demographic_field_options_required',
+  user_own_manager: 'errors.api.codes.user_own_manager',
+  company_domain_taken: 'errors.api.codes.company_domain_taken',
+  company_domain_invalid: 'errors.api.codes.company_domain_invalid',
+  // Survey authoring, schedule and lifecycle
+  survey_dates_out_of_order: 'errors.api.codes.survey_dates_out_of_order',
+  survey_content_locked: 'errors.api.codes.survey_content_locked',
+  survey_content_has_responses: 'errors.api.codes.survey_content_has_responses',
+  survey_schedule_frozen: 'errors.api.codes.survey_schedule_frozen',
+  survey_start_frozen: 'errors.api.codes.survey_start_frozen',
+  survey_revert_has_responses: 'errors.api.codes.survey_revert_has_responses',
+  survey_no_questions: 'errors.api.codes.survey_no_questions',
+  survey_missing_translations: 'errors.api.codes.survey_missing_translations',
+  survey_delete_has_responses: 'errors.api.codes.survey_delete_has_responses',
+  question_text_required: 'errors.api.codes.question_text_required',
+  question_option_duplicate: 'errors.api.codes.question_option_duplicate',
+  question_options_too_few: 'errors.api.codes.question_options_too_few',
+  // Survey distribution
+  survey_not_distributable: 'errors.api.codes.survey_not_distributable',
+  survey_window_closed: 'errors.api.codes.survey_window_closed',
+  survey_reminders_off: 'errors.api.codes.survey_reminders_off',
+  survey_not_collecting: 'errors.api.codes.survey_not_collecting',
+  // Microclimates
+  microclimate_window_out_of_order: 'errors.api.codes.microclimate_window_out_of_order',
+  microclimate_closed_window: 'errors.api.codes.microclimate_closed_window',
+  microclimate_not_draft: 'errors.api.codes.microclimate_not_draft',
+  microclimate_window_elapsed: 'errors.api.codes.microclimate_window_elapsed',
+  microclimate_missing_translations: 'errors.api.codes.microclimate_missing_translations',
+  microclimate_invite_window_closed: 'errors.api.codes.microclimate_invite_window_closed',
+  // Reports and the question bank
+  report_schedule_start_past: 'errors.api.codes.report_schedule_start_past',
+  question_bank_item_in_use: 'errors.api.codes.question_bank_item_in_use',
+  question_bank_item_has_variations: 'errors.api.codes.question_bank_item_has_variations',
 }
+
+/** Every `code` with a sentence here — for the test that sweeps the API's list against it. */
+export const KNOWN_REFUSAL_CODES: readonly string[] = Object.freeze(Object.keys(CODE_KEYS))
 
 function statusKeyFor(status: number): string | null {
   if (status === 401) return 'errors.sessionExpired'

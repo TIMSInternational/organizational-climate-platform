@@ -117,7 +117,8 @@ export async function updateUser(baseUrl: string, id: string, input: UpdateUserI
     if (isEmailRefusal(body?.code)) {
       throw new UserEmailError(response.status, message, body.code)
     }
-    throw new ApiError(response.status, message)
+    // Any other code travels on, so describeApiError can say it (`user_own_manager`).
+    throw new ApiError(response.status, message, typeof body?.code === 'string' ? body.code : undefined)
   }
   return response.json() as Promise<UserDetail>
 }

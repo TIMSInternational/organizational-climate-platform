@@ -197,6 +197,36 @@ describe('Detalle de encuesta — the window and delete (audit G16)', () => {
     expect(alert.textContent).not.toContain('rescheduled')
   })
 
+  it('says a coded refusal with its own sentence rather than the status line', async () => {
+    const onSaveWindow = vi.fn(async () => {
+      throw new ApiError(409, 'StartDate cannot be changed once the survey is active.', 'survey_start_frozen')
+    })
+    renderView(survey(), { onSaveWindow })
+
+    await userEvent.click(screen.getByRole('button', { name: window_.edit }))
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.click(within(dialog).getByRole('button', { name: window_.save }))
+    const alert = await within(dialog).findByRole('alert')
+    expect(alert.textContent).toBe(es.errors.api.codes.survey_start_frozen)
+    expect(alert.textContent).not.toBe(window_.refusedStatus)
+    expect(alert.textContent).not.toContain('StartDate')
+  })
+
+  it('says why publishing was refused in Spanish, not in the endpoint\'s English', async () => {
+    const user = userEvent.setup()
+    vi.mocked(surveysApi.getSurvey).mockResolvedValue(duplicatedFromClosed({ endDate: '2026-10-05T23:00:00Z' }))
+    vi.mocked(surveysApi.updateSurveyStatus).mockRejectedValue(
+      new ApiError(400, 'Cannot publish a survey with no questions.', 'survey_no_questions'),
+    )
+    renderPage()
+
+    const status = await screen.findByTestId('tile-status')
+    await user.click(within(status).getByRole('button', { name: 'Activar' }))
+
+    expect(await screen.findByText(es.errors.api.codes.survey_no_questions)).toBeTruthy()
+    expect(screen.queryByText(/Cannot publish/)).toBeNull()
+  })
+
   it('offers no date editor once a survey has ended, and none to a leader', () => {
     renderView(survey({ status: 'closed', allowedStatusTransitions: ['archived'], responseCount: 4 }))
     expect(screen.queryByRole('button', { name: window_.edit })).toBeNull()

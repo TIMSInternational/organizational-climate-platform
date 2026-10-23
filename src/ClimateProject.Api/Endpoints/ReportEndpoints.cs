@@ -369,7 +369,7 @@ public static class ReportEndpoints
             if (startAt <= now)
             {
                 return Results.Json(
-                    new ErrorResponse("The first occurrence must be in the future."),
+                    new { message = "The first occurrence must be in the future.", code = AdminRefusals.ReportScheduleStartPast },
                     statusCode: 400);
             }
 

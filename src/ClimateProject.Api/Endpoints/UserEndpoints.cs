@@ -284,7 +284,7 @@ public static class UserEndpoints
         // ManagerId, the subject-access export's "reports") would have to special-case.
         if (request.ManagerId == user.Id)
         {
-            return Results.Json(new { message = "A person cannot be their own manager" }, statusCode: 400);
+            return Results.Json(new { message = "A person cannot be their own manager", code = AdminRefusals.UserOwnManager }, statusCode: 400);
         }
 
         if (!string.IsNullOrWhiteSpace(request.Name))

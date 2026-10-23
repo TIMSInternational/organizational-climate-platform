@@ -371,7 +371,7 @@ public static class SurveyEndpoints
 
         if (request.StartDate >= request.EndDate)
         {
-            return Results.Json(new { message = "StartDate must be before EndDate" }, statusCode: 400);
+            return Results.Json(new { message = "StartDate must be before EndDate", code = AdminRefusals.SurveyDatesOutOfOrder }, statusCode: 400);
         }
 
         if (request.Title is null)
@@ -592,6 +592,7 @@ public static class SurveyEndpoints
                                   + (SurveyStatuses.CanTransition(survey.Status, SurveyStatuses.Draft)
                                       ? "Return it to 'draft' first via PUT /surveys/{id}/status."
                                       : "Duplicate it instead -- the copy keeps every option's stable value, so its responses still aggregate with this one's."),
+                        code = AdminRefusals.SurveyContentLocked,
                     },
                     statusCode: 409);
             }
@@ -602,7 +603,7 @@ public static class SurveyEndpoints
             if (await HasResponsesAsync(db, survey, cancellationToken))
             {
                 return Results.Json(
-                    new { message = "This survey already has responses; its content can no longer be edited." },
+                    new { message = "This survey already has responses; its content can no longer be edited.", code = AdminRefusals.SurveyContentHasResponses },
                     statusCode: 409);
             }
         }
@@ -630,7 +631,7 @@ public static class SurveyEndpoints
         if (touchesSchedule && !SurveyStatuses.AllowsScheduleEdit(survey.Status))
         {
             return Results.Json(
-                new { message = $"A survey in status '{survey.Status}' can no longer be rescheduled." },
+                new { message = $"A survey in status '{survey.Status}' can no longer be rescheduled.", code = AdminRefusals.SurveyScheduleFrozen },
                 statusCode: 409);
         }
 
@@ -641,7 +642,7 @@ public static class SurveyEndpoints
             && SurveyStatuses.AcceptsResponses(survey.Status))
         {
             return Results.Json(
-                new { message = "StartDate cannot be changed once the survey is active." },
+                new { message = "StartDate cannot be changed once the survey is active.", code = AdminRefusals.SurveyStartFrozen },
                 statusCode: 409);
         }
 
@@ -730,7 +731,7 @@ public static class SurveyEndpoints
         var endDate = (request.EndDate ?? survey.EndDate).ToUniversalTime();
         if (startDate >= endDate)
         {
-            return Results.Json(new { message = "StartDate must be before EndDate" }, statusCode: 400);
+            return Results.Json(new { message = "StartDate must be before EndDate", code = AdminRefusals.SurveyDatesOutOfOrder }, statusCode: 400);
         }
 
         survey.StartDate = startDate;
@@ -956,6 +957,7 @@ public static class SurveyEndpoints
                               + "Duplicate it instead -- the copy keeps every option's stable value, so its responses still aggregate with this one's.",
                     from = survey.Status,
                     to = target,
+                    code = AdminRefusals.SurveyRevertHasResponses,
                 },
                 statusCode: 409);
         }
@@ -966,7 +968,7 @@ public static class SurveyEndpoints
             if (questions.Count == 0)
             {
                 return Results.Json(
-                    new { message = "Cannot publish a survey with no questions." },
+                    new { message = "Cannot publish a survey with no questions.", code = AdminRefusals.SurveyNoQuestions },
                     statusCode: 400);
             }
 
@@ -985,7 +987,7 @@ public static class SurveyEndpoints
             if (missing.Count > 0)
             {
                 return Results.Json(
-                    new { message = ContentPublishValidation.Describe(missing), missingTranslations = missing },
+                    new { message = ContentPublishValidation.Describe(missing), missingTranslations = missing, code = AdminRefusals.SurveyMissingTranslations },
                     statusCode: 400);
             }
 
@@ -1068,7 +1070,7 @@ public static class SurveyEndpoints
         if (await HasResponsesAsync(db, survey, cancellationToken))
         {
             return Results.Json(
-                new { message = "This survey has responses and cannot be deleted. Archive it instead." },
+                new { message = "This survey has responses and cannot be deleted. Archive it instead.", code = AdminRefusals.SurveyDeleteHasResponses },
                 statusCode: 409);
         }
 
@@ -1113,7 +1115,7 @@ public static class SurveyEndpoints
         var endDate = (request?.EndDate ?? survey.EndDate).ToUniversalTime();
         if (startDate >= endDate)
         {
-            return Results.Json(new { message = "StartDate must be before EndDate" }, statusCode: 400);
+            return Results.Json(new { message = "StartDate must be before EndDate", code = AdminRefusals.SurveyDatesOutOfOrder }, statusCode: 400);
         }
 
         var actor = await SurveyAuditTrail.ResolveActorAsync(currentUser, http, db, cancellationToken);
@@ -1338,7 +1340,7 @@ public static class SurveyEndpoints
 
         if (question.Text is null)
         {
-            return (null, Results.Json(new { message = $"Question {question.Order} requires text" }, statusCode: 400));
+            return (null, Results.Json(new { message = $"Question {question.Order} requires text", code = AdminRefusals.QuestionTextRequired }, statusCode: 400));
         }
 
         if (!question.Text.TryResolve(language, $"{path}.text", out var textEn, out var textEs, out var textError))
@@ -1348,7 +1350,7 @@ public static class SurveyEndpoints
 
         if (string.IsNullOrWhiteSpace(textEn) && string.IsNullOrWhiteSpace(textEs))
         {
-            return (null, Results.Json(new { message = $"Question {question.Order} requires text" }, statusCode: 400));
+            return (null, Results.Json(new { message = $"Question {question.Order} requires text", code = AdminRefusals.QuestionTextRequired }, statusCode: 400));
         }
 
         string? scaleLabelMinEn = null;
@@ -1406,7 +1408,7 @@ public static class SurveyEndpoints
                 // option instead of an opaque DbUpdateException. Duplicate values make a
                 // stored answer ambiguous -- the exact failure the stable value prevents.
                 return (null, Results.Json(
-                    new { message = $"Question {question.Order} has duplicate option value '{value}'" },
+                    new { message = $"Question {question.Order} has duplicate option value '{value}'", code = AdminRefusals.QuestionOptionDuplicate },
                     statusCode: 400));
             }
 
@@ -1421,7 +1423,7 @@ public static class SurveyEndpoints
         if (question.Type == QuestionTypes.MultipleChoice && options.Count < 2)
         {
             return (null, Results.Json(
-                new { message = $"Question {question.Order}: multiple_choice questions require at least 2 options" },
+                new { message = $"Question {question.Order}: multiple_choice questions require at least 2 options", code = AdminRefusals.QuestionOptionsTooFew },
                 statusCode: 400));
         }
 

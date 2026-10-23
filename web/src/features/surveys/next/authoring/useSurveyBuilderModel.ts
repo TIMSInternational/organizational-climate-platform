@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { useTranslation } from '../../../../i18n'
+import { describeApiError } from '../../../../api/describeApiError'
 import { listDepartments, type Department } from '../../../org-structure/api/departments'
 import { credentialModeOf, getCompanySettings, type CredentialMode } from '../../../org-structure/api/companySettings'
 import { listUsers, type User } from '../../../org-structure/api/users'
@@ -255,7 +256,7 @@ export function useSurveyBuilderModel(companyId: string) {
         try {
           await setSurveyUserTargets(baseUrl, created.id, named)
         } catch (error) {
-          const message = error instanceof Error ? error.message : t('errors.generic')
+          const message = describeApiError(error, t)
           const removed = await deleteSurvey(baseUrl, created.id).then(
             () => true,
             () => false,
@@ -278,14 +279,14 @@ export function useSurveyBuilderModel(companyId: string) {
           // again would create a second survey — and the author is sent to the editor that
           // can still make the changes.
           await draft.discardAfterCreate()
-          setUnsaved({ id: created.id, kind: 'questions', message: error instanceof Error ? error.message : t('errors.generic') })
+          setUnsaved({ id: created.id, kind: 'questions', message: describeApiError(error, t) })
           return
         }
       }
       await draft.discardAfterCreate()
       navigate(`/surveys/${created.id}`)
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : t('surveys.createFailed'))
+      setSubmitError(describeApiError(error, t, 'surveys.createFailed'))
     } finally {
       setSubmitting(false)
     }

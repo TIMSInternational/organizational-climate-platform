@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ApiError } from '../../../../api/authFetch'
+import { describeKnownRefusal } from '../../../../api/describeApiError'
 import { useTranslation } from '../../../../i18n'
 import {
   Alert,
@@ -100,7 +101,7 @@ export function EditAudienceDialog({
       await onSave(departmentsEditable ? { departmentIds, userIds } : { userIds })
       onOpenChange(false)
     } catch (cause) {
-      setProblem(refusal(cause, copy, t('errors.generic')))
+      setProblem(describeKnownRefusal(cause, t) ?? refusal(cause, copy, t('errors.generic')))
     } finally {
       setSaving(false)
     }

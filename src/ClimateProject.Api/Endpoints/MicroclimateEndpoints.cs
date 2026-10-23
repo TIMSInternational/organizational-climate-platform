@@ -640,7 +640,7 @@ public static class MicroclimateEndpoints
         // difference between a typo and an unrunnable microclimate.
         if (request.StartTime >= request.EndTime)
         {
-            return Results.Json(new { message = WindowOutOfOrderMessage }, statusCode: 400);
+            return Results.Json(new { message = WindowOutOfOrderMessage, code = AdminRefusals.MicroclimateWindowOutOfOrder }, statusCode: 400);
         }
 
         // The content language defaults to the company's own, so a single-language
@@ -869,14 +869,14 @@ public static class MicroclimateEndpoints
             // admin would go on believing the extension took.
             if (string.Equals(microclimate.Status, MicroclimateStatuses.Closed, StringComparison.Ordinal))
             {
-                return Results.Json(new { message = ClosedWindowEditMessage }, statusCode: 409);
+                return Results.Json(new { message = ClosedWindowEditMessage, code = AdminRefusals.MicroclimateClosedWindow }, statusCode: 409);
             }
 
             // Same rule as CreateAsync, on the other route that writes this column. Without it
             // the window check on create is a formality: PUT could transpose the pair afterwards.
             if (microclimate.Scheduling.StartTime >= request.EndTime.Value)
             {
-                return Results.Json(new { message = WindowOutOfOrderMessage }, statusCode: 400);
+                return Results.Json(new { message = WindowOutOfOrderMessage, code = AdminRefusals.MicroclimateWindowOutOfOrder }, statusCode: 400);
             }
 
             microclimate.Scheduling.EndTime = request.EndTime.Value;
@@ -958,12 +958,12 @@ public static class MicroclimateEndpoints
 
         if (!IsUntouchedDraft(microclimate))
         {
-            return Results.Json(new { message = NotADraftMessage }, statusCode: 409);
+            return Results.Json(new { message = NotADraftMessage, code = AdminRefusals.MicroclimateNotDraft }, statusCode: 409);
         }
 
         if (request.StartTime >= request.EndTime)
         {
-            return Results.Json(new { message = WindowOutOfOrderMessage }, statusCode: 400);
+            return Results.Json(new { message = WindowOutOfOrderMessage, code = AdminRefusals.MicroclimateWindowOutOfOrder }, statusCode: 400);
         }
 
         var language = microclimate.Language;
@@ -1053,7 +1053,7 @@ public static class MicroclimateEndpoints
 
         if (!IsUntouchedDraft(microclimate))
         {
-            return Results.Json(new { message = NotADraftMessage }, statusCode: 409);
+            return Results.Json(new { message = NotADraftMessage, code = AdminRefusals.MicroclimateNotDraft }, statusCode: 409);
         }
 
         if (await db.MicroclimateInvitations.AnyAsync(i => i.MicroclimateId == microclimate.Id, cancellationToken))
@@ -1284,7 +1284,7 @@ public static class MicroclimateEndpoints
             {
                 var elapsed = WindowAlreadyOverMessage(microclimate.Scheduling.EndTime);
                 return new StatusChangeFailure(
-                    Results.Json(new { message = elapsed }, statusCode: 400),
+                    Results.Json(new { message = elapsed, code = AdminRefusals.MicroclimateWindowElapsed }, statusCode: 400),
                     elapsed);
             }
 
@@ -1324,7 +1324,7 @@ public static class MicroclimateEndpoints
             {
                 var untranslated = ContentPublishValidation.Describe(missing);
                 return new StatusChangeFailure(
-                    Results.Json(new { message = untranslated, missingTranslations = missing }, statusCode: 400),
+                    Results.Json(new { message = untranslated, missingTranslations = missing, code = AdminRefusals.MicroclimateMissingTranslations }, statusCode: 400),
                     untranslated);
             }
         }
