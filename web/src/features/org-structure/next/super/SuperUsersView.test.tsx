@@ -201,7 +201,9 @@ describe('SuperUsersView', () => {
     serve()
     renderPage(`/admin/companies/${C}/users?editar=ana`)
     await screen.findByDisplayValue('Ana Rojas')
-    expect(screen.getByRole('button', { name: en.users.next.edit.resetPassword })).toBeTruthy()
+    // Drawn only once the person's detail read settles (`ResetPassword`), a second request
+    // that can land after the name does.
+    expect(await screen.findByRole('button', { name: en.users.next.edit.resetPassword })).toBeTruthy()
   })
 
   it('writes "never signed in" in words rather than leaving a blank date', async () => {
