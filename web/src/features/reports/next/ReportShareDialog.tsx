@@ -40,6 +40,7 @@ import {
   reportFormatLabel,
   sameUtcDay,
 } from './derive'
+import { describeApiError } from '../../../api/describeApiError'
 
 /** The canvas's small-caps label: 10px, bold, spaced .06em, in the label ink. */
 const LABEL = 'text-2xs font-bold uppercase tracking-label text-fg-label'
@@ -99,7 +100,7 @@ export default function ReportShareDialog({ open, onOpenChange, baseUrl, report,
       setShares(next)
       onSharesChangeRef.current?.(next)
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('errors.generic'))
+      setError(describeApiError(err, t))
     } finally {
       setLoading(false)
     }
@@ -127,7 +128,7 @@ export default function ReportShareDialog({ open, onOpenChange, baseUrl, report,
       setMinted(result)
       await reload()
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('errors.generic'))
+      setError(describeApiError(err, t))
     } finally {
       setBusy(false)
     }
@@ -143,7 +144,7 @@ export default function ReportShareDialog({ open, onOpenChange, baseUrl, report,
       if (minted?.id === shareId) setMinted(null)
       await reload()
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('errors.generic'))
+      setError(describeApiError(err, t))
     } finally {
       setBusy(false)
     }

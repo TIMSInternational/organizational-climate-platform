@@ -559,7 +559,7 @@ function EditPerson({
         onClose()
       }
     } catch (err) {
-      setError(updateErrorText(t, err, t('superadmin.next.users.saveFailed')))
+      setError(updateErrorText(t, err, 'superadmin.next.users.saveFailed'))
     } finally {
       setSaving(false)
       onReload()

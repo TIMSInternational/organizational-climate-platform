@@ -8,6 +8,7 @@ import { listCompanies } from '../../../org-structure/api/companies'
 import { listSurveys } from '../../../surveys/api/surveys'
 import { acknowledgerIds, defaultSelection, reviewedOn } from './insightsDerive'
 import type { CompanyPick, InsightRow } from './insightsModel'
+import { describeApiError } from '../../../../api/describeApiError'
 
 /**
  * What the page may show this viewer:
@@ -123,7 +124,7 @@ export function useAIInsightsModel(): AIInsightsModelState {
       if (!current()) return
       // A failed request is an error with a retry, never an empty list: rendering a 404 as
       // "no findings" would tell an administrator their company has none (the old page's rule).
-      setError(err instanceof Error ? err.message : t('errors.generic'))
+      setError(describeApiError(err, t))
       setRows([])
       setLoading(false)
     }
@@ -163,7 +164,7 @@ export function useAIInsightsModel(): AIInsightsModelState {
         }),
       )
     } catch (err) {
-      setPicksError(err instanceof Error ? err.message : t('companyContext.loadFailed'))
+      setPicksError(describeApiError(err, t, 'companyContext.loadFailed'))
     }
   }, [baseUrl, locale, mode, t])
 
@@ -185,7 +186,7 @@ export function useAIInsightsModel(): AIInsightsModelState {
       // list is read again rather than one row patched.
       await loadInsights()
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : t('insights.acknowledgeFailed'))
+      setActionError(describeApiError(err, t, 'insights.acknowledgeFailed'))
     } finally {
       setAcknowledging(false)
     }

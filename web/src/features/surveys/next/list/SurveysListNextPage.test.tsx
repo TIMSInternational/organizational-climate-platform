@@ -11,6 +11,7 @@ import { duplicateSurvey, listSurveys, type SurveyDetail, type SurveyListItem } 
 import { getClimateTrends, type ClimateTrendsResponse } from '../../api/climateTrends'
 import SurveysListNextPage from './SurveysListNextPage'
 import en from '../../../../i18n/en.json'
+import { ApiError } from '../../../../api/authFetch'
 
 const copy = en.surveys.next.list
 
@@ -227,10 +228,11 @@ describe('SurveysListNextPage', () => {
     expect(vi.mocked(listSurveys).mock.calls[2][1]).toEqual({ status: '', type: '', q: 'clima q3' })
   })
 
-  it('shows the server’s message on a failed load, with a retry that refetches', async () => {
-    vi.mocked(listSurveys).mockRejectedValueOnce(new Error('Boom'))
+  it('says a failed load in the reader’s language, with a retry that refetches', async () => {
+    vi.mocked(listSurveys).mockRejectedValueOnce(new ApiError(500, 'Boom'))
     renderAs({ role: 'company_admin', companyId: 'c1' })
-    expect(await screen.findByText('Boom')).toBeTruthy()
+    expect(await screen.findByText(en.errors.api.server)).toBeTruthy()
+    expect(screen.queryByText('Boom')).toBeNull()
     await userEvent.click(screen.getByRole('button', { name: en.common.retry }))
     expect(await screen.findByRole('heading', { name: new RegExp(copy.openHeading) })).toBeTruthy()
     expect(vi.mocked(listSurveys)).toHaveBeenCalledTimes(2)
@@ -335,13 +337,15 @@ describe('SurveysListNextPage', () => {
     expect(vi.mocked(duplicateSurvey).mock.calls[0]?.[1]).toBe('q3')
   })
 
-  it('shows the server’s refusal when a duplicate fails, and keeps the list', async () => {
-    vi.mocked(duplicateSurvey).mockRejectedValue(new Error('Survey not found'))
+  it('says why a duplicate failed, in the reader’s language, and keeps the list', async () => {
+    vi.mocked(duplicateSurvey).mockRejectedValue(new ApiError(404, 'Survey not found'))
     renderAs({ role: 'company_admin', companyId: 'c1' })
     await screen.findByRole('heading', { name: new RegExp(copy.openHeading) })
     await openMenu('q1')
     await userEvent.click(screen.getByRole('menuitem', { name: en.surveys.duplicate }))
-    expect((await screen.findByRole('alert')).textContent).toContain('Survey not found')
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain(en.errors.api.notFound)
+    expect(alert.textContent).not.toContain('Survey not found')
     expect(rowIds()).toHaveLength(5)
   })
 

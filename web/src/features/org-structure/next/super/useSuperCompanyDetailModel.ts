@@ -9,6 +9,7 @@ import { getCompanySettings, type CompanySettingsResponse } from '../../api/comp
 import { listDemographicFields, type DemographicField } from '../../api/demographicFields'
 import { listDepartments, type Department } from '../../api/departments'
 import { listUsers, type User } from '../../api/users'
+import { describeApiError } from '../../../../api/describeApiError'
 
 export interface SuperCompanyDetailModel {
   company: CompanyDetail
@@ -91,7 +92,7 @@ export function useSuperCompanyDetailModel(companyId: string | undefined): Super
         setStatus('ready')
       } catch (err) {
         if (cancelled) return
-        setError(err instanceof Error ? err.message : t('errors.generic'))
+        setError(describeApiError(err, t))
         setStatus('error')
       }
     }

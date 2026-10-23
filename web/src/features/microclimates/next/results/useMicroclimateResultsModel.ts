@@ -3,6 +3,7 @@ import { useTranslation } from '../../../../i18n'
 import { downloadBlobFile } from '../../../../lib/downloadBlobFile'
 import { getLiveResults, getMicroclimate, type LiveResults, type MicroclimateDetail } from '../../api/microclimates'
 import { getMicroclimateCsv, microclimateCsvFileName } from '../../api/microclimateExport'
+import { describeApiError } from '../../../../api/describeApiError'
 
 export interface MicroclimateResultsState {
   status: 'loading' | 'ready' | 'error'
@@ -53,7 +54,7 @@ export function useMicroclimateResultsModel(id: string | undefined): Microclimat
       })
       .catch((err: unknown) => {
         if (cancelled) return
-        setError(err instanceof Error ? err.message : t('errors.generic'))
+        setError(describeApiError(err, t))
         setStatus('error')
       })
     return () => {

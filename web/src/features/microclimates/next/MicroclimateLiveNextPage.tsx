@@ -40,6 +40,7 @@ import {
 import type { MicroclimateLiveNextModel } from './model'
 import { useCopyLink } from './useCopyLink'
 import { useMicroclimateLiveModel } from './useMicroclimateLiveModel'
+import { describeApiError } from '../../../api/describeApiError'
 
 /** The artboard's `.card`, with its 16/20/18 padding and 12px between blocks. */
 const CARD = 'flex min-w-0 flex-col gap-3 rounded-xl border border-line-default bg-surface-card px-5 pt-4 pb-4.5 shadow-sm'
@@ -177,7 +178,7 @@ export default function MicroclimateLiveNextPage() {
           try {
             await state.close()
           } catch (err) {
-            setCloseError(err instanceof Error ? err.message : t('errors.generic'))
+            setCloseError(describeApiError(err, t))
           }
         }}
       />

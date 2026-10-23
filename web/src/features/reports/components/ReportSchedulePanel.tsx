@@ -22,6 +22,7 @@ import {
   type ReportListItem,
   type ReportRecurrencePattern,
 } from '../api/reports'
+import { describeApiError } from '../../../api/describeApiError'
 
 /**
  * Set or stop a report's recurring schedule (#91).
@@ -104,7 +105,7 @@ export default function ReportSchedulePanel({
       onSaved(saved)
       onOpenChange(false)
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('errors.generic'))
+      setError(describeApiError(err, t))
     } finally {
       setBusy(false)
     }
@@ -117,7 +118,7 @@ export default function ReportSchedulePanel({
       onSaved(await clearReportSchedule(baseUrl, report.id))
       onOpenChange(false)
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('errors.generic'))
+      setError(describeApiError(err, t))
     } finally {
       setBusy(false)
     }

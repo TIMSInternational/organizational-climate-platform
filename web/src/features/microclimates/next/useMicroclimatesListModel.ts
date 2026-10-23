@@ -5,6 +5,7 @@ import { useViewerCapabilities } from '../../../auth/viewerCapabilities'
 import { getMicroclimate, listMicroclimates } from '../api/microclimates'
 import { flowStepOf, groupSessions } from './derive'
 import type { InProgressSession, MicroclimatesListNextModel } from './model'
+import { describeApiError } from '../../../api/describeApiError'
 
 export type MicroclimatesListStatus =
   | 'loading'
@@ -95,7 +96,7 @@ export function useMicroclimatesListModel(): MicroclimatesListState {
       setStatus('ready')
     } catch (err) {
       if (request !== latest.current) return
-      setError(err instanceof Error ? err.message : t('errors.generic'))
+      setError(describeApiError(err, t))
       setStatus('error')
     }
   }, [baseUrl, companyId, locale, t])

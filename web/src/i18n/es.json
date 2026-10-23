@@ -1686,7 +1686,24 @@
     "unauthorized": "No tienes permiso para acceder a este recurso",
     "sessionExpired": "Tu sesión ha expirado. Por favor inicia sesión nuevamente.",
     "validationError": "Error de validación. Por favor verifica tus datos.",
-    "somethingWentWrong": "Algo salió mal."
+    "somethingWentWrong": "Algo salió mal.",
+    "api": {
+      "forbidden": "No tiene permiso para hacer esto. Si cree que debería tenerlo, consulte con su administrador.",
+      "notFound": "No se encontró lo que busca. Es posible que se haya eliminado; recargue la página.",
+      "conflict": "No se pudo completar en su estado actual; es posible que alguien lo haya cambiado. Recargue la página e intente de nuevo.",
+      "tooLarge": "El archivo o la solicitud es demasiado grande.",
+      "rateLimited": "Demasiadas solicitudes. Espere un minuto e intente de nuevo.",
+      "server": "El servidor no pudo completar la solicitud. Intente de nuevo en unos minutos.",
+      "rejected": "La solicitud fue rechazada. Revise los datos e intente de nuevo.",
+      "codes": {
+        "survey_ended_audience_frozen": "Esta encuesta ya terminó: su audiencia ya no se puede cambiar. Duplíquela para aplicarla de nuevo.",
+        "credential_mode_frozen": "La forma de acceso de los participantes se fija al crear la encuesta y no se puede cambiar. Cree una encuesta nueva para usar otra modalidad.",
+        "not_mass_invite": "Esta persona ingresa con su correo; no tiene datos de acceso generados que reenviar.",
+        "inactive": "Esta cuenta está desactivada.",
+        "batch_too_large": "Son demasiadas personas a la vez. Envíe un lote más pequeño.",
+        "per_survey_person": "Esta persona ingresa solo con códigos por encuesta; reenvíe su código desde la lista de participantes de la encuesta."
+      }
+    }
   },
   "export": {
     "exportPDF": "Exportar PDF",

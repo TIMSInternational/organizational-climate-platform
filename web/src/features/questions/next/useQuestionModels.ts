@@ -10,14 +10,11 @@ import {
 } from '../api/questionBank'
 import { useTranslation } from '../../../i18n'
 import { bankRows, globalLibraryTotals, type BankRow } from './model'
+import { describeApiError } from '../../../api/describeApiError'
 
 /** The wiring seams for the two redesigned question screens — existing clients only. */
 
 type Load<T> = { status: 'loading' } | { status: 'failed'; message: string } | { status: 'ready'; data: T }
-
-function messageOf(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback
-}
 
 export interface LibraryModel {
   categories: QuestionCategory[]
@@ -39,7 +36,7 @@ export function useQuestionLibraryModel() {
       ])
       setState({ status: 'ready', data: { categories, items } })
     } catch (error) {
-      setState({ status: 'failed', message: messageOf(error, t('errors.generic')) })
+      setState({ status: 'failed', message: describeApiError(error, t) })
     }
   }, [baseUrl, t])
 
@@ -84,7 +81,7 @@ export function useQuestionBankModel(companyId: string | undefined, filters: Que
         },
       })
     } catch (error) {
-      setState({ status: 'failed', message: messageOf(error, t('errors.generic')) })
+      setState({ status: 'failed', message: describeApiError(error, t) })
     }
   }, [baseUrl, companyId, search, category, type, includeRetired, t])
 
@@ -100,7 +97,7 @@ export function useQuestionBankModel(companyId: string | undefined, filters: Que
         await setQuestionBankLifecycle(baseUrl, id, isActive ? 'retired' : 'active')
         await reload()
       } catch (error) {
-        setActionError(messageOf(error, t('errors.generic')))
+        setActionError(describeApiError(error, t))
       } finally {
         setBusyId(null)
       }

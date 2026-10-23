@@ -12,6 +12,7 @@ import { requiredLocalesFor } from '../../api/surveyInvitationCopy'
 import { dimensionLabel } from '../../dimensionLabel'
 import { Eyebrow, Note, Panel, PanelHeading, Segmented } from '../../../shared-next/parts'
 import { groupByDimension, scaleName, uniformScale } from './model'
+import { describeApiError } from '../../../../api/describeApiError'
 
 /**
  * Detalle de plantilla, redesigned (canvas board "TemplateDetail"): the template's questions
@@ -43,7 +44,7 @@ function useTemplateDetailModel(id: string | undefined) {
       }
       setState({ status: 'ready', byLocale, primary })
     } catch (error) {
-      setState({ status: 'failed', message: error instanceof Error ? error.message : t('errors.generic') })
+      setState({ status: 'failed', message: describeApiError(error, t) })
     }
   }, [baseUrl, id, locale, t])
   useEffect(() => {
@@ -110,7 +111,7 @@ export default function TemplateDetailNextPage() {
       const survey = await instantiateSurveyTemplate(import.meta.env.VITE_API_BASE_URL as string, id, { companyId: scope.companyId }, locale)
       void navigate(`/surveys/${survey.id}/questions`)
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : t('errors.generic'))
+      setActionError(describeApiError(error, t))
       setUsing(false)
     }
   }

@@ -13,6 +13,7 @@ import {
   TextareaField,
   type FieldOption,
 } from '../../../components/ui'
+import { describeApiError } from '../../../api/describeApiError'
 
 export interface ProgressUpdateFormValues {
   overallNotes: string
@@ -161,7 +162,7 @@ export default function ProgressUpdateForm({
       // typed, including the notes, so retrying costs nothing.
       setOverallNotes('')
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('errors.generic'))
+      setError(describeApiError(err, t))
     } finally {
       setSubmitting(false)
     }

@@ -13,6 +13,7 @@ import {
   TextField,
   TextareaField,
 } from '../../../components/ui'
+import { describeApiError } from '../../../api/describeApiError'
 
 export interface DepartmentFormValues {
   name: string
@@ -76,7 +77,7 @@ export default function DepartmentForm({
       // answers 400 with the specific rule that was broken ("Department with
       // this name already exists at this level"), and `authFetch` already
       // unwraps `{ message }` off the body.
-      setError(err instanceof Error ? err.message : t('errors.generic'))
+      setError(describeApiError(err, t))
     } finally {
       setSubmitting(false)
     }

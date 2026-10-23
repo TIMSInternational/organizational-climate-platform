@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from '../../../../i18n'
 import { getSurveyTemplate, listSurveyTemplates, type SurveyTemplateListItem } from '../../api/surveyTemplates'
 import { shapeOf, type TemplateShape } from './derive'
+import { describeApiError } from '../../../../api/describeApiError'
 
 export interface TemplatesModelState {
   status: 'loading' | 'ready' | 'error'
@@ -40,7 +41,7 @@ export function useTemplatesModel(q: string): TemplatesModelState {
       })
       setState({ status: 'ready', templates, shapes, error: null })
     } catch (err) {
-      setState({ status: 'error', templates: [], shapes: new Map(), error: err instanceof Error ? err.message : t('errors.generic') })
+      setState({ status: 'error', templates: [], shapes: new Map(), error: describeApiError(err, t) })
     }
   }, [baseUrl, q, locale, t])
 

@@ -3,6 +3,7 @@ import { useState, type FormEvent } from 'react'
 import RoleSelector from './RoleSelector'
 import { useTranslation } from '../../../i18n'
 import { Button } from '../../../components/ui'
+import { describeApiError } from '../../../api/describeApiError'
 
 export interface InvitationFormValues {
   invitationType: string
@@ -33,7 +34,7 @@ export default function InvitationForm({ allowCompanyAdminSetup, onSubmit }: Inv
       await onSubmit(values)
       setValues({ invitationType: 'employee_direct', email: '', role: 'employee' })
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('errors.generic'))
+      setError(describeApiError(err, t))
     } finally {
       setSubmitting(false)
     }

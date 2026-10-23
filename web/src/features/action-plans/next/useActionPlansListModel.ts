@@ -21,6 +21,7 @@ import { sortPlans } from '../../tracking/planOrder'
 import { semaforoPresentation, toSemaforoEstado } from '../../tracking/semaforo'
 import { firstOverdue, groupOf } from './derive'
 import type { ActionPlansListModel, OverdueReading, PlanFinding, PlanRow } from './model'
+import { describeApiError } from '../../../api/describeApiError'
 
 export interface ActionPlansListState {
   /** `idle` while there is no company to ask about — the page says why instead. */
@@ -189,7 +190,7 @@ export function useActionPlansListModel(administers = true): ActionPlansListStat
     } else {
       const reason: unknown = plansResult.reason
       setPlans([])
-      setError(reason instanceof Error ? reason.message : t('errors.generic'))
+      setError(describeApiError(reason, t))
       setStatus('error')
     }
   }, [administers, baseUrl, companyId, locale, t])

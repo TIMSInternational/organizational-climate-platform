@@ -809,7 +809,7 @@ function EditPerson({
     } catch (err) {
       // No reload on a refusal: the API applied nothing, and a reload swaps the page for its
       // skeleton, which unmounts this panel and takes the error -- and what was typed -- with it.
-      setError(updateErrorText(t, err, t('users.next.edit.saveFailed')))
+      setError(updateErrorText(t, err, 'users.next.edit.saveFailed'))
     } finally {
       setSaving(false)
     }

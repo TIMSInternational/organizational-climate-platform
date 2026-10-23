@@ -346,7 +346,8 @@ describe('SurveyResultsNextPage', () => {
     renderAt({ role: 'company_admin' })
     await screen.findByRole('heading', { level: 1 })
     await userEvent.click(screen.getByRole('button', { name: copy.exportPdf }))
-    expect(await screen.findByText('Forbidden')).toBeTruthy()
+    expect(await screen.findByText(en.errors.api.forbidden)).toBeTruthy()
+    expect(screen.queryByText('Forbidden')).toBeNull()
     expect(vi.mocked(downloadBlobFile)).not.toHaveBeenCalled()
   })
 

@@ -4,6 +4,7 @@ import { getCompanySettings, type CompanySettingsResponse } from '../../api/comp
 import { listDepartments } from '../../api/departments'
 import { getCompanyAdminDashboard } from '../../../dashboard/api/dashboard'
 import { departmentReading, type DepartmentReading } from './derive'
+import { describeApiError } from '../../../../api/describeApiError'
 
 export interface CompanySettingsModel {
   companyName: string | null
@@ -63,7 +64,7 @@ export function useCompanySettingsModel(companyId: string | null): CompanySettin
       setState((current) => ({
         ...current,
         status: 'error',
-        error: reason instanceof Error ? reason.message : t('errors.generic'),
+        error: describeApiError(reason, t),
       }))
       return
     }

@@ -9,6 +9,7 @@ import {
   type MicroclimateInvitationBatchResult,
   type MicroclimateInvitationList,
 } from '../../api/microclimateInvitations'
+import { describeApiError } from '../../../../api/describeApiError'
 
 export type Settled<T> = { status: 'loading' } | { status: 'ready'; value: T } | { status: 'failed' }
 
@@ -69,7 +70,7 @@ export function useMicroclimateDetailModel(id: string | undefined): Microclimate
       })
       .catch((err: unknown) => {
         if (cancelled) return
-        setError(err instanceof Error ? err.message : t('errors.generic'))
+        setError(describeApiError(err, t))
         setStatus('error')
       })
     return () => {
@@ -104,7 +105,7 @@ export function useMicroclimateDetailModel(id: string | undefined): Microclimate
         setDetail(await updateMicroclimate(baseUrl, id, { status: next }))
       } catch (err) {
         // The server's own sentence: a bilingual session names the untranslated fields.
-        setActionError(err instanceof Error ? err.message : t('errors.generic'))
+        setActionError(describeApiError(err, t))
       } finally {
         setPending(null)
       }
@@ -129,7 +130,7 @@ export function useMicroclimateDetailModel(id: string | undefined): Microclimate
       await deleteMicroclimate(baseUrl, id)
       navigate('/microclimates')
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : t('errors.generic'))
+      setActionError(describeApiError(err, t))
     }
   }, [baseUrl, id, navigate, t])
 

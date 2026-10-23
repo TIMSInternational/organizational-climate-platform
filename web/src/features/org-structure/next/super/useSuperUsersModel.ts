@@ -4,6 +4,7 @@ import { getCompany, type CompanyDetail } from '../../api/companies'
 import { listDepartments, type Department } from '../../api/departments'
 import { listInvitations, type Invitation } from '../../api/invitations'
 import { listUsers, type User } from '../../api/users'
+import { describeApiError } from '../../../../api/describeApiError'
 
 export interface SuperUsersState {
   status: 'loading' | 'ready' | 'error'
@@ -68,7 +69,7 @@ export function useSuperUsersModel(companyId: string | undefined): SuperUsersSta
         setStatus('ready')
       } catch (err) {
         if (cancelled) return
-        setError(err instanceof Error ? err.message : t('errors.generic'))
+        setError(describeApiError(err, t))
         setStatus('error')
       }
     }

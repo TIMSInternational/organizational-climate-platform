@@ -3,6 +3,7 @@ import { useTranslation } from '../../../i18n'
 import { Alert, AlertDescription, Button, TextField, TextareaField } from '../../../components/ui'
 import type { PlanEdit } from '../next/useActionPlanDetailModel'
 import { isProvenanceTag, parseTags } from './planTags'
+import { describeApiError } from '../../../api/describeApiError'
 
 export interface PlanEditFormProps {
   initial: { title: string; description: string; dueDay: string; tags: readonly string[] }
@@ -48,7 +49,7 @@ export default function PlanEditForm({ initial, onSubmit, onCancel }: PlanEditFo
         tags: [...parseTags(tags), ...provenance],
       })
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('errors.generic'))
+      setError(describeApiError(err, t))
     } finally {
       setSubmitting(false)
     }

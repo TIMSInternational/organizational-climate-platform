@@ -16,6 +16,7 @@ import { todayIso } from '../planDates'
 import { isForbidden, isNotFound, resolvePersona } from './derive'
 import type { PlanDetailModel } from './model'
 import { readViewer } from './viewer'
+import { describeApiError } from '../../../api/describeApiError'
 
 export interface PlanDetailState {
   /**
@@ -105,7 +106,7 @@ export function usePlanDetailModel(id: string | undefined): PlanDetailState {
         setStatus('forbidden')
         return
       }
-      setError(err instanceof Error ? err.message : t('errors.generic'))
+      setError(describeApiError(err, t))
       setStatus('error')
     }
   }, [id, t])

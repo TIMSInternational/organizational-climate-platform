@@ -4,6 +4,7 @@ import { getBenchmark, listBenchmarks, type Benchmark } from '../api/benchmarks'
 import { listSurveys, type SurveyListItem } from '../../surveys/api/surveys'
 import { useTranslation } from '../../../i18n'
 import { benchmarkRows, latestClosedSurvey, sortInsights, type BenchmarkRow } from './model'
+import { describeApiError } from '../../../api/describeApiError'
 
 /**
  * The wiring seam for the two redesigned analytics screens. Both read only through the
@@ -11,10 +12,6 @@ import { benchmarkRows, latestClosedSurvey, sortInsights, type BenchmarkRow } fr
  */
 
 type Load<T> = { status: 'loading' } | { status: 'failed'; message: string } | { status: 'ready'; data: T }
-
-function messageOf(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback
-}
 
 export function useAIInsightsModel(companyId: string | undefined) {
   const { t } = useTranslation()
@@ -31,7 +28,7 @@ export function useAIInsightsModel(companyId: string | undefined) {
     } catch (error) {
       // A failed read is an error, never an empty list: "no findings" would be a lie
       // about the company when what failed was the request.
-      setState({ status: 'failed', message: messageOf(error, t('errors.generic')) })
+      setState({ status: 'failed', message: describeApiError(error, t) })
     }
   }, [baseUrl, companyId, t])
 
@@ -47,7 +44,7 @@ export function useAIInsightsModel(companyId: string | undefined) {
         await acknowledgeAIInsight(baseUrl, id)
         await reload()
       } catch (error) {
-        setActionError(messageOf(error, t('errors.generic')))
+        setActionError(describeApiError(error, t))
       } finally {
         setAcknowledgingId(null)
       }
@@ -97,7 +94,7 @@ export function useAnalyticsModel(companyId: string | undefined) {
         },
       })
     } catch (error) {
-      setState({ status: 'failed', message: messageOf(error, t('errors.generic')) })
+      setState({ status: 'failed', message: describeApiError(error, t) })
     }
   }, [baseUrl, companyId, locale, t])
 

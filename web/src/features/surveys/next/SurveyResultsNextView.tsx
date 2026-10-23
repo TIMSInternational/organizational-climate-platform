@@ -60,6 +60,7 @@ import {
   type ResultsFinding,
 } from './derive'
 import { deltaInkOf } from './tint'
+import { describeApiError } from '../../../api/describeApiError'
 
 /** The id the open cell's `aria-controls` names. */
 const PANEL_ID = 'results-next-cell-panel'
@@ -184,7 +185,7 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
       try {
         downloadBlobFile(fileName, await fetchFile())
       } catch (err) {
-        onError(err instanceof Error ? err.message : t('errors.generic'))
+        onError(describeApiError(err, t))
       } finally {
         setExporting(false)
       }

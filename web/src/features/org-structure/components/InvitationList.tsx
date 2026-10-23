@@ -14,6 +14,7 @@ import {
 } from '../../../components/ui'
 import { invitationStatusLabelKey, invitationTypeLabelKey, roleLabelKey } from '../labels'
 import { calendarDay } from '../../../lib/calendarDay'
+import { describeApiError } from '../../../api/describeApiError'
 
 interface InvitationListProps {
   invitations: Invitation[]
@@ -43,7 +44,7 @@ export default function InvitationList({ invitations, onResend }: InvitationList
     try {
       await onResend(invitation)
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('errors.generic'))
+      setError(describeApiError(err, t))
     } finally {
       setResendingId(null)
     }
