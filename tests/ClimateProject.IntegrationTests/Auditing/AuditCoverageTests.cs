@@ -100,6 +100,10 @@ public class AuditCoverageTests : IAsyncLifetime
         "GET /surveys/{id:guid}/export/csv",
         "GET /surveys/{id:guid}/export/pdf",
         "GET /surveys/{id:guid}/results",
+        // G20. The roster as a file: every invited person by name and email, with whether they
+        // have answered. Never an answer, but a list of named people leaving the server is the
+        // disclosure "who exported this data" asks about.
+        "GET /surveys/{surveyId:guid}/participation/export",
     ];
 
     private IReadOnlyList<(string Method, string Pattern, Endpoint Endpoint)> Routes()
