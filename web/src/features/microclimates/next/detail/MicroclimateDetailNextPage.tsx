@@ -29,6 +29,7 @@ import { JourneyRail } from '../JourneyRail'
 import { MicroclimateGate } from '../MicroclimateGate'
 import { FLOOR, invitationLadder, journeyStates, type JourneyKey, type JourneyState } from '../derive'
 import { clock, longDay, shortDay, shortDayYear } from '../format'
+import { displayZone, zoneNote } from '../companyZone'
 import { canvasTypeLabel, rungLabel, sessionStatusLabel, sessionStatusTone } from '../vocabulary'
 import { InviteDialog } from './InviteDialog'
 import { SessionQr } from './SessionQr'
@@ -78,12 +79,12 @@ function DetailScreen() {
   return <DetailView state={state} detail={state.detail} />
 }
 
-/** "9 sept 2026, 21:06". */
-function instant(t: TranslateFn, iso: string, locale: string): string {
-  return t('microclimates.next.sheet.instant', { date: shortDayYear(iso, locale), time: clock(iso, locale) })
+/** "9 sept 2026, 21:06" on `zone`'s clock. */
+function instant(t: TranslateFn, iso: string, locale: string, zone: string): string {
+  return t('microclimates.next.sheet.instant', { date: shortDayYear(iso, locale, zone), time: clock(iso, locale, zone) })
 }
 
-function journeyNotes(t: TranslateFn, detail: MicroclimateDetail, locale: string): Record<JourneyKey, string> {
+function journeyNotes(t: TranslateFn, detail: MicroclimateDetail, locale: string, zone: string): Record<JourneyKey, string> {
   const states: Record<JourneyKey, JourneyState> = journeyStates(detail.status)
   const count = detail.responseCount
   const target = detail.targetParticipantCount
@@ -94,7 +95,7 @@ function journeyNotes(t: TranslateFn, detail: MicroclimateDetail, locale: string
   return {
     create:
       states.create === 'done'
-        ? t('microclimates.next.journey.createdAt', { date: shortDay(detail.startTime, locale), time: clock(detail.startTime, locale) })
+        ? t('microclimates.next.journey.createdAt', { date: shortDay(detail.startTime, locale, zone), time: clock(detail.startTime, locale, zone) })
         : states.create === 'current'
           ? t('microclimates.next.journey.createDraft')
           : t('microclimates.next.journey.createNote'),
@@ -113,7 +114,7 @@ function journeyNotes(t: TranslateFn, detail: MicroclimateDetail, locale: string
     read:
       states.read === 'current'
         ? t('microclimates.next.journey.readNow')
-        : t('microclimates.next.journey.readOn', { date: shortDay(detail.endTime, locale) }),
+        : t('microclimates.next.journey.readOn', { date: shortDay(detail.endTime, locale, zone) }),
   }
 }
 
@@ -149,12 +150,15 @@ function DetailView({ state, detail }: { state: MicroclimateDetailState; detail:
     }
   }
 
+  // Every date and time on the company's clock, or the browser's when it could not be read.
+  const zone = displayZone(state.timeZone)
+  const closes = { date: longDay(detail.endTime, locale, zone), time: clock(detail.endTime, locale, zone) }
   const when =
     isLive
-      ? t('microclimates.next.detail.metaActive', { date: longDay(detail.endTime, locale), time: clock(detail.endTime, locale) })
+      ? t('microclimates.next.detail.metaActive', closes)
       : isClosed
-        ? t('microclimates.next.detail.metaClosed', { date: longDay(detail.endTime, locale), time: clock(detail.endTime, locale) })
-        : t('microclimates.next.detail.metaDraft', { date: longDay(detail.endTime, locale), time: clock(detail.endTime, locale) })
+        ? t('microclimates.next.detail.metaClosed', closes)
+        : t('microclimates.next.detail.metaDraft', closes)
   const tally =
     detail.targetParticipantCount > 0
       ? t('microclimates.next.detail.metaTally', { count: detail.responseCount, target: detail.targetParticipantCount })
@@ -175,6 +179,7 @@ function DetailView({ state, detail }: { state: MicroclimateDetailState; detail:
               sentences={[
                 { id: 'when', text: when },
                 { id: 'tally', text: tally, muted: true },
+                { id: 'zone', text: zoneNote(t, state.timeZone), muted: true },
               ]}
             />
           </PageMeta>
@@ -243,7 +248,7 @@ function DetailView({ state, detail }: { state: MicroclimateDetailState; detail:
           </Alert>
         )}
 
-        <JourneyRail states={journeyStates(detail.status)} notes={journeyNotes(t, detail, locale)} />
+        <JourneyRail states={journeyStates(detail.status)} notes={journeyNotes(t, detail, locale, zone)} />
 
         <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_350px]">
           <div className="flex min-w-0 flex-col gap-4">
@@ -303,12 +308,12 @@ function DetailView({ state, detail }: { state: MicroclimateDetailState; detail:
                   {
                     id: 'opens',
                     term: t('microclimates.next.sheet.opens'),
-                    value: <span className="font-mono tabular-nums">{instant(t, detail.startTime, locale)}</span>,
+                    value: <span className="font-mono tabular-nums">{instant(t, detail.startTime, locale, zone)}</span>,
                   },
                   {
                     id: 'closes',
                     term: t('microclimates.next.sheet.closes'),
-                    value: <span className="font-mono tabular-nums">{instant(t, detail.endTime, locale)}</span>,
+                    value: <span className="font-mono tabular-nums">{instant(t, detail.endTime, locale, zone)}</span>,
                   },
                   {
                     id: 'answer',
@@ -376,7 +381,7 @@ function DetailView({ state, detail }: { state: MicroclimateDetailState; detail:
                   note={
                     isClosed
                       ? t('microclimates.next.detail.afterResultsClosed')
-                      : t('microclimates.next.detail.afterResults', { date: shortDay(detail.endTime, locale) })
+                      : t('microclimates.next.detail.afterResults', { date: shortDay(detail.endTime, locale, zone) })
                   }
                 />
               </ul>

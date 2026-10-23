@@ -14,6 +14,7 @@ import {
   type MicroclimateInvitationList,
 } from '../../api/microclimateInvitations'
 import { listDepartments } from '../../../org-structure/api/departments'
+import { getCompanySettings, type CompanySettingsResponse } from '../../../org-structure/api/companySettings'
 import MicroclimateDetailNextPage from './MicroclimateDetailNextPage'
 import es from '../../../../i18n/es.json'
 import { ApiError } from '../../../../api/authFetch'
@@ -31,6 +32,10 @@ vi.mock('../../api/microclimateInvitations', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../api/microclimateInvitations')>()),
   listAllMicroclimateInvitations: vi.fn(),
   createMicroclimateInvitations: vi.fn(),
+}))
+vi.mock('../../../org-structure/api/companySettings', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../org-structure/api/companySettings')>()),
+  getCompanySettings: vi.fn(),
 }))
 vi.mock('../../../org-structure/api/departments', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../../org-structure/api/departments')>()),
@@ -116,6 +121,8 @@ describe('MicroclimateDetailNextPage', () => {
     vi.mocked(createMicroclimateInvitations).mockReset()
     vi.mocked(listDepartments).mockReset().mockResolvedValue([])
     vi.mocked(deleteMicroclimate).mockReset().mockResolvedValue(undefined)
+    // Unread unless a test says otherwise: the page then prints the browser's zone and says so.
+    vi.mocked(getCompanySettings).mockReset().mockRejectedValue(new ApiError(500, 'boom'))
     vi.mocked(getMicroclimateSeats)
       .mockReset()
       .mockResolvedValue({ licensed: true, status: 'active', seatsTotal: 200, seatsUsed: 37, seatsRemaining: 163 })
@@ -185,7 +192,8 @@ describe('MicroclimateDetailNextPage', () => {
     const run = container.querySelector('[data-slot="page-meta-sentences"]')
     expect(run?.contains(tally)).toBe(true)
     const sentences = [...(run?.children ?? [])]
-    expect(sentences).toHaveLength(2)
+    // When it closes, the tally, then the clock both are read on (the company's zone).
+    expect(sentences).toHaveLength(3)
     expect(sentences[1]!.lastElementChild).toBe(tally)
     expect(sentences[1]!.querySelector('[data-slot="page-meta-separator"]')?.textContent).toBe('·')
     expect(sentences[0]!.textContent).not.toContain('·')
@@ -411,5 +419,35 @@ describe('MicroclimateDetailNextPage', () => {
     renderAs({ role: 'company_admin', companyId: COMPANY })
     await screen.findByText(copy.detail.ladderTitle)
     expect(getMicroclimateSeats).not.toHaveBeenCalled()
+  })
+
+  /**
+   * The company's clock (G16, after #635 gave it to Crear). The fixture's instants are UTC
+   * (`02:06 UTC` on 10 and 12 Sep) and every expectation names the zone it is read in, so the
+   * same assertions hold under TZ=America/Chicago and TZ=UTC.
+   */
+  it.each([
+    ['America/Costa_Rica', '11 de septiembre a las 20:06', '9 sept 2026, 20:06', '11 sept 2026, 20:06', 'America/Costa_Rica (GMT-6)'],
+    ['Asia/Tokyo', '12 de septiembre a las 11:06', '10 sept 2026, 11:06', '12 sept 2026, 11:06', 'Asia/Tokyo (GMT+9)'],
+  ])('prints every date and time on the company’s zone (%s) and names it', async (zone, closes, sheetOpens, sheetCloses, label) => {
+    vi.mocked(getCompanySettings).mockResolvedValue({ settings: { timezone: zone } } as unknown as CompanySettingsResponse)
+    const { container } = renderAs({ role: 'company_admin', companyId: COMPANY })
+    expect(await screen.findByText(`abierta hasta el ${closes}`)).toBeTruthy()
+    expect(screen.getByText(sheetOpens)).toBeTruthy()
+    expect(screen.getByText(sheetCloses)).toBeTruthy()
+    const run = container.querySelector('[data-slot="page-meta-sentences"]') as HTMLElement
+    expect(run.textContent).toContain(`Fechas y horas en la zona de la empresa: ${label}.`)
+    // The session's own company: a super administrator reads whichever tenant it is in.
+    expect(vi.mocked(getCompanySettings).mock.calls[0]?.[1]).toBe(COMPANY)
+  })
+
+  it('falls back to the browser’s zone when the company’s cannot be read, and says which', async () => {
+    const { container } = renderAs({ role: 'company_admin', companyId: COMPANY })
+    const browser = Intl.DateTimeFormat().resolvedOptions().timeZone
+    const time = new Date(detail.endTime).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+    expect(await screen.findByText(new RegExp(`^abierta hasta el .* a las ${time}$`))).toBeTruthy()
+    const run = container.querySelector('[data-slot="page-meta-sentences"]') as HTMLElement
+    expect(run.textContent).toContain('No se pudo leer la zona horaria de la empresa: fechas y horas en la de este navegador, ')
+    expect(run.textContent).toContain(browser)
   })
 })

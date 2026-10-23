@@ -23,25 +23,10 @@ import {
   type MicroclimateWizardValues,
   type WizardQuestionValues,
 } from '../../wizardValues'
-import { getCompanySettings } from '../../../org-structure/api/companySettings'
-import { isKnownTimeZone } from '../../../surveys/next/authoring/zonedWindow'
 import { nameHead } from '../../../dashboard/next/derive'
 import { newestFirst } from '../derive'
 import { defaultWallWindow, sessionZone, shortDayIn } from './companyClock'
-
-/**
- * The company's IANA zone from its settings (`GET /admin/companies/{id}/settings`, the read
- * Nueva encuesta makes for the same purpose), or `null` when it cannot be read or is not a zone
- * this platform knows. Never throws: the form works on the browser's zone without it.
- */
-async function companyZone(baseUrl: string, companyId: string): Promise<string | null> {
-  try {
-    const zone = (await getCompanySettings(baseUrl, companyId))?.settings?.timezone
-    return isKnownTimeZone(zone) ? zone : null
-  } catch {
-    return null
-  }
-}
+import { companyZone } from '../companyZone'
 
 /** Where the questions come from: the last session, a template (which brings none), or nothing. */
 export type StartFrom = 'previous' | 'template' | 'blank'

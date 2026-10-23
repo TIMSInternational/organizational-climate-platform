@@ -10,6 +10,7 @@ import {
   type MicroclimateInvitationList,
 } from '../../api/microclimateInvitations'
 import { describeApiError } from '../../../../api/describeApiError'
+import { companyZone } from '../companyZone'
 
 export type Settled<T> = { status: 'loading' } | { status: 'ready'; value: T } | { status: 'failed' }
 
@@ -17,6 +18,11 @@ export interface MicroclimateDetailState {
   status: 'loading' | 'ready' | 'error'
   error: string | null
   detail: MicroclimateDetail | null
+  /**
+   * The session's company's IANA zone the page prints dates and times on (`companyZone.ts`),
+   * or `null` when its settings could not be read -- the browser's is used, and the page says so.
+   */
+  timeZone: string | null
   invitations: Settled<MicroclimateInvitationList>
   reload: () => void
   /** A launch or a close is in flight. */
@@ -47,6 +53,7 @@ export function useMicroclimateDetailModel(id: string | undefined): Microclimate
   const navigate = useNavigate()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const [detail, setDetail] = useState<MicroclimateDetail | null>(null)
+  const [timeZone, setTimeZone] = useState<string | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [error, setError] = useState<string | null>(null)
   const [invitations, setInvitations] = useState<Settled<MicroclimateInvitationList>>({ status: 'loading' })
@@ -62,10 +69,15 @@ export function useMicroclimateDetailModel(id: string | undefined): Microclimate
     let cancelled = false
     setStatus('loading')
     setError(null)
+    // The session's own company's zone (a super administrator reads whichever tenant it is
+    // in), read before the page is drawn so no time is ever printed on the wrong clock first.
+    // `companyZone` never throws: an unreadable zone is `null`, not an error.
     getMicroclimate(baseUrl, id, locale)
-      .then((loaded) => {
+      .then(async (loaded) => ({ loaded, zone: await companyZone(baseUrl, loaded.companyId) }))
+      .then(({ loaded, zone }) => {
         if (cancelled) return
         setDetail(loaded)
+        setTimeZone(zone)
         setStatus('ready')
       })
       .catch((err: unknown) => {
@@ -138,6 +150,7 @@ export function useMicroclimateDetailModel(id: string | undefined): Microclimate
     status,
     error,
     detail,
+    timeZone,
     invitations,
     reload: () => {
       setGeneration((value) => value + 1)

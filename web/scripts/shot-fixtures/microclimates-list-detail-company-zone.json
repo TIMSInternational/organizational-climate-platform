@@ -1,0 +1,185 @@
+{
+  "_comment": "W5 microclimate list + detail on the company's clock (G16 after #635). microclimates-dates-company-zone.json (company settings timezone America/Costa_Rica) with the session made ACTIVE: opens 2026-10-21T14:00Z and closes 2026-10-24T04:00Z -- 08:00 on 21 Oct and 22:00 on 23 Oct in Costa Rica, 09:00 and 23:00 on a UTC-5 laptop -- 9 of 25 responses; plus a CLOSED past session created 2026-10-01T03:00Z, which is 30 Sep in Costa Rica and 1 Oct in UTC. Every /microclimates/{id} read answers the active detail. Shoot /microclimates and /microclimates/9d1c2a40-5b7e-4f61-9a3e-2f6c1d8e7b10 with --role company_admin --company 16c97c29-07f8-4522-86fc-e6cc56298829 --lang es. For the fallback, microclimates-list-detail-zone-unread.json is the same with no settings key (404).",
+  "GET /admin/companies/*/result-bands": {
+    "opportunityMin": 3,
+    "strengthMin": 4,
+    "criticalName": null,
+    "opportunityName": null,
+    "strengthName": null
+  },
+  "GET /admin/companies/*/settings": {
+    "resultBands": {
+      "opportunityMin": 3,
+      "strengthMin": 4,
+      "criticalName": null,
+      "opportunityName": null,
+      "strengthName": null
+    },
+    "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+    "settings": {
+      "surveyFrequency": "quarterly",
+      "microclimateEnabled": true,
+      "aiInsightsEnabled": true,
+      "anonymousSurveys": false,
+      "dataRetentionDays": 2555,
+      "timezone": "America/Costa_Rica",
+      "language": "es",
+      "credentialMode": "shared"
+    },
+    "branding": {
+      "logoUrl": null,
+      "primaryColor": "#3B82F6",
+      "secondaryColor": "#1E40AF",
+      "fontFamily": "Inter",
+      "customCss": null
+    }
+  },
+  "GET /notifications/mine": {
+    "notifications": []
+  },
+  "GET /profile": {
+    "id": "7b34dd6e-3472-4180-9873-ec5cf7d2af65",
+    "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+    "companyName": "Grupo Meridiano S.A.",
+    "companyLogoUrl": null,
+    "email": "ana.rojas@meridiano.test",
+    "name": "Ana Rojas",
+    "role": "company_admin",
+    "departmentId": null,
+    "departmentName": null,
+    "managerId": null,
+    "isActive": true,
+    "hasPassword": true,
+    "lastLoginAt": "2026-09-10T17:15:46.58381+00:00",
+    "createdAt": "2026-09-10T01:58:51.849247+00:00",
+    "demographics": {}
+  },
+  "GET /microclimates/*/live-results": {
+    "sentimentScore": null,
+    "engagementLevel": "medium",
+    "wordCloud": [],
+    "responseCount": 0,
+    "targetParticipantCount": 20,
+    "isSuppressed": true,
+    "suppressionReason": "below_minimum_respondents",
+    "minimumGroupSize": 5
+  },
+  "GET /microclimates/seats": {
+    "licensed": true,
+    "status": "active",
+    "seatsTotal": 200,
+    "seatsUsed": 37,
+    "seatsRemaining": 163
+  },
+  "GET /microclimates/*/invitations": {
+    "invitations": [],
+    "summary": {
+      "total": 0,
+      "pending": 0,
+      "sent": 0,
+      "opened": 0,
+      "started": 0,
+      "completed": 0,
+      "revoked": 0,
+      "expired": 0
+    },
+    "anonymity": {
+      "anonymous": true,
+      "highestRecordableState": "opened",
+      "suppressedStates": [
+        "started",
+        "completed"
+      ],
+      "guarantee": "Este microclima es anónimo."
+    }
+  },
+  "GET /microclimates/*": {
+    "id": "9d1c2a40-5b7e-4f61-9a3e-2f6c1d8e7b10",
+    "title": "Pulso de octubre — carga de trabajo",
+    "description": "Tres preguntas, anónimo, antes del cierre de mes.",
+    "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+    "createdBy": "7b34dd6e-3472-4180-9873-ec5cf7d2af65",
+    "status": "active",
+    "responseCount": 9,
+    "targetParticipantCount": 25,
+    "startTime": "2026-10-21T14:00:00+00:00",
+    "endTime": "2026-10-24T04:00:00+00:00",
+    "anonymousResponses": true,
+    "showLiveResults": true,
+    "questions": [
+      {
+        "id": "a1f0c1d2-0001-4a00-9000-000000000001",
+        "text": "¿Cómo se sintió con la carga de trabajo este mes?",
+        "type": "likert",
+        "options": null,
+        "required": true,
+        "order": 1,
+        "emojiOptions": null
+      },
+      {
+        "id": "a1f0c1d2-0002-4a00-9000-000000000002",
+        "text": "¿Qué tan claro tuvo sus prioridades?",
+        "type": "multiple_choice",
+        "options": [
+          {
+            "order": 0,
+            "value": "Muy claro",
+            "label": "Muy claro"
+          },
+          {
+            "order": 1,
+            "value": "Algo claro",
+            "label": "Algo claro"
+          },
+          {
+            "order": 2,
+            "value": "Nada claro",
+            "label": "Nada claro"
+          }
+        ],
+        "required": true,
+        "order": 2,
+        "emojiOptions": null
+      },
+      {
+        "id": "a1f0c1d2-0003-4a00-9000-000000000003",
+        "text": "En una palabra, ¿qué le ayudaría?",
+        "type": "open_ended",
+        "options": null,
+        "required": false,
+        "order": 3,
+        "emojiOptions": null
+      }
+    ],
+    "language": "es",
+    "resolvedLocale": "es",
+    "fallbackFields": []
+  },
+  "GET /microclimates": {
+    "microclimates": [
+      {
+        "id": "9d1c2a40-5b7e-4f61-9a3e-2f6c1d8e7b10",
+        "title": "Pulso de octubre — carga de trabajo",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "status": "active",
+        "language": "es",
+        "responseCount": 9,
+        "targetParticipantCount": 25,
+        "createdAt": "2026-10-20T22:30:00+00:00"
+      },
+      {
+        "id": "5e2b7c10-8a4d-4c3e-9f21-7d6a0b9c3e44",
+        "title": "Pulso de septiembre — reconocimiento",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "status": "closed",
+        "language": "es",
+        "responseCount": 14,
+        "targetParticipantCount": 25,
+        "createdAt": "2026-10-01T03:00:00+00:00"
+      }
+    ]
+  },
+  "GET /microclimate-templates": {
+    "templates": []
+  }
+}

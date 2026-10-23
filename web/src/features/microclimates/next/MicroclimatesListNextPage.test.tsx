@@ -349,3 +349,83 @@ describe('by role', () => {
     await waitFor(() => expect(vi.mocked(fetch)).not.toHaveBeenCalled())
   })
 })
+
+/**
+ * The company's clock (G16 on the list, after #635 gave it to Crear). Every instant here is
+ * fixed in UTC and every expectation names the zone it is read in, so the same assertions hold
+ * on a laptop in America/Chicago and on a CI runner in UTC.
+ */
+describe('the company’s clock', () => {
+  // 02:06 UTC on 12 Sep: 20:06 on 11 Sep in Costa Rica (UTC-6), 11:06 on 12 Sep in Tokyo (UTC+9).
+  const CLOSES_UTC = '2026-09-12T02:06:00Z'
+  const OPENS_UTC = '2026-09-10T02:06:00Z'
+
+  /** `routeFetch`, plus `GET /admin/companies/{id}/settings` answering `settings` (or 500). */
+  function routeWithSettings(rows: Microclimate[], details: Record<string, MicroclimateDetail>, settings: unknown | null) {
+    routeFetch(rows, details)
+    const base = vi.mocked(fetch).getMockImplementation()!
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (/\/admin\/companies\/[^/]+\/settings$/.test(url)) {
+        return Promise.resolve(
+          settings === null
+            ? new Response(JSON.stringify({ message: 'boom' }), { status: 500 })
+            : new Response(JSON.stringify(settings), { status: 200 }),
+        )
+      }
+      return base(input, init)
+    })
+  }
+
+  async function meta(): Promise<HTMLElement> {
+    return screen.findByText((_, node) => node?.getAttribute('data-slot') === 'session-meta' && /preguntas/.test(node.textContent ?? ''))
+  }
+
+  it.each([
+    ['America/Costa_Rica', 'abierto hasta el 11 sept a las 20:06', 'America/Costa_Rica (GMT-6)', '11 de septiembre'],
+    ['Asia/Tokyo', 'abierto hasta el 12 sept a las 11:06', 'Asia/Tokyo (GMT+9)', '12 de septiembre'],
+  ])('prints an open session’s close on the company’s zone (%s), whatever the browser’s, and names it', async (zone, close, label, longDate) => {
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
+    routeWithSettings([OPEN], { m1: detailFor(OPEN, { startTime: OPENS_UTC, endTime: CLOSES_UTC }) }, { companyId: 'their-co', settings: { timezone: zone } })
+    renderPage()
+    expect((await meta()).textContent).toContain(close)
+    expect(screen.getByTestId('microclimate-zone').textContent).toBe(`Fechas y horas en la zona de la empresa: ${label}.`)
+    // The flow card's sentence reads the same clock.
+    expect(screen.getByText(new RegExp(`cierre el ${longDate}:`))).toBeTruthy()
+    // The settings read is the session's own company's.
+    expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input).endsWith('/admin/companies/their-co/settings'))).toBe(true)
+  })
+
+  it('prints a draft’s opening and a past session’s creation day on the company’s zone', async () => {
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
+    const draft = row({ id: 'd1', status: 'draft' })
+    // 03:00 UTC on 1 Oct is still 30 Sep in Costa Rica.
+    const past = row({ id: 'p1', status: 'closed', title: 'Retro de ingeniería', createdAt: '2026-10-01T03:00:00Z' })
+    routeWithSettings([draft, past], { d1: detailFor(draft, { startTime: OPENS_UTC, endTime: CLOSES_UTC }) }, { settings: { timezone: 'America/Costa_Rica' } })
+    renderPage()
+    expect((await meta()).textContent).toContain('abre el 9 sept a las 20:06')
+    expect(within(section('Sesiones pasadas')).getByText(/creado el 30 sept/)).toBeTruthy()
+  })
+
+  it('falls back to the browser’s zone when the company’s cannot be read, and says which it used', async () => {
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
+    routeWithSettings([OPEN], { m1: detailFor(OPEN, { startTime: OPENS_UTC, endTime: CLOSES_UTC }) }, null)
+    renderPage()
+    const browser = Intl.DateTimeFormat().resolvedOptions().timeZone
+    const text = (await meta()).textContent ?? ''
+    const expected = new Intl.DateTimeFormat('es', { hour: 'numeric', minute: '2-digit' }).format(new Date(CLOSES_UTC))
+    expect(text).toContain(`a las ${expected}`)
+    const note = screen.getByTestId('microclimate-zone').textContent ?? ''
+    expect(note).toMatch(/^No se pudo leer la zona horaria de la empresa: fechas y horas en la de este navegador, /)
+    expect(note).toContain(browser)
+  })
+
+  it('says nothing about a zone when no row prints an hour', async () => {
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
+    const past = row({ id: 'p1', status: 'closed' })
+    routeWithSettings([past], {}, { settings: { timezone: 'America/Costa_Rica' } })
+    renderPage()
+    await screen.findByText(/creado el/)
+    expect(screen.queryByTestId('microclimate-zone')).toBeNull()
+  })
+})
