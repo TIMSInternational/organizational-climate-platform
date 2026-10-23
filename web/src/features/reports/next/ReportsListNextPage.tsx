@@ -44,6 +44,7 @@ import {
 } from './derive'
 import type { ReportContents, ReportRow } from './model'
 import { useReportsListModel } from './useReportsListModel'
+import { describeApiError } from '../../../api/describeApiError'
 
 // The canvas's `.label` head: 10px bold uppercase spaced .06em, 8px under it, over the
 // default hairline — the same head `SurveysListNextPage` draws.
@@ -123,7 +124,7 @@ export default function ReportsListNextPage() {
     } catch (err) {
       // The server's own refusal, not a generic sentence: a download that does nothing
       // reads as a broken build.
-      setActionError(err instanceof Error ? err.message : t('errors.generic'))
+      setActionError(describeApiError(err, t))
     } finally {
       setDownloadingId(null)
     }

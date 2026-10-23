@@ -46,6 +46,7 @@ import {
   type CrossField,
 } from './crossOptions'
 import { actionPlansOffered } from '../../action-plans/offered'
+import { describeApiError } from '../../../api/describeApiError'
 
 /** Four cohorts beside the baseline is five columns, which still reads on a laptop. */
 const MAX_COHORTS = 4
@@ -309,7 +310,7 @@ export default function SurveyCrossPanel({
       setChosen({})
     } catch (error) {
       setResults(null)
-      setFailure(error instanceof Error ? error.message : t('surveyResults.cross.failed'))
+      setFailure(describeApiError(error, t, 'surveyResults.cross.failed'))
     } finally {
       setBusy(false)
     }
@@ -353,7 +354,7 @@ export default function SurveyCrossPanel({
     } catch (error) {
       // The cohort is not staged on a failure: a chip for a column that could not be read is
       // the same disagreement this function exists to remove.
-      setFailure(error instanceof Error ? error.message : t('surveyResults.cross.failed'))
+      setFailure(describeApiError(error, t, 'surveyResults.cross.failed'))
     } finally {
       setBusy(false)
     }

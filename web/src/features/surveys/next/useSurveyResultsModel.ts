@@ -8,6 +8,7 @@ import { getSurveyAnalytics, type SurveyAnalyticsResponse } from '../api/surveyR
 import { getSurvey } from '../api/surveys'
 import { composeResultsModel, previousSurveyOf, type PreviousPayloads } from './compose'
 import type { SurveyResultsNextModel } from './model'
+import { describeApiError } from '../../../api/describeApiError'
 
 export interface SurveyResultsModelState {
   model: SurveyResultsNextModel | null
@@ -98,7 +99,7 @@ export function useSurveyResultsModel(surveyId: string | undefined): SurveyResul
       setPlans(loadedPlans.status === 'fulfilled' ? loadedPlans.value : null)
       setPrevious(earlier)
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('errors.generic'))
+      setError(describeApiError(err, t))
     } finally {
       setLoading(false)
     }

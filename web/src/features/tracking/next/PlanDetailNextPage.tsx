@@ -36,6 +36,7 @@ import type { PersonaRef, PlanDetailModel } from './model'
 import { InfoBox, PersonaAvatar, ProgressTrack, RowGlyph } from './parts'
 import { usePlanDetailModel, type PlanDetailState } from './usePlanDetailModel'
 import { byCount } from '../../../i18n/plural'
+import { describeApiError } from '../../../api/describeApiError'
 
 /**
  * `/tracking/planes/:id` — the redesigned plan detail, the Main artboard of 10 Sep. It
@@ -440,7 +441,7 @@ function PlanDetail({ model, state }: { model: PlanDetailModel; state: PlanDetai
               state
                 .recordAvance(input)
                 .then(() => setAvanceOpen(false))
-                .catch((err: unknown) => setAvanceError(err instanceof Error ? err.message : t('errors.generic')))
+                .catch((err: unknown) => setAvanceError(describeApiError(err, t)))
                 .finally(() => setSavingAvance(false))
             }}
           />
@@ -461,7 +462,7 @@ function PlanDetail({ model, state }: { model: PlanDetailModel; state: PlanDetai
             .then(() => setCumplidoOpen(false))
             .catch((err: unknown) => {
               setCumplidoOpen(false)
-              setCumplidoError(err instanceof Error ? err.message : t('errors.generic'))
+              setCumplidoError(describeApiError(err, t))
             })
         }}
       />
@@ -789,7 +790,7 @@ function InvolucradosCard({
       setChosen([])
       setOpen(false)
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('errors.generic'))
+      setError(describeApiError(err, t))
     } finally {
       setSaving(false)
     }

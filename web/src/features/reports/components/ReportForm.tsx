@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useTranslation } from '../../../i18n'
 import { Button, Input, Label, Textarea } from '../../../components/ui'
 import { REPORT_FORMATS } from '../api/reports'
+import { describeApiError } from '../../../api/describeApiError'
 
 export interface ReportFormValues {
   title: string
@@ -54,7 +55,7 @@ export default function ReportForm({ onSubmit }: ReportFormProps) {
       await onSubmit(values)
       setValues(EMPTY_VALUES)
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('errors.generic'))
+      setError(describeApiError(err, t))
     } finally {
       setSubmitting(false)
     }

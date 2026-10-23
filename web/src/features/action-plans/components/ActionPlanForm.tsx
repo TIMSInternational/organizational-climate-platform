@@ -18,6 +18,7 @@ import {
   TextField,
   TextareaField,
 } from '../../../components/ui'
+import { describeApiError } from '../../../api/describeApiError'
 
 export interface ActionPlanFormValues {
   title: string
@@ -163,7 +164,7 @@ export default function ActionPlanForm({ templates = [], owners = [], onSubmit, 
       // The parent reloads and closes the form on success, so this component is
       // unmounted before the state below could matter. On failure it stays mounted
       // with everything the user typed still in it.
-      setError(err instanceof Error ? err.message : t('errors.generic'))
+      setError(describeApiError(err, t))
     } finally {
       setSubmitting(false)
     }

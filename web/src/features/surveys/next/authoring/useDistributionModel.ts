@@ -25,6 +25,7 @@ import {
   type SurveyInvitationBatchResult,
   type SurveyInvitationList,
 } from '../../api/surveyDistribution'
+import { describeApiError } from '../../../../api/describeApiError'
 
 export interface DistributionModel {
   survey: SurveyDetail
@@ -133,7 +134,7 @@ export function useDistributionModel(surveyId: string) {
       }
       setState({ status: 'ready', model: { survey, distribution, invitations, departments, users, scoped } })
     } catch (error) {
-      setState({ status: 'error', message: error instanceof Error ? error.message : t('surveys.distribution.loadFailed') })
+      setState({ status: 'error', message: describeApiError(error, t, 'surveys.distribution.loadFailed') })
     }
   }, [baseUrl, caps.canAuthorSurveys, locale, scope.companyId, scope.status, surveyId, t])
 
@@ -169,7 +170,7 @@ export function useDistributionModel(surveyId: string) {
         }
         return true
       } catch (error) {
-        setActionError(error instanceof Error ? error.message : t('surveys.distribution.actionFailed'))
+        setActionError(describeApiError(error, t, 'surveys.distribution.actionFailed'))
         return false
       } finally {
         setBusy(false)

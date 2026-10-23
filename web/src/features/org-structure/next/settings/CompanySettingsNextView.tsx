@@ -24,6 +24,7 @@ import { bandsChanged, bandsDraftOf, bandsOut, judgeBands, type BandsDraft } fro
 import { fromWire, toWire } from '../../../result-bands/api'
 import { rememberResultBands } from '../../../result-bands/useResultBands'
 import { byCount } from '../../../../i18n/plural'
+import { describeApiError } from '../../../../api/describeApiError'
 
 const DASH = '—'
 const LANGUAGES = ['es', 'en']
@@ -171,7 +172,7 @@ function SettingsForm({
       if (saved.resultBands) rememberResultBands(companyId, fromWire(saved.resultBands))
       onSaved(saved)
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : t('errors.generic'))
+      setSaveError(describeApiError(err, t))
     } finally {
       setSaving(false)
     }

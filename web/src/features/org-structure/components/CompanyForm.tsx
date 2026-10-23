@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { CompanyValidation } from './companyValidation'
 import { useTranslation } from '../../../i18n'
+import { describeApiError } from '../../../api/describeApiError'
 
 export interface CompanyFormValues {
   name: string
@@ -32,7 +33,7 @@ export default function CompanyForm({ initialValues, submitLabel, onSubmit }: Co
     try {
       await onSubmit(values)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Save failed')
+      setError(describeApiError(err, t))
     } finally {
       setSubmitting(false)
     }

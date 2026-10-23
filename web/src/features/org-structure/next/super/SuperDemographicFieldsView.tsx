@@ -10,6 +10,7 @@ import { createDemographicField, updateDemographicField, type DemographicField }
 import { fieldVerdict, isUsableCut, keyFromLabel, meanPerValue, tippingPoint, usableCuts } from './demographics'
 import { CanvasChip, CanvasSelect, EmptyNote, Field, IconBox, Panel } from './parts'
 import { useSuperDemographicsModel } from './useSuperDemographicsModel'
+import { describeApiError } from '../../../../api/describeApiError'
 
 const TYPES = ['select', 'text', 'number', 'date'] as const
 const TYPE_KEY: Readonly<Record<string, string>> = {
@@ -255,7 +256,7 @@ export function FieldForm({
       }
       onDone()
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('superadmin.next.demographics.form.saveFailed'))
+      setError(describeApiError(err, t, 'superadmin.next.demographics.form.saveFailed'))
     } finally {
       setSaving(false)
     }

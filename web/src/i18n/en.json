@@ -1686,7 +1686,24 @@
     "unauthorized": "You don't have permission to access this resource",
     "sessionExpired": "Your session has expired. Please login again.",
     "validationError": "Validation error. Please check your input.",
-    "somethingWentWrong": "Something went wrong."
+    "somethingWentWrong": "Something went wrong.",
+    "api": {
+      "forbidden": "You don't have permission to do this. If you think you should, ask your administrator.",
+      "notFound": "We couldn't find it. It may have been deleted; reload the page.",
+      "conflict": "This could not be done in its current state; someone may have changed it. Reload the page and try again.",
+      "tooLarge": "The file or request is too large.",
+      "rateLimited": "Too many requests. Wait a minute and try again.",
+      "server": "The server could not complete the request. Try again in a few minutes.",
+      "rejected": "The request was refused. Check the details and try again.",
+      "codes": {
+        "survey_ended_audience_frozen": "This survey has ended: its audience can no longer be changed. Duplicate it to run it again.",
+        "credential_mode_frozen": "How respondents sign in is fixed when the survey is created and cannot be changed. Create a new survey to use a different mode.",
+        "not_mass_invite": "This person signs in with their email; there are no generated sign-in details to resend.",
+        "inactive": "This account is deactivated.",
+        "batch_too_large": "Too many people at once. Send a smaller batch.",
+        "per_survey_person": "This person signs in only with per-survey codes; resend their code from the survey's roster."
+      }
+    }
   },
   "export": {
     "exportPDF": "Export PDF",

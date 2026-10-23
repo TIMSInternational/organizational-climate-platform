@@ -45,6 +45,7 @@ import { daysToDue, dueDay, elapsedShare, type PlanFinding, type PlanMove } from
 import type { ActionPlanDetailModel, Settled } from './planDetailModel'
 import { useActionPlanDetailModel, type ActionPlanDetailState } from './useActionPlanDetailModel'
 import { byCount } from '../../../i18n/plural'
+import { describeApiError } from '../../../api/describeApiError'
 
 /**
  * `/action-plans/:id` — the redesigned Detalle de plan, drawn as the ActionPlanDetail board
@@ -165,7 +166,7 @@ function ActionPlanDetailView({ state, model }: { state: ActionPlanDetailState; 
     try {
       await state.deletePlan()
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : t('errors.generic'))
+      setDeleteError(describeApiError(err, t))
       // Rethrown so the dialog stays open with the reason in it (`ConfirmationDialog`).
       throw err
     }

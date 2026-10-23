@@ -16,6 +16,7 @@ import {
 } from '../../api/questionBank'
 import { listQuestionCategories, listQuestionLibraryItems } from '../../api/questionLibrary'
 import { OWNER_ALL, filterByOwner, librarySummary, type OwnerFilter } from './bankDerive'
+import { describeApiError } from '../../../../api/describeApiError'
 
 /** How long typing rests before the search reaches the server. */
 export const SEARCH_DEBOUNCE_MS = 350
@@ -116,7 +117,7 @@ export function useQuestionBankModel(): QuestionBankModelState {
       setTotal(list.total)
       setCategories(cats)
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : t('errors.generic'))
+      setError(describeApiError(cause, t))
     } finally {
       setLoading(false)
     }
@@ -186,7 +187,7 @@ export function useQuestionBankModel(): QuestionBankModelState {
         await action()
         await reload()
       } catch (cause) {
-        setActionError(cause instanceof Error ? cause.message : t('errors.generic'))
+        setActionError(describeApiError(cause, t))
         throw cause
       } finally {
         setBusyId(null)

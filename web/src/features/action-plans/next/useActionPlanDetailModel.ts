@@ -22,6 +22,7 @@ import { latestClosedSurvey } from '../../dashboard/next/compose'
 import { findingFromTags } from './useActionPlansListModel'
 import { planFinding, planMove, type PlanFinding, type PlanMove } from './planDetailDerive'
 import type { ActionPlanDetailModel, Settled } from './planDetailModel'
+import { describeApiError } from '../../../api/describeApiError'
 
 export interface ActionPlanDetailState {
   status: 'loading' | 'ready' | 'error'
@@ -131,7 +132,7 @@ export function useActionPlanDetailModel(
       .catch((err: unknown) => {
         if (cancelled) return
         setForbidden(isApiStatus(err, 403))
-        setError(err instanceof Error ? err.message : t('errors.generic'))
+        setError(describeApiError(err, t))
         setStatus('error')
       })
     return () => {
@@ -257,7 +258,7 @@ export function useActionPlanDetailModel(
         // the Ficha cannot disagree for a frame.
         setPlan(await updateActionPlan(baseUrl, id, patch))
       } catch (err) {
-        setActionError(err instanceof Error ? err.message : t('errors.generic'))
+        setActionError(describeApiError(err, t))
       } finally {
         setSaving(false)
       }

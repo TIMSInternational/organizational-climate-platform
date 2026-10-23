@@ -4,6 +4,7 @@ import { useCompanyScope } from '../../../../company-context'
 import { getLiveResults, getMicroclimate, listMicroclimates, type Microclimate, type MicroclimateDetail } from '../../api/microclimates'
 import { suppressWordCloud } from '../../microclimatePrivacy'
 import { belowFloor, newestFirst } from '../derive'
+import { describeApiError } from '../../../../api/describeApiError'
 
 export type Settled<T> = { status: 'loading' } | { status: 'ready'; value: T } | { status: 'failed' }
 
@@ -90,7 +91,7 @@ export function useMicroclimateAnalyticsModel(): MicroclimateAnalyticsState {
       })
       .catch((err: unknown) => {
         if (cancelled) return
-        setError(err instanceof Error ? err.message : t('errors.generic'))
+        setError(describeApiError(err, t))
         setStatus('error')
       })
     return () => {

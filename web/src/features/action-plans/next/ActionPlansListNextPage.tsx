@@ -52,6 +52,7 @@ import {
 import type { ActionPlansListModel, PlanGroup, PlanRow } from './model'
 import { useActionPlansListModel } from './useActionPlansListModel'
 import { byCount } from '../../../i18n/plural'
+import { describeApiError } from '../../../api/describeApiError'
 
 /**
  * The artboard's column header: 10px, bold, uppercase, the label ink, no tint — set at the TOP
@@ -160,7 +161,7 @@ function ActionPlansListBody({ ownerView }: { ownerView: boolean }) {
       await state.cancelPlan(cancelTarget.id)
       setCancelTarget(null)
     } catch (err) {
-      setCancelError(err instanceof Error ? err.message : t('errors.generic'))
+      setCancelError(describeApiError(err, t))
     }
   }
 

@@ -33,6 +33,7 @@ import CredentialModeCard from '../settings/CredentialModeCard'
 import { bandsChanged, bandsDraftOf, bandsOut, judgeBands, type BandsDraft } from '../settings/bandsDraft'
 import { fromWire, toWire } from '../../../result-bands/api'
 import { rememberResultBands } from '../../../result-bands/useResultBands'
+import { describeApiError } from '../../../../api/describeApiError'
 
 const LANGUAGES = ['es', 'en']
 /** Configuración de empresa's keys: the two screens make the same statements in the same words. */
@@ -140,7 +141,7 @@ function DetailForm({ model, onSaved }: { model: SuperCompanyDetailModel; onSave
       setSaved(true)
       onSaved()
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : t('superadmin.next.companyDetail.saveFailed'))
+      setSaveError(describeApiError(err, t, 'superadmin.next.companyDetail.saveFailed'))
     } finally {
       setSaving(false)
     }

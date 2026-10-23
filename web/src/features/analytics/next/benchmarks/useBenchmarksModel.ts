@@ -33,6 +33,7 @@ import { buildCohortReadout } from '../../cohortReadout'
 import type { BenchmarkFormValues } from '../../components/BenchmarkForm'
 import { printedIndex } from './derive'
 import type { BenchmarkReference, ReadoutState } from './model'
+import { describeApiError } from '../../../../api/describeApiError'
 
 export type BenchmarksStatus = 'forbidden' | 'loading' | 'ready' | 'error'
 
@@ -122,7 +123,7 @@ export function useBenchmarksModel(): BenchmarksState {
         setRows(readableBenchmarks(scope, result))
         setStatus('ready')
       } catch (err) {
-        setError(err instanceof Error ? err.message : t('errors.generic'))
+        setError(describeApiError(err, t))
         setStatus('error')
       }
     },

@@ -16,6 +16,7 @@ import {
 import { listDepartments } from '../../../org-structure/api/departments'
 import MicroclimateDetailNextPage from './MicroclimateDetailNextPage'
 import es from '../../../../i18n/es.json'
+import { ApiError } from '../../../../api/authFetch'
 
 const copy = es.microclimates.next
 
@@ -370,13 +371,15 @@ describe('MicroclimateDetailNextPage', () => {
 
   it('says why a discard was refused, and stays on the session', async () => {
     vi.mocked(getMicroclimate).mockResolvedValue({ ...detail, status: 'draft' })
-    vi.mocked(deleteMicroclimate).mockRejectedValue(new Error('Este microclima tiene invitaciones.'))
+    vi.mocked(deleteMicroclimate).mockRejectedValue(new ApiError(409, 'This microclimate has invitations.'))
     const user = userEvent.setup()
     renderAs({ role: 'company_admin', companyId: COMPANY })
     await user.click(await screen.findByRole('button', { name: copy.detail.moreActions }))
     await user.click(await screen.findByRole('menuitem', { name: copy.detail.discardDraft }))
     await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: copy.detail.discardDraft }))
-    expect(await screen.findByText('Este microclima tiene invitaciones.')).toBeTruthy()
+    // G30: the status in the reader's language; the server's English never reaches the screen.
+    expect(await screen.findByText(es.errors.api.conflict)).toBeTruthy()
+    expect(screen.queryByText('This microclimate has invitations.')).toBeNull()
     expect(screen.queryByText('the list')).toBeNull()
   })
 

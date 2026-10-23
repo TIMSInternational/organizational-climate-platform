@@ -51,11 +51,18 @@ export interface AuthFetchOptions {
  */
 export class ApiError extends Error {
   readonly status: number
+  /**
+   * The body's machine-readable `code`, when the API sent one (`{ message, code }`). Additive:
+   * `message` is unchanged, so no screen that prints it shows anything different. Read by
+   * `describeApiError`, which says a known code in the reader's language.
+   */
+  readonly code?: string
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, code?: string) {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    if (code !== undefined) this.code = code
   }
 }
 
@@ -121,7 +128,8 @@ export async function authFetch(
       return response
     }
     const body = await response.json().catch(() => null)
-    throw new ApiError(response.status, (body && body.message) || `Request failed: ${response.status}`)
+    const code = body && typeof body.code === 'string' ? body.code : undefined
+    throw new ApiError(response.status, (body && body.message) || `Request failed: ${response.status}`, code)
   }
   return response
 }

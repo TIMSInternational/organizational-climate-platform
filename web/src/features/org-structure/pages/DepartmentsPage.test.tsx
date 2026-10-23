@@ -329,7 +329,7 @@ describe('DepartmentsPage create and edit', () => {
     expect(Object.hasOwn(JSON.parse(String(post?.[1]?.body)), 'description')).toBe(false)
   })
 
-  it('surfaces the server validation message instead of a generic one', async () => {
+  it('says a refused save in the reader\'s language, never the server\'s English (G30)', async () => {
     vi.mocked(fetch).mockImplementation((_input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === 'POST') {
         return Promise.resolve(
@@ -344,7 +344,8 @@ describe('DepartmentsPage create and edit', () => {
     await userEvent.type(screen.getByLabelText(/Name/), 'Engineering')
     await userEvent.click(screen.getByRole('button', { name: 'Create Department' }))
 
-    expect(await screen.findByText('Department with this name already exists at this level')).toBeTruthy()
+    expect(await screen.findByText(en.errors.api.rejected)).toBeTruthy()
+    expect(screen.queryByText('Department with this name already exists at this level')).toBeNull()
   })
 
   it('sends only the three fields PUT accepts, and locks the parent selector', async () => {

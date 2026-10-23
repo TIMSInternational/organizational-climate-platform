@@ -26,6 +26,7 @@ import {
   summarise,
 } from './model'
 import { byCount } from '../../../../i18n/plural'
+import { describeApiError } from '../../../../api/describeApiError'
 
 /**
  * Editar preguntas, redesigned — both states of one route (canvas boards
@@ -54,7 +55,7 @@ function useSurveyQuestionsModel(id: string | undefined) {
       const [authoring, detail] = await Promise.all([getSurveyQuestionAuthoring(baseUrl, id), getSurvey(baseUrl, id, locale)])
       setState({ status: 'ready', authoring, detail })
     } catch (error) {
-      setState({ status: 'failed', message: error instanceof Error ? error.message : t('common.error') })
+      setState({ status: 'failed', message: describeApiError(error, t, 'common.error') })
     }
   }, [baseUrl, id, locale, t])
   useEffect(() => {
@@ -135,7 +136,7 @@ export default function SurveyQuestionsEditorPage() {
       await saveSurveyQuestions(baseUrl, id, questions)
       void navigate(`/surveys/${id}`)
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : t('common.error'))
+      setActionError(describeApiError(error, t, 'common.error'))
       setBusy(false)
     }
   }
@@ -148,7 +149,7 @@ export default function SurveyQuestionsEditorPage() {
       const created = await duplicateSurvey(baseUrl, id, locale)
       void navigate(`/surveys/${created.id}/questions`)
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : t('common.error'))
+      setActionError(describeApiError(error, t, 'common.error'))
       setBusy(false)
     }
   }

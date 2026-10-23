@@ -3,6 +3,7 @@ import type { Benchmark, BenchmarkMetricChange, PriorPeriodCandidate, PriorPerio
 import { useTranslation } from '../../../i18n'
 import { Button, Table } from '../../../components/ui'
 import { formatMetric } from '../../../components/charts'
+import { describeApiError } from '../../../api/describeApiError'
 
 export interface BenchmarkPriorPeriodPanelProps {
   benchmark: Benchmark
@@ -119,7 +120,7 @@ export default function BenchmarkPriorPeriodPanel({
       await onSet(status, priorId)
       setSelected('')
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('errors.generic'))
+      setError(describeApiError(err, t))
     } finally {
       setBusy(false)
     }

@@ -15,6 +15,7 @@ import { parseReportDocument } from '../reportDocument'
 import type { ReportFormValues } from '../components/ReportForm'
 import { contentsOf } from './derive'
 import type { ReportContents, ReportRow, ReportsListModel } from './model'
+import { describeApiError } from '../../../api/describeApiError'
 
 export type ReportsListStatus = 'forbidden' | 'loading' | 'ready' | 'error'
 
@@ -109,7 +110,7 @@ export function useReportsListModel(companyId: string | undefined, access: Repor
       setContentsMap(Object.fromEntries(completed.map((row, index) => [row.id, documents[index]])))
       setStatus('ready')
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('errors.generic'))
+      setError(describeApiError(err, t))
       setStatus('error')
     }
   }, [baseUrl, companyId, locale, mayRead, mayShare, t])

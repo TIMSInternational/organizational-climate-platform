@@ -10,6 +10,7 @@ import {
   type MicroclimateDetail,
 } from '../api/microclimates'
 import type { MicroclimateLiveNextModel } from './model'
+import { describeApiError } from '../../../api/describeApiError'
 
 /**
  * Milliseconds between polls. `usePolling` refuses anything outside 3000–5000; 4000 is
@@ -81,7 +82,7 @@ export function useMicroclimateLiveModel(id: string | undefined): MicroclimateLi
       setDetail(await getMicroclimate(baseUrl, id, locale))
       setStatus('ready')
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('errors.generic'))
+      setError(describeApiError(err, t))
       setStatus('error')
     }
   }, [baseUrl, id, locale, mayWatch, t])

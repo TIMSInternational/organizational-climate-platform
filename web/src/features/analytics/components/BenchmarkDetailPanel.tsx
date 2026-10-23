@@ -6,6 +6,7 @@ import QualityScoreReading from './QualityScoreReading'
 import { useTranslation } from '../../../i18n'
 import { Badge, Button, Table } from '../../../components/ui'
 import { formatMetric } from '../../../components/charts'
+import { describeApiError } from '../../../api/describeApiError'
 
 export interface BenchmarkDetailPanelProps {
   benchmark: Benchmark
@@ -261,7 +262,7 @@ function AddMetricForm({ onAddMetric }: { onAddMetric: (input: AddBenchmarkMetri
       setValue('')
       setUnit('')
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('errors.generic'))
+      setError(describeApiError(err, t))
     } finally {
       setSubmitting(false)
     }

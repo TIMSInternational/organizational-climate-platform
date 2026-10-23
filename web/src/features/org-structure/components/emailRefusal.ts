@@ -1,4 +1,5 @@
 import type { TranslateFn } from '../../../i18n'
+import { describeApiError } from '../../../api/describeApiError'
 import { UserEmailError, type UserEmailRefusal } from '../api/users'
 
 // Spelled out rather than built from the code, so keysExist.test.ts can see every key.
@@ -12,11 +13,12 @@ const REFUSAL_KEYS: Record<UserEmailRefusal, string> = {
 /**
  * The refusal text for a save that failed, translated when it is one of the four address
  * refusals (`UserEndpoints.UpdateAsync`): the API's own message is English, and these are the
- * ones an administrator can act on. Anything else keeps the old behaviour -- the server's message.
+ * ones an administrator can act on. Anything else is `describeApiError` with the screen's
+ * `fallbackKey` -- never the server's English (G30).
  */
-export function updateErrorText(t: TranslateFn, err: unknown, fallback: string): string {
+export function updateErrorText(t: TranslateFn, err: unknown, fallbackKey: string): string {
   if (err instanceof UserEmailError) {
     return t(REFUSAL_KEYS[err.code])
   }
-  return err instanceof Error ? err.message : fallback
+  return describeApiError(err, t, fallbackKey)
 }

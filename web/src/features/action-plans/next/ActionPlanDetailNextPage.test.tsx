@@ -498,14 +498,16 @@ describe('ActionPlanDetailNextPage', () => {
   })
 
   it('stays on the plan and says why when the delete is refused', async () => {
-    vi.mocked(deleteActionPlan).mockRejectedValue(new ApiError(403, 'No tienes permiso'))
+    vi.mocked(deleteActionPlan).mockRejectedValue(new ApiError(403, 'Forbidden'))
     renderAs({ role: 'company_admin', companyId: COMPANY })
     await userEvent.click(await screen.findByRole('button', { name: new RegExp(copy.moreActions.replace('{title}', '')) }))
     await userEvent.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: copy.delete.menu }))
     const confirm = await screen.findByRole('alertdialog')
     await userEvent.click(within(confirm).getByRole('button', { name: copy.delete.confirm }))
 
-    expect(await within(confirm).findByText('No tienes permiso')).toBeTruthy()
+    // G30: the refusal in the reader's language, never the server's English.
+    expect(await within(confirm).findByText(es.errors.api.forbidden)).toBeTruthy()
+    expect(within(confirm).queryByText('Forbidden')).toBeNull()
     expect(screen.queryByTestId('plans-list')).toBeNull()
   })
 

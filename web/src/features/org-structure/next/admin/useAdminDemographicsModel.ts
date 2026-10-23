@@ -3,6 +3,7 @@ import { useTranslation } from '../../../../i18n'
 import { useCompanyName } from '../../../../company-context/useCompanyName'
 import { getCompanyAdminDashboard } from '../../../dashboard/api/dashboard'
 import { listDemographicFields, type DemographicField } from '../../api/demographicFields'
+import { describeApiError } from '../../../../api/describeApiError'
 
 export interface AdminDemographicsState {
   status: 'idle' | 'loading' | 'ready' | 'error'
@@ -55,7 +56,7 @@ export function useAdminDemographicsModel(companyId: string | undefined, enabled
         setStatus('ready')
       } catch (err) {
         if (cancelled) return
-        setError(err instanceof Error ? err.message : t('errors.generic'))
+        setError(describeApiError(err, t))
         setStatus('error')
       }
     }

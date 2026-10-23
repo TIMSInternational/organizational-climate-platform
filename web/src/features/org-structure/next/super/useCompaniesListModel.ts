@@ -4,6 +4,7 @@ import { getSuperAdminDashboard } from '../../../dashboard/api/dashboard'
 import { listSurveys } from '../../../surveys/api/surveys'
 import { listCompanies } from '../../api/companies'
 import { composeCompanyRows, type CompanyListRow } from './companiesList'
+import { describeApiError } from '../../../../api/describeApiError'
 
 export interface CompaniesListState {
   status: 'loading' | 'ready' | 'error'
@@ -69,7 +70,7 @@ export function useCompaniesListModel(enabled: boolean): CompaniesListState {
         setStatus('ready')
       } catch (err) {
         if (cancelled) return
-        setError(err instanceof Error ? err.message : t('errors.generic'))
+        setError(describeApiError(err, t))
         setStatus('error')
       }
     }

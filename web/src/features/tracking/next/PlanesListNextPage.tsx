@@ -23,6 +23,7 @@ import { joinNames } from './derive'
 import { PersonaAvatar } from './parts'
 import { coverage, groupRows, nodoNamesOf, toRows, type ListRow } from './planesList'
 import { usePlanesListModel } from './usePlanesListModel'
+import { describeApiError } from '../../../api/describeApiError'
 
 const TH = 'h-auto bg-transparent px-1.5 pb-2 pt-2 first:pl-3 last:pr-3 text-2xs font-bold uppercase tracking-label text-fg-label whitespace-nowrap'
 /**
@@ -202,7 +203,7 @@ export default function PlanesListNextPage() {
       setCreating(false)
       state.reload()
     } catch (err) {
-      setCreateError(err instanceof Error ? err.message : t('tracking.serviceUnavailableTitle'))
+      setCreateError(describeApiError(err, t, 'tracking.serviceUnavailableTitle'))
     } finally {
       setSubmitting(false)
     }
