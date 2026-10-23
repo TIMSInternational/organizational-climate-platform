@@ -561,7 +561,44 @@ export async function reissueSurveyCredential(
   return body?.delivered && body.issuedOn ? { kind: 'sent', issuedOn: body.issuedOn } : { kind: 'send_failed' }
 }
 
-/** `DELETE /surveys/{id}` answers 204, so there is no body to parse. */
+/**
+ * Moves a survey's response window: `PUT /surveys/{id}` carrying only the two instants, so no
+ * other column is touched (every field of the payload is nullable and an omitted one is left
+ * alone).
+ *
+ * The server's rules, read from `SurveyEndpoints.UpdateAsync` rather than restated:
+ *
+ * - draft, scheduled and active only (`SurveyStatuses.AllowsScheduleEdit`); closed or archived
+ *   is a **409**;
+ * - an ACTIVE survey's start is a fact -- a different `startDate` is a **409** -- so for one the
+ *   caller sends `endDate` alone;
+ * - `startDate >= endDate` is a **400**.
+ *
+ * The instants are sent as ISO strings in UTC; the caller turns the company's wall clock into
+ * them (`zonedWindow.ts`). Respondents read the new close at once -- on a live survey this is the
+ * point.
+ */
+export async function updateSurveyWindow(
+  baseUrl: string,
+  id: string,
+  window: { startDate?: string; endDate: string },
+  lang?: string,
+): Promise<SurveyDetail> {
+  const response = await authFetch(withQuery(baseUrl, `/surveys/${id}`, { lang }), {
+    method: 'PUT',
+    body: JSON.stringify(window.startDate === undefined ? { endDate: window.endDate } : window),
+  })
+  return response.json() as Promise<SurveyDetail>
+}
+
+/**
+ * `DELETE /surveys/{id}` answers 204, so there is no body to parse.
+ *
+ * The server deletes a survey in ANY status as long as nobody has answered it
+ * (`DeleteSurveyAsync`: the response counter and the responses table are both checked), and
+ * answers **409** otherwise -- archiving is what keeps the answers. Questions, targets, the
+ * link, invitations and per-survey codes go with it (cascades).
+ */
 export async function deleteSurvey(baseUrl: string, id: string): Promise<void> {
   await authFetch(`${baseUrl}/surveys/${id}`, { method: 'DELETE' })
 }

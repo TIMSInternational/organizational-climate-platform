@@ -4303,7 +4303,36 @@
         "departmentsAlsoPeople": "and {count} people chosen individually.",
         "responsesDash": "— responses",
         "departmentsNote": "Departments appear in Results from one response once the whole survey reaches {floor} completed responses.",
-        "privacyNote": "Results are computed every time they are read. Nobody sees the responses one by one."
+        "privacyNote": "Results are computed every time they are read. Nobody sees the responses one by one.",
+        "delete": {
+          "action": "Delete",
+          "title": "Delete this survey?",
+          "body": "Its questions, link and invitations are deleted. Nobody has answered it yet. This cannot be undone.",
+          "bodyLive": "It is {status}: anyone holding its link or a code will no longer be able to answer. Its questions, link and invitations are deleted. Nobody has answered it yet. This cannot be undone.",
+          "typeLabel": "Type {word} to confirm",
+          "word": "DELETE",
+          "confirm": "Delete survey",
+          "deleting": "Deleting…",
+          "refusedResponses": "This survey already has responses and cannot be deleted. Archive it to stop seeing it without losing what people answered.",
+          "refusedGone": "This survey no longer exists. Go back to the survey list."
+        },
+        "window": {
+          "edit": "Change dates",
+          "title": "Survey dates",
+          "zone": "Times are the company's: {zone}.",
+          "zoneRow": "Time zone",
+          "start": "Opens",
+          "end": "Closes",
+          "save": "Save dates",
+          "startLocked": "It has opened: the opening cannot move. Only the close.",
+          "liveNote": "It is active: respondents see the new close immediately.",
+          "errorMissing": "Choose the opening and closing date and time.",
+          "errorOrder": "The opening must be before the close.",
+          "errorPast": "The close must be after this moment.",
+          "refusedOrder": "Not saved: the opening must be before the close.",
+          "refusedStatus": "Not saved: the survey changed status and no longer accepts this change. Reload the page.",
+          "refusedGone": "Not saved: this survey no longer exists."
+        }
       },
       "distribution": {
         "title": "Distribution",
