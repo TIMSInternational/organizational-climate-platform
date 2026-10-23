@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useLocation } from 'react-router'
+import { useLocation, useNavigate } from 'react-router'
 import { useTranslation } from '../../../../i18n'
-import { getMicroclimate, updateMicroclimate, type MicroclimateDetail } from '../../api/microclimates'
+import { deleteMicroclimate, getMicroclimate, updateMicroclimate, type MicroclimateDetail } from '../../api/microclimates'
 import {
   createMicroclimateInvitations,
-  listMicroclimateInvitations,
+  listAllMicroclimateInvitations,
   type CreateMicroclimateInvitationsInput,
   type MicroclimateInvitationBatchResult,
   type MicroclimateInvitationList,
@@ -27,6 +27,8 @@ export interface MicroclimateDetailState {
   launch: () => void
   close: () => Promise<void>
   invite: (input: CreateMicroclimateInvitationsInput) => Promise<MicroclimateInvitationBatchResult>
+  /** Discards a draft (`DELETE /microclimates/{id}`, G23) and returns to the list. */
+  discard: () => Promise<void>
 }
 
 /**
@@ -41,6 +43,7 @@ export interface MicroclimateDetailState {
 export function useMicroclimateDetailModel(id: string | undefined): MicroclimateDetailState {
   const { t, locale } = useTranslation()
   const location = useLocation()
+  const navigate = useNavigate()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const [detail, setDetail] = useState<MicroclimateDetail | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
@@ -78,7 +81,8 @@ export function useMicroclimateDetailModel(id: string | undefined): Microclimate
     if (!id) return
     let cancelled = false
     setInvitations({ status: 'loading' })
-    listMicroclimateInvitations(baseUrl, id)
+    // Every page, not the first 500 (G23): the card lists the whole set.
+    listAllMicroclimateInvitations(baseUrl, id)
       .then((list) => {
         if (!cancelled) setInvitations({ status: 'ready', value: list })
       })
@@ -118,6 +122,17 @@ export function useMicroclimateDetailModel(id: string | undefined): Microclimate
     [baseUrl, id, t],
   )
 
+  const discard = useCallback(async () => {
+    if (!id) return
+    setActionError(null)
+    try {
+      await deleteMicroclimate(baseUrl, id)
+      navigate('/microclimates')
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : t('errors.generic'))
+    }
+  }, [baseUrl, id, navigate, t])
+
   return {
     status,
     error,
@@ -133,5 +148,6 @@ export function useMicroclimateDetailModel(id: string | undefined): Microclimate
     launch: () => void transition('active'),
     close: () => transition('closed'),
     invite,
+    discard,
   }
 }

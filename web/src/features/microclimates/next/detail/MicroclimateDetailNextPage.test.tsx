@@ -7,10 +7,10 @@ import { setToken, clearToken } from '../../../../auth/token'
 import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../../company-context'
 import { clearCompanyNameCache } from '../../../../company-context/useCompanyName'
 import { tokenFor } from '../../../../test/jwtFixture'
-import { getMicroclimate, updateMicroclimate, type MicroclimateDetail } from '../../api/microclimates'
+import { deleteMicroclimate, getMicroclimate, getMicroclimateSeats, updateMicroclimate, type MicroclimateDetail } from '../../api/microclimates'
 import {
   createMicroclimateInvitations,
-  listMicroclimateInvitations,
+  listAllMicroclimateInvitations,
   type MicroclimateInvitationList,
 } from '../../api/microclimateInvitations'
 import { listDepartments } from '../../../org-structure/api/departments'
@@ -23,10 +23,12 @@ vi.mock('../../api/microclimates', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../api/microclimates')>()),
   getMicroclimate: vi.fn(),
   updateMicroclimate: vi.fn(),
+  deleteMicroclimate: vi.fn(),
+  getMicroclimateSeats: vi.fn(),
 }))
 vi.mock('../../api/microclimateInvitations', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../api/microclimateInvitations')>()),
-  listMicroclimateInvitations: vi.fn(),
+  listAllMicroclimateInvitations: vi.fn(),
   createMicroclimateInvitations: vi.fn(),
 }))
 vi.mock('../../../org-structure/api/departments', async (importOriginal) => ({
@@ -92,6 +94,7 @@ function renderAs(claims: Record<string, unknown>, state?: unknown) {
         <CompanyContextProvider>
           <Routes>
             <Route path="/microclimates/:id" element={<MicroclimateDetailNextPage />} />
+            <Route path="/microclimates" element={<p>the list</p>} />
           </Routes>
         </CompanyContextProvider>
       </MemoryRouter>
@@ -108,9 +111,13 @@ describe('MicroclimateDetailNextPage', () => {
     window.localStorage.setItem('preferredLocale', 'es')
     vi.mocked(getMicroclimate).mockReset().mockResolvedValue(detail)
     vi.mocked(updateMicroclimate).mockReset()
-    vi.mocked(listMicroclimateInvitations).mockReset().mockResolvedValue(invitations)
+    vi.mocked(listAllMicroclimateInvitations).mockReset().mockResolvedValue(invitations)
     vi.mocked(createMicroclimateInvitations).mockReset()
     vi.mocked(listDepartments).mockReset().mockResolvedValue([])
+    vi.mocked(deleteMicroclimate).mockReset().mockResolvedValue(undefined)
+    vi.mocked(getMicroclimateSeats)
+      .mockReset()
+      .mockResolvedValue({ licensed: true, status: 'active', seatsTotal: 200, seatsUsed: 37, seatsRemaining: 163 })
   })
 
   afterEach(() => {
@@ -185,7 +192,7 @@ describe('MicroclimateDetailNextPage', () => {
 
   it('offers more invitations at the canvas’s 34px once the list holds one, when they are offered at all', async () => {
     invitationsOffered = true
-    vi.mocked(listMicroclimateInvitations).mockResolvedValue({
+    vi.mocked(listAllMicroclimateInvitations).mockResolvedValue({
       ...invitations,
       invitations: [
         {
@@ -265,7 +272,7 @@ describe('MicroclimateDetailNextPage', () => {
     await waitFor(() => expect(vi.mocked(createMicroclimateInvitations).mock.calls[0]?.slice(1)).toEqual(['m1', { allCompanyUsers: true }]))
     expect(await within(dialog).findByText('Se crearon 12 invitaciones.')).toBeTruthy()
     // The list is read again, so the card counts what the server now holds.
-    await waitFor(() => expect(listMicroclimateInvitations).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(listAllMicroclimateInvitations).toHaveBeenCalledTimes(2))
   })
 
   it('says why a session Crear created did not launch', async () => {
@@ -309,6 +316,97 @@ describe('MicroclimateDetailNextPage', () => {
     renderAs({ role: 'employee', companyId: COMPANY })
     expect(await screen.findByText(copy.noAccessTitle)).toBeTruthy()
     expect(getMicroclimate).not.toHaveBeenCalled()
-    expect(listMicroclimateInvitations).not.toHaveBeenCalled()
+    expect(listAllMicroclimateInvitations).not.toHaveBeenCalled()
+  })
+  // ---- G23, the administrator's half ----
+
+  it('lists every invitation in a scrollable region, not the first eight', async () => {
+    const rows = Array.from({ length: 20 }, (_, index) => ({
+      id: `i${index}`,
+      microclimateId: 'm1',
+      userId: `u${index}`,
+      email: `persona${index}@meridiano.test`,
+      status: 'pending',
+      isExpired: false,
+      sentAt: null,
+      openedAt: null,
+      startedAt: null,
+      completedAt: null,
+      reminderCount: 0,
+      lastReminderSent: null,
+      expiresAt: '2026-09-17T03:00:00Z',
+      createdAt: '2026-09-10T03:00:00Z',
+    }))
+    vi.mocked(listAllMicroclimateInvitations).mockResolvedValue({
+      ...invitations,
+      invitations: rows,
+      summary: { ...invitations.summary, total: 20, pending: 20 },
+    })
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    const region = await screen.findByRole('region', { name: 'Lista de invitaciones (20)' })
+    expect(within(region).getAllByRole('listitem')).toHaveLength(20)
+    expect(within(region).getByText('persona19@meridiano.test')).toBeTruthy()
+    expect(region.getAttribute('tabindex')).toBe('0')
+    expect(region.className.split(' ')).toContain('overflow-y-auto')
+    expect(screen.getByText('20 de 20 invitaciones')).toBeTruthy()
+  })
+
+  it('offers a draft’s administrator its edit page and a discard that waits for the confirmation', async () => {
+    vi.mocked(getMicroclimate).mockResolvedValue({ ...detail, status: 'draft' })
+    const user = userEvent.setup()
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    const edit = await screen.findByRole('link', { name: copy.detail.editDraft })
+    expect(edit.getAttribute('href')).toBe('/microclimates/m1/edit')
+
+    await user.click(screen.getByRole('button', { name: copy.detail.moreActions }))
+    await user.click(await screen.findByRole('menuitem', { name: copy.detail.discardDraft }))
+    expect(deleteMicroclimate).not.toHaveBeenCalled()
+    const dialog = await screen.findByRole('alertdialog')
+    expect(within(dialog).getByText(/Se eliminará «Pulso semanal/)).toBeTruthy()
+    await user.click(within(dialog).getByRole('button', { name: copy.detail.discardDraft }))
+    await waitFor(() => expect(vi.mocked(deleteMicroclimate).mock.calls[0]?.slice(1)).toEqual(['m1']))
+    expect(await screen.findByText('the list')).toBeTruthy()
+  })
+
+  it('says why a discard was refused, and stays on the session', async () => {
+    vi.mocked(getMicroclimate).mockResolvedValue({ ...detail, status: 'draft' })
+    vi.mocked(deleteMicroclimate).mockRejectedValue(new Error('Este microclima tiene invitaciones.'))
+    const user = userEvent.setup()
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    await user.click(await screen.findByRole('button', { name: copy.detail.moreActions }))
+    await user.click(await screen.findByRole('menuitem', { name: copy.detail.discardDraft }))
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: copy.detail.discardDraft }))
+    expect(await screen.findByText('Este microclima tiene invitaciones.')).toBeTruthy()
+    expect(screen.queryByText('the list')).toBeNull()
+  })
+
+  it('offers neither edit nor discard on a live session, or to another company’s administrator', async () => {
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    await screen.findByText(copy.detail.ladderTitle)
+    expect(screen.queryByRole('link', { name: copy.detail.editDraft })).toBeNull()
+    cleanup()
+    vi.mocked(getMicroclimate).mockResolvedValue({ ...detail, status: 'draft' })
+    renderAs({ role: 'company_admin', companyId: 'c2' })
+    await screen.findByText(copy.detail.ladderTitle)
+    expect(screen.queryByRole('link', { name: copy.detail.editDraft })).toBeNull()
+  })
+
+  it('shows the company’s seats before launch, and says plainly when none are left', async () => {
+    vi.mocked(getMicroclimate).mockResolvedValue({ ...detail, status: 'draft' })
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    expect(await screen.findByText('Cupos disponibles: 163 de 200 (37 usados)')).toBeTruthy()
+    expect(vi.mocked(getMicroclimateSeats).mock.calls[0]?.[1]).toBe(COMPANY)
+    cleanup()
+    vi.mocked(getMicroclimateSeats).mockResolvedValue({ licensed: true, status: 'active', seatsTotal: 200, seatsUsed: 200, seatsRemaining: 0 })
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    expect(await screen.findByText('No quedan cupos: 200 de 200 usados')).toBeTruthy()
+    expect(screen.getByText(copy.seats.exhaustedBody)).toBeTruthy()
+  })
+
+  it('reads no seats for a closed session', async () => {
+    vi.mocked(getMicroclimate).mockResolvedValue({ ...detail, status: 'closed' })
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    await screen.findByText(copy.detail.ladderTitle)
+    expect(getMicroclimateSeats).not.toHaveBeenCalled()
   })
 })

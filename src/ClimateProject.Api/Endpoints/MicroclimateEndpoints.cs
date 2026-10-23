@@ -73,6 +73,14 @@ public static class MicroclimateEndpoints
         // of the full admin detail).
         group.MapGet("/{id:guid}", GetAsync).AllowAnonymous();
         group.MapPut("/{id:guid}", UpdateAsync);
+
+        // A draft's authoring, after create (G23). Before these, PUT /{id} could change a
+        // draft's title, description and end time but nothing else, and nothing could remove
+        // a draft at all. Both refuse anything that is not an untouched draft -- see their
+        // handlers. "seats" is a literal segment, so no "/{id:guid}" template can match it.
+        group.MapPut("/{id:guid}/content", ReplaceContentAsync);
+        group.MapDelete("/{id:guid}", DeleteAsync);
+        group.MapGet("/seats", GetSeatsAsync);
         group.MapGet("/{id:guid}/live-results", GetLiveResultsAsync);
 
         // The lifecycle. Both routes funnel into ApplyStatusAsync, as does the Status field
@@ -244,6 +252,261 @@ public static class MicroclimateEndpoints
         return Results.Ok(new MicroclimateListResponse(microclimates));
     }
 
+    /// <summary>
+    /// The content a microclimate is authored with -- title, description and questions --
+    /// resolved for <paramref name="language"/> and validated, before anything reaches the
+    /// change tracker.
+    /// </summary>
+    /// <remarks>
+    /// One implementation for the two routes that write content: <c>POST /microclimates</c>
+    /// and <c>PUT /microclimates/{id}/content</c> (a draft's content, G23). "Same validation as
+    /// create" is then a fact of the code rather than a promise two copies have to keep.
+    /// Moved here verbatim from <c>CreateAsync</c>; every refusal is the same sentence it was.
+    /// </remarks>
+    private static (PreparedContent? Content, IResult? Error) PrepareContent(
+        LocalizedInput? title,
+        LocalizedInput? description,
+        List<CreateQuestionInput>? questions,
+        string language)
+    {
+        if (title is null)
+        {
+            return (null, Results.Json(new { message = "Title is required" }, statusCode: 400));
+        }
+
+        if (!title.TryResolve(language, "title", out var titleEn, out var titleEs, out var titleError))
+        {
+            return (null, Results.Json(new { message = titleError }, statusCode: 400));
+        }
+
+        if (string.IsNullOrWhiteSpace(titleEn) && string.IsNullOrWhiteSpace(titleEs))
+        {
+            return (null, Results.Json(new { message = "Title is required" }, statusCode: 400));
+        }
+
+        string? descriptionEn = null;
+        string? descriptionEs = null;
+        if (description is not null
+            && !description.TryResolve(language, "description", out descriptionEn, out descriptionEs, out var descriptionError))
+        {
+            return (null, Results.Json(new { message = descriptionError }, statusCode: 400));
+        }
+
+        var preparedQuestions = new List<PreparedQuestion>();
+        foreach (var question in questions ?? [])
+        {
+            if (!MicroclimateValidation.ValidQuestionTypes.Contains(question.Type))
+            {
+                return (null, Results.Json(new { message = $"Invalid question type: {question.Type}" }, statusCode: 400));
+            }
+
+            if (question.Text is null)
+            {
+                return (null, Results.Json(new { message = $"Question {question.Order} requires text" }, statusCode: 400));
+            }
+
+            if (!question.Text.TryResolve(language, $"questions[{question.Order}].text", out var questionTextEn, out var questionTextEs, out var textError))
+            {
+                return (null, Results.Json(new { message = textError }, statusCode: 400));
+            }
+
+            if (string.IsNullOrWhiteSpace(questionTextEn) && string.IsNullOrWhiteSpace(questionTextEs))
+            {
+                return (null, Results.Json(new { message = $"Question {question.Order} requires text" }, statusCode: 400));
+            }
+
+            var options = new List<MicroclimateQuestionOption>();
+            var order = 0;
+            foreach (var optionInput in question.Options ?? [])
+            {
+                string? labelEn = null;
+                string? labelEs = null;
+                if (optionInput.Label is not null
+                    && !optionInput.Label.TryResolve(language, $"questions[{question.Order}].options[{order}].label", out labelEn, out labelEs, out var labelError))
+                {
+                    return (null, Results.Json(new { message = labelError }, statusCode: 400));
+                }
+
+                var value = MicroclimateContent.DeriveOptionValue(optionInput.Value, labelEn, labelEs);
+                if (value is null)
+                {
+                    return (null, Results.Json(new { message = $"Option {order} of question {question.Order} needs a value or a label" }, statusCode: 400));
+                }
+
+                if (options.Any(o => string.Equals(o.Value, value, StringComparison.Ordinal)))
+                {
+                    // Caught here rather than by the unique index so it is a 400 naming
+                    // the option instead of an opaque DbUpdateException. Duplicate values
+                    // would make a stored answer ambiguous -- the exact failure the stable
+                    // value exists to prevent.
+                    return (null, Results.Json(new { message = $"Question {question.Order} has duplicate option value '{value}'" }, statusCode: 400));
+                }
+
+                options.Add(new MicroclimateQuestionOption
+                {
+                    Order = order,
+                    Value = value,
+                    LabelEn = labelEn,
+                    LabelEs = labelEs,
+                });
+                order++;
+            }
+
+            // multiple_choice has no meaningful fallback rendering -- unlike "rating" (which
+            // falls back to a 1-5 scale) there is nothing to show the respondent without at
+            // least 2 real options, and SubmitResponseAsync's validation for this type only
+            // makes sense once the option set is guaranteed non-empty. Reject at creation time
+            // instead of persisting an unanswerable question.
+            if (question.Type == QuestionTypes.MultipleChoice && options.Count < 2)
+            {
+                return (null, Results.Json(new { message = "multiple_choice questions require at least 2 options" }, statusCode: 400));
+            }
+
+            // The emoji scale (#198). Prepared in the same pass and by the same rules as the
+            // plain options above -- validated before anything reaches the change tracker, so
+            // a bad scale on question 5 does not leave questions 1-4 half-built.
+            var emojiOptions = new List<MicroclimateQuestionEmojiOption>();
+            var emojiOrder = 0;
+            foreach (var emojiInput in question.EmojiOptions ?? [])
+            {
+                // Refused rather than ignored. Every other type either renders its plain
+                // options or falls back to a 1-5 scale; none of them reads this field, so
+                // accepting it would take an author's authored scale and drop it silently.
+                if (question.Type != QuestionTypes.EmojiRating)
+                {
+                    return (null, Results.Json(new { message = $"Question {question.Order} is '{question.Type}', which has no emoji scale. emojiOptions is only valid on an {QuestionTypes.EmojiRating} question." }, statusCode: 400));
+                }
+
+                var emoji = emojiInput.Emoji?.Trim();
+                if (string.IsNullOrEmpty(emoji))
+                {
+                    return (null, Results.Json(new { message = $"Emoji option {emojiOrder} of question {question.Order} needs an emoji" }, statusCode: 400));
+                }
+
+                if (CharacterCount(emoji) > MaxEmojiLength)
+                {
+                    return (null, Results.Json(new { message = $"Emoji option {emojiOrder} of question {question.Order} is longer than {MaxEmojiLength} characters" }, statusCode: 400));
+                }
+
+                string? emojiLabelEn = null;
+                string? emojiLabelEs = null;
+                if (emojiInput.Label is not null
+                    && !emojiInput.Label.TryResolve(language, $"questions[{question.Order}].emojiOptions[{emojiOrder}].label", out emojiLabelEn, out emojiLabelEs, out var emojiLabelError))
+                {
+                    return (null, Results.Json(new { message = emojiLabelError }, statusCode: 400));
+                }
+
+                // The load-bearing rule of this whole feature. An emoji carries no name of
+                // its own that a screen reader can be relied on to speak in the respondent's
+                // language, so a scale point without a label is exactly the unusable control
+                // that reusing the plain Options array was rejected for (#198). Refused at
+                // creation, not papered over at render.
+                if (string.IsNullOrWhiteSpace(emojiLabelEn) && string.IsNullOrWhiteSpace(emojiLabelEs))
+                {
+                    return (null, Results.Json(new { message = $"Emoji option {emojiOrder} of question {question.Order} needs a label -- it is the option's accessible name" }, statusCode: 400));
+                }
+
+                // ...and a name the column cannot hold is refused here for the same reason the
+                // glyph above it is: the alternative is a DbUpdateException the author reads as
+                // "An unexpected error occurred."
+                var emojiLabelTooLong = new[] { emojiLabelEn?.Trim(), emojiLabelEs?.Trim() }
+                    .FirstOrDefault(label => label is not null && CharacterCount(label) > MaxEmojiLabelLength);
+                if (emojiLabelTooLong is not null)
+                {
+                    return (null, Results.Json(new { message = $"Emoji option {emojiOrder} of question {question.Order} has a label longer than {MaxEmojiLabelLength} characters" }, statusCode: 400));
+                }
+
+                // Position on the scale when the author did not say. Listing five faces then
+                // gets 1..5, which is the numbering a reader of the export expects and the
+                // one the plain 1-5 scale already uses.
+                var emojiValue = emojiInput.Value ?? emojiOrder + 1;
+                if (emojiOptions.Any(o => o.Value == emojiValue))
+                {
+                    // Caught here rather than by the unique index, for the reason the plain
+                    // duplicate check above gives: a duplicate value makes a submission
+                    // ambiguous -- two faces accepting the same string, with nothing to say
+                    // which one was meant -- and a 400 naming the option beats an opaque
+                    // DbUpdateException.
+                    return (null, Results.Json(new { message = $"Question {question.Order} has duplicate emoji option value '{emojiValue}'" }, statusCode: 400));
+                }
+
+                emojiOptions.Add(new MicroclimateQuestionEmojiOption
+                {
+                    Order = emojiOrder,
+                    Emoji = emoji,
+                    Value = emojiValue,
+                    LabelEn = emojiLabelEn?.Trim(),
+                    LabelEs = emojiLabelEs?.Trim(),
+                });
+                emojiOrder++;
+            }
+
+            if (question.Type == QuestionTypes.EmojiRating)
+            {
+                if (emojiOptions.Count < MinEmojiOptions)
+                {
+                    return (null, Results.Json(new { message = $"{QuestionTypes.EmojiRating} questions require at least {MinEmojiOptions} emoji options" }, statusCode: 400));
+                }
+
+                // Same "never silently drop input" rule as above, the other way round: the
+                // respond page renders the emoji scale for this type and nothing else, so
+                // plain options here would be collected and never shown.
+                if (options.Count > 0)
+                {
+                    return (null, Results.Json(new { message = $"Question {question.Order} is '{QuestionTypes.EmojiRating}', which is answered on its emoji scale. Use emojiOptions rather than options." }, statusCode: 400));
+                }
+            }
+
+            preparedQuestions.Add(new PreparedQuestion(question, questionTextEn, questionTextEs, options, emojiOptions));
+        }
+
+        return (new PreparedContent(titleEn, titleEs, descriptionEn, descriptionEs, preparedQuestions), null);
+    }
+
+    /// <summary>
+    /// Stages a microclimate's prepared questions, with their options and emoji scales, on the
+    /// change tracker. Does not save. Shared by create and by replacing a draft's content.
+    /// </summary>
+    private static void AddQuestions(
+        ClimateProjectDbContext db,
+        Guid microclimateId,
+        IReadOnlyList<PreparedQuestion> preparedQuestions)
+    {
+        foreach (var prepared in preparedQuestions)
+        {
+            var questionId = Guid.NewGuid();
+            db.MicroclimateQuestions.Add(new MicroclimateQuestion
+            {
+                Id = questionId,
+                MicroclimateId = microclimateId,
+                TextEn = prepared.TextEn,
+                TextEs = prepared.TextEs,
+                Type = prepared.Input.Type,
+                Required = prepared.Input.Required,
+                Order = prepared.Input.Order,
+            });
+
+            foreach (var option in prepared.Options)
+            {
+                option.MicroclimateQuestionId = questionId;
+                db.MicroclimateQuestionOptions.Add(option);
+            }
+
+            foreach (var emojiOption in prepared.EmojiOptions)
+            {
+                emojiOption.MicroclimateQuestionId = questionId;
+                db.MicroclimateQuestionEmojiOptions.Add(emojiOption);
+            }
+        }
+    }
+
+    private sealed record PreparedContent(
+        string? TitleEn,
+        string? TitleEs,
+        string? DescriptionEn,
+        string? DescriptionEs,
+        List<PreparedQuestion> Questions);
+
     // A question's localized text and stable-value options, validated before anything
     // is added to the change tracker -- so a bad option on question 5 does not leave
     // questions 1-4 half-built.
@@ -399,196 +662,13 @@ public static class MicroclimateEndpoints
             return Results.Json(new { message = $"Invalid language: {request.Language}. Expected one of: {string.Join(", ", ContentLanguages.ValidLanguages)}" }, statusCode: 400);
         }
 
-        if (request.Title is null)
+        var (content, contentError) = PrepareContent(request.Title, request.Description, request.Questions, language);
+        if (contentError is not null)
         {
-            return Results.Json(new { message = "Title is required" }, statusCode: 400);
+            return contentError;
         }
 
-        if (!request.Title.TryResolve(language, "title", out var titleEn, out var titleEs, out var titleError))
-        {
-            return Results.Json(new { message = titleError }, statusCode: 400);
-        }
-
-        if (string.IsNullOrWhiteSpace(titleEn) && string.IsNullOrWhiteSpace(titleEs))
-        {
-            return Results.Json(new { message = "Title is required" }, statusCode: 400);
-        }
-
-        string? descriptionEn = null;
-        string? descriptionEs = null;
-        if (request.Description is not null
-            && !request.Description.TryResolve(language, "description", out descriptionEn, out descriptionEs, out var descriptionError))
-        {
-            return Results.Json(new { message = descriptionError }, statusCode: 400);
-        }
-
-        var preparedQuestions = new List<PreparedQuestion>();
-        foreach (var question in request.Questions ?? [])
-        {
-            if (!MicroclimateValidation.ValidQuestionTypes.Contains(question.Type))
-            {
-                return Results.Json(new { message = $"Invalid question type: {question.Type}" }, statusCode: 400);
-            }
-
-            if (question.Text is null)
-            {
-                return Results.Json(new { message = $"Question {question.Order} requires text" }, statusCode: 400);
-            }
-
-            if (!question.Text.TryResolve(language, $"questions[{question.Order}].text", out var questionTextEn, out var questionTextEs, out var textError))
-            {
-                return Results.Json(new { message = textError }, statusCode: 400);
-            }
-
-            if (string.IsNullOrWhiteSpace(questionTextEn) && string.IsNullOrWhiteSpace(questionTextEs))
-            {
-                return Results.Json(new { message = $"Question {question.Order} requires text" }, statusCode: 400);
-            }
-
-            var options = new List<MicroclimateQuestionOption>();
-            var order = 0;
-            foreach (var optionInput in question.Options ?? [])
-            {
-                string? labelEn = null;
-                string? labelEs = null;
-                if (optionInput.Label is not null
-                    && !optionInput.Label.TryResolve(language, $"questions[{question.Order}].options[{order}].label", out labelEn, out labelEs, out var labelError))
-                {
-                    return Results.Json(new { message = labelError }, statusCode: 400);
-                }
-
-                var value = MicroclimateContent.DeriveOptionValue(optionInput.Value, labelEn, labelEs);
-                if (value is null)
-                {
-                    return Results.Json(new { message = $"Option {order} of question {question.Order} needs a value or a label" }, statusCode: 400);
-                }
-
-                if (options.Any(o => string.Equals(o.Value, value, StringComparison.Ordinal)))
-                {
-                    // Caught here rather than by the unique index so it is a 400 naming
-                    // the option instead of an opaque DbUpdateException. Duplicate values
-                    // would make a stored answer ambiguous -- the exact failure the stable
-                    // value exists to prevent.
-                    return Results.Json(new { message = $"Question {question.Order} has duplicate option value '{value}'" }, statusCode: 400);
-                }
-
-                options.Add(new MicroclimateQuestionOption
-                {
-                    Order = order,
-                    Value = value,
-                    LabelEn = labelEn,
-                    LabelEs = labelEs,
-                });
-                order++;
-            }
-
-            // multiple_choice has no meaningful fallback rendering -- unlike "rating" (which
-            // falls back to a 1-5 scale) there is nothing to show the respondent without at
-            // least 2 real options, and SubmitResponseAsync's validation for this type only
-            // makes sense once the option set is guaranteed non-empty. Reject at creation time
-            // instead of persisting an unanswerable question.
-            if (question.Type == QuestionTypes.MultipleChoice && options.Count < 2)
-            {
-                return Results.Json(new { message = "multiple_choice questions require at least 2 options" }, statusCode: 400);
-            }
-
-            // The emoji scale (#198). Prepared in the same pass and by the same rules as the
-            // plain options above -- validated before anything reaches the change tracker, so
-            // a bad scale on question 5 does not leave questions 1-4 half-built.
-            var emojiOptions = new List<MicroclimateQuestionEmojiOption>();
-            var emojiOrder = 0;
-            foreach (var emojiInput in question.EmojiOptions ?? [])
-            {
-                // Refused rather than ignored. Every other type either renders its plain
-                // options or falls back to a 1-5 scale; none of them reads this field, so
-                // accepting it would take an author's authored scale and drop it silently.
-                if (question.Type != QuestionTypes.EmojiRating)
-                {
-                    return Results.Json(new { message = $"Question {question.Order} is '{question.Type}', which has no emoji scale. emojiOptions is only valid on an {QuestionTypes.EmojiRating} question." }, statusCode: 400);
-                }
-
-                var emoji = emojiInput.Emoji?.Trim();
-                if (string.IsNullOrEmpty(emoji))
-                {
-                    return Results.Json(new { message = $"Emoji option {emojiOrder} of question {question.Order} needs an emoji" }, statusCode: 400);
-                }
-
-                if (CharacterCount(emoji) > MaxEmojiLength)
-                {
-                    return Results.Json(new { message = $"Emoji option {emojiOrder} of question {question.Order} is longer than {MaxEmojiLength} characters" }, statusCode: 400);
-                }
-
-                string? emojiLabelEn = null;
-                string? emojiLabelEs = null;
-                if (emojiInput.Label is not null
-                    && !emojiInput.Label.TryResolve(language, $"questions[{question.Order}].emojiOptions[{emojiOrder}].label", out emojiLabelEn, out emojiLabelEs, out var emojiLabelError))
-                {
-                    return Results.Json(new { message = emojiLabelError }, statusCode: 400);
-                }
-
-                // The load-bearing rule of this whole feature. An emoji carries no name of
-                // its own that a screen reader can be relied on to speak in the respondent's
-                // language, so a scale point without a label is exactly the unusable control
-                // that reusing the plain Options array was rejected for (#198). Refused at
-                // creation, not papered over at render.
-                if (string.IsNullOrWhiteSpace(emojiLabelEn) && string.IsNullOrWhiteSpace(emojiLabelEs))
-                {
-                    return Results.Json(new { message = $"Emoji option {emojiOrder} of question {question.Order} needs a label -- it is the option's accessible name" }, statusCode: 400);
-                }
-
-                // ...and a name the column cannot hold is refused here for the same reason the
-                // glyph above it is: the alternative is a DbUpdateException the author reads as
-                // "An unexpected error occurred."
-                var emojiLabelTooLong = new[] { emojiLabelEn?.Trim(), emojiLabelEs?.Trim() }
-                    .FirstOrDefault(label => label is not null && CharacterCount(label) > MaxEmojiLabelLength);
-                if (emojiLabelTooLong is not null)
-                {
-                    return Results.Json(new { message = $"Emoji option {emojiOrder} of question {question.Order} has a label longer than {MaxEmojiLabelLength} characters" }, statusCode: 400);
-                }
-
-                // Position on the scale when the author did not say. Listing five faces then
-                // gets 1..5, which is the numbering a reader of the export expects and the
-                // one the plain 1-5 scale already uses.
-                var emojiValue = emojiInput.Value ?? emojiOrder + 1;
-                if (emojiOptions.Any(o => o.Value == emojiValue))
-                {
-                    // Caught here rather than by the unique index, for the reason the plain
-                    // duplicate check above gives: a duplicate value makes a submission
-                    // ambiguous -- two faces accepting the same string, with nothing to say
-                    // which one was meant -- and a 400 naming the option beats an opaque
-                    // DbUpdateException.
-                    return Results.Json(new { message = $"Question {question.Order} has duplicate emoji option value '{emojiValue}'" }, statusCode: 400);
-                }
-
-                emojiOptions.Add(new MicroclimateQuestionEmojiOption
-                {
-                    Order = emojiOrder,
-                    Emoji = emoji,
-                    Value = emojiValue,
-                    LabelEn = emojiLabelEn?.Trim(),
-                    LabelEs = emojiLabelEs?.Trim(),
-                });
-                emojiOrder++;
-            }
-
-            if (question.Type == QuestionTypes.EmojiRating)
-            {
-                if (emojiOptions.Count < MinEmojiOptions)
-                {
-                    return Results.Json(new { message = $"{QuestionTypes.EmojiRating} questions require at least {MinEmojiOptions} emoji options" }, statusCode: 400);
-                }
-
-                // Same "never silently drop input" rule as above, the other way round: the
-                // respond page renders the emoji scale for this type and nothing else, so
-                // plain options here would be collected and never shown.
-                if (options.Count > 0)
-                {
-                    return Results.Json(new { message = $"Question {question.Order} is '{QuestionTypes.EmojiRating}', which is answered on its emoji scale. Use emojiOptions rather than options." }, statusCode: 400);
-                }
-            }
-
-            preparedQuestions.Add(new PreparedQuestion(question, questionTextEn, questionTextEs, options, emojiOptions));
-        }
+        var (titleEn, titleEs, descriptionEn, descriptionEs, preparedQuestions) = content!;
 
         // TemplateId has a real FK to microclimate_templates (see MicroclimateConfiguration).
         // An unknown id would otherwise surface as an opaque 500 from the DbUpdateException
@@ -641,32 +721,7 @@ public static class MicroclimateEndpoints
             template.UpdatedAt = now;
         }
 
-        foreach (var prepared in preparedQuestions)
-        {
-            var questionId = Guid.NewGuid();
-            db.MicroclimateQuestions.Add(new MicroclimateQuestion
-            {
-                Id = questionId,
-                MicroclimateId = microclimate.Id,
-                TextEn = prepared.TextEn,
-                TextEs = prepared.TextEs,
-                Type = prepared.Input.Type,
-                Required = prepared.Input.Required,
-                Order = prepared.Input.Order,
-            });
-
-            foreach (var option in prepared.Options)
-            {
-                option.MicroclimateQuestionId = questionId;
-                db.MicroclimateQuestionOptions.Add(option);
-            }
-
-            foreach (var emojiOption in prepared.EmojiOptions)
-            {
-                emojiOption.MicroclimateQuestionId = questionId;
-                db.MicroclimateQuestionEmojiOptions.Add(emojiOption);
-            }
-        }
+        AddQuestions(db, microclimate.Id, preparedQuestions);
 
         await db.SaveChangesAsync(cancellationToken);
 
@@ -845,6 +900,232 @@ public static class MicroclimateEndpoints
         await db.SaveChangesAsync(cancellationToken);
 
         return Results.Ok(await ToDetailAsync(microclimate, db, lang, cancellationToken));
+    }
+
+    /// <summary>The refusal for editing or discarding anything that is not an untouched draft.</summary>
+    internal const string NotADraftMessage =
+        "Only a draft microclimate with no responses can be edited or discarded. Once launched, its "
+        + "questions are what respondents answered; close it instead.";
+
+    /// <summary>The refusal for discarding a draft somebody has already been invited to.</summary>
+    internal const string DraftHasInvitationsMessage =
+        "This microclimate has invitations, so it cannot be discarded.";
+
+    private static Task<IResult> ReplaceContentAsync(
+        Guid id,
+        ReplaceMicroclimateContentRequest request,
+        string? lang,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+        => WithConcurrencyRetryAsync(
+            db,
+            () => ReplaceContentCoreAsync(id, request, lang, principal, db, cancellationToken));
+
+    /// <summary>
+    /// Replaces a draft's whole authored content -- title, description, window, timezone,
+    /// expected count, anonymity, language and questions -- under exactly the validation
+    /// <c>POST /microclimates</c> applies (<see cref="PrepareContent"/> is shared).
+    /// </summary>
+    /// <remarks>
+    /// Draft only, and only while nothing has been counted. A draft cannot accept responses
+    /// (<see cref="MicroclimateStatuses.AcceptsResponses"/>) and cannot be distributed, so its
+    /// questions belong to nobody yet; an active or closed session's questions are what its
+    /// responses were counted against, and rewriting them would relabel those counts. The
+    /// <c>ResponseCount</c> check is belt and braces for a row that reached draft some other way.
+    /// </remarks>
+    private static async Task<IResult> ReplaceContentCoreAsync(
+        Guid id,
+        ReplaceMicroclimateContentRequest request,
+        string? lang,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var currentUser = principal.GetCurrentUser();
+        var microclimate = await db.Microclimates.FirstOrDefaultAsync(m => m.Id == id, cancellationToken);
+        if (microclimate is null)
+        {
+            return Results.Json(new { message = "Microclimate not found" }, statusCode: 404);
+        }
+
+        if (!Roles.Admin.Contains(currentUser.Role) || !CanAccessCompany(currentUser, microclimate.CompanyId))
+        {
+            return Results.Forbid();
+        }
+
+        if (!IsUntouchedDraft(microclimate))
+        {
+            return Results.Json(new { message = NotADraftMessage }, statusCode: 409);
+        }
+
+        if (request.StartTime >= request.EndTime)
+        {
+            return Results.Json(new { message = WindowOutOfOrderMessage }, statusCode: 400);
+        }
+
+        var language = microclimate.Language;
+        if (request.Language is not null)
+        {
+            var requestedLanguage = ContentLanguages.NormaliseLanguage(request.Language);
+            if (requestedLanguage is null)
+            {
+                return Results.Json(new { message = $"Invalid language: {request.Language}. Expected one of: {string.Join(", ", ContentLanguages.ValidLanguages)}" }, statusCode: 400);
+            }
+
+            language = requestedLanguage;
+        }
+
+        var (content, contentError) = PrepareContent(request.Title, request.Description, request.Questions, language);
+        if (contentError is not null)
+        {
+            return contentError;
+        }
+
+        var (titleEn, titleEs, descriptionEn, descriptionEs, preparedQuestions) = content!;
+
+        // The old questions go with their options and emoji scales. Loaded and removed through
+        // the change tracker rather than with ExecuteDelete, so the delete and the inserts below
+        // are one SaveChanges -- one transaction -- and a refused save leaves the draft as it was.
+        var oldQuestions = await db.MicroclimateQuestions
+            .Where(q => q.MicroclimateId == microclimate.Id)
+            .ToListAsync(cancellationToken);
+        var oldQuestionIds = oldQuestions.Select(q => q.Id).ToList();
+        db.MicroclimateQuestionOptions.RemoveRange(
+            await db.MicroclimateQuestionOptions.Where(o => oldQuestionIds.Contains(o.MicroclimateQuestionId)).ToListAsync(cancellationToken));
+        db.MicroclimateQuestionEmojiOptions.RemoveRange(
+            await db.MicroclimateQuestionEmojiOptions.Where(o => oldQuestionIds.Contains(o.MicroclimateQuestionId)).ToListAsync(cancellationToken));
+        db.MicroclimateQuestions.RemoveRange(oldQuestions);
+
+        microclimate.Language = language;
+        microclimate.TitleEn = titleEn?.Trim();
+        microclimate.TitleEs = titleEs?.Trim();
+        microclimate.DescriptionEn = descriptionEn;
+        microclimate.DescriptionEs = descriptionEs;
+        microclimate.TargetParticipantCount = request.TargetParticipantCount;
+        microclimate.Scheduling.StartTime = request.StartTime;
+        microclimate.Scheduling.EndTime = request.EndTime;
+        if (!string.IsNullOrWhiteSpace(request.Timezone)) microclimate.Scheduling.Timezone = request.Timezone;
+        microclimate.RealtimeSettings.AnonymousResponses = request.AnonymousResponses;
+        microclimate.UpdatedAt = DateTimeOffset.UtcNow;
+
+        AddQuestions(db, microclimate.Id, preparedQuestions);
+
+        await db.SaveChangesAsync(cancellationToken);
+
+        return Results.Ok(await ToDetailAsync(microclimate, db, lang, cancellationToken));
+    }
+
+    private static Task<IResult> DeleteAsync(
+        Guid id,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+        => WithConcurrencyRetryAsync(
+            db,
+            () => DeleteCoreAsync(id, principal, db, cancellationToken));
+
+    /// <summary>
+    /// Discards a draft (G23). Draft only, with no responses and no invitations: anything that
+    /// has been in front of a respondent, or announced to one, is history and is closed instead.
+    /// Its questions, options, emoji scales, department targets and AI insights go with it
+    /// (every one of them is <c>ON DELETE CASCADE</c> from <c>microclimates</c>).
+    /// </summary>
+    private static async Task<IResult> DeleteCoreAsync(
+        Guid id,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var currentUser = principal.GetCurrentUser();
+        var microclimate = await db.Microclimates.FirstOrDefaultAsync(m => m.Id == id, cancellationToken);
+        if (microclimate is null)
+        {
+            return Results.Json(new { message = "Microclimate not found" }, statusCode: 404);
+        }
+
+        if (!Roles.Admin.Contains(currentUser.Role) || !CanAccessCompany(currentUser, microclimate.CompanyId))
+        {
+            return Results.Forbid();
+        }
+
+        if (!IsUntouchedDraft(microclimate))
+        {
+            return Results.Json(new { message = NotADraftMessage }, statusCode: 409);
+        }
+
+        if (await db.MicroclimateInvitations.AnyAsync(i => i.MicroclimateId == microclimate.Id, cancellationToken))
+        {
+            return Results.Json(new { message = DraftHasInvitationsMessage }, statusCode: 409);
+        }
+
+        db.Microclimates.Remove(microclimate);
+        await db.SaveChangesAsync(cancellationToken);
+
+        return Results.NoContent();
+    }
+
+    private static bool IsUntouchedDraft(Microclimate microclimate)
+        => string.Equals(microclimate.Status, MicroclimateStatuses.Draft, StringComparison.Ordinal)
+           && microclimate.ResponseCount == 0;
+
+    /// <summary>
+    /// The company's <c>microclimate</c> seats, for its own administrators (G23). Read-only.
+    /// </summary>
+    /// <remarks>
+    /// Before this the only reader was the super-admin licence surface, so a company admin
+    /// learned the seats were gone when respondents started getting a 402. Same tenant rule as
+    /// every other microclimate admin route (<see cref="CanAccessCompany"/>): a company admin
+    /// reads their own company, and <paramref name="companyId"/> defaults to it; a super admin
+    /// reads any company and must name it.
+    /// </remarks>
+    private static async Task<IResult> GetSeatsAsync(
+        Guid? companyId,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var currentUser = principal.GetCurrentUser();
+        Guid target;
+        if (companyId is { } requested)
+        {
+            target = requested;
+        }
+        else if (Guid.TryParse(currentUser.CompanyId, out var own))
+        {
+            target = own;
+        }
+        else
+        {
+            return Results.Json(new { message = "companyId is required" }, statusCode: 400);
+        }
+
+        if (!Roles.Admin.Contains(currentUser.Role) || !CanAccessCompany(currentUser, target))
+        {
+            return Results.Forbid();
+        }
+
+        if (!await db.Companies.AnyAsync(c => c.Id == target, cancellationToken))
+        {
+            return Results.Json(new { message = $"Company {target} not found" }, statusCode: 404);
+        }
+
+        var licence = await db.CompanyServiceLicenses
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                l => l.CompanyId == target && l.ServiceType == ClimateServiceTypes.Microclimate,
+                cancellationToken);
+
+        return Results.Ok(licence is null
+            ? new MicroclimateSeatsView(false, LicenseStatuses.Active, 0, 0, 0)
+            : new MicroclimateSeatsView(
+                true,
+                licence.Status,
+                licence.SeatsTotal,
+                licence.SeatsUsed,
+                Math.Max(0, licence.SeatsTotal - licence.SeatsUsed)));
     }
 
     // ------------------------------------------------------------------

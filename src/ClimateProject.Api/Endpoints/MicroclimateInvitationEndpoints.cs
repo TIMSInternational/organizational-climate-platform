@@ -192,6 +192,7 @@ public static class MicroclimateInvitationEndpoints
         Guid microclimateId,
         string? status,
         string? lang,
+        int? offset,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
@@ -200,6 +201,14 @@ public static class MicroclimateInvitationEndpoints
         if (error is not null)
         {
             return error;
+        }
+
+        // A page of at most MaxInvitationPageSize rows, starting at `offset` (G23: the admin
+        // card shows the whole list, and a list can outgrow one page -- one batch alone is up
+        // to MaxInvitationBatch). `summary.total` says how many there are in all.
+        if (offset is < 0)
+        {
+            return Results.Json(new { message = "offset must be zero or greater" }, statusCode: 400);
         }
 
         if (status is not null && !MicroclimateInvitationStatuses.IsValid(status))
@@ -215,8 +224,12 @@ public static class MicroclimateInvitationEndpoints
             query = query.Where(i => i.Status == status);
         }
 
+        // ThenBy(Id): a batch is minted with one CreatedAt, so without a tiebreak two pages
+        // could each return some of the same rows and skip others.
         var rows = await query
             .OrderBy(i => i.CreatedAt)
+            .ThenBy(i => i.Id)
+            .Skip(offset ?? 0)
             .Take(MaxInvitationPageSize)
             .ToListAsync(cancellationToken);
 
