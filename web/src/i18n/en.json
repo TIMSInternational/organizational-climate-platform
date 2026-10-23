@@ -7587,6 +7587,7 @@
     "actions": {
       "action-plan-templates__create": "Created an action-plan template",
       "action-plans__create": "Created an action plan",
+      "action-plans__delete": "Deleted an action plan",
       "action-plans__progress__create": "Recorded progress on an action plan",
       "action-plans__update": "Updated an action plan",
       "admin__ai-insights__acknowledge__create": "Acknowledged an AI insight",

@@ -7587,6 +7587,7 @@
     "actions": {
       "action-plan-templates__create": "Creó una plantilla de plan de acción",
       "action-plans__create": "Creó un plan de acción",
+      "action-plans__delete": "Eliminó un plan de acción",
       "action-plans__progress__create": "Registró avance en un plan de acción",
       "action-plans__update": "Modificó un plan de acción",
       "admin__ai-insights__acknowledge__create": "Marcó como revisada una recomendación de IA",
