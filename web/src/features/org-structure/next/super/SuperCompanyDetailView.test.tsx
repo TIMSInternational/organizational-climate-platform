@@ -126,11 +126,22 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+/**
+ * The page draws its heading while it is still loading (a skeleton under it), so the heading
+ * is not a "loaded" signal: wait for the form's Save button, which exists only once the read
+ * settled. An absence asserted before that passes for free.
+ */
+async function loaded() {
+  await screen.findByRole('heading', { level: 1, name: copy.title })
+  await screen.findByRole('button', { name: copy.save })
+}
+
 describe('SuperCompanyDetailView', () => {
   it('sends a super administrator to the canvas’s detail, reading the tenant into one form', async () => {
     serve()
     renderPage()
     expect(await screen.findByRole('heading', { level: 1, name: copy.title })).toBeTruthy()
+    await loaded()
     expect((screen.getByLabelText(new RegExp(`^${copy.company.name}( \\*)?$`)) as HTMLInputElement).value).toBe('Grupo Meridiano S.A.')
     expect((screen.getByLabelText(new RegExp(`^${copy.surveys.language}`)) as HTMLSelectElement).value).toBe('es')
     expect((screen.getByLabelText(ca.timezone) as HTMLSelectElement).value).toBe('America/Costa_Rica')
@@ -139,7 +150,7 @@ describe('SuperCompanyDetailView', () => {
   it('offers both actions from the start, and a save with nothing changed sends nothing and says so', async () => {
     serve()
     renderPage()
-    await screen.findByRole('heading', { level: 1, name: copy.title })
+    await loaded()
     const save = screen.getByRole('button', { name: copy.save })
     expect(save.hasAttribute('disabled')).toBe(false)
     expect(screen.getByRole('button', { name: copy.discard }).hasAttribute('disabled')).toBe(false)
@@ -151,7 +162,7 @@ describe('SuperCompanyDetailView', () => {
   it('states what the platform does where four controls wrote values nothing reads, and reads no survey to say it', async () => {
     serve({ openWave: true })
     renderPage()
-    await screen.findByRole('heading', { level: 1, name: copy.title })
+    await loaded()
     expect(screen.getByText(ca.anonymityAlwaysValue)).toBeTruthy()
     expect(screen.getByText(ca.anonymityAlwaysHelp)).toBeTruthy()
     expect(screen.getByText(ca.retentionFixedValue)).toBeTruthy()
@@ -183,7 +194,7 @@ describe('SuperCompanyDetailView', () => {
   it('says the colour is the button of the sign-in mail and nothing on screen — the words Configuración de empresa uses', async () => {
     serve()
     renderPage()
-    await screen.findByRole('heading', { level: 1, name: copy.title })
+    await loaded()
     expect(screen.getByText(ca.colourEmailHelp)).toBeTruthy()
     expect(screen.queryByText(copy.brand.colorHelper)).toBeNull()
     expect(screen.getByText(ca.brandMetaInEffect)).toBeTruthy()
@@ -192,7 +203,7 @@ describe('SuperCompanyDetailView', () => {
   it('reaches the four pages this role opens only from here, each with its own reading', async () => {
     serve()
     renderPage()
-    await screen.findByRole('heading', { level: 1, name: copy.title })
+    await loaded()
     const hrefOf = (name: string) => screen.getByRole('link', { name: new RegExp(`^${name}`) }).getAttribute('href')
     expect(hrefOf(en.navigation.users)).toBe(`/admin/companies/${C}/users`)
     expect(hrefOf(en.navigation.demographicFields)).toBe(`/admin/companies/${C}/demographic-fields`)
@@ -332,7 +343,7 @@ describe('SuperCompanyDetailView Escala de resultados', () => {
   it('draws no card when the settings carry no scale', async () => {
     serve({ bands: false })
     renderPage()
-    await screen.findByRole('heading', { level: 1, name: copy.title })
+    await loaded()
     expect(screen.queryByRole('heading', { name: bandsCopy.heading })).toBeNull()
   })
 })
