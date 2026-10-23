@@ -53,7 +53,9 @@ export function BuilderSettingsStep({
           checked={values.allowPartialResponses && values.autoSave !== false}
           onChange={(checked) => patch({ autoSave: checked })}
         />
-        <div className="grid gap-3 md:grid-cols-2">
+        {/* Stacked, not two columns: each description is several lines, and side by side the
+            grid let the two fields start at different heights (settings-light.png, first shot). */}
+        <div className="flex max-w-md flex-col gap-4">
           <TextField
             type="number"
             label={copy('timeLimitLabel')}
