@@ -10,6 +10,7 @@ import {
   type MicroclimateDetail,
 } from '../api/microclimates'
 import type { MicroclimateLiveNextModel } from './model'
+import { companyZone } from './companyZone'
 import { describeApiError } from '../../../api/describeApiError'
 
 /**
@@ -30,6 +31,11 @@ export type MicroclimateLiveStatus =
 export interface MicroclimateLiveState {
   status: MicroclimateLiveStatus
   model: MicroclimateLiveNextModel | null
+  /**
+   * The session's company's IANA zone every date and time is printed on (`companyZone.ts`),
+   * or `null` when it could not be read -- the page then prints the browser's and says so.
+   */
+  timeZone: string | null
   error: string | null
   reload: () => void
   /** The viewer may close this session, and it is open to close. */
@@ -68,6 +74,7 @@ export function useMicroclimateLiveModel(id: string | undefined): MicroclimateLi
   const mayWatch = !capabilities.seesTeam && !capabilities.seesOnlySelf
 
   const [detail, setDetail] = useState<MicroclimateDetail | null>(null)
+  const [timeZone, setTimeZone] = useState<string | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [error, setError] = useState<string | null>(null)
   const [final, setFinal] = useState<LiveResults | null>(null)
@@ -79,7 +86,12 @@ export function useMicroclimateLiveModel(id: string | undefined): MicroclimateLi
     try {
       // The UI locale, sent explicitly: left to the server it resolves against the
       // session's own language, and a Spanish reader gets English on a bilingual one.
-      setDetail(await getMicroclimate(baseUrl, id, locale))
+      const loaded = await getMicroclimate(baseUrl, id, locale)
+      // The session's own company's zone, read before the page is drawn so no time is printed
+      // on the wrong clock first. `companyZone` never throws: unreadable is `null`.
+      const zone = await companyZone(baseUrl, loaded.companyId)
+      setDetail(loaded)
+      setTimeZone(zone)
       setStatus('ready')
     } catch (err) {
       setError(describeApiError(err, t))
@@ -134,6 +146,7 @@ export function useMicroclimateLiveModel(id: string | undefined): MicroclimateLi
             isStale: polling.isStale,
           }
         : null,
+    timeZone,
     error,
     reload: () => {
       void reload()

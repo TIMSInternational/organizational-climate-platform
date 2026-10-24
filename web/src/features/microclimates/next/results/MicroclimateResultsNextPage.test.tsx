@@ -13,6 +13,8 @@ import { downloadBlobFile } from '../../../../lib/downloadBlobFile'
 import MicroclimateResultsNextPage from './MicroclimateResultsNextPage'
 import es from '../../../../i18n/es.json'
 import { MINIMUM_RESPONDENTS } from '../../microclimatePrivacy'
+import { getCompanySettings, type CompanySettingsResponse } from '../../../org-structure/api/companySettings'
+import { ApiError } from '../../../../api/authFetch'
 
 const copy = es.microclimates.next
 
@@ -26,6 +28,10 @@ vi.mock('../../api/microclimateExport', async (importOriginal) => ({
   getMicroclimateCsv: vi.fn(),
 }))
 vi.mock('../../../../lib/downloadBlobFile', () => ({ downloadBlobFile: vi.fn() }))
+vi.mock('../../../org-structure/api/companySettings', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../org-structure/api/companySettings')>()),
+  getCompanySettings: vi.fn(),
+}))
 
 const COMPANY = 'c1'
 
@@ -97,6 +103,8 @@ describe('MicroclimateResultsNextPage', () => {
     vi.mocked(getLiveResults).mockReset().mockResolvedValue(live(UNDER_FLOOR))
     vi.mocked(getMicroclimateCsv).mockReset().mockResolvedValue(new Blob(['id'], { type: 'text/csv' }))
     vi.mocked(downloadBlobFile).mockReset()
+    // Unread unless a test says otherwise: the page then prints the browser's zone and says so.
+    vi.mocked(getCompanySettings).mockReset().mockRejectedValue(new ApiError(500, 'boom'))
   })
 
   afterEach(() => {
@@ -169,5 +177,35 @@ describe('MicroclimateResultsNextPage', () => {
     expect(await screen.findByText(copy.noAccessTitle)).toBeTruthy()
     expect(getMicroclimate).not.toHaveBeenCalled()
     expect(getLiveResults).not.toHaveBeenCalled()
+  })
+
+  /**
+   * The company's clock (after #640 gave it to the list and the detail). The fixture's instants
+   * are UTC (`02:06 UTC` on 10 and 12 Sep) and every expectation names the zone it is read in,
+   * so the same assertions hold under TZ=America/Chicago and TZ=UTC.
+   */
+  it.each([
+    ['America/Costa_Rica', '11 de septiembre a las 20:06', '9 sept 2026, 20:06', '11 sept 2026, 20:06', 'America/Costa_Rica (GMT-6)'],
+    ['Asia/Tokyo', '12 de septiembre a las 11:06', '10 sept 2026, 11:06', '12 sept 2026, 11:06', 'Asia/Tokyo (GMT+9)'],
+  ])('prints every date and time on the company’s zone (%s) and names it', async (zone, closes, sheetOpens, sheetCloses, label) => {
+    vi.mocked(getCompanySettings).mockResolvedValue({ settings: { timezone: zone } } as unknown as CompanySettingsResponse)
+    const { container } = renderAs({ role: 'company_admin', companyId: COMPANY })
+    expect(await screen.findByText(`cierra el ${closes}; hasta entonces las cifras pueden moverse`)).toBeTruthy()
+    expect(screen.getByText(sheetOpens)).toBeTruthy()
+    expect(screen.getByText(sheetCloses)).toBeTruthy()
+    const run = container.querySelector('[data-slot="page-meta-sentences"]') as HTMLElement
+    expect(run.textContent).toContain(`Fechas y horas en la zona de la empresa: ${label}.`)
+    // The session's own company: a super administrator reads whichever tenant it is in.
+    expect(vi.mocked(getCompanySettings).mock.calls[0]?.[1]).toBe(COMPANY)
+  })
+
+  it('falls back to the browser’s zone when the company’s cannot be read, and says which', async () => {
+    const { container } = renderAs({ role: 'company_admin', companyId: COMPANY })
+    const browser = Intl.DateTimeFormat().resolvedOptions().timeZone
+    const time = new Date(detail.endTime).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+    expect(await screen.findByText(new RegExp(`^cierra el .* a las ${time}; hasta entonces`))).toBeTruthy()
+    const run = container.querySelector('[data-slot="page-meta-sentences"]') as HTMLElement
+    expect(run.textContent).toContain('No se pudo leer la zona horaria de la empresa: fechas y horas en la de este navegador, ')
+    expect(run.textContent).toContain(browser)
   })
 })

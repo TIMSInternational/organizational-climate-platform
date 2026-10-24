@@ -5,6 +5,7 @@ import { getLiveResults, getMicroclimate, listMicroclimates, type Microclimate, 
 import { suppressWordCloud } from '../../microclimatePrivacy'
 import { belowFloor, newestFirst } from '../derive'
 import { describeApiError } from '../../../../api/describeApiError'
+import { companyZone } from '../companyZone'
 
 export type Settled<T> = { status: 'loading' } | { status: 'ready'; value: T } | { status: 'failed' }
 
@@ -23,6 +24,11 @@ export interface MicroclimateAnalyticsState {
   status: 'loading' | 'ready' | 'error'
   error: string | null
   rows: readonly SessionRow[]
+  /**
+   * The company's IANA zone every day is printed on (`companyZone.ts`), or `null` when it
+   * could not be read -- the page then prints the browser's and says so.
+   */
+  timeZone: string | null
   reload: () => void
 }
 
@@ -46,6 +52,7 @@ export function useMicroclimateAnalyticsModel(): MicroclimateAnalyticsState {
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const companyId = useCompanyScope().companyId
   const [rows, setRows] = useState<SessionRow[]>([])
+  const [timeZone, setTimeZone] = useState<string | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [error, setError] = useState<string | null>(null)
   const [generation, setGeneration] = useState(0)
@@ -55,9 +62,12 @@ export function useMicroclimateAnalyticsModel(): MicroclimateAnalyticsState {
     let cancelled = false
     setStatus('loading')
     setError(null)
-    listMicroclimates(baseUrl, companyId, locale)
-      .then((list) => {
+    // The scoped company's zone, read alongside the list and settled before any row is drawn,
+    // so no day is printed on the wrong clock first. `companyZone` never throws.
+    Promise.all([listMicroclimates(baseUrl, companyId, locale), companyZone(baseUrl, companyId)])
+      .then(([list, zone]) => {
         if (cancelled) return
+        setTimeZone(zone)
         const sessions = newestFirst(list)
         const initial: SessionRow[] = sessions.map((session, index) => ({
           session,
@@ -99,5 +109,5 @@ export function useMicroclimateAnalyticsModel(): MicroclimateAnalyticsState {
     }
   }, [baseUrl, companyId, generation, locale, t])
 
-  return { status, error, rows, reload: () => setGeneration((value) => value + 1) }
+  return { status, error, rows, timeZone, reload: () => setGeneration((value) => value + 1) }
 }

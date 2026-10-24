@@ -2,12 +2,11 @@
  * How the microclimate boards write an instant. A microclimate's `startTime` and `endTime`
  * are minutes, not calendar days (`lib/calendarDay.ts` `instantDay` carries the argument).
  *
- * Each day/time writer takes an optional IANA `timeZone`. The administrator's list and detail
- * pass the company's (`companyZone.ts`, read from its settings, as Crear does since #635), so
- * the close an administrator in America/Chicago reads is the close the company's people read.
- * Left out, the instant is read in the reader's own zone -- what every other caller (live,
- * results, analytics) still does -- which is why a board drawn on a machine in
- * America/Chicago says the demo pulse opened "9 sept, 21:06".
+ * Each day/time writer takes an optional IANA `timeZone`. Every administrator's page -- the
+ * list, the detail, the live session, the results and the analytics -- passes the company's
+ * (`companyZone.ts`, read from its settings, as Crear does since #635), so the close an
+ * administrator in America/Chicago reads is the close the company's people read. Left out,
+ * the instant is read in the reader's own zone -- what the respondent's pages do.
  */
 
 function yearOf(date: Date, timeZone?: string): string {
@@ -55,11 +54,11 @@ export function shortDay(iso: string, locale: string, timeZone?: string): string
 }
 
 /** "9–11 sept": the locale's own range format, so English reads "Sep 9 – 11". */
-export function dayRange(startIso: string, endIso: string, locale: string): string {
+export function dayRange(startIso: string, endIso: string, locale: string, timeZone?: string): string {
   const start = new Date(startIso)
   const end = new Date(endIso)
-  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end < start) return shortDay(startIso, locale)
-  return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).formatRange(start, end)
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end < start) return shortDay(startIso, locale, timeZone)
+  return new Intl.DateTimeFormat(locale, { ...zoned(timeZone), day: 'numeric', month: 'short' }).formatRange(start, end)
 }
 
 /** "lunes". */

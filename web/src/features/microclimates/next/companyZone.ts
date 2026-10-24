@@ -5,9 +5,10 @@ import { sessionZone } from '../wizardValues'
 
 /**
  * The company's clock for the administrator's microclimate pages -- the rule #630 gave Nueva
- * encuesta and #635 gave Crear, now also on the list (`/microclimates`) and the detail
- * (`/microclimates/:id`), so the close an administrator reads is the one the company's
- * people read wherever the administrator sits.
+ * encuesta and #635 gave Crear, then #640 the list (`/microclimates`) and the detail
+ * (`/microclimates/:id`), and now the live session (`/:id/live`), the results (`/:id/results`)
+ * and the analytics (`/microclimates/analytics`), so the close an administrator reads is the
+ * one the company's people read wherever the administrator sits.
  *
  * The respondent's pages (the invitation, answering) do not read it: they stay on the
  * reader's own zone.

@@ -2,7 +2,7 @@ import { Link, useParams } from 'react-router'
 import { ArrowRight, Download } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
-import { CanvasCard, CanvasSectionHead, FactList, HatchField, HatchPill, NoteBand, PageMeta } from '../../../../components/canvas'
+import { CanvasCard, CanvasSectionHead, FactList, HatchField, HatchPill, NoteBand, PageMeta, PageMetaSentences } from '../../../../components/canvas'
 import { Alert, AlertDescription, Button, Chip, LoadingRegion, NetworkError, SkeletonText } from '../../../../components/ui'
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { cn } from '../../../../lib/cn'
@@ -10,6 +10,7 @@ import type { LiveResults, MicroclimateDetail, Question } from '../../api/microc
 import { MicroclimateGate } from '../MicroclimateGate'
 import { FLOOR, barPosition, belowFloor, figureKind, outstanding, wordBars } from '../derive'
 import { clock, longDay, shortDayYear } from '../format'
+import { displayZone, zoneNote } from '../companyZone'
 import { canvasTypeLabel, sessionStatusLabel, sessionStatusTone } from '../vocabulary'
 import { useMicroclimateResultsModel } from './useMicroclimateResultsModel'
 
@@ -72,6 +73,7 @@ function ResultsScreen() {
     <ResultsView
       detail={state.detail}
       live={state.live}
+      timeZone={state.timeZone}
       exporting={state.exporting}
       exportError={state.exportError}
       onExport={state.exportCsv}
@@ -82,12 +84,14 @@ function ResultsScreen() {
 function ResultsView({
   detail,
   live,
+  timeZone,
   exporting,
   exportError,
   onExport,
 }: {
   detail: MicroclimateDetail
   live: LiveResults
+  timeZone: string | null
   exporting: boolean
   exportError: string | null
   onExport: () => void
@@ -104,11 +108,14 @@ function ResultsView({
   // payload's own list is not handed down.
   const words = wordBars(live.wordCloud, responses)
 
+  // Every date and time on the company's clock, or the browser's when it could not be read.
+  const zone = displayZone(timeZone)
+  const closes = { date: longDay(detail.endTime, locale, zone), time: clock(detail.endTime, locale, zone) }
   const meta =
     detail.status === 'active'
-      ? t('microclimates.next.results.metaActive', { date: longDay(detail.endTime, locale), time: clock(detail.endTime, locale) })
+      ? t('microclimates.next.results.metaActive', closes)
       : detail.status === 'closed'
-        ? t('microclimates.next.results.metaClosed', { date: longDay(detail.endTime, locale), time: clock(detail.endTime, locale) })
+        ? t('microclimates.next.results.metaClosed', closes)
         : t('microclimates.next.results.metaDraft')
 
   return (
@@ -125,8 +132,13 @@ function ResultsView({
         ]}
         meta={
           <PageMeta>
-            <Chip label={sessionStatusLabel(t, detail.status)} tone={sessionStatusTone(detail.status)} />
-            <span>{meta}</span>
+            <Chip className="self-start" label={sessionStatusLabel(t, detail.status)} tone={sessionStatusTone(detail.status)} />
+            <PageMetaSentences
+              sentences={[
+                { id: 'when', text: meta },
+                { id: 'zone', text: zoneNote(t, timeZone), muted: true },
+              ]}
+            />
           </PageMeta>
         }
         actions={
@@ -222,12 +234,12 @@ function ResultsView({
                 {
                   id: 'opens',
                   term: t('microclimates.next.sheet.opens'),
-                  value: <span className="font-mono tabular-nums">{instant(t, detail.startTime, locale)}</span>,
+                  value: <span className="font-mono tabular-nums">{instant(t, detail.startTime, locale, zone)}</span>,
                 },
                 {
                   id: 'closes',
                   term: t('microclimates.next.sheet.closes'),
-                  value: <span className="font-mono tabular-nums">{instant(t, detail.endTime, locale)}</span>,
+                  value: <span className="font-mono tabular-nums">{instant(t, detail.endTime, locale, zone)}</span>,
                 },
                 {
                   id: 'answer',
@@ -252,9 +264,9 @@ function ResultsView({
   )
 }
 
-/** "9 sept 2026, 21:06". */
-function instant(t: TranslateFn, iso: string, locale: string): string {
-  return t('microclimates.next.sheet.instant', { date: shortDayYear(iso, locale), time: clock(iso, locale) })
+/** "9 sept 2026, 21:06" on `zone`'s clock. */
+function instant(t: TranslateFn, iso: string, locale: string, zone: string): string {
+  return t('microclimates.next.sheet.instant', { date: shortDayYear(iso, locale, zone), time: clock(iso, locale, zone) })
 }
 
 function ResponsesBar({ responses, target }: { responses: number; target: number }) {
