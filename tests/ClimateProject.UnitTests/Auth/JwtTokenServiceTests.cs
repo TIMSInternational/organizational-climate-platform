@@ -46,7 +46,8 @@ public class JwtTokenServiceTests
 
     private static readonly SessionWindow SampleWindow = new(
         StartedAt: WholeSecond.AddMinutes(-37),
-        ExpiresAt: WholeSecond.AddMinutes(43));
+        ExpiresAt: WholeSecond.AddMinutes(43),
+        IssuedAt: WholeSecond);
 
     [Fact]
     public void IssueToken_produces_exact_claim_shape_with_no_iss_or_aud()
@@ -117,17 +118,36 @@ public class JwtTokenServiceTests
         // the lifetime used to be `TimeSpan.FromHours(24)` inside this class, so
         // SessionTimeoutMinutes -- editable by a super admin, shipped at 60 -- enforced
         // nothing at all. A sixty-minute window must produce a sixty-minute token.
+        //
+        // Exact rather than "under an hour and two seconds": iat and exp now come from the same
+        // instant, so truncating both to whole seconds cannot open a gap between them.
         var service = CreateService();
         var startedAt = DateTimeOffset.UtcNow;
-        var window = new SessionWindow(startedAt, startedAt.AddMinutes(60));
+        var window = new SessionWindow(startedAt, startedAt.AddMinutes(60), startedAt);
 
         var jwt = new JwtSecurityTokenHandler().ReadJwtToken(service.IssueToken(SampleClaims, window));
         var iat = DateTimeOffset.FromUnixTimeSeconds(long.Parse(jwt.Claims.Single(c => c.Type == "iat").Value));
         var exp = new DateTimeOffset(jwt.ValidTo, TimeSpan.Zero);
 
-        Assert.True(
-            exp - iat < TimeSpan.FromHours(1) + TimeSpan.FromSeconds(2),
-            $"token lived {exp - iat} on a 60-minute window");
+        Assert.Equal(TimeSpan.FromHours(1), exp - iat);
+    }
+
+    [Fact]
+    public void IssueToken_stamps_iat_from_the_window_not_from_a_second_clock_reading()
+    {
+        // The mint used to read the clock again for iat, after the endpoint had already read it
+        // for the expiry and then queried the database. A second boundary between the two
+        // readings minted a 60-minute window as 59:59, which is how CrossServiceTokenTests went
+        // red on main on 2026-10-21. An IssuedAt seven minutes in the past cannot be confused
+        // with the present, so this fails every time a second reading comes back.
+        var service = CreateService();
+        var issuedAt = WholeSecond.AddMinutes(-7);
+        var window = new SessionWindow(issuedAt.AddMinutes(-3), issuedAt.AddMinutes(60), issuedAt);
+
+        var jwt = new JwtSecurityTokenHandler().ReadJwtToken(service.IssueToken(SampleClaims, window));
+        var iat = DateTimeOffset.FromUnixTimeSeconds(long.Parse(jwt.Claims.Single(c => c.Type == "iat").Value));
+
+        Assert.Equal(issuedAt, iat);
     }
 
     [Fact]

@@ -201,7 +201,7 @@ public class IdleSessionTimeoutTests : IAsyncLifetime
                 CompanyId: user.CompanyId?.ToString() ?? string.Empty,
                 IsActive: true,
                 SecurityStamp: user.SecurityStamp),
-            new SessionWindow(now - SessionWindows.AbsoluteCeiling - TimeSpan.FromMinutes(1), now.AddHours(1)));
+            new SessionWindow(now - SessionWindows.AbsoluteCeiling - TimeSpan.FromMinutes(1), now.AddHours(1), now));
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", pastCeiling);
         var response = await client.PostAsync("/auth/refresh", content: null);
@@ -234,7 +234,7 @@ public class IdleSessionTimeoutTests : IAsyncLifetime
                 CompanyId: user.CompanyId?.ToString() ?? string.Empty,
                 IsActive: true,
                 SecurityStamp: user.SecurityStamp),
-            new SessionWindow(now.AddHours(-23), now.AddHours(1)));
+            new SessionWindow(now.AddHours(-23), now.AddHours(1), now));
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", insideCeiling);
         var response = await client.PostAsync("/auth/refresh", content: null);
