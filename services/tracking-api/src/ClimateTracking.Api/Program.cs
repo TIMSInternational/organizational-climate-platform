@@ -129,7 +129,17 @@ app.UseCors("Frontend");
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapOpenApi();
+// The OpenAPI description is a map of every route, parameter and DTO this service has, and it
+// was mapped in every environment -- so production served it anonymously (no endpoint metadata
+// asks for authorization, and there is no FallbackPolicy). Development only (G25, 2026-10-22):
+// a developer still gets /openapi/v1.json locally (launchSettings.json says Development), and
+// nobody outside does: the Dockerfile defaults ASPNETCORE_ENVIRONMENT to Production and the
+// App Runner template allows only Production or Staging, neither of which maps it.
+// OpenApiExposureTests pins both halves.
+if (app.Environment.IsDevelopment())
+{
+    app.MapOpenApi();
+}
 
 app.MapGet("/", () => Results.Redirect("/health"));
 

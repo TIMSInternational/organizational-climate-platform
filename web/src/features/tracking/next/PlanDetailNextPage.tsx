@@ -31,6 +31,7 @@ import SemaforoChip from '../components/SemaforoChip'
 import { todayIso } from '../planDates'
 import { toPercent } from '../semaforo'
 import { canDeclareCumplido, isNamedOnPlan, readTrackingClaims } from '../trackingAccess'
+import { canReach } from '../../../navigation/roleCapabilities'
 import { asSentence, dayDiff, fullDay, hasRecordedProgress, isOverdue } from './derive'
 import type { PersonaRef, PlanDetailModel } from './model'
 import { InfoBox, PersonaAvatar, ProgressTrack, RowGlyph } from './parts'
@@ -158,6 +159,21 @@ export default function PlanDetailNextPage() {
  * payload word either caller passes is the reader's OWN department name, which they were
  * never refused.
  */
+/**
+ * Where "back" goes from a plan: the plans list for a role that can open it, and Mis tareas
+ * for one that cannot.
+ *
+ * An employee or a supervisor reaches a plan from a row of Mis tareas (G26). A crumb to
+ * `/tracking/planes` sent an employee through the respondent gate to `/dashboard`, and a
+ * supervisor to a list their role is not offered. `canReach` is the same table the gate and
+ * the nav are checked against, with tracking on -- this page only exists where it is.
+ */
+function plansCrumb(role: string | undefined, t: TranslateFn): { label: string; href: string } {
+  return canReach(role, '/tracking/planes', true)
+    ? { label: t('tracking.planes.title'), href: '/tracking/planes' }
+    : { label: t('tracking.misTareas.title'), href: '/tracking/mis-tareas' }
+}
+
 function PlanGate({
   crumb,
   title,
@@ -171,10 +187,12 @@ function PlanGate({
   help: string
   t: TranslateFn
 }) {
+  const back = plansCrumb(readTrackingClaims()?.role, t)
+  const listReachable = back.href === '/tracking/planes'
   return (
     <div>
       <PageTopBar
-        breadcrumbs={[{ label: t('tracking.planes.title'), href: '/tracking/planes' }, { label: crumb }]}
+        breadcrumbs={[back, { label: crumb }]}
         tightBreadcrumb
         eyebrow={t('tracking.next.planEyebrowBare')}
         title={title}
@@ -197,10 +215,12 @@ function PlanGate({
           </h2>
           <p className="m-0 max-w-[76ch] text-base text-fg-secondary">{help}</p>
           <div className="flex flex-wrap gap-2.5">
-            <Button asChild variant="primary">
-              <Link to="/tracking/planes">{t('tracking.next.backToPlans')}</Link>
-            </Button>
-            <Button asChild variant="outline">
+            {listReachable ? (
+              <Button asChild variant="primary">
+                <Link to="/tracking/planes">{t('tracking.next.backToPlans')}</Link>
+              </Button>
+            ) : null}
+            <Button asChild variant={listReachable ? 'outline' : 'primary'}>
               <Link to="/tracking/mis-tareas">
                 <ListChecks aria-hidden="true" />
                 {t('tracking.misTareas.title')}
@@ -245,6 +265,16 @@ function PlanDetail({ model, state }: { model: PlanDetailModel; state: PlanDetai
   const tableroHref = capabilities.canViewConsolidado
     ? `/tracking/tablero?nodoId=${encodeURIComponent(plan.nodoExternalId)}`
     : '/tracking/tablero'
+  // The same question as the crumb (`plansCrumb`), for the two other ways off this page. An
+  // employee or supervisor opened it from Mis tareas and reaches neither the board nor the
+  // list, so the menu would offer two links that bounce -- it is left out rather than shown
+  // empty, and the nodo is printed as a name rather than as a link.
+  //
+  // The board keeps the administrators' own path: they open it with `?nodoId=`, which
+  // `roleCapabilities` does not record for the admin roles (that table is incomplete for them,
+  // and says so), so `canViewConsolidado` answers for them and the table for everyone else.
+  const tableroReachable = capabilities.canViewConsolidado || canReach(claims?.role, '/tracking/tablero', true)
+  const plansReachable = canReach(claims?.role, '/tracking/planes', true)
 
   const [avanceOpen, setAvanceOpen] = useState(false)
   const [avanceError, setAvanceError] = useState<string | null>(null)
@@ -255,7 +285,7 @@ function PlanDetail({ model, state }: { model: PlanDetailModel; state: PlanDetai
   return (
     <div>
       <PageTopBar
-        breadcrumbs={[{ label: t('tracking.planes.title'), href: '/tracking/planes' }, { label: plan.planCode }]}
+        breadcrumbs={[plansCrumb(claims?.role, t), { label: plan.planCode }]}
         tightBreadcrumb
         // The leader boards of 10 Sep close the eyebrow with the reader's relation to the
         // plan — "Ingeniería · Plan de acción · tu nodo", "Finanzas · Plan de acción ·
@@ -336,6 +366,7 @@ function PlanDetail({ model, state }: { model: PlanDetailModel; state: PlanDetai
                 </span>
               </p>
             )}
+            {tableroReachable || plansReachable ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button type="button" variant="outline" size="icon" aria-label={t('tracking.next.moreActions')}>
@@ -343,14 +374,19 @@ function PlanDetail({ model, state }: { model: PlanDetailModel; state: PlanDetai
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem asChild>
-                  <Link to={tableroHref}>{t('tracking.next.openTablero')}</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link to="/tracking/planes">{t('tracking.next.goToPlans')}</Link>
-                </DropdownMenuItem>
+                {tableroReachable ? (
+                  <DropdownMenuItem asChild>
+                    <Link to={tableroHref}>{t('tracking.next.openTablero')}</Link>
+                  </DropdownMenuItem>
+                ) : null}
+                {plansReachable ? (
+                  <DropdownMenuItem asChild>
+                    <Link to="/tracking/planes">{t('tracking.next.goToPlans')}</Link>
+                  </DropdownMenuItem>
+                ) : null}
               </DropdownMenuContent>
             </DropdownMenu>
+            ) : null}
           </>
         }
       />
@@ -390,7 +426,7 @@ function PlanDetail({ model, state }: { model: PlanDetailModel; state: PlanDetai
           <FichaCard
             model={model}
             overdue={overdue}
-            tableroHref={tableroHref}
+            tableroHref={tableroReachable ? tableroHref : null}
             leadsThisNodo={leadsThisNodo}
             papel={readOnlyAsNamed ? (plan.responsableEjecucionExternalId === claims?.personaExternalId ? 'responsable' : 'involucrado') : null}
             t={t}
@@ -703,7 +739,8 @@ function FichaCard({
 }: {
   model: PlanDetailModel
   overdue: boolean
-  tableroHref: string
+  /** Null when the reader cannot open the board: the nodo is then a name, not a link. */
+  tableroHref: string | null
   leadsThisNodo: boolean
   /** The reader's own part in the plan, when the plan names them and gives them no write. */
   papel: 'responsable' | 'involucrado' | null
@@ -720,10 +757,14 @@ function FichaCard({
       <dl className="m-0 grid grid-cols-[112px_minmax(0,1fr)] items-center gap-x-3 gap-y-2.5 text-base">
         <dt className={term}>{t('tracking.fields.nodo')}</dt>
         <dd className="m-0 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-          <Link to={tableroHref} className="inline-flex items-center gap-1.5 font-medium text-fg-primary no-underline hover:underline">
-            {model.nodoName ?? t('tracking.next.nodoUnnamed')}
-            <ArrowRight aria-hidden="true" className="size-3.5" />
-          </Link>
+          {tableroHref === null ? (
+            <span className="font-medium text-fg-primary">{model.nodoName ?? t('tracking.next.nodoUnnamed')}</span>
+          ) : (
+            <Link to={tableroHref} className="inline-flex items-center gap-1.5 font-medium text-fg-primary no-underline hover:underline">
+              {model.nodoName ?? t('tracking.next.nodoUnnamed')}
+              <ArrowRight aria-hidden="true" className="size-3.5" />
+            </Link>
+          )}
           {/* TrackingPlanDetailLeader marks the row rather than repeating the nodo's name in
               a sentence: the leader's one board is "tu nodo", and the chip is what says so. */}
           {leadsThisNodo && <Chip label={t('tracking.next.chipTuNodo')} />}

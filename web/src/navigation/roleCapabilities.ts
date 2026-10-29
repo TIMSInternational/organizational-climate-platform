@@ -217,6 +217,26 @@ const TRACKING_TASKS: RoleCapability = {
   requiresTracking: true,
 }
 
+/**
+ * One plan, opened from a row of Mis tareas.
+ *
+ * Every role, because every role can be named on a plan: `PlanAccessHandler` gives the
+ * responsable and each involucrado Read whatever their role, and `MisTareasAsync` lists by
+ * exactly that predicate, so a row on Mis tareas is a plan its viewer may open. Until G26
+ * (2026-10-22) `employee` and `supervisor` were not given it, so their Mis tareas linked
+ * every row to a page this table did not grant them -- and the respondent gate, which may
+ * only narrow this table, bounced the employee's click to `/dashboard`.
+ */
+const TRACKING_PLAN_DETAIL: RoleCapability = {
+  route: '/tracking/planes/:id',
+  labelKey: 'tracking.detail.title',
+  authorizedBy:
+    'GET /api/planes-accion/{id} — PlanAccessHandler: admins always, a leader on their own nodo, ' +
+    'and the responsable or an involucrado read-only.',
+  inNav: false,
+  requiresTracking: true,
+}
+
 /** The plans surface, for the roles `ClimateTracking.Application.Auth.Roles.PlanCreator` admits. */
 const TRACKING_PLANS: readonly RoleCapability[] = [
   {
@@ -228,15 +248,7 @@ const TRACKING_PLANS: readonly RoleCapability[] = [
     inNav: true,
     requiresTracking: true,
   },
-  {
-    route: '/tracking/planes/:id',
-    labelKey: 'tracking.detail.title',
-    authorizedBy:
-      'GET /api/planes-accion/{id} — PlanAccessHandler: admins always, a leader on their own nodo, ' +
-      'and the responsable or an involucrado read-only.',
-    inNav: false,
-    requiresTracking: true,
-  },
+  TRACKING_PLAN_DETAIL,
 ]
 
 /**
@@ -577,8 +589,8 @@ export const ROLE_CAPABILITIES: Record<PlatformRole, readonly RoleCapability[]> 
     ...TRACKING_PLANS,
     TRACKING_TASKS,
   ],
-  supervisor: [...SELF_SERVICE, TRACKING_TASKS],
-  employee: [...SELF_SERVICE, TRACKING_TASKS],
+  supervisor: [...SELF_SERVICE, TRACKING_TASKS, TRACKING_PLAN_DETAIL],
+  employee: [...SELF_SERVICE, TRACKING_TASKS, TRACKING_PLAN_DETAIL],
 }
 
 /**

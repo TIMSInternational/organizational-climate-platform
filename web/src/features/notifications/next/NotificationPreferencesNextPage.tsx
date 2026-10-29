@@ -154,6 +154,22 @@ export default function NotificationPreferencesNextPage() {
   )
 }
 
+/**
+ * Below `sm` the table stacks: each row becomes a block -- the label and description, then
+ * its email switch, then the in-app note -- and the column headers give way to a small label
+ * inside each cell (`CellLabel`). It was a 40rem-wide table in a horizontal scroller, and on a
+ * 390px phone the scroller clipped the Correo column off the card, so an employee who opened
+ * this page from the footer of a notification email could read every row and change none
+ * (G26 follow-up, 2026-10-22). From `sm` up it is the same table it always was.
+ */
+const ROW = 'block border-b border-line-light py-1 sm:table-row sm:py-0'
+const TD = 'block border-b-0 px-4 py-1.5 align-middle sm:table-cell sm:border-b sm:py-3'
+
+/** The column header, restated inside the cell where the header row is hidden. */
+function CellLabel({ children }: { children: string }) {
+  return <span className="mb-1 block text-2xs font-bold uppercase tracking-label text-fg-tertiary sm:hidden">{children}</span>
+}
+
 const TH = 'border-b border-line-default px-4 pb-2 pt-1 text-left text-2xs font-bold uppercase tracking-label whitespace-nowrap text-fg-tertiary'
 
 function InApp() {
@@ -178,8 +194,8 @@ function PreferencesTable({ draft, onChange }: { draft: NotificationPreferences;
         <span className="text-xs text-fg-tertiary">{t('notifications.next.prefs.tableMeta')}</span>
       </div>
       <div className="overflow-x-auto">
-        <Table className="min-w-[40rem]">
-          <thead>
+        <Table className="sm:min-w-[40rem]">
+          <thead className="hidden sm:table-header-group">
             <tr>
               <th className={TH}>{t('notifications.next.prefs.colAviso')}</th>
               <th className={cn(TH, 'w-40')}>{t('notifications.next.prefs.colEmail')}</th>
@@ -190,14 +206,15 @@ function PreferencesTable({ draft, onChange }: { draft: NotificationPreferences;
             {EMAILS.map(({ key, name, description }) => {
               const switchId = `pref-${key}`
               return (
-                <tr key={key} data-pref={key} className="border-b border-line-light">
-                  <td className="px-4 py-3 align-middle">
+                <tr key={key} data-pref={key} className={ROW}>
+                  <td className={TD}>
                     <label htmlFor={switchId} className="m-0 flex flex-col gap-0.5">
                       <span className="text-sm font-semibold text-fg-primary">{t(name)}</span>
                       <span className="text-xs leading-snug text-fg-tertiary">{t(description)}</span>
                     </label>
                   </td>
-                  <td className="px-4 py-3 align-middle">
+                  <td className={TD}>
+                    <CellLabel>{t('notifications.next.prefs.colEmail')}</CellLabel>
                     <span className="inline-flex items-center gap-2 text-sm text-fg-secondary">
                       <Switch
                         id={switchId}
@@ -208,34 +225,37 @@ function PreferencesTable({ draft, onChange }: { draft: NotificationPreferences;
                       {draft[key] ? t('notifications.next.prefs.receives') : t('notifications.next.prefs.doesNotReceive')}
                     </span>
                   </td>
-                  <td className="px-4 py-3 align-middle">
+                  <td className={TD}>
+                    <CellLabel>{t('notifications.next.prefs.colInApp')}</CellLabel>
                     <InApp />
                   </td>
                 </tr>
               )
             })}
-            <tr className="border-b border-line-light">
-              <td className="px-4 py-3 align-middle">
+            <tr className={ROW}>
+              <td className={TD}>
                 <span className="flex flex-col gap-0.5">
                   <span className="text-sm font-semibold text-fg-primary">{t('notifications.next.prefs.systemName')}</span>
                   <span className="text-xs leading-snug text-fg-tertiary">{t('notifications.next.prefs.systemDescription')}</span>
                 </span>
               </td>
-              <td className="px-4 py-3 align-middle">
+              <td className={TD}>
+                <CellLabel>{t('notifications.next.prefs.colEmail')}</CellLabel>
                 <CanvasChip tone="neutral" icon={<Lock className="size-3" />} label={t('notifications.next.prefs.alwaysSent')} />
               </td>
-              <td className="px-4 py-3 align-middle">
+              <td className={TD}>
+                <CellLabel>{t('notifications.next.prefs.colInApp')}</CellLabel>
                 <InApp />
               </td>
             </tr>
-            <tr className="bg-surface-icon-box/60">
-              <td className="px-4 py-3 align-middle">
+            <tr className={cn(ROW, 'border-b-0 bg-surface-icon-box/60')}>
+              <td className={TD}>
                 <label htmlFor={digestId} className="m-0 flex flex-col gap-0.5">
                   <span className="text-sm font-semibold text-fg-primary">{t('notifications.preferences.digestTitle')}</span>
                   <span className="text-xs leading-snug text-fg-tertiary">{t('notifications.preferences.digestDescription')}</span>
                 </label>
               </td>
-              <td className="px-4 py-3 align-middle" colSpan={2}>
+              <td className={cn(TD, 'pb-3')} colSpan={2}>
                 <CanvasSelect
                   id={digestId}
                   className="w-36"
