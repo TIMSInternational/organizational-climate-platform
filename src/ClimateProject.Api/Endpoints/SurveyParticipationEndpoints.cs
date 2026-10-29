@@ -1,9 +1,11 @@
 using System.Globalization;
+using System.Text;
 using System.Security.Claims;
 using ClimateProject.Api.Infrastructure;
 using ClimateProject.Api.Infrastructure.Auditing;
 using ClimateProject.Application.Auditing;
 using ClimateProject.Application.Auth;
+using ClimateProject.Application.Exports;
 using ClimateProject.Application.Scheduling;
 using ClimateProject.Application.Surveys;
 using ClimateProject.Domain.Entities;
@@ -48,6 +50,114 @@ public static class SurveyParticipationEndpoints
         // the same marker the survey and dashboard exports carry.
         group.MapGet("/{surveyId:guid}/participation/export", ExportAsync)
             .WithMetadata(new AuditSensitiveReadAttribute(AuditVerbs.Export));
+
+        // Every one of a company's distributed surveys in one workbook -- the file TIMS sends
+        // the client, which through October was three downloads and a Python script. Mapped
+        // here, beside the per-survey export, because it is the same roster read repeated: it
+        // calls the same `LoadAsync`, with the same per-survey authorization, rather than
+        // assembling a second idea of who is in an audience.
+        app.MapGet("/admin/companies/{companyId:guid}/participation/export", ExportCompanyAsync)
+            .RequireAuthorization()
+            .WithMetadata(new AuditSensitiveReadAttribute(AuditVerbs.Export));
+    }
+
+    /// <summary>
+    /// <c>GET /admin/companies/{companyId}/participation/export</c>: one workbook, a sheet per
+    /// survey.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Draft surveys are left out: nobody has been invited to one, so its sheet would be a page
+    /// of people reported as not having answered something they were never sent. Everything
+    /// else the company has -- active, closed, archived -- is included, because a status file
+    /// that silently dropped the survey that closed yesterday would be read as if that survey
+    /// had never run.
+    /// </para>
+    /// <para>
+    /// Authorization is per survey and not per company, deliberately: each sheet goes through
+    /// <see cref="LoadAsync"/>, so the one predicate that decides who may read a list of named
+    /// people decides it here too. A caller who may administer none of them gets the same
+    /// refusal the single-survey route gives.
+    /// </para>
+    /// </remarks>
+    private static async Task<IResult> ExportCompanyAsync(
+        Guid companyId,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        IConfiguration configuration,
+        CancellationToken cancellationToken)
+    {
+        if (!SurveyEndpoints.CanAdminister(principal.GetCurrentUser(), companyId))
+        {
+            return Results.Forbid();
+        }
+
+        var company = await db.Companies
+            .AsNoTracking()
+            .Where(c => c.Id == companyId)
+            .Select(c => new { c.Name, c.Settings.Language, c.Settings.Timezone })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (company is null)
+        {
+            return Results.Json(new { message = "Company not found" }, statusCode: 404);
+        }
+
+        var spanish = SurveyRosterCsv.IsSpanish(company.Language);
+        var ids = await db.Surveys
+            .AsNoTracking()
+            .Where(s => s.CompanyId == companyId && s.Status != SurveyStatuses.Draft)
+            .OrderBy(s => s.CreatedAt)
+            .Select(s => s.Id)
+            .ToListAsync(cancellationToken);
+
+        var sheets = new List<StatusWorkbookSurvey>();
+        foreach (var id in ids)
+        {
+            var (loaded, failure) = await LoadAsync(id, principal, db, configuration, cancellationToken);
+            if (failure is not null)
+            {
+                return failure;
+            }
+
+            var survey = loaded!;
+            var title = spanish ? survey.TitleEs ?? survey.TitleEn : survey.TitleEn ?? survey.TitleEs;
+            sheets.Add(new StatusWorkbookSurvey(
+                title ?? id.ToString(),
+                survey.CredentialMode == CredentialModes.PerSurvey,
+                survey.DistinguishesStarted || survey.TracksCompletionOnly,
+                survey.Roster));
+        }
+
+        var today = DateOnly.FromDateTime(
+            SchedulingTimeZone.ToLocal(DateTimeOffset.UtcNow, SchedulingTimeZone.Resolve(company.Timezone)));
+
+        return Results.File(
+            StatusWorkbook.Build(sheets, today, spanish),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            StatusWorkbookFileName(company.Name, today, spanish));
+    }
+
+    /// <summary>
+    /// "estado-esph-2026-10-28.xlsx". ASCII only and punctuation collapsed, for the same reason
+    /// <see cref="ClimateProject.Application.Reports.Rendering.ReportFormats.FileName"/> does
+    /// it: a quote or a non-ASCII byte in `Content-Disposition` is an interoperability problem.
+    /// </summary>
+    internal static string StatusWorkbookFileName(string? companyName, DateOnly day, bool spanish)
+    {
+        var slug = new string((companyName ?? string.Empty)
+            .Normalize(NormalizationForm.FormD)
+            .Where(c => CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark)
+            .Select(c => char.IsAsciiLetterOrDigit(c) ? char.ToLowerInvariant(c) : '-')
+            .ToArray())
+            .Trim('-');
+        while (slug.Contains("--", StringComparison.Ordinal))
+        {
+            slug = slug.Replace("--", "-", StringComparison.Ordinal);
+        }
+
+        var stem = spanish ? "estado" : "status";
+        var named = slug.Length == 0 ? stem : $"{stem}-{slug}";
+        return $"{named}-{day:yyyy-MM-dd}.xlsx";
     }
 
     /// <summary>
