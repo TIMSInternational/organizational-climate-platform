@@ -561,6 +561,59 @@ export async function reissueSurveyCredential(
   return body?.delivered && body.issuedOn ? { kind: 'sent', issuedOn: body.issuedOn } : { kind: 'send_failed' }
 }
 
+/** Why `DELETE /surveys/{id}/credentials/{userId}` refused, as the API names it. */
+export type SurveyCredentialRevokeRefusal =
+  | 'not_per_survey'
+  | 'user_not_found'
+  | 'no_credential'
+  | 'has_responses'
+
+export type SurveyCredentialRevokeOutcome =
+  /**
+   * The key is gone and no longer opens the survey. `hadSignedIn` is not a failure -- it is a
+   * warning to pass on: sessions are stamped per PERSON, not per key, so somebody who had
+   * already signed in with this one may keep the survey open until that session expires.
+   */
+  | { kind: 'revoked'; hadSignedIn: boolean }
+  | { kind: 'refused'; code: SurveyCredentialRevokeRefusal | 'unknown' }
+
+/**
+ * Withdraws ONE person's key for ONE survey -- the repair for a code that should never have
+ * been sent (ten ESPH people were mailed a Clima key by mistake on 2026-10-28).
+ *
+ * The server's rules, read from `SurveyCredentialEndpoints.RevokeAsync` rather than restated:
+ *
+ * - it refuses somebody who has already answered, in whole or in part (`has_responses`):
+ *   withdrawing the key does not withdraw the response, and what happens to a response that
+ *   should not exist is a results decision;
+ * - it does NOT refuse a key that has been used -- being locked out is the point here, which
+ *   is the one place it differs from `reissueSurveyCredential`;
+ * - it leaves the account, the audience and the invitation row alone, so the person keeps
+ *   signing in to their OTHER surveys with those keys;
+ * - any survey status is allowed, because a mis-send is often noticed after the close.
+ *
+ * Refusals (404/409) come back as a value carrying their code, not a thrown English sentence,
+ * so the roster can say them in Spanish.
+ */
+export async function revokeSurveyCredential(
+  baseUrl: string,
+  surveyId: string,
+  userId: string,
+): Promise<SurveyCredentialRevokeOutcome> {
+  const response = await authFetch(
+    `${baseUrl}/surveys/${surveyId}/credentials/${userId}`,
+    { method: 'DELETE' },
+    { allowStatus: [404, 409] },
+  )
+  const body = (await response.json().catch(() => null)) as
+    | { hadSignedIn?: boolean; code?: string }
+    | null
+  if (!response.ok) {
+    return { kind: 'refused', code: (body?.code as SurveyCredentialRevokeRefusal | undefined) ?? 'unknown' }
+  }
+  return { kind: 'revoked', hadSignedIn: body?.hadSignedIn === true }
+}
+
 /**
  * Moves a survey's response window: `PUT /surveys/{id}` carrying only the two instants, so no
  * other column is touched (every field of the payload is nullable and an omitted one is left
