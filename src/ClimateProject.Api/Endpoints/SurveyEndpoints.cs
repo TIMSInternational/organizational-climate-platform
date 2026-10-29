@@ -747,6 +747,7 @@ public static class SurveyEndpoints
             }
         }
 
+        var departmentTargetsChanged = false;
         if (request.DepartmentIds is not null)
         {
             var departmentIds = request.DepartmentIds.Distinct().ToList();
@@ -757,6 +758,7 @@ public static class SurveyEndpoints
             }
 
             var existing = await db.SurveyDepartmentTargets.Where(t => t.SurveyId == survey.Id).ToListAsync(cancellationToken);
+            departmentTargetsChanged = !existing.Select(t => t.DepartmentId).ToHashSet().SetEquals(departmentIds);
             db.SurveyDepartmentTargets.RemoveRange(existing);
             foreach (var departmentId in departmentIds)
             {
@@ -842,6 +844,47 @@ public static class SurveyEndpoints
         if (userTargetsChanged)
         {
             changedFields.Add("userIds");
+        }
+
+        // The audience moved, so the stored denominator is now about a different set of
+        // people. `TargetAudienceCount` is what every participation RATE divides by
+        // (`surveyListView.ts`, the dashboard, the public report), and until now only a
+        // caller that sent the number itself kept it true: "Editar audiencia" sends
+        // `userIds` alone, so taking six people off a 240-person survey from the screen
+        // left the rate dividing by 240 for ever. The October shell script compensated by
+        // posting `targetAudienceCount` alongside the ids by hand -- a correction the
+        // product should not need a human to remember.
+        //
+        // Recounted here and not before the save because the new targets only exist in the
+        // database once written, and recounted through `SurveyQueries.Audience` rather than
+        // from the request's own list because that method is the single expression of who an
+        // audience is -- a survey with no targets of either kind is company-wide, department
+        // and named targets union, and only ACTIVE people count. Counting the ids in the
+        // request would be a fifth copy of that rule, and the fourth had already drifted.
+        //
+        // An explicit `targetAudienceCount` still wins: an author who declares a figure
+        // (a roster they are mid-way through importing, a paper cohort) keeps it. And a
+        // request that does not touch the targets does not touch the count, which is why
+        // the narrow settings PUTs cannot disturb a declared number.
+        //
+        // A survey that never declared one keeps declaring none. `null` is not "unset
+        // pending a default" here, it is the stored meaning "there is nothing to measure
+        // against", which `surveyParticipationPercent` passes through as an em dash rather
+        // than substituting a zero -- "nobody has responded" and "there is no audience to
+        // measure against" are different statements. So this corrects a denominator that
+        // has become WRONG; it never invents one that was deliberately absent.
+        if ((userTargetsChanged || departmentTargetsChanged)
+            && survey.TargetAudienceCount.HasValue
+            && !request.TargetAudienceCount.HasValue)
+        {
+            var resolved = await SurveyQueries
+                .Audience(db.Users.AsNoTracking(), db.SurveyDepartmentTargets, db.SurveyUserTargets, survey.Id, survey.CompanyId)
+                .CountAsync(cancellationToken);
+            if (survey.TargetAudienceCount != resolved)
+            {
+                survey.TargetAudienceCount = resolved;
+                changedFields.Add("targetAudienceCount");
+            }
         }
 
         if (changedFields.Count > 0)
