@@ -34,6 +34,7 @@ import { DeactivationConfirm, PersonDetailsFields, ResetPassword } from '../../c
 import { departmentChange, usePersonDetails } from '../../components/usePersonDetails'
 import type { Department } from '../../api/departments'
 import IntakeWizard from '../../components/IntakeWizard'
+import AddPersonForm from './AddPersonForm'
 import InvitationForm, { type InvitationFormValues } from '../../components/InvitationForm'
 import ShareableLinkPanel from '../../components/ShareableLinkPanel'
 import { roleText } from '../super/labels'
@@ -61,7 +62,7 @@ const EYEBROW = 'm-0 text-2xs font-bold uppercase tracking-label text-fg-tertiar
 export const GROUP_PARAM = 'departamento'
 export const EDIT_PARAM = 'editar'
 
-type OpenPanel = 'none' | 'invite' | 'import'
+type OpenPanel = 'none' | 'invite' | 'import' | 'add'
 
 /** What saving a corrected address did, for the person it was saved on. */
 interface EmailOutcome {
@@ -158,6 +159,10 @@ export default function AdminUsersView() {
         actions={
           allowed ? (
             <>
+              <Button type="button" variant="outline" onClick={() => setOpen(open === 'add' ? 'none' : 'add')}>
+                <UserPlus aria-hidden="true" />
+                {t('users.next.add.action')}
+              </Button>
               <Button type="button" variant="outline" onClick={() => setOpen(open === 'import' ? 'none' : 'import')}>
                 <Upload aria-hidden="true" />
                 {t('users.next.bulkImport')}
@@ -201,6 +206,25 @@ export default function AdminUsersView() {
               <InvitationForm allowCompanyAdminSetup={capabilities.canAssignRoles} onSubmit={handleCreateInvitation} />
               <ShareableLinkPanel onCreate={handleCreateShareableLink} />
             </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* One person, typed. The importer's own route commits it, so the account is shaped
+          exactly as an imported one -- see `AddPersonForm`. */}
+      <Dialog open={open === 'add'} onOpenChange={(next) => setOpen(next ? 'add' : 'none')}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto" closeLabel={t('users.next.panel.close')}>
+          <DialogHeader>
+            <DialogTitle>{t('users.next.add.action')}</DialogTitle>
+            <DialogDescription>{t('users.next.add.meta')}</DialogDescription>
+          </DialogHeader>
+          {companyId && (
+            <AddPersonForm
+              baseUrl={baseUrl}
+              companyId={companyId}
+              departments={state.departments}
+              onAdded={state.reload}
+            />
           )}
         </DialogContent>
       </Dialog>
