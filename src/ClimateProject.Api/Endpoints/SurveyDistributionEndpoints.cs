@@ -572,7 +572,8 @@ public static class SurveyDistributionEndpoints
                 survey,
                 await db.Companies
                     .Where(c => c.Id == survey.CompanyId)
-                    .Select(c => new SurveyCredentialCompany(c.Name, c.Settings.Language, c.Branding.LogoUrl, c.Branding.PrimaryColor))
+                    .Select(c => new SurveyCredentialCompany(
+                        c.Name, c.Settings.Language, c.Branding.LogoUrl, c.Branding.PrimaryColor, c.Settings.Timezone))
                     .FirstOrDefaultAsync(cancellationToken));
 
             // Both namespaces, because the two share one index each and a collision between

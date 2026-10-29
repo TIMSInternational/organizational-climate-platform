@@ -798,6 +798,15 @@ public class MassInviteTests(PostgresContainerFixture postgres, CapturingCredent
         var single = await client.PostAsync($"/admin/users/{ids[0]}/credentials", null);
         Assert.Equal(HttpStatusCode.OK, single.StatusCode);
         Assert.Equal(CredentialsEmailPurpose.Invitation, _factory.Sent.Where(s => s.ToEmail == email).Last().Purpose);
+
+        // All three are `shared` account details, which open every survey their holder is
+        // targeted by: none names a survey or a close day, so the composer sends the copy whose
+        // "ask your administrator to send new ones" this very route makes true (audit R3/R4).
+        Assert.All(_factory.Sent.Where(s => s.ToEmail == email), s =>
+        {
+            Assert.Null(s.SurveyName);
+            Assert.Null(s.SurveyClosesOn);
+        });
     }
 
     /// <summary>

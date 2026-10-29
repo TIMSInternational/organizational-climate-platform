@@ -187,7 +187,8 @@ public static class SurveyCredentialEndpoints
             .Where(c => c.Id == survey.CompanyId)
             .Select(c => new
             {
-                Mail = new SurveyCredentialCompany(c.Name, c.Settings.Language, c.Branding.LogoUrl, c.Branding.PrimaryColor),
+                Mail = new SurveyCredentialCompany(
+                    c.Name, c.Settings.Language, c.Branding.LogoUrl, c.Branding.PrimaryColor, c.Settings.Timezone),
                 c.Settings.Timezone,
             })
             .FirstOrDefaultAsync(cancellationToken);

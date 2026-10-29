@@ -172,6 +172,14 @@ public class SurveyCredentialReissueTests(PostgresContainerFixture postgres, Cap
         Assert.Equal("Clima", second.SurveyName);
         Assert.NotEqual(first.Password, second.Password);
 
+        // Both messages print the day the survey closes on the COMPANY's clock (this company
+        // is America/Costa_Rica), and the reissue carries the same day as the first -- the
+        // two must not disagree about the deadline.
+        var closesOn = DateOnly.FromDateTime(
+            TimeZoneInfo.ConvertTime(survey.EndDate, TimeZoneInfo.FindSystemTimeZoneById("America/Costa_Rica")).DateTime);
+        Assert.Equal(closesOn, first.SurveyClosesOn);
+        Assert.Equal(closesOn, second.SurveyClosesOn);
+
         Assert.Equal(HttpStatusCode.Unauthorized, await SignInAsync(first.Username, first.Password));
         Assert.Equal(HttpStatusCode.OK, await SignInAsync(second.Username, second.Password));
     }

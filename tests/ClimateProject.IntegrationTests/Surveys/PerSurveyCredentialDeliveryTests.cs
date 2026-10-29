@@ -296,6 +296,15 @@ public class PerSurveyCredentialDeliveryTests(PostgresContainerFixture postgres,
         // ...and the employer, which the call also asked for: "de la empresa Servicio
         // Público de Heredia".
         Assert.All(mail, m => Assert.Equal("Servicio Público de Heredia", m.CompanyName));
+
+        // ...and each carries its own survey's close, so the body can say when it ends. This
+        // company's zone is the default UTC, so the day is the UTC date of `EndDate`.
+        Assert.Equal(
+            DateOnly.FromDateTime(clima.EndDate.UtcDateTime),
+            mail.Single(m => m.SurveyName == "Encuesta de Clima Organizacional").SurveyClosesOn);
+        Assert.Equal(
+            DateOnly.FromDateTime(teletrabajo.EndDate.UtcDateTime),
+            mail.Single(m => m.SurveyName == "Encuesta de Teletrabajo").SurveyClosesOn);
     }
 
     /// <summary>
