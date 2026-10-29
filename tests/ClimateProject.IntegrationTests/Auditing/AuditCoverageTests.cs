@@ -104,6 +104,10 @@ public class AuditCoverageTests : IAsyncLifetime
         // have answered. Never an answer, but a list of named people leaving the server is the
         // disclosure "who exported this data" asks about.
         "GET /surveys/{surveyId:guid}/participation/export",
+        // The same disclosure as the line above, for EVERY survey the company has distributed
+        // at once -- the status workbook TIMS sends the client. Wider than the per-survey file
+        // by exactly the number of surveys in it, so it is marked for the same reason.
+        "GET /admin/companies/{companyId:guid}/participation/export",
     ];
 
     private IReadOnlyList<(string Method, string Pattern, Endpoint Endpoint)> Routes()

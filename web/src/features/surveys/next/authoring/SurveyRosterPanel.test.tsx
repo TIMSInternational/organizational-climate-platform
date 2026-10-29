@@ -63,10 +63,24 @@ function fetchWith(
   participation: SurveyParticipationView,
   onPost?: (ids: string[]) => unknown,
   onReissue?: (userId: string) => { status: number; body: unknown },
+  onRevoke?: (userId: string) => { status: number; body: unknown },
 ) {
   const sent: Sent[] = []
   const mock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
+    // Withdrawing a key is a DELETE on the credential itself, so it is matched before the
+    // reissue POST below -- the two paths differ only by the trailing segment.
+    const revoke = /\/surveys\/[^/]+\/credentials\/([^/]+)$/.exec(url)
+    if (revoke && (init?.method ?? 'GET').toUpperCase() === 'DELETE') {
+      sent.push({ url, body: null })
+      const answer = onRevoke?.(revoke[1]) ?? {
+        status: 200,
+        body: { surveyId: SURVEY, userId: revoke[1], username: 'x', hadSignedIn: false, issuedOn: '2026-10-20' },
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify(answer.body), { status: answer.status, headers: { 'Content-Type': 'application/json' } }),
+      )
+    }
     const reissue = /\/surveys\/[^/]+\/credentials\/([^/]+)\/reissue$/.exec(url)
     if (reissue && (init?.method ?? 'GET').toUpperCase() === 'POST') {
       sent.push({ url, body: null })
@@ -279,6 +293,104 @@ describe('SurveyRosterPanel', () => {
       // The false label is gone, and so is the account resend: it cannot reach a keyless account.
       expect(screen.queryByText(T.noUsuario)).toBeNull()
       expect(screen.queryAllByRole('checkbox')).toHaveLength(0)
+    })
+
+    /**
+     * Withdrawing a key: the repair for a code that should never have been sent. Ten ESPH
+     * people were mailed a Clima key by mistake on 2026-10-28 and the only in-product lever
+     * was deactivating the account, which would also have closed the Teletrabajo survey they
+     * were legitimately part-way through.
+     */
+    it('offers withdrawing a code only where there is one to withdraw and nobody has answered', async () => {
+      const payload = perSurvey()
+      vi.stubGlobal('fetch', fetchWith(payload).mock)
+      renderPanel(payload)
+      await screen.findByText('Ana Lucía Mora')
+
+      const revokeOf = (name: string) => screen.getByRole('button', { name: T.revokeFor.replace('{name}', name) })
+      // A code sent and never used: the mis-send case, and the only one it is offered for.
+      expect(revokeOf('Ana Lucía Mora')).toHaveProperty('disabled', false)
+      // Answering is what makes it a results decision instead of an access one.
+      expect(revokeOf('Hugo Peralta')).toHaveProperty('disabled', true)
+      expect(within(rowOf('hugo')).getByText(T.revokeWhyAnswered)).toBeTruthy()
+      expect(revokeOf('Marta Villalobos')).toHaveProperty('disabled', true)
+      expect(within(rowOf('marta')).getByText(T.revokeWhyNoCode)).toBeTruthy()
+    })
+
+    it('asks first, then withdraws the code and the row stops showing one', async () => {
+      const payload = perSurvey()
+      const { mock, sent } = fetchWith(payload)
+      vi.stubGlobal('fetch', mock)
+      const user = userEvent.setup()
+      renderPanel(payload)
+      await screen.findByText('Ana Lucía Mora')
+      expect(within(rowOf('ana')).getByText('esph-k7m2q9xa')).toBeTruthy()
+
+      await user.click(screen.getByRole('button', { name: T.revokeFor.replace('{name}', 'Ana Lucía Mora') }))
+
+      // `ConfirmationDialog` is an AlertDialog, so the role is `alertdialog` -- measured, not
+      // assumed: a `dialog` query finds nothing here.
+      const dialog = await screen.findByRole('alertdialog')
+      expect(within(dialog).getByText(T.revokeTitle.replace('{name}', 'Ana Lucía Mora'))).toBeTruthy()
+      // It names the username that stops working and the survey it stops opening, and says the
+      // account and the other surveys are untouched.
+      expect(
+        within(dialog).getByText(
+          T.revokeBody
+            .replace('{username}', 'esph-k7m2q9xa')
+            .replace('{survey}', 'Clima Organizacional ESPH 2026')
+            .replace('{name}', 'Ana Lucía Mora'),
+        ),
+      ).toBeTruthy()
+
+      await user.click(within(dialog).getByRole('button', { name: T.revoke }))
+
+      expect(sent).toHaveLength(1)
+      expect(sent[0].url).toBe(`${import.meta.env.VITE_API_BASE_URL}/surveys/${SURVEY}/credentials/ana`)
+      expect(await screen.findByText(T.revokeDone.replace('{name}', 'Ana Lucía Mora'))).toBeTruthy()
+      // The row reads as keyless at once, without refetching a roster the page owns elsewhere.
+      await waitFor(() => expect(within(rowOf('ana')).queryByText('esph-k7m2q9xa')).toBeNull())
+      expect(within(rowOf('ana')).getAllByText(T.noCode).length).toBeGreaterThan(0)
+    })
+
+    /**
+     * Sessions are stamped per PERSON, not per key, so a session opened with this key cannot be
+     * ended without ending that person's other surveys' sessions too. The screen says so rather
+     * than letting an administrator believe access stopped the instant they clicked.
+     */
+    it('warns when the withdrawn code had already been used to sign in', async () => {
+      const payload = perSurvey()
+      const { mock } = fetchWith(payload, undefined, undefined, () => ({
+        status: 200,
+        body: { surveyId: SURVEY, userId: 'ana', username: 'esph-k7m2q9xa', hadSignedIn: true, issuedOn: '2026-10-20' },
+      }))
+      vi.stubGlobal('fetch', mock)
+      const user = userEvent.setup()
+      renderPanel(payload)
+      await screen.findByText('Ana Lucía Mora')
+
+      await user.click(screen.getByRole('button', { name: T.revokeFor.replace('{name}', 'Ana Lucía Mora') }))
+      await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: T.revoke }))
+
+      expect(await screen.findByText(T.revokeDoneSignedIn.replace('{name}', 'Ana Lucía Mora'))).toBeTruthy()
+    })
+
+    it('says a refusal in Spanish and leaves the code on the row', async () => {
+      const payload = perSurvey()
+      const { mock } = fetchWith(payload, undefined, undefined, () => ({
+        status: 409,
+        body: { message: 'already answered', code: 'has_responses' },
+      }))
+      vi.stubGlobal('fetch', mock)
+      const user = userEvent.setup()
+      renderPanel(payload)
+      await screen.findByText('Ana Lucía Mora')
+
+      await user.click(screen.getByRole('button', { name: T.revokeFor.replace('{name}', 'Ana Lucía Mora') }))
+      await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: T.revoke }))
+
+      expect(await screen.findByText(T.revokeRefusedHasResponses)).toBeTruthy()
+      expect(within(rowOf('ana')).getByText('esph-k7m2q9xa')).toBeTruthy()
     })
 
     it('refuses, with the reason on screen, to reissue a code already used or never sent', async () => {

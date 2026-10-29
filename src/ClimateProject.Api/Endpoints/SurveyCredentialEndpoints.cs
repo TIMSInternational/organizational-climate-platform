@@ -38,6 +38,45 @@ public static class SurveyCredentialReissueRefusals
     public const string AlreadySignedIn = "already_signed_in";
 }
 
+/// <summary>
+/// Why a revoke was refused, as a stable code beside the English <c>message</c>. Separate from
+/// <see cref="SurveyCredentialReissueRefusals"/> although some values coincide: the two routes
+/// are different contracts and a screen reads each one's own list. Notably there is no
+/// <c>already_signed_in</c> here -- see <see cref="SurveyCredentialEndpoints"/>.
+/// </summary>
+public static class SurveyCredentialRevokeRefusals
+{
+    /// <summary>The survey hands out one account per person (<c>shared</c>); there is no per-survey key to withdraw.</summary>
+    public const string NotPerSurvey = "not_per_survey";
+
+    /// <summary>No such account in this survey's company.</summary>
+    public const string UserNotFound = "user_not_found";
+
+    /// <summary>This person holds no key for this survey, so there is nothing to withdraw.</summary>
+    public const string NoCredential = "no_credential";
+
+    /// <summary>
+    /// They have already answered -- wholly or in part. Withdrawing the key would not withdraw
+    /// the response, and what to do with a response that should never have existed is a
+    /// results decision, not an access one.
+    /// </summary>
+    public const string HasResponses = "has_responses";
+}
+
+/// <param name="HadSignedIn">
+/// Whether the withdrawn key had ever been used. True is not a refusal, it is a WARNING the
+/// screen must pass on: sessions are stamped per USER, not per credential, so a person who
+/// already signed in with this key may keep the survey open until that session expires. See
+/// the remarks on <see cref="SurveyCredentialEndpoints"/> for why it is not ended here.
+/// </param>
+/// <param name="IssuedOn">The day the withdrawn key had been issued, in the company's zone.</param>
+public sealed record SurveyCredentialRevokeResult(
+    Guid SurveyId,
+    Guid UserId,
+    string Username,
+    bool HadSignedIn,
+    DateOnly IssuedOn);
+
 /// <param name="Delivered">Whether the new key's email left. When false, the OLD key was put back and still works.</param>
 /// <param name="FailureReason">The transport's own reason when the send failed; null when it went.</param>
 /// <param name="IssuedOn">
@@ -97,9 +136,149 @@ public static class SurveyCredentialEndpoints
     {
         ArgumentNullException.ThrowIfNull(app);
 
-        app.MapGroup("/surveys")
-            .RequireAuthorization()
-            .MapPost("/{surveyId:guid}/credentials/{userId:guid}/reissue", ReissueAsync);
+        var group = app.MapGroup("/surveys").RequireAuthorization();
+        group.MapPost("/{surveyId:guid}/credentials/{userId:guid}/reissue", ReissueAsync);
+        group.MapDelete("/{surveyId:guid}/credentials/{userId:guid}", RevokeAsync);
+    }
+
+    /// <summary>
+    /// <c>DELETE /surveys/{surveyId}/credentials/{userId}</c>: withdraw a key that should never
+    /// have been sent, closing ONE survey to ONE person.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// On 2026-10-28 ten ESPH people were mailed a Clima key by mistake. The repair was
+    /// <c>esph-quitar-clave-clima-mal-enviadas.sql</c>, and the product had no equivalent: the
+    /// reissue route can REPLACE a key but nothing could take one away. Deactivating the
+    /// account was the only in-product lever and it is the wrong one -- it removes the person
+    /// from every survey, and those ten were legitimately mid-Teletrabajo.
+    /// </para>
+    /// <para>
+    /// <b>Why this is the lever, rather than editing the audience.</b> Clima is targeted by
+    /// DEPARTMENT, so there is no list of people to remove anybody from -- the audience is
+    /// whoever is in those departments. For a department-targeted survey the key IS the access,
+    /// so withdrawing it is the only way to close one survey to one person while leaving their
+    /// other surveys alone.
+    /// </para>
+    /// <para>
+    /// <b>What it deliberately does not touch</b>, each because the October recipe did not
+    /// either and said why: the ACCOUNT (they keep signing in to their other surveys with those
+    /// keys), the AUDIENCE (a department-targeted survey has no list to edit, and editing one
+    /// would move the participation denominator), the INVITATION row (it moves the report's
+    /// numbers, which is a separate decision), and the mail already sent, which cannot be
+    /// unsent.
+    /// </para>
+    /// <para>
+    /// <b>It refuses a person who has answered</b>, wholly or in part. Withdrawing the key does
+    /// not withdraw the response, and a response that should never have existed is a results
+    /// question -- which is exactly the decision ESPH was left with for one person on 28 Oct.
+    /// Refusing here keeps the two apart instead of half-doing both.
+    /// </para>
+    /// <para>
+    /// <b>It does NOT refuse a key that has been used</b>, and that is the one place it differs
+    /// from reissue. Reissue refuses, because replacing a key somebody is holding locks them
+    /// out of a survey they may be part-way through. Here being locked out is the POINT. The
+    /// used case is reported rather than refused, as <c>hadSignedIn</c>.
+    /// </para>
+    /// <para>
+    /// <b>The session is not ended, on purpose.</b> A JWT carries <c>user.SecurityStamp</c>, so
+    /// as <see cref="SurveyCredential"/> warns, there is no way to end a session opened with
+    /// ONE credential without ending that person's other sessions too. Signing somebody out of
+    /// Teletrabajo to undo a Clima mistake is the wrong trade, and they would simply sign in
+    /// again with the Teletrabajo key. So the row goes, future sign-ins with it are refused,
+    /// and a live session is reported to the caller instead of being silently survived. The
+    /// damaging case -- already answering -- is the one the response guard above refuses.
+    /// </para>
+    /// <para>
+    /// Any survey status is allowed: a mis-send is often noticed after the window has closed,
+    /// and withdrawing the key is how the roster stops showing it as outstanding.
+    /// </para>
+    /// </remarks>
+    private static async Task<IResult> RevokeAsync(
+        Guid surveyId,
+        Guid userId,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        AuditEntry audit,
+        CancellationToken cancellationToken)
+    {
+        audit.SetResourceId($"{surveyId}/{userId}");
+
+        var survey = await db.Surveys.AsNoTracking().FirstOrDefaultAsync(s => s.Id == surveyId, cancellationToken);
+        if (survey is null)
+        {
+            return Results.Json(new { message = "Survey not found" }, statusCode: 404);
+        }
+
+        if (!SurveyEndpoints.CanAdminister(principal.GetCurrentUser(), survey.CompanyId))
+        {
+            return Results.Forbid();
+        }
+
+        if ((survey.Settings.CredentialMode ?? CredentialModes.Shared) != CredentialModes.PerSurvey)
+        {
+            return Refuse(
+                409, SurveyCredentialRevokeRefusals.NotPerSurvey,
+                "This survey uses shared accounts, not per-survey keys; there is no key to withdraw. Deactivate the account, or take the person out of the audience.");
+        }
+
+        var userExists = await db.Users
+            .AsNoTracking()
+            .AnyAsync(u => u.Id == userId && u.CompanyId == survey.CompanyId, cancellationToken);
+        if (!userExists)
+        {
+            return Refuse(404, SurveyCredentialRevokeRefusals.UserNotFound, "No such person in this survey's company.");
+        }
+
+        var credential = await db.SurveyCredentials
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.SurveyId == surveyId && c.UserId == userId, cancellationToken);
+        if (credential is null)
+        {
+            return Refuse(
+                409, SurveyCredentialRevokeRefusals.NoCredential,
+                "This person holds no key for this survey, so there is nothing to withdraw.");
+        }
+
+        // ANY response, complete or not -- the October recipe's second guard, and its reason:
+        // "si alguien contesto, hay que decidirlo a mano, no borrarle nada".
+        var hasResponses = await db.Responses
+            .AsNoTracking()
+            .AnyAsync(r => r.SurveyId == surveyId && r.UserId == userId, cancellationToken);
+        if (hasResponses)
+        {
+            return Refuse(
+                409, SurveyCredentialRevokeRefusals.HasResponses,
+                "This person has already answered this survey. Withdrawing the key would not withdraw the response; decide what happens to the response first.");
+        }
+
+        // Conditional on the row still being the one that was read, so a reissue that lands
+        // between the read and the write does not get silently deleted by this call: the
+        // password hash is what a reissue rotates.
+        var removed = await db.SurveyCredentials
+            .Where(c => c.SurveyId == surveyId && c.UserId == userId && c.PasswordHash == credential.PasswordHash)
+            .ExecuteDeleteAsync(cancellationToken);
+        if (removed != 1)
+        {
+            return Refuse(
+                409, SurveyCredentialRevokeRefusals.NoCredential,
+                "This person's key changed while the request was in flight; read the roster again and retry.");
+        }
+
+        audit.RecordChange("credential", credential.Username, "revoked");
+
+        var zone = SchedulingTimeZone.Resolve(await db.Companies
+            .AsNoTracking()
+            .Where(c => c.Id == survey.CompanyId)
+            .Select(c => c.Settings.Timezone)
+            .FirstOrDefaultAsync(cancellationToken));
+
+        return Results.Ok(new SurveyCredentialRevokeResult(
+            surveyId,
+            userId,
+            credential.Username,
+            credential.LastSignInAt is not null,
+            DateOnly.FromDateTime(SchedulingTimeZone.ToLocal(credential.CreatedAt, zone))));
     }
 
     private static async Task<IResult> ReissueAsync(

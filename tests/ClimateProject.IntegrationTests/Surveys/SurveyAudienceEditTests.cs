@@ -155,4 +155,154 @@ public class SurveyAudienceEditTests : IAsyncLifetime
         var entry = Assert.Single(await UpdatedEntriesAsync(survey.Id));
         Assert.Equal(new[] { "departmentIds", "userIds" }, (entry!.Fields ?? []).Order());
     }
+
+    /// <summary>
+    /// The defect this group was extended for. `TargetAudienceCount` is what every
+    /// participation RATE divides by, and "Editar audiencia" sends `userIds` ALONE -- so
+    /// before this, taking somebody off a survey left the rate dividing by the old audience
+    /// for ever. October compensated by posting the number by hand from a shell script
+    /// (`quitar-teletrabajo-6.sh`: "targetAudienceCount rides along ... so the results'
+    /// response rate divides by 234, not 240").
+    /// </summary>
+    [Fact]
+    public async Task Taking_one_person_off_a_live_survey_recounts_what_the_rate_divides_by()
+    {
+        var admin = await _harness.ClientAsync(Roles.CompanyAdmin, _companyId);
+        var survey = await SurveyTestHarness.CreateSurveyAsync(
+            admin,
+            SurveyTestHarness.MinimalRequest(_companyId) with
+            {
+                UserIds = [_personAId, _personBId],
+                TargetAudienceCount = 2,
+            });
+        (await SurveyTestHarness.SetStatusAsync(admin, survey.Id, SurveyStatuses.Active)).EnsureSuccessStatusCode();
+        Assert.Equal(2, survey.TargetAudienceCount);
+
+        // Exactly the body the dialog sends: the surviving ids and nothing else.
+        var response = await admin.PutAsJsonAsync($"/surveys/{survey.Id}", new UpdateSurveyRequest(UserIds: [_personAId]));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var detail = (await response.Content.ReadFromJsonAsync<SurveyDetail>())!;
+        Assert.Equal(1, detail.TargetAudienceCount);
+        Assert.Equal(
+            1,
+            await _harness.WithDbAsync(async db => (await db.Surveys.AsNoTracking().FirstAsync(s => s.Id == survey.Id)).TargetAudienceCount));
+        var entry = Assert.Single(await UpdatedEntriesAsync(survey.Id));
+        Assert.Contains("targetAudienceCount", entry!.Fields ?? []);
+    }
+
+    /// <summary>
+    /// The recount must be the audience RULE, not the length of the list it was handed.
+    ///
+    /// <para>
+    /// Clearing both kinds of target makes a survey company-wide, so the correct denominator
+    /// is the company's ACTIVE headcount while `userIds` is empty -- the two numbers cannot be
+    /// confused for each other. `SurveyQueries.Audience` is where that rule lives, and its own
+    /// remarks record that it had been written out four times and the fourth had already
+    /// drifted; counting the request's ids here would have been a fifth copy.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task The_recount_is_the_audience_rule_not_the_length_of_the_list()
+    {
+        var admin = await _harness.ClientAsync(Roles.CompanyAdmin, _companyId);
+        var survey = await SurveyTestHarness.CreateSurveyAsync(
+            admin,
+            SurveyTestHarness.MinimalRequest(_companyId) with { UserIds = [_personAId], TargetAudienceCount = 1 });
+        await _harness.WithDbAsync(async db =>
+        {
+            var person = await db.Users.FirstAsync(u => u.Id == _personBId);
+            person.IsActive = false;
+            return await db.SaveChangesAsync();
+        });
+        var (active, total) = await _harness.WithDbAsync(async db => (
+            await db.Users.CountAsync(u => u.CompanyId == _companyId && u.IsActive),
+            await db.Users.CountAsync(u => u.CompanyId == _companyId)));
+
+        // No targets of either kind: the survey is now aimed at the whole company.
+        var response = await admin.PutAsJsonAsync(
+            $"/surveys/{survey.Id}",
+            new UpdateSurveyRequest(DepartmentIds: [], UserIds: []));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var detail = (await response.Content.ReadFromJsonAsync<SurveyDetail>())!;
+        Assert.Empty(detail.UserIds);
+        Assert.Equal(active, detail.TargetAudienceCount);
+        // The deactivated person is on the roll and out of the audience, so the rule is doing
+        // something the headcount alone would not -- without this the assertion above would
+        // pass against a count that ignored `IsActive`.
+        Assert.True(total > active, $"expected an inactive person to exist: {total} on the roll, {active} active");
+    }
+
+    /// <summary>
+    /// The other half of the rule. `TargetAudienceCount` is genuinely nullable and `null` is a
+    /// stored MEANING -- "there is nothing to measure against", which the list passes through
+    /// as an em dash rather than printing a false 0 % (`surveyParticipationPercent`). Moving
+    /// the audience of a survey that never declared a figure must not start declaring one:
+    /// this corrects a denominator that has become wrong, it does not invent one.
+    /// </summary>
+    [Fact]
+    public async Task A_survey_that_declared_no_audience_count_still_declares_none()
+    {
+        var admin = await _harness.ClientAsync(Roles.CompanyAdmin, _companyId);
+        var survey = await SurveyTestHarness.CreateSurveyAsync(
+            admin,
+            SurveyTestHarness.MinimalRequest(_companyId) with { UserIds = [_personAId, _personBId] });
+        (await SurveyTestHarness.SetStatusAsync(admin, survey.Id, SurveyStatuses.Active)).EnsureSuccessStatusCode();
+        Assert.Null(survey.TargetAudienceCount);
+
+        var response = await admin.PutAsJsonAsync($"/surveys/{survey.Id}", new UpdateSurveyRequest(UserIds: [_personAId]));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var detail = (await response.Content.ReadFromJsonAsync<SurveyDetail>())!;
+        Assert.Null(detail.TargetAudienceCount);
+        var entry = Assert.Single(await UpdatedEntriesAsync(survey.Id));
+        Assert.DoesNotContain("targetAudienceCount", entry!.Fields ?? []);
+    }
+
+    /// <summary>
+    /// An author who states the figure keeps it. A roster being imported in batches, or a
+    /// cohort part of which answers on paper, has a denominator the resolved audience does
+    /// not know -- which is why the recount only fills a number nobody sent.
+    /// </summary>
+    [Fact]
+    public async Task An_explicitly_sent_audience_count_still_wins()
+    {
+        var admin = await _harness.ClientAsync(Roles.CompanyAdmin, _companyId);
+        var survey = await SurveyTestHarness.CreateSurveyAsync(
+            admin,
+            SurveyTestHarness.MinimalRequest(_companyId) with { UserIds = [_personAId, _personBId], TargetAudienceCount = 2 });
+        (await SurveyTestHarness.SetStatusAsync(admin, survey.Id, SurveyStatuses.Active)).EnsureSuccessStatusCode();
+
+        var response = await admin.PutAsJsonAsync(
+            $"/surveys/{survey.Id}",
+            new UpdateSurveyRequest(UserIds: [_personAId], TargetAudienceCount: 240));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var detail = (await response.Content.ReadFromJsonAsync<SurveyDetail>())!;
+        Assert.Equal(240, detail.TargetAudienceCount);
+    }
+
+    /// <summary>
+    /// A request that does not touch the targets does not touch the count. The three narrow
+    /// settings PUTs the detail page sends (`setSurveySelfDeclaredDemographics` and its two
+    /// siblings) are legal on a live survey, and a declared denominator must survive them.
+    /// </summary>
+    [Fact]
+    public async Task A_settings_only_update_leaves_a_declared_audience_count_alone()
+    {
+        var admin = await _harness.ClientAsync(Roles.CompanyAdmin, _companyId);
+        var survey = await SurveyTestHarness.CreateSurveyAsync(
+            admin,
+            SurveyTestHarness.MinimalRequest(_companyId) with { UserIds = [_personAId], TargetAudienceCount = 240 });
+        (await SurveyTestHarness.SetStatusAsync(admin, survey.Id, SurveyStatuses.Active)).EnsureSuccessStatusCode();
+
+        var response = await admin.PutAsJsonAsync(
+            $"/surveys/{survey.Id}",
+            new UpdateSurveyRequest(Settings: new SurveySettingsInput(SelfDeclaredDemographics: true)));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var detail = (await response.Content.ReadFromJsonAsync<SurveyDetail>())!;
+        Assert.Equal(240, detail.TargetAudienceCount);
+    }
 }

@@ -394,4 +394,52 @@ describe('SurveysListNextPage', () => {
       vi.useRealTimers()
     }
   })
+
+  /**
+   * The status workbook: every distributed survey, a sheet each — the file the client is sent,
+   * which until now meant downloading each roster and running a script over them.
+   */
+  describe('the status workbook', () => {
+    it('fetches it with the bearer header and hands it over as a file', async () => {
+      const blob = new Blob(['xlsx'], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+      // Parameters declared so `mock.calls` is typed: a no-arg `vi.fn` gives an empty
+      // tuple, and `call[0]` is then a compile error rather than the URL.
+      const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(blob, { status: 200 }))
+      vi.stubGlobal('fetch', fetchMock)
+      const clicked: { name?: string } = {}
+      const createdUrl = 'blob:status'
+      vi.stubGlobal('URL', { ...URL, createObjectURL: vi.fn(() => createdUrl), revokeObjectURL: vi.fn() })
+      const realClick = HTMLAnchorElement.prototype.click
+      HTMLAnchorElement.prototype.click = function click(this: HTMLAnchorElement) {
+        clicked.name = this.download
+      }
+      try {
+        const user = userEvent.setup()
+        renderAs({ role: 'company_admin', companyId: 'c1' })
+        await screen.findByText('Q4')
+
+        await user.click(screen.getByRole('button', { name: copy.statusExport }))
+
+        await waitFor(() => expect(clicked.name).toBeDefined())
+        // The company-wide route, not a per-survey one.
+        const urls = fetchMock.mock.calls.map((call) => String(call[0]))
+        expect(urls.some((url) => url.endsWith('/admin/companies/c1/participation/export'))).toBe(true)
+        // Named for the company and the day, and an .xlsx.
+        expect(clicked.name).toMatch(/\.xlsx$/)
+      } finally {
+        HTMLAnchorElement.prototype.click = realClick
+      }
+    })
+
+    it('says so when the download fails, rather than doing nothing visible', async () => {
+      vi.stubGlobal('fetch', vi.fn(async () => new Response('no', { status: 500 })))
+      const user = userEvent.setup()
+      renderAs({ role: 'company_admin', companyId: 'c1' })
+      await screen.findByText('Q4')
+
+      await user.click(screen.getByRole('button', { name: copy.statusExport }))
+
+      expect(await screen.findByText(copy.statusExportFailed)).toBeTruthy()
+    })
+  })
 })

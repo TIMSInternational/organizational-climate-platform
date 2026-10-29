@@ -25,7 +25,9 @@ import {
 } from '../../../org-structure/api/users'
 import {
   reissueSurveyCredential,
+  revokeSurveyCredential,
   type SurveyCredentialReissueOutcome,
+  type SurveyCredentialRevokeOutcome,
   type SurveyParticipantStatus,
   type SurveyRosterRow,
 } from '../../api/surveys'
@@ -67,6 +69,17 @@ const STATUS_KEY: Record<SurveyParticipantStatus, string> = {
 type ReissueState =
   | { phase: 'idle' }
   | { phase: 'done'; name: string; email: string; outcome: SurveyCredentialReissueOutcome | { kind: 'error' } }
+
+type RevokeState =
+  | { phase: 'idle' }
+  | { phase: 'done'; name: string; outcome: SurveyCredentialRevokeOutcome | { kind: 'error' } }
+
+const REVOKE_REFUSAL_KEY: Record<string, string> = {
+  not_per_survey: 'revokeRefusedNotPerSurvey',
+  user_not_found: 'revokeRefusedNotFound',
+  no_credential: 'revokeRefusedNoCode',
+  has_responses: 'revokeRefusedHasResponses',
+}
 
 const REFUSAL_KEY: Record<string, string> = {
   not_per_survey: 'reissueRefusedNotPerSurvey',
@@ -120,6 +133,12 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
   // The day a key reissued from THIS page was mailed, so the row says so without refetching the
   // whole roster -- the payload is shared with the Participación panel, which owns its fetch.
   const [issuedHere, setIssuedHere] = useState<Readonly<Record<string, string>>>({})
+  const [revokeTarget, setRevokeTarget] = useState<SurveyRosterRow | null>(null)
+  const [revoke, setRevoke] = useState<RevokeState>({ phase: 'idle' })
+  // Keys withdrawn from THIS page, for the same reason as `issuedHere`: the roster payload is
+  // fetched once for the whole page and shared with the Participación panel, which owns that
+  // fetch, so a write here updates the row rather than refetching eight hundred of them.
+  const [revokedHere, setRevokedHere] = useState<ReadonlySet<string>>(new Set())
   const [download, setDownload] = useState<'idle' | 'busy' | 'failed'>('idle')
 
   const roster = state.status === 'ready' ? state.view.roster : NO_ROWS
@@ -284,6 +303,25 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
     setReissueTarget(null)
   }
 
+  /**
+   * Withdraws one person's key for this survey. On success the row is marked locally so it
+   * reads "Sin código" at once and the button cannot be pressed twice; the account, the
+   * audience and the invitation are untouched, so nothing else on the page moves.
+   */
+  async function revokeFor(row: SurveyRosterRow) {
+    let outcome: SurveyCredentialRevokeOutcome | { kind: 'error' }
+    try {
+      outcome = await revokeSurveyCredential(baseUrl, state.status === 'ready' ? state.view.surveyId : '', row.userId)
+    } catch {
+      outcome = { kind: 'error' }
+    }
+    if (outcome.kind === 'revoked') {
+      setRevokedHere((current) => new Set(current).add(row.userId))
+    }
+    setRevoke({ phase: 'done', name: row.name, outcome })
+    setRevokeTarget(null)
+  }
+
   // Counts come off the roster rather than the payload's own counters, so a chip can never
   // disagree with the rows under it.
   const filters: { value: Filter; key: string; count: number }[] =
@@ -431,6 +469,26 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
               </p>
             ) : null}
 
+            {revoke.phase === 'done' ? (
+              <p
+                role="status"
+                className={
+                  revoke.outcome.kind === 'revoked' ? 'm-0 text-sm font-medium' : 'm-0 text-sm font-medium text-accent-red-ink'
+                }
+              >
+                {revoke.outcome.kind === 'revoked'
+                  ? // A live session is said out loud rather than left to be discovered: sessions
+                    // are stamped per person, so one opened with this key cannot be ended without
+                    // ending that person's other surveys' sessions too.
+                    revoke.outcome.hadSignedIn
+                    ? copy('revokeDoneSignedIn', { name: revoke.name })
+                    : copy('revokeDone', { name: revoke.name })
+                  : revoke.outcome.kind === 'refused'
+                    ? copy(REVOKE_REFUSAL_KEY[revoke.outcome.code] ?? 'revokeError')
+                    : copy('revokeError')}
+              </p>
+            ) : null}
+
             {visible.length === 0 ? (
               <p className="m-0 text-sm text-fg-secondary">{copy('empty')}</p>
             ) : (
@@ -472,7 +530,9 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
                         tracked={showState}
                         perSurvey={perSurvey}
                         issuedHere={issuedHere[row.userId] ?? null}
+                        revokedHere={revokedHere.has(row.userId)}
                         onReissue={() => setReissueTarget(row)}
+                        onRevoke={() => setRevokeTarget(row)}
                         locale={locale}
                         copy={copy}
                         selected={selected.has(row.userId)}
@@ -516,6 +576,25 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
         cancelText={t('common.cancel')}
         onConfirm={() => (reissueTarget === null ? undefined : reissueFor(reissueTarget))}
       />
+
+      {/* What withdrawing a key does and does NOT do, before it is done: the survey closes to
+          this person, their other surveys keep working, and the email already sent cannot be
+          unsent. */}
+      <ConfirmationDialog
+        open={revokeTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setRevokeTarget(null)
+        }}
+        title={copy('revokeTitle', { name: revokeTarget?.name ?? '' })}
+        description={copy('revokeBody', {
+          name: revokeTarget?.name ?? '',
+          survey: surveyTitle,
+          username: revokeTarget?.surveyUsername ?? '',
+        })}
+        confirmText={copy('revoke')}
+        cancelText={t('common.cancel')}
+        onConfirm={() => (revokeTarget === null ? undefined : revokeFor(revokeTarget))}
+      />
     </section>
   )
 }
@@ -526,7 +605,9 @@ function RosterRows({
   tracked,
   perSurvey,
   issuedHere,
+  revokedHere,
   onReissue,
+  onRevoke,
   locale,
   copy,
   selected,
@@ -540,7 +621,10 @@ function RosterRows({
   perSurvey: boolean
   /** The day a reissue from this page mailed this person's key, overriding the loaded one. */
   issuedHere: string | null
+  /** Withdrawn from this page: the row reads as having no key whatever the payload said. */
+  revokedHere: boolean
   onReissue: () => void
+  onRevoke: () => void
   locale: string
   copy: (key: string, vars?: Record<string, string | number>) => string
   selected: boolean
@@ -552,9 +636,14 @@ function RosterRows({
     (locale === 'es' ? demographic.labelEs : demographic.labelEn) ?? demographic.field
 
   // Absent on a payload from before the key columns existed; absent reads as "no key".
-  const surveyUsername = row.surveyUsername ?? null
-  const issuedOn = issuedHere ?? row.credentialIssuedOn ?? null
-  const signedInOn = row.lastSignInOn ?? null
+  // A key withdrawn from this page is gone, so it outranks both the payload and a reissue.
+  const surveyUsername = revokedHere ? null : row.surveyUsername ?? null
+  const issuedOn = revokedHere ? null : issuedHere ?? row.credentialIssuedOn ?? null
+  const signedInOn = revokedHere ? null : row.lastSignInOn ?? null
+  // The server refuses a withdrawal for anyone who has answered, so the button says so instead
+  // of offering an action that cannot succeed. `not_completed` is the ANONYMOUS survey's "we
+  // cannot know", so it is not treated as having answered -- the server decides that one.
+  const hasAnswered = row.status === 'completed' || row.status === 'started'
   // Five either way: per-survey trades the checkbox for the Código column.
   const columns = 5 + (tracked ? 2 : 0)
 
@@ -627,6 +716,24 @@ function RosterRows({
               {issuedOn === null || signedInOn !== null ? (
                 <span id={`reissue-why-${row.userId}`} className="text-xs text-fg-secondary">
                   {issuedOn === null ? copy('reissueWhyNoCode') : copy('reissueWhySignedIn')}
+                </span>
+              ) : null}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                // With no key there is nothing to withdraw, and the server refuses somebody who
+                // has answered -- withdrawing their key would not withdraw the response.
+                disabled={issuedOn === null || hasAnswered}
+                aria-label={copy('revokeFor', { name: row.name })}
+                aria-describedby={issuedOn === null || hasAnswered ? `revoke-why-${row.userId}` : undefined}
+                onClick={onRevoke}
+              >
+                {copy('revoke')}
+              </Button>
+              {issuedOn === null || hasAnswered ? (
+                <span id={`revoke-why-${row.userId}`} className="text-xs text-fg-secondary">
+                  {issuedOn === null ? copy('revokeWhyNoCode') : copy('revokeWhyAnswered')}
                 </span>
               ) : null}
             </span>
