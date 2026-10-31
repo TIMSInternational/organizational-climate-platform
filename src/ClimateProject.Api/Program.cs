@@ -403,6 +403,12 @@ builder.Services.AddScoped<ICredentialsEmailSender>(sp => sp.GetRequiredService<
     ? ActivatorUtilities.CreateInstance<EmailCredentialsEmailSender>(sp)
     : ActivatorUtilities.CreateInstance<LoggingCredentialsEmailSender>(sp));
 
+// A reminder that mints NOTHING -- asked for by ESPH on 2026-10-30: "hay forma de enviar
+// recordatorio? no otro usuario o contraseña solo recordatorio?". Same selection rule again.
+builder.Services.AddScoped<ISurveyReminderEmailSender>(sp => sp.GetRequiredService<EmailOptions>().IsConfigured
+    ? ActivatorUtilities.CreateInstance<EmailSurveyReminderEmailSender>(sp)
+    : ActivatorUtilities.CreateInstance<LoggingSurveyReminderEmailSender>(sp));
+
 // What turns a queued survey invitation into a link the recipient can follow. Registered
 // unconditionally rather than inside the selection rule below: it reads a token, it does not
 // send anything, and a registration that exists only on the configured branch is a

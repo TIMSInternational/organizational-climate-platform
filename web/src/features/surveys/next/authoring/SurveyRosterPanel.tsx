@@ -25,14 +25,17 @@ import {
 } from '../../../org-structure/api/users'
 import {
   reissueSurveyCredential,
+  remindSurveyCredential,
   revokeSurveyCredential,
   type SurveyCredentialReissueOutcome,
+  type SurveyCredentialRemindOutcome,
   type SurveyCredentialRevokeOutcome,
   type SurveyParticipantStatus,
   type SurveyRosterRow,
 } from '../../api/surveys'
 import type { ParticipationState } from './useSurveyParticipation'
 import { Card, CardHeading } from './parts'
+import { chaseActionFor } from './chaseAction'
 import { formatParticipationDay } from './participationDay'
 import { getSurveyRosterCsv, surveyRosterCsvFileName } from './rosterExport'
 import { downloadBlobFile } from '../../../../lib/downloadBlobFile'
@@ -70,9 +73,29 @@ type ReissueState =
   | { phase: 'idle' }
   | { phase: 'done'; name: string; email: string; outcome: SurveyCredentialReissueOutcome | { kind: 'error' } }
 
+type RemindState =
+  | { phase: 'idle' }
+  | { phase: 'done'; name: string; email: string; outcome: SurveyCredentialRemindOutcome | { kind: 'error' } }
+
 type RevokeState =
   | { phase: 'idle' }
   | { phase: 'done'; name: string; outcome: SurveyCredentialRevokeOutcome | { kind: 'error' } }
+
+/**
+ * A reminder shares six of its seven refusals with a reissue, and they mean the same thing, so
+ * they reuse the same sentences rather than keeping a second copy that can drift. Only
+ * `already_completed` is its own: it cannot happen to a reissue, which refuses a signed-in
+ * person long before it gets as far as asking whether they finished.
+ */
+const REMIND_REFUSAL_KEY: Record<string, string> = {
+  not_per_survey: 'reissueRefusedNotPerSurvey',
+  survey_not_open: 'reissueRefusedNotOpen',
+  user_not_found: 'reissueRefusedNotFound',
+  user_inactive: 'reissueRefusedInactive',
+  not_in_audience: 'reissueRefusedNotInAudience',
+  no_credential: 'reissueRefusedNoCode',
+  already_completed: 'remindRefusedCompleted',
+}
 
 const REVOKE_REFUSAL_KEY: Record<string, string> = {
   not_per_survey: 'revokeRefusedNotPerSurvey',
@@ -129,6 +152,8 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
   const [send, setSend] = useState<SendState>({ phase: 'idle' })
   const [confirmBatch, setConfirmBatch] = useState(false)
   const [reissueTarget, setReissueTarget] = useState<SurveyRosterRow | null>(null)
+  const [remind, setRemind] = useState<RemindState>({ phase: 'idle' })
+  const [remindTarget, setRemindTarget] = useState<SurveyRosterRow | null>(null)
   const [reissue, setReissue] = useState<ReissueState>({ phase: 'idle' })
   // The day a key reissued from THIS page was mailed, so the row says so without refetching the
   // whole roster -- the payload is shared with the Participación panel, which owns its fetch.
@@ -304,6 +329,24 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
   }
 
   /**
+   * Reminds one person to finish, without minting anything.
+   *
+   * <p>Nothing is marked locally afterwards, unlike `reissueFor` -- there is no new issue date,
+   * because no key changed. The row is as true after this call as it was before, which is the
+   * whole difference between the two actions.</p>
+   */
+  async function remindFor(row: SurveyRosterRow) {
+    let outcome: SurveyCredentialRemindOutcome | { kind: 'error' }
+    try {
+      outcome = await remindSurveyCredential(baseUrl, state.status === 'ready' ? state.view.surveyId : '', row.userId)
+    } catch {
+      outcome = { kind: 'error' }
+    }
+    setRemind({ phase: 'done', name: row.name, email: row.email, outcome })
+    setRemindTarget(null)
+  }
+
+  /**
    * Withdraws one person's key for this survey. On success the row is marked locally so it
    * reads "Sin código" at once and the button cannot be pressed twice; the account, the
    * audience and the invitation are untouched, so nothing else on the page moves.
@@ -469,6 +512,23 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
               </p>
             ) : null}
 
+            {remind.phase === 'done' ? (
+              <p
+                role="status"
+                className={
+                  remind.outcome.kind === 'sent' ? 'm-0 text-sm font-medium' : 'm-0 text-sm font-medium text-accent-red-ink'
+                }
+              >
+                {remind.outcome.kind === 'sent'
+                  ? copy('remindSent')
+                  : remind.outcome.kind === 'send_failed'
+                    ? copy('remindFailed')
+                    : remind.outcome.kind === 'refused'
+                      ? copy(REMIND_REFUSAL_KEY[remind.outcome.code] ?? 'reissueError')
+                      : copy('reissueError')}
+              </p>
+            ) : null}
+
             {revoke.phase === 'done' ? (
               <p
                 role="status"
@@ -532,6 +592,7 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
                         issuedHere={issuedHere[row.userId] ?? null}
                         revokedHere={revokedHere.has(row.userId)}
                         onReissue={() => setReissueTarget(row)}
+                        onRemind={() => setRemindTarget(row)}
                         onRevoke={() => setRevokeTarget(row)}
                         locale={locale}
                         copy={copy}
@@ -559,6 +620,24 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
         confirmText={copy('send')}
         cancelText={t('common.cancel')}
         onConfirm={() => sendCredentials()}
+      />
+
+      {/* The opposite promise to the reissue dialog below, and said just as plainly: this one
+          changes nothing. An operator who has been told all month that resending replaces the
+          password needs to read that this does not. */}
+      <ConfirmationDialog
+        open={remindTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setRemindTarget(null)
+        }}
+        title={copy('remindTitle', { name: remindTarget?.name ?? '' })}
+        description={copy('remindBody', {
+          email: remindTarget?.email ?? '',
+          survey: surveyTitle,
+        })}
+        confirmText={copy('remind')}
+        cancelText={t('common.cancel')}
+        onConfirm={() => (remindTarget === null ? undefined : remindFor(remindTarget))}
       />
 
       <ConfirmationDialog
@@ -607,6 +686,7 @@ function RosterRows({
   issuedHere,
   revokedHere,
   onReissue,
+  onRemind,
   onRevoke,
   locale,
   copy,
@@ -624,6 +704,7 @@ function RosterRows({
   /** Withdrawn from this page: the row reads as having no key whatever the payload said. */
   revokedHere: boolean
   onReissue: () => void
+  onRemind: () => void
   onRevoke: () => void
   locale: string
   copy: (key: string, vars?: Record<string, string | number>) => string
@@ -640,6 +721,12 @@ function RosterRows({
   const surveyUsername = revokedHere ? null : row.surveyUsername ?? null
   const issuedOn = revokedHere ? null : issuedHere ?? row.credentialIssuedOn ?? null
   const signedInOn = revokedHere ? null : row.lastSignInOn ?? null
+  // Decided from what this row shows NOW, not from the payload: a key reissued or withdrawn on
+  // this page has already moved `issuedOn`, and the action has to follow it.
+  const chase = chaseActionFor(
+    { status: row.status, surveyUsername: row.surveyUsername, credentialIssuedOn: issuedOn, lastSignInOn: signedInOn },
+    perSurvey ? 'per_survey' : 'shared',
+  )
   // The server refuses a withdrawal for anyone who has answered, so the button says so instead
   // of offering an action that cannot succeed. `not_completed` is the ANONYMOUS survey's "we
   // cannot know", so it is not treated as having answered -- the server decides that one.
@@ -699,25 +786,43 @@ function RosterRows({
                     : copy('signedInOn', { date: formatParticipationDay(signedInOn, locale) })}
                 </span>
               )}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                // A used key is in that person's hands: replacing it would lock them out of a
-                // survey they may be halfway through. And with no key there is nothing to
-                // reissue -- the invitation mints the first one.
-                disabled={issuedOn === null || signedInOn !== null}
-                aria-label={copy('reissueFor', { name: row.name })}
-                aria-describedby={issuedOn === null || signedInOn !== null ? `reissue-why-${row.userId}` : undefined}
-                onClick={onReissue}
-              >
-                {copy('reissue')}
-              </Button>
-              {issuedOn === null || signedInOn !== null ? (
-                <span id={`reissue-why-${row.userId}`} className="text-xs text-fg-secondary">
-                  {issuedOn === null ? copy('reissueWhyNoCode') : copy('reissueWhySignedIn')}
-                </span>
-              ) : null}
+              {/* Which chase this person needs, from the one module that decides it. Until the
+                  reminder existed, somebody who had signed in got a DISABLED reissue and a note
+                  saying why -- a dead end on exactly the people worth chasing. Now they get the
+                  action that fits them. */}
+              {chase === 'remind' ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  aria-label={copy('remindFor', { name: row.name })}
+                  onClick={onRemind}
+                >
+                  {copy('remind')}
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    // With no key there is nothing to reissue -- the invitation mints the first
+                    // one. `chase` has already taken the signed-in case to the reminder above,
+                    // so what is left here is "never used it" (send a new one) and "finished".
+                    disabled={issuedOn === null || signedInOn !== null}
+                    aria-label={copy('reissueFor', { name: row.name })}
+                    aria-describedby={issuedOn === null || signedInOn !== null ? `reissue-why-${row.userId}` : undefined}
+                    onClick={onReissue}
+                  >
+                    {copy('reissue')}
+                  </Button>
+                  {issuedOn === null || signedInOn !== null ? (
+                    <span id={`reissue-why-${row.userId}`} className="text-xs text-fg-secondary">
+                      {issuedOn === null ? copy('reissueWhyNoCode') : copy('reissueWhySignedIn')}
+                    </span>
+                  ) : null}
+                </>
+              )}
               <Button
                 type="button"
                 variant="outline"
