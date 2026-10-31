@@ -396,7 +396,7 @@ public static class SurveyParticipationEndpoints
         var keys = await db.SurveyCredentials
             .AsNoTracking()
             .Where(c => c.SurveyId == surveyId)
-            .Select(c => new { c.UserId, c.Username, c.CreatedAt, c.LastSignInAt })
+            .Select(c => new { c.UserId, c.Username, c.CreatedAt, c.LastSignInAt, c.LastRemindedAt, c.ReminderCount })
             .ToDictionaryAsync(c => c.UserId, cancellationToken);
         if (keys.Count == 0)
         {
@@ -418,6 +418,8 @@ public static class SurveyParticipationEndpoints
                     SurveyUsername = key.Username,
                     CredentialIssuedOn = LocalDay(key.CreatedAt),
                     LastSignInOn = key.LastSignInAt is { } signedIn ? LocalDay(signedIn) : null,
+                    LastRemindedOn = key.LastRemindedAt is { } reminded ? LocalDay(reminded) : null,
+                    ReminderCount = key.ReminderCount,
                 }
                 : row),
         ];

@@ -165,8 +165,18 @@ public static class SurveyCredentialRemindRefusals
 /// Whether the mail left. False is not a refusal: nothing was changed either way, because a
 /// reminder writes nothing at all -- which is the difference between this route and a reissue.
 /// </param>
+/// <param name="RemindedOn">
+/// The calendar day, in the company's zone, of the most recent DELIVERED reminder for this key
+/// -- this one when it got through, the previous one when it did not, and null when none ever
+/// has. A day rather than an instant, to match every other date the roster publishes.
+/// </param>
+/// <param name="ReminderCount">
+/// How many reminders have now been delivered for this key, including this one. Unchanged from
+/// what it was when the send failed.
+/// </param>
 public sealed record SurveyCredentialRemindResult(
-    Guid SurveyId, Guid UserId, string Username, bool Delivered, string? FailureReason);
+    Guid SurveyId, Guid UserId, string Username, bool Delivered, string? FailureReason,
+    DateOnly? RemindedOn = null, int ReminderCount = 0);
 
 public static class SurveyCredentialEndpoints
 {
@@ -571,19 +581,49 @@ public static class SurveyCredentialEndpoints
         var company = await db.Companies
             .AsNoTracking()
             .Where(c => c.Id == survey.CompanyId)
-            .Select(c => new SurveyCredentialCompany(c.Name, c.Settings.Language, c.Branding.LogoUrl, c.Branding.PrimaryColor))
+            .Select(c => new
+            {
+                Mail = new SurveyCredentialCompany(c.Name, c.Settings.Language, c.Branding.LogoUrl, c.Branding.PrimaryColor),
+                c.Settings.Timezone,
+            })
             .FirstOrDefaultAsync(cancellationToken);
-        var mail = SurveyCredentialIssuance.MailFor(survey, company);
+        var zone = SchedulingTimeZone.Resolve(company?.Timezone);
+        var mail = SurveyCredentialIssuance.MailFor(survey, company?.Mail);
 
         var outcome = await reminderSender.SendAsync(
             user.Email, user.Name, credential.Username, mail.CompanyLanguage,
             mail.Brand, mail.SurveyTitle, cancellationToken);
 
+        // Stamped only on a DELIVERED reminder, and only after the send. Unlike reissue there is
+        // no secret that has to exist before the mail leaves, so there is nothing to put back
+        // when it fails -- a failed send leaves the row exactly as it was and the roster goes on
+        // reading "never reminded", which is the truth. Writing the stamp first and rolling it
+        // back would invent a state that briefly lies in both directions.
+        var remindedAt = credential.LastRemindedAt;
+        var reminderCount = credential.ReminderCount;
+        if (outcome.Delivered)
+        {
+            // `reminder_count + 1` is computed IN the database rather than from the value read
+            // above. Two operators working the same roster at once -- which is the normal case
+            // when a client sends a list of names -- would otherwise both write the same number
+            // and one of the two reminders would vanish from the count.
+            await db.SurveyCredentials
+                .Where(c => c.SurveyId == surveyId && c.UserId == userId)
+                .ExecuteUpdateAsync(
+                    set => set.SetProperty(c => c.LastRemindedAt, now)
+                        .SetProperty(c => c.ReminderCount, c => c.ReminderCount + 1),
+                    cancellationToken);
+            remindedAt = now;
+            reminderCount += 1;
+        }
+
         audit.RecordChange("reminder", null, outcome.Delivered ? "sent" : "send_failed");
 
         return Results.Ok(new SurveyCredentialRemindResult(
             surveyId, userId, credential.Username, outcome.Delivered,
-            outcome.Delivered ? null : outcome.FailureReason));
+            outcome.Delivered ? null : outcome.FailureReason,
+            remindedAt is { } stamp ? DateOnly.FromDateTime(SchedulingTimeZone.ToLocal(stamp, zone)) : null,
+            reminderCount));
     }
 
     private static IResult AlreadySignedIn() => Refuse(

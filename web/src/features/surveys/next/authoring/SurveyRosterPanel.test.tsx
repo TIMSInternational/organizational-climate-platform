@@ -454,6 +454,115 @@ describe('SurveyRosterPanel', () => {
       expect(sent.some((call) => call.url.endsWith('/reissue'))).toBe(false)
     })
 
+    /**
+     * The reminder used to leave no trace at all, so an operator working a client's list of
+     * names could not tell whether they had already written to somebody -- least of all from an
+     * earlier sitting. ESPH sent SEVEN names on 2026-10-30 and five were mailed; the next list
+     * overlaps with that one.
+     */
+    describe('having already been reminded', () => {
+      it('says nothing about reminders for somebody who has never had one', async () => {
+        const payload = perSurvey()
+        vi.stubGlobal('fetch', fetchWith(payload).mock)
+        renderPanel(payload)
+        await screen.findByText('Hugo Peralta')
+
+        // No "never reminded" line: on eight hundred rows that is noise, and absence says it.
+        // Matched on the LINE's wording ("Recordatorio enviado ..."), not on the word, because
+        // the button beside it legitimately reads "Enviar recordatorio".
+        expect(within(rowOf('hugo')).queryByText(/Recordatorio enviado/)).toBeNull()
+        expect(within(rowOf('hugo')).queryByText(/recordatorios, el último/)).toBeNull()
+        expect(screen.getByRole('button', { name: T.remindFor.replace('{name}', 'Hugo Peralta') })).toBeTruthy()
+      })
+
+      it('shows the day of a single reminder, and offers ANOTHER rather than a first', async () => {
+        const payload = perSurvey()
+        payload.roster = payload.roster.map((r) =>
+          r.userId === 'hugo' ? { ...r, lastRemindedOn: '2026-10-30', reminderCount: 1 } : r,
+        )
+        vi.stubGlobal('fetch', fetchWith(payload).mock)
+        renderPanel(payload)
+        await screen.findByText('Hugo Peralta')
+
+        expect(within(rowOf('hugo')).getByText(T.remindedOnce.replace('{date}', day('2026-10-30')))).toBeTruthy()
+        // The label is the last chance to notice before a second mail leaves.
+        expect(screen.getByRole('button', { name: T.remindAgainFor.replace('{name}', 'Hugo Peralta') })).toBeTruthy()
+        expect(screen.queryByRole('button', { name: T.remindFor.replace('{name}', 'Hugo Peralta') })).toBeNull()
+      })
+
+      it('counts them when there has been more than one', async () => {
+        const payload = perSurvey()
+        payload.roster = payload.roster.map((r) =>
+          r.userId === 'hugo' ? { ...r, lastRemindedOn: '2026-10-30', reminderCount: 3 } : r,
+        )
+        vi.stubGlobal('fetch', fetchWith(payload).mock)
+        renderPanel(payload)
+        await screen.findByText('Hugo Peralta')
+
+        // "reminded once, last week" and "reminded three times, last week" carry the same date
+        // and call for different judgement, so the count cannot be left to the date alone.
+        expect(
+          within(rowOf('hugo')).getByText(
+            T.remindedTimes.replace('{count}', '3').replace('{date}', day('2026-10-30')),
+          ),
+        ).toBeTruthy()
+      })
+
+      it('names the earlier reminder in the dialog, before a second one is sent', async () => {
+        const payload = perSurvey()
+        payload.roster = payload.roster.map((r) =>
+          r.userId === 'hugo' ? { ...r, lastRemindedOn: '2026-10-30', reminderCount: 1 } : r,
+        )
+        vi.stubGlobal('fetch', fetchWith(payload).mock)
+        const user = userEvent.setup()
+        renderPanel(payload)
+        await screen.findByText('Hugo Peralta')
+
+        await user.click(screen.getByRole('button', { name: T.remindAgainFor.replace('{name}', 'Hugo Peralta') }))
+        const dialog = await screen.findByRole('alertdialog')
+
+        // Appended to the promise, not substituted for it: a second reminder still carries no
+        // new password, and that is still the thing the operator needs told.
+        expect(within(dialog).getByText(/no lleva usuario ni contrase/i)).toBeTruthy()
+        expect(dialog.textContent).toContain(T.remindBodyAgainOne.replace('{date}', day('2026-10-30')))
+      })
+
+      it('records a reminder sent from this page, from the response rather than a refetch', async () => {
+        const payload = perSurvey()
+        // Fifth parameter: `onRemind`. The four before it answer the batch resend, the reissue
+        // and the revoke.
+        const { mock } = fetchWith(payload, undefined, undefined, undefined, (userId) => ({
+          status: 200,
+          body: {
+            surveyId: SURVEY,
+            userId,
+            username: 'x',
+            delivered: true,
+            failureReason: null,
+            remindedOn: '2026-10-31',
+            reminderCount: 1,
+          },
+        }))
+        vi.stubGlobal('fetch', mock)
+        const user = userEvent.setup()
+        renderPanel(payload)
+        await screen.findByText('Hugo Peralta')
+
+        await user.click(screen.getByRole('button', { name: T.remindFor.replace('{name}', 'Hugo Peralta') }))
+        await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: T.remind }))
+        await screen.findByText(T.remindSent)
+
+        // The row says so immediately, and the payload it was handed still says it never
+        // happened -- so the line can only have come from the send's own answer. The roster is
+        // fetched once for the whole page and shared with the Participación panel, so one write
+        // must not refetch eight hundred rows.
+        expect(payload.roster.find((r) => r.userId === 'hugo')?.lastRemindedOn ?? null).toBeNull()
+        expect(within(rowOf('hugo')).getByText(T.remindedOnce.replace('{date}', day('2026-10-31')))).toBeTruthy()
+        // And it now offers another rather than a first, without the roster being re-read.
+        expect(screen.getByRole('button', { name: T.remindAgainFor.replace('{name}', 'Hugo Peralta') })).toBeTruthy()
+      })
+    })
+
     it('asks first, naming who, which survey and that the old code stops working, then reissues', async () => {
       const payload = perSurvey()
       const { mock, sent } = fetchWith(payload)

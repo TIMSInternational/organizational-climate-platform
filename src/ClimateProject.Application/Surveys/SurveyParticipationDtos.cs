@@ -180,6 +180,24 @@ public sealed record SurveyRosterDemographic(string Field, string? LabelEn, stri
 /// "was it mailed" and "did they ever get in" -- the question an anonymous survey otherwise
 /// cannot answer -- and nothing finer.
 /// </para>
+/// <para>
+/// <paramref name="LastRemindedOn"/> and <paramref name="ReminderCount"/> answer the question an
+/// operator asks SECOND, once they have decided somebody is worth chasing: *"did I already
+/// remind this person, and how many times?"* Before they existed the reminder route wrote
+/// nothing at all, so ESPH's five reminders of 2026-10-30 were invisible in the product the
+/// next morning and nothing stopped the same person being mailed twice from two sittings. Both
+/// are an ADMINISTRATOR's history, not a respondent's: they record when we wrote to somebody,
+/// never anything they did, so they join to no response and the 2026-10-12 ruling does not
+/// reach them. Published as a day anyway, because that is all a screen needs.
+/// </para>
+/// <para>
+/// Deliberately NOT in <c>SurveyRosterCsv.Headers</c>, and so not in the company status
+/// workbook: that file is the CLIENT's deliverable, and how many times we chased one of their
+/// people is our operational history, not theirs. Changing a live deliverable's columns
+/// mid-engagement is its own hazard besides (<c>feedback-a-cosmetic-change-deleted-data</c>).
+/// Nothing in the suite couples the CSV's columns to this record's fields, so the omission is a
+/// choice rather than an oversight — which is why it is written down here.
+/// </para>
 /// </remarks>
 public sealed record SurveyRosterRow(
     Guid UserId,
@@ -192,4 +210,6 @@ public sealed record SurveyRosterRow(
     IReadOnlyList<SurveyRosterDemographic> Demographics,
     string? SurveyUsername = null,
     DateOnly? CredentialIssuedOn = null,
-    DateOnly? LastSignInOn = null);
+    DateOnly? LastSignInOn = null,
+    DateOnly? LastRemindedOn = null,
+    int ReminderCount = 0);

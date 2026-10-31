@@ -802,9 +802,17 @@ function AttentionRow({
           count: item.remindersSent ?? 0,
         },
       )}
-      // Not "Enviar recordatorio": there is no reminder to send. The sweep was deleted with the
-      // invitation email and the manual route answers zeros by design (#G11). What the page it
-      // leads to CAN do is show who has not answered -- the roster -- so that is what it says.
+      // Not "Enviar recordatorio", but the reason changed on 2026-10-31 and the old one is worth
+      // correcting rather than leaving to mislead. It used to be "there is no reminder to send":
+      // the sweep was deleted with the invitation email and the batch route still answers zeros
+      // by design (#G11). Since `e3132f31` there IS a reminder -- per PERSON, from the roster --
+      // so the label is right for a better reason: chasing is a per-person decision, and the
+      // page this leads to is where that decision is made and where the button lives.
+      //
+      // `item.remindersSent` still counts INVITATION reminders, which a per-survey survey never
+      // produces, so the detail line above reads "ningún recordatorio enviado todavía" however
+      // many went out. `survey_credentials.reminder_count` now holds the real figure; wiring the
+      // card to it is the next step and is listed in docs/audits/2026-10-31-frontend-completeness.md.
       action={
         capabilities.canAuthorSurveys
           ? { label: t('surveys.next.distribution.send.seeWhoIsMissing'), href: `/surveys/${survey.id}/distribution` }

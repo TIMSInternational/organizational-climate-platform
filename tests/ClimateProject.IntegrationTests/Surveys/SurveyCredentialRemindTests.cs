@@ -336,5 +336,95 @@ public class SurveyCredentialRemindTests(PostgresContainerFixture postgres, Capt
 
         // Nothing to restore, because nothing was written: their key still works.
         Assert.Equal(HttpStatusCode.OK, await SignInAsync(key.Username, key.Password));
+
+        // And the row still reads "never reminded". A stamp written before the send, or written
+        // regardless of it, would tell the next operator somebody had been chased when the mail
+        // never left -- and they would skip exactly the person who still needs it.
+        Assert.Null(result.RemindedOn);
+        Assert.Equal(0, result.ReminderCount);
+        await WithDbAsync(async db =>
+        {
+            var stored = await db.SurveyCredentials.AsNoTracking()
+                .FirstAsync(c => c.SurveyId == survey.Id && c.UserId == userId);
+            Assert.Null(stored.LastRemindedAt);
+            Assert.Equal(0, stored.ReminderCount);
+        });
+    }
+
+    // ------------------------------------------------- the reminder has to leave a trace (#G7)
+
+    [Fact]
+    public async Task A_delivered_reminder_is_recorded_on_the_key()
+    {
+        var (admin, survey, userId, _, _) = await InvitedAsync();
+
+        var result = (await (await RemindAsync(admin, survey.Id, userId))
+            .Content.ReadFromJsonAsync<SurveyCredentialRemindResult>())!;
+
+        Assert.True(result.Delivered);
+        Assert.Equal(1, result.ReminderCount);
+        // Published as a company-zone DAY, like every other date on the roster.
+        Assert.NotNull(result.RemindedOn);
+
+        await WithDbAsync(async db =>
+        {
+            var stored = await db.SurveyCredentials.AsNoTracking()
+                .FirstAsync(c => c.SurveyId == survey.Id && c.UserId == userId);
+            Assert.NotNull(stored.LastRemindedAt);
+            Assert.Equal(1, stored.ReminderCount);
+        });
+    }
+
+    [Fact]
+    public async Task A_second_reminder_counts_two_rather_than_overwriting_the_first()
+    {
+        var (admin, survey, userId, _, _) = await InvitedAsync();
+
+        (await RemindAsync(admin, survey.Id, userId)).EnsureSuccessStatusCode();
+        var second = (await (await RemindAsync(admin, survey.Id, userId))
+            .Content.ReadFromJsonAsync<SurveyCredentialRemindResult>())!;
+
+        // The count is what separates "reminded once, last week" from "reminded four times" --
+        // the same date, and a different decision about whether to chase again. A `SetProperty`
+        // that assigned a constant 1, or assigned from the value read before the send, would
+        // pass every other test in this file and fail this one.
+        Assert.Equal(2, second.ReminderCount);
+        await WithDbAsync(async db =>
+        {
+            var stored = await db.SurveyCredentials.AsNoTracking()
+                .FirstAsync(c => c.SurveyId == survey.Id && c.UserId == userId);
+            Assert.Equal(2, stored.ReminderCount);
+        });
+    }
+
+    [Fact]
+    public async Task The_roster_reports_the_reminder_so_the_screen_can_say_so()
+    {
+        var (admin, survey, userId, _, _) = await InvitedAsync();
+        (await RemindAsync(admin, survey.Id, userId)).EnsureSuccessStatusCode();
+
+        var roster = (await admin.GetFromJsonAsync<SurveyParticipationView>(
+            $"/surveys/{survey.Id}/participation"))!;
+        var row = Assert.Single(roster.Roster, r => r.UserId == userId);
+
+        // Without this projection the write above would be invisible to the only screen that
+        // asks the question -- which is how a reminder came to leave no trace in the first place.
+        Assert.Equal(1, row.ReminderCount);
+        Assert.NotNull(row.LastRemindedOn);
+    }
+
+    [Fact]
+    public async Task A_person_never_reminded_reports_no_reminder_rather_than_a_date()
+    {
+        var (admin, survey, userId, _, _) = await InvitedAsync();
+
+        var roster = (await admin.GetFromJsonAsync<SurveyParticipationView>(
+            $"/surveys/{survey.Id}/participation"))!;
+        var row = Assert.Single(roster.Roster, r => r.UserId == userId);
+
+        // The screen shows the reminder line only when there IS one, so "never" has to arrive
+        // as null and not as the day the key was issued.
+        Assert.Null(row.LastRemindedOn);
+        Assert.Equal(0, row.ReminderCount);
     }
 }

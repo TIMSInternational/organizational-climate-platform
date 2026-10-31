@@ -158,6 +158,11 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
   // The day a key reissued from THIS page was mailed, so the row says so without refetching the
   // whole roster -- the payload is shared with the Participación panel, which owns its fetch.
   const [issuedHere, setIssuedHere] = useState<Readonly<Record<string, string>>>({})
+  // Reminders sent from THIS page, for the same reason as `issuedHere`: one write updates the
+  // row instead of refetching eight hundred of them. Before this existed a reminder left no
+  // trace anywhere, so an operator working a client's list of names had no way to tell whether
+  // they had already written to somebody -- including from an earlier sitting.
+  const [remindedHere, setRemindedHere] = useState<Readonly<Record<string, { on: string | null; count: number }>>>({})
   const [revokeTarget, setRevokeTarget] = useState<SurveyRosterRow | null>(null)
   const [revoke, setRevoke] = useState<RevokeState>({ phase: 'idle' })
   // Keys withdrawn from THIS page, for the same reason as `issuedHere`: the roster payload is
@@ -181,6 +186,20 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
       : (locale === 'es'
           ? (state.view.surveyTitleEs ?? state.view.surveyTitleEn)
           : (state.view.surveyTitleEn ?? state.view.surveyTitleEs)) ?? ''
+
+  /**
+   * This person's reminder history as it stands at the moment the dialog opens: a send made from
+   * this page if there was one, otherwise what the roster loaded, and null when they have never
+   * been reminded. Null is what makes the dialog's extra sentence conditional rather than a
+   * sentence about zero.
+   */
+  const remindAlready = (() => {
+    if (remindTarget === null) return null
+    const here = remindedHere[remindTarget.userId]
+    const on = here?.on ?? remindTarget.lastRemindedOn ?? null
+    const count = here?.count ?? remindTarget.reminderCount ?? 0
+    return on === null || count === 0 ? null : { on, count }
+  })()
 
   /**
    * Whether a person's state on this survey means anything. An anonymous survey writes no user
@@ -341,6 +360,12 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
       outcome = await remindSurveyCredential(baseUrl, state.status === 'ready' ? state.view.surveyId : '', row.userId)
     } catch {
       outcome = { kind: 'error' }
+    }
+    if (outcome.kind === 'sent') {
+      setRemindedHere((seen) => ({
+        ...seen,
+        [row.userId]: { on: outcome.remindedOn, count: outcome.reminderCount },
+      }))
     }
     setRemind({ phase: 'done', name: row.name, email: row.email, outcome })
     setRemindTarget(null)
@@ -590,6 +615,7 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
                         tracked={showState}
                         perSurvey={perSurvey}
                         issuedHere={issuedHere[row.userId] ?? null}
+                        remindedHere={remindedHere[row.userId] ?? null}
                         revokedHere={revokedHere.has(row.userId)}
                         onReissue={() => setReissueTarget(row)}
                         onRemind={() => setRemindTarget(row)}
@@ -631,11 +657,23 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
           if (!open) setRemindTarget(null)
         }}
         title={copy('remindTitle', { name: remindTarget?.name ?? '' })}
-        description={copy('remindBody', {
-          email: remindTarget?.email ?? '',
-          survey: surveyTitle,
-        })}
-        confirmText={copy('remind')}
+        // The history is appended to the promise, not substituted for it: somebody being
+        // reminded a second time still needs telling that nothing about their sign-in changes.
+        // ESPH's client sent SEVEN names on 2026-10-30 and five were mailed; a list that
+        // arrives again next week overlaps, and this sentence is what stops the overlap
+        // becoming a second identical mail nobody meant to send.
+        description={[
+          copy('remindBody', { email: remindTarget?.email ?? '', survey: surveyTitle }),
+          remindAlready === null
+            ? null
+            : copy(remindAlready.count > 1 ? 'remindBodyAgainSome' : 'remindBodyAgainOne', {
+                count: remindAlready.count,
+                date: formatParticipationDay(remindAlready.on, locale),
+              }),
+        ]
+          .filter((line) => line !== null)
+          .join(' ')}
+        confirmText={copy(remindAlready === null ? 'remind' : 'remindAgain')}
         cancelText={t('common.cancel')}
         onConfirm={() => (remindTarget === null ? undefined : remindFor(remindTarget))}
       />
@@ -684,6 +722,7 @@ function RosterRows({
   tracked,
   perSurvey,
   issuedHere,
+  remindedHere,
   revokedHere,
   onReissue,
   onRemind,
@@ -701,6 +740,8 @@ function RosterRows({
   perSurvey: boolean
   /** The day a reissue from this page mailed this person's key, overriding the loaded one. */
   issuedHere: string | null
+  /** A reminder sent from this page, overriding the loaded history for the same reason. */
+  remindedHere: { on: string | null; count: number } | null
   /** Withdrawn from this page: the row reads as having no key whatever the payload said. */
   revokedHere: boolean
   onReissue: () => void
@@ -721,6 +762,11 @@ function RosterRows({
   const surveyUsername = revokedHere ? null : row.surveyUsername ?? null
   const issuedOn = revokedHere ? null : issuedHere ?? row.credentialIssuedOn ?? null
   const signedInOn = revokedHere ? null : row.lastSignInOn ?? null
+  // A reminder sent from this page outranks the payload. A withdrawn key takes its reminder
+  // history with it: the cell then reads as holding no key at all, and "reminded twice" about a
+  // key nobody holds would be a claim about nothing.
+  const remindedOn = revokedHere ? null : remindedHere?.on ?? row.lastRemindedOn ?? null
+  const reminderCount = revokedHere ? 0 : remindedHere?.count ?? row.reminderCount ?? 0
   // Decided from what this row shows NOW, not from the payload: a key reissued or withdrawn on
   // this page has already moved `issuedOn`, and the action has to follow it.
   const chase = chaseActionFor(
@@ -786,6 +832,21 @@ function RosterRows({
                     : copy('signedInOn', { date: formatParticipationDay(signedInOn, locale) })}
                 </span>
               )}
+              {/* Shown only when there IS one. A "never reminded" line on every row of eight
+                  hundred would be noise, and its absence already says so -- unlike the sign-in
+                  line above, where "has not signed in" is the finding an operator is looking
+                  for. The count is what separates "reminded once, last week" from "reminded
+                  four times": the same date, and a different decision about chasing again. */}
+              {issuedOn === null || remindedOn === null ? null : (
+                <span className="text-xs text-fg-secondary">
+                  {reminderCount > 1
+                    ? copy('remindedTimes', {
+                        count: reminderCount,
+                        date: formatParticipationDay(remindedOn, locale),
+                      })
+                    : copy('remindedOnce', { date: formatParticipationDay(remindedOn, locale) })}
+                </span>
+              )}
               {/* Which chase this person needs, from the one module that decides it. Until the
                   reminder existed, somebody who had signed in got a DISABLED reissue and a note
                   saying why -- a dead end on exactly the people worth chasing. Now they get the
@@ -795,10 +856,13 @@ function RosterRows({
                   type="button"
                   variant="outline"
                   size="sm"
-                  aria-label={copy('remindFor', { name: row.name })}
+                  // Says which it is. Clicking "Enviar recordatorio" on somebody who was
+                  // reminded yesterday reads as the first one; the label is the last chance to
+                  // notice before a second mail leaves.
+                  aria-label={copy(reminderCount > 0 ? 'remindAgainFor' : 'remindFor', { name: row.name })}
                   onClick={onRemind}
                 >
-                  {copy('remind')}
+                  {copy(reminderCount > 0 ? 'remindAgain' : 'remind')}
                 </Button>
               ) : (
                 <>

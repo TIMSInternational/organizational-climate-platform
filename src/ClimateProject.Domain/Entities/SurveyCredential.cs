@@ -72,6 +72,39 @@ public class SurveyCredential
     /// cannot answer that question.
     /// </summary>
     public DateTimeOffset? LastSignInAt { get; set; }
+
+    /// <summary>
+    /// When a reminder was last mailed for this key, or null if none ever was. Written only by
+    /// the remind route, and only when the send actually succeeded.
+    /// </summary>
+    /// <remarks>
+    /// The reminder is the one chase that mints nothing — it re-sends no password and writes no
+    /// hash — so before this field existed it left no trace at all. That made the screen unable
+    /// to answer the question an operator asks second: *"did I already remind this person?"*
+    /// ESPH's five reminders of 2026-10-30 were invisible in the product the morning after, and
+    /// nothing stopped the same person being mailed twice from two sittings.
+    ///
+    /// <para>An instant is stored and a calendar DAY is published
+    /// (<c>SurveyRosterRow.LastRemindedOn</c>), matching <see cref="LastSignInAt"/>. The day is
+    /// all a screen needs; the instant is what lets a later ruling space sends apart without a
+    /// second migration. Note this is an ADMINISTRATOR's action, not a respondent's, so it is
+    /// not the kind of per-person timestamp the 2026-10-12 anonymity ruling forbids — it joins
+    /// to nothing a respondent did. It is published as a day for consistency, not necessity.</para>
+    /// </remarks>
+    public DateTimeOffset? LastRemindedAt { get; set; }
+
+    /// <summary>
+    /// How many reminders have been mailed for this key. Zero until the first one succeeds.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="LastRemindedAt"/> because "reminded once, a week ago" and
+    /// "reminded four times, a week ago" call for different judgement from the person deciding
+    /// whether to chase again, and a single timestamp cannot tell them apart. The route does
+    /// NOT refuse a repeat: an operator re-sending after a bounce or a lost mailbox is doing
+    /// something legitimate. The count is shown so the choice is informed — the screen informs,
+    /// the API enforces, which is the division <c>chaseActionFor</c> already documents.
+    /// </remarks>
+    public int ReminderCount { get; set; }
 }
 
 /// <summary>

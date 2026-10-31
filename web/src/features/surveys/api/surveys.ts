@@ -513,6 +513,18 @@ export interface SurveyRosterRow {
   surveyUsername?: string | null
   credentialIssuedOn?: string | null
   lastSignInOn?: string | null
+  /**
+   * This person's reminder history for THIS survey: the company-zone day of the most recent
+   * DELIVERED reminder, and how many have been delivered in all. `null`/`0` for somebody who
+   * has never been reminded, which is every key issued before 2026-10-31 — the route wrote
+   * nothing before then, so an older reminder cannot be recovered and reads as none.
+   *
+   * These are an administrator's history, not a respondent's. They record when WE wrote to
+   * somebody and never anything they did, so they join to no response and the 2026-10-12
+   * anonymity ruling does not reach them.
+   */
+  lastRemindedOn?: string | null
+  reminderCount?: number
 }
 
 export async function getSurveyParticipation(baseUrl: string, id: string): Promise<SurveyParticipationView> {
@@ -577,8 +589,13 @@ export type SurveyCredentialRemindRefusal =
   | 'already_completed'
 
 export type SurveyCredentialRemindOutcome =
-  /** The reminder left. Nothing was minted and nothing changed; their key still works. */
-  | { kind: 'sent' }
+  /**
+   * The reminder left. Nothing was minted and nothing changed; their key still works.
+   *
+   * `remindedOn` and `reminderCount` are the row's new reminder history, so the screen can say
+   * so without refetching a roster of eight hundred people.
+   */
+  | { kind: 'sent'; remindedOn: string | null; reminderCount: number }
   /** The mail did not leave. There is nothing to restore -- a reminder writes nothing. */
   | { kind: 'send_failed' }
   | { kind: 'refused'; code: SurveyCredentialRemindRefusal | 'unknown' }
@@ -602,12 +619,19 @@ export async function remindSurveyCredential(
     { allowStatus: [404, 409] },
   )
   const body = (await response.json().catch(() => null)) as
-    | { delivered?: boolean; code?: string }
+    | { delivered?: boolean; code?: string; remindedOn?: string | null; reminderCount?: number }
     | null
   if (!response.ok) {
     return { kind: 'refused', code: (body?.code as SurveyCredentialRemindRefusal | undefined) ?? 'unknown' }
   }
-  return body?.delivered ? { kind: 'sent' } : { kind: 'send_failed' }
+  if (!body?.delivered) return { kind: 'send_failed' }
+  return {
+    kind: 'sent',
+    remindedOn: body.remindedOn ?? null,
+    // Defaulted rather than asserted: a reminder that arrived is the news, and an older API
+    // that answers without the count must not turn a delivered reminder into a screen error.
+    reminderCount: body.reminderCount ?? 1,
+  }
 }
 
 /** Why `DELETE /surveys/{id}/credentials/{userId}` refused, as the API names it. */
