@@ -64,6 +64,7 @@ function fetchWith(
   onPost?: (ids: string[]) => unknown,
   onReissue?: (userId: string) => { status: number; body: unknown },
   onRevoke?: (userId: string) => { status: number; body: unknown },
+  onRemind?: (userId: string) => { status: number; body: unknown },
 ) {
   const sent: Sent[] = []
   const mock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -76,6 +77,19 @@ function fetchWith(
       const answer = onRevoke?.(revoke[1]) ?? {
         status: 200,
         body: { surveyId: SURVEY, userId: revoke[1], username: 'x', hadSignedIn: false, issuedOn: '2026-10-20' },
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify(answer.body), { status: answer.status, headers: { 'Content-Type': 'application/json' } }),
+      )
+    }
+    // Matched before the generic POST below, which parses a JSON body -- a reminder sends none,
+    // so falling through to it would throw rather than fail an assertion.
+    const remind = /\/surveys\/[^/]+\/credentials\/([^/]+)\/remind$/.exec(url)
+    if (remind && (init?.method ?? 'GET').toUpperCase() === 'POST') {
+      sent.push({ url, body: null })
+      const answer = onRemind?.(remind[1]) ?? {
+        status: 200,
+        body: { surveyId: SURVEY, userId: remind[1], username: 'x', delivered: true, failureReason: null },
       }
       return Promise.resolve(
         new Response(JSON.stringify(answer.body), { status: answer.status, headers: { 'Content-Type': 'application/json' } }),
@@ -393,18 +407,51 @@ describe('SurveyRosterPanel', () => {
       expect(within(rowOf('ana')).getByText('esph-k7m2q9xa')).toBeTruthy()
     })
 
-    it('refuses, with the reason on screen, to reissue a code already used or never sent', async () => {
+    it('offers each person the chase that fits them, and says why when there is none', async () => {
+      // Hugo used to get a DISABLED reissue and a note explaining the dead end. He has signed
+      // in, so a new password would lock him out of a survey he may be part-way through -- and
+      // that is precisely who a reminder is for. The note stays for the two cases that really
+      // have no action: no code at all, and nothing left to chase.
       const payload = perSurvey()
       vi.stubGlobal('fetch', fetchWith(payload).mock)
       renderPanel(payload)
       await screen.findByText('Ana Lucía Mora')
 
       const reissueOf = (name: string) => screen.getByRole('button', { name: T.reissueFor.replace('{name}', name) })
+
+      // Holds a code, never used it: send a new one, nothing is lost.
       expect(reissueOf('Ana Lucía Mora')).toHaveProperty('disabled', false)
-      expect(reissueOf('Hugo Peralta')).toHaveProperty('disabled', true)
-      expect(within(rowOf('hugo')).getByText(T.reissueWhySignedIn)).toBeTruthy()
+
+      // Signed in: a reminder instead, and no reissue button at all rather than a dead one.
+      expect(screen.getByRole('button', { name: T.remindFor.replace('{name}', 'Hugo Peralta') })).toBeTruthy()
+      expect(screen.queryByRole('button', { name: T.reissueFor.replace('{name}', 'Hugo Peralta') })).toBeNull()
+
+      // No code: there is nothing to resend, and the row still says so.
       expect(reissueOf('Marta Villalobos')).toHaveProperty('disabled', true)
       expect(within(rowOf('marta')).getByText(T.reissueWhyNoCode)).toBeTruthy()
+      expect(screen.queryByRole('button', { name: T.remindFor.replace('{name}', 'Marta Villalobos') })).toBeNull()
+    })
+
+    it('reminds without minting anything, and says so before sending', async () => {
+      const payload = perSurvey()
+      const { mock, sent } = fetchWith(payload)
+      vi.stubGlobal('fetch', mock)
+      const user = userEvent.setup()
+      renderPanel(payload)
+      await screen.findByText('Hugo Peralta')
+
+      await user.click(screen.getByRole('button', { name: T.remindFor.replace('{name}', 'Hugo Peralta') }))
+
+      // The promise is the opposite of the reissue dialog's, and it is made BEFORE the send.
+      const dialog = await screen.findByRole('alertdialog')
+      expect(within(dialog).getByText(/no lleva usuario ni contrase/i)).toBeTruthy()
+
+      await user.click(within(dialog).getByRole('button', { name: T.remind }))
+
+      expect(await screen.findByText(T.remindSent)).toBeTruthy()
+      expect(sent.some((call) => call.url.endsWith('/remind'))).toBe(true)
+      // And no reissue went out alongside it: the reminder is not a resend in disguise.
+      expect(sent.some((call) => call.url.endsWith('/reissue'))).toBe(false)
     })
 
     it('asks first, naming who, which survey and that the old code stops working, then reissues', async () => {

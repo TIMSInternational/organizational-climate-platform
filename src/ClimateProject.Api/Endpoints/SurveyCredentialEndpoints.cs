@@ -130,6 +130,44 @@ public sealed record SurveyCredentialReissueResult(
 /// <c>audit_logs</c> by the audit middleware; the handler adds the person and the outcome.
 /// </para>
 /// </remarks>
+
+/// <summary>
+/// Why a reminder was refused. Separate from the reissue and revoke lists although some values
+/// coincide: the three routes are different contracts. Notably there is NO
+/// <c>already_signed_in</c> here -- somebody who has signed in is exactly who this route is for,
+/// and they are the people the other two refuse.
+/// </summary>
+public static class SurveyCredentialRemindRefusals
+{
+    /// <summary>The survey hands out one account per person (<c>shared</c>); there is no per-survey key to remind anyone about.</summary>
+    public const string NotPerSurvey = "not_per_survey";
+
+    /// <summary>The survey is a draft, closed, archived, or past its end date: there is nothing left to finish.</summary>
+    public const string SurveyNotOpen = "survey_not_open";
+
+    /// <summary>No such account in this survey's company.</summary>
+    public const string UserNotFound = "user_not_found";
+
+    /// <summary>The account is deactivated: sign-in refuses it, so chasing its holder is pointless.</summary>
+    public const string UserInactive = "user_inactive";
+
+    /// <summary>The account is not in the survey's audience, so it has nothing to finish.</summary>
+    public const string NotInAudience = "not_in_audience";
+
+    /// <summary>Nobody minted a key for this person yet, so there is no access to remind them of; they need an invitation instead.</summary>
+    public const string NoCredential = "no_credential";
+
+    /// <summary>They already finished. Chasing somebody who has answered is how a survey loses the trust of the people who did what was asked.</summary>
+    public const string AlreadyCompleted = "already_completed";
+}
+
+/// <param name="Delivered">
+/// Whether the mail left. False is not a refusal: nothing was changed either way, because a
+/// reminder writes nothing at all -- which is the difference between this route and a reissue.
+/// </param>
+public sealed record SurveyCredentialRemindResult(
+    Guid SurveyId, Guid UserId, string Username, bool Delivered, string? FailureReason);
+
 public static class SurveyCredentialEndpoints
 {
     public static void MapSurveyCredentialEndpoints(this WebApplication app)
@@ -138,6 +176,7 @@ public static class SurveyCredentialEndpoints
 
         var group = app.MapGroup("/surveys").RequireAuthorization();
         group.MapPost("/{surveyId:guid}/credentials/{userId:guid}/reissue", ReissueAsync);
+        group.MapPost("/{surveyId:guid}/credentials/{userId:guid}/remind", RemindAsync);
         group.MapDelete("/{surveyId:guid}/credentials/{userId:guid}", RevokeAsync);
     }
 
@@ -414,6 +453,137 @@ public static class SurveyCredentialEndpoints
             outcome.Delivered,
             outcome.Delivered ? null : outcome.FailureReason,
             DateOnly.FromDateTime(SchedulingTimeZone.ToLocal(outcome.Delivered ? now : credential.CreatedAt, zone))));
+    }
+
+    /// <summary>
+    /// <c>POST /surveys/{surveyId}/credentials/{userId}/remind</c>: ask ONE person to go in and
+    /// finish, WITHOUT minting anything.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Asked for by ESPH on 2026-10-30, in these words: *"hay forma de enviar recordatorio? no
+    /// otro usuario o contraseña solo recordatorio?"* -- with a list of seven people whose Clima
+    /// survey was <c>Pendiente Finalizar</c>. Until this route there was no way to do it. The
+    /// reminder behind <c>POST /invitations/reminders</c> returns zeroes (its mail was ruled out
+    /// on 2026-10-19) and, even restored, reminds INVITATIONS, which a respondent signing in with
+    /// a username never creates. The only live chase, <see cref="CredentialsEmailPurpose.Reminder"/>,
+    /// states in its own copy that the previous password stops working. So the people most worth
+    /// chasing -- the ones already part-way through -- were the only ones nothing could reach.
+    /// </para>
+    /// <para>
+    /// <b>It writes nothing.</b> No hash, no timestamp, no row. That is the point: the person is
+    /// holding working details and this must not disturb them. A failed send is therefore not a
+    /// half-done state and needs no restore, unlike <see cref="ReissueAsync"/>.
+    /// </para>
+    /// <para>
+    /// <b>One person per call, named by the caller.</b> There is deliberately no "remind everyone
+    /// outstanding": a send list holds only the people the client asked for, and an endpoint that
+    /// fans out over a roster is one mistaken click from mailing six hundred people.
+    /// </para>
+    /// </remarks>
+    private static async Task<IResult> RemindAsync(
+        Guid surveyId,
+        Guid userId,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        ISurveyReminderEmailSender reminderSender,
+        AuditEntry audit,
+        CancellationToken cancellationToken)
+    {
+        audit.SetResourceId($"{surveyId}/{userId}");
+
+        var survey = await db.Surveys.AsNoTracking().FirstOrDefaultAsync(s => s.Id == surveyId, cancellationToken);
+        if (survey is null)
+        {
+            return Results.Json(new { message = "Survey not found" }, statusCode: 404);
+        }
+
+        if (!SurveyEndpoints.CanAdminister(principal.GetCurrentUser(), survey.CompanyId))
+        {
+            return Results.Forbid();
+        }
+
+        if ((survey.Settings.CredentialMode ?? CredentialModes.Shared) != CredentialModes.PerSurvey)
+        {
+            return Refuse(
+                409, SurveyCredentialRemindRefusals.NotPerSurvey,
+                "This survey uses shared accounts, not per-survey keys.");
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        if (!SurveyStatuses.RespondentVisible.Contains(survey.Status, StringComparer.Ordinal) || survey.EndDate <= now)
+        {
+            return Refuse(
+                409, SurveyCredentialRemindRefusals.SurveyNotOpen,
+                $"A survey in status '{survey.Status}' that ends {survey.EndDate:O} is not open; there is nothing left to finish.");
+        }
+
+        var user = await db.Users
+            .AsNoTracking()
+            .Where(u => u.Id == userId && u.CompanyId == survey.CompanyId)
+            .Select(u => new { u.Id, u.Email, u.Name, u.IsActive })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (user is null)
+        {
+            return Refuse(404, SurveyCredentialRemindRefusals.UserNotFound, "No such person in this survey's company.");
+        }
+
+        if (!user.IsActive)
+        {
+            return Refuse(
+                409, SurveyCredentialRemindRefusals.UserInactive,
+                "This account is deactivated; sign-in refuses it whatever key it holds. Reactivate it first.");
+        }
+
+        var inAudience = await SurveyQueries
+            .Audience(db.Users.AsNoTracking(), db.SurveyDepartmentTargets, db.SurveyUserTargets, surveyId, survey.CompanyId)
+            .AnyAsync(u => u.Id == userId, cancellationToken);
+        if (!inAudience)
+        {
+            return Refuse(
+                409, SurveyCredentialRemindRefusals.NotInAudience,
+                "This person is not in the survey's audience, so they have nothing to finish.");
+        }
+
+        var credential = await db.SurveyCredentials
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.SurveyId == surveyId && c.UserId == userId, cancellationToken);
+        if (credential is null)
+        {
+            return Refuse(
+                409, SurveyCredentialRemindRefusals.NoCredential,
+                "This person holds no key for this survey, so there is no access to remind them of. Invite them (POST /surveys/{id}/invitations), which mints and mails one.");
+        }
+
+        // Refused rather than silently skipped: an admin working from a roster that is minutes
+        // old is exactly who calls this, and two of ESPH's seven had already finished by the
+        // time their list was read. Telling them so is more useful than a quiet no-op.
+        var finished = await db.Responses
+            .AsNoTracking()
+            .AnyAsync(r => r.SurveyId == surveyId && r.UserId == userId && r.IsComplete, cancellationToken);
+        if (finished)
+        {
+            return Refuse(
+                409, SurveyCredentialRemindRefusals.AlreadyCompleted,
+                "This person has already finished this survey; there is nothing to remind them about.");
+        }
+
+        var company = await db.Companies
+            .AsNoTracking()
+            .Where(c => c.Id == survey.CompanyId)
+            .Select(c => new SurveyCredentialCompany(c.Name, c.Settings.Language, c.Branding.LogoUrl, c.Branding.PrimaryColor))
+            .FirstOrDefaultAsync(cancellationToken);
+        var mail = SurveyCredentialIssuance.MailFor(survey, company);
+
+        var outcome = await reminderSender.SendAsync(
+            user.Email, user.Name, credential.Username, mail.CompanyLanguage,
+            mail.Brand, mail.SurveyTitle, cancellationToken);
+
+        audit.RecordChange("reminder", null, outcome.Delivered ? "sent" : "send_failed");
+
+        return Results.Ok(new SurveyCredentialRemindResult(
+            surveyId, userId, credential.Username, outcome.Delivered,
+            outcome.Delivered ? null : outcome.FailureReason));
     }
 
     private static IResult AlreadySignedIn() => Refuse(

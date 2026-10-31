@@ -561,6 +561,55 @@ export async function reissueSurveyCredential(
   return body?.delivered && body.issuedOn ? { kind: 'sent', issuedOn: body.issuedOn } : { kind: 'send_failed' }
 }
 
+/** Why `POST /surveys/{id}/credentials/{userId}/remind` refused, as the API names it. */
+export type SurveyCredentialRemindRefusal =
+  | 'not_per_survey'
+  | 'survey_not_open'
+  | 'user_not_found'
+  | 'user_inactive'
+  | 'not_in_audience'
+  | 'no_credential'
+  /**
+   * They finished. Not in the reissue list, and the only one here that is NOT in it: a roster
+   * read minutes ago goes stale, and chasing somebody who already complied is the one outcome
+   * worth refusing loudly rather than skipping in silence.
+   */
+  | 'already_completed'
+
+export type SurveyCredentialRemindOutcome =
+  /** The reminder left. Nothing was minted and nothing changed; their key still works. */
+  | { kind: 'sent' }
+  /** The mail did not leave. There is nothing to restore -- a reminder writes nothing. */
+  | { kind: 'send_failed' }
+  | { kind: 'refused'; code: SurveyCredentialRemindRefusal | 'unknown' }
+
+/**
+ * Reminds ONE person to finish ONE survey, WITHOUT minting anything.
+ *
+ * <p>For the people `reissueSurveyCredential` refuses: somebody who has signed in is holding
+ * working details, and replacing them mid-survey is the harm `already_signed_in` exists to
+ * prevent. Asked for by the client on 2026-10-30 -- *"no otro usuario o contraseña solo
+ * recordatorio?"*.</p>
+ */
+export async function remindSurveyCredential(
+  baseUrl: string,
+  surveyId: string,
+  userId: string,
+): Promise<SurveyCredentialRemindOutcome> {
+  const response = await authFetch(
+    `${baseUrl}/surveys/${surveyId}/credentials/${userId}/remind`,
+    { method: 'POST' },
+    { allowStatus: [404, 409] },
+  )
+  const body = (await response.json().catch(() => null)) as
+    | { delivered?: boolean; code?: string }
+    | null
+  if (!response.ok) {
+    return { kind: 'refused', code: (body?.code as SurveyCredentialRemindRefusal | undefined) ?? 'unknown' }
+  }
+  return body?.delivered ? { kind: 'sent' } : { kind: 'send_failed' }
+}
+
 /** Why `DELETE /surveys/{id}/credentials/{userId}` refused, as the API names it. */
 export type SurveyCredentialRevokeRefusal =
   | 'not_per_survey'
