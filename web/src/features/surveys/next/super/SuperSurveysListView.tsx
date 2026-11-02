@@ -564,6 +564,11 @@ function SuperRow({ row, model, t, locale }: { row: SurveyRow; model: SuperSurve
               {readViewerClaims().role === 'super_admin' && (
                 <OneClimateResponsesItem surveyId={row.id} title={row.title ?? ''} t={t} />
               )}
+              {/* The same rows without a single answer: the list a client asks for to check
+                  demographics before the analysis (Eagle, 2026-11-02). */}
+              {readViewerClaims().role === 'super_admin' && (
+                <OneClimateResponsesItem surveyId={row.id} title={row.title ?? ''} t={t} demographicsOnly />
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -579,15 +584,25 @@ function SuperRow({ row, model, t, locale }: { row: SurveyRow; model: SuperSurve
  * for it: a menu item that closes the menu and does nothing is indistinguishable from a
  * download the browser is still preparing, and the reader would press it again.
  */
-function OneClimateResponsesItem({ surveyId, title, t }: { surveyId: string; title: string; t: TranslateFn }) {
+function OneClimateResponsesItem({
+  surveyId,
+  title,
+  t,
+  demographicsOnly = false,
+}: {
+  surveyId: string
+  title: string
+  t: TranslateFn
+  demographicsOnly?: boolean
+}) {
   const [failed, setFailed] = useState(false)
 
   async function run() {
     setFailed(false)
     try {
       downloadBlobFile(
-        allResponsesFileName(new Date(), title),
-        await getAllResponsesWorkbook(RESPONSE_EXPORT_BASE_URL, surveyId),
+        allResponsesFileName(new Date(), title, demographicsOnly ? 'demograficos' : 'respuestas'),
+        await getAllResponsesWorkbook(RESPONSE_EXPORT_BASE_URL, surveyId, { answers: !demographicsOnly }),
       )
     } catch {
       setFailed(true)
@@ -601,7 +616,9 @@ function OneClimateResponsesItem({ surveyId, title, t }: { surveyId: string; tit
         void run()
       }}
     >
-      {failed ? t('surveys.next.super.exportFailed') : t('surveys.next.super.exportOne')}
+      {failed
+        ? t('surveys.next.super.exportFailed')
+        : t(demographicsOnly ? 'surveys.next.super.exportOneDemographics' : 'surveys.next.super.exportOne')}
     </DropdownMenuItem>
   )
 }

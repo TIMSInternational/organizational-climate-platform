@@ -4282,6 +4282,7 @@
         "barNoteChosen": "This list covers the whole platform and does not depend on the selection. A new survey is created in the chosen company.",
         "exportAll": "Download every response",
         "exportOne": "Download this climate's responses",
+        "exportOneDemographics": "Download demographics only (no answers)",
         "exportBusy": "Preparing the workbook…",
         "exportFailed": "The workbook could not be prepared. Try again.",
         "eyebrow": "Every company",

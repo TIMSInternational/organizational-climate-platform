@@ -74,9 +74,16 @@ public static class ResponseExportEndpoints
     private static string? Withheld(string? value)
         => string.IsNullOrWhiteSpace(value) ? value : SubjectDataMap.WithheldAnswerMarker;
 
+    /// <param name="includeAnswers">
+    /// <c>?answers=</c> in the query.
+    /// <c>false</c> for the demographics-only list: every response and every demographic, no
+    /// answer. Asked for by Eagle on 2026-11-02 to check managers' demographics before the
+    /// analysis. Same route, same role, same audit row — it reads strictly less.
+    /// </param>
     private static async Task<IResult> ExportAsync(
         Guid? companyId,
         Guid? surveyId,
+        [Microsoft.AspNetCore.Mvc.FromQuery(Name = "answers")] bool? includeAnswers,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
         IConfiguration configuration,
@@ -134,7 +141,7 @@ public static class ResponseExportEndpoints
         var questions = await db.Questions.AsNoTracking()
             .Where(q => surveyIds.Contains(q.SurveyId))
             .OrderBy(q => q.SurveyId).ThenBy(q => q.Order)
-            .Select(q => new { q.Id, q.SurveyId, q.Order, q.Type, q.Category, q.TextEs, q.TextEn })
+            .Select(q => new { q.Id, q.SurveyId, q.Order, q.Type, q.Category, q.TextEs, q.TextEn, q.ScaleMin, q.ScaleMax })
             .ToListAsync(cancellationToken);
 
         var questionTypes = questions.ToDictionary(q => q.Id, q => q.Type);
@@ -168,11 +175,16 @@ public static class ResponseExportEndpoints
             .Select(d => new { d.ResponseId, d.Field, d.Value })
             .ToListAsync(cancellationToken);
 
-        var departmentIds = responses.Where(r => r.DepartmentId is not null)
-            .Select(r => r.DepartmentId!.Value).Distinct().ToList();
-        var departments = await db.Departments.AsNoTracking()
-            .Where(d => departmentIds.Contains(d.Id))
-            .ToDictionaryAsync(d => d.Id, d => d.Name, cancellationToken);
+        // Every department of the companies in the file, not only those on `responses.department_id`:
+        // a respondent with no account declares their área as a demographic that holds the
+        // department's ID (SelfDeclaredDepartment), and that ID has to print as the name too.
+        var companyDepartments = await db.Departments.AsNoTracking()
+            .Where(d => companyIds.Contains(d.CompanyId))
+            .Select(d => new { d.Id, d.CompanyId, d.Name })
+            .ToListAsync(cancellationToken);
+        var departments = companyDepartments.ToDictionary(d => d.Id, d => d.Name);
+
+        var labels = await LoadDemographicLabelsAsync(companyIds, db, cancellationToken);
 
         // Only for surveys that are NOT anonymous. An anonymous response has no user id to
         // look up, so this set is empty for them by construction rather than by filtering.
@@ -223,8 +235,14 @@ public static class ResponseExportEndpoints
                     "P" + (index + 1).ToString("00", CultureInfo.InvariantCulture),
                     q.Category,
                     q.Type,
-                    (spanish ? q.TextEs ?? q.TextEn : q.TextEn ?? q.TextEs) ?? ""))
+                    (spanish ? q.TextEs ?? q.TextEn : q.TextEn ?? q.TextEs) ?? "",
+                    q.ScaleMin,
+                    q.ScaleMax))
                 .ToList();
+
+            var ownDepartments = companyDepartments
+                .Where(d => d.CompanyId == survey.CompanyId)
+                .ToDictionary(d => d.Id, d => d.Name);
 
             // See the answer mapping below. Super admin is TIMS, the external processor;
             // `GET /gdpr/access` keeps its own stricter rule and is deliberately untouched.
@@ -263,7 +281,12 @@ public static class ResponseExportEndpoints
                         user?.Email,
                         user?.Username,
                         r.DepartmentId is { } department ? departments.GetValueOrDefault(department) : null,
-                        demographicsByResponse.GetValueOrDefault(r.Id, new Dictionary<string, string>(StringComparer.Ordinal)),
+                        Labelled(
+                            demographicsByResponse.GetValueOrDefault(r.Id, new Dictionary<string, string>(StringComparer.Ordinal)),
+                            survey.CompanyId,
+                            spanish,
+                            labels,
+                            ownDepartments),
                         r.StartTime,
                         r.CompletionTime,
                         r.IsComplete,
@@ -271,6 +294,12 @@ public static class ResponseExportEndpoints
                         rowAnswers);
                 })
                 .ToList();
+
+            var columns = DemographicColumns(
+                rows.SelectMany(r => r.Demographics.Keys).ToHashSet(StringComparer.Ordinal),
+                survey.CompanyId,
+                spanish,
+                labels);
 
             model.Add(new ResponseExportSurvey(
                 survey.Id,
@@ -282,7 +311,8 @@ public static class ResponseExportEndpoints
                 survey.EndDate,
                 exportQuestions,
                 rows,
-                pending));
+                pending,
+                columns));
         }
 
         // Said in the file, not only in this comment. A reader who is handed a workbook has no
@@ -300,10 +330,124 @@ public static class ResponseExportEndpoints
         }
 
         var bytes = ResponseWorkbook.Build(
-            model, DateTimeOffset.UtcNow, notes.Count == 0 ? null : string.Join(" ", notes));
+            model,
+            DateTimeOffset.UtcNow,
+            notes.Count == 0 ? null : string.Join(" ", notes),
+            includeAnswers: includeAnswers != false);
         return Results.File(
             bytes,
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             "respuestas-clima.xlsx");
+    }
+
+    /// <summary>A company's demographic fields and options, in both languages.</summary>
+    private sealed record DemographicLabels(
+        IReadOnlyDictionary<(Guid Company, string Field), (string? Es, string? En, int Order)> Fields,
+        IReadOnlyDictionary<(Guid Company, string Field, string Value), (string? Es, string? En)> Options);
+
+    /// <summary>
+    /// Inactive fields and options too: a response keeps the value it was given after a field is
+    /// retired, and the label it was given under is still the right one to print.
+    /// </summary>
+    private static async Task<DemographicLabels> LoadDemographicLabelsAsync(
+        IReadOnlyCollection<Guid> companyIds, ClimateProjectDbContext db, CancellationToken cancellationToken)
+    {
+        var fields = await db.DemographicFields.AsNoTracking()
+            .Where(f => companyIds.Contains(f.CompanyId))
+            .Select(f => new { f.Id, f.CompanyId, f.Field, f.LabelEs, f.LabelEn, f.Order })
+            .ToListAsync(cancellationToken);
+        var fieldIds = fields.Select(f => f.Id).ToList();
+        var options = await db.DemographicFieldOptions.AsNoTracking()
+            .Where(o => fieldIds.Contains(o.DemographicFieldId))
+            .Select(o => new { o.DemographicFieldId, o.Value, o.LabelEs, o.LabelEn })
+            .ToListAsync(cancellationToken);
+
+        var byId = fields.ToDictionary(f => f.Id);
+        var fieldLabels = new Dictionary<(Guid, string), (string?, string?, int)>();
+        foreach (var f in fields)
+        {
+            fieldLabels.TryAdd((f.CompanyId, f.Field), (f.LabelEs, f.LabelEn, f.Order));
+        }
+
+        var optionLabels = new Dictionary<(Guid, string, string), (string?, string?)>();
+        foreach (var o in options)
+        {
+            var f = byId[o.DemographicFieldId];
+            optionLabels.TryAdd((f.CompanyId, f.Field, o.Value), (o.LabelEs, o.LabelEn));
+        }
+
+        return new DemographicLabels(fieldLabels, optionLabels);
+    }
+
+    private static string? Pick(string? es, string? en, bool spanish)
+        => (spanish ? es ?? en : en ?? es) is { Length: > 0 } label ? label : null;
+
+    /// <summary>
+    /// Each stored value as the company's own label. A self-declared área prints the department's
+    /// name. A value with no label is printed AS STORED, never blanked: an empty cell reads as
+    /// "this person did not answer", which would be a false statement about the record.
+    /// </summary>
+    private static Dictionary<string, string> Labelled(
+        IReadOnlyDictionary<string, string> stored,
+        Guid companyId,
+        bool spanish,
+        DemographicLabels labels,
+        IReadOnlyDictionary<Guid, string> ownDepartments)
+    {
+        var labelled = new Dictionary<string, string>(stored.Count, StringComparer.Ordinal);
+        foreach (var (field, value) in stored)
+        {
+            if (SelfDeclaredDepartment.IsReservedKey(field))
+            {
+                // Only the company's OWN departments: an ID from another tenant prints as stored
+                // rather than as somebody else's department name.
+                labelled[field] = Guid.TryParse(value, out var id) && ownDepartments.TryGetValue(id, out var name)
+                    ? name
+                    : value;
+                continue;
+            }
+
+            labelled[field] = labels.Options.TryGetValue((companyId, field, value), out var option)
+                && Pick(option.Es, option.En, spanish) is { } label
+                    ? label
+                    : value;
+        }
+
+        return labelled;
+    }
+
+    /// <summary>
+    /// The demographic columns of one sheet, in the company's own field order with the área first,
+    /// each headed by its label. Two fields that share a label get their key beside it, so no two
+    /// columns read the same.
+    /// </summary>
+    private static List<ResponseExportDemographicColumn> DemographicColumns(
+        IReadOnlySet<string> carried, Guid companyId, bool spanish, DemographicLabels labels)
+    {
+        var ordered = carried
+            .Select(field =>
+            {
+                if (SelfDeclaredDepartment.IsReservedKey(field))
+                {
+                    return (Field: field, Header: spanish ? "Área" : "Area", Rank: int.MinValue);
+                }
+
+                return labels.Fields.TryGetValue((companyId, field), out var f)
+                    ? (Field: field, Header: Pick(f.Es, f.En, spanish) ?? field, Rank: f.Order)
+                    : (Field: field, Header: field, Rank: int.MaxValue);
+            })
+            .OrderBy(c => c.Rank)
+            .ThenBy(c => c.Field, StringComparer.Ordinal)
+            .ToList();
+
+        var repeated = ordered.GroupBy(c => c.Header, StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Count() > 1)
+            .Select(g => g.Key)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return ordered
+            .Select(c => new ResponseExportDemographicColumn(
+                c.Field, repeated.Contains(c.Header) ? $"{c.Header} ({c.Field})" : c.Header))
+            .ToList();
     }
 }

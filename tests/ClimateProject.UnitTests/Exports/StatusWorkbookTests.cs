@@ -111,12 +111,14 @@ public class StatusWorkbookTests
     [Fact]
     public void The_totals_are_written_values_and_the_share_is_over_the_rows_above_them()
     {
+        // Every one of them was sent a code, so every one of them is counted (2026-11-02: on a
+        // per-survey sheet the denominator is the people sent a code).
         var roster = new[]
         {
-            Person("Uno", SurveyParticipantStatuses.Completed),
-            Person("Dos", SurveyParticipantStatuses.Completed),
-            Person("Tres", SurveyParticipantStatuses.Started),
-            Person("Cuatro", SurveyParticipantStatuses.NotStarted),
+            Person("Uno", SurveyParticipantStatuses.Completed, "esph-uno", Today),
+            Person("Dos", SurveyParticipantStatuses.Completed, "esph-dos", Today),
+            Person("Tres", SurveyParticipantStatuses.Started, "esph-tres", Today),
+            Person("Cuatro", SurveyParticipantStatuses.NotStarted, "esph-cuatro", Today),
         };
 
         var bytes = StatusWorkbook.Build([Survey("Clima", roster)], Today, spanish: true);
@@ -131,6 +133,12 @@ public class StatusWorkbookTests
         Assert.Equal(2, sheet.Cell(at + 1, 2).GetValue<int>());
         Assert.Equal(0.5d, sheet.Cell(at + 2, 2).GetValue<double>(), precision: 6);
         Assert.False(sheet.Cell(at + 2, 2).HasFormula);
+
+        // The other two states, so the three counts add up to the people on the sheet.
+        Assert.Equal(SurveyRosterCsv.StatusLabel(SurveyParticipantStatuses.Started, true), sheet.Cell(at + 3, 1).GetString());
+        Assert.Equal(1, sheet.Cell(at + 3, 2).GetValue<int>());
+        Assert.Equal(SurveyRosterCsv.StatusLabel(SurveyParticipantStatuses.NotStarted, true), sheet.Cell(at + 4, 1).GetString());
+        Assert.Equal(1, sheet.Cell(at + 4, 2).GetValue<int>());
     }
 
     /// <summary>
@@ -154,12 +162,17 @@ public class StatusWorkbookTests
         Assert.True(sheet.Cell(at + 2, 2).IsEmpty());
     }
 
-    /// <summary>A null field stays an empty cell: "no code yet" is not the empty string.</summary>
+    /// <summary>
+    /// A null field stays an empty cell: "no code yet" is not the empty string. The person
+    /// STARTED without a key — the one kind of keyless person a per-survey sheet still lists,
+    /// because a response is never left off (a keyless person who never opened it is not on
+    /// the sheet at all since 2026-11-02).
+    /// </summary>
     [Fact]
     public void A_person_with_no_key_leaves_those_cells_empty()
     {
         var bytes = StatusWorkbook.Build(
-            [Survey("Clima", [Person("Sin Clave", SurveyParticipantStatuses.NotStarted)])],
+            [Survey("Clima", [Person("Sin Clave", SurveyParticipantStatuses.Started)])],
             Today,
             spanish: true);
 
@@ -216,5 +229,75 @@ public class StatusWorkbookTests
         using var book = Open(bytes);
         var sheet = Assert.Single(book.Worksheets);
         Assert.False(string.IsNullOrWhiteSpace(sheet.Name));
+    }
+
+    // ------------------------------------------------------- who is counted, and colour (2026-11-02)
+
+    /// <summary>
+    /// ESPH's Clima reached 633 people by department while ESPH's own list was 619: the 14
+    /// between them never received a Clima key and could not answer. The sheet counts the
+    /// people sent a code, keeps anybody who answered without one, and says how many it left out.
+    /// </summary>
+    [Fact]
+    public void A_per_survey_sheet_counts_the_people_sent_a_code_and_says_how_many_it_left_out()
+    {
+        var roster = new[]
+        {
+            Person("Ana Rojas", SurveyParticipantStatuses.Completed, "esph-ana", Today),
+            Person("Beto Mora", SurveyParticipantStatuses.NotStarted, "esph-beto", Today),
+            Person("Caro Solis", SurveyParticipantStatuses.NotStarted),
+            Person("Dani Vega", SurveyParticipantStatuses.Completed),
+        };
+
+        var bytes = StatusWorkbook.Build([Survey("Clima", roster)], Today, spanish: true);
+
+        using var book = Open(bytes);
+        var sheet = book.Worksheet("Clima");
+        var names = Enumerable.Range(5, 3).Select(r => sheet.Cell(r, 1).GetString()).ToList();
+        Assert.Equal(["Ana Rojas", "Beto Mora", "Dani Vega"], names);
+        Assert.DoesNotContain(sheet.CellsUsed(), c => c.GetString() == "Caro Solis");
+
+        var at = 5 + 3 + 1;
+        Assert.Equal(3, sheet.Cell(at, 2).GetValue<int>());
+        Assert.Equal(2, sheet.Cell(at + 1, 2).GetValue<int>());
+        Assert.Equal(2d / 3, sheet.Cell(at + 2, 2).GetValue<double>(), precision: 6);
+        Assert.Contains(sheet.CellsUsed(), c => c.GetString() == "1 persona de la audiencia no recibió código para esta encuesta y no se cuenta.");
+    }
+
+    [Fact]
+    public void A_survey_without_per_survey_keys_still_counts_everyone()
+    {
+        var bytes = StatusWorkbook.Build(
+            [Survey("Identificada", [Person("Uno", SurveyParticipantStatuses.Completed), Person("Dos", SurveyParticipantStatuses.NotStarted)], perSurvey: false)],
+            Today,
+            spanish: true);
+
+        using var book = Open(bytes);
+        var sheet = book.Worksheet("Identificada");
+        Assert.Equal(2, sheet.Cell(5 + 2 + 1, 2).GetValue<int>());
+        Assert.DoesNotContain(sheet.CellsUsed(), c => c.GetString().Contains("no recibi", StringComparison.Ordinal));
+    }
+
+    /// <summary>The colours the client read for two weeks: finished green, started orange, not opened plain.</summary>
+    [Fact]
+    public void Each_state_is_coloured_as_the_clients_sheet_was()
+    {
+        var roster = new[]
+        {
+            Person("Uno", SurveyParticipantStatuses.Completed, "esph-uno", Today),
+            Person("Dos", SurveyParticipantStatuses.Started, "esph-dos", Today),
+            Person("Tres", SurveyParticipantStatuses.NotStarted, "esph-tres", Today),
+        };
+
+        var bytes = StatusWorkbook.Build([Survey("Clima", roster)], Today, spanish: true);
+
+        using var book = Open(bytes);
+        var sheet = book.Worksheet("Clima");
+        var headers = SurveyRosterCsv.Headers(spanish: true, perSurvey: true, showState: true);
+        var estado = Array.IndexOf(headers, "Estado") + 1;
+        Assert.Equal("FF" + StatusWorkbook.FinishedFill, sheet.Cell(5, estado).Style.Fill.BackgroundColor.Color.ToArgb().ToString("X8"));
+        Assert.Equal("FF" + StatusWorkbook.InProgressFill, sheet.Cell(6, estado).Style.Fill.BackgroundColor.Color.ToArgb().ToString("X8"));
+        Assert.Equal(XLFillPatternValues.None, sheet.Cell(7, estado).Style.Fill.PatternType);
+        Assert.True(sheet.AutoFilter.IsEnabled);
     }
 }
