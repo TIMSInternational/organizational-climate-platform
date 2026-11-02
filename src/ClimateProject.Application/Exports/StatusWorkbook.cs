@@ -45,9 +45,51 @@ public sealed record StatusWorkbookSurvey(
 /// doubt column beside it would be shipping a quiet error, so the name is one cell, exactly as
 /// stored. A two-column layout stays a reviewed step outside the product.
 /// </para>
+///
+/// <para>
+/// <b>Who is on a sheet (2026-11-02).</b> For a survey that hands out per-survey keys, the people
+/// who were SENT one — plus anybody who started or finished without one, so that no response is
+/// ever left off. The roster screen lists the whole audience, and for a survey aimed at
+/// departments that audience holds people the client never put on the list: ESPH's Clima reached
+/// 633 by department while ESPH's list was 619, and the 14 between them never received a Clima
+/// key and could not answer. A percentage over 633 told the client a lower number than the one
+/// they had been reading. Those people are not hidden — the count of them is printed under the
+/// totals — they are just not the denominator. Surveys without per-survey keys are unchanged.
+/// </para>
+///
+/// <para>
+/// <b>How it reads.</b> The client received this file from a script for two weeks with each
+/// Estado coloured — finished green, in progress orange, not opened left plain — and that is
+/// carried over with the same two tints (Office accent 6 and accent 2 at 80 %), so the file
+/// TIMS now downloads looks like the one ESPH already knows. The header is filled and filtered,
+/// and the name column stays on screen while the rest scrolls.
+/// </para>
 /// </summary>
 public static class StatusWorkbook
 {
+    /// <summary>Finished. Office accent 6 (green) at 80 % tint, as the client's own sheet used.</summary>
+    public const string FinishedFill = "E2EFDA";
+
+    /// <summary>Started but not finished. Office accent 2 (orange) at 80 % tint.</summary>
+    public const string InProgressFill = "FBE5D6";
+
+    private const string HeaderFill = "E1E0D9";
+
+    /// <summary>
+    /// The rows a sheet counts. Everyone, unless the survey hands out per-survey keys; then the
+    /// people sent one, and anybody who got further than "not opened" without one — a response
+    /// is never dropped to make a number tidier.
+    /// </summary>
+    public static IReadOnlyList<SurveyRosterRow> Counted(StatusWorkbookSurvey survey)
+    {
+        ArgumentNullException.ThrowIfNull(survey);
+        return survey.PerSurvey
+            ? survey.Roster
+                .Where(r => r.CredentialIssuedOn is not null || r.Status != SurveyParticipantStatuses.NotStarted)
+                .ToList()
+            : survey.Roster;
+    }
+
     /// <summary>Excel's own ceiling on a sheet name, and the characters it refuses in one.</summary>
     private const int MaxSheetNameLength = 31;
 
@@ -70,7 +112,9 @@ public static class StatusWorkbook
 
             sheet.Cell(1, 1).Value = survey.Title;
             sheet.Cell(1, 1).Style.Font.Bold = true;
+            sheet.Cell(1, 1).Style.Font.FontSize = 14;
             sheet.Cell(2, 1).Value = (spanish ? "Al " : "As at ") + generatedAt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            sheet.Cell(2, 1).Style.Font.FontColor = XLColor.FromHtml("#595959");
 
             const int headerRow = 4;
             for (var c = 0; c < headers.Length; c++)
@@ -78,10 +122,14 @@ public static class StatusWorkbook
                 var cell = sheet.Cell(headerRow, c + 1);
                 cell.Value = headers[c];
                 cell.Style.Font.Bold = true;
+                cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#" + HeaderFill);
             }
 
+            var counted = Counted(survey);
+            // 1-based. `Headers` ends with Estado, Última actividad whenever state is shown.
+            var stateColumn = survey.ShowState ? headers.Length - 1 : 0;
             var row = headerRow + 1;
-            foreach (var person in survey.Roster)
+            foreach (var person in counted)
             {
                 var fields = SurveyRosterCsv.Fields(person, spanish, survey.PerSurvey, survey.ShowState);
                 for (var c = 0; c < fields.Length; c++)
@@ -94,12 +142,26 @@ public static class StatusWorkbook
                     }
                 }
 
+                // The Estado cell takes the person's status colour.
+                if (stateColumn > 0 && StatusFill(person.Status) is { } fill)
+                {
+                    sheet.Cell(row, stateColumn).Style.Fill.BackgroundColor = XLColor.FromHtml("#" + fill);
+                }
+
                 row++;
             }
 
-            WriteTotals(sheet, survey, row + 1, spanish);
-            sheet.Columns(1, Math.Max(headers.Length, 1)).AdjustToContents();
-            sheet.SheetView.FreezeRows(headerRow);
+            if (row > headerRow + 1)
+            {
+                sheet.Range(headerRow, 1, row - 1, headers.Length).SetAutoFilter();
+            }
+
+            WriteTotals(sheet, survey, counted, row + 1, spanish);
+            // Sized over the header and the people only. Sized over the whole sheet, column A
+            // took the width of the title and the note under the totals, and every other column
+            // was pushed off the first screen; both now run over into the empty cells beside them.
+            sheet.Columns(1, Math.Max(headers.Length, 1)).AdjustToContents(headerRow, Math.Max(row - 1, headerRow));
+            sheet.SheetView.Freeze(headerRow, 1);
         }
 
         // A workbook with no sheet at all is a corrupt file, not an empty one: a company whose
@@ -126,19 +188,43 @@ public static class StatusWorkbook
     /// than the rows above it is a number nobody can check by counting.
     /// </para>
     /// </summary>
-    private static void WriteTotals(IXLWorksheet sheet, StatusWorkbookSurvey survey, int at, bool spanish)
+    /// <summary>The Estado colour for a status; null leaves the cell plain (not opened).</summary>
+    public static string? StatusFill(string status) => status switch
     {
-        var total = survey.Roster.Count;
+        SurveyParticipantStatuses.Completed => FinishedFill,
+        SurveyParticipantStatuses.Started or SurveyParticipantStatuses.NotCompleted => InProgressFill,
+        _ => null,
+    };
+
+    private static void WriteTotals(
+        IXLWorksheet sheet, StatusWorkbookSurvey survey, IReadOnlyList<SurveyRosterRow> counted, int at, bool spanish)
+    {
+        var total = counted.Count;
         sheet.Cell(at, 1).Value = spanish ? "Personas" : "People";
         sheet.Cell(at, 2).Value = total;
         sheet.Cell(at, 1).Style.Font.Bold = true;
+
+        // The people the screen lists and this sheet does not count, said rather than dropped.
+        var notCounted = survey.Roster.Count - counted.Count;
+        var noteAt = at + (survey.ShowState ? 5 : 1);
+        if (notCounted > 0)
+        {
+            sheet.Cell(noteAt, 1).Value = (spanish, notCounted == 1) switch
+            {
+                (true, true) => "1 persona de la audiencia no recibió código para esta encuesta y no se cuenta.",
+                (true, false) => $"{notCounted} personas de la audiencia no recibieron código para esta encuesta y no se cuentan.",
+                (false, true) => "1 person in the audience was never sent a code for this survey and is not counted.",
+                (false, false) => $"{notCounted} people in the audience were never sent a code for this survey and are not counted.",
+            };
+            sheet.Cell(noteAt, 1).Style.Font.Italic = true;
+        }
 
         if (!survey.ShowState)
         {
             return;
         }
 
-        var finished = survey.Roster.Count(r => r.Status == SurveyParticipantStatuses.Completed);
+        var finished = counted.Count(r => r.Status == SurveyParticipantStatuses.Completed);
         sheet.Cell(at + 1, 1).Value = SurveyRosterCsv.StatusLabel(SurveyParticipantStatuses.Completed, spanish);
         sheet.Cell(at + 1, 2).Value = finished;
 
@@ -152,6 +238,17 @@ public static class StatusWorkbook
         var shareCell = sheet.Cell(at + 2, 2);
         shareCell.Value = share;
         shareCell.Style.NumberFormat.Format = "0.0%";
+        sheet.Cell(at + 1, 1).Style.Fill.BackgroundColor = XLColor.FromHtml("#" + FinishedFill);
+
+        // The other two states, each as many as the rows above say. "Empezó" counts a person who
+        // stopped half way too, which is what the orange on the sheet already says about them.
+        var inProgress = counted.Count(r => StatusFill(r.Status) == InProgressFill);
+        var notOpened = total - finished - inProgress;
+        sheet.Cell(at + 3, 1).Value = SurveyRosterCsv.StatusLabel(SurveyParticipantStatuses.Started, spanish);
+        sheet.Cell(at + 3, 2).Value = inProgress;
+        sheet.Cell(at + 3, 1).Style.Fill.BackgroundColor = XLColor.FromHtml("#" + InProgressFill);
+        sheet.Cell(at + 4, 1).Value = SurveyRosterCsv.StatusLabel(SurveyParticipantStatuses.NotStarted, spanish);
+        sheet.Cell(at + 4, 2).Value = notOpened;
     }
 
     /// <summary>

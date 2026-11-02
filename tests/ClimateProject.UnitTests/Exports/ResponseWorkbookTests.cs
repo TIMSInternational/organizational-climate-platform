@@ -154,4 +154,158 @@ public class ResponseWorkbookTests
         Assert.Contains("P01_texto", header);
         Assert.DoesNotContain("P02_texto", header);
     }
+
+    // ------------------------------------------------------------------ readable (2026-11-02)
+
+    /// <summary>A 1–5 scale question and the identified survey carrying it, for the format tests.</summary>
+    private static ResponseExportSurvey Scaled(params ResponseExportDemographicColumn[] columns)
+    {
+        var survey = Survey(anonymous: false, "Clima identificado");
+        return survey with
+        {
+            Questions =
+            [
+                new ResponseExportQuestion(Q1, 1, "P01", "Comunicación", "likert", "Recibo a tiempo la información.", 1, 5),
+                new ResponseExportQuestion(Q2, 2, "P02", "Preguntas abiertas", "open_ended", "¿Qué mejoraría?"),
+            ],
+            Rows =
+            [
+                survey.Rows[0] with
+                {
+                    Demographics = new Dictionary<string, string>
+                    {
+                        ["antiguedad"] = "De 4 a 6 años",
+                        ["turno"] = "noche",
+                    },
+                },
+            ],
+            DemographicColumns = columns,
+        };
+    }
+
+    [Fact]
+    public void A_demographic_column_is_headed_by_its_label_and_a_key_with_no_label_still_prints()
+    {
+        using var book = Read(Scaled(new ResponseExportDemographicColumn("antiguedad", "Antigüedad")));
+        var sheet = book.Worksheet("R01 Clima identificado");
+        var header = HeaderOf(sheet);
+
+        Assert.Contains("Antigüedad", header);
+        Assert.DoesNotContain("antiguedad", header);
+        Assert.Equal("De 4 a 6 años", sheet.Cell(2, header.IndexOf("Antigüedad") + 1).GetString());
+
+        // The caller did not list "turno". Its value is still the person's answer, so it prints
+        // under its key rather than vanishing because a label was missing.
+        Assert.Equal("noche", sheet.Cell(2, header.IndexOf("turno") + 1).GetString());
+    }
+
+    [Fact]
+    public void Without_answers_every_row_and_demographic_stays_and_no_answer_or_question_sheet_does()
+    {
+        var bytes = ResponseWorkbook.Build(
+            [Scaled(new ResponseExportDemographicColumn("antiguedad", "Antigüedad"))],
+            DateTimeOffset.Parse("2026-10-16T01:00:00Z"),
+            includeAnswers: false);
+        using var book = new XLWorkbook(new MemoryStream(bytes));
+        var sheet = book.Worksheet("R01 Clima identificado");
+        var header = HeaderOf(sheet);
+
+        Assert.DoesNotContain(header, h => h.StartsWith('P'));
+        Assert.Equal("De 4 a 6 años", sheet.Cell(2, header.IndexOf("Antigüedad") + 1).GetString());
+        Assert.Equal(1, sheet.RowsUsed().Count() - 1);
+        Assert.False(book.Worksheets.Contains("PREGUNTAS"));
+
+        // Said in the file, so a list without answers is not mistaken for an export that lost them.
+        var summary = book.Worksheet("RESUMEN");
+        Assert.Contains(summary.CellsUsed(), c => c.GetString().StartsWith("Solo demográficos", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(1, 5)]
+    [InlineData(0, 10)]
+    [InlineData(1, 7)]
+    [InlineData(20, 100)]
+    public void Every_point_of_a_scale_falls_in_exactly_one_colour_and_the_ends_in_the_end_colours(int min, int max)
+    {
+        var question = new ResponseExportQuestion(Q1, 1, "P01", null, "likert", "x", min, max);
+        var buckets = ResponseWorkbook.ScaleBuckets(question)!;
+
+        Assert.Equal(ResponseWorkbook.ScaleFills.Length, buckets.Count);
+        for (var value = min; value <= max; value++)
+        {
+            Assert.Single(buckets, b => value >= b.Low && value <= b.High);
+        }
+
+        Assert.True(min >= buckets[0].Low && min <= buckets[0].High);
+        Assert.True(max >= buckets[^1].Low && max <= buckets[^1].High);
+    }
+
+    [Fact]
+    public void On_a_one_to_five_scale_each_answer_gets_its_own_step_with_the_middle_grey()
+    {
+        var buckets = ResponseWorkbook.ScaleBuckets(
+            new ResponseExportQuestion(Q1, 1, "P01", null, "likert", "x", 1, 5))!;
+
+        for (var value = 1; value <= 5; value++)
+        {
+            var step = buckets.ToList().FindIndex(b => value >= b.Low && value <= b.High);
+            Assert.Equal(value - 1, step);
+        }
+
+        Assert.Equal("F0EFEC", ResponseWorkbook.ScaleFills[2]);
+    }
+
+    [Fact]
+    public void A_question_with_no_scale_to_sit_on_is_not_coloured()
+    {
+        Assert.Null(ResponseWorkbook.ScaleBuckets(new ResponseExportQuestion(Q2, 2, "P02", null, "open_ended", "x")));
+        Assert.Null(ResponseWorkbook.ScaleBuckets(new ResponseExportQuestion(Q2, 2, "P02", null, "multiple_choice", "x", 1, 5)));
+        Assert.Null(ResponseWorkbook.ScaleBuckets(new ResponseExportQuestion(Q1, 1, "P01", null, "likert", "x")));
+        Assert.Null(ResponseWorkbook.ScaleBuckets(new ResponseExportQuestion(Q1, 1, "P01", null, "likert", "x", 5, 5)));
+    }
+
+    [Fact]
+    public void The_scale_column_carries_the_five_colours_and_the_open_one_carries_none()
+    {
+        using var book = Read(Scaled());
+        var sheet = book.Worksheet("R01 Clima identificado");
+        var header = HeaderOf(sheet);
+        var p01 = header.IndexOf("P01") + 1;
+        var p02 = header.IndexOf("P02") + 1;
+
+        var onP01 = sheet.ConditionalFormats
+            .Where(f => f.Ranges.Any(r => r.RangeAddress.FirstAddress.ColumnNumber == p01))
+            .ToList();
+        Assert.Equal(ResponseWorkbook.ScaleFills.Length, onP01.Count);
+        Assert.Equal(
+            ResponseWorkbook.ScaleFills.Select(f => "FF" + f),
+            onP01.Select(f => f.Style.Fill.BackgroundColor.Color.ToArgb().ToString("X8")));
+
+        Assert.DoesNotContain(
+            sheet.ConditionalFormats,
+            f => f.Ranges.Any(r => r.RangeAddress.FirstAddress.ColumnNumber == p02));
+    }
+
+    [Fact]
+    public void A_question_header_is_banded_by_dimension_and_carries_its_wording_and_the_block_beside_it_is_frozen()
+    {
+        using var book = Read(Scaled());
+        var sheet = book.Worksheet("R01 Clima identificado");
+        var header = HeaderOf(sheet);
+        var p01 = sheet.Cell(1, header.IndexOf("P01") + 1);
+        var p02 = sheet.Cell(1, header.IndexOf("P02") + 1);
+
+        Assert.Contains("Recibo a tiempo la información.", p01.GetComment().Text, StringComparison.Ordinal);
+        Assert.Contains("Comunicación", p01.GetComment().Text, StringComparison.Ordinal);
+
+        // Two dimensions side by side, so two different steps of the one hue.
+        Assert.Equal("FF" + ResponseWorkbook.DimensionBands[0], p01.Style.Fill.BackgroundColor.Color.ToArgb().ToString("X8"));
+        Assert.Equal("FF" + ResponseWorkbook.DimensionBands[1], p02.Style.Fill.BackgroundColor.Color.ToArgb().ToString("X8"));
+
+        // Everything up to "minutos" stays on screen while the answers scroll.
+        Assert.Equal(1, sheet.SheetView.SplitRow);
+        Assert.Equal(header.IndexOf("minutos") + 1, sheet.SheetView.SplitColumn);
+        Assert.True(sheet.AutoFilter.IsEnabled);
+    }
 }
+

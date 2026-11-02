@@ -4282,6 +4282,7 @@
         "barNoteChosen": "Esta lista es de toda la plataforma y no depende de la selección. Una encuesta nueva se crea en la empresa elegida.",
         "exportAll": "Descargar todas las respuestas",
         "exportOne": "Descargar las respuestas de este clima",
+        "exportOneDemographics": "Descargar solo los demográficos (sin respuestas)",
         "exportBusy": "Preparando el archivo…",
         "exportFailed": "No se pudo preparar el archivo. Inténtelo de nuevo.",
         "eyebrow": "Todas las empresas",
