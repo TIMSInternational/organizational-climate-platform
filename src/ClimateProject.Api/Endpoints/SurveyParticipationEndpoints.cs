@@ -143,6 +143,10 @@ public static class SurveyParticipationEndpoints
     /// it: a quote or a non-ASCII byte in `Content-Disposition` is an interoperability problem.
     /// </summary>
     internal static string StatusWorkbookFileName(string? companyName, DateOnly day, bool spanish)
+        => CompanyFileName(spanish ? "estado" : "status", companyName, day);
+
+    /// <summary><c>{stem}-{company slug}-{day}.xlsx</c>, the one naming rule for a company's workbooks.</summary>
+    internal static string CompanyFileName(string stem, string? companyName, DateOnly day)
     {
         var slug = new string((companyName ?? string.Empty)
             .Normalize(NormalizationForm.FormD)
@@ -155,7 +159,6 @@ public static class SurveyParticipationEndpoints
             slug = slug.Replace("--", "-", StringComparison.Ordinal);
         }
 
-        var stem = spanish ? "estado" : "status";
         var named = slug.Length == 0 ? stem : $"{stem}-{slug}";
         return $"{named}-{day:yyyy-MM-dd}.xlsx";
     }

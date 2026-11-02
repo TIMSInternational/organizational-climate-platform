@@ -11,9 +11,29 @@ import { authFetch } from '../../../api/authFetch'
  * A `fetch` and a `Blob`, never an `<a href>`: the route is authorized by the bearer header,
  * and an anchor sends cookies, not headers (CLAUDE.md; `rosterExport.ts` says the same).
  */
-export async function getCompanyStatusWorkbook(baseUrl: string, companyId: string): Promise<Blob> {
-  const response = await authFetch(`${baseUrl}/admin/companies/${encodeURIComponent(companyId)}/participation/export`)
+const WORKBOOK_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+
+/**
+ * A refused request and the SPA's index.html (a 200, from a relative URL) both used to be saved
+ * under an .xlsx name. Status and content type are both checked, as `responseExport.ts` does.
+ */
+async function companyWorkbook(url: string): Promise<Blob> {
+  const response = await authFetch(url)
+  if (!response.ok) throw new Error('workbook request failed')
+  if (!(response.headers.get('content-type') ?? '').includes(WORKBOOK_TYPE)) throw new Error('not a workbook')
   return response.blob()
+}
+
+export function getCompanyStatusWorkbook(baseUrl: string, companyId: string): Promise<Blob> {
+  return companyWorkbook(`${baseUrl}/admin/companies/${encodeURIComponent(companyId)}/participation/export`)
+}
+
+/**
+ * `GET /admin/companies/{id}/delivery-audit` — who never received the email and what their mail
+ * server answered. Super admin only and internal to TIMS: never sent to the client.
+ */
+export function getDeliveryAuditWorkbook(baseUrl: string, companyId: string): Promise<Blob> {
+  return companyWorkbook(`${baseUrl}/admin/companies/${encodeURIComponent(companyId)}/delivery-audit`)
 }
 
 /**

@@ -151,6 +151,11 @@ public static class SubjectErasure
         actions.Add(await DeleteAsync("SurveyCredential",
             db.SurveyCredentials.Where(c => c.UserId == id), cancellationToken));
 
+        // The same predicate the export uses: what the subject is handed as theirs is what goes.
+        var lowered = originalEmail.Trim().ToLowerInvariant();
+        actions.Add(await DeleteAsync("EmailDeliveryEvent",
+            db.EmailDeliveryEvents.Where(e => e.UserId == id || e.Email == lowered), cancellationToken));
+
         var invitationIds = await SubjectAccessExport
             .AddressedInvitations(db, originalEmail, companyScope)
             .Select(i => i.Id)

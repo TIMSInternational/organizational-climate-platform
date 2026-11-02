@@ -29,6 +29,7 @@ import { calendarDay, calendarDayLong } from '../../../../lib/calendarDay'
 import { cn } from '../../../../lib/cn'
 import { downloadBlobFile } from '../../../../lib/downloadBlobFile'
 import { allResponsesFileName, getAllResponsesWorkbook } from '../../api/responseExport'
+import { companyStatusFileName, getCompanyStatusWorkbook, getDeliveryAuditWorkbook } from '../../api/statusExport'
 
 /**
  * The API origin, the same way every other caller reads it. An empty string here is not a
@@ -138,6 +139,12 @@ export default function SuperSurveysListView() {
           capabilities.canAuthorSurveys || readViewerClaims().role === 'super_admin' ? (
             <div className="flex flex-wrap gap-2">
             {readViewerClaims().role === 'super_admin' && <AllResponsesButton t={t} />}
+            {/* Once a company is picked: its status workbook (what the client receives) and the
+                delivery audit (what TIMS keeps). A super admin has no company claim, so the
+                tenant page's status button never reached the people who send that file. */}
+            {readViewerClaims().role === 'super_admin' && model.company && (
+              <CompanyFilesButtons companyId={model.company} companyName={model.companyNames.get(model.company) ?? ''} t={t} />
+            )}
             <Button asChild variant="outline"><Link to="/surveys/import">{t('climateWorkbook.title')}</Link></Button>
             {capabilities.canAuthorSurveys && <Button asChild variant="primary">
               <Link to="/surveys/new">
@@ -620,6 +627,48 @@ function OneClimateResponsesItem({
         ? t('surveys.next.super.exportFailed')
         : t(demographicsOnly ? 'surveys.next.super.exportOneDemographics' : 'surveys.next.super.exportOne')}
     </DropdownMenuItem>
+  )
+}
+
+/**
+ * The two per-company files, for the company picked in the filter. Each failure is said beside
+ * the buttons, as the platform-wide download does: a fetch that rejects gives no sign otherwise.
+ */
+function CompanyFilesButtons({ companyId, companyName, t }: { companyId: string; companyName: string; t: TranslateFn }) {
+  const [busy, setBusy] = useState<'status' | 'audit' | null>(null)
+  const [failed, setFailed] = useState(false)
+
+  async function download(kind: 'status' | 'audit') {
+    setBusy(kind)
+    setFailed(false)
+    try {
+      const blob = kind === 'status'
+        ? await getCompanyStatusWorkbook(RESPONSE_EXPORT_BASE_URL, companyId)
+        : await getDeliveryAuditWorkbook(RESPONSE_EXPORT_BASE_URL, companyId)
+      downloadBlobFile(companyStatusFileName(kind === 'status' ? 'estado' : 'auditoria-envios', companyName, new Date()), blob)
+    } catch {
+      setFailed(true)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      {failed && (
+        <span className="m-0 text-sm text-accent-red-ink" role="alert">
+          {t('surveys.next.super.exportFailed')}
+        </span>
+      )}
+      <Button type="button" variant="outline" disabled={busy !== null} onClick={() => void download('status')}>
+        <Download aria-hidden="true" />
+        {busy === 'status' ? t('surveys.next.super.exportBusy') : t('surveys.next.super.companyStatus')}
+      </Button>
+      <Button type="button" variant="outline" disabled={busy !== null} onClick={() => void download('audit')}>
+        <Download aria-hidden="true" />
+        {busy === 'audit' ? t('surveys.next.super.exportBusy') : t('surveys.next.super.deliveryAudit')}
+      </Button>
+    </div>
   )
 }
 

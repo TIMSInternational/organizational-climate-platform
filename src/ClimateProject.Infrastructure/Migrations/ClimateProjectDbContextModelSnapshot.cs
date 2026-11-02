@@ -1474,6 +1474,73 @@ namespace ClimateProject.Infrastructure.Migrations
                     b.ToTable("departments", (string)null);
                 });
 
+            modelBuilder.Entity("ClimateProject.Domain.Entities.EmailDeliveryEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("BounceSubType")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("bounce_sub_type");
+
+                    b.Property<string>("BounceType")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("bounce_type");
+
+                    b.Property<string>("Diagnostic")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("diagnostic");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .HasColumnName("email");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("event_type");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at");
+
+                    b.Property<DateTimeOffset>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("received_at");
+
+                    b.Property<string>("SesMessageId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("ses_message_id");
+
+                    b.Property<string>("SnsMessageId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("sns_message_id");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "OccurredAt");
+
+                    b.HasIndex("SnsMessageId", "Email", "EventType")
+                        .IsUnique();
+
+                    b.ToTable("email_delivery_events", (string)null);
+                });
+
             modelBuilder.Entity("ClimateProject.Domain.Entities.Microclimate", b =>
                 {
                     b.Property<Guid>("Id")
@@ -5190,6 +5257,15 @@ namespace ClimateProject.Infrastructure.Migrations
                         });
 
                     b.Navigation("Settings")
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ClimateProject.Domain.Entities.EmailDeliveryEvent", b =>
+                {
+                    b.HasOne("ClimateProject.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 

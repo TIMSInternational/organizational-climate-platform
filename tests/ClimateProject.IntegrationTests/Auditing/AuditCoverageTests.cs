@@ -108,6 +108,10 @@ public class AuditCoverageTests : IAsyncLifetime
         // at once -- the status workbook TIMS sends the client. Wider than the per-survey file
         // by exactly the number of surveys in it, so it is marked for the same reason.
         "GET /admin/companies/{companyId:guid}/participation/export",
+        // 2026-11-02. The delivery audit: named people, their addresses and what their mail
+        // server answered. Super admin only and never sent to the client; marked for the same
+        // reason the status workbook above is, with more in it.
+        "GET /admin/companies/{companyId:guid}/delivery-audit",
     ];
 
     private IReadOnlyList<(string Method, string Pattern, Endpoint Endpoint)> Routes()
@@ -193,6 +197,9 @@ public class AuditCoverageTests : IAsyncLifetime
         "POST /survey-invitations/{token}/opened",
         "POST /survey-invitations/{token}/started",
         "POST /surveys/{id:guid}/responses",
+        // 2026-11-02. Amazon SNS delivering SES bounces. Nobody signs in -- every message proves
+        // itself by signature, topic and certificate host instead (SesWebhookEndpoints).
+        "POST /webhooks/ses",
     ];
 
     /// <summary>

@@ -276,6 +276,15 @@ public static class SubjectDataMap
             + "is retained on erasure because the org structure is the employer's record, and because erasure "
             + "pseudonymises the users row rather than deleting it, so no dangling manager_id is created."),
 
+        new("EmailDeliveryEvent", "email_delivery_events", SubjectLink.Subject, ["UserId", "Email"],
+            ExportTreatment.FullRecord, ErasureTreatment.Deleted,
+            BasisLegitimateInterest,
+            "Deleted on erasure; otherwise kept while the delivery audit of the engagement is useful.",
+            "A bounce, complaint or rejection Amazon SES reported for an email the product sent to the subject: "
+            + "their address and the receiving server's reply, which often repeats it. Written only for "
+            + "addresses that belong to a user here. Deleted rather than redacted -- a redacted row would still "
+            + "say that mail to somebody failed, and that is the only fact it holds."),
+
         Actor("Microclimate", "microclimates", "CreatedBy", "Authorship of a microclimate. Its results are aggregates."),
         NotPersonal("MicroclimateAiInsight", "microclimate_ai_insights",
             "Generated commentary on aggregate microclimate results. No person referenced."),
