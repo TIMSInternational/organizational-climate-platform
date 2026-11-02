@@ -646,12 +646,19 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
         // it was last used. Days, never instants, so neither lines up with a response's first
         // save; they say "was it mailed / did they get in" and nothing finer. On this shared
         // survey all three key fields are null.
+        //
+        // Extended 2026-10-31: `lastRemindedOn` and `reminderCount`, the key's reminder history.
+        // Deliberate, and safe for the reason this list exists to protect. They are an
+        // ADMINISTRATOR's history -- when WE wrote to somebody -- and record nothing a respondent
+        // did, so neither can line up with a response the way a sign-in instant could. A day and
+        // a count, like the two above. On this shared QR survey both are absent/zero, as every
+        // key field is.
         using var document = JsonDocument.Parse(json);
         Assert.Equal(
             ["answered", "answeredCount", "collectsParticipantIdentity", "credentialMode", "notStartedCount", "pending", "pendingCount", "roster", "startedCount", "surveyId", "surveyTitleEn", "surveyTitleEs", "tracksCompletionOnly", "tracksIndividuals"],
             document.RootElement.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
         Assert.Equal(
-            ["credentialIssuedOn", "demographics", "email", "lastActivityOn", "lastSignInOn", "name", "role", "status", "surveyUsername", "userId", "username"],
+            ["credentialIssuedOn", "demographics", "email", "lastActivityOn", "lastRemindedOn", "lastSignInOn", "name", "reminderCount", "role", "status", "surveyUsername", "userId", "username"],
             document.RootElement.GetProperty("roster").EnumerateArray().First().EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
         Assert.DoesNotContain(_operaciones.ToString(), json, StringComparison.OrdinalIgnoreCase);
     }
