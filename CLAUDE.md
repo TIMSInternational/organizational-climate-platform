@@ -13,7 +13,7 @@ For where things stand, read `docs/runbooks/` and the repository's issues.
 | Gate | Command | Time |
 |---|---|---|
 | .NET build | `dotnet build ClimateProject.slnx --configuration Release` | ~10 s warm |
-| **.NET suite** | `dotnet test ClimateProject.slnx --no-build --configuration Release` | **~18 min**, of which ~13 is Testcontainers Postgres (`.github/workflows/ci.yml:19-26`) |
+| **.NET suite** | `dotnet test ClimateProject.slnx --no-build --configuration Release` | **~25 min locally, ~30 on CI** (Nov 2026; the job ceiling is 50, `.github/workflows/ci.yml:19-34`) |
 | tracking service | same two against `services/tracking-api/ClimateTracking.slnx` | ~60 s — **a separate solution**, not covered by the line above (`ci.yml:43-54`) |
 | web | `npm run typecheck`, `npm run build`, `npm test`, `npm run lint` in `web/` | 1–5 min each |
 
