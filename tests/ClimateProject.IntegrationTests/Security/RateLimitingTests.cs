@@ -746,6 +746,12 @@ public class RateLimitingTests : IClassFixture<WebApplicationFactory<Program>>
     /// gates it -- but it is key-gated rather than JWT-gated, so it has no <c>[Authorize]</c>
     /// metadata to recognise it by. It has its own ceiling inside
     /// <see cref="RateLimitPolicies.PartitionGlobal"/>.</item>
+    /// <item><c>POST /webhooks/ses</c> is called by AWS SNS, not a person: no bearer token exists
+    /// for it, and every body is refused unless its SNS signature verifies against a certificate
+    /// fetched only from <c>sns.*.amazonaws.com</c> and cached (<c>HttpSnsTransport</c>), so a
+    /// junk post costs a parse and no network call after the first. A tighter address-keyed
+    /// policy would put SNS's few sending addresses in one small bucket and throttle real bounces
+    /// in the burst after a mass send. The per-address global ceiling bounds it.</item>
     /// </list>
     /// </summary>
     private static readonly IReadOnlySet<string> RoutesCoveredByTheCeilingAlone =
@@ -762,6 +768,7 @@ public class RateLimitingTests : IClassFixture<WebApplicationFactory<Program>>
             "/api/internal/ciclos-encuesta",
             "/api/internal/hallazgos",
             "/api/internal/send-notification",
+            "/webhooks/ses",
         };
 
     private RouteEndpoint EndpointFor(string pattern)

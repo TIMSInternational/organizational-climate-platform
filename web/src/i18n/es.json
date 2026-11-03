@@ -7192,6 +7192,7 @@
     "erasureDeletedSurveyCredentials": "tus datos de acceso a una sola encuesta: el usuario que recibiste por correo y la forma almacenada de su contrase\u00f1a. Se eliminan por completo, as\u00ed que esa llave ya no abre nada.",
     "erasureDeletedSurveyParticipations": "el registro de que respondiste una encuesta por su enlace: el nombre y el correo que escribiste y el día, nunca lo que respondiste.",
     "erasureDeletedSurveyUserTargets": "el registro de que una encuesta se dirigió a ti en particular, y no a todo tu departamento.",
+    "erasureDeletedEmailDeliveryEvents": "cada problema que el servicio de correo informó con un correo que se te envió (que rebotó, que se rechazó antes de enviarse o que se marcó como spam), la dirección a la que se envió y la respuesta del servidor que lo recibió.",
     "erasureRedactedSurveyInvitations": "invitaciones a una encuesta: se sobrescriben tu dirección y su token de acceso. La fila es el denominador de una tasa de respuesta que ya se ha reportado.",
     "erasureRedactedUserInvitations": "la invitación con la que llegaste: se sobrescriben tu dirección, su token y su contenido. Quién la envió se conserva, porque ese fue su acto y no el tuyo.",
     "erasureKeepsTitle": "Lo que el borrado no elimina",
