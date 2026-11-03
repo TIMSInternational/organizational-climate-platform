@@ -653,12 +653,18 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
         // did, so neither can line up with a response the way a sign-in instant could. A day and
         // a count, like the two above. On this shared QR survey both are absent/zero, as every
         // key field is.
+        //
+        // Extended 2026-11-03: `deliveryProblem` and `deliveryProblemOn` -- what the mail service
+        // reported going wrong with the mail of the person's current key (bounce, spam, rejected)
+        // and on which DAY. Safe for the same reason: it is about OUR mail reaching an address,
+        // not anything the person did in the survey, and it is a day, not an instant. Null on a
+        // shared survey, like every key field.
         using var document = JsonDocument.Parse(json);
         Assert.Equal(
             ["answered", "answeredCount", "collectsParticipantIdentity", "credentialMode", "notStartedCount", "pending", "pendingCount", "roster", "startedCount", "surveyId", "surveyTitleEn", "surveyTitleEs", "tracksCompletionOnly", "tracksIndividuals"],
             document.RootElement.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
         Assert.Equal(
-            ["credentialIssuedOn", "demographics", "email", "lastActivityOn", "lastRemindedOn", "lastSignInOn", "name", "reminderCount", "role", "status", "surveyUsername", "userId", "username"],
+            ["credentialIssuedOn", "deliveryProblem", "deliveryProblemOn", "demographics", "email", "lastActivityOn", "lastRemindedOn", "lastSignInOn", "name", "reminderCount", "role", "status", "surveyUsername", "userId", "username"],
             document.RootElement.GetProperty("roster").EnumerateArray().First().EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
         Assert.DoesNotContain(_operaciones.ToString(), json, StringComparison.OrdinalIgnoreCase);
     }

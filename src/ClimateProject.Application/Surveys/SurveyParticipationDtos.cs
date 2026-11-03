@@ -212,4 +212,43 @@ public sealed record SurveyRosterRow(
     DateOnly? CredentialIssuedOn = null,
     DateOnly? LastSignInOn = null,
     DateOnly? LastRemindedOn = null,
-    int ReminderCount = 0);
+    int ReminderCount = 0,
+    string? DeliveryProblem = null,
+    DateOnly? DeliveryProblemOn = null);
+
+/// <summary>
+/// What the mail service last reported going wrong with the mail of a person's CURRENT key, as
+/// published on <see cref="SurveyRosterRow.DeliveryProblem"/>. Null on the row means nothing was
+/// reported -- which, before 3 Nov 2026 (when the bounce webhook was connected), also covers
+/// mail nobody was listening for.
+/// </summary>
+/// <remarks>
+/// Same rule as the delivery audit (<c>DeliveryAuditEndpoints</c>): the person's latest event
+/// counts only if it happened on or after the day their key for THIS survey was issued, so a
+/// bounce that a later reissue already answered stops showing. Events carry an address, not a
+/// survey, so a failure of another survey's mail sent after this key will show here too; the
+/// audit makes the same trade, and the alternative is showing nothing.
+/// </remarks>
+public static class SurveyDeliveryProblems
+{
+    /// <summary>A permanent bounce: the address does not exist or refuses everything. Re-sending to it repeats the bounce.</summary>
+    public const string Bounced = "bounced";
+
+    /// <summary>A temporary bounce (mailbox full, server busy). The mail service retried and gave up.</summary>
+    public const string BouncedTemporarily = "bounced_temporarily";
+
+    /// <summary>The recipient marked it as spam.</summary>
+    public const string MarkedSpam = "marked_spam";
+
+    /// <summary>The mail service refused it before it left.</summary>
+    public const string Rejected = "rejected";
+
+    public static string? From(string eventType, string? bounceType) => (eventType, bounceType) switch
+    {
+        ("bounce", "Permanent") => Bounced,
+        ("bounce", _) => BouncedTemporarily,
+        ("complaint", _) => MarkedSpam,
+        ("reject", _) => Rejected,
+        _ => null,
+    };
+}

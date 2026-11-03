@@ -36,7 +36,52 @@ public static class SurveyCredentialReissueRefusals
 
     /// <summary>The key has already been used to sign in; replacing it would lock out somebody who has it.</summary>
     public const string AlreadySignedIn = "already_signed_in";
+
+    /// <summary>
+    /// Handing a password over in person, or replacing a key that has been used, was asked for by
+    /// somebody who is not a super_admin. See <see cref="SurveyCredentialReissueRequest"/>.
+    /// </summary>
+    public const string SuperAdminOnly = "super_admin_only";
+
+    /// <summary><c>delivery</c> named something other than <c>email</c> or <c>handover</c>.</summary>
+    public const string UnknownDelivery = "unknown_delivery";
 }
+
+/// <summary>How a reissued password reaches its holder.</summary>
+public static class SurveyCredentialDeliveries
+{
+    /// <summary>Mailed to the person's own address. The default, and the only way before November 2026.</summary>
+    public const string Email = "email";
+
+    /// <summary>
+    /// Returned ONCE, in the response, to a super_admin who passes it on in person. Nothing is mailed.
+    /// </summary>
+    public const string Handover = "handover";
+}
+
+/// <summary>
+/// The optional body of <c>POST /surveys/{surveyId}/credentials/{userId}/reissue</c>. No body at
+/// all is the October behaviour exactly: mail the new password, refuse a key that has been used.
+/// </summary>
+/// <param name="Delivery">
+/// <c>email</c> (default) or <c>handover</c>. <b>Handover is super_admin only.</b> It exists
+/// because, between 26 Oct and 3 Nov 2026, about twenty ESPH people -- paper questionnaires, an
+/// address the client's own gateway rejects, a client contact who asked to pass the key on
+/// herself -- each had their account's email re-pointed by SQL to a TIMS inbox, only so TIMS
+/// could read the one email the product would send. The plaintext reached TIMS either way; this
+/// gets it there without editing anybody's address. A company_admin may not do it: a company that
+/// can read an employee's password can sign in as that employee to a survey promised to be
+/// anonymous to the company.
+/// </param>
+/// <param name="ReplaceUsedKey">
+/// Replace a key even though it has been used to sign in. <b>super_admin only.</b> The default
+/// refusal protects somebody who HOLDS their key from being locked out part-way through; this is
+/// for the opposite case, somebody who signed in once and has since lost it -- Mario Freer,
+/// Teletrabajo, 3 Nov 2026, whose half-finished answers are kept and who now needs a new password.
+/// The used-on day is kept, because it is still true. A session already open with the old
+/// password is not ended (see <see cref="SurveyCredential"/>): it belongs to the person this is for.
+/// </param>
+public sealed record SurveyCredentialReissueRequest(string? Delivery = null, bool ReplaceUsedKey = false);
 
 /// <summary>
 /// Why a revoke was refused, as a stable code beside the English <c>message</c>. Separate from
@@ -77,12 +122,24 @@ public sealed record SurveyCredentialRevokeResult(
     bool HadSignedIn,
     DateOnly IssuedOn);
 
-/// <param name="Delivered">Whether the new key's email left. When false, the OLD key was put back and still works.</param>
+/// <param name="Delivered">
+/// Whether the new key reached somebody: its email left, or -- for a handover -- it is in this
+/// response. When false (email only), the OLD key was put back and still works.
+/// </param>
 /// <param name="FailureReason">The transport's own reason when the send failed; null when it went.</param>
 /// <param name="IssuedOn">
 /// The day the key now in force was issued, in the company's zone -- a DAY, never an instant,
 /// for the reason <see cref="SurveyRosterRow"/> gives. Today on success; the original day when
 /// the send failed and the old key was restored.
+/// </param>
+/// <param name="Delivery">Which of <see cref="SurveyCredentialDeliveries"/> was used.</param>
+/// <param name="Password">
+/// The new password, for a handover ONLY, and only in this one response: nothing stores the
+/// plaintext and nothing can read it back. Null for an email delivery.
+/// </param>
+/// <param name="HadSignedIn">
+/// The replaced key had been used to sign in (only possible with <c>replaceUsedKey</c>). A WARNING
+/// for the screen: a session opened with the old password stays open until it expires.
 /// </param>
 public sealed record SurveyCredentialReissueResult(
     Guid SurveyId,
@@ -90,7 +147,10 @@ public sealed record SurveyCredentialReissueResult(
     string Username,
     bool Delivered,
     string? FailureReason,
-    DateOnly IssuedOn);
+    DateOnly IssuedOn,
+    string Delivery = SurveyCredentialDeliveries.Email,
+    string? Password = null,
+    bool HadSignedIn = false);
 
 /// <summary>
 /// <c>POST /surveys/{surveyId}/credentials/{userId}/reissue</c>: send ONE person a new
@@ -264,6 +324,8 @@ public static class SurveyCredentialEndpoints
             return Results.Forbid();
         }
 
+        await AttributeToSurveyCompanyAsync(audit, principal.GetCurrentUser(), survey.CompanyId, db, cancellationToken);
+
         if ((survey.Settings.CredentialMode ?? CredentialModes.Shared) != CredentialModes.PerSurvey)
         {
             return Refuse(
@@ -338,7 +400,9 @@ public static class SurveyCredentialEndpoints
         IPasswordHasher passwordHasher,
         ICredentialsEmailSender credentialsSender,
         AuditEntry audit,
-        CancellationToken cancellationToken)
+        HttpContext httpContext,
+        CancellationToken cancellationToken,
+        SurveyCredentialReissueRequest? request = null)
     {
         audit.SetResourceId($"{surveyId}/{userId}");
 
@@ -348,9 +412,33 @@ public static class SurveyCredentialEndpoints
             return Results.Json(new { message = "Survey not found" }, statusCode: 404);
         }
 
-        if (!SurveyEndpoints.CanAdminister(principal.GetCurrentUser(), survey.CompanyId))
+        var currentUser = principal.GetCurrentUser();
+        if (!SurveyEndpoints.CanAdminister(currentUser, survey.CompanyId))
         {
             return Results.Forbid();
+        }
+
+        await AttributeToSurveyCompanyAsync(audit, currentUser, survey.CompanyId, db, cancellationToken);
+
+        var delivery = request?.Delivery ?? SurveyCredentialDeliveries.Email;
+        if (delivery is not (SurveyCredentialDeliveries.Email or SurveyCredentialDeliveries.Handover))
+        {
+            return Refuse(
+                400, SurveyCredentialReissueRefusals.UnknownDelivery,
+                $"delivery must be '{SurveyCredentialDeliveries.Email}' or '{SurveyCredentialDeliveries.Handover}'.");
+        }
+
+        var handover = delivery == SurveyCredentialDeliveries.Handover;
+        var replaceUsedKey = request?.ReplaceUsedKey ?? false;
+
+        // Both options put a working password somewhere other than its holder's own inbox, or take
+        // one from somebody who has used it. A company that could do either could sign in as its
+        // own employee to a survey promised to be anonymous to it -- see the request's remarks.
+        if ((handover || replaceUsedKey) && currentUser.Role != Roles.SuperAdmin)
+        {
+            return Refuse(
+                403, SurveyCredentialReissueRefusals.SuperAdminOnly,
+                "Only a super admin may receive a password to hand over in person, or replace a key that has been used.");
         }
 
         if ((survey.Settings.CredentialMode ?? CredentialModes.Shared) != CredentialModes.PerSurvey)
@@ -405,7 +493,8 @@ public static class SurveyCredentialEndpoints
                 "This person holds no key for this survey yet. Invite them (POST /surveys/{id}/invitations), which mints and mails one.");
         }
 
-        if (credential.LastSignInAt is not null)
+        var hadSignedIn = credential.LastSignInAt is not null;
+        if (hadSignedIn && !replaceUsedKey)
         {
             return AlreadySignedIn();
         }
@@ -423,16 +512,48 @@ public static class SurveyCredentialEndpoints
 
         var (password, newHash) = SurveyCredentialIssuance.NewPassword(passwordHasher);
 
-        // Conditional on the key still being unused, in the statement that writes it: a sign-in
-        // that lands after the read above wins, and this refuses rather than locking them out.
-        var rotated = await db.SurveyCredentials
-            .Where(c => c.SurveyId == surveyId && c.UserId == userId && c.LastSignInAt == null)
-            .ExecuteUpdateAsync(
-                set => set.SetProperty(c => c.PasswordHash, newHash).SetProperty(c => c.CreatedAt, now),
-                cancellationToken);
+        // Conditional in the statement that writes it. Normally on the key still being unused: a
+        // sign-in that lands after the read above wins, and this refuses rather than locking them
+        // out. When a used key is being replaced on purpose, a sign-in is no reason to stop -- but
+        // another rotation in flight is, so the condition becomes "still the key that was read".
+        var rotated = replaceUsedKey
+            ? await db.SurveyCredentials
+                .Where(c => c.SurveyId == surveyId && c.UserId == userId && c.PasswordHash == credential.PasswordHash)
+                .ExecuteUpdateAsync(
+                    set => set.SetProperty(c => c.PasswordHash, newHash).SetProperty(c => c.CreatedAt, now),
+                    cancellationToken)
+            : await db.SurveyCredentials
+                .Where(c => c.SurveyId == surveyId && c.UserId == userId && c.LastSignInAt == null)
+                .ExecuteUpdateAsync(
+                    set => set.SetProperty(c => c.PasswordHash, newHash).SetProperty(c => c.CreatedAt, now),
+                    cancellationToken);
         if (rotated != 1)
         {
-            return AlreadySignedIn();
+            return replaceUsedKey
+                ? Refuse(
+                    409, SurveyCredentialReissueRefusals.NoCredential,
+                    "This person's key changed while the request was in flight; read the roster again and retry.")
+                : AlreadySignedIn();
+        }
+
+        if (handover)
+        {
+            // Nothing is mailed, so there is nothing to fail and nothing to restore: the key now in
+            // force is the one in this response. It must not be cached by anything in between.
+            httpContext.Response.Headers.CacheControl = "no-store";
+            httpContext.Response.Headers.Pragma = "no-cache";
+            audit.RecordChange("credential", null, hadSignedIn ? "handed_over_replacing_used_key" : "handed_over");
+
+            return Results.Ok(new SurveyCredentialReissueResult(
+                surveyId,
+                userId,
+                credential.Username,
+                Delivered: true,
+                FailureReason: null,
+                DateOnly.FromDateTime(SchedulingTimeZone.ToLocal(now, zone)),
+                SurveyCredentialDeliveries.Handover,
+                password,
+                hadSignedIn));
         }
 
         var outcome = await SurveyCredentialIssuance.SendAsync(
@@ -454,7 +575,10 @@ public static class SurveyCredentialEndpoints
                     CancellationToken.None);
         }
 
-        audit.RecordChange("credential", null, outcome.Delivered ? "reissued" : "send_failed_restored");
+        audit.RecordChange(
+            "credential",
+            null,
+            !outcome.Delivered ? "send_failed_restored" : hadSignedIn ? "reissued_replacing_used_key" : "reissued");
 
         return Results.Ok(new SurveyCredentialReissueResult(
             surveyId,
@@ -462,7 +586,10 @@ public static class SurveyCredentialEndpoints
             credential.Username,
             outcome.Delivered,
             outcome.Delivered ? null : outcome.FailureReason,
-            DateOnly.FromDateTime(SchedulingTimeZone.ToLocal(outcome.Delivered ? now : credential.CreatedAt, zone))));
+            DateOnly.FromDateTime(SchedulingTimeZone.ToLocal(outcome.Delivered ? now : credential.CreatedAt, zone)),
+            SurveyCredentialDeliveries.Email,
+            Password: null,
+            HadSignedIn: outcome.Delivered && hadSignedIn));
     }
 
     /// <summary>
@@ -512,6 +639,8 @@ public static class SurveyCredentialEndpoints
         {
             return Results.Forbid();
         }
+
+        await AttributeToSurveyCompanyAsync(audit, principal.GetCurrentUser(), survey.CompanyId, db, cancellationToken);
 
         if ((survey.Settings.CredentialMode ?? CredentialModes.Shared) != CredentialModes.PerSurvey)
         {
@@ -624,6 +753,24 @@ public static class SurveyCredentialEndpoints
             outcome.Delivered ? null : outcome.FailureReason,
             remindedAt is { } stamp ? DateOnly.FromDateTime(SchedulingTimeZone.ToLocal(stamp, zone)) : null,
             reminderCount));
+    }
+
+    /// <summary>
+    /// File the audit row under the survey's company. Without this, a call by a company-less
+    /// super_admin -- which is every TIMS operator -- resolves to no company, and the audit
+    /// middleware writes NO row at all (<c>audit_logs.company_id</c> is NOT NULL; see
+    /// <c>AuditWritingMiddleware.ResolveActorAsync</c>). Measured 3 Nov 2026 while adding the
+    /// in-person handover: the test for its audit row found none. Every reissue, reminder and
+    /// revoke TIMS did on a client's keys was therefore off the trail. A company_admin resolves
+    /// to the same company either way, so their rows do not change.
+    /// </summary>
+    private static async Task AttributeToSurveyCompanyAsync(
+        AuditEntry audit, CurrentUser currentUser, Guid companyId, ClimateProjectDbContext db, CancellationToken cancellationToken)
+    {
+        if (await SurveyEndpoints.ResolveActingUserIdAsync(currentUser, db, cancellationToken) is { } actorId)
+        {
+            audit.AttributeTo(actorId, companyId);
+        }
     }
 
     private static IResult AlreadySignedIn() => Refuse(

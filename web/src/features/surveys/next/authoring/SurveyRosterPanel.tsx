@@ -17,6 +17,7 @@ import {
   type ChipTone,
 } from '../../../../components/ui'
 import { useTranslation } from '../../../../i18n'
+import { readViewerClaims } from '../../../../auth/viewerCapabilities'
 import { TH_CLASS } from '../../../shared-next/parts'
 import {
   MAX_CREDENTIALS_BATCH,
@@ -30,6 +31,7 @@ import {
   type SurveyCredentialReissueOutcome,
   type SurveyCredentialRemindOutcome,
   type SurveyCredentialRevokeOutcome,
+  type SurveyDeliveryProblem,
   type SurveyParticipantStatus,
   type SurveyRosterRow,
 } from '../../api/surveys'
@@ -112,7 +114,23 @@ const REFUSAL_KEY: Record<string, string> = {
   not_in_audience: 'reissueRefusedNotInAudience',
   no_credential: 'reissueRefusedNoCode',
   already_signed_in: 'reissueRefusedSignedIn',
+  super_admin_only: 'reissueRefusedSuperAdminOnly',
 }
+
+/** What the mail service reported, as the roster says it. */
+const DELIVERY_PROBLEM_KEY: Record<SurveyDeliveryProblem, string> = {
+  bounced: 'deliveryBounced',
+  bounced_temporarily: 'deliveryBouncedTemporarily',
+  marked_spam: 'deliveryMarkedSpam',
+  rejected: 'deliveryRejected',
+}
+
+/**
+ * A password handed over in person: on screen until the operator dismisses it, then gone. It is
+ * held in component state only -- never storage, never the URL -- because nothing on the server
+ * keeps the plaintext either, and this is its only copy.
+ */
+type HandedOver = { name: string; username: string; password: string; hadSignedIn: boolean }
 
 const OUTCOME_KEY: Record<string, string> = {
   not_mass_invite: 'outcomeNotMassInvite',
@@ -170,6 +188,16 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
   // fetch, so a write here updates the row rather than refetching eight hundred of them.
   const [revokedHere, setRevokedHere] = useState<ReadonlySet<string>>(new Set())
   const [download, setDownload] = useState<'idle' | 'busy' | 'failed'>('idle')
+  const [handoverTarget, setHandoverTarget] = useState<SurveyRosterRow | null>(null)
+  const [handedOver, setHandedOver] = useState<HandedOver | null>(null)
+
+  /**
+   * Only a super admin may receive a password to hand over: the server refuses anybody else
+   * (`super_admin_only`), because a company that could read its employee's password could sign
+   * in as them to a survey promised to be anonymous to it. The button follows the same rule so
+   * a company admin is never offered an action that cannot succeed.
+   */
+  const superAdmin = readViewerClaims().role === 'super_admin'
 
   const roster = state.status === 'ready' ? state.view.roster : NO_ROWS
 
@@ -348,6 +376,37 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
   }
 
   /**
+   * A new password for this survey, shown ONCE here instead of mailed -- for the person TIMS has
+   * to give it to in person: a paper questionnaire, an address their own company's gateway
+   * rejects, a client contact who asked to pass it on herself. Between 26 Oct and 3 Nov 2026
+   * each of those took an SQL edit of the person's email address.
+   *
+   * <p>A key already used to sign in is replaced too (`replaceUsedKey`): somebody who signed in
+   * once and lost the password is exactly who asks for this, and the dialog said so first.</p>
+   */
+  async function handoverFor(row: SurveyRosterRow) {
+    const usedKey = (row.lastSignInOn ?? null) !== null
+    let outcome: SurveyCredentialReissueOutcome | { kind: 'error' }
+    try {
+      outcome = await reissueSurveyCredential(baseUrl, state.status === 'ready' ? state.view.surveyId : '', row.userId, {
+        delivery: 'handover',
+        replaceUsedKey: usedKey,
+      })
+    } catch {
+      outcome = { kind: 'error' }
+    }
+    setHandoverTarget(null)
+    if (outcome.kind === 'handed_over') {
+      const issuedOn = outcome.issuedOn
+      setIssuedHere((current) => ({ ...current, [row.userId]: issuedOn }))
+      setHandedOver({ name: row.name, username: outcome.username, password: outcome.password, hadSignedIn: outcome.hadSignedIn })
+      setReissue({ phase: 'idle' })
+      return
+    }
+    setReissue({ phase: 'done', name: row.name, email: row.email, outcome })
+  }
+
+  /**
    * Reminds one person to finish, without minting anything.
    *
    * <p>Nothing is marked locally afterwards, unlike `reissueFor` -- there is no new issue date,
@@ -520,6 +579,31 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
               </div>
             ) : null}
 
+            {handedOver === null ? null : (
+              <div
+                role="status"
+                aria-label={copy('handoverDoneTitle', { name: handedOver.name })}
+                className="flex flex-col gap-2 rounded-md border border-line-light bg-surface-icon-box px-3 py-3"
+              >
+                <p className="m-0 text-sm font-medium">{copy('handoverDoneTitle', { name: handedOver.name })}</p>
+                <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
+                  <dt className="text-xs text-fg-secondary">{copy('handoverUsername')}</dt>
+                  <dd className="m-0 font-mono text-sm">{handedOver.username}</dd>
+                  <dt className="text-xs text-fg-secondary">{copy('handoverPassword')}</dt>
+                  <dd className="m-0 font-mono text-sm">{handedOver.password}</dd>
+                </dl>
+                <p className="m-0 text-xs text-fg-secondary">{copy('handoverDoneNote')}</p>
+                {handedOver.hadSignedIn ? (
+                  <p className="m-0 text-xs text-fg-secondary">{copy('handoverDoneSignedIn')}</p>
+                ) : null}
+                <div>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setHandedOver(null)}>
+                    {copy('handoverDismiss')}
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {reissue.phase === 'done' ? (
               <p
                 role="status"
@@ -618,6 +702,8 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
                         remindedHere={remindedHere[row.userId] ?? null}
                         revokedHere={revokedHere.has(row.userId)}
                         onReissue={() => setReissueTarget(row)}
+                        superAdmin={superAdmin}
+                        onHandover={() => setHandoverTarget(row)}
                         onRemind={() => setRemindTarget(row)}
                         onRevoke={() => setRevokeTarget(row)}
                         locale={locale}
@@ -684,14 +770,42 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
           if (!open) setReissueTarget(null)
         }}
         title={copy('reissueTitle', { name: reissueTarget?.name ?? '' })}
-        description={copy('reissueBody', {
-          email: reissueTarget?.email ?? '',
-          survey: surveyTitle,
-          username: reissueTarget?.surveyUsername ?? '',
-        })}
+        // A permanent bounce is said BEFORE another mail goes to the same dead address: on 20 Oct
+        // ten ESPH addresses bounced and two were re-sent to the same address days later.
+        description={[
+          copy('reissueBody', {
+            email: reissueTarget?.email ?? '',
+            survey: surveyTitle,
+            username: reissueTarget?.surveyUsername ?? '',
+          }),
+          reissueTarget?.deliveryProblem === 'bounced' && reissueTarget.deliveryProblemOn
+            ? copy('reissueBodyBounced', { date: formatParticipationDay(reissueTarget.deliveryProblemOn, locale) })
+            : null,
+        ]
+          .filter((line) => line !== null)
+          .join(' ')}
         confirmText={copy('reissue')}
         cancelText={t('common.cancel')}
         onConfirm={() => (reissueTarget === null ? undefined : reissueFor(reissueTarget))}
+      />
+
+      {/* The handover says, before anything changes, that nothing is mailed, that the password is
+          shown once, and -- for a key already used -- that a session open elsewhere stays open. */}
+      <ConfirmationDialog
+        open={handoverTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setHandoverTarget(null)
+        }}
+        title={copy('handoverTitle', { name: handoverTarget?.name ?? '' })}
+        description={[
+          copy('handoverBody', { survey: surveyTitle, username: handoverTarget?.surveyUsername ?? '' }),
+          (handoverTarget?.lastSignInOn ?? null) !== null ? copy('handoverBodySignedIn') : null,
+        ]
+          .filter((line) => line !== null)
+          .join(' ')}
+        confirmText={copy('handover')}
+        cancelText={t('common.cancel')}
+        onConfirm={() => (handoverTarget === null ? undefined : handoverFor(handoverTarget))}
       />
 
       {/* What withdrawing a key does and does NOT do, before it is done: the survey closes to
@@ -727,6 +841,8 @@ function RosterRows({
   onReissue,
   onRemind,
   onRevoke,
+  superAdmin,
+  onHandover,
   locale,
   copy,
   selected,
@@ -747,6 +863,9 @@ function RosterRows({
   onReissue: () => void
   onRemind: () => void
   onRevoke: () => void
+  /** A super admin may hand a new password over in person; nobody else is offered it. */
+  superAdmin: boolean
+  onHandover: () => void
   locale: string
   copy: (key: string, vars?: Record<string, string | number>) => string
   selected: boolean
@@ -777,6 +896,10 @@ function RosterRows({
   // of offering an action that cannot succeed. `not_completed` is the ANONYMOUS survey's "we
   // cannot know", so it is not treated as having answered -- the server decides that one.
   const hasAnswered = row.status === 'completed' || row.status === 'started'
+  // What the mail service reported about this key's mail. A key reissued or handed over from
+  // this page is newer than any failure the payload knows about, and a withdrawn one has no mail.
+  const deliveryProblem = revokedHere || issuedHere !== null ? null : row.deliveryProblem ?? null
+  const deliveryProblemOn = row.deliveryProblemOn ?? null
   // Five either way: per-survey trades the checkbox for the Código column.
   const columns = 5 + (tracked ? 2 : 0)
 
@@ -837,6 +960,11 @@ function RosterRows({
                   line above, where "has not signed in" is the finding an operator is looking
                   for. The count is what separates "reminded once, last week" from "reminded
                   four times": the same date, and a different decision about chasing again. */}
+              {deliveryProblem === null || deliveryProblemOn === null ? null : (
+                <span className="text-xs font-medium text-accent-red-ink">
+                  {copy(DELIVERY_PROBLEM_KEY[deliveryProblem], { date: formatParticipationDay(deliveryProblemOn, locale) })}
+                </span>
+              )}
               {issuedOn === null || remindedOn === null ? null : (
                 <span className="text-xs text-fg-secondary">
                   {reminderCount > 1
@@ -887,6 +1015,19 @@ function RosterRows({
                   ) : null}
                 </>
               )}
+              {/* Any key not yet finished with, used or not: the in-person route is for exactly the
+                  people the mailed routes cannot reach. */}
+              {superAdmin && issuedOn !== null && row.status !== 'completed' ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  aria-label={copy('handoverFor', { name: row.name })}
+                  onClick={onHandover}
+                >
+                  {copy('handover')}
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 variant="outline"
