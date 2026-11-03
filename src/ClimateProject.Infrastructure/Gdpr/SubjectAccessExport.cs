@@ -217,6 +217,8 @@ public static class SubjectAccessExport
                     .Select(u => new Reference(u.Id, u.OverallNotes)), cancellationToken),
             await ReferencesAsync("Benchmark", "CreatedBy",
                 db.Benchmarks.Where(b => b.CreatedBy == id).Select(b => new Reference(b.Id, b.NameEn ?? b.NameEs)), cancellationToken),
+            await ReferencesAsync("BenchmarkGroup", "CreatedBy",
+                db.BenchmarkGroups.Where(g => g.CreatedBy == id).Select(g => new Reference(g.Id, g.Name)), cancellationToken),
             await ReferencesAsync("QuestionCategory", "CreatedBy",
                 db.QuestionCategories.Where(c => c.CreatedBy == id).Select(c => new Reference(c.Id, c.NameEn)), cancellationToken),
             await ReferencesAsync("QuestionBankItem", "CreatedBy",

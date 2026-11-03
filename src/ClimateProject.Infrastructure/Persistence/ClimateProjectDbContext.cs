@@ -66,6 +66,7 @@ public class ClimateProjectDbContext(DbContextOptions<ClimateProjectDbContext> o
     public DbSet<ReportShare> ReportShares => Set<ReportShare>();
     public DbSet<Benchmark> Benchmarks => Set<Benchmark>();
     public DbSet<BenchmarkMetric> BenchmarkMetrics => Set<BenchmarkMetric>();
+    public DbSet<BenchmarkGroup> BenchmarkGroups => Set<BenchmarkGroup>();
     public DbSet<AnalyticsInsight> AnalyticsInsights => Set<AnalyticsInsight>();
     public DbSet<AnalyticsMetricData> AnalyticsMetricData => Set<AnalyticsMetricData>();
     public DbSet<AnalyticsTimeSeries> AnalyticsTimeSeries => Set<AnalyticsTimeSeries>();
