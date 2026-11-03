@@ -342,6 +342,11 @@ public class AuthWebApplicationFactory(string connectionString) : WebApplication
                 // SchedulingServiceCollectionExtensions for why that is load-bearing --
                 // and ApiSchedulingCoHostTests proves both directions.
                 ["Scheduling:Enabled"] = "false",
+
+                // The SES bounce webhook listens to this topic and no other. Its certificate is
+                // served by TestSnsCertificateSource below, so a test can sign a message the way
+                // SNS does without the network.
+                ["Email:SesEventsTopicArn"] = TestSns.TopicArn,
             });
         });
 
@@ -349,6 +354,11 @@ public class AuthWebApplicationFactory(string connectionString) : WebApplication
         {
             services.RemoveAll<IGoogleTokenVerifier>();
             services.AddScoped<IGoogleTokenVerifier, FakeGoogleTokenVerifier>();
+
+            services.RemoveAll<ClimateProject.Application.Email.ISnsCertificateSource>();
+            services.AddSingleton<ClimateProject.Application.Email.ISnsCertificateSource, TestSnsCertificateSource>();
+            services.RemoveAll<ClimateProject.Application.Email.ISnsSubscriptionConfirmer>();
+            services.AddSingleton<ClimateProject.Application.Email.ISnsSubscriptionConfirmer, RecordingSnsConfirmer>();
 
             // The AI intake's model, replaced once for the whole collection (see
             // TestIntakeMappingModel): a real model is a network call that costs money.

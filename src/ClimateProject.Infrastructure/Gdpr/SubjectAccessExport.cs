@@ -120,6 +120,8 @@ public static class SubjectAccessExport
 
         var id = subject.Id;
         var email = subject.Email;
+        // email_delivery_events stores the address as SES reported it, lower-cased.
+        var loweredEmail = email.Trim().ToLowerInvariant();
         var idText = id.ToString();
 
         // Harvested first: the child tables below have no person reference of their own and
@@ -149,6 +151,10 @@ public static class SubjectAccessExport
             await FullAsync(db, "MicroclimateInvitation",
                 (MicroclimateInvitation i) => i.UserId == id ? "UserId" : "Email",
                 MicroclimateInvitationsFor(db, id, email, companyScope), cancellationToken),
+            // users.email is unique, so the address can only add rows written before a change of
+            // address -- which is exactly when the history is still the subject's.
+            await FullAsync(db, "EmailDeliveryEvent", (EmailDeliveryEvent e) => e.UserId == id ? "UserId" : "Email",
+                db.EmailDeliveryEvents.Where(e => e.UserId == id || e.Email == loweredEmail), cancellationToken),
             await FullAsync(db, "Notification", "UserId",
                 db.Notifications.Where(n => n.UserId == id), cancellationToken),
             await FullAsync(db, "SurveyDraft", "UserId",
