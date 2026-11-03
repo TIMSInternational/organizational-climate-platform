@@ -56,6 +56,21 @@ le dice qué hacer:
   **Spam** y **Promociones**, buscando el remitente `no-reply@timsint.com`, y que use el correo
   **de hoy**.
 
+### Un cuestionario en papel
+
+Decidido el 3 de noviembre de 2026: el papel **queda ligado a la persona**. TIMS lo digita
+entrando con la clave de esa persona, así cuenta como Terminó en el estado y su clave queda
+usada. Es lo que se hizo con el primer cuestionario en papel de ESPH el 2 de noviembre.
+
+1. Confirme que la persona está en la lista del cliente y que el papel es suyo.
+2. En **Distribución**, use **Entregar en mano** en su fila y anote el usuario y la contraseña.
+3. Abra una **ventana privada** del navegador y entre ahí con ese usuario. En la misma ventana
+   donde usted trabaja, entrar como la persona cierra su propia sesión.
+4. Digite las respuestas **tal como están en el papel**, también las abiertas, sin corregir
+   nada. **Revise antes de enviar**: una respuesta enviada no se puede cambiar ni volver a
+   enviar.
+5. Cierre la ventana privada. La fila de la persona debe decir que terminó.
+
 ### "Cámbienle el correo a fulano"
 
 1. Confirme que el cliente lo pidió por escrito y que la persona es de esa encuesta.
@@ -99,8 +114,6 @@ En la lista de encuestas, en el menú **⋮** de la encuesta:
 
 ## Lo que todavía no hace la plataforma
 
-- **Digitar un cuestionario en papel.** Está pendiente una decisión (si el papel queda ligado a
-  la persona o no). Mientras tanto, no se digita.
 - **Quitar una respuesta de los resultados**, ni borrar una persona o una empresa.
 - **Reabrir una encuesta cerrada.**
 
