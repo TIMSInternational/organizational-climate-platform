@@ -7895,7 +7895,21 @@
       "reasonLowest": "La celda más baja del mapa",
       "reasonOnlyCriticalOutside": "Única celda en {band} fuera de {group}",
       "mapSub": "tres áreas de resultado · selecciona una celda para ver su pregunta",
-      "mapSubCompanyOnly": "ningún grupo llegó a {minimum} respuestas, así que el mapa muestra solo a toda la empresa"
+      "mapSubCompanyOnly": "ningún grupo llegó a {minimum} respuestas, así que el mapa muestra solo a toda la empresa",
+      "criticalSpread": "en {groups} grupos y {dimensions} dimensiones",
+      "criticalSpreadOneDimension": "en {groups} grupos, todas en {dimension}",
+      "criticalSpreadDimensions": "en {dimensions} dimensiones",
+      "criticalSeeAll": "Ver cuáles",
+      "criticalSub": "Celdas con {range} · cada una abre su pregunta",
+      "criticalSubStatic": "Dimensiones de toda la empresa con {range}",
+      "criticalGroupingLabel": "Agrupar las celdas críticas",
+      "criticalByDimension": "Por dimensión",
+      "criticalByGroup": "Por grupo",
+      "criticalInGroups": "en {count} grupos",
+      "criticalInGroupsOne": "en 1 grupo",
+      "criticalInDimensions": "{count} dimensiones",
+      "criticalInDimensionsOne": "1 dimensión",
+      "criticalOpen": "{cell}: {score}. Abrir su pregunta"
     },
     "dashboard": {
       "movedLegend": "límites de área {low} y {high} · {count} encuestas cerradas, toda la empresa",

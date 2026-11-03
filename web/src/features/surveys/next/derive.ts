@@ -233,6 +233,48 @@ export function criticalCells(model: SurveyResultsNextModel): CriticalCell[] {
   return cells.sort((a, b) => a.score - b.score || a.rowName.localeCompare(b.rowName))
 }
 
+/** Critical cells gathered under one dimension or one group. */
+export interface CriticalCluster {
+  /** The dimension key, or the group's row id. */
+  key: string
+  cells: CriticalCell[]
+}
+
+/**
+ * The critical cells gathered by `keyOf`. The cluster with the most cells comes first, then
+ * the one whose lowest cell is lowest. Inside a cluster the cells keep their input order,
+ * which `criticalCells` sets as lowest first.
+ *
+ * Why the count leads (ESPH Clima, 3 Nov 2026): twelve critical cells printed as one line
+ * read as twelve unrelated problems. Gathered by dimension they were six dimensions, one
+ * of them critical in three groups. A dimension that is critical in several groups points
+ * at something company-wide, not at one team, and that is the first thing a reader needs.
+ */
+function clusterCritical(cells: readonly CriticalCell[], keyOf: (cell: CriticalCell) => string): CriticalCluster[] {
+  const byKey = new Map<string, CriticalCell[]>()
+  for (const cell of cells) {
+    const key = keyOf(cell)
+    const list = byKey.get(key)
+    if (list) list.push(cell)
+    else byKey.set(key, [cell])
+  }
+  const lowest = (list: readonly CriticalCell[]) => Math.min(...list.map((cell) => cell.score))
+  // Map iteration follows first appearance, so a full tie keeps the input's order.
+  return [...byKey.entries()]
+    .map(([key, list]) => ({ key, cells: list }))
+    .sort((a, b) => b.cells.length - a.cells.length || lowest(a.cells) - lowest(b.cells))
+}
+
+/** The critical cells by dimension: the dimension critical in the most groups first. */
+export function criticalByDimension(cells: readonly CriticalCell[]): CriticalCluster[] {
+  return clusterCritical(cells, (cell) => cell.dimensionKey)
+}
+
+/** The critical cells by group: the group with the most critical dimensions first. */
+export function criticalByGroup(cells: readonly CriticalCell[]): CriticalCluster[] {
+  return clusterCritical(cells, (cell) => cell.rowId)
+}
+
 /**
  * The company row's cells in the critical area, lowest first -- the fourth tile's reading
  * when the map is the company row alone (`companyOnlyClimateMap`). `criticalCells` reads
