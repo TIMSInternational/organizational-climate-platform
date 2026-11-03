@@ -152,9 +152,11 @@ describe('the survey results on the tenant’s real payload', () => {
     // The fourth tile counts the map's cells in the critical area — all three Operaciones'.
     expect(tiles).toContain('Área crítica')
     expect(tiles).toContain('celdas, todas de Operaciones')
-    expect(screen.getByTestId('critical-cells').textContent).toBe(
-      'Carga de trabajo 2,4 · Seguridad psicológica 2,6 · Reconocimiento 2,8',
-    )
+    // The tile gives the spread and a way to the cells, never the cells themselves joined
+    // by `·`: with ESPH Clima's twelve that was a paragraph nobody could parse (3 Nov 2026).
+    expect(screen.getByTestId('critical-spread').textContent).toBe('en 3 dimensiones')
+    expect(screen.queryByTestId('critical-cells')).toBeNull()
+    expect(tiles).not.toContain('Carga de trabajo 2,4 · Seguridad psicológica')
     expect(tiles).not.toContain('media')
     // Every figure on the tiles is measured: no sample chip among them.
     expect(tiles).not.toContain(SAMPLE)
@@ -287,6 +289,33 @@ describe('the survey results on the tenant’s real payload', () => {
     expect(doing.textContent).toMatch(/Q2\s*\d,\d/)
     expect(doing.textContent).toMatch(/Q3\s*\d,\d/)
     expect(doing.textContent).toContain('El texto libre de Operaciones no se muestra')
+  })
+
+  it('lists the critical cells under the findings, by dimension, each opening its question', async () => {
+    await open()
+    const section = screen.getByTestId('critical-areas')
+    expect(within(section).getByRole('heading', { level: 2, name: 'Área crítica' })).toBeTruthy()
+    expect(section.textContent).toContain('Celdas con menos de 3,00 · cada una abre su pregunta')
+    // All three are Operaciones', so there is one reading and nothing to regroup.
+    expect(within(section).queryByRole('group', { name: 'Agrupar las celdas críticas' })).toBeNull()
+    const clusters = [...section.querySelectorAll('li[data-cluster]')].map((item) => item.textContent)
+    expect(clusters).toEqual([
+      'Carga de trabajoen 1 grupo2,4Operaciones',
+      'Seguridad psicológicaen 1 grupo2,6Operaciones',
+      'Reconocimientoen 1 grupo2,8Operaciones',
+    ])
+    await userEvent.click(within(section).getByRole('button', { name: 'Operaciones · Reconocimiento: 2,8. Abrir su pregunta' }))
+    const opened = heading('Operaciones · Reconocimiento')
+    expect(opened).toBeTruthy()
+    expect(scrolled).toHaveBeenCalled()
+    expect(document.activeElement).toBe(opened)
+  })
+
+  it('takes the reader from the tile to the critical cells, focus and all', async () => {
+    await open()
+    await userEvent.click(screen.getByRole('button', { name: 'Ver cuáles' }))
+    expect(scrolled).toHaveBeenCalled()
+    expect(document.activeElement).toBe(within(screen.getByTestId('critical-areas')).getByRole('heading', { level: 2 }))
   })
 
   it('keeps the cell open when "Ver la pregunta" names the cell already open, and brings it into view', async () => {

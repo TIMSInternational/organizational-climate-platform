@@ -7895,7 +7895,21 @@
       "reasonLowest": "The lowest cell on the map",
       "reasonOnlyCriticalOutside": "The only {band} cell outside {group}",
       "mapSub": "three result areas · select a cell to see its question",
-      "mapSubCompanyOnly": "no group reached {minimum} responses, so the map shows the whole company only"
+      "mapSubCompanyOnly": "no group reached {minimum} responses, so the map shows the whole company only",
+      "criticalSpread": "across {groups} groups and {dimensions} dimensions",
+      "criticalSpreadOneDimension": "across {groups} groups, all in {dimension}",
+      "criticalSpreadDimensions": "across {dimensions} dimensions",
+      "criticalSeeAll": "See which",
+      "criticalSub": "Cells {range} · each opens its question",
+      "criticalSubStatic": "Company-wide dimensions {range}",
+      "criticalGroupingLabel": "Group the critical cells",
+      "criticalByDimension": "By dimension",
+      "criticalByGroup": "By group",
+      "criticalInGroups": "in {count} groups",
+      "criticalInGroupsOne": "in 1 group",
+      "criticalInDimensions": "{count} dimensions",
+      "criticalInDimensionsOne": "1 dimension",
+      "criticalOpen": "{cell}: {score}. Open its question"
     },
     "dashboard": {
       "movedLegend": "area boundaries {low} and {high} · {count} closed surveys, whole company",
