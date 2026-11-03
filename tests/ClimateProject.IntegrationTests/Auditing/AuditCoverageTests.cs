@@ -112,6 +112,9 @@ public class AuditCoverageTests : IAsyncLifetime
         // server answered. Super admin only and never sent to the client; marked for the same
         // reason the status workbook above is, with more in it.
         "GET /admin/companies/{companyId:guid}/delivery-audit",
+        // 2026-11-03. One company's climate against a group computed from other companies'
+        // climates: confidential employee opinion read across tenants, super admin only.
+        "GET /admin/benchmark-groups/{id:guid}/reading",
     ];
 
     private IReadOnlyList<(string Method, string Pattern, Endpoint Endpoint)> Routes()

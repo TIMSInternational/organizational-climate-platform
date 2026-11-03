@@ -244,6 +244,8 @@ public static class SubjectDataMap
         Actor("Benchmark", "benchmarks", "CreatedBy",
             "Authorship of a benchmark definition. Benchmark values are aggregates and reference nobody."),
         NotPersonal("BenchmarkMetric", "benchmark_metrics", "Aggregate values on a benchmark. No person referenced."),
+        Actor("BenchmarkGroup", "benchmark_groups", "CreatedBy",
+            "Authorship of a reference group's criteria. A group stores no figure and references nobody else."),
         NotPersonal("Company", "companies",
             "The employer, a legal person. Its email domain is a routing rule, not an individual's address."),
         NotPersonal("CompanyServiceLicense", "company_service_licenses",
