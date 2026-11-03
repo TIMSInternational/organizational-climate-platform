@@ -43,8 +43,15 @@ le dice qué hacer:
 | Tiene código y nunca entró | **Reenviar credenciales** | Mismo usuario, contraseña nueva; la anterior deja de servir |
 | Entró pero no terminó | **Enviar recordatorio** (u **Enviar otro recordatorio**) | Un correo sin contraseña nueva: ya la tiene |
 | Ya terminó | — | Nada que enviar |
+| Hay que dársela en persona (papel, el correo de su empresa la rechaza, o el cliente pidió pasársela él) | **Entregar en mano** (solo superadministrador) | Contraseña nueva que se muestra **una sola vez** en pantalla; no se envía correo. Sirve también si ya había entrado y la perdió: sus respuestas guardadas se conservan |
 
 - La fila dice cuándo se envió el código y si ya se le recordó.
+- Si el correo **rebotó**, se marcó como spam o se rechazó, la fila lo dice en rojo con la fecha.
+  Reenviar a la misma dirección casi siempre rebota otra vez: cambie el correo (con permiso
+  escrito del cliente) o use **Entregar en mano**.
+- **Entregar en mano** reemplaza la entrega por correo que antes obligaba a cambiar el correo de
+  la persona a un buzón de TIMS. Anote o copie la contraseña antes de ocultarla: no se puede
+  volver a mostrar. Si se pierde, se genera otra.
 - Si la persona usa un correo personal (Gmail, Hotmail), pídale al cliente que la persona revise
   **Spam** y **Promociones**, buscando el remitente `no-reply@timsint.com`, y que use el correo
   **de hoy**.

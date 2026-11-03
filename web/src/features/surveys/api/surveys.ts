@@ -525,7 +525,18 @@ export interface SurveyRosterRow {
    */
   lastRemindedOn?: string | null
   reminderCount?: number
+  /**
+   * What the mail service last reported going wrong with the mail of this person's CURRENT key,
+   * and on which day (company zone). Null when nothing was reported -- which, before the bounce
+   * webhook was connected on 3 Nov 2026, also covers mail nobody was listening for. A failure
+   * older than the key now in force is not shown: a reissue answers it.
+   */
+  deliveryProblem?: SurveyDeliveryProblem | null
+  deliveryProblemOn?: string | null
 }
+
+/** `SurveyDeliveryProblems` on the server. */
+export type SurveyDeliveryProblem = 'bounced' | 'bounced_temporarily' | 'marked_spam' | 'rejected'
 
 export async function getSurveyParticipation(baseUrl: string, id: string): Promise<SurveyParticipationView> {
   const response = await authFetch(`${baseUrl}/surveys/${id}/participation`)
@@ -541,10 +552,31 @@ export type SurveyCredentialReissueRefusal =
   | 'not_in_audience'
   | 'no_credential'
   | 'already_signed_in'
+  /** Handover, or replacing a used key, asked for by somebody who is not a super admin. */
+  | 'super_admin_only'
+  | 'unknown_delivery'
+
+/**
+ * Options a SUPER ADMIN may add; with none, the October behaviour exactly. `handover` returns the
+ * new password once, on screen, instead of mailing it. `replaceUsedKey` replaces a key its holder
+ * has already signed in with -- for somebody who lost it, not somebody holding it.
+ */
+export interface SurveyCredentialReissueOptions {
+  delivery?: 'email' | 'handover'
+  replaceUsedKey?: boolean
+}
 
 export type SurveyCredentialReissueOutcome =
-  /** A new password was mailed; the old one stopped working. `issuedOn` is today, company zone. */
-  | { kind: 'sent'; issuedOn: string }
+  /**
+   * A new password was mailed; the old one stopped working. `issuedOn` is today, company zone.
+   * `hadSignedIn`: the replaced key had been used, so a session opened with it stays open.
+   */
+  | { kind: 'sent'; issuedOn: string; hadSignedIn: boolean }
+  /**
+   * Nothing was mailed: the new password is HERE, once. Nothing stores it and nothing can read it
+   * back -- the screen shows it until it is dismissed, then it is gone.
+   */
+  | { kind: 'handed_over'; issuedOn: string; username: string; password: string; hadSignedIn: boolean }
   /** The mail did not leave, so the server put the OLD key back: it still works. */
   | { kind: 'send_failed' }
   | { kind: 'refused'; code: SurveyCredentialReissueRefusal | 'unknown' }
@@ -558,19 +590,32 @@ export async function reissueSurveyCredential(
   baseUrl: string,
   surveyId: string,
   userId: string,
+  options?: SurveyCredentialReissueOptions,
 ): Promise<SurveyCredentialReissueOutcome> {
   const response = await authFetch(
     `${baseUrl}/surveys/${surveyId}/credentials/${userId}/reissue`,
-    { method: 'POST' },
-    { allowStatus: [404, 409] },
+    options ? { method: 'POST', body: JSON.stringify(options) } : { method: 'POST' },
+    { allowStatus: [400, 403, 404, 409] },
   )
   const body = (await response.json().catch(() => null)) as
-    | { delivered?: boolean; issuedOn?: string; code?: string }
+    | {
+        delivered?: boolean
+        issuedOn?: string
+        code?: string
+        delivery?: string
+        username?: string
+        password?: string | null
+        hadSignedIn?: boolean
+      }
     | null
   if (!response.ok) {
     return { kind: 'refused', code: (body?.code as SurveyCredentialReissueRefusal | undefined) ?? 'unknown' }
   }
-  return body?.delivered && body.issuedOn ? { kind: 'sent', issuedOn: body.issuedOn } : { kind: 'send_failed' }
+  const hadSignedIn = body?.hadSignedIn === true
+  if (body?.delivery === 'handover' && body.password && body.username && body.issuedOn) {
+    return { kind: 'handed_over', issuedOn: body.issuedOn, username: body.username, password: body.password, hadSignedIn }
+  }
+  return body?.delivered && body.issuedOn ? { kind: 'sent', issuedOn: body.issuedOn, hadSignedIn } : { kind: 'send_failed' }
 }
 
 /** Why `POST /surveys/{id}/credentials/{userId}/remind` refused, as the API names it. */

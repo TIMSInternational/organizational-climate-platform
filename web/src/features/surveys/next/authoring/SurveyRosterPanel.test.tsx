@@ -97,7 +97,8 @@ function fetchWith(
     }
     const reissue = /\/surveys\/[^/]+\/credentials\/([^/]+)\/reissue$/.exec(url)
     if (reissue && (init?.method ?? 'GET').toUpperCase() === 'POST') {
-      sent.push({ url, body: null })
+      // The October reissue sends no body; a handover sends its options, which the tests read.
+      sent.push({ url, body: init?.body ? (JSON.parse(String(init.body)) as unknown) : null })
       const answer = onReissue?.(reissue[1]) ?? {
         status: 200,
         body: { surveyId: SURVEY, userId: reissue[1], username: 'x', delivered: true, failureReason: null, issuedOn: '2026-10-22' },
@@ -593,6 +594,172 @@ describe('SurveyRosterPanel', () => {
       ).toBeTruthy()
       // The row now says when the NEW code went, without a refetch.
       expect(within(rowOf('ana')).getByText(T.codeSent.replace('{date}', day('2026-10-22')))).toBeTruthy()
+    })
+
+    /**
+     * Between 26 Oct and 3 Nov 2026 about twenty ESPH accounts had their email re-pointed by SQL
+     * to a TIMS inbox, only so TIMS could read the one mail with a password in it. A super admin
+     * now gets the password on screen, once, and nothing is mailed.
+     */
+    describe('handing a password over in person', () => {
+      // A made-up value the mocked server "returns"; named so no scanner mistakes it for a secret.
+      const FIXTURE_HANDOVER = 'fixture-not-a-secret'
+      const handedOver = (userId: string, hadSignedIn = false) => ({
+        status: 200,
+        body: {
+          surveyId: SURVEY,
+          userId,
+          username: userId === 'hugo' ? 'esph-p3r8t2wz' : 'esph-k7m2q9xa',
+          delivered: true,
+          failureReason: null,
+          issuedOn: '2026-11-03',
+          delivery: 'handover',
+          password: FIXTURE_HANDOVER,
+          hadSignedIn,
+        },
+      })
+
+      it('is not offered to a company admin', async () => {
+        const payload = perSurvey()
+        vi.stubGlobal('fetch', fetchWith(payload).mock)
+        renderPanel(payload)
+        await screen.findByText('Ana Lucía Mora')
+
+        expect(screen.queryByRole('button', { name: T.handoverFor.replace('{name}', 'Ana Lucía Mora') })).toBeNull()
+        expect(screen.queryByText(T.handover)).toBeNull()
+      })
+
+      it('asks first, then shows the new password once and hides it when dismissed', async () => {
+        setToken(tokenFor({ role: 'super_admin' }))
+        const payload = perSurvey()
+        const { mock, sent } = fetchWith(payload, undefined, (userId) => handedOver(userId))
+        vi.stubGlobal('fetch', mock)
+        const user = userEvent.setup()
+        renderPanel(payload)
+        await screen.findByText('Ana Lucía Mora')
+
+        await user.click(screen.getByRole('button', { name: T.handoverFor.replace('{name}', 'Ana Lucía Mora') }))
+        const dialog = await screen.findByRole('alertdialog')
+        expect(within(dialog).getByText(T.handoverTitle.replace('{name}', 'Ana Lucía Mora'))).toBeTruthy()
+        expect(
+          within(dialog).getByText(
+            T.handoverBody.replace('{survey}', 'Clima Organizacional ESPH 2026').replace('{username}', 'esph-k7m2q9xa'),
+          ),
+        ).toBeTruthy()
+        expect(sent).toHaveLength(0)
+
+        await user.click(within(dialog).getByRole('button', { name: T.handover }))
+
+        await waitFor(() => expect(sent).toHaveLength(1))
+        expect(sent[0].url).toBe(`${import.meta.env.VITE_API_BASE_URL}/surveys/${SURVEY}/credentials/ana/reissue`)
+        expect(sent[0].body).toEqual({ delivery: 'handover', replaceUsedKey: false })
+
+        const shown = await screen.findByRole('status', { name: T.handoverDoneTitle.replace('{name}', 'Ana Lucía Mora') })
+        expect(within(shown).getByText(FIXTURE_HANDOVER)).toBeTruthy()
+        expect(within(shown).getByText('esph-k7m2q9xa')).toBeTruthy()
+        expect(within(shown).getByText(T.handoverDoneNote)).toBeTruthy()
+        // The row now says when the code now in force was issued.
+        expect(within(rowOf('ana')).getByText(T.codeSent.replace('{date}', day('2026-11-03')))).toBeTruthy()
+
+        await user.click(within(shown).getByRole('button', { name: T.handoverDismiss }))
+        expect(screen.queryByText(FIXTURE_HANDOVER)).toBeNull()
+      })
+
+      it('says a used code is being replaced, and asks the server to replace it', async () => {
+        setToken(tokenFor({ role: 'super_admin' }))
+        const payload = perSurvey()
+        const { mock, sent } = fetchWith(payload, undefined, (userId) => handedOver(userId, true))
+        vi.stubGlobal('fetch', mock)
+        const user = userEvent.setup()
+        renderPanel(payload)
+        await screen.findByText('Hugo Peralta')
+
+        await user.click(screen.getByRole('button', { name: T.handoverFor.replace('{name}', 'Hugo Peralta') }))
+        const dialog = await screen.findByRole('alertdialog')
+        expect(
+          within(dialog).getByText(
+            `${T.handoverBody.replace('{survey}', 'Clima Organizacional ESPH 2026').replace('{username}', 'esph-p3r8t2wz')} ${T.handoverBodySignedIn}`,
+          ),
+        ).toBeTruthy()
+
+        await user.click(within(dialog).getByRole('button', { name: T.handover }))
+        await waitFor(() => expect(sent).toHaveLength(1))
+        expect(sent[0].body).toEqual({ delivery: 'handover', replaceUsedKey: true })
+        expect(await screen.findByText(T.handoverDoneSignedIn)).toBeTruthy()
+      })
+
+      it('says a refusal in Spanish and shows no password', async () => {
+        setToken(tokenFor({ role: 'super_admin' }))
+        const payload = perSurvey()
+        vi.stubGlobal(
+          'fetch',
+          fetchWith(payload, undefined, () => ({
+            status: 403,
+            body: { message: 'Only a super admin may…', code: 'super_admin_only' },
+          })).mock,
+        )
+        const user = userEvent.setup()
+        renderPanel(payload)
+        await screen.findByText('Ana Lucía Mora')
+
+        await user.click(screen.getByRole('button', { name: T.handoverFor.replace('{name}', 'Ana Lucía Mora') }))
+        await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: T.handover }))
+
+        expect(await screen.findByText(T.reissueRefusedSuperAdminOnly)).toBeTruthy()
+        expect(screen.queryByText(T.handoverPassword)).toBeNull()
+      })
+
+      it('is not offered for somebody who already finished', async () => {
+        setToken(tokenFor({ role: 'super_admin' }))
+        const payload = view({
+          credentialMode: 'per_survey',
+          surveyTitleEs: 'Clima Organizacional ESPH 2026',
+          surveyTitleEn: null,
+          roster: [{ ...MARTA, username: null, surveyUsername: 'esph-m4r7a2bb', credentialIssuedOn: '2026-10-20', lastSignInOn: '2026-10-21' }],
+        })
+        vi.stubGlobal('fetch', fetchWith(payload).mock)
+        renderPanel(payload)
+        await screen.findByText('Marta Villalobos')
+
+        expect(screen.queryByRole('button', { name: T.handoverFor.replace('{name}', 'Marta Villalobos') })).toBeNull()
+      })
+    })
+
+    /**
+     * The bounce webhook (3 Nov 2026) records what the mail service reports. The roster says it,
+     * on the row, and the reissue dialog says it BEFORE another mail goes to a dead address.
+     */
+    it('shows a bounce on the row and warns before re-sending to the same address', async () => {
+      const base = perSurvey()
+      const payload = {
+        ...base,
+        roster: base.roster.map((r) =>
+          r.userId === 'ana' ? { ...r, deliveryProblem: 'bounced' as const, deliveryProblemOn: '2026-10-20' } : r,
+        ),
+      }
+      vi.stubGlobal('fetch', fetchWith(payload).mock)
+      const user = userEvent.setup()
+      renderPanel(payload)
+      await screen.findByText('Ana Lucía Mora')
+
+      expect(within(rowOf('ana')).getByText(T.deliveryBounced.replace('{date}', day('2026-10-20')))).toBeTruthy()
+      expect(within(rowOf('hugo')).queryByText(T.deliveryBounced.replace('{date}', day('2026-10-20')))).toBeNull()
+
+      await user.click(screen.getByRole('button', { name: T.reissueFor.replace('{name}', 'Ana Lucía Mora') }))
+      const dialog = await screen.findByRole('alertdialog')
+      expect(
+        within(dialog).getByText(
+          `${T.reissueBody
+            .replace('{email}', 'ana@esph.test')
+            .replace('{survey}', 'Clima Organizacional ESPH 2026')
+            .replace('{username}', 'esph-k7m2q9xa')} ${T.reissueBodyBounced.replace('{date}', day('2026-10-20'))}`,
+        ),
+      ).toBeTruthy()
+
+      // Reissued from this page: the new mail is newer than the bounce, so the row stops showing it.
+      await user.click(within(dialog).getByRole('button', { name: T.reissue }))
+      await screen.findByText(T.reissueSent.replace('{name}', 'Ana Lucía Mora').replace('{email}', 'ana@esph.test'))
+      expect(within(rowOf('ana')).queryByText(T.deliveryBounced.replace('{date}', day('2026-10-20')))).toBeNull()
     })
 
     it('says a failed mail changed nothing, and a refusal in Spanish', async () => {

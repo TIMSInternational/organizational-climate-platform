@@ -413,18 +413,40 @@ public static class SurveyParticipationEndpoints
             .FirstOrDefaultAsync(cancellationToken));
         DateOnly LocalDay(DateTimeOffset moment) => DateOnly.FromDateTime(SchedulingTimeZone.ToLocal(moment, zone));
 
+        // Each key holder's latest delivery failure, if any (SurveyDeliveryProblems: the rule).
+        var holders = keys.Keys.ToList();
+        var latestFailure = (await db.EmailDeliveryEvents
+                .AsNoTracking()
+                .Where(e => holders.Contains(e.UserId))
+                .Select(e => new { e.UserId, e.EventType, e.BounceType, e.OccurredAt })
+                .ToListAsync(cancellationToken))
+            .GroupBy(e => e.UserId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(e => e.OccurredAt).First());
+
         return
         [
-            .. roster.Select(row => keys.TryGetValue(row.UserId, out var key)
-                ? row with
+            .. roster.Select(row =>
+            {
+                if (!keys.TryGetValue(row.UserId, out var key))
+                {
+                    return row;
+                }
+
+                var failure = latestFailure.GetValueOrDefault(row.UserId);
+                var problem = failure is not null && failure.OccurredAt >= key.CreatedAt
+                    ? SurveyDeliveryProblems.From(failure.EventType, failure.BounceType)
+                    : null;
+                return row with
                 {
                     SurveyUsername = key.Username,
                     CredentialIssuedOn = LocalDay(key.CreatedAt),
                     LastSignInOn = key.LastSignInAt is { } signedIn ? LocalDay(signedIn) : null,
                     LastRemindedOn = key.LastRemindedAt is { } reminded ? LocalDay(reminded) : null,
                     ReminderCount = key.ReminderCount,
-                }
-                : row),
+                    DeliveryProblem = problem,
+                    DeliveryProblemOn = problem is null ? null : LocalDay(failure!.OccurredAt),
+                };
+            }),
         ];
     }
 
