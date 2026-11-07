@@ -24,8 +24,20 @@ async function companyWorkbook(url: string): Promise<Blob> {
   return response.blob()
 }
 
-export function getCompanyStatusWorkbook(baseUrl: string, companyId: string): Promise<Blob> {
-  return companyWorkbook(`${baseUrl}/admin/companies/${encodeURIComponent(companyId)}/participation/export`)
+/**
+ * `surveyIds` empty asks for every distributed survey and sends NO query, which is what this
+ * function did before a picker existed — so the request the server sees is byte-for-byte the
+ * old one. A non-empty list repeats `?survey=` once per sheet; the server refuses an id that is
+ * not one of the company's distributed surveys rather than returning a workbook missing it.
+ */
+export function getCompanyStatusWorkbook(
+  baseUrl: string,
+  companyId: string,
+  surveyIds: readonly string[] = [],
+): Promise<Blob> {
+  const route = `${baseUrl}/admin/companies/${encodeURIComponent(companyId)}/participation/export`
+  const query = surveyIds.map((id) => `survey=${encodeURIComponent(id)}`).join('&')
+  return companyWorkbook(query ? `${route}?${query}` : route)
 }
 
 /**

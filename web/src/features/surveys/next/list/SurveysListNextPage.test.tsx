@@ -14,6 +14,7 @@ import en from '../../../../i18n/en.json'
 import { ApiError } from '../../../../api/authFetch'
 
 const copy = en.surveys.next.list
+const pickerCopy = en.surveys.next.statusWorkbook
 
 vi.mock('../../api/surveys', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../api/surveys')>()),
@@ -419,11 +420,16 @@ describe('SurveysListNextPage', () => {
         await screen.findByText('Q4')
 
         await user.click(screen.getByRole('button', { name: copy.statusExport }))
+        // The button opens the picker; every survey starts ticked, so confirming it asks for
+        // the same whole-company file the button used to fetch on its own.
+        await user.click(await screen.findByRole('button', { name: pickerCopy.download }))
 
         await waitFor(() => expect(clicked.name).toBeDefined())
-        // The company-wide route, not a per-survey one.
+        // The company-wide route, not a per-survey one. It names the sheets that were
+        // ticked, so the path carries a `?survey=` list rather than ending at `export`.
         const urls = fetchMock.mock.calls.map((call) => String(call[0]))
-        expect(urls.some((url) => url.endsWith('/admin/companies/c1/participation/export'))).toBe(true)
+        expect(urls.some((url) => url.includes('/admin/companies/c1/participation/export?survey='))).toBe(true)
+        expect(urls.some((url) => /\/surveys\/[^/]+\/participation/.test(url))).toBe(false)
         // Named for the company and the day, and an .xlsx.
         expect(clicked.name).toMatch(/\.xlsx$/)
       } finally {
@@ -438,8 +444,9 @@ describe('SurveysListNextPage', () => {
       await screen.findByText('Q4')
 
       await user.click(screen.getByRole('button', { name: copy.statusExport }))
+      await user.click(await screen.findByRole('button', { name: pickerCopy.download }))
 
-      expect(await screen.findByText(copy.statusExportFailed)).toBeTruthy()
+      expect(await screen.findByText(pickerCopy.failed)).toBeTruthy()
     })
   })
 })

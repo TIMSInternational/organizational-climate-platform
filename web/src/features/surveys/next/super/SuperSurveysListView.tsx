@@ -29,7 +29,8 @@ import { calendarDay, calendarDayLong } from '../../../../lib/calendarDay'
 import { cn } from '../../../../lib/cn'
 import { downloadBlobFile } from '../../../../lib/downloadBlobFile'
 import { allResponsesFileName, getAllResponsesWorkbook } from '../../api/responseExport'
-import { companyStatusFileName, getCompanyStatusWorkbook, getDeliveryAuditWorkbook } from '../../api/statusExport'
+import { companyStatusFileName, getDeliveryAuditWorkbook } from '../../api/statusExport'
+import { StatusWorkbookButton } from '../StatusWorkbookButton'
 
 /**
  * The API origin, the same way every other caller reads it. An empty string here is not a
@@ -143,7 +144,11 @@ export default function SuperSurveysListView() {
                 delivery audit (what TIMS keeps). A super admin has no company claim, so the
                 tenant page's status button never reached the people who send that file. */}
             {readViewerClaims().role === 'super_admin' && model.company && (
-              <CompanyFilesButtons companyId={model.company} companyName={model.companyNames.get(model.company) ?? ''} t={t} />
+              <CompanyFilesButtons
+                companyId={model.company}
+                companyName={model.companyNames.get(model.company) ?? ''}
+                t={t}
+              />
             )}
             <Button asChild variant="outline"><Link to="/surveys/import">{t('climateWorkbook.title')}</Link></Button>
             {capabilities.canAuthorSurveys && <Button asChild variant="primary">
@@ -634,22 +639,30 @@ function OneClimateResponsesItem({
  * The two per-company files, for the company picked in the filter. Each failure is said beside
  * the buttons, as the platform-wide download does: a fetch that rejects gives no sign otherwise.
  */
-function CompanyFilesButtons({ companyId, companyName, t }: { companyId: string; companyName: string; t: TranslateFn }) {
-  const [busy, setBusy] = useState<'status' | 'audit' | null>(null)
+function CompanyFilesButtons({
+  companyId,
+  companyName,
+  t,
+}: {
+  companyId: string
+  companyName: string
+  t: TranslateFn
+}) {
+  const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState(false)
 
-  async function download(kind: 'status' | 'audit') {
-    setBusy(kind)
+  // The delivery audit is one file per company with no sheets to choose between, so it stays a
+  // single press. Only the status workbook asks which surveys.
+  async function downloadAudit() {
+    setBusy(true)
     setFailed(false)
     try {
-      const blob = kind === 'status'
-        ? await getCompanyStatusWorkbook(RESPONSE_EXPORT_BASE_URL, companyId)
-        : await getDeliveryAuditWorkbook(RESPONSE_EXPORT_BASE_URL, companyId)
-      downloadBlobFile(companyStatusFileName(kind === 'status' ? 'estado' : 'auditoria-envios', companyName, new Date()), blob)
+      const blob = await getDeliveryAuditWorkbook(RESPONSE_EXPORT_BASE_URL, companyId)
+      downloadBlobFile(companyStatusFileName('auditoria-envios', companyName, new Date()), blob)
     } catch {
       setFailed(true)
     } finally {
-      setBusy(null)
+      setBusy(false)
     }
   }
 
@@ -660,13 +673,15 @@ function CompanyFilesButtons({ companyId, companyName, t }: { companyId: string;
           {t('surveys.next.super.exportFailed')}
         </span>
       )}
-      <Button type="button" variant="outline" disabled={busy !== null} onClick={() => void download('status')}>
+      <StatusWorkbookButton
+        companyId={companyId}
+        companyName={companyName}
+        baseUrl={RESPONSE_EXPORT_BASE_URL}
+        label={t('surveys.next.super.companyStatus')}
+      />
+      <Button type="button" variant="outline" disabled={busy} onClick={() => void downloadAudit()}>
         <Download aria-hidden="true" />
-        {busy === 'status' ? t('surveys.next.super.exportBusy') : t('surveys.next.super.companyStatus')}
-      </Button>
-      <Button type="button" variant="outline" disabled={busy !== null} onClick={() => void download('audit')}>
-        <Download aria-hidden="true" />
-        {busy === 'audit' ? t('surveys.next.super.exportBusy') : t('surveys.next.super.deliveryAudit')}
+        {busy ? t('surveys.next.super.exportBusy') : t('surveys.next.super.deliveryAudit')}
       </Button>
     </div>
   )
