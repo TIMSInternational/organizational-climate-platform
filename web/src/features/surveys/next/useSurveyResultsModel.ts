@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from '../../../i18n'
 import { useCompanyScope } from '../../../company-context'
 import { useResultBands } from '../../result-bands/useResultBands'
@@ -20,6 +20,8 @@ export interface SurveyResultsModelState {
    * second round trip and without being able to offer one the page does not already show.
    */
   payload: SurveyAnalyticsResponse | null
+  /** The survey's own company once read — what the page's header follows. */
+  companyId?: string
   loading: boolean
   error: string | null
   reload: () => void
@@ -56,8 +58,17 @@ export function useSurveyResultsModel(surveyId: string | undefined): SurveyResul
   const { t, locale } = useTranslation()
   const scope = useCompanyScope()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
-  const companyId = scope.status === 'ready' ? scope.companyId : undefined
-  const bands = useResultBands()
+  const headerCompanyId = scope.status === 'ready' ? scope.companyId : undefined
+  // Read through a ref so that a super administrator's header moving to the survey's company
+  // (`useFollowCompany` on the page) does not re-run the reads and flash the skeleton. It is
+  // only the fallback for a survey whose own record could not be read.
+  const headerCompanyRef = useRef(headerCompanyId)
+  useEffect(() => {
+    headerCompanyRef.current = headerCompanyId
+  }, [headerCompanyId])
+  // The survey's own company, once read: `undefined` until then. The scale is ITS scale.
+  const [tenant, setTenant] = useState<string | null | undefined>(undefined)
+  const bands = useResultBands({ companyId: tenant })
 
   const [payload, setPayload] = useState<SurveyAnalyticsResponse | null>(null)
   const [plans, setPlans] = useState<ActionPlan[] | null>(null)
@@ -86,11 +97,12 @@ export function useSurveyResultsModel(surveyId: string | undefined): SurveyResul
       // Settled on its own so a failing survey request still cannot take the map down, which
       // is what the one batch below was for.
       const [survey] = await Promise.allSettled([getSurvey(baseUrl, surveyId, locale)])
-      const tenant = survey.status === 'fulfilled' ? survey.value.companyId : companyId
+      const owner = survey.status === 'fulfilled' ? survey.value.companyId : headerCompanyRef.current
+      setTenant(owner ?? null)
       // The secondary readings, together: none of them may take the map down.
       const [loadedPlans, trends] = await Promise.allSettled([
-        tenant ? listActionPlans(baseUrl, tenant, {}, locale) : Promise.resolve(null),
-        getClimateTrends(baseUrl, { companyId: tenant, lang: locale }),
+        owner ? listActionPlans(baseUrl, owner, {}, locale) : Promise.resolve(null),
+        getClimateTrends(baseUrl, { companyId: owner, lang: locale }),
       ])
       const closed = survey.status === 'fulfilled' ? (survey.value.endDate ?? null) : null
       const earlier = await loadPrevious(baseUrl, trends, surveyId, closed, locale)
@@ -103,7 +115,7 @@ export function useSurveyResultsModel(surveyId: string | undefined): SurveyResul
     } finally {
       setLoading(false)
     }
-  }, [baseUrl, surveyId, companyId, locale, t])
+  }, [baseUrl, surveyId, locale, t])
 
   useEffect(() => {
     reload()
@@ -122,9 +134,9 @@ export function useSurveyResultsModel(surveyId: string | undefined): SurveyResul
     await reload()
   }, [retryBands, reload])
   if (bands.status === 'error' && error === null) {
-    return { model: null, payload, loading: false, error: t('resultBands.loadError'), reload: reloadAll }
+    return { model: null, payload, companyId: tenant ?? undefined, loading: false, error: t('resultBands.loadError'), reload: reloadAll }
   }
-  return { model, payload, loading: loading || bands.status === 'loading', error, reload: reloadAll }
+  return { model, payload, companyId: tenant ?? undefined, loading: loading || bands.status === 'loading', error, reload: reloadAll }
 }
 
 /**

@@ -68,6 +68,76 @@ public class SurveyDraftEndpointsTests : IAsyncLifetime
     // Create
     // ------------------------------------------------------------------
 
+    // ------------------------------------------------------------------
+    // Whose draft (docs/audits/2026-11-08-operator-ui-walkthrough.md, B1)
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task A_company_less_super_admin_drafts_for_the_client_they_name()
+    {
+        // The production shape of a TIMS operator: no company of their own. Every autosave of
+        // the wizard used to answer 400 "A user with no company cannot own a survey draft".
+        var operatorClient = await _harness.ClientAsync(Roles.SuperAdmin, companyId: null);
+
+        var draft = await CreateDraftAsync(operatorClient, new CreateSurveyDraftRequest(SessionId: "op-1", CompanyId: _otherCompanyId));
+
+        Assert.Equal(_otherCompanyId, draft.CompanyId);
+    }
+
+    [Fact]
+    public async Task A_super_admin_homed_in_one_company_files_the_draft_under_the_client_named()
+    {
+        // An operator homed in a TIMS company used to file every draft under TIMS.
+        var operatorClient = await _harness.ClientAsync(Roles.SuperAdmin, _companyId);
+
+        var draft = await CreateDraftAsync(operatorClient, new CreateSurveyDraftRequest(SessionId: "op-2", CompanyId: _otherCompanyId));
+
+        Assert.Equal(_otherCompanyId, draft.CompanyId);
+    }
+
+    [Fact]
+    public async Task A_super_admin_naming_an_unknown_company_is_refused()
+    {
+        var operatorClient = await _harness.ClientAsync(Roles.SuperAdmin, companyId: null);
+
+        var response = await operatorClient.PostAsJsonAsync("/surveys/drafts", new CreateSurveyDraftRequest(SessionId: "op-3", CompanyId: Guid.NewGuid()));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_company_admin_cannot_draft_for_another_company()
+    {
+        var client = await AdminAsync();
+
+        var response = await client.PostAsJsonAsync("/surveys/drafts", new CreateSurveyDraftRequest(SessionId: "x-1", CompanyId: _otherCompanyId));
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_company_admin_naming_their_own_company_or_none_drafts_for_it_as_before()
+    {
+        var client = await AdminAsync();
+
+        var named = await CreateDraftAsync(client, new CreateSurveyDraftRequest(SessionId: "own-1", CompanyId: _companyId));
+        var unnamed = await CreateDraftAsync(client, new CreateSurveyDraftRequest(SessionId: "own-2"));
+
+        Assert.Equal(_companyId, named.CompanyId);
+        Assert.Equal(_companyId, unnamed.CompanyId);
+    }
+
+    [Fact]
+    public async Task A_company_less_super_admin_who_names_no_company_is_still_told_why()
+    {
+        var operatorClient = await _harness.ClientAsync(Roles.SuperAdmin, companyId: null);
+
+        var response = await operatorClient.PostAsJsonAsync("/surveys/drafts", new CreateSurveyDraftRequest(SessionId: "op-4"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("no company", await response.Content.ReadAsStringAsync());
+    }
+
     [Fact]
     public async Task Creating_a_draft_starts_it_at_version_one_with_no_autosaves()
     {

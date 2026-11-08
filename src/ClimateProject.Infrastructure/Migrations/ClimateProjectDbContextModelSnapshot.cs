@@ -1124,6 +1124,38 @@ namespace ClimateProject.Infrastructure.Migrations
                     b.ToTable("companies", (string)null);
                 });
 
+            modelBuilder.Entity("ClimateProject.Domain.Entities.CompanyLogo", b =>
+                {
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("company_id");
+
+                    b.Property<byte[]>("Content")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("content");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("content_type");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("sha256");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("CompanyId");
+
+                    b.ToTable("company_logos", (string)null);
+                });
+
             modelBuilder.Entity("ClimateProject.Domain.Entities.CompanyServiceLicense", b =>
                 {
                     b.Property<Guid>("Id")
@@ -5123,6 +5155,15 @@ namespace ClimateProject.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Settings")
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ClimateProject.Domain.Entities.CompanyLogo", b =>
+                {
+                    b.HasOne("ClimateProject.Domain.Entities.Company", null)
+                        .WithOne()
+                        .HasForeignKey("ClimateProject.Domain.Entities.CompanyLogo", "CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 

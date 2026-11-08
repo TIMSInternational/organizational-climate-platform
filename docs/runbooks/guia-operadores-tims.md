@@ -12,8 +12,14 @@ donde dice esta guía, avise antes de buscar otra forma de hacerlo.
 - Su cuenta es de **super administrador** (`docs/decisions/tims-operators-hold-super-admin.md`).
   Eso le deja ver **a todos los clientes**, no solo al que usted atiende. Trate cada empresa como
   si fuera la única.
-- Para dar de alta a un compañero: invítelo desde Usuarios y luego cámbiele el rol a super
-  administrador en su ficha.
+- Para dar de alta a un compañero de TIMS: en **Empresas**, abra **TIMS International** →
+  **Usuarios** → **Invitar persona**. Cuando acepte la invitación y elija su contraseña, abra su
+  ficha y cambie el **Rol** a **Super administrador**. Queda con el mismo acceso que cualquier
+  otro super administrador. **Nunca lo invite desde la empresa de un cliente**: quedaría contado
+  entre la gente de ese cliente, y dentro de su audiencia si se le asigna un departamento.
+- En **Configuración del Sistema** hay dos interruptores que afectan a **todos los clientes a la
+  vez**: **Inicio de sesión habilitado** (apagado, nadie entra salvo los super administradores) y
+  **Modo de mantenimiento**. No se tocan mientras haya una encuesta abierta.
 
 ## Las tres reglas que no se negocian
 
@@ -31,20 +37,46 @@ donde dice esta guía, avise antes de buscar otra forma de hacerlo.
    que alguien escribió en una pregunta abierta no salen nunca, salvo en el archivo de respuestas
    que solo descarga TIMS.
 
+## Un cliente nuevo
+
+1. **Empresas → Nueva empresa.** El dominio es el del correo del cliente y no se puede repetir:
+   quien se registre con ese dominio entra a esta empresa. Al crearla, la plataforma lo lleva a la
+   empresa con una lista de **Primeros pasos**.
+2. **Antes de crear la primera encuesta**, decida en la empresa el **Acceso de los participantes**
+   (una cuenta para todas las encuestas, o un código por encuesta). Cada encuesta se queda con el
+   modo con que se creó.
+3. **Marca**: en la empresa, **Subir logotipo** (PNG, JPG o WebP, hasta 512 KB). Se guarda al
+   instante y sale en las pantallas y en los correos de acceso. Un SVG no se acepta.
+4. **Importar Excel integral** (en Todas las encuestas) carga de una vez los campos demográficos,
+   las personas y la encuesta como borrador. Revise la pantalla de revisión: dice qué correos se
+   enviarán y cuándo, antes de crear nada.
+5. **Que la audiencia sea exactamente la lista del cliente:** en la audiencia de la encuesta elija
+   **Personas específicas** y pegue los correos de la lista del cliente. La pantalla dice cuáles no
+   están en la empresa o están inactivos. Así nadie que el cliente no nombró puede recibir nada.
+6. **Participantes previstos**: si lo deja en blanco, la tasa de respuesta se calcula sobre la
+   audiencia que eligió (la pantalla dice cuántas personas son).
+7. **Encuesta por QR o enlace que debe abrir antes de su fecha de inicio**: en Distribución, active
+   **Abrir el enlace antes de la fecha de inicio**. Una encuesta activa no deja mover su inicio.
+8. **Informes para el cliente**: en Empresas → la empresa → Informes, elija **la encuesta** del
+   informe. «Todas las encuestas de la empresa» las junta en un solo documento.
+
 ## Lo de todos los días
 
 ### "No le llegó el correo a fulano"
 
-En la encuesta, abra **Distribución** y busque a la persona en la lista. El botón de su fila ya
-le dice qué hacer:
+En la encuesta, abra **Distribución** y busque a la persona en la lista. La barra superior se pone
+sola en la empresa de esa encuesta. El botón de su fila ya le dice qué hacer:
 
 | Lo que muestra la fila | Botón | Qué hace |
 |---|---|---|
+| No tiene código (nunca se le envió, o se le retiró) | **Enviar código** | Usuario y contraseña **solo para esa persona**: nadie más recibe correo. Úselo solo si el cliente la nombró por escrito |
 | Tiene código y nunca entró | **Reenviar credenciales** | Mismo usuario, contraseña nueva; la anterior deja de servir |
 | Entró pero no terminó | **Enviar recordatorio** (u **Enviar otro recordatorio**) | Un correo sin contraseña nueva: ya la tiene |
 | Ya terminó | — | Nada que enviar |
 | Hay que dársela en persona (papel, el correo de su empresa la rechaza, o el cliente pidió pasársela él) | **Entregar en mano** (solo superadministrador) | Contraseña nueva que se muestra **una sola vez** en pantalla; no se envía correo. Sirve también si ya había entrado y la perdió: sus respuestas guardadas se conservan |
 
+- **Nunca use «Enviar códigos» para una sola persona**: ese botón le escribe a todas las de la
+  audiencia que todavía no tienen código, también a las que el cliente no puso en su lista.
 - La fila dice cuándo se envió el código y si ya se le recordó.
 - Si el correo **rebotó**, se marcó como spam o se rechazó, la fila lo dice en rojo con la fecha.
   Reenviar a la misma dirección casi siempre rebota otra vez: cambie el correo (con permiso

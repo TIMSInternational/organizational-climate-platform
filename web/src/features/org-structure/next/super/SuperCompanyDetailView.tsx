@@ -1,5 +1,5 @@
 import { Fragment, useId, useState, type ReactNode } from 'react'
-import { useNavigate, useParams } from 'react-router'
+import { useNavigate, useParams, useSearchParams } from 'react-router'
 import { BarChart3, Calendar, Check, FileText, Filter, Mail, Network, Users } from 'lucide-react'
 import { useTranslation } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
@@ -9,7 +9,8 @@ import { useCompanyContext } from '../../../../company-context'
 import { calendarDay } from '../../../../lib/calendarDay'
 import { cn } from '../../../../lib/cn'
 import { updateCompany } from '../../api/companies'
-import { updateCompanySettings, type UpdateCompanySettingsInput } from '../../api/companySettings'
+import { updateCompanySettings, uploadCompanyLogo, type UpdateCompanySettingsInput } from '../../api/companySettings'
+import { ApiError } from '../../../../api/authFetch'
 import { CompanyValidation } from '../../components/companyValidation'
 import { countryOptions } from './countries'
 import { statusMix } from '../../../dashboard/next/super/derive'
@@ -28,6 +29,8 @@ import { STATUS_COUNT_KEYS, countText, dayWithYear, languageText, sizeText, tier
 import { CanvasSelect, Field, IconBox, LinkCard, Panel } from './parts'
 import CompanyServiceLicensesPanel from './CompanyServiceLicensesPanel'
 import { useSuperCompanyDetailModel, type SuperCompanyDetailModel } from './useSuperCompanyDetailModel'
+import CompanySetupChecklist from './CompanySetupChecklist'
+import { companySetupSteps, needsSetup } from './companySetup'
 import ResultBandsCard from '../settings/ResultBandsCard'
 import CredentialModeCard from '../settings/CredentialModeCard'
 import { bandsChanged, bandsDraftOf, bandsOut, judgeBands, type BandsDraft } from '../settings/bandsDraft'
@@ -95,6 +98,9 @@ function DetailForm({ model, onSaved }: { model: SuperCompanyDetailModel; onSave
   const { t, locale } = useTranslation()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const { company, settings } = model
+  // Arriving from "Crear empresa" (`?nueva=1`): the setup shows whatever the counts say.
+  const [searchParams] = useSearchParams()
+  const justCreated = searchParams.get('nueva') === '1'
   const initialProfile = profileDraftOf(company)
   const initialSettings = settings ? draftOf(settings) : null
   const [profile, setProfile] = useState<ProfileDraft>(initialProfile)
@@ -174,6 +180,9 @@ function DetailForm({ model, onSaved }: { model: SuperCompanyDetailModel; onSave
           </>
         }
       />
+
+      {/* A client nobody has set up yet, or one just created: its setup, in order. */}
+      {(justCreated || needsSetup(model)) && <CompanySetupChecklist steps={companySetupSteps(model)} />}
       <LiveRegion>
         {saved
           ? t('superadmin.next.companyDetail.saved')
@@ -223,7 +232,7 @@ function DetailForm({ model, onSaved }: { model: SuperCompanyDetailModel; onSave
         </div>
         <div className="flex min-w-0 flex-col gap-4 xl:col-span-5">
           <CompanyCard model={model} profile={profile} setProfile={setProfile} locale={locale} />
-          <BrandCard companyName={company.name} draft={draft} setDraft={setDraft} />
+          <BrandCard companyName={company.name} draft={draft} setDraft={setDraft} companyId={company.id} onUploaded={onSaved} />
         </div>
       </div>
     </div>
@@ -611,12 +620,36 @@ function BrandCard({
   companyName,
   draft,
   setDraft,
+  companyId,
+  onUploaded,
 }: {
   companyName: string
   draft: SettingsDraft | null
   setDraft: (draft: SettingsDraft) => void
+  companyId: string
+  /** Reloads the page's model: the upload is saved at once, so the form's baseline must follow. */
+  onUploaded: () => void
 }) {
   const { t } = useTranslation()
+  const uploadId = useId()
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  async function upload(file: File | undefined) {
+    if (!file) return
+    setUploading(true)
+    setUploadError(null)
+    try {
+      await uploadCompanyLogo(import.meta.env.VITE_API_BASE_URL as string, companyId, file)
+      onUploaded()
+    } catch (error) {
+      const code = error instanceof ApiError ? error.code : undefined
+      setUploadError(
+        t(code === 'logo_too_large' ? `${CA}.uploadTooLarge` : code === 'logo_not_an_image' ? `${CA}.uploadNotImage` : `${CA}.uploadFailed`),
+      )
+    } finally {
+      setUploading(false)
+    }
+  }
   const colourId = useId()
   const logoId = useId()
   const colourValid = draft ? HEX_COLOUR.test(draft.primaryColor) : false
@@ -675,9 +708,25 @@ function BrandCard({
                 />
               </div>
             </Field>
-            {/* The logo path Configuración de empresa edits, which this role could only see as
-                "cargado" (audit gap G19). Set the way it is set today: the file is published on
-                this site and chosen here by its path; there is no upload. */}
+            {/* Upload: until 2026-11-08 every new client's logo was a file a developer committed
+                under web/public/brand/ and deployed (walkthrough B4). Saved at once. */}
+            <div className="flex flex-col gap-1">
+              <label htmlFor={uploadId} className="text-sm font-medium text-fg-primary">
+                {t(`${CA}.upload`)}
+              </label>
+              <input
+                id={uploadId}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                disabled={uploading}
+                onChange={(event) => void upload(event.target.files?.[0])}
+                className="text-sm"
+              />
+              <p role={uploadError ? 'alert' : undefined} className={cn('m-0 text-xs', uploadError ? 'text-accent-red' : 'text-fg-secondary')}>
+                {uploadError ?? (uploading ? t(`${CA}.uploading`) : t(`${CA}.uploadHelp`))}
+              </p>
+            </div>
+            {/* The path the upload writes, or a file already published on this site (G19). */}
             <Field
               fieldLabel={t(`${CA}.logoPath`)}
               htmlFor={logoId}

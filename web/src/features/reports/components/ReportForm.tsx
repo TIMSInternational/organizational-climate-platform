@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useTranslation } from '../../../i18n'
 import { Button, Input, Label, Textarea } from '../../../components/ui'
 import { REPORT_FORMATS } from '../api/reports'
@@ -9,6 +9,14 @@ export interface ReportFormValues {
   description: string
   type: string
   format: string
+  /** The one survey the report covers, or `''` for every survey of the company. */
+  surveyId: string
+}
+
+/** A survey the report can be about — the company's distributed ones, oldest first. */
+export interface ReportSurveyChoice {
+  id: string
+  title: string | null
 }
 
 /**
@@ -35,15 +43,29 @@ const EMPTY_VALUES: ReportFormValues = {
   description: '',
   type: 'summary',
   format: 'pdf',
+  surveyId: '',
 }
 
 interface ReportFormProps {
   onSubmit: (values: ReportFormValues) => Promise<void>
+  /**
+   * The company's surveys. Offered when given: without a choice, every report and every share
+   * link covered ALL of a company's surveys in one document -- ESPH's Clima, Teletrabajo and
+   * Contraloría mixed together (docs/audits/2026-11-08-operator-ui-walkthrough.md, B3).
+   */
+  surveys?: readonly ReportSurveyChoice[]
 }
 
-export default function ReportForm({ onSubmit }: ReportFormProps) {
+export default function ReportForm({ onSubmit, surveys }: ReportFormProps) {
   const { t } = useTranslation()
   const [values, setValues] = useState<ReportFormValues>(EMPTY_VALUES)
+  // The most recent survey is the likeliest subject, so it is chosen until somebody chooses —
+  // "Todas" included, which then stays chosen.
+  const [surveyTouched, setSurveyTouched] = useState(false)
+  const latest = surveys && surveys.length > 0 ? surveys[surveys.length - 1].id : ''
+  useEffect(() => {
+    if (!surveyTouched && latest) setValues((current) => (current.surveyId === '' ? { ...current, surveyId: latest } : current))
+  }, [latest, surveyTouched])
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -53,7 +75,8 @@ export default function ReportForm({ onSubmit }: ReportFormProps) {
     setSubmitting(true)
     try {
       await onSubmit(values)
-      setValues(EMPTY_VALUES)
+      setValues({ ...EMPTY_VALUES, surveyId: latest })
+      setSurveyTouched(false)
     } catch (err) {
       setError(describeApiError(err, t))
     } finally {
@@ -81,6 +104,31 @@ export default function ReportForm({ onSubmit }: ReportFormProps) {
           onChange={(event) => setValues({ ...values, description: event.target.value })}
         />
       </div>
+
+      {surveys && surveys.length > 0 ? (
+        <div>
+          <Label htmlFor="report-survey">{t('reports.survey')}</Label>
+          <select
+            id="report-survey"
+            value={values.surveyId}
+            aria-describedby="report-survey-help"
+            onChange={(event) => {
+              setSurveyTouched(true)
+              setValues({ ...values, surveyId: event.target.value })
+            }}
+          >
+            {surveys.map((survey) => (
+              <option key={survey.id} value={survey.id}>
+                {survey.title ?? t('surveys.next.statusWorkbook.untitled')}
+              </option>
+            ))}
+            <option value="">{t('reports.allSurveys')}</option>
+          </select>
+          <p id="report-survey-help" className="m-0 mt-1 text-xs text-fg-secondary">
+            {t('reports.surveyHelp')}
+          </p>
+        </div>
+      ) : null}
 
       {/* Native `<select>`, matching every other filter and form in `features/`.
           `index.css` styles it in both themes, and unlike the Radix `Select` it is

@@ -35,6 +35,8 @@ import {
   type SurveyParticipantStatus,
   type SurveyRosterRow,
 } from '../../api/surveys'
+import { createSurveyInvitations } from '../../api/surveyDistribution'
+import { ApiError } from '../../../../api/authFetch'
 import type { ParticipationState } from './useSurveyParticipation'
 import { Card, CardHeading } from './parts'
 import { chaseActionFor } from './chaseAction'
@@ -82,6 +84,16 @@ type RemindState =
 type RevokeState =
   | { phase: 'idle' }
   | { phase: 'done'; name: string; outcome: SurveyCredentialRevokeOutcome | { kind: 'error' } }
+
+/** What sending ONE person their first code did. */
+type SendCodeOutcome = 'sent' | 'not_sent' | 'already_had' | 'not_open' | 'error'
+type SendCodeState = { phase: 'idle' } | { phase: 'done'; name: string; email: string; outcome: SendCodeOutcome }
+
+/** The local calendar day, as the roster's day fields are written (`YYYY-MM-DD`). */
+function today(): string {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+}
 
 /**
  * A reminder shares six of its seven refusals with a reissue, and they mean the same thing, so
@@ -131,6 +143,14 @@ const DELIVERY_PROBLEM_KEY: Record<SurveyDeliveryProblem, string> = {
  * keeps the plaintext either, and this is its only copy.
  */
 type HandedOver = { name: string; username: string; password: string; hadSignedIn: boolean }
+
+const SEND_CODE_OUTCOME_KEY: Record<SendCodeOutcome, string> = {
+  sent: 'sendCodeSent',
+  not_sent: 'sendCodeNotSent',
+  already_had: 'sendCodeAlreadyHad',
+  not_open: 'sendCodeNotOpen',
+  error: 'sendCodeError',
+}
 
 const OUTCOME_KEY: Record<string, string> = {
   not_mass_invite: 'outcomeNotMassInvite',
@@ -190,6 +210,8 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
   const [download, setDownload] = useState<'idle' | 'busy' | 'failed'>('idle')
   const [handoverTarget, setHandoverTarget] = useState<SurveyRosterRow | null>(null)
   const [handedOver, setHandedOver] = useState<HandedOver | null>(null)
+  const [sendCodeTarget, setSendCodeTarget] = useState<SurveyRosterRow | null>(null)
+  const [sendCode, setSendCode] = useState<SendCodeState>({ phase: 'idle' })
 
   /**
    * Only a super admin may receive a password to hand over: the server refuses anybody else
@@ -407,6 +429,45 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
   }
 
   /**
+   * Sends ONE person their first code for this survey: `POST /surveys/{id}/invitations` naming
+   * only them. The server resolves the id within the survey's own company, mints for nobody who
+   * already holds a key, and mails nobody else.
+   *
+   * <p>The only alternative on this page was "Enviar códigos", which mails everyone in the
+   * audience still without a key -- on a department-targeted survey that includes people the
+   * client never listed, which is the 28 Oct 2026 incident. So one person whose key was withdrawn
+   * by mistake (4 Nov), or a new hire added mid-survey, took a script
+   * (docs/audits/2026-11-08-operator-ui-walkthrough.md, A3).</p>
+   */
+  async function sendCodeFor(row: SurveyRosterRow) {
+    let outcome: SendCodeOutcome
+    try {
+      const result = await createSurveyInvitations(baseUrl, state.status === 'ready' ? state.view.surveyId : '', {
+        userIds: [row.userId],
+      })
+      outcome = result.credentialsIssued > 0 ? 'sent' : result.credentialsNotSent > 0 ? 'not_sent' : 'already_had'
+    } catch (error) {
+      outcome =
+        error instanceof ApiError && (error.code === 'survey_not_distributable' || error.code === 'survey_window_closed')
+          ? 'not_open'
+          : 'error'
+    }
+    if (outcome === 'sent') {
+      const issuedOn = today()
+      setIssuedHere((current) => ({ ...current, [row.userId]: issuedOn }))
+      // A key minted here supersedes a withdrawal made here earlier in this sitting.
+      setRevokedHere((current) => {
+        if (!current.has(row.userId)) return current
+        const next = new Set(current)
+        next.delete(row.userId)
+        return next
+      })
+    }
+    setSendCode({ phase: 'done', name: row.name, email: row.email, outcome })
+    setSendCodeTarget(null)
+  }
+
+  /**
    * Reminds one person to finish, without minting anything.
    *
    * <p>Nothing is marked locally afterwards, unlike `reissueFor` -- there is no new issue date,
@@ -604,6 +665,15 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
               </div>
             )}
 
+            {sendCode.phase === 'done' ? (
+              <p
+                role="status"
+                className={sendCode.outcome === 'sent' ? 'm-0 text-sm font-medium' : 'm-0 text-sm font-medium text-accent-red-ink'}
+              >
+                {copy(SEND_CODE_OUTCOME_KEY[sendCode.outcome], { name: sendCode.name, email: sendCode.email })}
+              </p>
+            ) : null}
+
             {reissue.phase === 'done' ? (
               <p
                 role="status"
@@ -702,6 +772,7 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
                         remindedHere={remindedHere[row.userId] ?? null}
                         revokedHere={revokedHere.has(row.userId)}
                         onReissue={() => setReissueTarget(row)}
+                        onSendCode={() => setSendCodeTarget(row)}
                         superAdmin={superAdmin}
                         onHandover={() => setHandoverTarget(row)}
                         onRemind={() => setRemindTarget(row)}
@@ -762,6 +833,19 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
         confirmText={copy(remindAlready === null ? 'remind' : 'remindAgain')}
         cancelText={t('common.cancel')}
         onConfirm={() => (remindTarget === null ? undefined : remindFor(remindTarget))}
+      />
+
+      {/* Names the one recipient and the rule, before anything is sent. */}
+      <ConfirmationDialog
+        open={sendCodeTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setSendCodeTarget(null)
+        }}
+        title={copy('sendCodeTitle', { name: sendCodeTarget?.name ?? '' })}
+        description={copy('sendCodeBody', { email: sendCodeTarget?.email ?? '', survey: surveyTitle })}
+        confirmText={copy('sendCode')}
+        cancelText={t('common.cancel')}
+        onConfirm={() => (sendCodeTarget === null ? undefined : sendCodeFor(sendCodeTarget))}
       />
 
       <ConfirmationDialog
@@ -839,6 +923,7 @@ function RosterRows({
   remindedHere,
   revokedHere,
   onReissue,
+  onSendCode,
   onRemind,
   onRevoke,
   superAdmin,
@@ -861,6 +946,8 @@ function RosterRows({
   /** Withdrawn from this page: the row reads as having no key whatever the payload said. */
   revokedHere: boolean
   onReissue: () => void
+  /** Sends a person who holds no key for this survey their first one, and nobody else. */
+  onSendCode: () => void
   onRemind: () => void
   onRevoke: () => void
   /** A super admin may hand a new password over in person; nobody else is offered it. */
@@ -889,7 +976,9 @@ function RosterRows({
   // Decided from what this row shows NOW, not from the payload: a key reissued or withdrawn on
   // this page has already moved `issuedOn`, and the action has to follow it.
   const chase = chaseActionFor(
-    { status: row.status, surveyUsername: row.surveyUsername, credentialIssuedOn: issuedOn, lastSignInOn: signedInOn },
+    // `surveyUsername` here is the revoke-aware one above: a key withdrawn on this page is gone, and
+    // reading the payload's username kept such a row looking as if it still held one.
+    { status: row.status, surveyUsername, credentialIssuedOn: issuedOn, lastSignInOn: signedInOn },
     perSurvey ? 'per_survey' : 'shared',
   )
   // The server refuses a withdrawal for anyone who has answered, so the button says so instead
@@ -979,7 +1068,17 @@ function RosterRows({
                   reminder existed, somebody who had signed in got a DISABLED reissue and a note
                   saying why -- a dead end on exactly the people worth chasing. Now they get the
                   action that fits them. */}
-              {chase === 'remind' ? (
+              {chase === 'invite' ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  aria-label={copy('sendCodeFor', { name: row.name })}
+                  onClick={onSendCode}
+                >
+                  {copy('sendCode')}
+                </Button>
+              ) : chase === 'remind' ? (
                 <Button
                   type="button"
                   variant="outline"

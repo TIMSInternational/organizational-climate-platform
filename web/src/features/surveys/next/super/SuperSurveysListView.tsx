@@ -117,8 +117,10 @@ function waveOrdinal(t: TranslateFn, place: number): string {
 export default function SuperSurveysListView() {
   const { t, locale } = useTranslation()
   const scope = useCompanyScope()
+  const headerCompanyId = scope.status === 'ready' ? (scope.companyId ?? '') : ''
   const capabilities = useViewerCapabilities()
   const model = useSuperSurveysListModel()
+  const filesCompany = model.company || headerCompanyId
   const { base } = model
   const sections = groupSuperSections(model.visible)
   const facets = [
@@ -143,10 +145,13 @@ export default function SuperSurveysListView() {
             {/* Once a company is picked: its status workbook (what the client receives) and the
                 delivery audit (what TIMS keeps). A super admin has no company claim, so the
                 tenant page's status button never reached the people who send that file. */}
-            {readViewerClaims().role === 'super_admin' && model.company && (
+            {/* The table's company filter, or else the header's company: the header said a
+                client while these buttons waited for the filter, two notions of "the chosen
+                company" on one page (walkthrough, C). */}
+            {readViewerClaims().role === 'super_admin' && filesCompany && (
               <CompanyFilesButtons
-                companyId={model.company}
-                companyName={model.companyNames.get(model.company) ?? ''}
+                companyId={filesCompany}
+                companyName={model.companyNames.get(filesCompany) ?? ''}
                 t={t}
               />
             )}

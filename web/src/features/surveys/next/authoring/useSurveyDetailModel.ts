@@ -2,8 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useTranslation } from '../../../../i18n'
 import { describeApiError } from '../../../../api/describeApiError'
-import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
-import { useCompanyScope } from '../../../../company-context'
+import { administersSurvey, readViewerClaims } from '../../../../auth/viewerCapabilities'
 import { listDepartments, type Department } from '../../../org-structure/api/departments'
 import { listUsers, type User } from '../../../org-structure/api/users'
 import { getCompanySettings } from '../../../org-structure/api/companySettings'
@@ -61,30 +60,29 @@ export type SurveyDetailState =
  */
 export function useSurveyDetailModel(id: string | undefined) {
   const { t, locale } = useTranslation()
-  const caps = useViewerCapabilities()
-  const scope = useCompanyScope()
   const navigate = useNavigate()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const [state, setState] = useState<SurveyDetailState>({ status: 'loading' })
   const [pending, setPending] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
-  const readsContext = caps.canAuthorSurveys
 
   const load = useCallback(async () => {
     if (!id) return
     setState({ status: 'loading' })
     try {
       const survey = await getSurvey(baseUrl, id, locale)
-      if (!readsContext) {
+      // The survey's own company, never the header (A1 of the 2026-11-08 walkthrough): a super
+      // administrator reads every survey's context, a company administrator their tenant's.
+      const administers = administersSurvey(readViewerClaims(), survey)
+      if (!administers) {
         setState({ status: 'ready', model: { survey, departments: null, distribution: undefined, invitations: null, users: null, timeZone: null } })
         return
       }
-      const scoped = scope.status === 'ready' && scope.companyId === survey.companyId
       const [distribution, invitations, departments, users, settings] = await Promise.allSettled([
         getSurveyDistribution(baseUrl, id),
         listSurveyInvitations(baseUrl, id, {}, locale),
         listDepartments(baseUrl, survey.companyId),
-        scoped ? listUsers(baseUrl, survey.companyId) : Promise.resolve(null),
+        listUsers(baseUrl, survey.companyId),
         getCompanySettings(baseUrl, survey.companyId),
       ])
       setState({
@@ -101,7 +99,7 @@ export function useSurveyDetailModel(id: string | undefined) {
     } catch (error) {
       setState({ status: 'error', message: error instanceof Error ? error.message : t('errors.generic') })
     }
-  }, [baseUrl, id, locale, readsContext, scope.companyId, scope.status, t])
+  }, [baseUrl, id, locale, t])
 
   useEffect(() => {
     void load()

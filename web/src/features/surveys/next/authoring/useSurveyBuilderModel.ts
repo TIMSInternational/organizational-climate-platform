@@ -28,6 +28,7 @@ import {
   type ContentLanguage,
   type SurveyQuestionValues,
   type SurveyWizardValues,
+  builderAudienceEstimate,
 } from '../../wizardValues'
 import { arrangedQuestions, arrangementChanged, materialiseTemplate, templateCovers } from './templateRows'
 import { choosablePeople } from './peopleTargets'
@@ -210,6 +211,7 @@ export function useSurveyBuilderModel(companyId: string) {
     baseUrl,
     locale,
     fallbackLanguage,
+    companyId,
     enabled: true,
     keyPrefix,
     values,
@@ -236,18 +238,20 @@ export function useSurveyBuilderModel(companyId: string) {
 
   const people = useMemo(() => (users ? choosablePeople(users, departmentNames) : users === null ? null : undefined), [departmentNames, users])
   const activePeople = useMemo(() => (people ? new Set(people.map((person) => person.id)) : null), [people])
+  // What a blank "Participantes previstos" stands for: the audience step's choice, counted.
+  const audienceEstimate = useMemo(() => builderAudienceEstimate(values, users), [values, users])
 
   const submit = useCallback(async () => {
     setSubmitting(true)
     setSubmitError(null)
     try {
       if (!startsFromTemplate(values)) {
-        const created = await createSurvey(baseUrl, buildCreateInput(values, companyId, timeZone), locale)
+        const created = await createSurvey(baseUrl, buildCreateInput(values, companyId, timeZone, audienceEstimate), locale)
         await draft.discardAfterCreate()
         navigate(`/surveys/${created.id}`)
         return
       }
-      const created = await instantiateSurveyTemplate(baseUrl, values.templateId, buildInstantiateInput(values, companyId, timeZone), locale)
+      const created = await instantiateSurveyTemplate(baseUrl, values.templateId, buildInstantiateInput(values, companyId, timeZone, audienceEstimate), locale)
       const named = audienceTargets(values).userIds
       if (named.length > 0) {
         // `/use` takes no people, so the copy exists aimed at the whole company until this lands.
@@ -290,7 +294,7 @@ export function useSurveyBuilderModel(companyId: string) {
     } finally {
       setSubmitting(false)
     }
-  }, [baseUrl, companyId, draft, locale, navigate, t, template, timeZone, values])
+  }, [audienceEstimate, baseUrl, companyId, draft, locale, navigate, t, template, timeZone, values])
 
   return {
     values,
@@ -303,6 +307,7 @@ export function useSurveyBuilderModel(companyId: string) {
     users: users ?? [],
     people,
     activePeople,
+    audienceEstimate,
     timeZone,
     companyCredentialMode,
     templates,

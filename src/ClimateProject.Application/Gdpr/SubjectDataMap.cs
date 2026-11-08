@@ -248,6 +248,8 @@ public static class SubjectDataMap
             "Authorship of a reference group's criteria. A group stores no figure and references nobody else."),
         NotPersonal("Company", "companies",
             "The employer, a legal person. Its email domain is a routing rule, not an individual's address."),
+        NotPersonal("CompanyLogo", "company_logos",
+            "A company's uploaded logo image: a brand asset of a legal person, referencing nobody."),
         NotPersonal("CompanyServiceLicense", "company_service_licenses",
             "A company's entitlement to run a climate service, in respondent seats. Seat counts and status "
             + "against a company, no individual referenced."),

@@ -19,6 +19,13 @@ public static class CompanyEndpoints
         group.MapPut("/{id:guid}", UpdateAsync);
         group.MapGet("/{id:guid}/settings", GetSettingsAsync);
         group.MapPut("/{id:guid}/settings", UpdateSettingsAsync);
+        // An uploaded logo (walkthrough B4, 2026-11-08): until this, every new client's logo was a
+        // file a developer committed under web/public/brand/ and deployed.
+        group.MapPut("/{id:guid}/logo", UploadLogoAsync);
+
+        // Unauthenticated on purpose: respondents' screens and the access emails show the logo. The
+        // web reaches it same-origin through a rewrite of /logos/{id}, which is what LogoUrl stores.
+        app.MapGet("/public/company-logos/{id:guid}", ServeLogoAsync).AllowAnonymous();
         group.MapGet("/{id:guid}/result-bands", GetResultBandsAsync);
     }
 
@@ -315,6 +322,88 @@ public static class CompanyEndpoints
         }
 
         return Results.Ok(ToSettingsResponse(company));
+    }
+
+    /// <summary>
+    /// <c>PUT /admin/companies/{id}/logo</c>: the request body IS the image (PNG, JPEG or WebP, at
+    /// most <see cref="CompanyLogoValidation.MaxBytes"/>). Stores it, and points the company's
+    /// branding at its versioned same-origin path. Who may: whoever may change the settings.
+    /// </summary>
+    private static async Task<IResult> UploadLogoAsync(
+        Guid id,
+        HttpRequest request,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var currentUser = principal.GetCurrentUser();
+        if (!CanManageSettings(currentUser.Role, currentUser.CompanyId, id))
+        {
+            return Results.Forbid();
+        }
+
+        var company = await db.Companies.FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+        if (company is null)
+        {
+            return Results.NotFound();
+        }
+
+        if (request.ContentLength is > CompanyLogoValidation.MaxBytes)
+        {
+            return Results.Json(new { message = "The logo is larger than 512 KB.", code = "logo_too_large" }, statusCode: 400);
+        }
+
+        using var buffer = new MemoryStream();
+        await request.Body.CopyToAsync(buffer, cancellationToken);
+        if (buffer.Length > CompanyLogoValidation.MaxBytes)
+        {
+            return Results.Json(new { message = "The logo is larger than 512 KB.", code = "logo_too_large" }, statusCode: 400);
+        }
+
+        var content = buffer.ToArray();
+        var contentType = CompanyLogoValidation.ContentTypeOf(content);
+        if (contentType is null)
+        {
+            return Results.Json(
+                new { message = "The logo must be a PNG, JPEG or WebP image.", code = "logo_not_an_image" },
+                statusCode: 400);
+        }
+
+        var sha = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(content));
+        var logo = await db.CompanyLogos.FirstOrDefaultAsync(l => l.CompanyId == id, cancellationToken);
+        if (logo is null)
+        {
+            logo = new CompanyLogo { CompanyId = id };
+            db.CompanyLogos.Add(logo);
+        }
+
+        logo.Content = content;
+        logo.ContentType = contentType;
+        logo.Sha256 = sha;
+        logo.UpdatedAt = DateTimeOffset.UtcNow;
+        company.Branding.LogoUrl = CompanyLogoValidation.PathFor(id, sha);
+        await db.SaveChangesAsync(cancellationToken);
+
+        return Results.Ok(new { logoUrl = company.Branding.LogoUrl, contentType, bytes = content.Length });
+    }
+
+    /// <summary>
+    /// <c>GET /public/company-logos/{id}</c>: the stored image. Versioned by <c>?v=</c>, so it may be
+    /// cached for a year; served so that the bytes can never be read as a page.
+    /// </summary>
+    private static async Task<IResult> ServeLogoAsync(Guid id, HttpContext context, ClimateProjectDbContext db, CancellationToken cancellationToken)
+    {
+        var logo = await db.CompanyLogos.AsNoTracking().FirstOrDefaultAsync(l => l.CompanyId == id, cancellationToken);
+        if (logo is null)
+        {
+            return Results.NotFound();
+        }
+
+        context.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
+        context.Response.Headers.ETag = $"\"{logo.Sha256}\"";
+        context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+        context.Response.Headers["Content-Security-Policy"] = "default-src 'none'; sandbox";
+        return Results.File(logo.Content, logo.ContentType);
     }
 
     private static bool CanManageSettings(string role, string? companyId, Guid id) =>

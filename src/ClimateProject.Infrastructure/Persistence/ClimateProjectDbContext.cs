@@ -8,6 +8,7 @@ public class ClimateProjectDbContext(DbContextOptions<ClimateProjectDbContext> o
 {
     public DbSet<Company> Companies => Set<Company>();
     public DbSet<CompanyServiceLicense> CompanyServiceLicenses => Set<CompanyServiceLicense>();
+    public DbSet<CompanyLogo> CompanyLogos => Set<CompanyLogo>();
     public DbSet<SystemSettings> SystemSettings => Set<SystemSettings>();
     public DbSet<User> Users => Set<User>();
     public DbSet<Department> Departments => Set<Department>();

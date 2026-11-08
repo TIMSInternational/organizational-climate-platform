@@ -380,6 +380,7 @@ describe('Detalle de encuesta (SurveyDetail artboard)', () => {
 const noop: DistributionActions = {
   invite: () => undefined,
   setOneSessionOnly: () => undefined,
+  setOpensBeforeStart: () => undefined,
   createLink: () => undefined,
   regenerateLink: () => undefined,
   revokeLink: () => undefined,
@@ -708,6 +709,36 @@ describe('Distribución — the role half of the rule, through the page model', 
     page('company_admin')
     expect(await screen.findByRole('button', { name: 'Cambiar audiencia' })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Registrar la audiencia/ })).toBeTruthy()
+  })
+
+  /**
+   * The walkthrough's A1 (docs/audits/2026-11-08-operator-ui-walkthrough.md): the survey's own
+   * company decides, never the header. A TIMS operator whose header held another client opened
+   * this page and got no roster, no per-person button and no send control, and nothing said why.
+   */
+  it("offers a super administrator whose header holds another client the survey company's controls, and moves the header there", async () => {
+    localStorage.setItem(COMPANY_CONTEXT_STORAGE_KEY, 'otra-empresa')
+    renderAs('super_admin', <SurveyDistributionNextPage />, '', '/surveys/s1/distribution', '/surveys/:surveyId/distribution')
+    expect(await screen.findByRole('button', { name: 'Cambiar audiencia' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Registrar la audiencia/ })).toBeTruthy()
+    // The directory read is the survey's company's, not the header's.
+    expect(vi.mocked(usersApi.listUsers).mock.calls.map((call) => call[1])).toEqual(['c1'])
+    await waitFor(() => expect(localStorage.getItem(COMPANY_CONTEXT_STORAGE_KEY)).toBe('c1'))
+  })
+
+  it('offers a super administrator with nothing selected the same controls', async () => {
+    renderAs('super_admin', <SurveyDistributionNextPage />, '', '/surveys/s1/distribution', '/surveys/:surveyId/distribution')
+    expect(await screen.findByRole('button', { name: 'Cambiar audiencia' })).toBeTruthy()
+    expect(usersApi.listUsers).toHaveBeenCalled()
+  })
+
+  it("offers a company administrator of another company nothing, even with the survey's company stored as a selection", async () => {
+    // The selection is consulted for a super administrator only; a company admin is their claim.
+    localStorage.setItem(COMPANY_CONTEXT_STORAGE_KEY, 'c1')
+    renderAs('company_admin', <SurveyDistributionNextPage />, 'c2', '/surveys/s1/distribution', '/surveys/:surveyId/distribution')
+    await screen.findByTestId('step-audience')
+    expect(screen.queryByRole('button', { name: 'Cambiar audiencia' })).toBeNull()
+    expect(usersApi.listUsers).not.toHaveBeenCalled()
   })
 
   it("offers a leader of the survey's own company no audience, send, reminder or link control", async () => {
@@ -1290,6 +1321,9 @@ describe('Nueva encuesta (SurveyBuilder artboard)', () => {
     const sent = vi.mocked(creating.createSurvey).mock.calls[0][1]
     expect(sent.title).toBe('Pulso de octubre')
     expect(sent.questions).toEqual([{ text: 'Me siento escuchado.', type: 'likert', required: true, order: 0, category: 'trust' }])
-    expect(Object.keys(sent).sort()).toEqual(Object.keys(buildCreateInput({ ...content, questions: [] } as never, 'c1')).concat('questions').filter((k, i, a) => a.indexOf(k) === i).sort())
+    // `targetAudienceCount` joins the payload deliberately (walkthrough B6, 2026-11-08): the count
+    // was left blank, so it is the audience the step chose rather than nothing at all.
+    expect(Number.isInteger(sent.targetAudienceCount) && (sent.targetAudienceCount as number) > 0).toBe(true)
+    expect(Object.keys(sent).sort()).toEqual(Object.keys(buildCreateInput({ ...content, questions: [] } as never, 'c1')).concat('questions', 'targetAudienceCount').filter((k, i, a) => a.indexOf(k) === i).sort())
   })
 })

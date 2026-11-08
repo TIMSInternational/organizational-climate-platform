@@ -203,11 +203,37 @@ public static class SurveyDraftEndpoints
             .Select(u => new { u.CompanyId })
             .FirstAsync(cancellationToken);
 
-        // survey_drafts.company_id is NOT NULL, but User.CompanyId has been Guid? since
-        // #191 and NULL means "outside every tenant" (a global super_admin). Such a user
-        // has no company whose surveys they would be drafting, so this is a 400 with a
-        // reason rather than an opaque foreign-key 500.
-        if (author.CompanyId is not Guid companyId)
+        // Whose survey this is. A super administrator drafts on a client's behalf and names it
+        // (`request.CompanyId`); everyone else drafts for their own company and may name only that
+        // one. survey_drafts.company_id is NOT NULL, while User.CompanyId has been Guid? since
+        // #191 (NULL = a global super_admin) -- so a company-less author who names nothing is a
+        // 400 with a reason rather than an opaque foreign-key 500.
+        Guid companyId;
+        if (request.CompanyId is Guid named)
+        {
+            if (principal.GetCurrentUser().Role == Roles.SuperAdmin)
+            {
+                if (!await db.Companies.AnyAsync(c => c.Id == named, cancellationToken))
+                {
+                    return Results.Json(new { message = "Unknown company for this draft" }, statusCode: 400);
+                }
+
+                companyId = named;
+            }
+            else if (author.CompanyId == named)
+            {
+                companyId = named;
+            }
+            else
+            {
+                return Results.Forbid();
+            }
+        }
+        else if (author.CompanyId is Guid own)
+        {
+            companyId = own;
+        }
+        else
         {
             return Results.Json(
                 new { message = "A user with no company cannot own a survey draft" },

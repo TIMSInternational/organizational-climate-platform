@@ -75,6 +75,12 @@ export interface CreateReportInput {
   companyId: string
   format: string
   templateId?: string
+  /**
+   * `filters.surveyIds` (`ReportFilters`, #88): the surveys the document covers. Absent means
+   * every survey of the company, which is what a report without the field has always meant; an
+   * empty list is refused by the server, so it is never sent.
+   */
+  filters?: { surveyIds: string[] }
 }
 
 /**

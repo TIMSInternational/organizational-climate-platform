@@ -769,6 +769,10 @@ public class RateLimitingTests : IClassFixture<WebApplicationFactory<Program>>
             "/api/internal/hallazgos",
             "/api/internal/send-notification",
             "/webhooks/ses",
+            // A company's uploaded logo (walkthrough B4, 2026-11-08): a public, immutable,
+            // year-cached image keyed by company id -- no token to guess or exhaust, and the bytes
+            // are the brand a respondent's own screen already shows. Same exposure as /version.
+            "/public/company-logos/{id:guid}",
         };
 
     private RouteEndpoint EndpointFor(string pattern)

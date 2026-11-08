@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from '../../../../i18n'
-import { useCompanyScope } from '../../../../company-context'
-import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
+import { administersSurvey, readViewerClaims } from '../../../../auth/viewerCapabilities'
 import { listDepartments, type Department } from '../../../org-structure/api/departments'
 import { listUsers, type User } from '../../../org-structure/api/users'
 import {
@@ -87,6 +86,8 @@ export interface DistributionActions {
   /** Turns "ask who is answering" on the public link on or off. */
   setCollectParticipantIdentity: (next: boolean) => void
   setOneSessionOnly: (next: boolean) => void
+  /** `accessRules.activeOutsideSchedule`: the open link opens before the start date. */
+  setOpensBeforeStart: (next: boolean) => void
 }
 
 /**
@@ -102,8 +103,6 @@ export interface DistributionActions {
  */
 export function useDistributionModel(surveyId: string) {
   const { t, locale } = useTranslation()
-  const scope = useCompanyScope()
-  const caps = useViewerCapabilities()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const [state, setState] = useState<DistributionState>({ status: 'loading' })
   const [busy, setBusy] = useState(false)
@@ -121,7 +120,10 @@ export function useDistributionModel(surveyId: string) {
         getSurveyDistribution(baseUrl, surveyId),
         listSurveyInvitations(baseUrl, surveyId, {}, locale),
       ])
-      const scoped = caps.canAuthorSurveys && scope.status === 'ready' && scope.companyId === survey.companyId
+      // The survey's own company decides, never the header: gating on the header dropped the
+      // roster and every per-person button for a TIMS operator whose header held another client
+      // (docs/audits/2026-11-08-operator-ui-walkthrough.md, A1).
+      const scoped = administersSurvey(readViewerClaims(), survey)
       let departments: Department[] = []
       let users: User[] = []
       if (scoped) {
@@ -136,7 +138,7 @@ export function useDistributionModel(surveyId: string) {
     } catch (error) {
       setState({ status: 'error', message: describeApiError(error, t, 'surveys.distribution.loadFailed') })
     }
-  }, [baseUrl, caps.canAuthorSurveys, locale, scope.companyId, scope.status, surveyId, t])
+  }, [baseUrl, locale, surveyId, t])
 
   useEffect(() => {
     void load()
@@ -302,6 +304,17 @@ export function useDistributionModel(surveyId: string) {
         },
         { refreshSurvey: true },
       ),
+    /**
+     * `PUT /surveys/{id}/distribution` with ONLY `accessRules.activeOutsideSchedule` -- the server
+     * applies access rules field by field (`ApplyAccessRules`), so nothing else moves. The start
+     * date cannot move once a survey is active (409 `survey_start_frozen`), so this is the only way
+     * a QR survey activated early opens now; PROCOMER's demo needed a script for it on 4 Nov 2026.
+     */
+    setOpensBeforeStart: (next) =>
+      void run(async () => {
+        await updateSurveyDistribution(baseUrl, surveyId, { accessRules: { activeOutsideSchedule: next } })
+        return t(next ? 'surveys.next.share.opensBeforeStartOn' : 'surveys.next.share.opensBeforeStartOff')
+      }),
     /** The same narrow `PUT` as the demographics switch, legal on a live survey for the same reason. */
     setCollectParticipantIdentity: (next) =>
       void run(
