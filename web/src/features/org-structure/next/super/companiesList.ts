@@ -21,6 +21,8 @@ export interface CompanyListRow {
   country: string | null
   subscriptionTier: string | null
   createdAt: string
+  /** The language setting new surveys inherit; null when the API did not say. */
+  language: string | null
   /** People in the tenant; `null` when the platform read failed. */
   people: number | null
   completedResponses: number
@@ -53,6 +55,7 @@ export function composeCompanyRows(
         country: company.country,
         subscriptionTier: company.subscriptionTier,
         createdAt: company.createdAt,
+        language: company.language ?? null,
         people: summary ? summary.userCount : null,
         completedResponses: summary?.completedResponseCount ?? 0,
         activeSurveyCount: summary ? summary.activeSurveyCount : null,

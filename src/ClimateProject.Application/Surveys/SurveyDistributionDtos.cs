@@ -62,7 +62,16 @@ public sealed record SurveyInvitationSummaryDto(
     /// A key exists only once its mail went: one whose send failed is withdrawn. Always 0 on
     /// a `shared` survey, which mints none.
     /// </summary>
-    int WithCode = 0);
+    int WithCode = 0,
+    /// <summary>
+    /// Reminders sent to the holders of this survey's CURRENT keys (`per_survey`): the sum of
+    /// <c>survey_credentials.reminder_count</c>, which the roster's Enviar recordatorio raises.
+    /// The invitations' own <c>reminderCount</c> never moves on such a survey, so the survey page
+    /// read "Ningún recordatorio enviado todavía" after ESPH's reminders of 2026-10-30
+    /// (walkthrough 2026-11-08). A key withdrawn and re-issued starts again at 0. Always 0 on a
+    /// `shared` survey.
+    /// </summary>
+    int KeyReminders = 0);
 
 public sealed record SurveyDistributionDetail(
     Guid Id,

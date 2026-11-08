@@ -42,7 +42,7 @@ public static class CompanyEndpoints
 
         var companies = await db.Companies
             .OrderByDescending(c => c.CreatedAt)
-            .Select(c => new CompanyListItem(c.Id, c.Name, c.EmailDomain, c.Industry, c.Size, c.Country, c.SubscriptionTier, c.CreatedAt))
+            .Select(c => new CompanyListItem(c.Id, c.Name, c.EmailDomain, c.Industry, c.Size, c.Country, c.SubscriptionTier, c.CreatedAt, c.Settings.Language))
             .ToListAsync(cancellationToken);
 
         return Results.Ok(new CompanyListResponse(companies));

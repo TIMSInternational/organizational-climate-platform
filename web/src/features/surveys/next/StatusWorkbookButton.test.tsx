@@ -86,6 +86,22 @@ describe('picking which surveys go in the status workbook', () => {
     vi.unstubAllGlobals()
   })
 
+  it('asks for ESPH’s progress layout when it is chosen, and for the full one by default', async () => {
+    const user = userEvent.setup()
+    renderPicker()
+    await openPicker(user)
+
+    // The default sends no format at all: the request every caller sent before the choice.
+    expect(screen.getByRole('radio', { name: new RegExp(`^${copy.formatStandard}`) }).getAttribute('aria-checked')).toBe('true')
+    await user.click(screen.getByRole('radio', { name: new RegExp(`^${copy.formatProgress.replace(/[()]/g, '\\$&')}`) }))
+    await user.click(screen.getByRole('button', { name: copy.download }))
+
+    await waitFor(() => expect(clicked.name).toBeDefined())
+    expect(requestedUrl()).toBe(
+      'https://api.example.test/admin/companies/c1/participation/export?survey=clima&survey=contraloria&survey=teletrabajo&format=progress',
+    )
+  })
+
   it('opens a picker rather than downloading straight away', async () => {
     const user = userEvent.setup()
     renderPicker()

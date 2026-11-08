@@ -265,7 +265,7 @@ function TemplateCard({
           <h3 id={`template-${template.id}`} className="m-0 text-lg font-semibold">
             {template.name}
           </h3>
-          <CanvasChip label={template.isGlobal ? t(`${K}.global`) : t(`${K}.company`)} />
+          <CanvasChip label={template.isGlobal ? t(`${K}.global`) : (template.companyName ?? t(`${K}.company`))} />
         </div>
         <span className="text-xs text-fg-label">{facts.join(' · ')}</span>
         <span className="text-xs text-fg-secondary">{template.description}</span>

@@ -47,6 +47,15 @@ holds that client's people, and ESPH closes 2026-11-11; a decision for the next 
 fix), the *Idioma* column on Empresas, the owner company on template cards, and the survey page's
 reminder count for per-survey surveys.
 
+**Built later the same day** (second PR, after a ruling on the name column):
+
+| | What | Evidence |
+|---|---|---|
+| D1 | Status workbook *Formato*: **Avance (formato ESPH)** — *Nombre completo*, *Porcentaje de Avance*, *Observaciones*, whole row coloured, *Total finalizadas* as a written value. **Ruled 2026-11-08: the name stays ONE column** (no guessed Apellidos). `?format=progress` on `GET /admin/companies/{id}/participation/export`; unknown formats refused (400); a survey without per-person state keeps the standard sheet | 6 `StatusWorkbookTests`, 3 `CompanyStatusExportTests`, dialog test |
+| D2 | *Idioma* column on Empresas reads `Settings.Language` off `GET /admin/companies` (no audited PUT per row) | `CompanyEndpointsTests`, page test |
+| D3 | Template owner: `companyName` on `GET /survey-templates`; the wizard's dropdown reads "Nombre · Empresa" / "· Global", the templates page chip names the company | `SurveyTemplateEndpointsTests`, `templateOwner` tests |
+| D4 | Reminder count for per-survey surveys: `summary.keyReminders` (sum of `survey_credentials.reminder_count`) added to the invitations' count on the survey page and the dashboard card | `SurveyCredentialRemindTests`, `launch`/`compose` tests |
+
 ## Verdict
 
 **Not yet.** The core is strong — the climate-workbook importer, the six-step survey wizard, the

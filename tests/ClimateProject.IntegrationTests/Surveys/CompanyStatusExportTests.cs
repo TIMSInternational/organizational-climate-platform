@@ -322,4 +322,54 @@ public class CompanyStatusExportTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
+
+    /// <summary>
+    /// <c>?format=progress</c> is ESPH's layout: the name whole, Porcentaje de Avance and
+    /// Observaciones (walkthrough 2026-11-08).
+    /// </summary>
+    [Fact]
+    public async Task The_progress_format_prints_the_clients_three_columns()
+    {
+        var admin = await _harness.ClientAsync(Roles.CompanyAdmin, _companyId);
+        var (_, personId) = await _harness.IdentifiedClientAsync(Roles.Employee, _companyId);
+        await ActiveSurveyAsync(admin, "Clima", personId);
+
+        var response = await admin.GetAsync($"/admin/companies/{_companyId}/participation/export?format=progress");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var book = await WorkbookOfAsync(response);
+        var sheet = book.Worksheet("Clima");
+        Assert.Equal(
+            ["Nombre completo", "Porcentaje de Avance", "Observaciones"],
+            Enumerable.Range(1, 3).Select(c => sheet.Cell(4, c).GetString()));
+        Assert.Equal("Sin Iniciar", sheet.Cell(5, 3).GetString());
+    }
+
+    /// <summary>The picker's survey choice and the format travel together.</summary>
+    [Fact]
+    public async Task The_progress_format_keeps_the_picked_surveys()
+    {
+        var admin = await _harness.ClientAsync(Roles.CompanyAdmin, _companyId);
+        var (_, personId) = await _harness.IdentifiedClientAsync(Roles.Employee, _companyId);
+        await ActiveSurveyAsync(admin, "Clima", personId);
+        var teletrabajo = await ActiveSurveyAsync(admin, "Teletrabajo", personId);
+
+        var response = await admin.GetAsync(
+            $"/admin/companies/{_companyId}/participation/export?survey={teletrabajo}&format=progress");
+
+        using var book = await WorkbookOfAsync(response);
+        Assert.Equal(["Teletrabajo"], book.Worksheets.Select(w => w.Name));
+        Assert.Equal("Nombre completo", book.Worksheet("Teletrabajo").Cell(4, 1).GetString());
+    }
+
+    /// <summary>An unknown format is refused, never quietly read as the standard one: the file goes to a client.</summary>
+    [Fact]
+    public async Task An_unknown_format_is_refused()
+    {
+        var admin = await _harness.ClientAsync(Roles.CompanyAdmin, _companyId);
+
+        var response = await admin.GetAsync($"/admin/companies/{_companyId}/participation/export?format=fidelitas");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
 }

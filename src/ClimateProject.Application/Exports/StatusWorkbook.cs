@@ -17,6 +17,22 @@ public sealed record StatusWorkbookSurvey(
     bool ShowState,
     IReadOnlyList<SurveyRosterRow> Roster);
 
+/// <summary>Which layout the status workbook's sheets take.</summary>
+public enum StatusWorkbookLayout
+{
+    /// <summary>The roster's own columns, exactly as the screen and the CSV print them.</summary>
+    Standard,
+
+    /// <summary>
+    /// The layout ESPH received from a script through October 2026 (copied from a Fidelitas 360
+    /// status file): name, a progress percentage and a word, the whole row coloured, and the share
+    /// finished under it. The name stays ONE cell (ruled 2026-11-08): the script's separate
+    /// Apellidos column was a guess at where the surnames start, see the remarks on
+    /// <see cref="StatusWorkbook"/>.
+    /// </summary>
+    Progress,
+}
+
 /// <summary>
 /// Every survey of one company as one workbook, a sheet per survey: who was invited, how they
 /// sign in and where each person stands.
@@ -99,7 +115,16 @@ public static class StatusWorkbook
     /// The day the picture was taken, in the company's zone, printed on every sheet. A status
     /// file with no date on it gets read a week later as if it were today's.
     /// </param>
-    public static byte[] Build(IReadOnlyList<StatusWorkbookSurvey> surveys, DateOnly generatedAt, bool spanish)
+    /// <param name="layout">
+    /// <see cref="StatusWorkbookLayout.Progress"/> applies only to a survey that records where each
+    /// person stands; a sheet for one that does not keeps the standard columns, because a
+    /// percentage column would be a claim that survey cannot make.
+    /// </param>
+    public static byte[] Build(
+        IReadOnlyList<StatusWorkbookSurvey> surveys,
+        DateOnly generatedAt,
+        bool spanish,
+        StatusWorkbookLayout layout = StatusWorkbookLayout.Standard)
     {
         ArgumentNullException.ThrowIfNull(surveys);
 
@@ -108,6 +133,12 @@ public static class StatusWorkbook
         {
             var survey = surveys[i];
             var sheet = book.AddWorksheet(SheetName(survey.Title, i, book));
+            if (layout == StatusWorkbookLayout.Progress && survey.ShowState)
+            {
+                WriteProgressSheet(sheet, survey, generatedAt, spanish);
+                continue;
+            }
+
             var headers = SurveyRosterCsv.Headers(spanish, survey.PerSurvey, survey.ShowState);
 
             sheet.Cell(1, 1).Value = survey.Title;
@@ -249,6 +280,114 @@ public static class StatusWorkbook
         sheet.Cell(at + 3, 1).Style.Fill.BackgroundColor = XLColor.FromHtml("#" + InProgressFill);
         sheet.Cell(at + 4, 1).Value = SurveyRosterCsv.StatusLabel(SurveyParticipantStatuses.NotStarted, spanish);
         sheet.Cell(at + 4, 2).Value = notOpened;
+    }
+
+    /// <summary>The progress column's text for someone who started and has not finished.</summary>
+    public static string InProgressText(bool spanish) => spanish ? "En curso" : "In progress";
+
+    /// <summary>
+    /// The progress layout's two words for a status: the percentage cell's value (a number, or
+    /// <see cref="InProgressText"/> -- the platform never reads answers, so how FAR somebody got is
+    /// not known and is not invented) and the Observaciones label.
+    /// </summary>
+    public static (object Progress, string Note) ProgressOf(string status, bool spanish) => status switch
+    {
+        SurveyParticipantStatuses.Completed => (1d, spanish ? "Finalizada" : "Finished"),
+        SurveyParticipantStatuses.Started or SurveyParticipantStatuses.NotCompleted =>
+            (InProgressText(spanish), spanish ? "Pendiente Finalizar" : "Pending completion"),
+        _ => (0d, spanish ? "Sin Iniciar" : "Not started"),
+    };
+
+    /// <summary>
+    /// One survey in the progress layout. Same people as the standard sheet (<see cref="Counted"/>),
+    /// same title and date above, same note for those not counted; only the columns and the total
+    /// differ. The total is the share FINISHED, written as a value for the reason
+    /// <see cref="WriteTotals"/> gives, and labelled so it cannot be read as an average of the
+    /// percentages above it.
+    /// </summary>
+    private static void WriteProgressSheet(IXLWorksheet sheet, StatusWorkbookSurvey survey, DateOnly generatedAt, bool spanish)
+    {
+        sheet.Cell(1, 1).Value = survey.Title;
+        sheet.Cell(1, 1).Style.Font.Bold = true;
+        sheet.Cell(1, 1).Style.Font.FontSize = 14;
+        sheet.Cell(2, 1).Value = (spanish ? "Al " : "As at ") + generatedAt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        sheet.Cell(2, 1).Style.Font.FontColor = XLColor.FromHtml("#595959");
+
+        string[] headers = spanish
+            ? ["Nombre completo", "Porcentaje de Avance", "Observaciones"]
+            : ["Full name", "Progress", "Notes"];
+        const int headerRow = 4;
+        for (var c = 0; c < headers.Length; c++)
+        {
+            var cell = sheet.Cell(headerRow, c + 1);
+            cell.Value = headers[c];
+            cell.Style.Font.Bold = true;
+            cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#" + HeaderFill);
+        }
+
+        var counted = Counted(survey);
+        var row = headerRow + 1;
+        foreach (var person in counted)
+        {
+            var (progress, note) = ProgressOf(person.Status, spanish);
+            sheet.Cell(row, 1).Value = person.Name;
+            var pct = sheet.Cell(row, 2);
+            if (progress is double share)
+            {
+                pct.Value = share;
+                pct.Style.NumberFormat.Format = "0%";
+            }
+            else
+            {
+                pct.Value = (string)progress;
+            }
+
+            pct.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+            sheet.Cell(row, 3).Value = note;
+            // The whole row takes the colour, as the client's file did.
+            if (StatusFill(person.Status) is { } fill)
+            {
+                sheet.Range(row, 1, row, headers.Length).Style.Fill.BackgroundColor = XLColor.FromHtml("#" + fill);
+            }
+
+            row++;
+        }
+
+        if (row > headerRow + 1)
+        {
+            sheet.Range(headerRow, 1, row - 1, headers.Length).SetAutoFilter();
+        }
+
+        var finished = counted.Count(r => r.Status == SurveyParticipantStatuses.Completed);
+        var totalLabel = sheet.Cell(row, 1);
+        totalLabel.Value = spanish ? "Total finalizadas" : "Total finished";
+        totalLabel.Style.Font.Bold = true;
+        var totalShare = sheet.Cell(row, 2);
+        totalShare.Value = counted.Count == 0 ? 0d : (double)finished / counted.Count;
+        totalShare.Style.NumberFormat.Format = "0%";
+        totalShare.Style.Font.Bold = true;
+        totalShare.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+        sheet.Cell(row, 3).Value = spanish
+            ? $"{finished} de {counted.Count} personas"
+            : $"{finished} of {counted.Count} people";
+        sheet.Range(row, 1, row, headers.Length).Style.Border.TopBorder = XLBorderStyleValues.Thin;
+
+        var notCounted = survey.Roster.Count - counted.Count;
+        if (notCounted > 0)
+        {
+            var noteCell = sheet.Cell(row + 2, 1);
+            noteCell.Value = (spanish, notCounted == 1) switch
+            {
+                (true, true) => "1 persona de la audiencia no recibió código para esta encuesta y no se cuenta.",
+                (true, false) => $"{notCounted} personas de la audiencia no recibieron código para esta encuesta y no se cuentan.",
+                (false, true) => "1 person in the audience was never sent a code for this survey and is not counted.",
+                (false, false) => $"{notCounted} people in the audience were never sent a code for this survey and are not counted.",
+            };
+            noteCell.Style.Font.Italic = true;
+        }
+
+        sheet.Columns(1, headers.Length).AdjustToContents(headerRow, Math.Max(row, headerRow));
+        sheet.SheetView.Freeze(headerRow, 1);
     }
 
     /// <summary>

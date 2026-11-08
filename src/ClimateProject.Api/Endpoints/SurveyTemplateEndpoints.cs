@@ -175,6 +175,17 @@ public static class SurveyTemplateEndpoints
                 .Select(g => new { TemplateId = g.Key, Count = g.Count() })
                 .ToDictionaryAsync(x => x.TemplateId, x => x.Count, cancellationToken);
 
+        // The owner's name, so a list that holds several clients' copies of one instrument (a
+        // super administrator sees every company's) can tell them apart: the wizard read
+        // "Instrumento de clima estándar" three times (walkthrough 2026-11-08). A caller only ever
+        // receives templates it may already see, so the names are of companies it may see.
+        var ownerIds = rows.Where(t => t.CompanyId is not null).Select(t => t.CompanyId!.Value).Distinct().ToList();
+        var ownerNames = ownerIds.Count == 0
+            ? []
+            : await db.Companies
+                .Where(c => ownerIds.Contains(c.Id))
+                .ToDictionaryAsync(c => c.Id, c => c.Name, cancellationToken);
+
         var templates = rows
             .Select(t => new SurveyTemplateListItem(
                 t.Id,
@@ -191,7 +202,8 @@ public static class SurveyTemplateEndpoints
                 t.Rating,
                 questionCounts.GetValueOrDefault(t.Id),
                 t.LastUsed,
-                t.CreatedAt))
+                t.CreatedAt,
+                t.CompanyId is { } owner ? ownerNames.GetValueOrDefault(owner) : null))
             .ToList();
 
         return Results.Ok(new SurveyTemplateListResponse(templates));

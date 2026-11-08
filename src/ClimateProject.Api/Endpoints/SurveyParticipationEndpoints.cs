@@ -101,6 +101,7 @@ public static class SurveyParticipationEndpoints
     private static async Task<IResult> ExportCompanyAsync(
         Guid companyId,
         [Microsoft.AspNetCore.Mvc.FromQuery(Name = "survey")] Guid[]? surveyIds,
+        [Microsoft.AspNetCore.Mvc.FromQuery(Name = "format")] string? format,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
         IConfiguration configuration,
@@ -122,6 +123,23 @@ public static class SurveyParticipationEndpoints
         }
 
         var spanish = SurveyRosterCsv.IsSpanish(company.Language);
+        // `?format=progress` is ESPH's layout (walkthrough 2026-11-08); absent is the standard one,
+        // which is what every caller sent before the choice existed. Anything else is refused
+        // rather than quietly read as standard: this file goes to a client.
+        StatusWorkbookLayout layout;
+        if (string.IsNullOrEmpty(format) || format == "standard")
+        {
+            layout = StatusWorkbookLayout.Standard;
+        }
+        else if (format == "progress")
+        {
+            layout = StatusWorkbookLayout.Progress;
+        }
+        else
+        {
+            return Results.Json(new { message = "format must be 'standard' or 'progress'" }, statusCode: 400);
+        }
+
         var distributed = await db.Surveys
             .AsNoTracking()
             .Where(s => s.CompanyId == companyId && s.Status != SurveyStatuses.Draft)
@@ -169,7 +187,7 @@ public static class SurveyParticipationEndpoints
             SchedulingTimeZone.ToLocal(DateTimeOffset.UtcNow, SchedulingTimeZone.Resolve(company.Timezone)));
 
         return Results.File(
-            StatusWorkbook.Build(sheets, today, spanish),
+            StatusWorkbook.Build(sheets, today, spanish, layout),
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             StatusWorkbookFileName(company.Name, today, spanish));
     }

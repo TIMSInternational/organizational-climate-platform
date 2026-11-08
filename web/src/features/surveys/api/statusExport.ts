@@ -34,11 +34,22 @@ export function getCompanyStatusWorkbook(
   baseUrl: string,
   companyId: string,
   surveyIds: readonly string[] = [],
+  format: StatusWorkbookFormat = 'standard',
 ): Promise<Blob> {
   const route = `${baseUrl}/admin/companies/${encodeURIComponent(companyId)}/participation/export`
-  const query = surveyIds.map((id) => `survey=${encodeURIComponent(id)}`).join('&')
+  const parts = surveyIds.map((id) => `survey=${encodeURIComponent(id)}`)
+  // The standard layout sends no `format`, so its request stays byte-for-byte the old one.
+  if (format !== 'standard') parts.push(`format=${format}`)
+  const query = parts.join('&')
   return companyWorkbook(query ? `${route}?${query}` : route)
 }
+
+/**
+ * `standard` is every roster column; `progress` is ESPH's layout -- Nombre completo, Porcentaje
+ * de Avance, Observaciones, the row coloured -- with the name whole (ruled 2026-11-08: a split
+ * into Apellidos would be a guess). `StatusWorkbookLayout` on the server.
+ */
+export type StatusWorkbookFormat = 'standard' | 'progress'
 
 /**
  * `GET /admin/companies/{id}/delivery-audit` — who never received the email and what their mail

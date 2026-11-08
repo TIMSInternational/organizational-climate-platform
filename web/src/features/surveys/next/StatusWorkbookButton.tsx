@@ -10,10 +10,12 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  RadioGroup,
+  RadioGroupItem,
 } from '../../../components/ui'
 import { downloadBlobFile } from '../../../lib/downloadBlobFile'
 import { listSurveys } from '../api/surveys'
-import { companyStatusFileName, getCompanyStatusWorkbook } from '../api/statusExport'
+import { companyStatusFileName, getCompanyStatusWorkbook, type StatusWorkbookFormat } from '../api/statusExport'
 import { statusLabel } from '../surveyVocabulary'
 import { distributedSurveys, type StatusWorkbookChoice } from './statusWorkbookChoices'
 
@@ -69,6 +71,11 @@ export function StatusWorkbookButton({
   const [picked, setPicked] = useState<ReadonlySet<string> | null>(null)
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState(false)
+  /**
+   * The file's layout. Kept across openings on purpose: an operator who sends ESPH its format
+   * every morning should not have to pick it every morning.
+   */
+  const [format, setFormat] = useState<StatusWorkbookFormat>('standard')
 
   useEffect(() => {
     if (!open) return
@@ -106,7 +113,7 @@ export function StatusWorkbookButton({
     setFailed(false)
     try {
       const ids = choices.filter((survey) => selected.has(survey.id)).map((survey) => survey.id)
-      const blob = await getCompanyStatusWorkbook(baseUrl, companyId, ids)
+      const blob = await getCompanyStatusWorkbook(baseUrl, companyId, ids, format)
       downloadBlobFile(companyStatusFileName('estado', companyName, new Date()), blob)
       setOpen(false)
     } catch {
@@ -172,6 +179,38 @@ export function StatusWorkbookButton({
                 })}
               </ul>
             </div>
+          )}
+          {choices.length > 0 && (
+            <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+              <legend className="mb-1 p-0 text-sm font-medium">{t('surveys.next.statusWorkbook.formatLabel')}</legend>
+              <RadioGroup
+                aria-label={t('surveys.next.statusWorkbook.formatLabel')}
+                value={format}
+                onValueChange={(next) => setFormat(next === 'progress' ? 'progress' : 'standard')}
+                className="gap-2"
+              >
+                {(['standard', 'progress'] as const).map((option) => {
+                  const itemId = `status-workbook-format-${option}`
+                  return (
+                    <div key={option} className="flex items-start gap-2">
+                      <RadioGroupItem id={itemId} value={option} aria-describedby={`${itemId}-help`} className="mt-1" />
+                      <label htmlFor={itemId} className="min-w-0 cursor-pointer">
+                        <span className="block text-sm font-medium text-fg-primary">
+                          {t(option === 'progress' ? 'surveys.next.statusWorkbook.formatProgress' : 'surveys.next.statusWorkbook.formatStandard')}
+                        </span>
+                        <span id={`${itemId}-help`} className="block text-sm text-fg-secondary">
+                          {t(
+                            option === 'progress'
+                              ? 'surveys.next.statusWorkbook.formatProgressHelp'
+                              : 'surveys.next.statusWorkbook.formatStandardHelp',
+                          )}
+                        </span>
+                      </label>
+                    </div>
+                  )
+                })}
+              </RadioGroup>
+            </fieldset>
           )}
           {failed && (
             <p className="m-0 text-sm text-accent-red-ink" role="alert">

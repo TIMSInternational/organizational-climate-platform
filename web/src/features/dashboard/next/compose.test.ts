@@ -562,6 +562,7 @@ describe('the derivations', () => {
 
   it('counts the reminders sent from the open survey’s invitations, and claims nothing it could not read', () => {
     expect(remindersOf({ invitations: [{ reminderCount: 2 }, { reminderCount: 0 }, { reminderCount: 1 }] as never })).toBe(3)
+    expect(remindersOf({ invitations: [{ reminderCount: 0 }] as never, summary: { keyReminders: 4 } })).toBe(4)
     const parts = live()
     parts.reminders = { status: 'live', value: 0 }
     expect(composeModel(parts, options()).model.attention.at(-1)).toEqual({

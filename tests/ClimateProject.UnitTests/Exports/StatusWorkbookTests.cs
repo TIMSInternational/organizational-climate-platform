@@ -300,4 +300,140 @@ public class StatusWorkbookTests
         Assert.Equal(XLFillPatternValues.None, sheet.Cell(7, estado).Style.Fill.PatternType);
         Assert.True(sheet.AutoFilter.IsEnabled);
     }
+
+    // ---- The progress layout (ESPH's format, walkthrough 2026-11-08) ----
+
+    private static byte[] Progress(params StatusWorkbookSurvey[] surveys)
+        => StatusWorkbook.Build(surveys, Today, spanish: true, StatusWorkbookLayout.Progress);
+
+    /// <summary>
+    /// Three columns, the name in ONE of them exactly as stored: the script this replaces split
+    /// it by guessing where the surnames start, and the product does not print a guess.
+    /// </summary>
+    [Fact]
+    public void The_progress_layout_has_the_name_whole_a_percentage_and_a_word()
+    {
+        var bytes = Progress(Survey("Clima", [
+            Person("ADRIANA DE LOS ANGELES SANCHO PORRAS", SurveyParticipantStatuses.Completed, "esph-a", Today),
+            Person("Hugo Peralta", SurveyParticipantStatuses.Started, "esph-b", Today),
+            Person("Marta Solis", SurveyParticipantStatuses.NotStarted, "esph-c", Today),
+        ]));
+
+        using var book = Open(bytes);
+        var sheet = book.Worksheet("Clima");
+        Assert.Equal("Clima", sheet.Cell(1, 1).GetString());
+        Assert.Equal("Al 2026-10-28", sheet.Cell(2, 1).GetString());
+        Assert.Equal(
+            ["Nombre completo", "Porcentaje de Avance", "Observaciones"],
+            Enumerable.Range(1, 3).Select(c => sheet.Cell(4, c).GetString()));
+        Assert.True(sheet.Cell(4, 4).IsEmpty());
+
+        Assert.Equal("ADRIANA DE LOS ANGELES SANCHO PORRAS", sheet.Cell(5, 1).GetString());
+        Assert.Equal(1d, sheet.Cell(5, 2).GetDouble());
+        Assert.Equal("0%", sheet.Cell(5, 2).Style.NumberFormat.Format);
+        Assert.Equal("Finalizada", sheet.Cell(5, 3).GetString());
+
+        // How far a started person got is not known, so it is said, not invented.
+        Assert.Equal("En curso", sheet.Cell(6, 2).GetString());
+        Assert.Equal("Pendiente Finalizar", sheet.Cell(6, 3).GetString());
+
+        Assert.Equal(0d, sheet.Cell(7, 2).GetDouble());
+        Assert.Equal("Sin Iniciar", sheet.Cell(7, 3).GetString());
+    }
+
+    /// <summary>The whole row takes the status colour, as the client's file did.</summary>
+    [Fact]
+    public void The_progress_layout_colours_the_whole_row()
+    {
+        var bytes = Progress(Survey("Clima", [
+            Person("Uno", SurveyParticipantStatuses.Completed, "esph-uno", Today),
+            Person("Dos", SurveyParticipantStatuses.Started, "esph-dos", Today),
+            Person("Tres", SurveyParticipantStatuses.NotStarted, "esph-tres", Today),
+        ]));
+
+        using var book = Open(bytes);
+        var sheet = book.Worksheet("Clima");
+        for (var c = 1; c <= 3; c++)
+        {
+            Assert.Equal("FF" + StatusWorkbook.FinishedFill, sheet.Cell(5, c).Style.Fill.BackgroundColor.Color.ToArgb().ToString("X8"));
+            Assert.Equal("FF" + StatusWorkbook.InProgressFill, sheet.Cell(6, c).Style.Fill.BackgroundColor.Color.ToArgb().ToString("X8"));
+            Assert.Equal(XLFillPatternValues.None, sheet.Cell(7, c).Style.Fill.PatternType);
+        }
+
+        Assert.True(sheet.AutoFilter.IsEnabled);
+    }
+
+    /// <summary>
+    /// The total is the share FINISHED over the people on the sheet, a written value (not a
+    /// formula), with the count beside it so it can be checked by counting.
+    /// </summary>
+    [Fact]
+    public void The_progress_total_is_the_share_finished_written_as_a_value()
+    {
+        var bytes = Progress(Survey("Clima", [
+            Person("Uno", SurveyParticipantStatuses.Completed, "esph-uno", Today),
+            Person("Dos", SurveyParticipantStatuses.Started, "esph-dos", Today),
+            Person("Tres", SurveyParticipantStatuses.NotStarted, "esph-tres", Today),
+            Person("Cuatro", SurveyParticipantStatuses.Completed, "esph-cuatro", Today),
+        ]));
+
+        using var book = Open(bytes);
+        var sheet = book.Worksheet("Clima");
+        Assert.Equal("Total finalizadas", sheet.Cell(9, 1).GetString());
+        Assert.False(sheet.Cell(9, 2).HasFormula);
+        Assert.Equal(0.5d, sheet.Cell(9, 2).GetDouble(), 6);
+        Assert.Equal("2 de 4 personas", sheet.Cell(9, 3).GetString());
+    }
+
+    /// <summary>
+    /// Same people as the standard sheet: on a per-survey survey, those never sent a key are
+    /// not counted, and the sheet says how many were left out.
+    /// </summary>
+    [Fact]
+    public void The_progress_layout_counts_the_same_people_and_says_who_it_left_out()
+    {
+        var bytes = Progress(Survey("Clima", [
+            Person("Con clave", SurveyParticipantStatuses.NotStarted, "esph-a", Today),
+            Person("Sin clave", SurveyParticipantStatuses.NotStarted),
+        ]));
+
+        using var book = Open(bytes);
+        var sheet = book.Worksheet("Clima");
+        Assert.Equal("Con clave", sheet.Cell(5, 1).GetString());
+        Assert.Equal("Total finalizadas", sheet.Cell(6, 1).GetString());
+        Assert.Equal("0 de 1 personas", sheet.Cell(6, 3).GetString());
+        Assert.Contains("1 persona de la audiencia no recibió código", sheet.Cell(8, 1).GetString(), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A survey that records no per-person state cannot fill a percentage column, so its sheet
+    /// keeps the standard columns rather than printing a claim it cannot make.
+    /// </summary>
+    [Fact]
+    public void A_survey_without_state_keeps_the_standard_sheet_in_the_progress_layout()
+    {
+        var bytes = Progress(Survey("Anonima", [Person("Uno", SurveyParticipantStatuses.NotStarted)], perSurvey: false, showState: false));
+
+        using var book = Open(bytes);
+        var sheet = book.Worksheet("Anonima");
+        var headers = SurveyRosterCsv.Headers(spanish: true, perSurvey: false, showState: false);
+        Assert.Equal(headers[0], sheet.Cell(4, 1).GetString());
+        Assert.NotEqual("Nombre completo", sheet.Cell(4, 1).GetString());
+    }
+
+    [Fact]
+    public void The_progress_layout_speaks_english_for_an_english_company()
+    {
+        var bytes = StatusWorkbook.Build(
+            [Survey("Climate", [Person("Uno", SurveyParticipantStatuses.Started, "a", Today)])],
+            Today,
+            spanish: false,
+            StatusWorkbookLayout.Progress);
+
+        using var book = Open(bytes);
+        var sheet = book.Worksheet("Climate");
+        Assert.Equal(["Full name", "Progress", "Notes"], Enumerable.Range(1, 3).Select(c => sheet.Cell(4, c).GetString()));
+        Assert.Equal("In progress", sheet.Cell(5, 2).GetString());
+        Assert.Equal("Pending completion", sheet.Cell(5, 3).GetString());
+    }
 }

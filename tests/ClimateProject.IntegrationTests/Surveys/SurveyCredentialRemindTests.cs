@@ -427,4 +427,24 @@ public class SurveyCredentialRemindTests(PostgresContainerFixture postgres, Capt
         Assert.Null(row.LastRemindedOn);
         Assert.Equal(0, row.ReminderCount);
     }
+
+    /// <summary>
+    /// The survey page's reminder line reads the invitations summary. On a per-survey survey the
+    /// invitations' own counter never moves, so it said "Ningún recordatorio enviado todavía"
+    /// after reminders went out (walkthrough 2026-11-08); the summary now carries the keys' total.
+    /// </summary>
+    [Fact]
+    public async Task The_invitations_summary_counts_the_reminders_sent_on_keys()
+    {
+        var (admin, survey, userId, _, _) = await InvitedAsync();
+
+        var before = (await admin.GetFromJsonAsync<SurveyInvitationListResponse>($"/surveys/{survey.Id}/invitations"))!;
+        Assert.Equal(0, before.Summary.KeyReminders);
+
+        (await RemindAsync(admin, survey.Id, userId)).EnsureSuccessStatusCode();
+        (await RemindAsync(admin, survey.Id, userId)).EnsureSuccessStatusCode();
+
+        var after = (await admin.GetFromJsonAsync<SurveyInvitationListResponse>($"/surveys/{survey.Id}/invitations"))!;
+        Assert.Equal(2, after.Summary.KeyReminders);
+    }
 }

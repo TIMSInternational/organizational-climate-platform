@@ -88,6 +88,30 @@ public class CompanyEndpointsTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
+    /// <summary>
+    /// The list says each company's language (walkthrough 2026-11-08: it read "en el detalle"
+    /// for every row), and it is the SETTING every new survey inherits, not a second field.
+    /// </summary>
+    [Fact]
+    public async Task The_list_carries_each_companys_language_setting()
+    {
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            var company = await db.Companies.FirstAsync(c => c.Id == _companyId);
+            company.Settings.Language = "es";
+            await db.SaveChangesAsync();
+        }
+
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.SuperAdmin);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var body = await (await client.GetAsync("/admin/companies")).Content.ReadFromJsonAsync<CompanyListResponse>();
+
+        Assert.Equal("es", body!.Companies.Single(c => c.Id == _companyId).Language);
+    }
+
     [Fact]
     public async Task SuperAdmin_can_list_create_and_update_a_company()
     {

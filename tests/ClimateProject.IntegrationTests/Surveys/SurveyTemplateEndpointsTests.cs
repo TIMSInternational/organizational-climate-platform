@@ -332,6 +332,27 @@ public class SurveyTemplateEndpointsTests : IAsyncLifetime
         Assert.DoesNotContain(theirs.Id, listed);
     }
 
+    /// <summary>
+    /// A super administrator's list holds every client's copy of an instrument; each one names its
+    /// owner so the wizard's dropdown can tell them apart (walkthrough 2026-11-08). A global one
+    /// names nobody.
+    /// </summary>
+    [Fact]
+    public async Task The_listing_names_each_templates_owner_company()
+    {
+        var superAdmin = await SuperAdminAsync();
+        var global = await CreateAsync(superAdmin, BilingualRequest(companyId: null));
+        var mine = await CreateAsync(await AdminAsync(), BilingualRequest(_companyId));
+        var theirs = await CreateAsync(await OtherAdminAsync(), BilingualRequest(_otherCompanyId));
+
+        var listed = (await (await superAdmin.GetAsync("/survey-templates")).Content
+            .ReadFromJsonAsync<SurveyTemplateListResponse>())!.Templates;
+
+        Assert.Equal("Template Co", listed.Single(t => t.Id == mine.Id).CompanyName);
+        Assert.Equal("Other Co", listed.Single(t => t.Id == theirs.Id).CompanyName);
+        Assert.Null(listed.Single(t => t.Id == global.Id).CompanyName);
+    }
+
     [Fact]
     public async Task The_listing_reports_the_question_count_and_the_global_flag()
     {

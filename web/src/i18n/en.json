@@ -3301,6 +3301,8 @@
         "noSize": "no size",
         "noLanguage": "not set",
         "languageInDetail": "in the detail",
+        "languageEs": "Spanish",
+        "languageEn": "English",
         "noPlan": "no plan",
         "noSurveys": "no surveys",
         "noneOpen": "none open",
@@ -4090,7 +4092,12 @@
         "download": "Download",
         "cancel": "Cancel",
         "busy": "Preparing the file…",
-        "failed": "The file could not be prepared. Please try again."
+        "failed": "The file could not be prepared. Please try again.",
+        "formatLabel": "Format",
+        "formatStandard": "Full",
+        "formatStandardHelp": "Every column of the roster: username, code, status and last activity.",
+        "formatProgress": "Progress (ESPH format)",
+        "formatProgressHelp": "Full name, progress and notes, each row coloured, and the share finished at the bottom."
       },
       "trends": {
         "title": "Climate over time",
