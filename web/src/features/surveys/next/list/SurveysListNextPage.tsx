@@ -1,6 +1,5 @@
-import { useState } from 'react'
 import { Link } from 'react-router'
-import { ChevronDown, Download, MoreHorizontal, Plus, Search } from 'lucide-react'
+import { ChevronDown, MoreHorizontal, Plus, Search } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
 import {
@@ -21,8 +20,7 @@ import {
   chipVariants,
 } from '../../../../components/ui'
 import { useViewerCapabilities, type ViewerCapabilities } from '../../../../auth/viewerCapabilities'
-import { companyStatusFileName, getCompanyStatusWorkbook } from '../../api/statusExport'
-import { downloadBlobFile } from '../../../../lib/downloadBlobFile'
+import { StatusWorkbookButton } from '../StatusWorkbookButton'
 import { formatMetric } from '../../../../components/charts/formatMetric'
 import { calendarDay, calendarDayOf, todayCalendarDay } from '../../../../lib/calendarDay'
 import { cn } from '../../../../lib/cn'
@@ -109,7 +107,7 @@ function SurveysListForCompany() {
   const { t, locale } = useTranslation()
   const capabilities = useViewerCapabilities()
   const state = useSurveysListModel()
-  const statusExport = useStatusExport(state.model.companyName)
+  const companyId = readViewerClaims().companyId
   const sections = groupBySection(state.visible)
   const facets = [{ status: '', count: state.model.rows.length }, ...visibleFacets(state.facets, state.statusFilter)]
 
@@ -121,10 +119,14 @@ function SurveysListForCompany() {
         description={t('surveys.next.list.description')}
         actions={
           capabilities.canAuthorSurveys ? (
-            <div className="flex flex-wrap gap-2"><Button type="button" variant="outline" disabled={statusExport.phase === 'busy'} onClick={statusExport.download}>
-              <Download aria-hidden="true" />
-              {statusExport.phase === 'busy' ? t('surveys.next.list.statusExportBusy') : t('surveys.next.list.statusExport')}
-            </Button>
+            <div className="flex flex-wrap gap-2">{companyId && (
+              <StatusWorkbookButton
+                companyId={companyId}
+                companyName={state.model.companyName ?? ''}
+                baseUrl={import.meta.env.VITE_API_BASE_URL as string}
+                label={t('surveys.next.list.statusExport')}
+              />
+            )}
             <Button asChild variant="outline"><Link to="/surveys/import">{t('climateWorkbook.title')}</Link></Button>
             <Button asChild variant="primary">
               <Link to="/surveys/new">
@@ -135,12 +137,6 @@ function SurveysListForCompany() {
           ) : undefined
         }
       />
-
-      {statusExport.phase === 'failed' && (
-        <Alert variant="destructive" className="mb-6">
-          <AlertDescription>{t('surveys.next.list.statusExportFailed')}</AlertDescription>
-        </Alert>
-      )}
 
       <form
         role="search"
@@ -570,32 +566,4 @@ function RowMenu({
       </DropdownMenuContent>
     </DropdownMenu>
   )
-}
-
-/**
- * Downloading the company's status workbook — every distributed survey, a sheet each.
- *
- * The blob is fetched and handed over, never linked: the route is authorized by the bearer
- * header and an anchor would send cookies instead. A failure is shown rather than swallowed,
- * because this is the file somebody is about to send a client and a silent no-op reads as
- * "nothing to report".
- */
-function useStatusExport(companyName: string | null | undefined) {
-  const [phase, setPhase] = useState<'idle' | 'busy' | 'failed'>('idle')
-  const baseUrl = import.meta.env.VITE_API_BASE_URL as string
-  const companyId = readViewerClaims().companyId
-
-  async function download() {
-    if (!companyId) return
-    setPhase('busy')
-    try {
-      const blob = await getCompanyStatusWorkbook(baseUrl, companyId)
-      downloadBlobFile(companyStatusFileName('estado', companyName ?? '', new Date()), blob)
-      setPhase('idle')
-    } catch {
-      setPhase('failed')
-    }
-  }
-
-  return { phase, download }
 }

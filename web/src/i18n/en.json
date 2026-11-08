@@ -4041,6 +4041,19 @@
       "suppressedGroups": "Groups withheld in every survey shown, because fewer than {threshold} people answered: {count}."
     },
     "next": {
+      "statusWorkbook": {
+        "loading": "Loading this company's surveys…",
+        "loadFailed": "The surveys could not be loaded. Please try again.",
+        "close": "Close",
+        "description": "One sheet per survey, with its people and how far each has got. Untick any survey you do not want in the file.",
+        "all": "All surveys",
+        "untitled": "Untitled survey",
+        "none": "This company has no distributed surveys yet.",
+        "download": "Download",
+        "cancel": "Cancel",
+        "busy": "Preparing the file…",
+        "failed": "The file could not be prepared. Please try again."
+      },
       "trends": {
         "title": "Climate over time",
         "description": "How each dimension moved between closed surveys, against the target of {target}.",
@@ -4093,8 +4106,6 @@
       "list": {
         "description": "Which survey is open today, how long until it closes, and where to read the ones that already closed.",
         "statusExport": "Download status (Excel)",
-        "statusExportBusy": "Preparing the file…",
-        "statusExportFailed": "The status could not be downloaded. Try again.",
         "searchPlaceholder": "Search by title or tag",
         "allTypes": "All types",
         "chipCount": "{label} · {count}",

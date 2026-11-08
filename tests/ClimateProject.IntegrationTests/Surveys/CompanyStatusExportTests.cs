@@ -37,6 +37,12 @@ public class CompanyStatusExportTests : IAsyncLifetime
     private static Task<HttpResponseMessage> ExportAsync(HttpClient client, Guid companyId)
         => client.GetAsync($"/admin/companies/{companyId}/participation/export");
 
+    /// <summary>The same route with the picker's <c>?survey=</c> repeated once per sheet.</summary>
+    private static Task<HttpResponseMessage> ExportAsync(HttpClient client, Guid companyId, params Guid[] surveyIds)
+        => client.GetAsync(
+            $"/admin/companies/{companyId}/participation/export?"
+            + string.Join('&', surveyIds.Select(id => $"survey={id}")));
+
     private static async Task<XLWorkbook> WorkbookOfAsync(HttpResponseMessage response)
     {
         Assert.Equal(
@@ -187,5 +193,133 @@ public class CompanyStatusExportTests : IAsyncLifetime
             .AsNoTracking()
             .AnyAsync(a => a.CompanyId == _companyId && a.Action.Contains("participation") && a.Action.Contains("export")));
         Assert.True(logged, "the status export should be written to audit_logs");
+    }
+
+    [Fact]
+    public async Task Only_the_picked_surveys_get_a_sheet()
+    {
+        var admin = await _harness.ClientAsync(Roles.CompanyAdmin, _companyId);
+        var (_, personId) = await _harness.IdentifiedClientAsync(Roles.Employee, _companyId);
+        var clima = await ActiveSurveyAsync(admin, "Clima", personId);
+        await ActiveSurveyAsync(admin, "Contraloria", personId);
+        var teletrabajo = await ActiveSurveyAsync(admin, "Teletrabajo", personId);
+
+        var response = await ExportAsync(admin, _companyId, clima, teletrabajo);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var book = await WorkbookOfAsync(response);
+        Assert.Equal(["Clima", "Teletrabajo"], book.Worksheets.Select(w => w.Name));
+    }
+
+    /// <summary>
+    /// The client has read these sheets in one order for weeks. Ticking the boxes bottom-up
+    /// must not reorder the tabs, so the order is the company's own, not the query's.
+    /// </summary>
+    [Fact]
+    public async Task The_sheets_keep_the_companys_order_whatever_order_the_ids_arrive_in()
+    {
+        var admin = await _harness.ClientAsync(Roles.CompanyAdmin, _companyId);
+        var (_, personId) = await _harness.IdentifiedClientAsync(Roles.Employee, _companyId);
+        var clima = await ActiveSurveyAsync(admin, "Clima", personId);
+        var teletrabajo = await ActiveSurveyAsync(admin, "Teletrabajo", personId);
+
+        var response = await ExportAsync(admin, _companyId, teletrabajo, clima);
+
+        using var book = await WorkbookOfAsync(response);
+        Assert.Equal(["Clima", "Teletrabajo"], book.Worksheets.Select(w => w.Name));
+    }
+
+    [Fact]
+    public async Task The_same_survey_picked_twice_gets_one_sheet()
+    {
+        var admin = await _harness.ClientAsync(Roles.CompanyAdmin, _companyId);
+        var (_, personId) = await _harness.IdentifiedClientAsync(Roles.Employee, _companyId);
+        var clima = await ActiveSurveyAsync(admin, "Clima", personId);
+
+        var response = await ExportAsync(admin, _companyId, clima, clima);
+
+        using var book = await WorkbookOfAsync(response);
+        Assert.Equal(["Clima"], book.Worksheets.Select(w => w.Name));
+    }
+
+    /// <summary>
+    /// Sending no <c>?survey=</c> is every distributed survey, which is what the button did
+    /// before a picker existed. The whole point of the parameter being optional.
+    /// </summary>
+    [Fact]
+    public async Task Picking_nothing_still_exports_every_survey()
+    {
+        var admin = await _harness.ClientAsync(Roles.CompanyAdmin, _companyId);
+        var (_, personId) = await _harness.IdentifiedClientAsync(Roles.Employee, _companyId);
+        await ActiveSurveyAsync(admin, "Clima", personId);
+        await ActiveSurveyAsync(admin, "Teletrabajo", personId);
+
+        using var book = await WorkbookOfAsync(await ExportAsync(admin, _companyId));
+
+        Assert.Equal(["Clima", "Teletrabajo"], book.Worksheets.Select(w => w.Name));
+    }
+
+    /// <summary>
+    /// A workbook that silently came back without a sheet the operator picked would be read as
+    /// that survey having had no activity -- and this file goes to a client.
+    /// </summary>
+    [Fact]
+    public async Task A_survey_that_is_not_this_companys_is_refused_not_dropped()
+    {
+        var admin = await _harness.ClientAsync(Roles.CompanyAdmin, _companyId);
+        var (_, personId) = await _harness.IdentifiedClientAsync(Roles.Employee, _companyId);
+        var clima = await ActiveSurveyAsync(admin, "Clima", personId);
+
+        var response = await ExportAsync(admin, _companyId, clima, Guid.NewGuid());
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    /// <summary>
+    /// The refusal above must be the same refusal for a survey that EXISTS somewhere else, or
+    /// the route answers "does this id exist" for any guid a caller cares to try.
+    /// </summary>
+    [Fact]
+    public async Task Another_companys_survey_is_refused_the_same_way_as_an_unknown_one()
+    {
+        var otherCompanyId = await _harness.SeedCompanyAsync("Otra Empresa", "es");
+        var otherAdmin = await _harness.ClientAsync(Roles.CompanyAdmin, otherCompanyId);
+        var (_, otherPersonId) = await _harness.IdentifiedClientAsync(Roles.Employee, otherCompanyId);
+        var theirs = await SurveyTestHarness.CreateSurveyAsync(
+            otherAdmin,
+            SurveyTestHarness.MinimalRequest(otherCompanyId, title: SurveyTestHarness.Both("Suya", "Suya")) with
+            {
+                UserIds = [otherPersonId],
+                Settings = new SurveySettingsInput(Anonymous: false),
+            });
+        (await SurveyTestHarness.SetStatusAsync(otherAdmin, theirs.Id, SurveyStatuses.Active)).EnsureSuccessStatusCode();
+
+        var admin = await _harness.ClientAsync(Roles.CompanyAdmin, _companyId);
+        var (_, personId) = await _harness.IdentifiedClientAsync(Roles.Employee, _companyId);
+        await ActiveSurveyAsync(admin, "Clima", personId);
+
+        var response = await ExportAsync(admin, _companyId, theirs.Id);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    /// <summary>Picking a draft is refused too: the route has one list and a draft is not on it.</summary>
+    [Fact]
+    public async Task Picking_a_draft_is_refused()
+    {
+        var admin = await _harness.ClientAsync(Roles.CompanyAdmin, _companyId);
+        var (_, personId) = await _harness.IdentifiedClientAsync(Roles.Employee, _companyId);
+        await ActiveSurveyAsync(admin, "Clima", personId);
+        var draft = await SurveyTestHarness.CreateSurveyAsync(
+            admin,
+            SurveyTestHarness.MinimalRequest(_companyId, title: SurveyTestHarness.Both("Borrador", "Borrador")) with
+            {
+                UserIds = [personId],
+                Settings = new SurveySettingsInput(Anonymous: false),
+            });
+
+        var response = await ExportAsync(admin, _companyId, draft.Id);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 }

@@ -23,6 +23,31 @@ describe('the per-company workbooks', () => {
     expect(vi.mocked(authFetch).mock.calls[1][0]).toBe('https://api.example.test/admin/companies/c%201/delivery-audit')
   })
 
+  it('repeats ?survey= once per picked sheet, and url-encodes each id', async () => {
+    vi.mocked(authFetch).mockImplementation(() => Promise.resolve(reply('xlsx', WORKBOOK)))
+
+    await getCompanyStatusWorkbook('https://api.example.test', 'c1', ['a 1', 'b2'])
+
+    expect(vi.mocked(authFetch).mock.calls[0][0]).toBe(
+      'https://api.example.test/admin/companies/c1/participation/export?survey=a%201&survey=b2',
+    )
+  })
+
+  /**
+   * An empty list is "all of them" and must send no query at all: that is the request the route
+   * answered before a picker existed, and it lets the server include a survey distributed since
+   * the page was loaded instead of refusing an id the caller could not have known about.
+   */
+  it('sends no query for an empty pick, exactly as it did before the picker', async () => {
+    vi.mocked(authFetch).mockImplementation(() => Promise.resolve(reply('xlsx', WORKBOOK)))
+
+    await getCompanyStatusWorkbook('https://api.example.test', 'c1', [])
+
+    expect(vi.mocked(authFetch).mock.calls[0][0]).toBe(
+      'https://api.example.test/admin/companies/c1/participation/export',
+    )
+  })
+
   /** A refusal used to be saved under an .xlsx name, which a reader opens as a corrupt file. */
   it('refuses a refused request', async () => {
     vi.mocked(authFetch).mockResolvedValue(reply('{"message":"forbidden"}', 'application/json', 403))

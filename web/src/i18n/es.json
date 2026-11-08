@@ -4041,6 +4041,19 @@
       "suppressedGroups": "Grupos protegidos en todas las encuestas mostradas, porque respondieron menos de {threshold} personas: {count}."
     },
     "next": {
+      "statusWorkbook": {
+        "loading": "Cargando las encuestas de la empresa…",
+        "loadFailed": "No se pudieron cargar las encuestas. Inténtelo de nuevo.",
+        "close": "Cerrar",
+        "description": "Una hoja por encuesta, con sus personas y el avance de cada una. Desmarque la encuesta que no quiera en el archivo.",
+        "all": "Todas las encuestas",
+        "untitled": "Encuesta sin título",
+        "none": "Esta empresa aún no tiene encuestas distribuidas.",
+        "download": "Descargar",
+        "cancel": "Cancelar",
+        "busy": "Preparando el archivo…",
+        "failed": "No se pudo preparar el archivo. Inténtelo de nuevo."
+      },
       "trends": {
         "title": "Clima en el tiempo",
         "description": "Cómo se movió cada dimensión entre encuestas cerradas, frente a la meta de {target}.",
@@ -4093,8 +4106,6 @@
       "list": {
         "description": "Cuál encuesta está abierta hoy, cuánto le falta para cerrar y dónde leer las que ya cerraron.",
         "statusExport": "Descargar estado (Excel)",
-        "statusExportBusy": "Preparando el archivo…",
-        "statusExportFailed": "No se pudo descargar el estado. Intente de nuevo.",
         "searchPlaceholder": "Buscar por título o etiqueta",
         "allTypes": "Todos los tipos",
         "chipCount": "{label} · {count}",

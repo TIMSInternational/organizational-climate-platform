@@ -56,6 +56,10 @@ public static class SurveyParticipationEndpoints
         // here, beside the per-survey export, because it is the same roster read repeated: it
         // calls the same `LoadAsync`, with the same per-survey authorization, rather than
         // assembling a second idea of who is in an audience.
+        //
+        // `?survey=` narrows it to the sheets the operator picked. Repeat the parameter once
+        // per survey; omit it entirely for all of them, which is what the route did before a
+        // picker existed and what every existing caller still sends.
         app.MapGet("/admin/companies/{companyId:guid}/participation/export", ExportCompanyAsync)
             .RequireAuthorization()
             .WithMetadata(new AuditSensitiveReadAttribute(AuditVerbs.Export));
@@ -79,9 +83,24 @@ public static class SurveyParticipationEndpoints
     /// people decides it here too. A caller who may administer none of them gets the same
     /// refusal the single-survey route gives.
     /// </para>
+    /// <para>
+    /// <paramref name="surveyIds"/> narrows the workbook to the sheets asked for, and an id that
+    /// is not one of this company's distributed surveys is REFUSED rather than dropped. A file
+    /// that quietly came back without the survey the operator picked would be read as that
+    /// survey having no activity -- the same misreading the draft rule above avoids -- and this
+    /// file goes to a client. The refusal says the same thing for a mistyped id, a draft and
+    /// another company's survey, so it cannot be used to discover that an id exists.
+    /// </para>
+    /// <para>
+    /// Sheet order is always the company's own creation order, never the order the ids arrived
+    /// in: the client has been reading these sheets in one order for weeks, and a workbook
+    /// whose tabs moved because of the order someone ticked boxes in would read as a different
+    /// report. Duplicate ids collapse for the same reason.
+    /// </para>
     /// </remarks>
     private static async Task<IResult> ExportCompanyAsync(
         Guid companyId,
+        [Microsoft.AspNetCore.Mvc.FromQuery(Name = "survey")] Guid[]? surveyIds,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
         IConfiguration configuration,
@@ -103,12 +122,30 @@ public static class SurveyParticipationEndpoints
         }
 
         var spanish = SurveyRosterCsv.IsSpanish(company.Language);
-        var ids = await db.Surveys
+        var distributed = await db.Surveys
             .AsNoTracking()
             .Where(s => s.CompanyId == companyId && s.Status != SurveyStatuses.Draft)
             .OrderBy(s => s.CreatedAt)
             .Select(s => s.Id)
             .ToListAsync(cancellationToken);
+
+        var ids = distributed;
+        if (surveyIds is { Length: > 0 })
+        {
+            var asked = surveyIds.ToHashSet();
+            if (asked.Any(id => !distributed.Contains(id)))
+            {
+                return Results.Json(
+                    new { message = spanish
+                        ? "Alguna de las encuestas seleccionadas ya no está disponible. Actualice la página e inténtelo de nuevo."
+                        : "One of the selected surveys is no longer available. Reload the page and try again." },
+                    statusCode: 400);
+            }
+
+            // `distributed` is the company's own list in its own order, so filtering it keeps
+            // both the tenancy scope and the sheet order no matter what arrived in the query.
+            ids = distributed.Where(asked.Contains).ToList();
+        }
 
         var sheets = new List<StatusWorkbookSurvey>();
         foreach (var id in ids)
