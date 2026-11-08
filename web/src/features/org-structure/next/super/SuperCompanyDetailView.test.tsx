@@ -204,7 +204,13 @@ describe('SuperCompanyDetailView', () => {
     serve()
     renderPage()
     await loaded()
-    const hrefOf = (name: string) => screen.getByRole('link', { name: new RegExp(`^${name}`) }).getAttribute('href')
+    // The page's own link cards: the setup checklist (shown for a client still being set up)
+    // links some of the same pages, deliberately.
+    const hrefOf = (name: string) =>
+      screen
+        .getAllByRole('link', { name: new RegExp(`^${name}`) })
+        .filter((link) => !link.closest('[data-testid="company-setup"]'))[0]
+        .getAttribute('href')
     expect(hrefOf(en.navigation.users)).toBe(`/admin/companies/${C}/users`)
     expect(hrefOf(en.navigation.demographicFields)).toBe(`/admin/companies/${C}/demographic-fields`)
     expect(hrefOf(en.navigation.reports)).toBe(`/admin/companies/${C}/reports`)
@@ -345,5 +351,67 @@ describe('SuperCompanyDetailView Escala de resultados', () => {
     renderPage()
     await loaded()
     expect(screen.queryByRole('heading', { name: bandsCopy.heading })).toBeNull()
+  })
+
+  /**
+   * After "Crear empresa" the operator lands here; the decisions a survey freezes at creation --
+   * the access mode first -- were nowhere on the way (walkthrough C, 2026-11-08).
+   */
+  it('lists the setup steps for a client with no survey yet, each marked from what the page read', async () => {
+    serve()
+    renderPage()
+    await loaded()
+    const setup = await screen.findByTestId('company-setup')
+    const done = (id: string) => setup.querySelector(`[data-step="${id}"]`)?.getAttribute('data-done')
+    expect(done('people')).toBe('true')
+    expect(done('fields')).toBe('false')
+    expect(done('survey')).toBe('false')
+    expect(done('access')).toBe('false')
+    expect(within(setup).getByText(en.superadmin.next.companyDetail.setup.access.title)).toBeTruthy()
+  })
+
+  it('does not nag an established client that already has people and a survey', async () => {
+    serve({ openWave: true })
+    renderPage()
+    await loaded()
+    expect(screen.queryByTestId('company-setup')).toBeNull()
+  })
+
+  /** Walkthrough B4 (2026-11-08): every new client's logo used to need a developer and a deploy. */
+  it('uploads a logo as the request body, then reloads so the form reads what was saved', async () => {
+    serve()
+    const answer = vi.mocked(fetch).getMockImplementation()!
+    const puts: { url: string; body: unknown }[] = []
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      if ((init?.method ?? 'GET') === 'PUT' && String(input).endsWith(`/admin/companies/${C}/logo`)) {
+        puts.push({ url: String(input), body: init?.body })
+        return Promise.resolve(new Response(JSON.stringify({ logoUrl: `/logos/${C}?v=abc123abc123` }), { status: 200 }))
+      }
+      return answer(input, init)
+    })
+    renderPage()
+    await loaded()
+    const before = vi.mocked(fetch).mock.calls.filter((call) => String(call[0]).includes(`/admin/companies/${C}/settings`)).length
+    const file = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], 'logo.png', { type: 'image/png' })
+    await userEvent.upload(screen.getByLabelText(en.companySettings.next.upload), file)
+    await waitFor(() => expect(puts).toHaveLength(1))
+    expect(puts[0].body).toBe(file)
+    await waitFor(() =>
+      expect(vi.mocked(fetch).mock.calls.filter((call) => String(call[0]).includes(`/admin/companies/${C}/settings`)).length).toBeGreaterThan(before),
+    )
+  })
+
+  it('says why a file was refused, in words, when it is not an image', async () => {
+    serve()
+    const answer = vi.mocked(fetch).getMockImplementation()!
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) =>
+      (init?.method ?? 'GET') === 'PUT' && String(input).endsWith('/logo')
+        ? Promise.resolve(new Response(JSON.stringify({ message: 'no', code: 'logo_not_an_image' }), { status: 400 }))
+        : answer(input, init),
+    )
+    renderPage()
+    await loaded()
+    await userEvent.upload(screen.getByLabelText(en.companySettings.next.upload), new File(['<svg/>'], 'logo.png', { type: 'image/png' }))
+    expect(await screen.findByText(en.companySettings.next.uploadNotImage)).toBeTruthy()
   })
 })

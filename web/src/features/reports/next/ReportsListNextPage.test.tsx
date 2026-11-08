@@ -118,6 +118,10 @@ function routeFetch(
     documents?: Record<string, string | null>
     /** Report ids whose detail read fails, so that row can claim no contents. */
     detailFail?: string[]
+    /** `GET /surveys?companyId=` rows, for the form's survey choice. Absent: the read 404s. */
+    surveys?: object[]
+    /** `GET /admin/companies/{id}`'s name, for a super administrator's header. */
+    companyName?: string
   } = {},
 ) {
   vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
@@ -142,6 +146,10 @@ function routeFetch(
       return Promise.resolve(options.download ? options.download() : new Response(new Blob(['"section"\r\n']), { status: 200 }))
     }
     if (method === 'POST' && url.pathname.endsWith('/admin/reports')) return Promise.resolve(json({ ...csv, id: 'r-new' }))
+    if (method === 'GET' && url.pathname.endsWith('/surveys') && options.surveys) return Promise.resolve(json({ surveys: options.surveys }))
+    if (method === 'GET' && url.pathname.endsWith(`/admin/companies/${CID}`) && options.companyName) {
+      return Promise.resolve(json({ id: CID, name: options.companyName }))
+    }
     return Promise.resolve(new Response(null, { status: 404 }))
   })
 }
@@ -549,5 +557,64 @@ describe('ReportsListNextPage — one test per role that matters', () => {
     renderAs({ role, companyId: CID })
     expect(await screen.findByText('Los informes de esta empresa son de su administración')).toBeTruthy()
     expect(calls((url) => url.pathname.includes('/admin/reports'))).toHaveLength(0)
+  })
+})
+
+/**
+ * The walkthrough's B3 (docs/audits/2026-11-08-operator-ui-walkthrough.md): "Nuevo informe" asked
+ * no survey, so every report and every share link covered ALL of a company's surveys in one
+ * document. The server has taken `filters.surveyIds` since #88; the form never sent it.
+ */
+describe('ReportsListNextPage — which survey a report covers', () => {
+  const surveyRow = (id: string, title: string, createdAt: string, extra: object = {}) => ({
+    id, title, companyId: CID, status: 'closed', createdAt, type: 'periodic', startDate: createdAt, endDate: createdAt,
+    responseCount: 10, targetAudienceCount: 20, ...extra,
+  })
+  const SURVEYS = [
+    surveyRow('s-tele', 'Teletrabajo 2026', '2026-10-20T00:00:00Z'),
+    surveyRow('s-clima', 'Clima 2026', '2026-10-19T00:00:00Z'),
+    surveyRow('s-draft', 'Borrador', '2026-10-21T00:00:00Z', { status: 'draft' }),
+    surveyRow('s-other', 'De otra empresa', '2026-10-22T00:00:00Z', { companyId: 'c2' }),
+  ]
+  const postedBody = () => {
+    const post = vi.mocked(fetch).mock.calls.find(
+      (call) => (call[1] as RequestInit | undefined)?.method === 'POST' && String(call[0]).endsWith('/admin/reports'),
+    )
+    return post ? (JSON.parse(String((post[1] as RequestInit).body)) as Record<string, unknown>) : null
+  }
+
+  it("offers the company's distributed surveys, chooses the latest, and sends only that one", async () => {
+    routeFetch({ surveys: SURVEYS })
+    renderAs(ADMIN)
+    await screen.findByText('Datos de clima — T3 2026')
+    await userEvent.click(screen.getByRole('button', { name: 'Nuevo informe' }))
+    const choice = (await screen.findByLabelText('Encuesta')) as HTMLSelectElement
+    // Oldest first, never a draft, never another company's, and "every survey" as a deliberate choice.
+    expect([...choice.options].map((option) => option.textContent)).toEqual(['Clima 2026', 'Teletrabajo 2026', 'Todas las encuestas de la empresa'])
+    expect(choice.value).toBe('s-tele')
+    await userEvent.selectOptions(choice, 's-clima')
+    await userEvent.type(screen.getByLabelText('Título'), 'Clima para ESPH')
+    await userEvent.click(screen.getByRole('button', { name: 'Crear informe' }))
+    await waitFor(() => expect(postedBody()).not.toBeNull())
+    expect(postedBody()).toMatchObject({ companyId: CID, title: 'Clima para ESPH', filters: { surveyIds: ['s-clima'] } })
+  })
+
+  it('sends no filter at all when every survey is chosen, which is what "all" has always meant', async () => {
+    routeFetch({ surveys: SURVEYS })
+    renderAs(ADMIN)
+    await screen.findByText('Datos de clima — T3 2026')
+    await userEvent.click(screen.getByRole('button', { name: 'Nuevo informe' }))
+    await userEvent.selectOptions(await screen.findByLabelText('Encuesta'), '')
+    await userEvent.type(screen.getByLabelText('Título'), 'Todo')
+    await userEvent.click(screen.getByRole('button', { name: 'Crear informe' }))
+    await waitFor(() => expect(postedBody()).not.toBeNull())
+    expect(postedBody()).not.toHaveProperty('filters')
+  })
+
+  it('names the client in the header for a super administrator', async () => {
+    routeFetch({ companyName: 'Empresa de Servicios Públicos de Heredia' })
+    renderAs({ role: 'super_admin', companyId: '' })
+    await screen.findByText('Datos de clima — T3 2026')
+    expect(await screen.findAllByText('Empresa de Servicios Públicos de Heredia')).not.toHaveLength(0)
   })
 })

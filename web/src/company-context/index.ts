@@ -1,5 +1,7 @@
 export { default as CompanyContextProvider, type CompanyContextProviderProps } from './CompanyContextProvider'
 export { useCompanyContext, useCompanyScope } from './useCompanyScope'
+export { useFollowCompany } from './useFollowCompany'
+export { useCompanyNameFor, forgetCompanyNames } from './useCompanyNameFor'
 export { CompanyContext, type CompanyContextValue } from './context'
 export {
   COMPANY_CONTEXT_STORAGE_KEY,

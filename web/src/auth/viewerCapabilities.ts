@@ -82,6 +82,18 @@ export interface ViewerCapabilities {
   seesOnlySelf: boolean
   /** `POST /surveys` — `SurveyEndpoints.cs:306-310` via `CanAdminister` (`:55-57`). */
   canAuthorSurveys: boolean
+  /**
+   * Administers THIS existing survey — its audience, codes, roster, window, status and
+   * questions: `CanAdminister` on the survey's own company. A `super_admin` for any survey,
+   * whatever the header holds; a `company_admin` for their claim's tenant only.
+   *
+   * Not `canAuthorSurveys`, which also needs a company SELECTED because it answers "may this
+   * viewer create a new survey, and where". Gating an existing survey's pages on that made the
+   * header a silent filter: a TIMS operator who opened another client's survey from "Todas las
+   * encuestas" got its Distribution page without the roster, the per-person buttons or the send
+   * controls, and nothing said why (docs/audits/2026-11-08-operator-ui-walkthrough.md, A1).
+   */
+  canAdministerSurvey: (survey: { companyId: string }) => boolean
   /** `POST /microclimates` — `MicroclimateEndpoints.cs:347` (`Roles.Admin` + `CanAccessCompany`). */
   canLaunchMicroclimate: boolean
   /** `POST /action-plans` — `ActionPlanEndpoints.cs:103` (`Roles.Admin` + `CanAccessCompany`). */
@@ -216,6 +228,16 @@ function administersCompany(claims: ViewerClaims, companyId: string): boolean {
 }
 
 /**
+ * `canAdministerSurvey` as a plain function of the claims, for a loader that must decide what
+ * to read before rendering anything. It depends on the claims alone — never the header — so a
+ * survey page's reads do not re-run, and flash a skeleton, when a super administrator's header
+ * moves to the survey's company (`useFollowCompany`).
+ */
+export function administersSurvey(claims: ViewerClaims, survey: { companyId: string }): boolean {
+  return administersCompany(claims, survey.companyId)
+}
+
+/**
  * The whole rule set, pure, so the table test can run it against every role without a
  * DOM. `scope` is the resolved company scope (`resolveCompanyScope`), which already
  * applies the SuperAdmin-selection asymmetry; this function does not re-derive it.
@@ -247,6 +269,7 @@ export function capabilitiesFor(claims: ViewerClaims, scope: CompanyScope): View
     canRecordProgress: (plan) => canManagePlan(plan, trackingClaims),
     canOpenResults: (survey) =>
       role === SUPER_ADMIN || (role === COMPANY_ADMIN && claims.companyId !== undefined && claims.companyId === survey.companyId),
+    canAdministerSurvey: (survey) => administersSurvey(claims, survey),
     canManageCompanies: role === SUPER_ADMIN,
     canAssignRoles: role === SUPER_ADMIN,
     canManageMicroclimate: (microclimate) => administersCompany(claims, microclimate.companyId),

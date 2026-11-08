@@ -73,7 +73,7 @@ function q(order: number, textEn: string, category: string | null = 'trust'): Au
 
 function arrangeSurvey(status: string, responseCount: number) {
   vi.mocked(getSurveyQuestionAuthoring).mockResolvedValue({ surveyId: 's1', title: 'Q4', language: 'both', status, locales: ['en', 'es'], questions: [q(0, 'First'), q(1, 'Second', 'workload')] })
-  vi.mocked(getSurvey).mockResolvedValue({ id: 's1', title: 'Q4 Climate Survey', description: 'Wave five', type: 'periodic', status, responseCount, targetAudienceCount: 24, startDate: '2026-09-03T12:00:00Z', endDate: '2026-10-10T12:00:00Z' } as SurveyDetail)
+  vi.mocked(getSurvey).mockResolvedValue({ id: 's1', companyId: COMPANY, title: 'Q4 Climate Survey', description: 'Wave five', type: 'periodic', status, responseCount, targetAudienceCount: 24, startDate: '2026-09-03T12:00:00Z', endDate: '2026-10-10T12:00:00Z' } as SurveyDetail)
 }
 
 function renderAt(path: string, role = 'company_admin') {

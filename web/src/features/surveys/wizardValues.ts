@@ -896,6 +896,8 @@ export function buildCreateInput(
   companyId: string,
   /** The company's IANA zone: the wall clocks are read on it (G16). */
   timeZone?: string | null,
+  /** `builderAudienceEstimate`: what a blank "Participantes previstos" stands for. */
+  audienceEstimate?: number | null,
 ): CreateSurveyInput {
   const title = localizedFor(values.language, values.titleEn, values.titleEs)
   const description = localizedFor(values.language, values.descriptionEn, values.descriptionEs)
@@ -934,9 +936,34 @@ export function buildCreateInput(
   if (targets.userIds.length > 0) input.userIds = targets.userIds
   if (!isBlank(values.targetAudienceCount) && Number.isInteger(target) && target > 0) {
     input.targetAudienceCount = target
+  } else if (isBlank(values.targetAudienceCount) && audienceEstimate !== undefined && audienceEstimate !== null && audienceEstimate > 0) {
+    // Blank used to store no count at all, and no count means no participation rate anywhere --
+    // EAGLE read "sin lista de invitados" for that reason. Blank now means "the audience I chose",
+    // which the field said before it was left blank (walkthrough B6, 2026-11-08).
+    input.targetAudienceCount = audienceEstimate
   }
 
   return input
+}
+
+/**
+ * How many people the audience step's choice reaches, from the company's directory -- the same
+ * union `SurveyQueries.Audience` takes: the targeted departments OR the named people, and the
+ * whole active company when neither is chosen. `null` when the directory has not been read, or
+ * the choice reaches nobody: then a blank count stays undeclared, as for a link-only survey.
+ */
+export function builderAudienceEstimate(
+  values: SurveyWizardValues,
+  users: readonly { id: string; departmentId: string | null; isActive: boolean }[] | null | undefined,
+): number | null {
+  if (!users) return null
+  const active = users.filter((user) => user.isActive)
+  const targets = audienceTargets(values)
+  if (targets.departmentIds.length === 0 && targets.userIds.length === 0) return active.length > 0 ? active.length : null
+  const departments = new Set(targets.departmentIds)
+  const people = new Set(targets.userIds)
+  const reached = active.filter((user) => people.has(user.id) || (user.departmentId !== null && departments.has(user.departmentId))).length
+  return reached > 0 ? reached : null
 }
 
 /**
@@ -964,6 +991,8 @@ export function buildInstantiateInput(
   companyId: string,
   /** The company's IANA zone, as for `buildCreateInput`. */
   timeZone?: string | null,
+  /** As for `buildCreateInput`. */
+  audienceEstimate?: number | null,
 ): InstantiateSurveyTemplateInput {
   const description = localizedFor(values.language, values.descriptionEn, values.descriptionEs)
   const target = Number(values.targetAudienceCount)
@@ -995,6 +1024,11 @@ export function buildInstantiateInput(
   if (targets.departmentIds.length > 0) input.departmentIds = targets.departmentIds
   if (!isBlank(values.targetAudienceCount) && Number.isInteger(target) && target > 0) {
     input.targetAudienceCount = target
+  } else if (isBlank(values.targetAudienceCount) && audienceEstimate !== undefined && audienceEstimate !== null && audienceEstimate > 0) {
+    // Blank used to store no count at all, and no count means no participation rate anywhere --
+    // EAGLE read "sin lista de invitados" for that reason. Blank now means "the audience I chose",
+    // which the field said before it was left blank (walkthrough B6, 2026-11-08).
+    input.targetAudienceCount = audienceEstimate
   }
 
   return input

@@ -65,6 +65,7 @@ function fetchWith(
   onReissue?: (userId: string) => { status: number; body: unknown },
   onRevoke?: (userId: string) => { status: number; body: unknown },
   onRemind?: (userId: string) => { status: number; body: unknown },
+  onInvite?: (userIds: string[]) => { status: number; body: unknown },
 ) {
   const sent: Sent[] = []
   const mock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -102,6 +103,22 @@ function fetchWith(
       const answer = onReissue?.(reissue[1]) ?? {
         status: 200,
         body: { surveyId: SURVEY, userId: reissue[1], username: 'x', delivered: true, failureReason: null, issuedOn: '2026-10-22' },
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify(answer.body), { status: answer.status, headers: { 'Content-Type': 'application/json' } }),
+      )
+    }
+    // The one-person send: `POST /surveys/{id}/invitations` naming only that person. Matched before
+    // the generic POST below, which answers in the account-resend shape.
+    if (/\/surveys\/[^/]+\/invitations$/.test(url) && (init?.method ?? 'GET').toUpperCase() === 'POST') {
+      const body = JSON.parse(String(init?.body)) as { userIds: string[] }
+      sent.push({ url, body })
+      const answer = onInvite?.(body.userIds) ?? {
+        status: 200,
+        body: {
+          requested: body.userIds.length, created: 1, invitationIds: ['i1'], skippedUserIds: [], notificationsQueued: 0,
+          undeliverableRecipients: 0, note: null, credentialsIssued: 1, credentialsNotSent: 0, remaining: 0,
+        },
       }
       return Promise.resolve(
         new Response(JSON.stringify(answer.body), { status: answer.status, headers: { 'Content-Type': 'application/json' } }),
@@ -427,9 +444,12 @@ describe('SurveyRosterPanel', () => {
       expect(screen.getByRole('button', { name: T.remindFor.replace('{name}', 'Hugo Peralta') })).toBeTruthy()
       expect(screen.queryByRole('button', { name: T.reissueFor.replace('{name}', 'Hugo Peralta') })).toBeNull()
 
-      // No code: there is nothing to resend, and the row still says so.
-      expect(reissueOf('Marta Villalobos')).toHaveProperty('disabled', true)
-      expect(within(rowOf('marta')).getByText(T.reissueWhyNoCode)).toBeTruthy()
+      // No code: there is nothing to RESEND -- she is sent her first one instead. Until
+      // 2026-11-08 this row was a disabled reissue and a note, the third dead end, and the only
+      // way to give her a code mailed everyone else without one too (walkthrough A3).
+      expect(screen.queryByRole('button', { name: T.reissueFor.replace('{name}', 'Marta Villalobos') })).toBeNull()
+      expect(screen.getByRole('button', { name: T.sendCodeFor.replace('{name}', 'Marta Villalobos') })).toHaveProperty('disabled', false)
+      expect(within(rowOf('marta')).queryByText(T.reissueWhyNoCode)).toBeNull()
       expect(screen.queryByRole('button', { name: T.remindFor.replace('{name}', 'Marta Villalobos') })).toBeNull()
     })
 
@@ -561,6 +581,109 @@ describe('SurveyRosterPanel', () => {
         expect(within(rowOf('hugo')).getByText(T.remindedOnce.replace('{date}', day('2026-10-31')))).toBeTruthy()
         // And it now offers another rather than a first, without the roster being re-read.
         expect(screen.getByRole('button', { name: T.remindAgainFor.replace('{name}', 'Hugo Peralta') })).toBeTruthy()
+      })
+    })
+
+    /**
+     * The walkthrough's A3 (docs/audits/2026-11-08-operator-ui-walkthrough.md): a person with no
+     * code for this survey had a disabled "Reenviar credenciales" and no action at all, so the only
+     * way to give ONE person a code was "Enviar códigos" -- which mails everyone in the audience
+     * still without one, people the client never listed included (28 Oct 2026).
+     */
+    describe('sending one person their first code', () => {
+      const sendOf = (name: string) => screen.queryByRole('button', { name: T.sendCodeFor.replace('{name}', name) })
+      const today = () => {
+        const now = new Date()
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+      }
+
+      it('asks first, naming only that person, then sends to them alone', async () => {
+        const payload = perSurvey()
+        const { mock, sent } = fetchWith(payload)
+        vi.stubGlobal('fetch', mock)
+        const user = userEvent.setup()
+        renderPanel(payload)
+        await screen.findByText('Marta Villalobos')
+
+        await user.click(sendOf('Marta Villalobos')!)
+        const dialog = await screen.findByRole('alertdialog')
+        expect(within(dialog).getByText(T.sendCodeTitle.replace('{name}', 'Marta Villalobos'))).toBeTruthy()
+        expect(
+          within(dialog).getByText(
+            T.sendCodeBody.replace('{email}', 'marta@esph.test').replace('{survey}', 'Clima Organizacional ESPH 2026'),
+          ),
+        ).toBeTruthy()
+        expect(sent).toHaveLength(0)
+
+        await user.click(within(dialog).getByRole('button', { name: T.sendCode }))
+
+        await waitFor(() => expect(sent).toHaveLength(1))
+        expect(sent[0].url).toBe(`${import.meta.env.VITE_API_BASE_URL}/surveys/${SURVEY}/invitations`)
+        // Exactly one person, and never a department, the audience, or "allTargeted".
+        expect(sent[0].body).toEqual({ userIds: ['marta'] })
+        expect(
+          await screen.findByText(T.sendCodeSent.replace('{name}', 'Marta Villalobos').replace('{email}', 'marta@esph.test')),
+        ).toBeTruthy()
+        // The row now holds a code from today, and its action is the reissue, without a refetch.
+        expect(within(rowOf('marta')).getByText(T.codeSent.replace('{date}', day(today())))).toBeTruthy()
+        expect(sendOf('Marta Villalobos')).toBeNull()
+        expect(screen.getByRole('button', { name: T.reissueFor.replace('{name}', 'Marta Villalobos') })).toHaveProperty('disabled', false)
+      })
+
+      it('is never offered to somebody who already holds a code', async () => {
+        const payload = perSurvey()
+        vi.stubGlobal('fetch', fetchWith(payload).mock)
+        renderPanel(payload)
+        await screen.findByText('Ana Lucía Mora')
+        expect(sendOf('Ana Lucía Mora')).toBeNull()
+        expect(sendOf('Hugo Peralta')).toBeNull()
+        expect(sendOf('Marta Villalobos')).not.toBeNull()
+      })
+
+      it('says the mail did not go, and leaves the row without a code', async () => {
+        const payload = perSurvey()
+        const { mock } = fetchWith(payload, undefined, undefined, undefined, undefined, () => ({
+          status: 200,
+          body: {
+            requested: 1, created: 1, invitationIds: ['i1'], skippedUserIds: [], notificationsQueued: 0,
+            undeliverableRecipients: 0, note: null, credentialsIssued: 0, credentialsNotSent: 1, remaining: 1,
+          },
+        }))
+        vi.stubGlobal('fetch', mock)
+        const user = userEvent.setup()
+        renderPanel(payload)
+        await user.click((await screen.findByRole('button', { name: T.sendCodeFor.replace('{name}', 'Marta Villalobos') })))
+        await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: T.sendCode }))
+        expect(
+          await screen.findByText(T.sendCodeNotSent.replace('{name}', 'Marta Villalobos').replace('{email}', 'marta@esph.test')),
+        ).toBeTruthy()
+        expect(sendOf('Marta Villalobos')).not.toBeNull()
+      })
+
+      it('says the survey is not open, in Spanish, rather than a generic failure', async () => {
+        const payload = perSurvey()
+        const { mock } = fetchWith(payload, undefined, undefined, undefined, undefined, () => ({
+          status: 409,
+          body: { message: 'A survey in status closed cannot be distributed.', code: 'survey_not_distributable' },
+        }))
+        vi.stubGlobal('fetch', mock)
+        const user = userEvent.setup()
+        renderPanel(payload)
+        await user.click((await screen.findByRole('button', { name: T.sendCodeFor.replace('{name}', 'Marta Villalobos') })))
+        await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: T.sendCode }))
+        expect(await screen.findByText(T.sendCodeNotOpen)).toBeTruthy()
+      })
+
+      it('is offered again for a person whose code was withdrawn on this page -- the 4 Nov case', async () => {
+        const payload = perSurvey()
+        vi.stubGlobal('fetch', fetchWith(payload).mock)
+        const user = userEvent.setup()
+        renderPanel(payload)
+        await screen.findByText('Ana Lucía Mora')
+        expect(sendOf('Ana Lucía Mora')).toBeNull()
+        await user.click(screen.getByRole('button', { name: T.revokeFor.replace('{name}', 'Ana Lucía Mora') }))
+        await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: T.revoke }))
+        await waitFor(() => expect(sendOf('Ana Lucía Mora')).not.toBeNull())
       })
     })
 

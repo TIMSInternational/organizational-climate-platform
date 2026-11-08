@@ -924,6 +924,7 @@
     "country": "Country",
     "companySize": "Company Size",
     "selectSize": "Select size",
+    "selectCountry": "Select country",
     "subscriptionTier": "Subscription Tier",
     "selectTier": "Select tier",
     "sendInvitationToAdmin": "Send invitation to company administrator",
@@ -2851,6 +2852,9 @@
     "reportTitle": "Title",
     "type": "Type",
     "format": "Format",
+    "survey": "Survey",
+    "allSurveys": "Every survey of the company",
+    "surveyHelp": "The report, and any link shared from it, shows this survey only. “Every survey of the company” puts them all in one document.",
     "createdAt": "Created",
     "download": "Download",
     "type_summary": "Summary",
@@ -3314,12 +3318,44 @@
         "noMatch": "No company matches the search.",
         "createHeading": "New company",
         "create": "Create company",
+        "domainHelp": "The client’s email domain, such as esph-sa.com. Anyone who registers with an address on it joins this company, and it cannot be used by another.",
         "loadFailed": "The companies could not be read",
         "superOnly": "The list of companies belongs to the super administrator: no other account can read it."
       },
       "companyDetail": {
         "title": "Company detail",
         "description": "What every new survey of this company inherits, and the pages that only open from here. Saved at the end.",
+        "setup": {
+          "title": "First steps",
+          "intro": "What this client still needs before its first survey, in the order it happens.",
+          "allDone": "Ready for its first survey.",
+          "done": "done",
+          "pending": "pending",
+          "access": {
+            "title": "Language, time zone and participant access",
+            "body": "Further down this page. Choose “One account for every survey” or “One code per survey” BEFORE creating the first survey: each survey keeps the mode it was created with."
+          },
+          "brand": {
+            "title": "Brand",
+            "body": "The logo and the email colour, further down this page."
+          },
+          "departments": {
+            "title": "Departments",
+            "body": "The company’s areas. They are also created by the full Excel import."
+          },
+          "fields": {
+            "title": "Demographic fields",
+            "body": "The cuts of the results: tenure, gender, age… They also come in the full Excel import."
+          },
+          "people": {
+            "title": "People",
+            "body": "Load the client’s list with Bulk import, or one at a time with Add person."
+          },
+          "survey": {
+            "title": "First survey",
+            "body": "The full Excel import creates fields, people and the survey as a draft in one go; or use New survey."
+          }
+        },
         "discard": "Discard",
         "save": "Save changes",
         "saving": "Saving…",
@@ -3478,6 +3514,8 @@
         "showAll": "Show the rest",
         "showFewer": "Show fewer",
         "empty": "Nobody matches these filters.",
+        "emptyCompany": "This company has no people yet.",
+        "emptyCompanyHint": "Load them with Bulk import, add one with Add person, or invite one with Invite person.",
         "invitations": {
           "heading": "Invitations",
           "noneMeta": "none pending",
@@ -4588,6 +4626,7 @@
           "sharedNone": "Nobody recorded yet.",
           "confirmCodesTitle": "Send the codes?",
           "confirmCodesBody": "A code will be emailed to those of these {count} people who do not have one yet. They go out 100 at a time and nobody receives two. This cannot be undone.",
+          "confirmCodesOnePerson": "This writes to everyone who still has no code. For one person, use “Send code” on their row under “Who has answered”.",
           "confirmSharedTitle": "Record the audience?",
           "confirmSharedBody": "{count} people will be recorded as this survey's audience. No email is sent: they sign in with their own account.",
           "progressStarting": "Sending codes…",
@@ -4620,6 +4659,7 @@
         "cannotAuthorBody": "Creating a survey is the company administrator's task.",
         "pickCompany": "Choose a company to create a survey on its behalf.",
         "title": "New survey",
+        "forCompany": "For {company}",
         "draftBadge": "Draft",
         "stepLine": {
           "basics": "Which survey it is, in which language and from which template, before anything is sent.",
@@ -4725,6 +4765,7 @@
           "people": "Specific people",
           "companyCount": "It reaches the whole company. Active people today: {count}.",
           "companyAll": "It reaches the whole company.",
+          "targetDefault": "Left blank, the response rate is computed over {count} people: the audience you chose.",
           "departmentsCount": "People in the ticked departments: {count}.",
           "departmentsRequired": "Tick at least one department, or choose “The whole company”.",
           "peopleRequired": "Choose at least one person, or choose “The whole company”. With nobody chosen, the survey would reach the whole company.",
@@ -4769,6 +4810,11 @@
         "participantIdentityOn": "The public link now asks respondents for their name.",
         "participantIdentityOff": "The public link no longer asks respondents for their name.",
         "oneSessionOnlyLabel": "One session only on the public link",
+        "opensBeforeStartLabel": "Open the link before the start date",
+        "opensBeforeStartHelp": "With the survey active, the link and the QR open now, even before the start date. Email invitations do not depend on this.",
+        "opensBeforeStartOn": "The link opens now, even before the start date.",
+        "opensBeforeStartOff": "The link will open on the start date.",
+        "linkWaitsForStart": "The link does not open yet: the survey starts on {date}. If it must open now, turn on “Open the link before the start date”.",
         "oneSessionOnlyHelp": "Someone answering without an account starts again if they come back. Their answers are not handed back to them.",
         "oneSessionOnlyOn": "The public link no longer hands answers back.",
         "oneSessionOnlyOff": "The public link hands answers back again."
@@ -4781,7 +4827,7 @@
         "filterAll": "All",
         "filterCompleted": "Finished",
         "filterStarted": "Started, not finished",
-        "filterNotStarted": "Not opened yet",
+        "filterNotStarted": "Not started yet",
         "colPerson": "Person",
         "colUsuario": "Username",
         "colRole": "Role",
@@ -4789,7 +4835,7 @@
         "colLast": "Last activity",
         "statusCompleted": "Finished",
         "statusStarted": "Started",
-        "statusNotStarted": "Not opened",
+        "statusNotStarted": "Not started",
         "statusNotCompleted": "Not finished",
         "filterNotCompleted": "Not finished",
         "completionOnlyNote": "This survey is anonymous. That a person finished it is recorded, never what they answered: they are two separate records with no way to join them. So who has finished and who has not can be shown, but not who started without finishing.",
@@ -4825,6 +4871,15 @@
         "reissueFor": "Resend credentials to {name}",
         "remindFor": "Send {name} a reminder",
         "reissueWhyNoCode": "No code yet: the invitation sends the first one.",
+        "sendCode": "Send code",
+        "sendCodeFor": "Send a code to {name}",
+        "sendCodeTitle": "Send {name} a code?",
+        "sendCodeBody": "A username and password that open only “{survey}” will be sent to {email}. Nobody else is emailed. Send it only if the client asked in writing for this person to receive the survey.",
+        "sendCodeSent": "A code was sent to {name} ({email}).",
+        "sendCodeNotSent": "The email to {name} ({email}) did not go out and the code was withdrawn: they hold no code. Check the address on their record and try again.",
+        "sendCodeAlreadyHad": "{name} already had a code for this survey: nothing was sent. Reload the page to see it.",
+        "sendCodeNotOpen": "The survey is not open: codes cannot be sent. Open it or extend its close first.",
+        "sendCodeError": "The code could not be sent. Try again.",
         "reissueWhySignedIn": "Already signed in with this code: they have it.",
         "reissueTitle": "Resend credentials to {name}?",
         "reissueBody": "A NEW password for “{survey}” will be sent to {email}. Their username stays {username}. The previous password stops working as soon as the email goes out.",
@@ -5721,6 +5776,12 @@
       "colourInvalid": "Use the #rrggbb form.",
       "sender": "Sender name",
       "logoPath": "Logo path",
+      "upload": "Upload logo",
+      "uploadHelp": "PNG, JPG or WebP, up to 512 KB. Saved at once, and shown on screens and in access emails.",
+      "uploading": "Uploading the logo…",
+      "uploadTooLarge": "The logo is larger than 512 KB. Use a lighter one.",
+      "uploadNotImage": "It must be a PNG, JPG or WebP image. An SVG is not accepted: it can carry code.",
+      "uploadFailed": "The logo could not be uploaded. Try again.",
       "logoPathHelp": "A path on this site, like /brand/esph-logo.svg. Empty removes the logo.",
       "logoPathInvalid": "Must start with / and end in .svg, .png, .jpg, .webp, .avif or .gif. External addresses are not accepted.",
       "uploadLogo": "Upload logo",
@@ -8186,6 +8247,7 @@
       "admin__companies__licenses__reactivate__create": "Reactivated a company licence",
       "admin__companies__licenses__suspend__create": "Suspended a company licence",
       "admin__companies__licenses__update": "Updated the company's licences",
+      "admin__companies__logo__update": "Uploaded the company logo",
       "admin__companies__settings__update": "Updated the company settings",
       "admin__companies__update": "Updated the company",
       "admin__demographic-fields__create": "Created a demographic field",

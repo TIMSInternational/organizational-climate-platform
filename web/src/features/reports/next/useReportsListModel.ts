@@ -16,6 +16,9 @@ import type { ReportFormValues } from '../components/ReportForm'
 import { contentsOf } from './derive'
 import type { ReportContents, ReportRow, ReportsListModel } from './model'
 import { describeApiError } from '../../../api/describeApiError'
+import { listSurveys } from '../../surveys/api/surveys'
+import { distributedSurveys } from '../../surveys/next/statusWorkbookChoices'
+import type { ReportSurveyChoice } from '../components/ReportForm'
 
 export type ReportsListStatus = 'forbidden' | 'loading' | 'ready' | 'error'
 
@@ -40,6 +43,8 @@ export interface ReportsListState {
   applySchedule: (saved: Report) => void
   /** Replaces one report's links after the share dialog minted or revoked one. */
   setShares: (reportId: string, shares: readonly ReportShareSummary[]) => void
+  /** The company's distributed surveys, oldest first, for the form's survey choice. */
+  surveys: readonly ReportSurveyChoice[]
 }
 
 /**
@@ -79,6 +84,24 @@ export function useReportsListModel(companyId: string | undefined, access: Repor
   const [contents, setContentsMap] = useState<Record<string, ReportContents | null>>({})
   const [status, setStatus] = useState<ReportsListStatus>(mayRead && companyId ? 'loading' : 'forbidden')
   const [error, setError] = useState<string | null>(null)
+  const [surveys, setSurveys] = useState<readonly ReportSurveyChoice[]>([])
+
+  // The same list, filter and order as the status workbook's survey choice: never a draft,
+  // never another company's. A failed read leaves the form without the choice, as before.
+  useEffect(() => {
+    if (!companyId || !mayRead) return
+    let cancelled = false
+    listSurveys(baseUrl, { companyId }, locale)
+      .then((rows) => {
+        if (!cancelled) setSurveys(distributedSurveys(rows, companyId))
+      })
+      .catch(() => {
+        if (!cancelled) setSurveys([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [baseUrl, companyId, locale, mayRead])
 
   const load = useCallback(async () => {
     if (!companyId || !mayRead) {
@@ -146,6 +169,7 @@ export function useReportsListModel(companyId: string | undefined, access: Repor
         type: values.type,
         companyId,
         format: values.format,
+        ...(values.surveyId ? { filters: { surveyIds: [values.surveyId] } } : {}),
       })
       await load()
     },
@@ -185,5 +209,5 @@ export function useReportsListModel(companyId: string | undefined, access: Repor
     void load()
   }, [load])
 
-  return { status, model, error, reload, create, download, applySchedule, setShares }
+  return { status, model, error, reload, create, download, applySchedule, setShares, surveys }
 }

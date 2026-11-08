@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
+import { useFollowCompany } from '../../../company-context'
 import { ChevronDown, ChevronUp, FileClock, History, Lock } from 'lucide-react'
 import { PageTopBar } from '../../../components/layout'
 import { Button, Chip, ErrorState, LoadingRegion, SkeletonText, Table } from '../../../components/ui'
@@ -99,6 +100,7 @@ export default function SurveyHistoryPage() {
   const { id } = useParams<{ id: string }>()
   const { t, locale } = useTranslation()
   const { state, reload } = useSurveyHistoryModel(id)
+  useFollowCompany(state.status === 'ready' ? state.survey.companyId : undefined)
 
   if (state.status === 'loading') {
     return (

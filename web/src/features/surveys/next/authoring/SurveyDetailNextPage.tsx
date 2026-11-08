@@ -15,7 +15,7 @@ import {
 import { ANONYMITY_FLOOR } from '../../../../components/charts'
 import { estimateAudience, targetsWholeCompany } from '../../../../components/distribution'
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
-import { useCompanyScope } from '../../../../company-context/useCompanyScope'
+import { useFollowCompany } from '../../../../company-context/useFollowCompany'
 import { useTranslation } from '../../../../i18n'
 import ContentFallbackNotice from '../../components/ContentFallbackNotice'
 import { canDistribute } from '../../api/surveyInvitationCopy'
@@ -57,6 +57,7 @@ export default function SurveyDetailNextPage() {
   const { id } = useParams<{ id: string }>()
   const { t } = useTranslation()
   const { state, reload, transition, duplicate, saveWindow, saveAudience, remove, pending, actionError } = useSurveyDetailModel(id)
+  useFollowCompany(state.status === 'ready' ? state.model.survey.companyId : undefined)
 
   if (state.status === 'loading') {
     return (
@@ -138,15 +139,12 @@ export function SurveyDetailView({
   const targets = targetedDepartments(survey.departmentIds, departments)
   const reminders = remindersSent(invitations?.invitations ?? null)
   const sections = dimensionSections(survey.questions)
-  const canAuthor = caps.canAuthorSurveys
-  // A super administrator carries no tenant until they pick one, so `canAuthorSurveys` is
-  // false and every authoring control vanishes -- Duplicar, Distribución, the transitions --
-  // while Resultados stays, because `canOpenResults` admits SUPER_ADMIN unconditionally. The
-  // page then looks complete and merely lacks the thing the reader came for. That silence
-  // cost a real client conversation: the team concluded the product could not share a link.
-  // Eight other pages already branch on this state; this one did not.
-  const scope = useCompanyScope()
-  const needsCompany = !canAuthor && scope.status === 'needs-selection'
+  // The survey's own company decides, never the header. This page used to gate on
+  // `canAuthorSurveys`, which waits for a selected company, so a super administrator with none
+  // (or another one) lost Duplicar, Distribución and the transitions, and was shown a "choose a
+  // company" notice for a survey whose company is already known. That silence once cost a client
+  // conversation; the 2026-11-08 walkthrough (A1) found the same gate hiding the roster.
+  const canAuthor = caps.canAdministerSurvey(survey)
   const editable = survey.isContentEditable && survey.responseCount === 0
   // The company's clock, which the window is read and written in. The browser's only when the
   // company's cannot be read -- and the editor prints whichever zone it is using.
@@ -210,17 +208,6 @@ export function SurveyDetailView({
           </>
         }
       />
-
-      {needsCompany && (
-        <p
-          role="status"
-          data-testid="detail-needs-company"
-          className="m-0 rounded-lg border border-line-light bg-surface-panel px-4 py-3 text-sm text-fg-secondary"
-        >
-          <b className="font-semibold text-fg-primary">{t('companyContext.chooseACompany')}</b>{' '}
-          {t('companyContext.chooseACompanyDescription')}
-        </p>
-      )}
 
       <ContentFallbackNotice
         language={survey.language}

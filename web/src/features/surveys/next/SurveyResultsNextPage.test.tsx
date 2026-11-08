@@ -444,10 +444,15 @@ describe('SurveyResultsNextPage', () => {
     expect(vi.mocked(fetch)).not.toHaveBeenCalled()
   })
 
-  it('sends a super administrator with no company chosen to /dashboard', async () => {
+  /**
+   * Reversed on 2026-11-08, deliberately. A super administrator reads every survey's results
+   * (`canOpenResults`), so waiting for a header selection sent a TIMS operator with none to the
+   * dashboard from a results link (docs/audits/2026-11-08-operator-ui-walkthrough.md).
+   */
+  it('draws the results for a super administrator with no company chosen, instead of sending them away', async () => {
     renderAt({ role: 'super_admin', companyId: '' })
-    expect(await screen.findByTestId('home')).toBeTruthy()
-    expect(vi.mocked(fetch)).not.toHaveBeenCalled()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Results of Q3 climate survey' })).toBeTruthy()
+    expect(screen.queryByTestId('home')).toBeNull()
   })
 
   /**

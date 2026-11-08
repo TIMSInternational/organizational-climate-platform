@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { AlertCircle, Check, ClipboardList, Clock, HelpCircle, KeyRound, MoreHorizontal, ShieldCheck, Users } from 'lucide-react'
 import { Link, useParams } from 'react-router'
+import { useFollowCompany } from '../../../../company-context/useFollowCompany'
 import { PageTopBar } from '../../../../components/layout'
 import {
   Alert,
@@ -85,6 +86,7 @@ export default function SurveyDistributionNextPage() {
   const { t } = useTranslation()
   const model = useDistributionModel(surveyId)
   const { state } = model
+  useFollowCompany(state.status === 'ready' ? state.model.survey.companyId : undefined)
 
   if (state.status === 'loading') {
     return (
@@ -355,6 +357,29 @@ export function DistributionView({
               onChange={actions.setOneSessionOnly}
             />
           </div>
+
+          {/* The open link obeys the survey's dates: an ACTIVE survey whose start is still ahead
+              answers "Este enlace no abre ninguna encuesta", and the start is frozen once active.
+              Offered wherever there is a link to open, and said out loud when it is the reason
+              the link is shut right now (docs/audits/2026-11-08-operator-ui-walkthrough.md, B2). */}
+          {distribution?.publicLink ? (
+            <div className="mt-4 flex flex-col gap-2 border-t border-line-default pt-4">
+              {survey.status === 'active' &&
+              new Date(survey.startDate).getTime() > now.getTime() &&
+              !(distribution.accessRules?.activeOutsideSchedule ?? false) ? (
+                <p role="status" data-testid="link-waits-for-start" className="m-0 text-sm font-medium text-accent-red-ink">
+                  {t('surveys.next.share.linkWaitsForStart', { date: dayMonth(survey.startDate, locale) })}
+                </p>
+              ) : null}
+              <SwitchField
+                label={t('surveys.next.share.opensBeforeStartLabel')}
+                description={t('surveys.next.share.opensBeforeStartHelp')}
+                checked={distribution.accessRules?.activeOutsideSchedule ?? false}
+                disabled={!actionable || busy}
+                onChange={actions.setOpensBeforeStart}
+              />
+            </div>
+          ) : null}
 
           {/* The survey's own words for the respondent: the anonymity box's paragraph and the
               thank-you (Eagle's corrections, 2026-10-20). Here because, like the two switches
@@ -678,7 +703,12 @@ export function DistributionView({
         onOpenChange={setConfirming}
         title={perSurvey ? copy('send.confirmCodesTitle') : copy('send.confirmSharedTitle')}
         description={
-          perSurvey ? copy('send.confirmCodesBody', { count: recipients }) : copy('send.confirmSharedBody', { count: recipients })
+          // The per-survey send mails everyone in the audience still without a key -- on a
+          // department-targeted survey that includes people the client never listed (28 Oct
+          // 2026). It says so, and where the one-person send is, before anything leaves.
+          perSurvey
+            ? `${copy('send.confirmCodesBody', { count: recipients })} ${copy('send.confirmCodesOnePerson')}`
+            : copy('send.confirmSharedBody', { count: recipients })
         }
         confirmText={perSurvey ? copy('send.sendCodes') : copy('send.register')}
         cancelText={t('common.cancel')}

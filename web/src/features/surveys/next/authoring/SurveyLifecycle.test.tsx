@@ -291,3 +291,42 @@ describe('Detalle de encuesta — the window and delete (audit G16)', () => {
     expect(screen.getByRole('alertdialog')).toBeTruthy()
   })
 })
+
+/**
+ * The walkthrough's A1 (docs/audits/2026-11-08-operator-ui-walkthrough.md) on this page: the
+ * survey's own company decides what a super administrator may do here, never the header. Gated on
+ * a selected company, a TIMS operator with none lost Duplicar, Distribución and the transitions.
+ */
+describe('Detalle de encuesta — a super administrator, whatever the header holds', () => {
+  const renderAsOperator = () => {
+    setToken(tokenFor({ role: 'super_admin', companyId: '', sub: 'u-op', name: 'Operador TIMS' }))
+    return render(
+      <TranslationProvider>
+        <CompanyContextProvider>
+          <MemoryRouter initialEntries={['/surveys/s1']}>
+            <Routes>
+              <Route path="/surveys/:id" element={<SurveyDetailNextPage />} />
+            </Routes>
+          </MemoryRouter>
+        </CompanyContextProvider>
+      </TranslationProvider>,
+    )
+  }
+
+  it("offers the survey's controls with another client in the header, and moves the header to the survey's company", async () => {
+    localStorage.setItem(COMPANY_CONTEXT_STORAGE_KEY, 'otra-empresa')
+    vi.mocked(surveysApi.getSurvey).mockResolvedValue(survey())
+    renderAsOperator()
+    expect(await screen.findByRole('button', { name: 'Duplicar' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: /Distribución/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Cerrar/ })).toBeTruthy()
+    await waitFor(() => expect(localStorage.getItem(COMPANY_CONTEXT_STORAGE_KEY)).toBe('c1'))
+  })
+
+  it('offers them with nothing selected, and shows no "choose a company" notice', async () => {
+    vi.mocked(surveysApi.getSurvey).mockResolvedValue(survey())
+    renderAsOperator()
+    expect(await screen.findByRole('button', { name: 'Duplicar' })).toBeTruthy()
+    expect(screen.queryByTestId('detail-needs-company')).toBeNull()
+  })
+})

@@ -50,6 +50,8 @@ export default function CompaniesListNextPage() {
   const [plan, setPlan] = useState('')
   const state = useCompaniesListModel(capabilities.canManageCompanies)
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
+  const navigateTo = useNavigate()
+  const { selectCompany } = useCompanyContext()
 
   function closeCreate() {
     setCreating(false)
@@ -57,7 +59,7 @@ export default function CompaniesListNextPage() {
   }
 
   async function handleCreate(values: CompanyFormValues) {
-    await createCompany(baseUrl, {
+    const created = await createCompany(baseUrl, {
       name: values.name,
       emailDomain: values.emailDomain,
       industry: values.industry,
@@ -65,8 +67,11 @@ export default function CompaniesListNextPage() {
       country: values.country,
       subscriptionTier: values.subscriptionTier || undefined,
     })
-    closeCreate()
-    state.reload()
+    // Straight into the new client, as "Abrir" does, with its setup steps on top: the form used
+    // to close onto the list with no word, the new company somewhere mid-list
+    // (docs/audits/2026-11-08-operator-ui-walkthrough.md, C).
+    selectCompany(created.id)
+    navigateTo(`/admin/companies/${created.id}?nueva=1`)
   }
 
   const header = (

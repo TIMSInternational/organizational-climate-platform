@@ -75,6 +75,16 @@ export async function getCompanySettings(baseUrl: string, companyId: string): Pr
   return response.json() as Promise<CompanySettingsResponse>
 }
 
+/**
+ * `PUT /admin/companies/{id}/logo`: the body IS the image. The server reads its type off the bytes
+ * (PNG, JPEG or WebP, at most 512 KB), stores it, and points the branding at the versioned
+ * same-origin path it answers with (walkthrough B4, 2026-11-08).
+ */
+export async function uploadCompanyLogo(baseUrl: string, companyId: string, file: Blob): Promise<{ logoUrl: string }> {
+  const response = await authFetch(`${baseUrl}/admin/companies/${companyId}/logo`, { method: 'PUT', body: file })
+  return (await response.json()) as { logoUrl: string }
+}
+
 export async function updateCompanySettings(baseUrl: string, companyId: string, input: UpdateCompanySettingsInput): Promise<CompanySettingsResponse> {
   const response = await authFetch(`${baseUrl}/admin/companies/${companyId}/settings`, {
     method: 'PUT',

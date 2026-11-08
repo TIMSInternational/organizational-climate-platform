@@ -21,8 +21,7 @@ import {
   Switch,
   Table,
 } from '../../../../components/ui'
-import { useCompanyScope } from '../../../../company-context'
-import { useCompanyName } from '../../../../company-context/useCompanyName'
+import { useCompanyNameFor, useCompanyScope } from '../../../../company-context'
 import { readViewerClaims, useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { cn } from '../../../../lib/cn'
 import { useResultBands } from '../../../result-bands/useResultBands'
@@ -63,7 +62,9 @@ export default function DepartmentsNextPage() {
   const { t } = useTranslation()
   const capabilities = useViewerCapabilities()
   const scope = useCompanyScope()
-  const companyName = useCompanyName()
+  // The client the page is about -- the header's selection for a super administrator -- not the
+  // viewer's own company, which for a TIMS operator named nobody (walkthrough, C).
+  const companyName = useCompanyNameFor(scope.companyId)
   const companyId = capabilities.canManageOrg ? (scope.companyId ?? null) : null
   const superScope = readViewerClaims().role === 'super_admin' ? (scope.companyId ?? undefined) : undefined
   const state = useDepartmentsModel(companyId, superScope)

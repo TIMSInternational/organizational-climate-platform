@@ -31,7 +31,7 @@ import { QuestionLibraryBrowser } from '../../../../components/questions'
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { CREDENTIAL_MODES, type CredentialMode } from '../../../org-structure/api/companySettings'
 import { credentialModeLabel } from '../../../org-structure/next/settings/credentialModeLabel'
-import { useCompanyScope } from '../../../../company-context'
+import { useCompanyNameFor, useCompanyScope } from '../../../../company-context'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { cn } from '../../../../lib/cn'
 import type { SurveyRespondQuestion } from '../../api/surveyResponses'
@@ -126,6 +126,9 @@ export default function SurveyBuilderNextPage() {
 function SurveyBuilder({ companyId }: { companyId: string }) {
   const { t, locale } = useTranslation()
   const m = useSurveyBuilderModel(companyId)
+  // Whose survey this is, on every step: a TIMS operator creates for several clients a day, and
+  // nothing on the six steps said which (docs/audits/2026-11-08-operator-ui-walkthrough.md, C).
+  const companyName = useCompanyNameFor(companyId)
   const { values, patch, setQuestions, stepIndex, setStepIndex, template, draft } = m
   const copy = (key: string, vars?: Record<string, string | number>) => t(`surveys.next.builder.${key}`, vars)
   const [attempted, setAttempted] = useState<ReadonlySet<SurveyBuilderStepId>>(new Set())
@@ -190,6 +193,7 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
   return (
     <div>
       <PageTopBar
+        eyebrow={companyName ? copy('forCompany', { company: companyName }) : undefined}
         title={copy('title')}
         // The artboard's chip: small, serif, lavender — not the sans secondary badge.
         badge={{
@@ -933,6 +937,12 @@ function StepForm({
           value={values.targetAudienceCount}
           onChange={(next) => patch({ targetAudienceCount: next })}
         />
+        {values.targetAudienceCount.trim() === '' && m.audienceEstimate !== null ? (
+          // Said BEFORE it is left blank: blank now stands for this count, not for "no rate".
+          <p className="-mt-2 m-0 text-sm text-fg-secondary" data-testid="audience-target-default">
+            {copy('audience.targetDefault', { count: m.audienceEstimate })}
+          </p>
+        ) : null}
         {/* No "Anónima" checkbox: respondents never log in (ruled 2026-10-12), and only an
             anonymous survey can be answered without an account, so every survey built here is
             one (`values.anonymous` defaults to true; both create routes default the same way, through

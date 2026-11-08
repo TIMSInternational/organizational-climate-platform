@@ -1,6 +1,6 @@
 import { useId, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router'
-import { ArrowRight, Check, Link2, Mail, Search, Shield, Upload, UserPlus } from 'lucide-react'
+import { ArrowRight, Check, Link2, Mail, Plus, Search, Shield, Upload, UserPlus } from 'lucide-react'
 import { useTranslation } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
 import { ANONYMITY_FLOOR } from '../../../../components/charts'
@@ -33,6 +33,7 @@ import { DeactivationConfirm, PersonDetailsFields, ResetPassword } from '../../c
 import { departmentChange, usePersonDetails } from '../../components/usePersonDetails'
 import type { Department } from '../../api/departments'
 import IntakeWizard from '../../components/IntakeWizard'
+import AddPersonForm from '../admin/AddPersonForm'
 import InvitationForm, { type InvitationFormValues } from '../../components/InvitationForm'
 import InvitationList from '../../components/InvitationList'
 import ShareableLinkPanel from '../../components/ShareableLinkPanel'
@@ -61,7 +62,7 @@ const FACET_KEY: Readonly<Record<string, string>> = {
   employee: 'superadmin.next.users.roleEmployee',
 }
 
-type OpenPanel = 'none' | 'invite' | 'import'
+type OpenPanel = 'none' | 'invite' | 'import' | 'add'
 
 /**
  * `/admin/companies/:companyId/users` for a super administrator — the canvas's *Usuarios
@@ -160,6 +161,13 @@ export default function SuperUsersView() {
                 <Upload aria-hidden="true" />
                 {t('superadmin.next.users.bulkImport')}
               </Button>
+              {/* One person, typed, mailing nothing. A super administrator — every TIMS operator —
+                  had only the bulk import for a single new hire: the form lived in the company
+                  admin's view alone (docs/audits/2026-11-08-operator-ui-walkthrough.md, A2). */}
+              <Button type="button" variant="outline" onClick={() => setOpen(open === 'add' ? 'none' : 'add')}>
+                <Plus aria-hidden="true" />
+                {t('users.next.add.action')}
+              </Button>
               <Button type="button" variant="primary" onClick={() => setOpen(open === 'invite' ? 'none' : 'invite')}>
                 <UserPlus aria-hidden="true" />
                 {t('superadmin.next.users.invite')}
@@ -181,6 +189,20 @@ export default function SuperUsersView() {
               <InvitationForm allowCompanyAdminSetup onSubmit={handleCreateInvitation} />
               <ShareableLinkPanel onCreate={handleCreateShareableLink} />
             </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* The importer's own single-row route commits it, so the account is shaped exactly as an
+          imported one: the company's language, and keyless in a per-survey company. */}
+      <Dialog open={open === 'add'} onOpenChange={(next) => setOpen(next ? 'add' : 'none')}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto" closeLabel={t('superadmin.next.users.invitations.close')}>
+          <DialogHeader>
+            <DialogTitle>{t('users.next.add.action')}</DialogTitle>
+            <DialogDescription>{t('users.next.add.meta')}</DialogDescription>
+          </DialogHeader>
+          {companyId && (
+            <AddPersonForm baseUrl={baseUrl} companyId={companyId} departments={state.departments} onAdded={state.reload} />
           )}
         </DialogContent>
       </Dialog>
@@ -273,6 +295,9 @@ export default function SuperUsersView() {
         <LoadingRegion loading={state.status === 'loading'} label={t('common.loading')}>
           {state.status === 'loading' ? (
             <SkeletonText lines={6} />
+          ) : state.users.length === 0 ? (
+            // A company with nobody in it is not a filter that matched nothing.
+            <EmptyState title={t('superadmin.next.users.emptyCompany')} description={t('superadmin.next.users.emptyCompanyHint')} />
           ) : visible.length === 0 ? (
             <EmptyState title={t('superadmin.next.users.empty')} />
           ) : (

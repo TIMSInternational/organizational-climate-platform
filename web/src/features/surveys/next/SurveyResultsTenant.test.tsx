@@ -11,6 +11,7 @@ import { COMPANY_CONTEXT_STORAGE_KEY } from '../../../company-context/companyCon
 import { setToken } from '../../../auth/token'
 import { tokenFor } from '../../../test/jwtFixture'
 import { downloadBlobFile } from '../../../lib/downloadBlobFile'
+import { getResultBands } from '../../result-bands/api'
 import type { ClimateTrendsResponse } from '../api/climateTrends'
 import type { SurveyAnalyticsResponse } from '../api/surveyResults'
 
@@ -486,6 +487,32 @@ describe('the survey results on the tenant’s real payload', () => {
     // Fortaleza" about a map that has no group cell.
     expect(screen.queryByRole('heading', { level: 2, name: 'Dónde mirar primero' })).toBeNull()
     expect(document.getElementById('results-next-questions')).not.toBeNull()
+  })
+
+  /**
+   * The scale that decides "Área crítica" is the SURVEY's company's, never the header's: a TIMS
+   * operator who opened this survey while the header held another client had it coloured by that
+   * client's bands (docs/audits/2026-11-08-operator-ui-walkthrough.md). And the header then moves
+   * to the survey's company, so the next "Nueva encuesta" lands where they are looking.
+   */
+  it("reads the survey company's scale, not the header's, for a super administrator whose header holds another client", async () => {
+    // `getResultBands` is the suite-wide mock (src/test/setup.ts); its calls name the company
+    // whose scale was read. Cleared first so only this page's reads count.
+    vi.mocked(getResultBands).mockClear()
+    window.localStorage.setItem(COMPANY_CONTEXT_STORAGE_KEY, 'otra-empresa')
+    renderAs({ role: 'super_admin', companyId: '' })
+    expect(await screen.findByTestId('cell-panel')).toBeTruthy()
+    const scalesRead = vi.mocked(getResultBands).mock.calls.map((call) => call[1])
+    expect(scalesRead).toContain(COMPANY)
+    expect(scalesRead).not.toContain('otra-empresa')
+    await waitFor(() => expect(window.localStorage.getItem(COMPANY_CONTEXT_STORAGE_KEY)).toBe(COMPANY))
+  })
+
+  it('draws the page for a super administrator with nothing selected, and selects the survey’s company', async () => {
+    renderAs({ role: 'super_admin', companyId: '' })
+    expect(await screen.findByTestId('cell-panel')).toBeTruthy()
+    expect(screen.queryByTestId('home')).toBeNull()
+    await waitFor(() => expect(window.localStorage.getItem(COMPANY_CONTEXT_STORAGE_KEY)).toBe(COMPANY))
   })
 
   it('draws the same page for a super administrator who chose the company', async () => {

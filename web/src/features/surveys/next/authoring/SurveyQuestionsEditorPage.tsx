@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router'
 import { PageTopBar } from '../../../../components/layout'
 import { Alert, AlertDescription, Button, Chip, ErrorState, Input, LoadingRegion, SkeletonText, Switch, Textarea } from '../../../../components/ui'
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
-import { useCompanyScope } from '../../../../company-context'
+import { useFollowCompany } from '../../../../company-context'
 import { QuestionLibraryBrowser } from '../../../../components/questions'
 import { useTranslation, type Locale } from '../../../../i18n'
 import { cn } from '../../../../lib/cn'
@@ -72,9 +72,9 @@ export default function SurveyQuestionsEditorPage() {
   const { id } = useParams<{ id: string }>()
   const { t, locale } = useTranslation()
   const caps = useViewerCapabilities()
-  const scope = useCompanyScope()
   const navigate = useNavigate()
   const { state, reload } = useSurveyQuestionsModel(id)
+  useFollowCompany(state.status === 'ready' ? state.detail.companyId : undefined)
   const [libraryOpen, setLibraryOpen] = useState(false)
   // null until the author changes something: the list on screen is the payload's until then,
   // so the first render already counts the real questions.
@@ -111,7 +111,7 @@ export default function SurveyQuestionsEditorPage() {
   const setQuestions = (change: (current: AuthoringQuestion[]) => AuthoringQuestion[]) =>
     setEdited((previous) => change(previous ?? authoring.questions))
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
-  const editable = isEditable(authoring.status, detail.responseCount) && caps.canAuthorSurveys
+  const editable = isEditable(authoring.status, detail.responseCount) && caps.canAdministerSurvey(detail)
   const locked = !isEditable(authoring.status, detail.responseCount)
   // The reader's language first, as the board orders ES · EN for a Spanish reader.
   const locales = [...authoring.locales].sort((x, y) => (x === locale ? -1 : y === locale ? 1 : 0))
@@ -189,7 +189,7 @@ export default function SurveyQuestionsEditorPage() {
               <Button asChild variant="outline">
                 <Link to={`/surveys/${id}`}>{copy('backToSurvey')}</Link>
               </Button>
-              {caps.canAuthorSurveys && (
+              {caps.canAdministerSurvey(detail) && (
                 <Button type="button" variant="primary" disabled={busy} onClick={() => void duplicateAndEdit()}>
                   <Copy aria-hidden="true" />
                   {copy('duplicateAndEdit')}
@@ -236,7 +236,7 @@ export default function SurveyQuestionsEditorPage() {
                     ? copy(detail.responseCount === 1 ? 'arrivedOneOf' : 'arrivedManyOf', { count: detail.responseCount, target: detail.targetAudienceCount })
                     : copy(detail.responseCount === 1 ? 'arrivedOne' : 'arrivedMany', { count: detail.responseCount })
                 } ${copy('mixing')} `}
-              {caps.canAuthorSurveys && (
+              {caps.canAdministerSurvey(detail) && (
                 <>
                   <strong className="text-fg-primary">{copy('duplicateAndEdit')}</strong>{' '}
                   {copy('duplicateCreates', { count: questions.length })}
@@ -433,7 +433,7 @@ export default function SurveyQuestionsEditorPage() {
             <QuestionLibraryBrowser
               open={libraryOpen}
               onOpenChange={setLibraryOpen}
-              companyId={scope.companyId ?? null}
+              companyId={detail.companyId}
               allowedTypes={SURVEY_QUESTION_TYPES}
               typeLabel={(type) => scaleName(t, type)}
               onAdd={(picked) => {

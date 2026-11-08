@@ -211,6 +211,35 @@ describe('CompaniesListNextPage', () => {
     expect(screen.getByRole('button', { name: copy.create })).toBeTruthy()
   })
 
+  /**
+   * The form used to close onto the list with no word, the new company somewhere mid-list; it now
+   * lands in the new client with its setup steps, the header on it -- and it says the domain is
+   * permanent and names sizes and countries the way the company page does (walkthrough C).
+   */
+  it('creates a company and lands in it, with the header moved there', async () => {
+    serve()
+    const listing = vi.mocked(fetch).getMockImplementation()!
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) =>
+      (init?.method ?? 'GET') === 'POST' && String(input).endsWith('/admin/companies')
+        ? Promise.resolve(new Response(JSON.stringify({ id: 'c-new', name: 'Cliente Nuevo' }), { status: 201 }))
+        : listing(input, init),
+    )
+    renderPage('/admin/companies?new=1')
+    await screen.findByRole('heading', { level: 2, name: copy.createHeading })
+    expect(screen.getByText(copy.domainHelp)).toBeTruthy()
+    const size = screen.getByLabelText(en.dashboard.size) as HTMLSelectElement
+    expect([...size.options].map((option) => option.value)).toContain('medium')
+    expect([...size.options].map((option) => option.textContent)).not.toContain('medium')
+    await userEvent.type(screen.getByLabelText(en.departments.name), 'Cliente Nuevo')
+    await userEvent.type(screen.getByLabelText(new RegExp(`^${en.dashboard.domain}`)), 'cliente-nuevo.test')
+    await userEvent.type(screen.getByLabelText(en.dashboard.industry), 'Servicios')
+    await userEvent.selectOptions(size, 'medium')
+    await userEvent.selectOptions(screen.getByLabelText(en.dashboard.country), 'Costa Rica')
+    await userEvent.click(screen.getByRole('button', { name: copy.create }))
+    expect(await screen.findByText('detail c-new')).toBeTruthy()
+    expect(localStorage.getItem(COMPANY_CONTEXT_STORAGE_KEY)).toBe('c-new')
+  })
+
   it('keeps its title and primary action when the list cannot load, and says why', async () => {
     serve({ companies: 'fail' })
     renderPage()
