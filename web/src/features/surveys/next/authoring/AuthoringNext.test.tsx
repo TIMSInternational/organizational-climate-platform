@@ -240,8 +240,10 @@ describe('Detalle de encuesta (SurveyDetail artboard)', () => {
     expect(onTransition).not.toHaveBeenCalled()
 
     const dialog = await screen.findByRole('alertdialog')
-    // The consequence is named, not implied: it cannot be reopened.
-    expect(dialog.textContent).toContain('no se puede reabrir')
+    // The consequence is named, not implied: since the 2026-11-08 ruling a close can be undone,
+    // but not by this reader -- only a super admin, with a new close and a reason.
+    expect(dialog.textContent).toContain('Reabrirla solo lo puede hacer un super administrador')
+    expect(dialog.textContent).not.toContain('no se puede reabrir')
 
     await userEvent.click(within(dialog).getByRole('button', { name: 'Cancelar' }))
     expect(onTransition).not.toHaveBeenCalled()
@@ -1109,7 +1111,7 @@ describe('Nueva encuesta (SurveyBuilder artboard)', () => {
     const row = await screen.findByTestId('add-question')
     expect(row.textContent).toContain('· del banco, de la biblioteca o en blanco')
     await userEvent.click(within(row).getByRole('button', { name: /Agregar pregunta/ }))
-    expect((await screen.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual(['Del banco', 'De la biblioteca', 'En blanco'])
+    expect((await screen.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual(['Del banco', 'De la biblioteca', 'Pegar desde Excel', 'En blanco'])
   })
 
   it("keeps the reader's Spanish on a bilingual template, live — /use takes the language", async () => {
