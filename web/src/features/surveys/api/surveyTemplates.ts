@@ -81,6 +81,12 @@ export interface SurveyTemplateListItem {
   questionCount: number
   lastUsed: string | null
   createdAt: string
+  /**
+   * The owning company's name; null for a global template. A super administrator's list holds
+   * every client's copy of an instrument, and without it the wizard read the same name three
+   * times (walkthrough 2026-11-08). Absent from an API older than it.
+   */
+  companyName?: string | null
 }
 
 /** `GET /survey-templates/{id}`. */

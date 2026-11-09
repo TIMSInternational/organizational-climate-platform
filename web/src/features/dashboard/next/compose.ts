@@ -3,6 +3,7 @@ import type { Microclimate, MicroclimateDetail } from '../../microclimates/api/m
 import { WHOLE_COMPANY_KEY, type ClimateTrendsResponse } from '../../surveys/api/climateTrends'
 import type { SurveyInvitationList } from '../../surveys/api/surveyDistribution'
 import type { SurveyDetail, SurveyListItem } from '../../surveys/api/surveys'
+import { remindersSent } from '../../surveys/next/authoring/launch'
 import type { PlanAccion } from '../../tracking/api/trackingApi'
 import type { CompanyAdminDashboard } from '../api/dashboard'
 import { daysBetween, lowestCell, type MapCell } from './derive'
@@ -237,9 +238,13 @@ export function questionOrderOf(survey: Pick<SurveyDetail, 'questions'>): string
   return order
 }
 
-/** Reminders sent for a survey: every invitation's `reminderCount` (attempts), summed. */
-export function remindersOf(list: Pick<SurveyInvitationList, 'invitations'>): number {
-  return list.invitations.reduce((sum, invitation) => sum + invitation.reminderCount, 0)
+/**
+ * Reminders sent for a survey: the invitations' `reminderCount` (attempts) plus the reminders
+ * recorded on per-survey keys (`summary.keyReminders`) -- the survey page's own rule
+ * (`remindersSent`), so the two screens cannot disagree.
+ */
+export function remindersOf(list: Pick<SurveyInvitationList, 'invitations'> & { summary?: Pick<SurveyInvitationList['summary'], 'keyReminders'> }): number {
+  return remindersSent(list) ?? 0
 }
 
 interface SurveysRegion {

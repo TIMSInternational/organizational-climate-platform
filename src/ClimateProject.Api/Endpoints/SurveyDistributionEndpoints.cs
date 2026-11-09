@@ -1552,6 +1552,10 @@ public static class SurveyDistributionEndpoints
 
         int CountOf(string status) => rows.Count(r => r.Status == status);
 
+        var keyReminders = await db.SurveyCredentials.AsNoTracking()
+            .Where(c => c.SurveyId == surveyId)
+            .SumAsync(c => c.ReminderCount, cancellationToken);
+
         return new SurveyInvitationSummaryDto(
             rows.Count,
             CountOf(SurveyInvitationStatuses.Pending),
@@ -1565,7 +1569,8 @@ public static class SurveyDistributionEndpoints
             // is both 'sent' and expired. Counting it as its own status would need a sweep to
             // keep true, which is the dependency this design does not take.
             rows.Count(r => r.Status != SurveyInvitationStatuses.Revoked && r.ExpiresAt <= now),
-            rows.Count(r => r.Status != SurveyInvitationStatuses.Revoked && r.HasCode));
+            rows.Count(r => r.Status != SurveyInvitationStatuses.Revoked && r.HasCode),
+            keyReminders);
     }
 
     private static async Task<SurveyDistributionDetail> ToDistributionDetailAsync(

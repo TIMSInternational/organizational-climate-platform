@@ -50,9 +50,17 @@ describe('targetedDepartments', () => {
 
 describe('remindersSent', () => {
   it('sums the reminders, and is null — not 0 — while the list is unread', () => {
-    expect(remindersSent([{ reminderCount: 2 }, { reminderCount: 1 }] as never[])).toBe(3)
-    expect(remindersSent([])).toBe(0)
+    expect(remindersSent({ invitations: [{ reminderCount: 2 }, { reminderCount: 1 }] })).toBe(3)
+    expect(remindersSent({ invitations: [] })).toBe(0)
     expect(remindersSent(null)).toBeNull()
+  })
+
+  it('counts the reminders recorded on per-survey keys, which the invitations never carry', () => {
+    // ESPH's case: every invitation at 0, two reminders sent from the roster.
+    expect(remindersSent({ invitations: [{ reminderCount: 0 }, { reminderCount: 0 }], summary: { keyReminders: 2 } })).toBe(2)
+    expect(remindersSent({ invitations: [{ reminderCount: 1 }], summary: { keyReminders: 2 } })).toBe(3)
+    // An API older than the field sends no keyReminders: the invitations alone, as before.
+    expect(remindersSent({ invitations: [{ reminderCount: 1 }], summary: {} })).toBe(1)
   })
 })
 

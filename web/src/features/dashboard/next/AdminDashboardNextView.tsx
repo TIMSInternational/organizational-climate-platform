@@ -809,10 +809,8 @@ function AttentionRow({
       // so the label is right for a better reason: chasing is a per-person decision, and the
       // page this leads to is where that decision is made and where the button lives.
       //
-      // `item.remindersSent` still counts INVITATION reminders, which a per-survey survey never
-      // produces, so the detail line above reads "ningún recordatorio enviado todavía" however
-      // many went out. `survey_credentials.reminder_count` now holds the real figure; wiring the
-      // card to it is the next step and is listed in docs/audits/2026-10-31-frontend-completeness.md.
+      // `item.remindersSent` counts both kinds since 2026-11-08: invitation reminders and the
+      // ones recorded on per-survey keys (`remindersOf`).
       action={
         capabilities.canAuthorSurveys
           ? { label: t('surveys.next.distribution.send.seeWhoIsMissing'), href: `/surveys/${survey.id}/distribution` }

@@ -9,6 +9,11 @@ export interface Company {
   country: string | null
   subscriptionTier: string | null
   createdAt: string
+  /**
+   * The company's language setting ('es' | 'en'), which every new survey, invitation and report
+   * inherits. On the list only (`GET /admin/companies`); absent from an API older than it.
+   */
+  language?: string | null
 }
 
 export interface CompanyDetail extends Company {

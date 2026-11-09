@@ -3301,6 +3301,8 @@
         "noSize": "sin tamaño",
         "noLanguage": "sin definir",
         "languageInDetail": "en el detalle",
+        "languageEs": "Español",
+        "languageEn": "Inglés",
         "noPlan": "sin plan",
         "noSurveys": "sin encuestas",
         "noneOpen": "ninguna abierta",
@@ -4090,7 +4092,12 @@
         "download": "Descargar",
         "cancel": "Cancelar",
         "busy": "Preparando el archivo…",
-        "failed": "No se pudo preparar el archivo. Inténtelo de nuevo."
+        "failed": "No se pudo preparar el archivo. Inténtelo de nuevo.",
+        "formatLabel": "Formato",
+        "formatStandard": "Completo",
+        "formatStandardHelp": "Todas las columnas de la lista: usuario, código, estado y última actividad.",
+        "formatProgress": "Avance (formato ESPH)",
+        "formatProgressHelp": "Nombre completo, Porcentaje de Avance y Observaciones, con la fila coloreada y el total de finalizadas."
       },
       "trends": {
         "title": "Clima en el tiempo",

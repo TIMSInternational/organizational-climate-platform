@@ -143,6 +143,22 @@ describe('CompaniesListNextPage', () => {
     expect(screen.getAllByText(copy.languageInDetail)).toHaveLength(2)
   })
 
+  it('names each company’s language when the list carries it, and says where to read it when it does not', async () => {
+    serve({
+      companies: [
+        { ...TENANTS[0], language: 'es' },
+        { ...TENANTS[1], language: undefined },
+      ] as Company[],
+    })
+    renderPage()
+    const rows = await screen.findAllByRole('row')
+    const northwind = rows.find((row) => row.textContent?.includes('Northwind Logistics'))!
+    const contoso = rows.find((row) => row.textContent?.includes('Contoso'))!
+    expect(northwind.textContent).toContain(copy.languageEs)
+    expect(northwind.textContent).not.toContain(copy.languageInDetail)
+    expect(contoso.textContent).toContain(copy.languageInDetail)
+  })
+
   it('marks its three notes with the board’s glyphs: an open book, a circle alert, a plus', async () => {
     serve()
     renderPage()

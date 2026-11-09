@@ -38,6 +38,7 @@ import type { SurveyRespondQuestion } from '../../api/surveyResponses'
 import { SurveyDraftIndicator, SurveyDraftRecoveryBanner } from '../../components/SurveyDraftNotices'
 import { dimensionLabel } from '../../dimensionLabel'
 import { hasDraftableContent } from '../../draftContent'
+import { templateOptionLabel } from '../../templateOwner'
 import {
   SUGGESTED_DIMENSION_KEYS,
   SURVEY_QUESTION_TYPES,
@@ -809,7 +810,7 @@ function StepForm({
             label={t('surveys.startFromTemplate')}
             value={values.templateId === '' ? NO_TEMPLATE : values.templateId}
             onChange={(next) => m.chooseTemplate(next === NO_TEMPLATE ? '' : next)}
-            options={[{ value: NO_TEMPLATE, label: t('surveys.startBlank') }, ...templates.map((option) => ({ value: option.id, label: option.name }))]}
+            options={[{ value: NO_TEMPLATE, label: t('surveys.startBlank') }, ...templates.map((option) => ({ value: option.id, label: templateOptionLabel(t, option) }))]}
           />
           <SelectField
             required

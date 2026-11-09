@@ -137,7 +137,7 @@ export function SurveyDetailView({
   })
   const rate = responseRate(survey.responseCount, audience?.count ?? null)
   const targets = targetedDepartments(survey.departmentIds, departments)
-  const reminders = remindersSent(invitations?.invitations ?? null)
+  const reminders = remindersSent(invitations ?? null)
   const sections = dimensionSections(survey.questions)
   // The survey's own company decides, never the header. This page used to gate on
   // `canAuthorSurveys`, which waits for a selected company, so a super administrator with none

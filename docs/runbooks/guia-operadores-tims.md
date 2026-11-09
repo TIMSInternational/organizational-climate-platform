@@ -39,7 +39,7 @@ donde dice esta guía, avise antes de buscar otra forma de hacerlo.
 
 ## Un cliente nuevo
 
-1. **Empresas → Nueva empresa.** El dominio es el del correo del cliente y no se puede repetir:
+1. **Empresas → Nueva empresa.** La lista de Empresas dice el **idioma** de cada una. El dominio es el del correo del cliente y no se puede repetir:
    quien se registre con ese dominio entra a esta empresa. Al crearla, la plataforma lo lleva a la
    empresa con una lista de **Primeros pasos**.
 2. **Antes de crear la primera encuesta**, decida en la empresa el **Acceso de los participantes**
@@ -47,17 +47,20 @@ donde dice esta guía, avise antes de buscar otra forma de hacerlo.
    modo con que se creó.
 3. **Marca**: en la empresa, **Subir logotipo** (PNG, JPG o WebP, hasta 512 KB). Se guarda al
    instante y sale en las pantallas y en los correos de acceso. Un SVG no se acepta.
-4. **Importar Excel integral** (en Todas las encuestas) carga de una vez los campos demográficos,
+4. **Plantillas**: en el asistente de nueva encuesta, cada plantilla dice de qué empresa es
+   («Instrumento de clima · ESPH») o si es **Global**. Use la del cliente o una global, nunca la
+   de otro cliente.
+5. **Importar Excel integral** (en Todas las encuestas) carga de una vez los campos demográficos,
    las personas y la encuesta como borrador. Revise la pantalla de revisión: dice qué correos se
    enviarán y cuándo, antes de crear nada.
-5. **Que la audiencia sea exactamente la lista del cliente:** en la audiencia de la encuesta elija
+6. **Que la audiencia sea exactamente la lista del cliente:** en la audiencia de la encuesta elija
    **Personas específicas** y pegue los correos de la lista del cliente. La pantalla dice cuáles no
    están en la empresa o están inactivos. Así nadie que el cliente no nombró puede recibir nada.
-6. **Participantes previstos**: si lo deja en blanco, la tasa de respuesta se calcula sobre la
+7. **Participantes previstos**: si lo deja en blanco, la tasa de respuesta se calcula sobre la
    audiencia que eligió (la pantalla dice cuántas personas son).
-7. **Encuesta por QR o enlace que debe abrir antes de su fecha de inicio**: en Distribución, active
+8. **Encuesta por QR o enlace que debe abrir antes de su fecha de inicio**: en Distribución, active
    **Abrir el enlace antes de la fecha de inicio**. Una encuesta activa no deja mover su inicio.
-8. **Informes para el cliente**: en Empresas → la empresa → Informes, elija **la encuesta** del
+9. **Informes para el cliente**: en Empresas → la empresa → Informes, elija **la encuesta** del
    informe. «Todas las encuestas de la empresa» las junta en un solo documento.
 
 ## Lo de todos los días
@@ -77,7 +80,8 @@ sola en la empresa de esa encuesta. El botón de su fila ya le dice qué hacer:
 
 - **Nunca use «Enviar códigos» para una sola persona**: ese botón le escribe a todas las de la
   audiencia que todavía no tienen código, también a las que el cliente no puso en su lista.
-- La fila dice cuándo se envió el código y si ya se le recordó.
+- La fila dice cuándo se envió el código y si ya se le recordó. La página de la encuesta dice
+  cuántos recordatorios se han enviado en total.
 - Si el correo **rebotó**, se marcó como spam o se rechazó, la fila lo dice en rojo con la fecha.
   Reenviar a la misma dirección casi siempre rebota otra vez: cambie el correo (con permiso
   escrito del cliente) o use **Entregar en mano**.
@@ -116,6 +120,14 @@ En la lista de encuestas, elija la empresa en el filtro y use **Estado de la emp
 Es una hoja por encuesta, con Terminó en verde, Empezó en naranja y los totales debajo.
 Divide entre las personas a las que se les envió código; si alguien de la audiencia no recibió
 código, la hoja lo dice en una nota.
+
+En el mismo cuadro elija el **Formato**:
+
+- **Completo**: todas las columnas de la lista (usuario, código, estado, última actividad).
+- **Avance (formato ESPH)**: *Nombre completo*, *Porcentaje de Avance* (100 %, 0 % o «En curso»)
+  y *Observaciones* (Finalizada, Pendiente Finalizar, Sin Iniciar), la fila entera coloreada y el
+  total de finalizadas abajo. El nombre va **en una sola columna**, tal como está guardado: no
+  se separan los apellidos, porque separarlos sería adivinar.
 
 ### ¿A quién no le llegó?
 

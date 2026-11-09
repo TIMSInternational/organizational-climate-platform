@@ -60,7 +60,9 @@ public sealed record SurveyTemplateListItem(
     double Rating,
     int QuestionCount,
     DateTimeOffset? LastUsed,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    // The owning company's name; null for a global template. On the list only.
+    string? CompanyName = null);
 
 public sealed record SurveyTemplateListResponse(IReadOnlyList<SurveyTemplateListItem> Templates);
 
