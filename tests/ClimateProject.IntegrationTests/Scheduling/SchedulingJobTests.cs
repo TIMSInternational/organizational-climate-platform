@@ -52,7 +52,7 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
     private async Task<ClimateProjectDbContext> FreshAsync()
     {
         var db = await MigratedAsync(CreateContext());
-        await db.Database.ExecuteSqlRawAsync("TRUNCATE TABLE companies CASCADE");
+        await db.Database.ExecuteSqlRawAsync("TRUNCATE TABLE companies, audit_logs CASCADE");
         return db;
     }
 

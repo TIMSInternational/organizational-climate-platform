@@ -39,7 +39,7 @@ public class SurveyDraftRetentionJobTests(PostgresContainerFixture postgres)
     {
         var db = CreateContext();
         await db.Database.MigrateAsync();
-        await db.Database.ExecuteSqlRawAsync("TRUNCATE TABLE companies CASCADE");
+        await db.Database.ExecuteSqlRawAsync("TRUNCATE TABLE companies, audit_logs CASCADE");
         return db;
     }
 
