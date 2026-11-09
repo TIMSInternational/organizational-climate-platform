@@ -214,7 +214,8 @@ public sealed record SurveyRosterRow(
     DateOnly? LastRemindedOn = null,
     int ReminderCount = 0,
     string? DeliveryProblem = null,
-    DateOnly? DeliveryProblemOn = null);
+    DateOnly? DeliveryProblemOn = null,
+    bool ExcludedFromResults = false);
 
 /// <summary>
 /// What the mail service last reported going wrong with the mail of a person's CURRENT key, as

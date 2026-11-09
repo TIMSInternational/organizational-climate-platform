@@ -109,6 +109,16 @@ const CODE_KEYS: Readonly<Record<string, string>> = {
   report_schedule_start_past: 'errors.api.codes.report_schedule_start_past',
   question_bank_item_in_use: 'errors.api.codes.question_bank_item_in_use',
   question_bank_item_has_variations: 'errors.api.codes.question_bank_item_has_variations',
+  // TIMS operations ruled 2026-11-08: reopen, exclude a response, delete a company
+  survey_not_closed: 'errors.api.codes.survey_not_closed',
+  survey_reopen_end_too_soon: 'errors.api.codes.survey_reopen_end_too_soon',
+  survey_reopen_reason_required: 'errors.api.codes.survey_reopen_reason_required',
+  exclusion_reason_required: 'errors.api.codes.exclusion_reason_required',
+  exclusion_no_response: 'errors.api.codes.exclusion_no_response',
+  company_name_mismatch: 'errors.api.codes.company_name_mismatch',
+  company_has_responses: 'errors.api.codes.company_has_responses',
+  company_holds_super_admins: 'errors.api.codes.company_holds_super_admins',
+  company_people_referenced: 'errors.api.codes.company_people_referenced',
 }
 
 /** Every `code` with a sentence here — for the test that sweeps the API's list against it. */

@@ -30,6 +30,7 @@ import { EmailChangeOutcome } from '../../components/EmailChangeOutcome'
 import { updateErrorText } from '../../components/emailRefusal'
 import { ResendCredentials } from '../../components/ResendCredentials'
 import { DeactivationConfirm, PersonDetailsFields, ResetPassword } from '../../components/PersonDetails'
+import { ErasePerson } from '../../components/ErasePerson'
 import { departmentChange, usePersonDetails } from '../../components/usePersonDetails'
 import type { Department } from '../../api/departments'
 import IntakeWizard from '../../components/IntakeWizard'
@@ -675,6 +676,13 @@ function EditPerson({
         name={user.name}
         onOpenChange={setConfirmingDeactivation}
         onConfirm={save}
+      />
+      <ErasePerson
+        user={user}
+        onErased={() => {
+          onReload()
+          onClose()
+        }}
       />
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-light pt-2.5">
         <label htmlFor={ids.active} className="m-0 inline-flex items-center gap-2 text-xs text-fg-secondary">

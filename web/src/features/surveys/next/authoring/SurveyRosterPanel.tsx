@@ -43,6 +43,7 @@ import { chaseActionFor } from './chaseAction'
 import { formatParticipationDay } from './participationDay'
 import { getSurveyRosterCsv, surveyRosterCsvFileName } from './rosterExport'
 import { downloadBlobFile } from '../../../../lib/downloadBlobFile'
+import { ResponseExclusionDialog } from './ResponseExclusionDialog'
 
 type Filter = 'all' | SurveyParticipantStatus
 
@@ -212,6 +213,11 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
   const [handedOver, setHandedOver] = useState<HandedOver | null>(null)
   const [sendCodeTarget, setSendCodeTarget] = useState<SurveyRosterRow | null>(null)
   const [sendCode, setSendCode] = useState<SendCodeState>({ phase: 'idle' })
+  // Taking one finished response out of the results, or putting it back (super admins only).
+  // The outcome is kept per row like `issuedHere`: the payload is the Participación panel's.
+  const [exclusionTarget, setExclusionTarget] = useState<{ row: SurveyRosterRow; exclude: boolean } | null>(null)
+  const [excludedHere, setExcludedHere] = useState<Readonly<Record<string, boolean>>>({})
+  const [exclusionNote, setExclusionNote] = useState<string | null>(null)
 
   /**
    * Only a super admin may receive a password to hand over: the server refuses anybody else
@@ -728,6 +734,12 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
               </p>
             ) : null}
 
+            {exclusionNote === null ? null : (
+              <p role="status" className="m-0 text-sm font-medium">
+                {exclusionNote}
+              </p>
+            )}
+
             {visible.length === 0 ? (
               <p className="m-0 text-sm text-fg-secondary">{copy('empty')}</p>
             ) : (
@@ -777,6 +789,8 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
                         onHandover={() => setHandoverTarget(row)}
                         onRemind={() => setRemindTarget(row)}
                         onRevoke={() => setRevokeTarget(row)}
+                        excluded={excludedHere[row.userId] ?? row.excludedFromResults === true}
+                        onExclusion={(exclude) => setExclusionTarget({ row, exclude })}
                         locale={locale}
                         copy={copy}
                         selected={selected.has(row.userId)}
@@ -910,6 +924,21 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
         cancelText={t('common.cancel')}
         onConfirm={() => (revokeTarget === null ? undefined : revokeFor(revokeTarget))}
       />
+
+      {superAdmin && state.status === 'ready' ? (
+        <ResponseExclusionDialog
+          surveyId={state.view.surveyId}
+          target={exclusionTarget?.row ?? null}
+          exclude={exclusionTarget?.exclude ?? true}
+          onOpenChange={(open) => {
+            if (!open) setExclusionTarget(null)
+          }}
+          onDone={(row, excluded) => {
+            setExcludedHere((current) => ({ ...current, [row.userId]: excluded }))
+            setExclusionNote(t(`surveys.next.roster.exclusion.${excluded ? 'excludeDone' : 'restoreDone'}`, { name: row.name }))
+          }}
+        />
+      ) : null}
     </section>
   )
 }
@@ -928,6 +957,8 @@ function RosterRows({
   onRevoke,
   superAdmin,
   onHandover,
+  excluded,
+  onExclusion,
   locale,
   copy,
   selected,
@@ -953,6 +984,10 @@ function RosterRows({
   /** A super admin may hand a new password over in person; nobody else is offered it. */
   superAdmin: boolean
   onHandover: () => void
+  /** This person's response is out of the results. Only ever true for a super admin. */
+  excluded: boolean
+  /** Opens the exclusion dialog: true to take the response out, false to put it back. */
+  onExclusion: (exclude: boolean) => void
   locale: string
   copy: (key: string, vars?: Record<string, string | number>) => string
   selected: boolean
@@ -1151,7 +1186,24 @@ function RosterRows({
         {tracked ? (
           <>
             <TableCell className="px-3 py-2">
-              <Chip tone={STATUS_TONE[row.status]} label={copy(STATUS_KEY[row.status])} />
+              <span className="flex flex-col items-start gap-1">
+                <Chip tone={STATUS_TONE[row.status]} label={copy(STATUS_KEY[row.status])} />
+                {excluded ? <Chip tone="neutral" label={copy('exclusion.excludedChip')} /> : null}
+                {/* Only somebody who FINISHED has a response in the results to take out, and
+                    only TIMS may: the server refuses anyone else, and a client administrator
+                    never learns whose response left (it would undo the anonymity by subtraction). */}
+                {superAdmin && row.status === 'completed' ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-label={copy(excluded ? 'exclusion.restoreFor' : 'exclusion.excludeFor', { name: row.name })}
+                    onClick={() => onExclusion(!excluded)}
+                  >
+                    {copy(excluded ? 'exclusion.restore' : 'exclusion.exclude')}
+                  </Button>
+                ) : null}
+              </span>
             </TableCell>
             <TableCell className="whitespace-nowrap px-3 py-2 text-fg-secondary">
               {row.lastActivityOn === null ? (

@@ -6,6 +6,7 @@ using ClimateProject.Application.Email;
 using ClimateProject.Application.OrgStructure;
 using ClimateProject.Application.Surveys;
 using ClimateProject.Domain.Entities;
+using ClimateProject.Infrastructure.Gdpr;
 using ClimateProject.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -94,7 +95,11 @@ public static class UserEndpoints
         // `company_id = @p` and NULL rows never match. That is the intended outcome of
         // #191: a company-less super_admin belongs to no tenant, so they must not turn up
         // in any single company's user list.
-        var query = db.Users.Where(u => u.CompanyId == companyId);
+        // An erased account (POST /gdpr/erasure) stays as a pseudonymised, inactive row -- sixteen
+        // RESTRICT keys keep it -- but it is nobody any more, so the people list does not show it.
+        // Since 2026-11-08 "Eliminar persona" is a button, and a row reading "Erased user" left in
+        // the list it was deleted from would read as the delete having failed.
+        var query = db.Users.Where(u => u.CompanyId == companyId && !u.Email.EndsWith(SubjectErasure.PseudonymisedEmailSuffix));
         if (departmentId.HasValue)
         {
             query = query.Where(u => u.DepartmentId == departmentId.Value);

@@ -683,6 +683,8 @@ app.MapSurveyResponseEndpoints();
 app.MapSurveyDistributionEndpoints();
 app.MapSurveyParticipationEndpoints();
 app.MapSurveyCredentialEndpoints();
+app.MapSurveyResponseExclusionEndpoints();
+app.MapCompanyDeletionEndpoints();
 app.MapSurveyDraftEndpoints();
 app.MapSurveyResultsEndpoints();
 app.MapSurveyExportEndpoints();

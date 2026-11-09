@@ -329,6 +329,26 @@ public static class SurveyParticipationEndpoints
         var roster = survey.Roster;
         var distinguishesStarted = survey.DistinguishesStarted;
 
+        // Whose response TIMS took out of the results -- to super admins ONLY. A client
+        // administrator who knew whose response left, and compared the results before and
+        // after, could work that person's answers out by subtraction
+        // (SurveyResponseExclusionEndpoints). For everyone else the flag stays false: the person
+        // still finished, and the roster says so.
+        if (principal.GetCurrentUser().Role == Roles.SuperAdmin && roster.Count > 0)
+        {
+            var excluded = await SurveyResponseExclusionEndpoints.ExcludedPeopleAsync(
+                db,
+                survey.Id,
+                survey.Anonymous,
+                [.. roster.Select(row => row.UserId)],
+                SurveyResumeSessionConfiguration.KeyFrom(configuration),
+                cancellationToken);
+            if (excluded.Count > 0)
+            {
+                roster = [.. roster.Select(row => excluded.Contains(row.UserId) ? row with { ExcludedFromResults = true } : row)];
+            }
+        }
+
         // Respondents with NO account. `survey_participations` is written only for them
         // (`participation-is-not-linked-to-answers.md`), and the 2026-10-13 identity ruling
         // switched off the step that fed it -- so on a mass invite this is empty and the whole
@@ -572,7 +592,7 @@ public static class SurveyParticipationEndpoints
             return ([], false);
         }
 
-        var responses = await db.Responses
+        var responses = await db.Responses.IgnoreQueryFilters(ResponseQueryFilters.IncludeExcluded)
             .AsNoTracking()
             .Where(r => r.SurveyId == surveyId && r.UserId != null)
             .Select(r => new { UserId = r.UserId!.Value, r.IsComplete, r.CompletionTime, r.UpdatedAt })
@@ -651,7 +671,7 @@ public static class SurveyParticipationEndpoints
         // *"quiénes fueron invitados y todavía no han ingresado. Quiénes lo han comenzado pero
         // no lo han terminado."*
         var anonymousStateBySession = anonymous && resumeKey is not null
-            ? (await db.Responses
+            ? (await db.Responses.IgnoreQueryFilters(ResponseQueryFilters.IncludeExcluded)
                     .AsNoTracking()
                     .Where(r => r.SurveyId == surveyId && r.UserId == null && r.SessionId != null)
                     .Select(r => new { SessionId = r.SessionId!, r.IsComplete, r.CompletionTime, r.UpdatedAt })

@@ -67,4 +67,15 @@ internal static class AdminRefusals
     public const string ReportScheduleStartPast = "report_schedule_start_past";
     public const string QuestionBankItemInUse = "question_bank_item_in_use";
     public const string QuestionBankItemHasVariations = "question_bank_item_has_variations";
+
+    // TIMS operations ruled 2026-11-08: reopen, exclude a response, delete a company
+    public const string SurveyNotClosed = "survey_not_closed";
+    public const string SurveyReopenEndTooSoon = "survey_reopen_end_too_soon";
+    public const string SurveyReopenReasonRequired = "survey_reopen_reason_required";
+    public const string ExclusionReasonRequired = "exclusion_reason_required";
+    public const string ExclusionNoResponse = "exclusion_no_response";
+    public const string CompanyNameMismatch = "company_name_mismatch";
+    public const string CompanyHasResponses = "company_has_responses";
+    public const string CompanyHoldsSuperAdmins = "company_holds_super_admins";
+    public const string CompanyPeopleReferenced = "company_people_referenced";
 }

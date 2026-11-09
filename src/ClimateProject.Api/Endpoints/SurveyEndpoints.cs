@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using ClimateProject.Api.Infrastructure.Auditing;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Localization;
 using ClimateProject.Application.Questions;
@@ -40,6 +41,9 @@ public static class SurveyEndpoints
         // and freezes the survey's content), and an update that could also publish is an
         // update that publishes by accident.
         group.MapPut("/{id:guid}/status", UpdateStatusAsync);
+        // Reopening a closed survey: a separate, super-admin-only route, deliberately NOT an edge
+        // in SurveyStatuses' transition map -- see ReopenAsync.
+        group.MapPost("/{id:guid}/reopen", ReopenAsync);
 
         group.MapPost("/{id:guid}/duplicate", DuplicateAsync);
     }
@@ -201,7 +205,7 @@ public static class SurveyEndpoints
         }
 
         var query = SurveyQueries.AssignedTo(
-            db.Surveys, db.SurveyDepartmentTargets, db.SurveyUserTargets, db.Responses, myCompanyId, me.DepartmentId, me.Id,
+            db.Surveys, db.SurveyDepartmentTargets, db.SurveyUserTargets, db.Responses.IgnoreQueryFilters(ResponseQueryFilters.IncludeExcluded), myCompanyId, me.DepartmentId, me.Id,
             currentUser.SurveyScope);
 
         var rows = await SurveyQueries.ToMyRows(query, db.Questions).ToListAsync(cancellationToken);
@@ -942,6 +946,123 @@ public static class SurveyEndpoints
         return Results.Ok(await ToDetailAsync(survey, db, lang, cancellationToken));
     }
 
+    /// <summary>The soonest a reopened survey may close again, from now. The lifecycle sweep runs
+    /// every five minutes; a close closer than this could be swept before anyone used the reopen.</summary>
+    public static readonly TimeSpan ReopenMinimumWindow = TimeSpan.FromMinutes(30);
+
+    /// <summary>The reason a reopen must give, in characters. It is the only record of why.</summary>
+    public const int ReopenReasonMinLength = 5;
+
+    /// <summary>
+    /// <c>POST /surveys/{id}/reopen</c>: a closed survey takes answers again, until a new close.
+    /// Ruled 2026-11-08 (<c>docs/decisions/operators-reopen-exclude-delete.md</c>).
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why a route of its own and not an edge in the transition map.</b>
+    /// <see cref="SurveyStatuses"/> leaves <c>closed -&gt; active</c> out on purpose: answers that
+    /// arrive after results were analysed, exported and benchmarked restate them. That stays true,
+    /// so <c>PUT /status</c> still refuses it, and a client administrator still cannot do it. What
+    /// changed is that TIMS may decide the cost is worth paying -- Eagle on 27 Oct 2026, done then
+    /// by SQL (<c>EAGLE-ABRIR-AL-30.sql</c>) -- and must say why, on the record.</para>
+    /// <para><b>What it writes.</b> Status and the close, in ONE save: with the status open and a
+    /// close already past, the lifecycle sweep would close it again within five minutes. That is
+    /// all a close ever wrote (status, updated_at, and an early close's end date), so nothing else
+    /// needs undoing: the link, the QR and every per-survey key keep working, and anybody who
+    /// already answered is still recognised as having answered.</para>
+    /// <para>The new status is <c>active</c> when the opening is past -- the usual case -- and
+    /// <c>scheduled</c> when a survey closed before it ever opened is reopened, so it opens on its
+    /// own date rather than early.</para>
+    /// </remarks>
+    private static async Task<IResult> ReopenAsync(
+        Guid id,
+        ReopenSurveyRequest request,
+        string? lang,
+        ClaimsPrincipal principal,
+        HttpContext http,
+        ClimateProjectDbContext db,
+        AuditEntry audit,
+        CancellationToken cancellationToken)
+    {
+        var currentUser = principal.GetCurrentUser();
+        if (currentUser.Role != Roles.SuperAdmin)
+        {
+            return Results.Forbid();
+        }
+
+        var survey = await db.Surveys.FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
+        if (survey is null)
+        {
+            return NotFound();
+        }
+
+        var actor = await SurveyAuditTrail.ResolveActorAsync(currentUser, http, db, cancellationToken);
+        if (actor is null)
+        {
+            return ActingUserRequired();
+        }
+
+        // A company-less super admin -- Federico's account -- resolves to no company, and the
+        // middleware would then write no row at all. File it under the survey's.
+        if (await ResolveActingUserIdAsync(currentUser, db, cancellationToken) is { } actorId)
+        {
+            audit.AttributeTo(actorId, survey.CompanyId);
+        }
+
+        if (!string.Equals(survey.Status, SurveyStatuses.Closed, StringComparison.Ordinal))
+        {
+            return Results.Json(
+                new
+                {
+                    message = $"Only a closed survey can be reopened; this one is '{survey.Status}'.",
+                    code = AdminRefusals.SurveyNotClosed,
+                },
+                statusCode: 409);
+        }
+
+        var reason = request.Reason?.Trim() ?? string.Empty;
+        if (reason.Length < ReopenReasonMinLength || reason.Length > AuditEntry.MaxChangeValueLength)
+        {
+            return Results.Json(
+                new
+                {
+                    message = $"Say why the survey is being reopened, in {ReopenReasonMinLength} to {AuditEntry.MaxChangeValueLength} characters.",
+                    code = AdminRefusals.SurveyReopenReasonRequired,
+                },
+                statusCode: 400);
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        if (request.EndDate is not { } newEnd || newEnd < now + ReopenMinimumWindow || newEnd <= survey.StartDate)
+        {
+            return Results.Json(
+                new
+                {
+                    message = $"The new close must be at least {ReopenMinimumWindow.TotalMinutes:0} minutes from now and after the survey's opening.",
+                    code = AdminRefusals.SurveyReopenEndTooSoon,
+                },
+                statusCode: 400);
+        }
+
+        // timestamptz takes UTC only (Npgsql refuses another offset), and a caller may send one.
+        newEnd = newEnd.ToUniversalTime();
+        var target = survey.StartDate <= now ? SurveyStatuses.Active : SurveyStatuses.Scheduled;
+        var previousEnd = survey.EndDate;
+        survey.Status = target;
+        survey.EndDate = newEnd;
+        survey.UpdatedAt = now;
+
+        SurveyAuditTrail.Record(
+            db, survey.Id, SurveyAuditActions.StatusChanged, SurveyAuditEntityTypes.Status, actor, now,
+            new SurveyAuditChangeSet(From: SurveyStatuses.Closed, To: target));
+        await db.SaveChangesAsync(cancellationToken);
+
+        audit.RecordChange("status", SurveyStatuses.Closed, target);
+        audit.RecordChange("endDate", previousEnd.ToString("O", System.Globalization.CultureInfo.InvariantCulture), newEnd.ToString("O", System.Globalization.CultureInfo.InvariantCulture));
+        audit.RecordChange("reason", null, reason);
+
+        return Results.Ok(await ToDetailAsync(survey, db, lang, cancellationToken));
+    }
+
     /// <summary>
     /// The whole lifecycle rule, in one place so <c>PUT /status</c> and <c>POST /bulk</c>
     /// cannot drift apart. Mutates <paramref name="survey"/> and returns null on success,
@@ -1056,7 +1177,8 @@ public static class SurveyEndpoints
         // its EndDate, so a survey closed on 2 Oct kept saying "cerró el 29 de octubre" (TIMS
         // dry run). Only inside the window: a close after EndDate keeps the planned day it
         // really ended on, and one before StartDate would leave an end before the start.
-        // 'closed' leads only to 'archived', so no reopen can need the old date back.
+        // 'closed' leads only to 'archived' here; ReopenAsync sets a NEW close, so it never
+        // needs the old date back either.
         if (string.Equals(target, SurveyStatuses.Closed, StringComparison.Ordinal)
             && survey.StartDate <= changedAt && changedAt < survey.EndDate)
         {
@@ -1309,7 +1431,7 @@ public static class SurveyEndpoints
         Survey survey,
         CancellationToken cancellationToken)
         => survey.ResponseCount > 0
-           || await db.Responses.AnyAsync(r => r.SurveyId == survey.Id, cancellationToken);
+           || await db.Responses.IgnoreQueryFilters(ResponseQueryFilters.IncludeExcluded).AnyAsync(r => r.SurveyId == survey.Id, cancellationToken);
 
     /// <summary>
     /// Every targeted person must belong to the SURVEY's company and be active, for the same

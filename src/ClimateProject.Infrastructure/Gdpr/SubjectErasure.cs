@@ -80,7 +80,10 @@ public static class SubjectErasure
     /// <c>users.email</c> is uniquely indexed and two erasures in the same tenant must not
     /// collide.
     /// </summary>
-    public static string PseudonymisedEmail(Guid userId) => $"erased-{userId:N}@erased.invalid";
+    public static string PseudonymisedEmail(Guid userId) => $"erased-{userId:N}{PseudonymisedEmailSuffix}";
+
+    /// <summary>How every erased account's address ends: the people list leaves these out.</summary>
+    public const string PseudonymisedEmailSuffix = "@erased.invalid";
 
     /// <summary>
     /// Erases the subject and returns what was done, table by table.
@@ -226,7 +229,7 @@ public static class SubjectErasure
         actions.Add(Action("SurveyAuditLog", surveyAuditLogs.Count));
 
         // --- Anonymised -----------------------------------------------------------------
-        var responses = await db.Responses.Where(r => r.UserId == id).ToListAsync(cancellationToken);
+        var responses = await db.Responses.IgnoreQueryFilters(ResponseQueryFilters.IncludeExcluded).Where(r => r.UserId == id).ToListAsync(cancellationToken);
         foreach (var response in responses)
         {
             response.UserId = null;

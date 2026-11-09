@@ -30,4 +30,13 @@ public class Response
     public string? UserAgent { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
+
+    /// <summary>
+    /// When TIMS took this response out of the results (ruled 2026-11-08), or null while it
+    /// counts. The row and its answers stay stored -- excluding is reversible, deleting is not --
+    /// and every results reader drops it through the query filter
+    /// <c>ResponseQueryFilters.Counted</c>. Who asked and why live in the audit trail, not here:
+    /// a reason typed about a person does not belong on the row that holds that person's answers.
+    /// </summary>
+    public DateTimeOffset? ExcludedAt { get; set; }
 }
