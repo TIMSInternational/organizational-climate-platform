@@ -1,7 +1,7 @@
 # Guía para operadores de TIMS
 
 Para quien atiende a un cliente desde la plataforma, sin desarrollador de por medio.
-Escrita el 2 de noviembre de 2026 con lo que la plataforma hace ese día. Si un botón no está
+Escrita el 2 de noviembre de 2026 y puesta al día el 8 de noviembre con lo que la plataforma hace. Si un botón no está
 donde dice esta guía, avise antes de buscar otra forma de hacerlo.
 
 ## Antes de empezar: su cuenta
@@ -50,6 +50,12 @@ donde dice esta guía, avise antes de buscar otra forma de hacerlo.
 4. **Plantillas**: en el asistente de nueva encuesta, cada plantilla dice de qué empresa es
    («Instrumento de clima · ESPH») o si es **Global**. Use la del cliente o una global, nunca la
    de otro cliente.
+   **Si el cliente manda su propio cuestionario en Excel**: en el paso de preguntas del asistente,
+   **Agregar pregunta → Pegar desde Excel**. Copie las filas en Excel (con la fila de títulos) y
+   péguelas. Elija la columna de la pregunta (si el archivo trae varias versiones del texto, la que
+   el cliente aprobó), la de dimensión y la de tipo (`Likert 1-5`, `0-10`, `Abierta`, `Sí/No`). La
+   ventana muestra cada pregunta antes de agregarla, sin cambiar una palabra; si una fila no se
+   puede leer, dice cuál y no agrega ninguna.
 5. **Importar Excel integral** (en Todas las encuestas) carga de una vez los campos demográficos,
    las personas y la encuesta como borrador. Revise la pantalla de revisión: dice qué correos se
    enviarán y cuándo, antes de crear nada.
@@ -153,13 +159,42 @@ En la lista de encuestas, en el menú **⋮** de la encuesta:
   cierre.
 - **Pregunte antes**: cambiar la audiencia, retirar el código de alguien, cambiar textos o
   preguntas. Lo que cambia la experiencia de quien está contestando no se toca sin decisión.
-- **Alargue el cierre antes de que pase.** Una encuesta cerrada **no se puede reabrir** desde
-  la plataforma; reabrir Eagle el 27 de octubre necesitó a un desarrollador.
+- **Alargue el cierre antes de que pase.** Es lo más limpio.
+- **Si ya cerró y el cliente pide más días**: en la página de la encuesta, **Reabrir** (solo
+  super administradores). Pide la nueva fecha de cierre y el motivo, que queda en el registro de
+  actividad. El enlace, el QR y los códigos siguen iguales. Antes, avísele al cliente: lo que
+  llegue ahora cambia los resultados, y cualquier resultado o informe ya entregado queda viejo.
+
+### "Esa respuesta no debió contar"
+
+Cuando el cliente pide **por escrito** que no cuente la respuesta de alguien (por ejemplo, alguien
+fuera de su lista que recibió la clave por error): en **Distribución**, en la fila de esa persona,
+**Excluir de los resultados** (solo super administradores, solo si terminó). Escriba el motivo
+**sin el nombre de la persona**: el cliente puede leer el registro de actividad.
+
+- La respuesta no se borra: queda guardada y se puede **Volver a incluir**.
+- Sale de los resultados, informes, exportaciones, tableros y del archivo de respuestas, desde ya.
+- La persona sigue figurando como que terminó, y no se le vuelve a ofrecer la encuesta.
+- Solo usted ve quién fue excluido; el cliente no. Quien compare resultados de antes y de después
+  podría deducir lo que respondió esa persona, por eso se hace solo a pedido escrito.
+- Una respuesta por enlace o QR no se puede atribuir a nadie, así que no se puede excluir así.
+
+### Eliminar una empresa o una persona
+
+- **Empresa**: en la empresa, al final, **Eliminar empresa…**. Solo si **nadie respondió nada**
+  en ella (una creada por error, la de un ensayo) y si no hay un super administrador en ella. Hay
+  que escribir el nombre exacto. Se borra con su gente, encuestas, departamentos, plantillas propias
+  y logotipo; el registro de actividad se conserva. **No se puede deshacer.**
+- **Persona**: en **Usuarios**, abra su ficha → **Eliminar persona…** y escriba su correo. Se borran
+  su nombre, correo y contraseña, ya no puede entrar y sus códigos dejan de servir; sus respuestas
+  quedan en los resultados sin nada que las ligue a ella. **No se puede deshacer.** Si solo debe
+  dejar de entrar, use **Activo** (se puede revertir).
 
 ## Lo que todavía no hace la plataforma
 
-- **Quitar una respuesta de los resultados**, ni borrar una persona o una empresa.
-- **Reabrir una encuesta cerrada.**
+- **Eliminar una empresa que tiene respuestas.**
+- **Excluir una respuesta que llegó por enlace o QR** (no se puede saber de quién es).
+- **Reabrir una encuesta archivada.**
 
 Para cualquiera de estas cosas, o si un botón responde con un error que no entiende, escriba
 al equipo de desarrollo con el nombre de la encuesta, la persona y una captura. No lo resuelva

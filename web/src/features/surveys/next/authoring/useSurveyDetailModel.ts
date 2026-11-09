@@ -10,6 +10,7 @@ import {
   deleteSurvey,
   duplicateSurvey,
   getSurvey,
+  reopenSurvey,
   updateSurveyStatus,
   updateSurveyWindow,
   type SurveyDetail,
@@ -165,6 +166,19 @@ export function useSurveyDetailModel(id: string | undefined) {
     [baseUrl, id, locale, state],
   )
 
+  /**
+   * `POST /surveys/{id}/reopen` (super admins only). Throws so the dialog can say why; on success
+   * the page reads the detail the server answered with -- status, close and transitions move.
+   */
+  const reopen = useCallback(
+    async (body: { endDate: string; reason: string }) => {
+      if (!id || state.status !== 'ready') return
+      const survey = await reopenSurvey(baseUrl, id, body, locale)
+      setState({ status: 'ready', model: { ...state.model, survey } })
+    },
+    [baseUrl, id, locale, state],
+  )
+
   /** `DELETE /surveys/{id}`, then back to the list. Throws so the confirmation can say why. */
   const remove = useCallback(async () => {
     if (!id) return
@@ -172,5 +186,5 @@ export function useSurveyDetailModel(id: string | undefined) {
     navigate('/surveys')
   }, [baseUrl, id, navigate])
 
-  return { state, reload: load, transition, duplicate, saveWindow, saveAudience, remove, pending, actionError }
+  return { state, reload: load, transition, duplicate, saveWindow, saveAudience, reopen, remove, pending, actionError }
 }

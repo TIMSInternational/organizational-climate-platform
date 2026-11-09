@@ -126,7 +126,7 @@ public static class SubjectAccessExport
 
         // Harvested first: the child tables below have no person reference of their own and
         // are reachable only through these parents.
-        var responseIds = await db.Responses.Where(r => r.UserId == id)
+        var responseIds = await db.Responses.IgnoreQueryFilters(ResponseQueryFilters.IncludeExcluded).Where(r => r.UserId == id)
             .Select(r => r.Id).ToListAsync(cancellationToken);
         var invitationIds = await AddressedInvitations(db, email, companyScope)
             .Select(i => i.Id).ToListAsync(cancellationToken);
@@ -142,7 +142,7 @@ public static class SubjectAccessExport
             await FullAsync(db, "UserDemographic", "UserId",
                 db.UserDemographics.Where(d => d.UserId == id), cancellationToken),
             await FullAsync(db, "Response", "UserId",
-                db.Responses.Where(r => r.UserId == id), cancellationToken),
+                db.Responses.IgnoreQueryFilters(ResponseQueryFilters.IncludeExcluded).Where(r => r.UserId == id), cancellationToken),
             await QuestionResponsesAsync(db, responseIds, withholdVerbatimAnswers, cancellationToken),
             await FullAsync(db, "ResponseDemographic", "ResponseId",
                 db.ResponseDemographics.Where(rd => responseIds.Contains(rd.ResponseId)), cancellationToken),

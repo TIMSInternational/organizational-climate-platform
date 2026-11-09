@@ -14,7 +14,7 @@ import {
 } from '../../../../components/ui'
 import { ANONYMITY_FLOOR } from '../../../../components/charts'
 import { estimateAudience, targetsWholeCompany } from '../../../../components/distribution'
-import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
+import { readViewerClaims, useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { useFollowCompany } from '../../../../company-context/useFollowCompany'
 import { useTranslation } from '../../../../i18n'
 import ContentFallbackNotice from '../../components/ContentFallbackNotice'
@@ -38,6 +38,7 @@ import { SurveyWindowDialog } from './SurveyWindowDialog'
 import { DeleteSurveyDialog } from './DeleteSurveyDialog'
 import { EditAudienceDialog } from './EditAudienceDialog'
 import { audienceEditability } from './audienceEdit'
+import { ReopenSurveyDialog } from './ReopenSurveyDialog'
 import { browserTimeZone, dayMonthIn, dayTimeIn, daysFromIn, isKnownTimeZone, yearIn, zoneLabel } from './zonedWindow'
 
 /**
@@ -56,7 +57,7 @@ import { browserTimeZone, dayMonthIn, dayTimeIn, daysFromIn, isKnownTimeZone, ye
 export default function SurveyDetailNextPage() {
   const { id } = useParams<{ id: string }>()
   const { t } = useTranslation()
-  const { state, reload, transition, duplicate, saveWindow, saveAudience, remove, pending, actionError } = useSurveyDetailModel(id)
+  const { state, reload, transition, duplicate, saveWindow, saveAudience, reopen, remove, pending, actionError } = useSurveyDetailModel(id)
   useFollowCompany(state.status === 'ready' ? state.model.survey.companyId : undefined)
 
   if (state.status === 'loading') {
@@ -88,6 +89,7 @@ export default function SurveyDetailNextPage() {
       onDuplicate={() => void duplicate()}
       onSaveWindow={saveWindow}
       onSaveAudience={saveAudience}
+      onReopen={reopen}
       onDelete={remove}
     />
   )
@@ -101,6 +103,7 @@ export function SurveyDetailView({
   onDuplicate,
   onSaveWindow,
   onSaveAudience,
+  onReopen,
   onDelete,
   now = new Date(),
 }: {
@@ -113,6 +116,8 @@ export function SurveyDetailView({
   onSaveWindow?: (window: { startDate?: string; endDate: string }) => Promise<void>
   /** Rewrites the survey's targets; absent, "Editar audiencia" is not offered. */
   onSaveAudience?: (targets: { departmentIds?: string[]; userIds: string[] }) => Promise<void>
+  /** Reopens a closed survey (super admins only); absent, "Reabrir" is not offered. */
+  onReopen?: (body: { endDate: string; reason: string }) => Promise<void>
   /** Deletes the survey; absent, "Eliminar" is not offered. */
   onDelete?: () => Promise<void>
   now?: Date
@@ -158,6 +163,10 @@ export function SurveyDetailView({
   // `DeleteSurveyAsync` deletes in any status while nobody has answered, and only then.
   const deletable = canAuthor && onDelete !== undefined && survey.responseCount === 0
   const [editingWindow, setEditingWindow] = useState(false)
+  // Reopening is TIMS's alone (ruled 2026-11-08): the server refuses every other role, and a
+  // client administrator keeps seeing "Cerrada" with no way back, as before.
+  const reopenable = survey.status === 'closed' && onReopen !== undefined && readViewerClaims().role === 'super_admin'
+  const [reopening, setReopening] = useState(false)
   // "Editar audiencia": offered to an author wherever the page can save it, DISABLED with the
   // reason once the survey has ended (`survey_ended_audience_frozen`, #627) rather than hidden,
   // so the reader learns why the audience no longer moves.
@@ -281,6 +290,7 @@ export function SurveyDetailView({
           onTransition={onTransition}
           endPassed={closesIn !== null && closesIn < 0}
           onEditWindow={windowEditable ? () => setEditingWindow(true) : undefined}
+          onReopen={reopenable ? () => setReopening(true) : undefined}
         />
       </section>
 
@@ -443,6 +453,15 @@ export function SurveyDetailView({
           onSave={onSaveAudience}
         />
       )}
+      {reopenable && onReopen && (
+        <ReopenSurveyDialog
+          timeZone={timeZone}
+          open={reopening}
+          onOpenChange={setReopening}
+          onReopen={onReopen}
+          now={() => now}
+        />
+      )}
       {deletable && onDelete && (
         <DeleteSurveyDialog status={survey.status} open={deleting} onOpenChange={setDeleting} onDelete={onDelete} />
       )}
@@ -469,6 +488,7 @@ function StatusTile({
   onTransition,
   endPassed,
   onEditWindow,
+  onReopen,
 }: {
   survey: SurveyDetail
   canAuthor: boolean
@@ -478,6 +498,8 @@ function StatusTile({
   endPassed: boolean
   /** Opens the date editor; absent where the window cannot be moved. */
   onEditWindow?: () => void
+  /** Opens "Reabrir"; absent unless the survey is closed and the viewer is a super admin. */
+  onReopen?: () => void
 }) {
   const { t } = useTranslation()
   const copy = (key: string, vars?: Record<string, string | number>) => t(`surveys.next.detail.${key}`, vars)
@@ -545,6 +567,14 @@ function StatusTile({
               {copy('window.edit')}
             </Button>
           )}
+        </div>
+      )}
+      {onReopen && (
+        <div className="flex flex-col items-start gap-1 border-t border-line-light pt-1.5" data-testid="status-reopen">
+          <Button type="button" size="sm" variant="outline" disabled={pending !== null} onClick={onReopen}>
+            {copy('reopen.action')}
+          </Button>
+          <span className="text-xs text-fg-label">{copy('reopen.hint')}</span>
         </div>
       )}
       <ConfirmationDialog

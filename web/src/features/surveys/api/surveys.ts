@@ -324,6 +324,26 @@ export async function updateSurveyStatus(
 }
 
 /**
+ * Reopens a CLOSED survey: `POST /surveys/{id}/reopen` (ruled 2026-11-08, super admins only).
+ * The new close is an instant in UTC -- the caller turns the company's wall clock into it -- and
+ * must be at least 30 minutes ahead; the reason is kept in the activity log. Throws the server's
+ * refusal (`survey_not_closed`, `survey_reopen_end_too_soon`, `survey_reopen_reason_required`)
+ * for the dialog to say in the reader's language.
+ */
+export async function reopenSurvey(
+  baseUrl: string,
+  id: string,
+  body: { endDate: string; reason: string },
+  lang?: string,
+): Promise<SurveyDetail> {
+  const response = await authFetch(withQuery(baseUrl, `/surveys/${id}/reopen`, { lang }), {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+  return response.json() as Promise<SurveyDetail>
+}
+
+/**
  * Duplicate a survey into a fresh draft.
  *
  * This is the supported way to run a survey again: `closed -> active` is not a legal
@@ -533,6 +553,13 @@ export interface SurveyRosterRow {
    */
   deliveryProblem?: SurveyDeliveryProblem | null
   deliveryProblemOn?: string | null
+  /**
+   * TIMS took this person's response out of the results (`responses.excluded_at`, ruled
+   * 2026-11-08). Sent true to SUPER ADMINS only: a client administrator who knew whose response
+   * left could work its answers out by subtracting results. Absent or false otherwise -- the
+   * person still finished, and `status` keeps saying so.
+   */
+  excludedFromResults?: boolean
 }
 
 /** `SurveyDeliveryProblems` on the server. */
@@ -730,6 +757,48 @@ export async function revokeSurveyCredential(
     return { kind: 'refused', code: (body?.code as SurveyCredentialRevokeRefusal | undefined) ?? 'unknown' }
   }
   return { kind: 'revoked', hadSignedIn: body?.hadSignedIn === true }
+}
+
+/** What `POST /surveys/{id}/response-exclusions[/restore]` answered. */
+export interface ResponseExclusionResult {
+  excluded: boolean
+  /** False when the response was already in the state asked for -- a retried click. */
+  changed: boolean
+  /** The survey's counted responses after the change. */
+  responseCount: number
+}
+
+/**
+ * Takes ONE person's finished response out of the survey's results, keeping it stored
+ * (`POST /surveys/{id}/response-exclusions`, ruled 2026-11-08, super admins only). The person
+ * travels in the body so the activity log, which records the path, never names them; the reason
+ * does go to the log, which the client's administrators can read. Throws the server's refusal
+ * (`exclusion_reason_required`, `exclusion_no_response`).
+ */
+export async function excludeSurveyResponse(
+  baseUrl: string,
+  surveyId: string,
+  userId: string,
+  reason: string,
+): Promise<ResponseExclusionResult> {
+  const response = await authFetch(`${baseUrl}/surveys/${surveyId}/response-exclusions`, {
+    method: 'POST',
+    body: JSON.stringify({ userId, reason }),
+  })
+  return response.json() as Promise<ResponseExclusionResult>
+}
+
+/** Puts an excluded response back into the results: `POST /surveys/{id}/response-exclusions/restore`. */
+export async function restoreSurveyResponse(
+  baseUrl: string,
+  surveyId: string,
+  userId: string,
+): Promise<ResponseExclusionResult> {
+  const response = await authFetch(`${baseUrl}/surveys/${surveyId}/response-exclusions/restore`, {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  })
+  return response.json() as Promise<ResponseExclusionResult>
 }
 
 /**

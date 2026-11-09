@@ -777,7 +777,7 @@ public static class SurveyResponseEndpoints
     {
         if (!respondent.IsAnonymous && respondent.ActingUserId is Guid userId)
         {
-            return await db.Responses.FirstOrDefaultAsync(
+            return await db.Responses.IgnoreQueryFilters(ResponseQueryFilters.IncludeExcluded).FirstOrDefaultAsync(
                 r => r.SurveyId == survey.Id && r.UserId == userId,
                 cancellationToken).ConfigureAwait(false);
         }
@@ -785,7 +785,7 @@ public static class SurveyResponseEndpoints
         // The derived id first, so the same person is recognised on a second device.
         if (resumeSessionId is not null)
         {
-            var carried = await db.Responses.FirstOrDefaultAsync(
+            var carried = await db.Responses.IgnoreQueryFilters(ResponseQueryFilters.IncludeExcluded).FirstOrDefaultAsync(
                 r => r.SurveyId == survey.Id && r.SessionId == resumeSessionId,
                 cancellationToken).ConfigureAwait(false);
             if (carried is not null)
@@ -801,7 +801,7 @@ public static class SurveyResponseEndpoints
             return null;
         }
 
-        return await db.Responses.FirstOrDefaultAsync(
+        return await db.Responses.IgnoreQueryFilters(ResponseQueryFilters.IncludeExcluded).FirstOrDefaultAsync(
             r => r.SurveyId == survey.Id && r.SessionId == sessionId,
             cancellationToken).ConfigureAwait(false);
     }

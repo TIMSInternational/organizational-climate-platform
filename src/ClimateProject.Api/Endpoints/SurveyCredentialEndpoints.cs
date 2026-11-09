@@ -353,7 +353,7 @@ public static class SurveyCredentialEndpoints
 
         // ANY response, complete or not -- the October recipe's second guard, and its reason:
         // "si alguien contesto, hay que decidirlo a mano, no borrarle nada".
-        var hasResponses = await db.Responses
+        var hasResponses = await db.Responses.IgnoreQueryFilters(ResponseQueryFilters.IncludeExcluded)
             .AsNoTracking()
             .AnyAsync(r => r.SurveyId == surveyId && r.UserId == userId, cancellationToken);
         if (hasResponses)
@@ -697,7 +697,7 @@ public static class SurveyCredentialEndpoints
         // Refused rather than silently skipped: an admin working from a roster that is minutes
         // old is exactly who calls this, and two of ESPH's seven had already finished by the
         // time their list was read. Telling them so is more useful than a quiet no-op.
-        var finished = await db.Responses
+        var finished = await db.Responses.IgnoreQueryFilters(ResponseQueryFilters.IncludeExcluded)
             .AsNoTracking()
             .AnyAsync(r => r.SurveyId == surveyId && r.UserId == userId && r.IsComplete, cancellationToken);
         if (finished)

@@ -659,12 +659,18 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
         // and on which DAY. Safe for the same reason: it is about OUR mail reaching an address,
         // not anything the person did in the survey, and it is a day, not an instant. Null on a
         // shared survey, like every key field.
+        //
+        // Extended 2026-11-08: `excludedFromResults` -- TIMS took this person's response out of the
+        // results (responses.excluded_at). It says nothing about WHAT they answered, only that the
+        // answer stopped counting, and it is TRUE for super admins only: a client administrator
+        // who knew whose response left could subtract results to recover it, so for every other
+        // caller -- including the one here -- it is always false (ResponseExclusionTests pins that).
         using var document = JsonDocument.Parse(json);
         Assert.Equal(
             ["answered", "answeredCount", "collectsParticipantIdentity", "credentialMode", "notStartedCount", "pending", "pendingCount", "roster", "startedCount", "surveyId", "surveyTitleEn", "surveyTitleEs", "tracksCompletionOnly", "tracksIndividuals"],
             document.RootElement.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
         Assert.Equal(
-            ["credentialIssuedOn", "deliveryProblem", "deliveryProblemOn", "demographics", "email", "lastActivityOn", "lastRemindedOn", "lastSignInOn", "name", "reminderCount", "role", "status", "surveyUsername", "userId", "username"],
+            ["credentialIssuedOn", "deliveryProblem", "deliveryProblemOn", "demographics", "email", "excludedFromResults", "lastActivityOn", "lastRemindedOn", "lastSignInOn", "name", "reminderCount", "role", "status", "surveyUsername", "userId", "username"],
             document.RootElement.GetProperty("roster").EnumerateArray().First().EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
         Assert.DoesNotContain(_operaciones.ToString(), json, StringComparison.OrdinalIgnoreCase);
     }

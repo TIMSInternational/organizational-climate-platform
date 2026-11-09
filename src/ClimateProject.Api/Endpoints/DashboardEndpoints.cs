@@ -669,7 +669,7 @@ public static class DashboardEndpoints
             : null;
 
         var assigned = SurveyQueries.AssignedTo(
-            db.Surveys, db.SurveyDepartmentTargets, db.SurveyUserTargets, db.Responses, myCompanyId, me.DepartmentId, me.Id,
+            db.Surveys, db.SurveyDepartmentTargets, db.SurveyUserTargets, db.Responses.IgnoreQueryFilters(ResponseQueryFilters.IncludeExcluded), myCompanyId, me.DepartmentId, me.Id,
             currentUser.SurveyScope);
 
         var pendingCount = await assigned.CountAsync(cancellationToken);
@@ -677,7 +677,7 @@ public static class DashboardEndpoints
             .PendingSurveys(assigned, db.Questions, SurveyRowLimit)
             .ToListAsync(cancellationToken);
 
-        var completedCount = await db.Responses
+        var completedCount = await db.Responses.IgnoreQueryFilters(ResponseQueryFilters.IncludeExcluded)
             .CountAsync(r => r.UserId == me.Id && r.IsComplete, cancellationToken);
 
         // The soonest close date across ALL pending surveys, not merely the page of them

@@ -74,6 +74,7 @@ import {
 import { Eyebrow, PanelHeading } from '../../../shared-next/parts'
 import { PreviewQuestion, PreviewSection } from './QuestionPreview'
 import { QuestionBankPicker } from './QuestionBankPicker'
+import { PasteQuestionsDialog } from './PasteQuestionsDialog'
 import { Card } from './parts'
 import { dimensionSections } from './launch'
 import { templateCovers } from './templateRows'
@@ -138,6 +139,7 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
   const [dragFrom, setDragFrom] = useState<number | null>(null)
   const [libraryOpen, setLibraryOpen] = useState(false)
   const [bankOpen, setBankOpen] = useState(false)
+  const [pasteOpen, setPasteOpen] = useState(false)
 
   const fromTemplate = startsFromTemplate(values)
   const baseErrors = wizardStepErrors(values, t, template === null ? null : template.questions.length, m.activePeople)
@@ -472,6 +474,7 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                   <DropdownMenuContent>
                     <DropdownMenuItem onSelect={() => setBankOpen(true)}>{copy('addFromBank')}</DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => setLibraryOpen(true)}>{copy('addFromLibrary')}</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setPasteOpen(true)}>{copy('addFromPaste')}</DropdownMenuItem>
                     <DropdownMenuItem
                       onSelect={() => {
                         const [key] = m.takeKeys(1)
@@ -498,6 +501,13 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                   const keys = m.takeKeys(picked.length)
                   setQuestions((questions) => [...questions, ...picked.map((item, index) => questionFromLibrary(item, keys[index]))])
                 }}
+              />
+              <PasteQuestionsDialog
+                open={pasteOpen}
+                onOpenChange={setPasteOpen}
+                language={values.language}
+                takeKeys={m.takeKeys}
+                onAdd={(pasted) => setQuestions((questions) => [...questions, ...pasted])}
               />
               <QuestionBankPicker
                 open={bankOpen}

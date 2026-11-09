@@ -429,7 +429,7 @@ public static class SurveyHistoryEndpoints
         Survey survey,
         CancellationToken cancellationToken)
         => survey.ResponseCount > 0
-           || await db.Responses.AnyAsync(r => r.SurveyId == survey.Id, cancellationToken);
+           || await db.Responses.IgnoreQueryFilters(ResponseQueryFilters.IncludeExcluded).AnyAsync(r => r.SurveyId == survey.Id, cancellationToken);
 
     private static IResult VersionNotFound()
         => Results.Json(new { message = "Survey version not found" }, statusCode: 404);
