@@ -39,6 +39,7 @@ internal static class AdminRefusals
     public const string SurveyDatesOutOfOrder = "survey_dates_out_of_order";
     public const string SurveyContentLocked = "survey_content_locked";
     public const string SurveyContentHasResponses = "survey_content_has_responses";
+    public const string SurveyLiveEditOutOfScope = "survey_live_edit_out_of_scope";
     public const string SurveyScheduleFrozen = "survey_schedule_frozen";
     public const string SurveyStartFrozen = "survey_start_frozen";
     public const string SurveyRevertHasResponses = "survey_revert_has_responses";

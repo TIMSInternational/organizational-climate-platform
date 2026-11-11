@@ -84,6 +84,7 @@ const CODE_KEYS: Readonly<Record<string, string>> = {
   survey_dates_out_of_order: 'errors.api.codes.survey_dates_out_of_order',
   survey_content_locked: 'errors.api.codes.survey_content_locked',
   survey_content_has_responses: 'errors.api.codes.survey_content_has_responses',
+  survey_live_edit_out_of_scope: 'errors.api.codes.survey_live_edit_out_of_scope',
   survey_schedule_frozen: 'errors.api.codes.survey_schedule_frozen',
   survey_start_frozen: 'errors.api.codes.survey_start_frozen',
   survey_revert_has_responses: 'errors.api.codes.survey_revert_has_responses',

@@ -15,12 +15,26 @@ import type { Locale } from '../../../../i18n'
  */
 
 /**
- * Whether the server will accept a content edit. `SurveyEndpoints` refuses twice: a status
+ * Whether the server will accept a QUESTIONS edit. `SurveyEndpoints` refuses twice: a status
  * other than draft/scheduled, and any response at all. `responseCount` is the server's fast
- * path, so a 0 here is a hint and the save's 409 stays the truth.
+ * path, so a 0 here is a hint and the save's 409 stays the truth -- it counts results, so a
+ * survey whose only answer TIMS excluded reads 0 here and is still refused there.
+ *
+ * `operator` (a super admin) also edits an ACTIVE survey nobody has answered (ruled 2026-11-11,
+ * `docs/decisions/operators-edit-a-live-survey.md`); a client's administrator does not.
  */
-export function isEditable(status: string, responseCount: number): boolean {
-  return (status === 'draft' || status === 'scheduled') && responseCount === 0
+export function isEditable(status: string, responseCount: number, operator = false): boolean {
+  return (status === 'draft' || status === 'scheduled' || (operator && status === 'active')) && responseCount === 0
+}
+
+/**
+ * Whether «Editar nombre» is offered: a draft nobody has answered, for anyone who administers
+ * the survey; past draft, a super admin for as long as it is not archived -- with answers too,
+ * because no stored answer points at a survey's name or description (ruled 2026-11-11).
+ */
+export function isTextEditable(status: string, responseCount: number, operator: boolean): boolean {
+  if (status === 'draft') return responseCount === 0
+  return operator && (status === 'scheduled' || status === 'active' || status === 'closed')
 }
 
 /** The locales a question is actually written in — an unauthored locale is not a translation. */

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { BarChart3, CalendarClock, Copy, Lock, Send, ShieldCheck, Trash2, Users } from 'lucide-react'
+import { BarChart3, CalendarClock, Copy, Lock, Pencil, Send, ShieldCheck, Trash2, Users } from 'lucide-react'
 import { Link, useParams } from 'react-router'
 import { PageTopBar } from '../../../../components/layout'
 import {
@@ -39,6 +39,8 @@ import { DeleteSurveyDialog } from './DeleteSurveyDialog'
 import { EditAudienceDialog } from './EditAudienceDialog'
 import { audienceEditability } from './audienceEdit'
 import { ReopenSurveyDialog } from './ReopenSurveyDialog'
+import { EditSurveyTextDialog } from './EditSurveyTextDialog'
+import { isTextEditable } from './model'
 import { browserTimeZone, dayMonthIn, dayTimeIn, daysFromIn, isKnownTimeZone, yearIn, zoneLabel } from './zonedWindow'
 
 /**
@@ -57,7 +59,7 @@ import { browserTimeZone, dayMonthIn, dayTimeIn, daysFromIn, isKnownTimeZone, ye
 export default function SurveyDetailNextPage() {
   const { id } = useParams<{ id: string }>()
   const { t } = useTranslation()
-  const { state, reload, transition, duplicate, saveWindow, saveAudience, reopen, remove, pending, actionError } = useSurveyDetailModel(id)
+  const { state, reload, transition, duplicate, saveWindow, saveAudience, saveText, reopen, remove, pending, actionError } = useSurveyDetailModel(id)
   useFollowCompany(state.status === 'ready' ? state.model.survey.companyId : undefined)
 
   if (state.status === 'loading') {
@@ -89,6 +91,7 @@ export default function SurveyDetailNextPage() {
       onDuplicate={() => void duplicate()}
       onSaveWindow={saveWindow}
       onSaveAudience={saveAudience}
+      onSaveText={saveText}
       onReopen={reopen}
       onDelete={remove}
     />
@@ -103,6 +106,7 @@ export function SurveyDetailView({
   onDuplicate,
   onSaveWindow,
   onSaveAudience,
+  onSaveText,
   onReopen,
   onDelete,
   now = new Date(),
@@ -116,6 +120,8 @@ export function SurveyDetailView({
   onSaveWindow?: (window: { startDate?: string; endDate: string }) => Promise<void>
   /** Rewrites the survey's targets; absent, "Editar audiencia" is not offered. */
   onSaveAudience?: (targets: { departmentIds?: string[]; userIds: string[] }) => Promise<void>
+  /** Saves the name and description; absent, "Editar nombre" is not offered. */
+  onSaveText?: (text: { title: Partial<Record<'en' | 'es', string>>; description: Partial<Record<'en' | 'es', string>> }) => Promise<void>
   /** Reopens a closed survey (super admins only); absent, "Reabrir" is not offered. */
   onReopen?: (body: { endDate: string; reason: string }) => Promise<void>
   /** Deletes the survey; absent, "Eliminar" is not offered. */
@@ -150,7 +156,15 @@ export function SurveyDetailView({
   // company" notice for a survey whose company is already known. That silence once cost a client
   // conversation; the 2026-11-08 walkthrough (A1) found the same gate hiding the roster.
   const canAuthor = caps.canAdministerSurvey(survey)
-  const editable = survey.isContentEditable && survey.responseCount === 0
+  // TIMS edits a survey that has left draft (ruled 2026-11-11, super admins only): its questions
+  // while it is scheduled or active and nobody has answered, its name and description until it is
+  // archived. A client's administrator keeps the draft-only rule. The server decides either way;
+  // this only keeps the page from offering what it would refuse.
+  const operator = readViewerClaims().role === 'super_admin'
+  const liveQuestions = operator && (survey.status === 'scheduled' || survey.status === 'active')
+  const editable = (survey.isContentEditable || liveQuestions) && survey.responseCount === 0
+  const textEditable = canAuthor && onSaveText !== undefined && isTextEditable(survey.status, survey.responseCount, operator)
+  const [renaming, setRenaming] = useState(false)
   // The company's clock, which the window is read and written in. The browser's only when the
   // company's cannot be read -- and the editor prints whichever zone it is using.
   const timeZone = isKnownTimeZone(model.timeZone) ? model.timeZone : browserTimeZone()
@@ -185,6 +199,12 @@ export function SurveyDetailView({
         tightBreadcrumb
         actions={
           <>
+            {textEditable && (
+              <Button type="button" variant="outline" disabled={pending !== null} onClick={() => setRenaming(true)}>
+                <Pencil aria-hidden="true" className="size-icon" />
+                {copy('rename.action')}
+              </Button>
+            )}
             {deletable && (
               <Button type="button" variant="outline" disabled={pending !== null} onClick={() => setDeleting(true)}>
                 <Trash2 aria-hidden="true" className="size-icon" />
@@ -315,8 +335,10 @@ export function SurveyDetailView({
           {/* `-mt-3` cancels the heading's 12px margin: the line sits the card's 12px gap under it. */}
           <p className="-mt-3 mb-0 text-sm text-fg-secondary">
             {editable
-              ? copy('editableLine')
-              : survey.responseCount > 0 && survey.isContentEditable
+              ? survey.status === 'draft'
+                ? copy('editableLine')
+                : copy('editableLive')
+              : survey.responseCount > 0 && (survey.isContentEditable || liveQuestions)
                 ? copy('lockedResponses')
                 : copy('lockedStatus', { status: copy(`statusAdjective.${survey.status}`) })}
           </p>
@@ -460,6 +482,15 @@ export function SurveyDetailView({
           onOpenChange={setReopening}
           onReopen={onReopen}
           now={() => now}
+        />
+      )}
+      {textEditable && onSaveText && (
+        <EditSurveyTextDialog
+          surveyId={survey.id}
+          live={survey.status !== 'draft'}
+          open={renaming}
+          onOpenChange={setRenaming}
+          onSave={onSaveText}
         />
       )}
       {deletable && onDelete && (

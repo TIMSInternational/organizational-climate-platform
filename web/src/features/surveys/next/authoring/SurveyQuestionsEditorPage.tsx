@@ -3,7 +3,7 @@ import { Check, Copy, GripVertical, Lock, MoreHorizontal, Plus } from 'lucide-re
 import { Link, useNavigate, useParams } from 'react-router'
 import { PageTopBar } from '../../../../components/layout'
 import { Alert, AlertDescription, Button, Chip, ErrorState, Input, LoadingRegion, SkeletonText, Switch, Textarea } from '../../../../components/ui'
-import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
+import { readViewerClaims, useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { useFollowCompany } from '../../../../company-context'
 import { QuestionLibraryBrowser } from '../../../../components/questions'
 import { useTranslation, type Locale } from '../../../../i18n'
@@ -111,8 +111,12 @@ export default function SurveyQuestionsEditorPage() {
   const setQuestions = (change: (current: AuthoringQuestion[]) => AuthoringQuestion[]) =>
     setEdited((previous) => change(previous ?? authoring.questions))
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
-  const editable = isEditable(authoring.status, detail.responseCount) && caps.canAdministerSurvey(detail)
-  const locked = !isEditable(authoring.status, detail.responseCount)
+  // A super admin also edits an ACTIVE survey nobody has answered (ruled 2026-11-11). For a
+  // client's administrator that survey stays locked, with "Duplicar y editar" as before.
+  const operator = readViewerClaims().role === 'super_admin'
+  const editable = isEditable(authoring.status, detail.responseCount, operator) && caps.canAdministerSurvey(detail)
+  const locked = !isEditable(authoring.status, detail.responseCount, operator)
+  const live = !locked && authoring.status !== 'draft'
   // The reader's language first, as the board orders ES · EN for a Spanish reader.
   const locales = [...authoring.locales].sort((x, y) => (x === locale ? -1 : y === locale ? 1 : 0))
   const summary = summarise(questions, locales)
@@ -171,7 +175,7 @@ export default function SurveyQuestionsEditorPage() {
         ]}
         eyebrow={copy('eyebrow', { type: typeLabel(t, detail.type), status: statusLabel(t, authoring.status) })}
         title={copy('title')}
-        description={locked ? copy('descriptionLocked') : copy('descriptionDraft')}
+        description={locked ? copy('descriptionLocked') : live ? copy('descriptionLive') : copy('descriptionDraft')}
         meta={
           <>
             <Chip tone={authoring.status === 'active' ? 'good' : authoring.status === 'draft' ? 'warning' : 'neutral'} label={statusLabel(t, authoring.status)} />
@@ -215,6 +219,14 @@ export default function SurveyQuestionsEditorPage() {
       {actionError && (
         <Alert variant="destructive" role="alert" className="mb-5">
           <AlertDescription>{actionError}</AlertDescription>
+        </Alert>
+      )}
+
+      {live && (
+        // Said BEFORE the first change, not after the save: these questions are already in front
+        // of the people invited, and the edit is only possible because none of them has answered.
+        <Alert variant="warning" role="note" className="mb-5" data-testid="live-banner">
+          <AlertDescription>{copy('liveEdit', { status: statusLabel(t, authoring.status).toLowerCase() })}</AlertDescription>
         </Alert>
       )}
 
