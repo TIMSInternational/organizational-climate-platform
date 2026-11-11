@@ -572,20 +572,36 @@ public static class SurveyEndpoints
         // answer already collected may be interpreted and re-identified, which is the
         // definition of invalidating a result -- the rest of the settings blob (reminder
         // cadence, progress bar, autosave) changes nothing about the data.
-        var touchesContent = request.Title is not null
-                             || request.Description is not null
-                             || request.Type is not null
-                             || request.Language is not null
-                             || request.Questions is not null
-                             || request.DepartmentIds is not null
-                             || request.Settings?.Anonymous is not null;
+        var touchesText = request.Title is not null || request.Description is not null;
+        var touchesStructure = request.Type is not null
+                               || request.Language is not null
+                               || request.Questions is not null
+                               || request.DepartmentIds is not null
+                               || request.Settings?.Anonymous is not null;
+        var touchesContent = touchesText || touchesStructure;
 
         var touchesSchedule = request.StartDate.HasValue
                               || request.EndDate.HasValue
                               || request.TargetAudienceCount.HasValue
                               || request.Settings is not null;
 
-        if (touchesContent)
+        // A TIMS operator editing a survey that has left draft (ruled 2026-11-11,
+        // `docs/decisions/operators-edit-a-live-survey.md`). Decided here, applied below: the
+        // question replacement is then serialised against the first answer, and the edit writes
+        // a version so the content a response resolves to stays the content it was given.
+        var operatorLiveEdit = false;
+        if (touchesContent && !SurveyStatuses.AllowsContentEdit(survey.Status) && currentUser.Role == Roles.SuperAdmin)
+        {
+            var refusal = await RefuseLiveEditAsync(db, survey, request, cancellationToken);
+            if (refusal is not null)
+            {
+                return refusal;
+            }
+
+            operatorLiveEdit = true;
+        }
+
+        if (touchesContent && !operatorLiveEdit)
         {
             if (!SurveyStatuses.AllowsContentEdit(survey.Status))
             {
@@ -648,6 +664,30 @@ public static class SurveyEndpoints
             return Results.Json(
                 new { message = "StartDate cannot be changed once the survey is active.", code = AdminRefusals.SurveyStartFrozen },
                 statusCode: 409);
+        }
+
+        // An operator's live edit runs in one transaction that holds the survey row. Inserting a
+        // response takes FOR KEY SHARE on that row (responses.survey_id), which FOR UPDATE
+        // excludes. So a first answer either committed before this -- and the re-check below
+        // refuses -- or waits until this commits and then fails on its own, against questions
+        // that no longer exist (question_responses.question_id is RESTRICT). Never an answer
+        // quietly attached to a question that was taken away.
+        await using var liveTransaction = operatorLiveEdit
+            ? await db.Database.BeginTransactionAsync(cancellationToken)
+            : null;
+        IReadOnlyList<MissingTranslation> missingBefore = [];
+        if (operatorLiveEdit)
+        {
+            await db.Database.ExecuteSqlInterpolatedAsync(
+                $"SELECT 1 FROM surveys WHERE \"Id\" = {survey.Id} FOR UPDATE", cancellationToken);
+            if (request.Questions is not null && await HasResponsesAsync(db, survey, cancellationToken))
+            {
+                return Results.Json(
+                    new { message = "This survey already has responses; its questions can no longer be edited.", code = AdminRefusals.SurveyContentHasResponses },
+                    statusCode: 409);
+            }
+
+            missingBefore = await MissingTranslationsAsync(db, survey, cancellationToken);
         }
 
         // Captured after every guard has passed and before the first mutation, so the audit
@@ -819,10 +859,10 @@ public static class SurveyEndpoints
                 return sourceError;
             }
 
-            // Replace wholesale. Safe only because we have already established the survey
-            // is a draft with zero responses -- with responses in play this would orphan
-            // every question_responses row, which is precisely what the guard above exists
-            // to prevent.
+            // Replace wholesale. Safe only because we have already established the survey has
+            // zero responses -- a draft, or a live survey an operator is editing under the row
+            // lock above. With responses in play this would orphan every question_responses
+            // row, which is precisely what those guards exist to prevent.
             var existingQuestions = await db.Questions.Where(x => x.SurveyId == survey.Id).ToListAsync(cancellationToken);
             var existingIds = existingQuestions.Select(x => x.Id).ToList();
             var existingOptions = await db.QuestionOptions.Where(o => existingIds.Contains(o.QuestionId)).ToListAsync(cancellationToken);
@@ -845,6 +885,43 @@ public static class SurveyEndpoints
         // a cost paid on updates only, and only when something actually moved.
         var contentAfter = await SurveyAuditTrail.LoadContentAsync(db, survey, cancellationToken);
         var changedFields = SurveyVersioning.Diff(contentBefore, contentAfter).ToList();
+
+        if (operatorLiveEdit)
+        {
+            // The publish gate (#195), held for the content respondents already see: an edit
+            // may not take a live survey's questions to zero, nor leave a text untranslated that
+            // was translated. Gaps that predate the edit stay its own business -- refusing a
+            // title fix over a question published before the gate existed protects nobody.
+            var liveQuestions = await db.Questions.Where(x => x.SurveyId == survey.Id).ToListAsync(cancellationToken);
+            if (liveQuestions.Count == 0)
+            {
+                return Results.Json(
+                    new { message = "A survey respondents can see must keep at least one question.", code = AdminRefusals.SurveyNoQuestions },
+                    statusCode: 400);
+            }
+
+            var liveOptions = await SurveyContent.LoadOptionsAsync(db, liveQuestions.Select(x => x.Id).ToList(), cancellationToken);
+            var newlyMissing = ContentPublishValidation
+                .FindMissing(survey.Language, SurveyContent.GateFields(survey, liveQuestions, liveOptions))
+                .Except(missingBefore)
+                .ToList();
+            if (newlyMissing.Count > 0)
+            {
+                return Results.Json(
+                    new { message = ContentPublishValidation.Describe(newlyMissing), missingTranslations = newlyMissing, code = AdminRefusals.SurveyMissingTranslations },
+                    statusCode: 400);
+            }
+
+            // A response resolves to its wording through survey.Version (CaptureVersionAsync).
+            // Publishing froze that snapshot because content could not move afterwards; now it
+            // can, so every effective live edit writes the next one. Questions only move while
+            // nobody has answered, so every answer still resolves to the questions it was given.
+            if (changedFields.Count > 0)
+            {
+                await SurveyAuditTrail.CaptureVersionAsync(db, survey, liveQuestions, liveOptions, actor, updatedAt, cancellationToken);
+            }
+        }
+
         if (userTargetsChanged)
         {
             changedFields.Add("userIds");
@@ -897,6 +974,11 @@ public static class SurveyEndpoints
                 db, survey.Id, SurveyAuditActions.Updated, SurveyAuditEntityTypes.Survey, actor, updatedAt,
                 new SurveyAuditChangeSet(Fields: changedFields));
             await db.SaveChangesAsync(cancellationToken);
+        }
+
+        if (liveTransaction is not null)
+        {
+            await liveTransaction.CommitAsync(cancellationToken);
         }
 
         return Results.Ok(await ToDetailAsync(survey, db, lang, cancellationToken));
@@ -1432,6 +1514,67 @@ public static class SurveyEndpoints
         CancellationToken cancellationToken)
         => survey.ResponseCount > 0
            || await db.Responses.IgnoreQueryFilters(ResponseQueryFilters.IncludeExcluded).AnyAsync(r => r.SurveyId == survey.Id, cancellationToken);
+
+    /// <summary>
+    /// What a TIMS operator may NOT change once a survey has left draft (ruled 2026-11-11,
+    /// <c>docs/decisions/operators-edit-a-live-survey.md</c>). The title and the description
+    /// always, short of archived: they are words about the survey, not the instrument, and no
+    /// stored answer points at them. The questions only while the survey is scheduled or active
+    /// AND nothing has been stored against them -- not one row, complete, partial or excluded.
+    /// Everything else (type, language, anonymity, departments) stays a draft-only decision.
+    /// Null when the request is within that.
+    /// </summary>
+    private static async Task<IResult?> RefuseLiveEditAsync(
+        ClimateProjectDbContext db,
+        Survey survey,
+        UpdateSurveyRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (string.Equals(survey.Status, SurveyStatuses.Archived, StringComparison.Ordinal))
+        {
+            return Results.Json(
+                new { message = "An archived survey cannot be edited.", code = AdminRefusals.SurveyContentLocked },
+                statusCode: 409);
+        }
+
+        var questionsOutOfWindow = request.Questions is not null
+                                   && !SurveyStatuses.RespondentVisible.Contains(survey.Status, StringComparer.Ordinal);
+        if (request.Type is not null
+            || request.Language is not null
+            || request.DepartmentIds is not null
+            || request.Settings?.Anonymous is not null
+            || questionsOutOfWindow)
+        {
+            return Results.Json(
+                new
+                {
+                    message = $"A survey in status '{survey.Status}' keeps its type, language, anonymity and departments. "
+                              + "Its title and description can change, and its questions only while it is scheduled or active and nobody has answered.",
+                    code = AdminRefusals.SurveyLiveEditOutOfScope,
+                },
+                statusCode: 409);
+        }
+
+        if (request.Questions is not null && await HasResponsesAsync(db, survey, cancellationToken))
+        {
+            return Results.Json(
+                new { message = "This survey already has responses; its questions can no longer be edited.", code = AdminRefusals.SurveyContentHasResponses },
+                statusCode: 409);
+        }
+
+        return null;
+    }
+
+    /// <summary>The publish gate's findings for the survey as stored right now.</summary>
+    private static async Task<IReadOnlyList<MissingTranslation>> MissingTranslationsAsync(
+        ClimateProjectDbContext db,
+        Survey survey,
+        CancellationToken cancellationToken)
+    {
+        var questions = await db.Questions.AsNoTracking().Where(x => x.SurveyId == survey.Id).ToListAsync(cancellationToken);
+        var options = await SurveyContent.LoadOptionsAsync(db, questions.Select(x => x.Id).ToList(), cancellationToken);
+        return ContentPublishValidation.FindMissing(survey.Language, SurveyContent.GateFields(survey, questions, options));
+    }
 
     /// <summary>
     /// Every targeted person must belong to the SURVEY's company and be active, for the same

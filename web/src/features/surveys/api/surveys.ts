@@ -832,6 +832,28 @@ export async function updateSurveyWindow(
 }
 
 /**
+ * `PUT /surveys/{id}` with `title` and `description` only. Every other member is left out, so
+ * this can never clobber the dates, the audience or the questions of a survey being edited in
+ * another tab. Each is a `LocalizedInput` holding only the languages the survey is written in;
+ * an empty description is sent as `''`, which is how the server is told to clear it.
+ *
+ * Outside draft only a super admin is answered (ruled 2026-11-11): the server's 409 is thrown
+ * with its code, for the dialog to say in the reader's language.
+ */
+export async function updateSurveyText(
+  baseUrl: string,
+  id: string,
+  text: { title: Partial<Record<'en' | 'es', string>>; description: Partial<Record<'en' | 'es', string>> },
+  lang?: string,
+): Promise<SurveyDetail> {
+  const response = await authFetch(withQuery(baseUrl, `/surveys/${id}`, { lang }), {
+    method: 'PUT',
+    body: JSON.stringify({ title: text.title, description: text.description }),
+  })
+  return response.json() as Promise<SurveyDetail>
+}
+
+/**
  * `DELETE /surveys/{id}` answers 204, so there is no body to parse.
  *
  * The server deletes a survey in ANY status as long as nobody has answered it

@@ -126,6 +126,13 @@ public static class SurveyStatuses
     /// True when the survey's *content* -- title, description, language, type, questions,
     /// options, department targeting -- may still be rewritten. Draft only.
     ///
+    /// That is the rule for the survey's administrators. Since 2026-11-11 a TIMS operator (super
+    /// admin) has a narrower exception past draft: the title and description until archived, the
+    /// questions while scheduled or active and nobody has answered
+    /// (<c>SurveyEndpoints.RefuseLiveEditAsync</c>, <c>docs/decisions/operators-edit-a-live-survey.md</c>).
+    /// Deliberately not folded into this predicate, which also gates the audience editor and the
+    /// <c>IsContentEditable</c> every client reads.
+    ///
     /// Note this is the structural half of the rule; the endpoint additionally refuses a
     /// content edit whenever any response exists, so a row that somehow reached draft with
     /// responses attached is still protected. See <c>SurveyEndpoints.UpdateAsync</c>.

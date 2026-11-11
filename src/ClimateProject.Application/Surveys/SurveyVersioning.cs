@@ -146,7 +146,9 @@ public static class SurveyVersionReasons
 /// it just makes the change log quietly misleading, and it is unit-testable here without
 /// Docker.
 ///
-/// <b>What a version is.</b> One row per publish. A survey's content is editable only in
+/// <b>What a version is.</b> One row per publish -- and, since 2026-11-11, one per effective edit
+/// a TIMS operator makes past draft (<c>docs/decisions/operators-edit-a-live-survey.md</c>), which
+/// keeps the paragraph below true: questions only move while nobody has answered. A survey's content is editable only in
 /// <c>draft</c> (<see cref="SurveyStatuses.AllowsContentEdit"/>) and only while it has no
 /// responses, and no status that accepts responses has a path back to <c>draft</c>. So
 /// the snapshot taken at the publish that led to collection is, and remains, a byte-for-byte
