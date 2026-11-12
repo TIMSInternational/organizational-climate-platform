@@ -173,6 +173,21 @@ describe('MicroclimateInvitationNextPage — the landing card', () => {
     ).toBeTruthy()
   })
 
+  /**
+   * One promise, one shape: the survey invitation's box at the respond step (15px), not an
+   * Alert at 13px with an 8px gap beside it (12 Nov review).
+   */
+  it('draws the promise in the survey promise box, at the respond step', async () => {
+    serve()
+    renderPage()
+    await screen.findByText('No se asocia a usted')
+    const notice = document.querySelector('[data-slot="anonymity-notice"]') as HTMLElement
+    expect(notice, 'the promise is the shared box').toBeTruthy()
+    expect(notice.className).toContain('gap-2.5')
+    expect(notice.querySelector('p')?.className ?? '').toContain('text-respond')
+    expect(notice.querySelector('svg')?.getAttribute('class') ?? '').toContain('text-accent-blue-ink')
+  })
+
   it('states the anonymity contract the payload actually reports', async () => {
     serve()
     renderPage()
@@ -199,7 +214,7 @@ describe('MicroclimateInvitationNextPage — the landing card', () => {
   it('records opened on arrival and started only when the respondent begins', async () => {
     serve()
     renderPage()
-    const begin = await screen.findByRole('button', { name: /Responder/ })
+    const begin = await screen.findByRole('button', { name: 'Empezar a responder' })
     await waitFor(() => expect(steps()).toEqual(['opened']))
 
     await userEvent.click(begin)
@@ -224,7 +239,7 @@ describe('MicroclimateInvitationNextPage — the six states', () => {
 
     expect(await screen.findByRole('heading', { name: title })).toBeTruthy()
     expect(screen.getByText(label)).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /Responder/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Empezar a responder' })).toBeNull()
   })
 
   /**
@@ -263,7 +278,7 @@ describe('MicroclimateInvitationNextPage — the six states', () => {
 
     expect(await screen.findByRole('heading', { name: 'Este pulso ya no recibe respuestas' })).toBeTruthy()
     expect(screen.getByText(/Cerró el 11 de septiembre/)).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /Responder/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Empezar a responder' })).toBeNull()
   })
 
   /**
@@ -283,7 +298,7 @@ describe('MicroclimateInvitationNextPage — the six states', () => {
 
     const action = await screen.findByRole('link', { name: 'Iniciar sesión y volver aquí' })
     expect(screen.getByText('Pulso con nombre · sin sesión iniciada')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /Responder/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Empezar a responder' })).toBeNull()
 
     await userEvent.click(action)
     expect(await screen.findByText('login page')).toBeTruthy()
@@ -316,7 +331,7 @@ describe('MicroclimateInvitationNextPage — answering', () => {
   it('lets the respondent answer even when every tracking call fails', async () => {
     serve({ steps: () => new Response('', { status: 500 }) })
     renderPage()
-    await userEvent.click(await screen.findByRole('button', { name: /Responder/ }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Empezar a responder' }))
     expect(await screen.findByText('¿Cómo te sientes hoy?')).toBeTruthy()
   })
 
@@ -324,7 +339,7 @@ describe('MicroclimateInvitationNextPage — answering', () => {
     serve()
     setToken('a-stored-session')
     renderPage()
-    await screen.findByRole('button', { name: /Responder/ })
+    await screen.findByRole('button', { name: 'Empezar a responder' })
 
     const invitationCalls = vi
       .mocked(fetch)

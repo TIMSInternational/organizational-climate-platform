@@ -4,9 +4,6 @@ import { Calendar, Check, CircleAlert, Lock, Search, ShieldCheck } from 'lucide-
 import { useTranslation } from '../../../../i18n'
 import { RespondCaption, RespondReading, RespondShell } from '../../../../components/layout'
 import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
   Button,
   CanvasArrowRightIcon,
   CanvasClockIcon,
@@ -184,24 +181,38 @@ function Landing({
  * that much. On an anonymous session the invitation ladder stops at `opened`, so "we know
  * you looked and we will not know whether you answered" is literally true.
  *
- * `Alert` rather than a hand-rolled box, in its default (card) variant with the padlock in
- * the blue tint — the Respond board's promise row. It was the green success alert until
- * the 11 Nov ruling kept green for the three result areas only. Only the title's
- * typographic rule is overridden, to the small uppercase label the board sets it in.
+ * Drawn in the survey's promise box (`surveys/components/AnonymityNotice`): the card
+ * hairline, 16px across and 14px down, the blue padlock, the small uppercase label, and
+ * the body at the respond step (15px). It was an `Alert` at 13px with an 8px gap, beside a
+ * survey invitation whose promise was 15px with a 16px gap (12 Nov review): one promise,
+ * two shapes. The words stay the pulse's own: "No se asocia a usted" and "Este pulso
+ * registra quién participa" say what this payload's flag means for a pulse, which the
+ * survey's "Anónima" does not.
  */
 function AnonymityNotice({ anonymous }: { anonymous: boolean }) {
   const { t } = useTranslation('microclimates')
 
   return (
-    <Alert variant="default" role="status" className="[&>svg]:text-accent-blue-ink">
-      {anonymous ? <Lock aria-hidden="true" /> : <ShieldCheck aria-hidden="true" />}
-      <AlertTitle className="text-2xs font-semibold uppercase tracking-eyebrow text-fg-secondary">
-        {anonymous ? t('next.invitation.anonymousTitle') : t('next.invitation.identifiedTitle')}
-      </AlertTitle>
-      <AlertDescription>
-        {anonymous ? t('next.invitation.anonymousBody') : t('next.invitation.identifiedBody')}
-      </AlertDescription>
-    </Alert>
+    <section
+      role="status"
+      data-slot="anonymity-notice"
+      data-anonymous={anonymous}
+      className="flex gap-2.5 rounded-xl border border-line-panel bg-surface-card px-4 py-3.5"
+    >
+      {anonymous ? (
+        <Lock aria-hidden="true" className="mt-px size-icon shrink-0 text-accent-blue-ink" />
+      ) : (
+        <ShieldCheck aria-hidden="true" className="mt-px size-icon shrink-0 text-accent-blue-ink" />
+      )}
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <span className="text-2xs font-semibold uppercase tracking-eyebrow text-fg-secondary">
+          {anonymous ? t('next.invitation.anonymousTitle') : t('next.invitation.identifiedTitle')}
+        </span>
+        <p className="m-0 text-respond text-fg-secondary">
+          {anonymous ? t('next.invitation.anonymousBody') : t('next.invitation.identifiedBody')}
+        </p>
+      </div>
+    </section>
   )
 }
 

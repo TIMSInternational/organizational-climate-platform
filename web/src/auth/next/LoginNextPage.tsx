@@ -172,7 +172,7 @@ export default function LoginNextPage() {
               account was knowing the URL. */}
           <p className="m-0 flex flex-wrap gap-1.5 text-sm text-fg-secondary">
             <span>{t('auth.next.noAccount')}</span>
-            <Link to="/register" className="text-accent-blue underline">
+            <Link to="/register" className="text-accent-blue-ink underline">
               {t('auth.next.createOne')}
             </Link>
           </p>
