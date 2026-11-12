@@ -261,7 +261,9 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                   aria-current={state === 'current' ? 'step' : undefined}
                   disabled={!reachable(index)}
                   onClick={() => setStepIndex(index)}
-                  className="flex min-w-0 items-center gap-2.5 border-0 bg-transparent p-0 text-left shadow-none disabled:cursor-default"
+                  // `shrink-0`: a shrinking button let its nowrap label spill over the connector
+                  // beside it, so the line ran under «Datos básicos» like a link underline.
+                  className="flex shrink-0 items-center gap-2.5 border-0 bg-transparent p-0 text-left shadow-none disabled:cursor-default"
                 >
                   {/* Blue marks the step you are on (blue = selection); the others are grey and say
                       their state in words and a glyph. Red is OCC's mark and green/amber the result
@@ -298,7 +300,9 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                   </span>
                 </button>
                 {index < SURVEY_BUILDER_STEPS.length - 1 && (
-                  <span aria-hidden="true" className={cn('hidden h-px min-w-6 flex-1 xl:block', index < stepIndex ? 'bg-accent-blue' : 'bg-line-default')} />
+                  // Neutral for every state: the blue marker already says where you are, and a blue
+                  // rule beside text that is not a link read as one (blue = action/selection).
+                  <span aria-hidden="true" data-slot="rail-connector" className="hidden h-px min-w-4 flex-1 self-center bg-line-default xl:block" />
                 )}
               </li>
             )

@@ -333,6 +333,17 @@ describe('SurveyQuestionsEditorPage — scale, library and dimension check', () 
 // The boards' spacing, inks and type (SurveyQuestionsEditor / …Locked .dc.html). happy-dom has no
 // layout: the classes are the pin, and draft-light.png / locked-light.png are the evidence.
 describe('SurveyQuestionsEditorPage — the boards\' spacing, inks and type', () => {
+  it("previews the open question semibold in the UI face, as the artboards' `<b>`, under a visible «n de N»", async () => {
+    arrangeSurvey('draft', 0)
+    renderAt('/surveys/s1/questions')
+    const text = await screen.findByTestId('preview-question-text')
+    expect(text.className.split(' ')).toEqual(expect.arrayContaining(['text-base', 'font-semibold']))
+    for (const face of ['font-display', 'font-serif', 'text-xl']) expect(text.className.split(' ')).not.toContain(face)
+    const position = screen.getByTestId('preview-position')
+    expect(position.textContent).toMatch(/^\d+ (de|of) \d+$/)
+    expect(position.className.split(' ')).not.toContain('sr-only')
+  })
+
   it('sets the two columns and the preview stack 16px apart, and rules the save note off under a full-width hairline', async () => {
     arrangeSurvey('draft', 0)
     renderAt('/surveys/s1/questions')

@@ -39,10 +39,12 @@ export function PreviewSection({
           {category ? dimensionLabel(category, t) : t('surveys.next.preview.noDimension')}
         </span>
         <span aria-hidden="true" className="h-px flex-1 bg-line-light" />
-        {/* The section's place ("2 de 6") is said to screen readers only: on screen every card
-            already carries its position chip ("2/6"), and two counters per question said the same
-            thing twice (Apple-design review, writing.md › Be clear). */}
-        <span className="sr-only">{t('surveys.next.preview.sectionOf', { index, count })}</span>
+        {/* The section's place ("2 de 6"), visible at the end of the rule as the SurveyDetail
+            artboard draws it (`.xs.muted.num` beside the eyebrow). Set at the 13px secondary size:
+            the type ruling keeps anything smaller for uppercase eyebrows. */}
+        <span data-slot="preview-section-count" className="text-sm leading-normal text-fg-secondary tabular-nums">
+          {t('surveys.next.preview.sectionOf', { index, count })}
+        </span>
       </div>
       {children}
     </div>
@@ -71,9 +73,11 @@ export function PreviewQuestion({
       data-slot="preview-question"
       className="flex flex-col gap-2.5 rounded-xl border border-line-panel bg-surface-card px-4 py-3.5"
     >
-      {/* The question in the display serif: it is the respondent's question text, the one body
-          text the type ruling sets in the serif, and this card shows it as they will read it. */}
-      <p className="m-0 flex items-baseline gap-2 font-display text-xl font-semibold leading-snug text-fg-primary">
+      {/* The question in the UI face, semibold at body size: the SurveyDetail and SurveyBuilder
+          artboards draw a preview card's question as `<b>`, not in the serif. The serif stays on
+          the Respond flow itself, where the question is the page's subject; six 20px serif lines
+          made this list far heavier than the board (typography.md › Conveying hierarchy). */}
+      <p data-slot="preview-question-text" className="m-0 flex items-baseline gap-2 text-base font-semibold leading-snug text-fg-primary">
         <span
           aria-hidden="true"
           className="relative -top-px shrink-0 rounded-md bg-surface-fill-subtle px-1.5 py-px font-sans text-xs font-medium leading-normal tracking-normal text-fg-secondary tabular-nums"

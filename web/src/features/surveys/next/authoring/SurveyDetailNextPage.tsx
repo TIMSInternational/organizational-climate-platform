@@ -249,7 +249,7 @@ export function SurveyDetailView({
         </Alert>
       )}
 
-      <section aria-label={copy('readings')} className="grid items-start gap-3.5 sm:grid-cols-2 xl:grid-cols-4" data-testid="detail-readings">
+      <section aria-label={copy('readings')} className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4" data-testid="detail-readings">
         <ReadingTile
           testId="tile-responses"
           label={copy('responses')}
@@ -309,10 +309,29 @@ export function SurveyDetailView({
           pending={pending}
           onTransition={onTransition}
           endPassed={closesIn !== null && closesIn < 0}
-          onEditWindow={windowEditable ? () => setEditingWindow(true) : undefined}
           onReopen={reopenable ? () => setReopening(true) : undefined}
         />
       </section>
+      {/* The end-passed warning spans the row under the readings instead of stretching the
+          Estado tile: inside it, the tile ran ~330px past the other three (the board's `.grid.g4`
+          draws four tiles of one height). */}
+      {canAuthor && closesIn !== null && closesIn < 0 && survey.allowedStatusTransitions.some((status) => status === 'active' || status === 'scheduled') && (
+        <div className="mt-3.5 flex flex-wrap items-center gap-3" data-testid="status-end-passed-block">
+          {/* A neutral note with its glyph, not amber ink: amber is the Oportunidad result
+              area and nothing else (color.md › Best practices). */}
+          <Note role="note" icon={<CalendarClock />} className="min-w-0 flex-1 py-2.5 text-sm" data-testid="status-end-passed">
+            {copy('endPassedWarning')}
+          </Note>
+          {/* The sentence above has always said "cambia primero las fechas"; this is where. A
+              duplicated survey keeps its source's past window, and this is how it gets run. */}
+          {windowEditable && (
+            <Button type="button" size="sm" variant="outline" disabled={pending !== null} onClick={() => setEditingWindow(true)}>
+              <CalendarClock aria-hidden="true" className="size-3.5" />
+              {copy('window.edit')}
+            </Button>
+          )}
+        </div>
+      )}
 
       <div className="mt-6 grid items-start gap-4 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
         <Card className="flex min-w-0 flex-col gap-3 px-5 pb-4.5 pt-4" data-testid="detail-questions">
@@ -518,7 +537,6 @@ function StatusTile({
   pending,
   onTransition,
   endPassed,
-  onEditWindow,
   onReopen,
 }: {
   survey: SurveyDetail
@@ -527,8 +545,6 @@ function StatusTile({
   onTransition: (status: string) => void
   /** The survey's end date is behind today. */
   endPassed: boolean
-  /** Opens the date editor; absent where the window cannot be moved. */
-  onEditWindow?: () => void
   /** Opens "Reabrir"; absent unless the survey is closed and the viewer is a super admin. */
   onReopen?: () => void
 }) {
@@ -584,23 +600,6 @@ function StatusTile({
               <li key={status}>{copy('consequence', { verb: verbOf(status), meaning: copy(`meaning.${status}`) })}</li>
             ))}
         </ul>
-      )}
-      {canAuthor && survey.allowedStatusTransitions.some(opensIntoThePast) && (
-        <div className="flex flex-col items-start gap-2" data-testid="status-end-passed-block">
-          {/* A neutral note with its glyph, not amber ink: amber is the Oportunidad result
-              area and nothing else (color.md › Best practices). */}
-          <Note role="note" icon={<CalendarClock />} className="px-3 py-2.5 text-sm" data-testid="status-end-passed">
-            {copy('endPassedWarning')}
-          </Note>
-          {/* The sentence above has always said "cambia primero las fechas"; this is where. A
-              duplicated survey keeps its source's past window, and this is how it gets run. */}
-          {onEditWindow && (
-            <Button type="button" size="sm" variant="outline" disabled={pending !== null} onClick={onEditWindow}>
-              <CalendarClock aria-hidden="true" className="size-3.5" />
-              {copy('window.edit')}
-            </Button>
-          )}
-        </div>
       )}
       {onReopen && (
         <div className="flex flex-col items-start gap-1 border-t border-line-light pt-1.5" data-testid="status-reopen">

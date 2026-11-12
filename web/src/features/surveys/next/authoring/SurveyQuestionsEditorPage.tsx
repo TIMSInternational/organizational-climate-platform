@@ -534,10 +534,11 @@ export default function SurveyQuestionsEditorPage() {
                   <div className="mb-2 flex items-center gap-2 border-t border-line-light pt-3">
                     <Eyebrow className="tracking-wider">{openQuestion.category ? dimensionLabel(openQuestion.category, t) : copy('noDimension')}</Eyebrow>
                     <span className="h-px flex-1 bg-line-light" />
-                    <span className="sr-only">{copy('positionOf', { position: openPosition, count: questions.length })}</span>
+                    <span data-testid="preview-position" className="text-sm text-fg-secondary tabular-nums">{copy('positionOf', { position: openPosition, count: questions.length })}</span>
                   </div>
                   <div className="rounded-xl border border-line-panel p-3.5">
-                    <p className="m-0 flex items-baseline gap-2 font-display text-xl font-semibold leading-snug">
+                    {/* Semibold UI face at body size, as the artboards draw a preview question (`<b>`). */}
+                    <p data-testid="preview-question-text" className="m-0 flex items-baseline gap-2 text-base font-semibold leading-snug">
                       <span aria-hidden="true" className="relative -top-px shrink-0 rounded-md bg-surface-fill-subtle px-1.5 font-sans text-xs font-medium text-fg-secondary tabular-nums">{`${openPosition}/${questions.length}`}</span>
                       <span>
                         <span className="text-fg-primary">{openQuestion.text[shownLocale]?.text || copy('noText')}</span>{' '}
