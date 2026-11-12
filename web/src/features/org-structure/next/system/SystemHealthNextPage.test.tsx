@@ -136,7 +136,7 @@ describe('SystemHealthNextPage', () => {
     expect((document.querySelector('[data-slot="jobs-bar"]') as HTMLElement).className.split(/\s+/)).toContain('py-2.75')
   })
 
-  it('sets the tiles and cards above the jobs on the board\'s line boxes — 24px chips, a 15px reading, 1.5 leading on labels and notes', async () => {
+  it('sets the tiles and cards above the jobs on the board\'s line boxes — 24px chips, a 15px reading, 30px figures in the body face', async () => {
     serve(status())
     renderPage()
     await screen.findByText('notification-dispatch')
@@ -144,7 +144,7 @@ describe('SystemHealthNextPage', () => {
     expect(tiles).toHaveLength(4)
     for (const tile of tiles) {
       const title = tile.querySelector('[data-slot="tile-title"]') as HTMLElement
-      expect(title.className.split(/\s+/)).toEqual(expect.arrayContaining(['text-[15px]', 'leading-normal']))
+      expect(title.className.split(/\s+/)).toEqual(expect.arrayContaining(['text-base', 'leading-normal', 'tabular-nums']))
       const eyebrow = (tile.firstElementChild as HTMLElement).firstElementChild as HTMLElement
       expect(eyebrow.className.split(/\s+/)).toContain('leading-normal')
     }
@@ -152,11 +152,12 @@ describe('SystemHealthNextPage', () => {
     const chips = [...document.querySelectorAll('[data-slot="chip"]')]
     expect(chips.length).toBeGreaterThanOrEqual(10)
     for (const chip of chips) expect(chip.className.split(/\s+/)).toContain('h-6')
-    // The queue's figures sit on a 30px line, their labels on 15px and the note under them on 16.5.
+    // The queue's figures are the `.kpi` reading: 30px semibold, tabular, never the mono face.
     const figures = [...document.querySelectorAll('[data-slot="queue-figure"]')]
     expect(figures).toHaveLength(3)
     for (const figure of figures) {
-      expect(figure.className.split(/\s+/)).toContain('leading-normal')
+      expect(figure.className.split(/\s+/)).toEqual(expect.arrayContaining(['text-3xl', 'tabular-nums']))
+      expect(figure.className).not.toMatch(/font-mono/)
       expect((figure.previousElementSibling as HTMLElement).className.split(/\s+/)).toContain('leading-normal')
     }
     expect(screen.getByText(next.deadLetteredSub).className.split(/\s+/)).toContain('leading-normal')
@@ -169,6 +170,36 @@ describe('SystemHealthNextPage', () => {
     renderPage()
     const verdict = await screen.findByText(next.verdictWithWarnings.replace('{verdict}', copy.statusOk).replace('{count}', '3'))
     expect(verdict.closest('[data-slot="system-verdict"]')).toBeTruthy()
+  })
+
+  it('never paints a health state green, amber or red: gray chips with a glyph, the danger ink only on a failing one', async () => {
+    serve(status())
+    renderPage()
+    await screen.findByText('notification-dispatch')
+    const chips = [...document.querySelectorAll('[data-slot="chip"]')] as HTMLElement[]
+    for (const chip of chips) {
+      expect(chip.className).toMatch(/bg-chip-neutral-fill/)
+      expect(chip.className).not.toMatch(/chip-(good|warning|critical)/)
+    }
+    // A job with errors is a warning: gray, with its warning mark, not the danger ink.
+    const failing = within(jobRow('digests')).getByText(copy.statusFailing).closest('[data-slot="chip"]') as HTMLElement
+    expect(failing.className).not.toMatch(/text-accent-red-ink/)
+    expect(failing.querySelector('svg')).not.toBeNull()
+    const ok = within(jobRow('notification-dispatch')).getByText(copy.statusOk).closest('[data-slot="chip"]') as HTMLElement
+    expect(ok.className).not.toMatch(/text-accent-red-ink/)
+    expect(ok.querySelector('svg')).not.toBeNull()
+  })
+
+  it('gives only a critical state the danger ink, and still its glyph and word', async () => {
+    serve(status({ status: 'unhealthy', database: { ...status().database, status: 'timeout' } }), 503)
+    renderPage()
+    const timeouts = await screen.findAllByText(copy.statusTimeout)
+    for (const word of timeouts) {
+      const chip = word.closest('[data-slot="chip"]') as HTMLElement
+      expect(chip.className).toMatch(/text-accent-red-ink/)
+      expect(chip.className).toMatch(/bg-chip-neutral-fill/)
+      expect(chip.querySelector('svg')).not.toBeNull()
+    }
   })
 
   it('renders the payload of a 503 rather than treating it as a failed request', async () => {

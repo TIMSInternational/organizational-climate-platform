@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { ArrowRight, CircleAlert, Copy, Download, Lock } from 'lucide-react'
-import { PageTopBar } from '../../../components/layout'
-import { Alert, AlertDescription, Button, Table } from '../../../components/ui'
+import { ArrowRight, Check, CircleAlert, Copy, Download, Info, Lock } from 'lucide-react'
+import { PageHeader } from '../../../components/layout'
+import { Alert, AlertDescription, Button, Note, Table } from '../../../components/ui'
 import { useTranslation } from '../../../i18n'
 import { downloadTextFile } from '../../../lib/downloadTextFile'
 import { cn } from '../../../lib/cn'
@@ -12,7 +12,10 @@ import AccountTabs from './AccountTabs'
 import { AUTHORED_OTHER_KINDS } from './authoredKinds'
 import { usePrivacyModel } from './usePrivacyModel'
 
-const TH = 'border-b border-line-default bg-transparent px-3 pb-2 pt-1 text-2xs font-bold uppercase tracking-label whitespace-nowrap text-fg-tertiary'
+// The `.tbl th` of `occ.css`: 12px semibold, secondary ink, sentence case.
+const TH = 'border-b border-line-default bg-transparent px-4 pb-2 pt-1 text-left text-xs font-semibold whitespace-nowrap text-fg-secondary'
+// The `.card` of `occ.css` over the shared panel: the panel hairline, no shadow.
+const CARD = 'border-line-panel shadow-none py-4.5'
 const HELD = ['account', 'responses', 'demographics', 'notices', 'drafts', 'activity', 'authored'] as const
 const CONSENTS = ['essential', 'analytics', 'marketing', 'personalization', 'thirdParties', 'demographics'] as const
 const EMAILS = ['emailSurveys', 'emailMicroclimates', 'emailActionPlans', 'emailReminders'] as const
@@ -84,19 +87,18 @@ export default function PrivacyNextPage() {
 
   return (
     <div className="flex flex-col gap-section">
-      <div className="-mb-6">
-        <PageTopBar
+      <PageHeader
+          className="mb-0"
           eyebrow={t('privacy.eyebrow')}
           title={t('privacy.next.title')}
           description={t('privacy.next.description')}
-          actions={
+          primaryAction={
             <Button type="button" variant="primary" disabled={downloading} onClick={() => void download()}>
               <Download aria-hidden="true" />
               {downloading ? t('privacy.next.downloading') : t('privacy.next.download')}
             </Button>
           }
         />
-      </div>
       <AccountTabs />
 
       {error && (
@@ -105,19 +107,19 @@ export default function PrivacyNextPage() {
         </Alert>
       )}
 
-      <section aria-labelledby="privacy-held" className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-line-default bg-surface-card shadow-sm">
-        <div className="flex flex-col gap-1.5 px-4 pt-4 pb-3">
+      <section aria-labelledby="privacy-held" className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-line-panel bg-surface-card">
+        <div className="flex flex-col gap-1.5 px-5 pt-4.5 pb-3">
           <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
             <h2 id="privacy-held" className="m-0 text-2xl">
               {t('privacy.next.held.heading')}
             </h2>
-            <span className="text-xs text-fg-tertiary">{t('privacy.next.held.meta')}</span>
+            <span className="text-sm text-fg-tertiary">{t('privacy.next.held.meta')}</span>
           </div>
           <p className="m-0 max-w-[96ch] text-sm leading-normal text-fg-secondary">{t('privacy.next.held.text')}</p>
         </div>
         <div className="overflow-x-auto">
           <div className="min-w-[48rem] [&_[data-slot=table-container]]:overflow-visible">
-            <Table aria-label={t('privacy.next.held.heading')} className="table-fixed">
+            <Table zebra aria-label={t('privacy.next.held.heading')} className="table-fixed">
               <colgroup>
                 <col className="w-[30%]" />
                 <col className="w-[25%]" />
@@ -135,15 +137,15 @@ export default function PrivacyNextPage() {
               <tbody>
                 {HELD.map((key) => (
                   <tr key={key} className="border-b border-line-light last:border-b-0">
-                    <td className="px-3 py-3 align-middle">
+                    <td className="px-4 py-3 align-middle">
                       <span className="flex flex-col gap-0.5">
                         <span className="text-sm font-semibold text-fg-primary">{t(`privacy.next.held.${key}.name`)}</span>
-                        <span className="text-xs leading-snug text-fg-tertiary">{t(`privacy.next.held.${key}.what`, { kinds: AUTHORED_OTHER_KINDS })}</span>
+                        <span className="text-sm leading-snug text-fg-tertiary">{t(`privacy.next.held.${key}.what`, { kinds: AUTHORED_OTHER_KINDS })}</span>
                       </span>
                     </td>
-                    <td className="px-3 py-3 align-middle text-sm leading-snug text-fg-secondary">{t(`privacy.next.held.${key}.link`)}</td>
-                    <td className="px-3 py-3 align-middle text-sm text-fg-secondary">{t(`privacy.next.held.${key}.basis`)}</td>
-                    <td className="px-3 py-3 align-middle text-sm leading-snug text-fg-secondary">{t(`privacy.next.held.${key}.kept`)}</td>
+                    <td className="px-4 py-3 align-middle text-sm leading-snug text-fg-secondary">{t(`privacy.next.held.${key}.link`)}</td>
+                    <td className="px-4 py-3 align-middle text-sm text-fg-secondary">{t(`privacy.next.held.${key}.basis`)}</td>
+                    <td className="px-4 py-3 align-middle text-sm leading-snug text-fg-secondary">{t(`privacy.next.held.${key}.kept`)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -152,17 +154,18 @@ export default function PrivacyNextPage() {
         </div>
       </section>
 
-      <div data-slot="tracking-note" className="flex items-start gap-2.5 rounded-lg bg-accent-amber-soft px-4 py-3 text-sm leading-normal text-fg-secondary">
-        <CircleAlert aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-accent-amber-ink" />
+      {/* A neutral note with the info glyph: amber is the Oportunidad area, never a caution. */}
+      <Note data-slot="tracking-note" icon={<Info />} className="text-sm text-fg-secondary">
         <span>
           <b className="font-semibold text-fg-primary">{t('privacy.next.tracking.lead')}</b> {t('privacy.next.tracking.text')}{' '}
           {state.responsibleFor && state.responsibleFor.length > 0
             ? t('privacy.next.tracking.responsible', { codes: state.responsibleFor.join(', ') })
             : t('privacy.next.tracking.askByHand')}
         </span>
-      </div>
+      </Note>
 
       <Panel
+        className={CARD}
         labelledBy="privacy-consent"
         heading={
           <h2 id="privacy-consent" className="m-0 text-2xl">
@@ -174,15 +177,15 @@ export default function PrivacyNextPage() {
         <dl className="m-0 grid grid-cols-1 gap-x-6 sm:grid-cols-2 xl:grid-cols-3">
           {CONSENTS.map((key) => (
             <div key={key} className="flex items-baseline justify-between gap-3 border-b border-line-light py-2">
-              <dt className="text-sm text-fg-primary">{t(`privacy.next.consent.${key}`)}</dt>
-              <dd className="m-0 text-xs text-fg-tertiary">{t('privacy.next.consent.inFile')}</dd>
+              <dt className="text-ui text-fg-primary">{t(`privacy.next.consent.${key}`)}</dt>
+              <dd className="m-0 text-sm text-fg-tertiary">{t('privacy.next.consent.inFile')}</dd>
             </div>
           ))}
         </dl>
-        <p className="m-0 text-xs leading-normal text-fg-secondary">{t('privacy.next.consent.why')}</p>
+        <p className="m-0 text-sm leading-normal text-fg-secondary">{t('privacy.next.consent.why')}</p>
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-light pt-3">
           <span className="flex flex-wrap items-baseline gap-3">
-            <span className="text-2xs font-bold uppercase tracking-label text-fg-tertiary">{t('privacy.next.consent.emailsLabel')}</span>
+            <span className="text-2xs font-semibold uppercase tracking-eyebrow text-fg-label">{t('privacy.next.consent.emailsLabel')}</span>
             <span className="text-sm text-fg-primary">
               {prefs && on !== null
                 ? t('privacy.next.consent.emailsValue', {
@@ -193,7 +196,7 @@ export default function PrivacyNextPage() {
                 : t('privacy.next.consent.emailsUnknown')}
             </span>
           </span>
-          <Link to="/settings/notifications" className="inline-flex items-center gap-1 text-xs text-fg-secondary">
+          <Link to="/settings/notifications" className="inline-flex min-h-11 items-center gap-1 text-sm text-accent-blue-ink">
             {t('profile.notificationPreferencesLink')}
             <ArrowRight aria-hidden="true" className="size-3" />
           </Link>
@@ -201,6 +204,7 @@ export default function PrivacyNextPage() {
       </Panel>
 
       <Panel
+        className={CARD}
         labelledBy="privacy-erasure"
         heading={
           <h2 id="privacy-erasure" className="m-0 text-2xl">
@@ -209,17 +213,16 @@ export default function PrivacyNextPage() {
         }
         meta={t('privacy.next.erasure.meta')}
       >
-        <div className="flex items-start gap-2.5 rounded-lg bg-surface-icon-box px-3.5 py-3 text-sm leading-normal text-fg-secondary">
-          <Lock aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+        <Note data-slot="erasure-note" icon={<Lock />} className="text-sm text-fg-secondary">
           <span>
             <b className="font-semibold text-fg-primary">{t('privacy.next.erasure.lead')}</b> {t('privacy.next.erasure.text')}
           </span>
-        </div>
+        </Note>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           {ERASURE.map((group) => (
             <div key={group.key} className="flex flex-col gap-1.5">
               <p className="m-0 text-sm font-semibold text-fg-primary">{t(`privacy.next.erasure.${group.key}.title`)}</p>
-              <p className="m-0 text-2xs text-fg-tertiary">{t(`privacy.next.erasure.${group.key}.sub`)}</p>
+              <p className="m-0 text-sm text-fg-tertiary">{t(`privacy.next.erasure.${group.key}.sub`)}</p>
               <ul className="m-0 flex list-disc flex-col gap-1 pl-4 text-sm text-fg-secondary marker:text-fg-tertiary">
                 {group.items.map((item) => (
                   <li key={item}>{t(`privacy.next.erasure.${group.key}.${item}`)}</li>
@@ -230,19 +233,20 @@ export default function PrivacyNextPage() {
         </div>
         <p className="m-0 text-sm text-fg-secondary">{t('privacy.next.erasure.notErased')}</p>
         <div className="flex flex-col gap-2 border-t border-line-light pt-3">
-          <p className="m-0 text-2xs font-bold uppercase tracking-label text-fg-tertiary">{t('privacy.next.request.heading')}</p>
+          <p className="m-0 text-2xs font-semibold uppercase tracking-eyebrow text-fg-label">{t('privacy.next.request.heading')}</p>
           <div className="flex flex-wrap items-end justify-between gap-3">
             <dl className="m-0 grid grid-cols-[10rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-sm">
               <dt className="text-fg-tertiary">{t('privacy.next.request.id')}</dt>
               <dd className="m-0 min-w-0 truncate font-mono text-fg-primary">{state.profile?.id ?? '—'}</dd>
               <dt className="text-fg-tertiary">{t('privacy.next.request.email')}</dt>
-              <dd className="m-0 min-w-0 truncate font-mono text-fg-primary">{state.profile?.email ?? '—'}</dd>
+              <dd className="m-0 min-w-0 truncate text-fg-primary">{state.profile?.email ?? '—'}</dd>
               <dt className="text-fg-tertiary">{t('privacy.next.request.name')}</dt>
               <dd className="m-0 min-w-0 truncate text-fg-primary">{state.profile?.name ?? '—'}</dd>
             </dl>
             <span className="flex items-center gap-2">
               {copy !== 'idle' && (
-                <span role="status" className={cn('text-xs', copy === 'copied' ? 'text-accent-green-ink' : 'text-accent-red')}>
+                <span role="status" className={cn('inline-flex items-center gap-1.5 text-sm', copy === 'copied' ? 'text-fg-primary' : 'text-accent-red-ink')}>
+                  {copy === 'copied' ? <Check aria-hidden="true" className="size-4 text-accent-blue" /> : <CircleAlert aria-hidden="true" className="size-4" />}
                   {copy === 'copied' ? t('privacy.next.request.copied') : t('privacy.next.request.copyRefused')}
                 </span>
               )}

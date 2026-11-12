@@ -127,7 +127,7 @@ describe('NotificationsNextPage (/notifications)', () => {
     expect((screen.getByRole('button', { name: copy.markAll }) as HTMLButtonElement).disabled).toBe(true)
   })
 
-  it('draws "Adjust by kind of notice" in the secondary ink, as the artboard does, not the blue link colour', async () => {
+  it('draws "Adjust by kind of notice" as a blue link with a 44px target, as the Privacy page draws the same destination', async () => {
     // `company_admin`, not `employee`: since 2026-10-18 the respondent shell offers no
     // route into the account pages at all, and this link was the first step of the chain
     // that defeated removing them from the menu — bell -> /notifications -> here ->
@@ -136,7 +136,10 @@ describe('NotificationsNextPage (/notifications)', () => {
     renderAs({ role: 'company_admin', companyId: 'c1' })
     const link = await screen.findByRole('link', { name: copy.byType })
     expect(link.getAttribute('href')).toBe('/settings/notifications')
-    expect(link.className.split(/\s+/)).toContain('text-fg-secondary')
+    const classes = link.className.split(/\s+/)
+    expect(classes).toContain('text-accent-blue-ink')
+    expect(classes).toContain('min-h-11')
+    expect(classes).not.toContain('text-fg-secondary')
   })
 
   it('offers a respondent no way into the notification settings', async () => {
