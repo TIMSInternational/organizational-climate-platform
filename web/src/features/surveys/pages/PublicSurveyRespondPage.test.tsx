@@ -149,7 +149,7 @@ describe('PublicSurveyRespondPage', () => {
     renderPage()
 
     await screen.findByRole('heading', { name: 'Clima laboral 2026' })
-    expect(screen.getByRole('combobox', { name: 'Cambiar Idioma' })).toBeTruthy()
+    expect(screen.getByRole('combobox', { name: 'Cambiar idioma' })).toBeTruthy()
   })
 
   it('offers a skip link, so the survey is the first thing a keyboard reaches', async () => {

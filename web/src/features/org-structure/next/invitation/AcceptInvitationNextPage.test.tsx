@@ -118,7 +118,7 @@ describe('AcceptInvitationNextPage — the form', () => {
     )
     renderPage()
     await fillAndSubmit()
-    expect(await screen.findByRole('heading', { name: 'Cuenta Creada' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: 'Cuenta creada' })).toBeTruthy()
     expect(screen.queryByText('users page')).toBeNull()
   })
 })
@@ -234,7 +234,7 @@ describe('AcceptInvitationNextPage — while the account is being created', () =
     // The two things only `AuthCanvas` puts on this route. `AuthShell` has neither, so this
     // is what fails if the wait ever returns above the frame again.
     expect(screen.getByRole('link', { name: 'Ir al formulario' })).toBeTruthy()
-    expect(screen.getByText('EL CICLO')).toBeTruthy()
+    expect(screen.getByText('El ciclo')).toBeTruthy()
   })
 
   it('replaces the form while it waits, so nothing can be submitted twice', async () => {

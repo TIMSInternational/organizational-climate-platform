@@ -210,7 +210,7 @@ await flow('action plan: the driver\'s own plan, created from the form when abse
     return `${title} reused (${existing.reopen ? 'reopened' : 'already open'}) and listed`
   }
   await go(page, '/action-plans')
-  await click(page, /Nuevo Plan de Acción|New Action Plan/)
+  await click(page, /Nuevo Plan de Acción|New Action Plan/i)
   await page.getByLabel(/^Título|Title/i).first().fill(title)
   await page.getByLabel(/^Descripción|Description/i).first().fill('Creado por el recorrido automatizado; se puede borrar.')
   const due = page.getByLabel(/vencimiento|due/i).first(); if (await due.count()) await due.fill(new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10))
@@ -293,7 +293,7 @@ await flow('admin: the driver\'s own department, created from the form when abse
     return `${name} reused (${existing.reactivate ? 'reactivated' : 'already active'}) and listed`
   }
   await go(page, '/departments')
-  await click(page, /Nuevo Departamento|New Department/)
+  await click(page, /Nuevo Departamento|New Department/i)
   await page.getByLabel(/^Nombre|Name/i).first().fill(name)
   await click(page, /Crear|Guardar|Create|Save/)
   await page.waitForTimeout(1500)

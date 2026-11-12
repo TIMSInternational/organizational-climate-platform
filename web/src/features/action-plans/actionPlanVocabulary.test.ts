@@ -37,7 +37,7 @@ describe('action plan vocabulary', () => {
 
   it('translates rather than echoing, in both languages', () => {
     expect(statusLabel(t, 'in_progress')).toBe('In Progress')
-    expect(statusLabel(tEs, 'in_progress')).toBe('En Progreso')
+    expect(statusLabel(tEs, 'in_progress')).toBe('En progreso')
     expect(priorityLabel(tEs, 'critical')).toBe('Crítica')
     expect(frequencyLabel(tEs, 'quarterly')).toBe('Trimestral')
   })

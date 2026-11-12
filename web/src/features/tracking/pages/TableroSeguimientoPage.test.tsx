@@ -162,7 +162,7 @@ describe('TableroSeguimientoPage', () => {
 
   it('renders in Spanish', async () => {
     renderPage()
-    expect(await screen.findByRole('heading', { name: 'Tablero de Seguimiento' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: 'Tablero de seguimiento' })).toBeTruthy()
     expect(screen.getByText('Fecha de compromiso')).toBeTruthy()
     expect(screen.getByText('Qué se va a hacer')).toBeTruthy()
     expect(screen.getByText('Semáforo')).toBeTruthy()
@@ -264,7 +264,7 @@ describe('TableroSeguimientoPage', () => {
     renderPage()
 
     expect(await screen.findByText('No se pudo contactar el servicio de seguimiento')).toBeTruthy()
-    expect(screen.getByRole('heading', { name: 'Tablero de Seguimiento' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Tablero de seguimiento' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeTruthy()
     expect(screen.queryByRole('table')).toBeNull()
   })

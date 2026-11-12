@@ -630,7 +630,7 @@ describe('MicroclimateInvitationPage', () => {
     await userEvent.type(screen.getByRole('textbox'), 'agotado')
 
     await userEvent.selectOptions(
-      screen.getByRole('combobox', { name: 'Cambiar Idioma' }),
+      screen.getByRole('combobox', { name: 'Cambiar idioma' }),
       'en',
     )
 
