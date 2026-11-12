@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Check, Copy, GripVertical, Lock, MoreHorizontal, Plus } from 'lucide-react'
+import { Check, CircleAlert, Copy, GripVertical, Lock, MoreHorizontal, Plus } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { PageTopBar } from '../../../../components/layout'
-import { Alert, AlertDescription, Button, Chip, ErrorState, Input, LoadingRegion, SkeletonText, Switch, Textarea } from '../../../../components/ui'
+import { PageHeader } from '../../../../components/layout'
+import { Alert, AlertDescription, Button, Chip, ErrorState, Input, LoadingState, Switch, Textarea } from '../../../../components/ui'
 import { readViewerClaims, useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { useFollowCompany } from '../../../../company-context'
 import { QuestionLibraryBrowser } from '../../../../components/questions'
@@ -12,7 +12,8 @@ import { getSurveyQuestionAuthoring, saveSurveyQuestions, type AuthoringQuestion
 import { duplicateSurvey, getSurvey, type SurveyDetail } from '../../api/surveys'
 import { dimensionLabel } from '../../dimensionLabel'
 import { needsScaleLabels, statusLabel, SUGGESTED_DIMENSION_KEYS, SURVEY_QUESTION_TYPES, typeLabel } from '../../surveyVocabulary'
-import { Eyebrow, IconBox, Panel, PanelHeading, Segmented } from '../../../shared-next/parts'
+import { Eyebrow, IconBox, Segmented } from '../../../shared-next/parts'
+import { Panel, PanelHeading } from './parts'
 import {
   authoredLocales,
   blankQuestion,
@@ -87,9 +88,7 @@ export default function SurveyQuestionsEditorPage() {
 
   if (state.status === 'loading') {
     return (
-      <LoadingRegion loading label={t('common.loading')}>
-        <SkeletonText lines={8} />
-      </LoadingRegion>
+      <LoadingState rows={8} label={t('common.loading')} />
     )
   }
   if (state.status === 'failed') {
@@ -167,7 +166,9 @@ export default function SurveyQuestionsEditorPage() {
 
   return (
     <div>
-      <PageTopBar
+      {/* The board's `.hdr`, with the page's one primary (Guardar preguntas, or Duplicar y editar
+          once the questions are locked) in the header's primary slot. */}
+      <PageHeader
         breadcrumbs={[
           { label: t('navigation.surveys'), href: '/surveys' },
           { label: title, href: `/surveys/${id}` },
@@ -178,7 +179,8 @@ export default function SurveyQuestionsEditorPage() {
         description={locked ? copy('descriptionLocked') : live ? copy('descriptionLive') : copy('descriptionDraft')}
         meta={
           <>
-            <Chip tone={authoring.status === 'active' ? 'good' : authoring.status === 'draft' ? 'warning' : 'neutral'} label={statusLabel(t, authoring.status)} />
+            {/* Status chips are grey; only Activa wears the blue live chip. */}
+            <Chip tone={authoring.status === 'active' ? 'live' : 'neutral'} label={statusLabel(t, authoring.status)} />
             <span>
               {title} ·{' '}
               {locked
@@ -189,30 +191,29 @@ export default function SurveyQuestionsEditorPage() {
         }
         actions={
           locked ? (
-            <>
-              <Button asChild variant="outline">
-                <Link to={`/surveys/${id}`}>{copy('backToSurvey')}</Link>
-              </Button>
-              {caps.canAdministerSurvey(detail) && (
-                <Button type="button" variant="primary" disabled={busy} onClick={() => void duplicateAndEdit()}>
-                  <Copy aria-hidden="true" />
-                  {copy('duplicateAndEdit')}
-                </Button>
-              )}
-            </>
+            <Button asChild variant="outline">
+              <Link to={`/surveys/${id}`}>{copy('backToSurvey')}</Link>
+            </Button>
           ) : (
-            <>
-              <Button asChild variant="outline">
-                <Link to={`/surveys/${id}`}>{t('common.cancel')}</Link>
-              </Button>
-              {editable && (
-                <Button type="button" variant="primary" disabled={busy} onClick={() => void save()}>
-                  <Check aria-hidden="true" />
-                  {copy('save')}
-                </Button>
-              )}
-            </>
+            <Button asChild variant="outline">
+              <Link to={`/surveys/${id}`}>{t('common.cancel')}</Link>
+            </Button>
           )
+        }
+        primaryAction={
+          locked ? (
+            caps.canAdministerSurvey(detail) ? (
+              <Button type="button" variant="primary" disabled={busy} onClick={() => void duplicateAndEdit()}>
+                <Copy aria-hidden="true" />
+                {copy('duplicateAndEdit')}
+              </Button>
+            ) : undefined
+          ) : editable ? (
+            <Button type="button" variant="primary" disabled={busy} onClick={() => void save()}>
+              <Check aria-hidden="true" />
+              {copy('save')}
+            </Button>
+          ) : undefined
         }
       />
 
@@ -298,7 +299,7 @@ export default function SurveyQuestionsEditorPage() {
                     ) : (
                       <Lock aria-hidden="true" className="size-3.5 shrink-0 text-fg-secondary" />
                     )}
-                    <span className="w-4 shrink-0 font-mono text-sm text-fg-secondary tabular-nums">{index + 1}</span>
+                    <span className="w-4 shrink-0 text-sm text-fg-secondary tabular-nums">{index + 1}</span>
                     <div className="min-w-0 flex-1">
                       {/* The board: 13px, 600 on the open card and 500 on the others, in the secondary ink once locked. */}
                       <p className={cn('m-0 text-base', open ? 'font-semibold' : 'font-medium', locked ? 'text-fg-secondary' : 'text-fg-primary')}>
@@ -308,11 +309,12 @@ export default function SurveyQuestionsEditorPage() {
                         {question.category ? (
                           <Chip tone="neutral" label={dimensionLabel(question.category, t)} />
                         ) : (
-                          <Chip tone="warning" label={copy('noDimension')} />
+                          // Grey with a glyph: amber is the Oportunidad area, never a warning.
+                          <Chip icon={<CircleAlert aria-hidden="true" className="size-3" />} label={copy('noDimension')} />
                         )}
                         <Chip tone="neutral" label={scaleChip(t, question)} />
                         {locked && question.commentRequired && <Chip tone="neutral" label={copy('withComment')} />}
-                        <span className="inline-flex items-center gap-1 font-mono text-2xs text-chip-good-ink">
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-fg-secondary">
                           {written.length === locales.length && <Check aria-hidden="true" className="size-3" />}
                           {locales.map((l) => l.toUpperCase()).join(' · ')}
                         </span>
@@ -320,7 +322,7 @@ export default function SurveyQuestionsEditorPage() {
                     </div>
                     {editable ? (
                       <label className="mb-0 inline-flex shrink-0 items-center gap-2 text-sm text-fg-secondary">
-                        <Switch className="data-[state=checked]:bg-chip-good-ink" checked={question.required} onCheckedChange={(value) => update(index, { required: value === true })} />
+                        <Switch checked={question.required} onCheckedChange={(value) => update(index, { required: value === true })} />
                         {copy('required')}
                       </label>
                     ) : (
@@ -387,11 +389,11 @@ export default function SurveyQuestionsEditorPage() {
                         ))}
                       <div className="flex flex-wrap items-center gap-4 border-t border-line-light pt-3">
                         <label className="mb-0 inline-flex items-center gap-2 text-sm text-fg-secondary">
-                          <Switch className="data-[state=checked]:bg-chip-good-ink" checked={question.required} onCheckedChange={(value) => update(index, { required: value === true })} />
+                          <Switch checked={question.required} onCheckedChange={(value) => update(index, { required: value === true })} />
                           {copy('answerRequired')}
                         </label>
                         <label className="mb-0 inline-flex items-center gap-2 text-sm text-fg-secondary">
-                          <Switch className="data-[state=checked]:bg-chip-good-ink" checked={question.commentRequired} onCheckedChange={(value) => update(index, { commentRequired: value === true })} />
+                          <Switch checked={question.commentRequired} onCheckedChange={(value) => update(index, { commentRequired: value === true })} />
                           {copy('commentRequired')}
                         </label>
                         <span className="ml-auto flex gap-2">
@@ -405,7 +407,7 @@ export default function SurveyQuestionsEditorPage() {
                               {copy('moveDown')}
                             </Button>
                           )}
-                          <Button type="button" variant="outline" className="text-chip-critical-ink" onClick={() => { setQuestions((c) => removeQuestion(c, index)); setOpenIndex(null) }}>
+                          <Button type="button" variant="destructive" onClick={() => { setQuestions((c) => removeQuestion(c, index)); setOpenIndex(null) }}>
                             {copy('remove')}
                           </Button>
                         </span>
@@ -478,11 +480,17 @@ export default function SurveyQuestionsEditorPage() {
             {!locked && (
               <span data-testid="dimension-check">
                 {summary.uncategorised > 0 ? (
-                  <span className="text-accent-amber-ink">{copy('missingDimension', { count: summary.uncategorised })}</span>
+                  <span className="inline-flex items-center gap-1 font-medium text-fg-primary">
+                    <CircleAlert aria-hidden="true" className="size-3.5" />
+                    {copy('missingDimension', { count: summary.uncategorised })}
+                  </span>
                 ) : emptied.length > 0 ? (
-                  <span className="text-accent-amber-ink">{copy('dimensionsWithout', { dimensions: emptied.map((key) => dimensionLabel(key, t)).join(', ') })}</span>
+                  <span className="inline-flex items-center gap-1 font-medium text-fg-primary">
+                    <CircleAlert aria-hidden="true" className="size-3.5" />
+                    {copy('dimensionsWithout', { dimensions: emptied.map((key) => dimensionLabel(key, t)).join(', ') })}
+                  </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 text-chip-good-ink">
+                  <span className="inline-flex items-center gap-1 text-fg-secondary">
                     <Check aria-hidden="true" className="size-3.5" />
                     {copy('everyDimensionCovered')}
                   </span>
@@ -511,9 +519,9 @@ export default function SurveyQuestionsEditorPage() {
               </div>
             </div>
             <p className="mb-3 mt-0 text-sm text-fg-secondary">{locked ? copy('previewLocked') : copy('previewDraft')}</p>
-            <div data-testid="respondent-preview" className="rounded-lg border border-line-default p-4">
+            <div data-testid="respondent-preview" className="rounded-xl border border-line-panel bg-surface-card p-4">
               <Eyebrow>{copy('surveyEyebrow')}</Eyebrow>
-              <p className="m-0 font-serif text-[1.125rem] text-fg-primary">{title}</p>
+              <p className="m-0 font-display text-[1.125rem] font-semibold leading-tight text-fg-primary">{title}</p>
               <p className="mb-3 mt-0.5 text-sm text-fg-secondary">
                 {locked
                   ? authoring.status === 'active'
@@ -526,21 +534,21 @@ export default function SurveyQuestionsEditorPage() {
                   <div className="mb-2 flex items-center gap-2 border-t border-line-light pt-3">
                     <Eyebrow className="tracking-wider">{openQuestion.category ? dimensionLabel(openQuestion.category, t) : copy('noDimension')}</Eyebrow>
                     <span className="h-px flex-1 bg-line-light" />
-                    <span className="font-mono text-xs text-fg-secondary">{copy('positionOf', { position: openPosition, count: questions.length })}</span>
+                    <span className="sr-only">{copy('positionOf', { position: openPosition, count: questions.length })}</span>
                   </div>
-                  <div className="rounded-lg border border-line-default p-3">
-                    <p className="m-0 flex items-start gap-2 text-base">
-                      <span className="rounded bg-surface-icon-box px-1.5 font-mono text-xs font-medium text-fg-secondary">{`${openPosition}/${questions.length}`}</span>
+                  <div className="rounded-xl border border-line-panel p-3.5">
+                    <p className="m-0 flex items-baseline gap-2 font-display text-xl font-semibold leading-snug">
+                      <span aria-hidden="true" className="relative -top-px shrink-0 rounded-md bg-surface-fill-subtle px-1.5 font-sans text-xs font-medium text-fg-secondary tabular-nums">{`${openPosition}/${questions.length}`}</span>
                       <span>
-                        <strong className="text-fg-primary">{openQuestion.text[shownLocale]?.text || copy('noText')}</strong>{' '}
-                        {openQuestion.required && <span className="text-fg-secondary">{copy('requiredParen')}</span>}
+                        <span className="text-fg-primary">{openQuestion.text[shownLocale]?.text || copy('noText')}</span>{' '}
+                        {openQuestion.required && <span className="font-sans text-sm font-normal text-fg-secondary">{copy('requiredParen')}</span>}
                       </span>
                     </p>
                     {openQuestion.scaleMin !== null && openQuestion.scaleMax !== null && (
                       <>
-                        <div className="mt-3 grid gap-2" style={{ gridTemplateColumns: `repeat(${openQuestion.scaleMax - openQuestion.scaleMin + 1}, minmax(0, 1fr))` }}>
+                        <div aria-hidden="true" className="mt-3 grid gap-2" style={{ gridTemplateColumns: `repeat(${openQuestion.scaleMax - openQuestion.scaleMin + 1}, minmax(0, 1fr))` }}>
                           {Array.from({ length: openQuestion.scaleMax - openQuestion.scaleMin + 1 }, (_, i) => (
-                            <span key={i} className="flex h-9 items-center justify-center rounded-md border border-line-default font-mono text-base text-fg-secondary">
+                            <span key={i} className="flex h-9 select-none items-center justify-center rounded-md bg-surface-fill-subtle text-base tabular-nums text-fg-secondary">
                               {openQuestion.scaleMin! + i}
                             </span>
                           ))}
@@ -556,7 +564,7 @@ export default function SurveyQuestionsEditorPage() {
                         <p className="m-0 text-xs font-semibold text-fg-secondary">
                           {copy('comment')} <span className="font-normal text-fg-secondary">{copy('requiredParenMasc')}</span>
                         </p>
-                        <div className="mt-1 h-10 rounded-md border border-line-default" />
+                        <div aria-hidden="true" className="mt-1 h-10 rounded-md bg-surface-fill-subtle" />
                       </div>
                     )}
                   </div>
@@ -614,7 +622,7 @@ function EditorField({ label, hint, required, children }: { label: string; hint?
     <label className="mb-0 flex flex-col gap-1.5 [&>input]:mt-0 [&>select]:mt-0 [&>textarea]:mt-0">
       <span className="text-sm font-semibold text-fg-secondary">
         {label}
-        {required && <span className="text-chip-critical-ink"> *</span>}
+        {required && <span className="text-accent-red-ink"> *</span>}
       </span>
       {children}
       {hint && <span className="text-sm leading-[1.45] text-fg-secondary">{hint}</span>}

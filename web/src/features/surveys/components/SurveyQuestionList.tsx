@@ -64,7 +64,7 @@ export default function SurveyQuestionList({ questions }: SurveyQuestionListProp
             {/* A position is a reading, and every reading in this product is set in the
                 mono face with tabular figures — which is also what keeps a column of
                 them aligned once the list passes question 9. */}
-            <td className="font-mono tabular-nums">{question.order + 1}</td>
+            <td className="tabular-nums">{question.order + 1}</td>
             <td>{question.text ?? t('surveys.untranslatedQuestion')}</td>
             <td>
               {question.category !== null && question.category.trim() !== '' ? (

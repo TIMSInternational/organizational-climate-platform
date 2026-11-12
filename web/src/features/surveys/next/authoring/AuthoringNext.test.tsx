@@ -360,15 +360,16 @@ describe('Detalle de encuesta (SurveyDetail artboard)', () => {
     }
   })
 
-  it("lays the rows and tiles on the artboard's rhythm: 24px department rows, tiles 20px under the header", () => {
-    // Measured: index.css's 4px <li> margin set the department rows 28px apart (the artboard's
-    // are 24), and the header's 24px margin put the tiles 24px under its hairline (20 on the
-    // board). The classes are the pin; the shots are the evidence.
+  it("lays the rows and tiles on the board's rhythm: 24px department rows, tiles the header's 24px under it", () => {
+    // Measured: index.css's 4px <li> margin set the department rows 28px apart (the board's are
+    // 24). The tiles sit PageHeader's own 24px (`mb-section`) under its hairline, as every
+    // Apple-design board spaces a header from its first row, so the grid adds no margin of its own.
     detail(survey())
     for (const row of within(screen.getByTestId('detail-departments')).getAllByRole('listitem')) {
       expect(row.className.split(' ')).toContain('mb-0')
     }
-    expect(screen.getByTestId('detail-readings').className.split(' ')).toContain('-mt-1')
+    expect(screen.getByTestId('detail-readings').className.split(' ')).not.toContain('-mt-1')
+    expect(screen.getByTestId('detail-readings').closest('div')?.querySelector('[data-slot="page-header"]')).not.toBeNull()
     expect(screen.getByTestId('tile-status').querySelector('span')?.className.split(' ')).toContain('leading-normal')
   })
 
@@ -1242,16 +1243,19 @@ describe('Nueva encuesta (SurveyBuilder artboard)', () => {
     expect(icon?.getAttribute('class')).not.toContain('lucide-file-text')
   })
 
-  it("sets the preview title and the draft chip in the headings' Goudy, never Tailwind's Georgia font-serif", async () => {
+  it('sets the preview title in the one display serif and the draft chip as a grey sans status chip', async () => {
     vi.mocked(templatesApi.getSurveyTemplate).mockResolvedValue(templateRead('es'))
     restoreDraft(4)
     await openBuilder()
     const title = within(await screen.findByTestId('builder-preview')).getByText('Clima Q1')
-    expect(title.className.split(' ')).toEqual(expect.arrayContaining(['font-store-serif', 'leading-tight']))
+    expect(title.className.split(' ')).toEqual(expect.arrayContaining(['font-display', 'leading-tight']))
     expect(title.className.split(' ')).not.toContain('font-serif')
-    const chip = screen.getByText('Borrador')
-    expect(chip.className.split(' ')).toContain('font-store-serif')
-    expect(chip.className.split(' ')).not.toContain('font-serif')
+    expect(title.className.split(' ')).not.toContain('font-store-serif')
+    // Status chips are grey, in the UI face: the serif is for titles and question text only.
+    const chip = screen.getByTestId('builder-draft-chip')
+    expect(chip.textContent).toBe('Borrador')
+    for (const face of ['font-display', 'font-store-serif', 'font-serif']) expect(chip.className.split(' ')).not.toContain(face)
+    expect(chip.getAttribute('data-live')).toBeNull()
   })
 
   it("writes a changed arrangement onto the template's copy: the copied question, the row's required flag", async () => {

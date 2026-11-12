@@ -20,7 +20,7 @@ import type { SurveyDraftRecovery, SurveyDraftState } from '../useSurveyDraft'
  *
  * ## Both themes
  *
- * Every colour is a token — `text-fg-secondary`, `text-accent-green`, and the `warning`
+ * Every colour is a token — `text-fg-secondary` (the saved tick included: green is a result area), and the `default`
  * and `destructive` Alert variants, whose soft fills are already contrast-checked in
  * light and dark.
  */
@@ -44,7 +44,7 @@ export function SurveyDraftIndicator({ state, locale, onSaveAnyway }: SurveyDraf
 
   if (state.status === 'conflict') {
     return (
-      <Alert variant="warning" role="alert" className="mb-panel-gap">
+      <Alert variant="default" role="alert" className="mb-panel-gap">
         <CloudOff aria-hidden="true" />
         <AlertTitle>{t('surveys.draftConflictTitle')}</AlertTitle>
         <AlertDescription>
@@ -96,7 +96,7 @@ export function SurveyDraftIndicator({ state, locale, onSaveAnyway }: SurveyDraf
   return (
     <LiveRegion visible className="mb-panel-gap flex items-center gap-inline text-fg-secondary">
       {state.status === 'saved' && (
-        <Check aria-hidden="true" className="size-icon text-accent-green" />
+        <Check aria-hidden="true" className="size-icon text-fg-secondary" />
       )}
       <span>{text}</span>
     </LiveRegion>

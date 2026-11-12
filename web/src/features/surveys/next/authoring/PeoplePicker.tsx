@@ -59,7 +59,7 @@ export function PeoplePicker({
   return (
     <div className="flex flex-col gap-3" data-testid="people-picker">
       <p className="m-0 text-sm" data-testid="people-chosen-count" aria-live="polite">
-        <span className="font-mono tabular-nums text-fg-primary">{chosen.length}</span>{' '}
+        <span className="font-medium tabular-nums text-fg-primary">{chosen.length}</span>{' '}
         {copy(chosen.length === 1 ? 'chosenOne' : 'chosenMany')}
       </p>
 
@@ -150,7 +150,7 @@ export function PeoplePicker({
                 <ul className="m-0 mt-1 flex list-none flex-col gap-0.5 p-0" data-testid="paste-unmatched">
                   {pasted.unmatched.map(({ email, reason }) => (
                     <li key={email} className="mb-0">
-                      <span className="break-all font-mono text-xs text-fg-primary">{email}</span>{' '}
+                      <span className="break-all text-sm text-fg-secondary">{email}</span>{' '}
                       <span className="text-fg-secondary">— {copy(reason === 'inactive' ? 'reasonInactive' : 'reasonUnknown')}</span>
                     </li>
                   ))}

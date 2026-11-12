@@ -250,10 +250,11 @@ export default function WizardStepper({
           <p className="m-0 text-2xs font-semibold uppercase tracking-label text-fg-secondary">
             {progressLabel}
           </p>
-          {/* A reading, so it is set like every other reading in this product: mono
-              face, tabular figures. The denominator is dimmed rather than omitted --
+          {/* A reading, so it is set like every other reading in this product: the UI
+              face in tabular figures (never a third, mono typeface -- typography.md ›
+              Conveying hierarchy). The denominator is dimmed rather than omitted --
               "3" alone is not a measurement. */}
-          <p className="m-0 font-mono text-2xl font-semibold tracking-tight tabular-nums">
+          <p className="m-0 text-2xl font-semibold tracking-tight tabular-nums">
             {completeCount}
             <span className="text-fg-secondary">/{steps.length}</span>
           </p>
@@ -310,14 +311,19 @@ export default function WizardStepper({
 
                       `text-fg-primary` on every one of the four tints, never an
                       accent ink -- see the header. */}
+                  {/* Blue for the step you are on (selection) and neutral grey for the
+                      rest: green and amber are the Fortaleza and Oportunidad result areas
+                      and nothing else (color.md › Best practices). The state itself is
+                      carried by the badge's word and glyph, never by the tint alone. */}
                   <span
                     aria-hidden="true"
+                    data-slot="step-ordinal"
                     className={cn(
                       'grid size-6 flex-none place-items-center rounded-md',
-                      'font-mono text-xs font-semibold tabular-nums text-fg-primary',
+                      'text-xs font-semibold tabular-nums text-fg-primary',
                       state === 'current' && 'bg-accent-blue-soft',
-                      state === 'complete' && 'bg-accent-green-soft',
-                      state === 'outstanding' && 'bg-accent-amber-soft',
+                      state === 'complete' && 'bg-surface-fill-subtle',
+                      state === 'outstanding' && 'bg-surface-fill',
                       state === 'locked' && 'bg-surface-icon-box',
                     )}
                   >

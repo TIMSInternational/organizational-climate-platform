@@ -1,3 +1,4 @@
+import { Info } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { describeKnownRefusal } from '../../../../api/describeApiError'
 import { useTranslation } from '../../../../i18n'
@@ -12,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
   Label,
+  Note,
   Textarea,
 } from '../../../../components/ui'
 import { DateTimeField } from '../../../microclimates/next/create/DateTimeField'
@@ -94,9 +96,9 @@ export function ReopenSurveyDialog({
           <DialogTitle>{copy('title')}</DialogTitle>
           <DialogDescription>{copy('body')}</DialogDescription>
         </DialogHeader>
-        <p role="note" className="m-0 text-sm text-accent-amber-ink" data-testid="reopen-cost">
+        <Note role="note" icon={<Info />} className="px-3 py-2.5 text-sm" data-testid="reopen-cost">
           {copy('cost')}
-        </p>
+        </Note>
         <DateTimeField
           id="survey-reopen-end"
           label={copy('end', { zone: zoneLabel(timeZone) })}

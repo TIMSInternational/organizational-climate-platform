@@ -6,10 +6,10 @@ import { cn } from '../../../../lib/cn'
 import { absoluteLink, maskedLink } from './launch'
 
 /**
- * The reading tile the SurveyDetail and Distribution artboards open with: a 10px tracked label,
- * a 28px mono reading with its unit on the same baseline, then an optional line or meter. The
- * canvas's own grammar (`card`, 14px by 16px of padding, 6px between rows) rather than `KpiTile`,
- * whose value row carries a change indicator these tiles never have.
+ * The reading tile the SurveyDetail and Distribution boards open with — the canvas's `.card.kpi`
+ * (the same look as `ui/KpiCard`): an 11px tracked label, a 30px semibold tabular reading with
+ * its unit on the same baseline, then an optional line or meter. Kept separate from `KpiCard`
+ * because its testids and unit layout are pinned by the authoring tests.
  */
 export function ReadingTile({
   label,
@@ -28,13 +28,14 @@ export function ReadingTile({
   return (
     <div
       data-testid={testId}
-      className="flex min-w-0 flex-col gap-1.5 rounded-lg border border-line-default bg-surface-card px-4 py-3.5 shadow-xs"
+      className="flex min-w-0 flex-col gap-1.5 rounded-xl border border-line-panel bg-surface-card px-5 py-4.5"
     >
-      {/* `leading-normal`: the artboards' `.label` is 10px on the body's 1.5 (15px), not the type
-          scale's snug 13.5px. */}
-      <span data-slot="tile-label" className="text-2xs font-bold uppercase leading-normal tracking-wider text-fg-label">{label}</span>
+      {/* The canvas's `.kpi .l`: 11px uppercase, tracked, the one size allowed under 13px. */}
+      <span data-slot="tile-label" className="text-2xs font-semibold uppercase leading-normal tracking-tile text-fg-label">{label}</span>
       <div className="flex flex-wrap items-baseline gap-1.5">
-        <span data-slot="reading" className="font-mono text-kpi-lg leading-none text-fg-primary tabular-nums">
+        {/* The canvas's `.kpi .v`: 30px semibold in the UI face with tabular figures — never a
+            third (mono) typeface (typography.md › Conveying hierarchy). */}
+        <span data-slot="reading" className="text-kpi-hero font-semibold leading-none tracking-display text-fg-primary tabular-nums">
           {value === null ? '—' : value}
         </span>
         {unit !== undefined && <span className="text-sm text-fg-secondary">{unit}</span>}
@@ -54,9 +55,9 @@ export function Meter({ percent, label }: { percent: number; label: string }) {
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={clamped}
-      className="h-1.5 overflow-hidden rounded-sm bg-surface-icon-box"
+      className="h-1.5 overflow-hidden rounded-full bg-band-track"
     >
-      <div className="h-full bg-accent-blue" style={{ width: `${clamped}%` }} />
+      <div className="h-full rounded-full bg-accent-blue" style={{ width: `${clamped}%` }} />
     </div>
   )
 }
@@ -75,10 +76,10 @@ export function CardHeading({ title }: { title: string }) {
   )
 }
 
-/** A white card with the canvas hairline, as every artboard section draws it. */
+/** The canvas's `.card`: 12px radius, the panel hairline, no shadow — as `ui/Card` draws it. */
 export function Card({ className, children, ...rest }: HTMLAttributes<HTMLElement>) {
   return (
-    <section className={cn('rounded-lg border border-line-default bg-surface-card shadow-xs', className)} {...rest}>
+    <section className={cn('rounded-xl border border-line-panel bg-surface-card', className)} {...rest}>
       {children}
     </section>
   )
@@ -165,8 +166,8 @@ export function ShareLinkField({
 }
 
 /**
- * A translated sentence with one reading set in mono, as the artboards set dates inside a line
- * ("Uno programado para el <mono>7 oct</mono>, …"). The sentence is translated whole — the
+ * A translated sentence with one reading set in tabular figures, as the boards set dates inside
+ * a line ("Uno programado para el <num>7 oct</num>, …"). The sentence is translated whole — the
  * reading sits where the locale puts `{date}` — and split around a sentinel that no copy holds.
  */
 export function WithReading({ text, reading }: { text: (sentinel: string) => string; reading: string }) {
@@ -175,8 +176,37 @@ export function WithReading({ text, reading }: { text: (sentinel: string) => str
   return (
     <>
       {before}
-      <span className="font-mono tabular-nums">{reading}</span>
+      <span className="tabular-nums">{reading}</span>
       {after}
     </>
+  )
+}
+
+/**
+ * `shared-next`'s Panel as the Apple-design boards draw a card: 12px radius, the panel hairline,
+ * no shadow (the canvas's `.card`). Same API, so the authoring pages swap the import only.
+ */
+export function Panel({ className, children, ...rest }: HTMLAttributes<HTMLElement>) {
+  return (
+    <section className={cn('rounded-xl border border-line-panel bg-surface-card p-card', className)} {...rest}>
+      {children}
+    </section>
+  )
+}
+
+/**
+ * A card's serif heading with an optional count and a trailing aside — `shared-next`'s
+ * PanelHeading with the count in the UI face's tabular figures instead of a third, mono
+ * typeface (typography.md › Conveying hierarchy: minimise the number of typefaces).
+ */
+export function PanelHeading({ title, count, aside, id }: { title: string; count?: number; aside?: ReactNode; id?: string }) {
+  return (
+    <div className="mb-3 flex flex-wrap items-baseline justify-between gap-inline">
+      <h2 id={id} className="m-0 flex items-baseline gap-2 text-2xl">
+        {title}
+        {count !== undefined && <span className="font-sans text-sm font-normal tracking-normal text-fg-tertiary tabular-nums">{count}</span>}
+      </h2>
+      {aside && <div className="text-sm text-fg-tertiary">{aside}</div>}
+    </div>
   )
 }
