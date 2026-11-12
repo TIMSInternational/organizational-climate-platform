@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ArrowRight, Check, Rows3 } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router'
-import { PageTopBar } from '../../../../components/layout'
-import { Alert, AlertDescription, Button, Chip, ErrorState, LoadingRegion, SkeletonText } from '../../../../components/ui'
+import { PageHeader } from '../../../../components/layout'
+import { Alert, AlertDescription, Button, Chip, ErrorState, LoadingState, Note } from '../../../../components/ui'
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { useCompanyScope } from '../../../../company-context'
 import { useCompanyName } from '../../../../company-context/useCompanyName'
@@ -10,7 +10,8 @@ import { useTranslation, type Locale } from '../../../../i18n'
 import { getSurveyTemplate, instantiateSurveyTemplate, type SurveyTemplateDetail } from '../../api/surveyTemplates'
 import { requiredLocalesFor } from '../../api/surveyInvitationCopy'
 import { dimensionLabel } from '../../dimensionLabel'
-import { Eyebrow, Note, Panel, PanelHeading, Segmented } from '../../../shared-next/parts'
+import { Eyebrow, Segmented } from '../../../shared-next/parts'
+import { Panel, PanelHeading } from './parts'
 import { groupByDimension, scaleName, uniformScale } from './model'
 import { describeApiError } from '../../../../api/describeApiError'
 
@@ -68,9 +69,7 @@ export default function TemplateDetailNextPage() {
 
   if (state.status === 'loading') {
     return (
-      <LoadingRegion loading label={t('common.loading')}>
-        <SkeletonText lines={8} />
-      </LoadingRegion>
+      <LoadingState rows={8} label={t('common.loading')} />
     )
   }
   if (state.status === 'failed') {
@@ -118,7 +117,7 @@ export default function TemplateDetailNextPage() {
 
   return (
     <div>
-      <PageTopBar
+      <PageHeader
         breadcrumbs={[{ label: t('navigation.surveyTemplates'), href: '/surveys/templates' }, { label: primary.name }]}
         eyebrow={copy('eyebrow', { category: categoryLabel(t, primary.category) })}
         title={primary.name}
@@ -132,18 +131,18 @@ export default function TemplateDetailNextPage() {
             <span>{copy(primary.usageCount === 1 ? 'countUsedOnce' : 'countUsed', { count: n, used: primary.usageCount })}</span>
           </>
         }
-        actions={
+        primaryAction={
           caps.canAuthorSurveys ? (
             <Button type="button" variant="primary" disabled={using || needsCompany} onClick={() => void use()}>
               <ArrowRight aria-hidden="true" />
               {copy('use')}
             </Button>
-          ) : null
+          ) : undefined
         }
       />
 
       {caps.canAuthorSurveys && needsCompany && (
-        <Alert variant="warning" className="mb-5">
+        <Alert variant="default" className="mb-5">
           <AlertDescription>{scope.isSuperAdmin ? t('surveys.chooseCompanyToUseTemplate') : t('surveys.noCompanyToUseTemplate')}</AlertDescription>
         </Alert>
       )}
@@ -171,11 +170,11 @@ export default function TemplateDetailNextPage() {
           />
           <p className="mb-3 mt-0 text-sm text-fg-secondary">{locales.length > 1 ? copy('groupedBoth', { language: copy(`languageLower.${secondLocale}`) }) : copy('groupedOne')}</p>
           {scale && firstScale && (
-            <div data-testid="scale-strip" className="mb-4 flex flex-wrap items-center gap-2 rounded-md bg-surface-icon-box px-3 py-2 text-sm text-fg-secondary">
+            <div data-testid="scale-strip" className="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-surface-fill-subtle px-3 py-2 text-sm text-fg-secondary">
               <span className="font-semibold text-fg-secondary">{copy('scaleIn', { count: n })}</span>
               <span>{firstScale.minLabel}</span>
               {Array.from({ length: scale.max - scale.min + 1 }, (_, i) => (
-                <span key={i} className="flex size-6 items-center justify-center rounded border border-line-default bg-surface-card font-mono text-xs text-fg-secondary">
+                <span key={i} aria-hidden="true" className="flex size-6 items-center justify-center rounded-md bg-surface-card text-xs tabular-nums text-fg-secondary">
                   {scale.min + i}
                 </span>
               ))}
@@ -186,13 +185,13 @@ export default function TemplateDetailNextPage() {
           {groupByDimension(questions).map((group) => (
             <section key={group.key ?? 'none'} className="mb-3">
               <div className="mb-1.5 flex items-center gap-2">
-                <Eyebrow className="tracking-wider">{group.key ? dimensionLabel(group.key, t) : copy('noDimension')}</Eyebrow>
+                <Eyebrow className="tracking-eyebrow">{group.key ? dimensionLabel(group.key, t) : copy('noDimension')}</Eyebrow>
                 <span className="h-px flex-1 bg-line-light" />
                 <span className="text-xs text-fg-secondary">{copy(group.questions.length === 1 ? 'oneQuestion' : 'manyQuestions', { count: group.questions.length })}</span>
               </div>
               {group.questions.map((question) => (
-                <div key={question.id} data-testid="template-question" className="mb-2 flex items-start gap-3 rounded-lg border border-line-default px-3 py-2.5">
-                  <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-surface-icon-box font-mono text-xs font-semibold text-fg-secondary">{questions.indexOf(question) + 1}</span>
+                <div key={question.id} data-testid="template-question" className="mb-2 flex items-start gap-3 rounded-xl border border-line-panel px-3.5 py-3">
+                  <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-surface-fill-subtle text-xs font-semibold tabular-nums text-fg-secondary">{questions.indexOf(question) + 1}</span>
                   <div className="min-w-0 text-base">
                     <p className="m-0 font-medium text-fg-primary">{textOf(firstLocale, question.id) ?? question.text}</p>
                     {secondLocale && <p className="m-0 text-sm text-fg-secondary">{textOf(secondLocale, question.id)}</p>}
@@ -220,7 +219,8 @@ export default function TemplateDetailNextPage() {
               <dd className="m-0 flex flex-col items-start gap-1">
                 <span className="flex flex-wrap gap-1.5">
                   {locales.map((l) => (
-                    <Chip key={l} tone="good" icon={<Check className="size-3" />} label={copy(`language.${l}`)} />
+                    // Grey with the tick: green is the Fortaleza result area, never "available".
+                    <Chip key={l} tone="neutral" icon={<Check className="size-3" />} label={copy(`language.${l}`)} />
                   ))}
                 </span>
                 <span className="text-sm text-fg-secondary">{copy(locales.length === 2 ? 'allInBoth' : 'allInOne', { count: n })}</span>
@@ -233,10 +233,10 @@ export default function TemplateDetailNextPage() {
               )}
               <dt className="text-fg-secondary">{copy('used')}</dt>
               <dd className="m-0 text-sm text-fg-secondary">
-                <span className="font-mono text-base text-fg-primary">{primary.usageCount}</span> {copy('times')}
+                <span className="text-base tabular-nums text-fg-primary">{primary.usageCount}</span> {copy('times')}
               </dd>
               <dt className="text-fg-secondary">{copy('created')}</dt>
-              <dd className="m-0 font-mono text-fg-primary">{created}</dd>
+              <dd className="m-0 tabular-nums text-fg-primary">{created}</dd>
             </dl>
           </Panel>
           <Panel aria-labelledby="template-using">
@@ -246,13 +246,13 @@ export default function TemplateDetailNextPage() {
             <ol className="m-0 flex list-none flex-col gap-3 p-0 text-sm text-fg-secondary">
               {[copy('step1', { company: companyName ?? t('insights.next.thisCompany'), count: n }), copy('step2'), copy('step3')].map((step, index) => (
                 <li key={index} className="flex items-start gap-3">
-                  <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-surface-icon-box font-mono text-xs font-semibold text-fg-secondary">{index + 1}</span>
+                  <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-surface-fill-subtle text-xs font-semibold tabular-nums text-fg-secondary">{index + 1}</span>
                   <span>{step}</span>
                 </li>
               ))}
             </ol>
           </Panel>
-          <Note icon={<Rows3 />}>{copy('keysNote')}</Note>
+          <Note icon={<Rows3 />} className="text-sm text-fg-secondary">{copy('keysNote')}</Note>
         </div>
       </div>
     </div>

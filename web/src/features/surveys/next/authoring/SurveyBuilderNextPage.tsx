@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { ArrowRight, Check, EyeOff, FileIcon, GripVertical, Lock, MoreHorizontal, Plus, ShieldCheck, Trash2 } from 'lucide-react'
-import { PageTopBar } from '../../../../components/layout'
+import { ArrowRight, Check, CircleAlert, EyeOff, FileIcon, GripVertical, Lock, MoreHorizontal, Plus, ShieldCheck, Trash2 } from 'lucide-react'
+import { PageHeader } from '../../../../components/layout'
 import CompanyContextBar from '../../../../components/layout/CompanyContextBar'
 import {
   Alert,
@@ -71,11 +71,11 @@ import {
   type SurveyBuilderStepId,
   type SurveyWizardValues,
 } from '../../wizardValues'
-import { Eyebrow, PanelHeading } from '../../../shared-next/parts'
+import { Eyebrow } from '../../../shared-next/parts'
 import { PreviewQuestion, PreviewSection } from './QuestionPreview'
 import { QuestionBankPicker } from './QuestionBankPicker'
 import { PasteQuestionsDialog } from './PasteQuestionsDialog'
-import { Card } from './parts'
+import { Card, PanelHeading } from './parts'
 import { dimensionSections } from './launch'
 import { templateCovers } from './templateRows'
 import { useSurveyBuilderModel } from './useSurveyBuilderModel'
@@ -195,17 +195,13 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
 
   return (
     <div>
-      <PageTopBar
+      {/* The board's `.hdr`: eyebrow, serif title with the grey status chip beside it (status chips
+          are grey except Activa), the step line as the sub. No primary in the header: the one
+          primary on this screen is Siguiente / Crear in the footer. */}
+      <PageHeader
         eyebrow={companyName ? copy('forCompany', { company: companyName }) : undefined}
         title={copy('title')}
-        // The artboard's chip: small, serif, lavender — not the sans secondary badge.
-        badge={{
-          text: copy('draftBadge'),
-          variant: 'secondary',
-          // `font-store-serif` is the headings' Goudy; `font-serif` is Tailwind's Georgia stack.
-          className: 'h-5.5 rounded border border-line-default bg-surface-icon-box px-2 font-store-serif text-xs font-normal text-fg-primary',
-        }}
-        tightBreadcrumb
+        titleAccessory={<Chip data-testid="builder-draft-chip" label={copy('draftBadge')} />}
         description={`${copy(`stepLine.${step}`)} ${copy('stepOf', { current: stepIndex + 1, total: SURVEY_BUILDER_STEPS.length })}`}
         breadcrumbs={[{ label: t('navigation.surveys'), href: '/surveys' }, { label: copy('title') }]}
         actions={
@@ -253,9 +249,7 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
         />
       )}
 
-      {/* `-mt-1`: the header's 24px bottom margin (`mb-section`) collapses with this one, and the
-          artboard puts the rail 20px under the hairline (measured: 198 → 218). */}
-      <Card className="-mt-1 flex flex-wrap items-center gap-x-6 gap-y-3 px-5 py-3.5" data-testid="builder-rail">
+      <Card className="flex flex-wrap items-center gap-x-6 gap-y-3 px-5 py-3.5" data-testid="builder-rail">
         <ol aria-label={t('surveys.wizardStepList')} className="m-0 flex min-w-0 flex-1 list-none flex-wrap items-center gap-x-3.5 gap-y-2 p-0">
           {SURVEY_BUILDER_STEPS.map((id, index) => {
             const state = index < stepIndex ? (errors[id].length === 0 ? 'done' : 'open') : index === stepIndex ? 'current' : 'pending'
@@ -267,15 +261,21 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                   aria-current={state === 'current' ? 'step' : undefined}
                   disabled={!reachable(index)}
                   onClick={() => setStepIndex(index)}
-                  className="flex min-w-0 items-center gap-2.5 border-0 bg-transparent p-0 text-left shadow-none disabled:cursor-default"
+                  // `shrink-0`: a shrinking button let its nowrap label spill over the connector
+                  // beside it, so the line ran under «Datos básicos» like a link underline.
+                  className="flex shrink-0 items-center gap-2.5 border-0 bg-transparent p-0 text-left shadow-none disabled:cursor-default"
                 >
+                  {/* Blue marks the step you are on (blue = selection); the others are grey and say
+                      their state in words and a glyph. Red is OCC's mark and green/amber the result
+                      areas, so none of them may stand for a wizard state (color.md › Best practices). */}
                   <span
                     aria-hidden="true"
+                    data-slot="rail-marker"
                     className={cn(
-                      'flex size-5.5 shrink-0 items-center justify-center rounded-full font-mono text-xs [&>svg]:size-3',
-                      state === 'done' && 'border border-accent-green-ring bg-chip-good-fill text-chip-good-ink',
-                      state === 'open' && 'border border-accent-amber-ring bg-chip-warning-fill text-chip-warning-ink',
-                      state === 'current' && 'bg-accent-red font-semibold text-fg-on-accent',
+                      'flex size-5.5 shrink-0 items-center justify-center rounded-full text-xs tabular-nums [&>svg]:size-3',
+                      state === 'done' && 'bg-surface-fill text-fg-primary',
+                      state === 'open' && 'border border-line-control bg-surface-card font-semibold text-fg-primary',
+                      state === 'current' && 'bg-accent-blue-fill font-semibold text-fg-on-accent',
                       state === 'pending' && 'border border-line-default bg-surface-icon-box text-fg-label',
                     )}
                   >
@@ -289,9 +289,9 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                     <span
                       className={cn(
                         'text-xs leading-[1.25]',
-                        state === 'done' && 'text-chip-good-ink',
-                        state === 'open' && 'text-accent-amber-ink',
-                        state === 'current' && 'text-chip-critical-ink',
+                        state === 'done' && 'text-fg-secondary',
+                        state === 'open' && 'font-medium text-fg-primary',
+                        state === 'current' && 'text-accent-blue-ink',
                         state === 'pending' && 'text-fg-label',
                       )}
                     >
@@ -300,7 +300,9 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                   </span>
                 </button>
                 {index < SURVEY_BUILDER_STEPS.length - 1 && (
-                  <span aria-hidden="true" className={cn('hidden h-px min-w-6 flex-1 xl:block', index < stepIndex ? 'bg-accent-green' : 'bg-line-default')} />
+                  // Neutral for every state: the blue marker already says where you are, and a blue
+                  // rule beside text that is not a link read as one (blue = action/selection).
+                  <span aria-hidden="true" data-slot="rail-connector" className="hidden h-px min-w-4 flex-1 self-center bg-line-default xl:block" />
                 )}
               </li>
             )
@@ -384,7 +386,7 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                         className="grid grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-x-2.5 gap-y-2 pb-2.75 pl-2 pr-3 pt-2.5 sm:flex"
                       >
                         <GripVertical aria-hidden="true" data-slot="drag-grip" className="size-4 shrink-0 cursor-grab text-fg-label" />
-                        <span className="w-5.5 shrink-0 text-center font-mono text-sm text-fg-secondary tabular-nums">{index + 1}</span>
+                        <span className="w-5.5 shrink-0 text-center text-sm text-fg-secondary tabular-nums">{index + 1}</span>
                         <button
                           type="button"
                           aria-pressed={isSelected}
@@ -404,7 +406,8 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                             {question.category ? (
                               <Chip label={dimensionLabel(question.category, t)} />
                             ) : (
-                              <Chip tone="warning" label={copy('noDimension')} />
+                              // Grey with a glyph: amber is the Oportunidad area, never a warning.
+                              <Chip icon={<CircleAlert aria-hidden="true" className="size-3" />} label={copy('noDimension')} />
                             )}
                             <Chip label={typeChip(t, question)} />
                           </span>
@@ -414,12 +417,10 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                             artboard's "Obligatoria" is regular — the extra weight cost the text
                             column 1.7px. */}
                         <label className="mb-0 inline-flex shrink-0 items-center gap-2 text-sm font-normal text-fg-secondary">
-                          {/* The artboard's switch is #12945b (SurveyBuilder.dc.html), the accent
-                              green — the chip ink is a darker, text-weight green — on its 16×28
-                              track (`size="sm"`), 4px narrower than the default's. */}
+                          {/* Toggles are blue (ruling of 11 Nov; the Switch primitive paints its
+                              checked fill itself), on the 16×28 track (`size="sm"`). */}
                           <Switch
                             size="sm"
-                            className="data-[state=checked]:bg-accent-green"
                             checked={question.required}
                             onCheckedChange={(value) => patchQuestion(own.key, { required: value === true })}
                           />
@@ -521,7 +522,7 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
             <StepForm step={step} m={m} both={both} copy={copy} />
           )}
           {attempted.has(step) && errors[step].length > 0 && (
-            <ul role="alert" className="m-0 flex list-none flex-col gap-1 p-0 text-sm text-accent-amber-ink">
+            <ul role="alert" className="m-0 flex list-none flex-col gap-1 p-0 text-sm text-accent-red-ink">
               {errors[step].map((message) => (
                 <li key={message}>{message}</li>
               ))}
@@ -540,12 +541,12 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
             }
           />
           <p className="-mt-3 mb-0 text-sm text-fg-secondary">{copy('previewLine')}</p>
-          <div className="flex flex-col gap-3.5 rounded-lg border border-line-default bg-surface-card px-4.5 pb-4.5 pt-4 shadow-xs">
+          <div className="flex flex-col gap-3.5 rounded-xl border border-line-panel bg-surface-card px-4.5 pb-4.5 pt-4">
             <div className="flex flex-col gap-1 border-b border-line-light pb-3">
               <Eyebrow className="leading-normal">{copy('surveyEyebrow')}</Eyebrow>
-              {/* The artboard's `.serif` at 18px: the headings' Goudy (`font-store-serif`, not
-                  Tailwind's Georgia `font-serif`) at their 1.2 line height. */}
-              <p className="m-0 font-store-serif text-[1.125rem] leading-tight text-fg-primary">{title || copy('untitled')}</p>
+              {/* The survey's title as the respondent meets it: the one display serif
+                  (`font-display`), never the storefront's Goudy or Tailwind's Georgia. */}
+              <p className="m-0 font-display text-[1.125rem] font-semibold leading-tight text-fg-primary">{title || copy('untitled')}</p>
               {description && <p className="m-0 text-sm text-fg-secondary">{description}</p>}
             </div>
             {focusSection && values.randomizeQuestions ? (
@@ -568,8 +569,9 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                   artboard's `.btn` (weight 500) at `height: 28px` in a content box, so 30px with its
                   borders: at 28px regular the preview card came out 2px short of the artboard's. */}
               <span className="flex flex-wrap gap-2" data-slot="preview-actions">
-                <span className="inline-flex h-7.5 items-center whitespace-nowrap rounded border border-line-default px-3 text-sm font-medium text-fg-primary">{copy('saveLater')}</span>
-                <span className="inline-flex h-7.5 items-center whitespace-nowrap rounded border border-accent-red-ring bg-chip-critical-fill px-3 text-sm font-medium text-chip-critical-ink">
+                <span className="inline-flex h-7.5 items-center whitespace-nowrap rounded-md border border-line-control px-3 text-sm font-medium text-fg-primary">{copy('saveLater')}</span>
+                {/* The respondent's one primary, in the action blue (red is OCC's mark only). */}
+                <span data-slot="preview-submit" className="inline-flex h-7.5 items-center whitespace-nowrap rounded-md bg-accent-blue-fill px-3 text-sm font-medium text-fg-on-accent">
                   {copy('submitAnswers')}
                 </span>
               </span>
@@ -663,12 +665,16 @@ function QuestionsFooter({
       {missing === 0 ? (
         // 216px: the artboard's two lines, "Cada dimensión tiene al menos / una pregunta" (at 220px
         // "una" still fit on the first line in the shot).
-        <span className="inline-flex max-w-54 items-start gap-1.5 text-chip-good-ink [&>svg]:mt-0.5">
+        <span className="inline-flex max-w-54 items-start gap-1.5 text-fg-secondary [&>svg]:mt-0.5">
           <Check aria-hidden="true" className="size-3.5" />
           {copy('everyDimension')}
         </span>
       ) : (
-        <span className="text-accent-amber-ink">{copy('withoutDimension', { count: missing })}</span>
+        // Neutral ink with a glyph: amber is a result area, never a warning colour.
+        <span className="inline-flex items-start gap-1.5 font-medium text-fg-primary [&>svg]:mt-0.5">
+          <CircleAlert aria-hidden="true" className="size-3.5" />
+          {copy('withoutDimension', { count: missing })}
+        </span>
       )}
     </div>
   )
@@ -872,7 +878,7 @@ function StepForm({
         <p className="m-0 text-sm text-fg-secondary" data-testid="builder-zone">{zoneNote}</p>
         {days !== null && (
           <p className="m-0 text-sm text-fg-secondary">
-            <span className="font-mono text-fg-primary tabular-nums">{days}</span> {copy('daysOpen')}
+            <span className="font-medium text-fg-primary tabular-nums">{days}</span> {copy('daysOpen')}
           </p>
         )}
       </>

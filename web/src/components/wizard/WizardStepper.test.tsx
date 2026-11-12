@@ -212,13 +212,16 @@ describe('WizardStepper rail', () => {
     expect(meterReading()).toBe('2/3')
   })
 
-  it('numbers every step, in the mono face that every reading in this product uses', () => {
+  it('numbers every step in tabular figures, in the UI face rather than a mono one', () => {
     localStorage.setItem(LOCALE_STORAGE_KEY, 'en')
     render(<Harness stepList={steps()} />)
 
-    const ordinals = [...document.querySelectorAll('span.font-mono.tabular-nums')].map(
-      (node) => node.textContent,
-    )
+    const nodes = [...document.querySelectorAll<HTMLElement>('[data-slot="step-ordinal"]')]
+    const ordinals = nodes.map((node) => node.textContent)
+    for (const node of nodes) {
+      expect(node.className.split(' ')).toContain('tabular-nums')
+      expect(node.className.split(' ')).not.toContain('font-mono')
+    }
     // Zero-padded so the column does not shift between 9 and 10, which is the whole
     // reason a position is set in tabular figures.
     expect(ordinals).toEqual(['01', '02', '03'])

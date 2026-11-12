@@ -17,7 +17,7 @@ import { SurveyDetailView } from './SurveyDetailNextPage'
 import SurveyDistributionNextPage, { DistributionView, INVITATION_PREVIEW_ROWS } from './SurveyDistributionNextPage'
 import { INVITATION_COLUMNS } from './launch'
 import SurveyBuilderNextPage from './SurveyBuilderNextPage'
-import { PreviewQuestion } from './QuestionPreview'
+import { PreviewQuestion, PreviewSection } from './QuestionPreview'
 import type { DistributionActions, DistributionModel } from './useDistributionModel'
 import * as drafts from '../../api/surveyDrafts'
 import * as creating from '../../api/surveyCreate'
@@ -213,6 +213,10 @@ describe('Detalle de encuesta (SurveyDetail artboard)', () => {
     expect((within(status).getByRole('button', { name: 'Programar' }) as HTMLButtonElement).disabled).toBe(true)
     expect((within(status).getByRole('button', { name: 'Archivar' }) as HTMLButtonElement).disabled).toBe(false)
     expect(screen.getByTestId('status-end-passed').textContent).toContain('La fecha de cierre ya pasó')
+    // The warning spans the row under the readings, not inside the Estado tile: inside, it made
+    // that tile ~330px taller than the other three (detail-draft-light.png).
+    expect(status.contains(screen.getByTestId('status-end-passed-block'))).toBe(false)
+    expect(screen.getByTestId('detail-readings').contains(screen.getByTestId('status-end-passed-block'))).toBe(false)
     // Each verb says what it does.
     expect(screen.getByTestId('status-consequences').textContent).toContain('Programar: abre en su fecha de inicio')
     expect(screen.getByTestId('status-consequences').textContent).toContain('Activar: recibe respuestas')
@@ -360,15 +364,18 @@ describe('Detalle de encuesta (SurveyDetail artboard)', () => {
     }
   })
 
-  it("lays the rows and tiles on the artboard's rhythm: 24px department rows, tiles 20px under the header", () => {
-    // Measured: index.css's 4px <li> margin set the department rows 28px apart (the artboard's
-    // are 24), and the header's 24px margin put the tiles 24px under its hairline (20 on the
-    // board). The classes are the pin; the shots are the evidence.
+  it("lays the rows and tiles on the board's rhythm: 24px department rows, tiles the header's 24px under it", () => {
+    // Measured: index.css's 4px <li> margin set the department rows 28px apart (the board's are
+    // 24). The tiles sit PageHeader's own 24px (`mb-section`) under its hairline, as every
+    // Apple-design board spaces a header from its first row, so the grid adds no margin of its own.
     detail(survey())
     for (const row of within(screen.getByTestId('detail-departments')).getAllByRole('listitem')) {
       expect(row.className.split(' ')).toContain('mb-0')
     }
-    expect(screen.getByTestId('detail-readings').className.split(' ')).toContain('-mt-1')
+    expect(screen.getByTestId('detail-readings').className.split(' ')).not.toContain('-mt-1')
+    // The four tiles stretch to one height, as the board's `.grid.g4 > .card.kpi` draws them.
+    expect(screen.getByTestId('detail-readings').className.split(' ')).not.toContain('items-start')
+    expect(screen.getByTestId('detail-readings').closest('div')?.querySelector('[data-slot="page-header"]')).not.toBeNull()
     expect(screen.getByTestId('tile-status').querySelector('span')?.className.split(' ')).toContain('leading-normal')
   })
 
@@ -954,6 +961,22 @@ describe('PreviewQuestion (the respondent card on SurveyBuilder and SurveyDetail
   })
   const cells = () => [...document.querySelectorAll<HTMLElement>('[data-slot="preview-choice"]')]
 
+  it("sets the question semibold in the UI face at body size, as the artboards' `<b>`, and shows the section's place", () => {
+    render(
+      <TranslationProvider>
+        <PreviewSection category="psychological_safety" index={2} count={6}>
+          <PreviewQuestion question={question()} position={1} total={6} />
+        </PreviewSection>
+      </TranslationProvider>,
+    )
+    const text = document.querySelector<HTMLElement>('[data-slot="preview-question-text"]')!
+    expect(text.className.split(' ')).toEqual(expect.arrayContaining(['text-base', 'font-semibold']))
+    for (const face of ['font-display', 'font-serif', 'text-xl']) expect(text.className.split(' ')).not.toContain(face)
+    const counter = document.querySelector<HTMLElement>('[data-slot="preview-section-count"]')!
+    expect(counter.textContent).toBe('2 de 6')
+    expect(counter.className.split(' ')).not.toContain('sr-only')
+  })
+
   it("lets a numeric scale's five cells shrink into a 390px card, and keeps a choice row's 40px cells, which wrap", () => {
     // builder-390.png: five 40px cells and four 8px gaps (232px) ran past the 208px inside the
     // preview card. A numeric row never wraps, so its cells may shrink; a choice row wraps instead.
@@ -1210,6 +1233,18 @@ describe('Nueva encuesta (SurveyBuilder artboard)', () => {
     }
     expect(within(screen.getByTestId('builder-step')).getByText(/Arrastre para reordenar/).className.split(' ')).toContain('-mt-3')
     expect(within(screen.getByTestId('builder-rail')).getAllByRole('listitem').every((item) => item.className.split(' ').includes('mb-0'))).toBe(true)
+    // The connector between steps is neutral whatever the state (blue beside non-link text read
+    // as a link underline), and a step's button never shrinks under its label to let it spill
+    // over that connector (new-settings-light.png).
+    const connectors = [...screen.getByTestId('builder-rail').querySelectorAll('[data-slot="rail-connector"]')]
+    expect(connectors).toHaveLength(5)
+    for (const line of connectors) {
+      expect(line.className.split(' ')).toContain('bg-line-default')
+      expect(line.className).not.toContain('bg-accent-blue')
+    }
+    for (const step of within(screen.getByTestId('builder-rail')).getAllByRole('listitem')) {
+      expect(step.querySelector('button')?.className.split(' ')).toContain('shrink-0')
+    }
   })
 
   it('fits the content-language select inside the rail at 390px and lets the preview buttons wrap', async () => {
@@ -1242,16 +1277,19 @@ describe('Nueva encuesta (SurveyBuilder artboard)', () => {
     expect(icon?.getAttribute('class')).not.toContain('lucide-file-text')
   })
 
-  it("sets the preview title and the draft chip in the headings' Goudy, never Tailwind's Georgia font-serif", async () => {
+  it('sets the preview title in the one display serif and the draft chip as a grey sans status chip', async () => {
     vi.mocked(templatesApi.getSurveyTemplate).mockResolvedValue(templateRead('es'))
     restoreDraft(4)
     await openBuilder()
     const title = within(await screen.findByTestId('builder-preview')).getByText('Clima Q1')
-    expect(title.className.split(' ')).toEqual(expect.arrayContaining(['font-store-serif', 'leading-tight']))
+    expect(title.className.split(' ')).toEqual(expect.arrayContaining(['font-display', 'leading-tight']))
     expect(title.className.split(' ')).not.toContain('font-serif')
-    const chip = screen.getByText('Borrador')
-    expect(chip.className.split(' ')).toContain('font-store-serif')
-    expect(chip.className.split(' ')).not.toContain('font-serif')
+    expect(title.className.split(' ')).not.toContain('font-store-serif')
+    // Status chips are grey, in the UI face: the serif is for titles and question text only.
+    const chip = screen.getByTestId('builder-draft-chip')
+    expect(chip.textContent).toBe('Borrador')
+    for (const face of ['font-display', 'font-store-serif', 'font-serif']) expect(chip.className.split(' ')).not.toContain(face)
+    expect(chip.getAttribute('data-live')).toBeNull()
   })
 
   it("writes a changed arrangement onto the template's copy: the copied question, the row's required flag", async () => {
