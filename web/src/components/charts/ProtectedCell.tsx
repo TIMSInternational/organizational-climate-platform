@@ -80,7 +80,8 @@ export interface ProtectedCellProps {
    *
    * - `ClimateMap` has too little room — `h-7` cells, and a dense grid repeating
    *   one word is noise. `charts.protectedLegend` explains the hatch for the whole
-   *   matrix at once.
+   *   matrix at once, and the row's first cell uses `mark='floor'` to say
+   *   «Menos de {floor}» once per row, so the row still carries the words.
    * - `LiveOpenAnswers` has too much already — a `liveProtectedChip` badge with a
    *   padlock and the word above the panel, and `liveProtectedDescription` naming
    *   the floor in a sentence below it. A word inside the box would be the third

@@ -99,12 +99,16 @@ describe('AdminDashboardNextView', () => {
     expect(sections?.className.split(/\s+/)).toContain('-mt-1')
   })
 
-  it('prints no digit anywhere on a protected map row', () => {
+  it('prints only the floor, in words, on a protected map row: no count and no score', () => {
     renderView()
     const header = screen.getByRole('rowheader', { name: /Finanzas/ })
     const row = header.closest('tr')
     expect(row).not.toBeNull()
-    expect(row?.textContent ?? '').not.toMatch(/\d/)
+    // The whole row text is pinned: the department name plus «Fewer than {floor}» once.
+    // Any withheld count or reading would change it, so this is stricter than a digit scan.
+    expect(row?.textContent).toBe(
+      'Finanzas' + en.charts.protectedUnderFloor.replace('{threshold}', String(ANONYMITY_FLOOR)),
+    )
     // The disclosed rows do print their readings, so the absence above is the floor's doing.
     const disclosed = screen.getByRole('rowheader', { name: /Operaciones/ }).closest('tr')
     expect(disclosed?.textContent ?? '').toMatch(/2\.4/)
