@@ -2,9 +2,8 @@ import { useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { Check, ChevronRight, CircleAlert, Clock, Download, LayoutPanelTop, Plus, Shield, Users } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../i18n'
-import { PageTopBar } from '../../../components/layout'
-import { KpiTile } from '../../../components/charts'
-import { Alert, AlertDescription, Button, Chip, EmptyState, LoadingRegion, NetworkError, SkeletonText, Table, chipVariants } from '../../../components/ui'
+import { PageHeader } from '../../../components/layout'
+import { Alert, AlertDescription, Button, KpiCard, Chip, EmptyState, LoadingRegion, NetworkError, SkeletonText, Table, chipVariants } from '../../../components/ui'
 import { useCompanyScope } from '../../../company-context'
 import { useCompanyName } from '../../../company-context/useCompanyName'
 import { useViewerCapabilities } from '../../../auth/viewerCapabilities'
@@ -25,7 +24,7 @@ import { coverage, groupRows, nodoNamesOf, toRows, type ListRow } from './planes
 import { usePlanesListModel } from './usePlanesListModel'
 import { describeApiError } from '../../../api/describeApiError'
 
-const TH = 'h-auto bg-transparent px-1.5 pb-2 pt-2 first:pl-3 last:pr-3 text-2xs font-bold uppercase tracking-label text-fg-label whitespace-nowrap'
+const TH = 'h-auto bg-transparent px-1.5 pb-2 pt-2 first:pl-3 last:pr-3 text-xs font-semibold text-fg-label whitespace-nowrap'
 /**
  * The board's row is a grid with a 12px gap inside 12px of padding; 6px either side of a cell,
  * 12px at the row's two ends, keeps that rhythm, so the column widths are the board's own.
@@ -33,11 +32,6 @@ const TH = 'h-auto bg-transparent px-1.5 pb-2 pt-2 first:pl-3 last:pr-3 text-2xs
 const TD = 'px-1.5 py-3 align-middle first:pl-3 last:pr-3'
 const ALL = ''
 
-const TONE_INK: Record<string, string> = {
-  critical: 'text-accent-red',
-  warning: 'text-accent-amber-ink',
-  good: 'text-accent-green-ink',
-}
 
 const STATE_ICON: Record<SemaforoEstado, ReactNode> = {
   Rojo: <CircleAlert aria-hidden="true" className="size-4" />,
@@ -212,7 +206,7 @@ export default function PlanesListNextPage() {
   return (
     <div className="flex flex-col gap-section">
       <div className="-mb-6">
-        <PageTopBar
+        <PageHeader
           eyebrow={
             leaderView && ownNodo
               ? t('tracking.next.planesEyebrowNodo', { nodo: ownNodo })
@@ -240,8 +234,24 @@ export default function PlanesListNextPage() {
               </span>
             ) : undefined
           }
+          primaryAction={
+            mayCreate ? (
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => {
+                  setCreated(null)
+                  setCreateError(null)
+                  setCreating((open) => !open)
+                }}
+              >
+                <Plus aria-hidden="true" />
+                {leaderView && ownNodo ? t('tracking.next.planesNewPlanIn', { nodo: ownNodo }) : t('tracking.actions.newPlan')}
+              </Button>
+            ) : undefined
+          }
           actions={
-            capabilities.canViewConsolidado || capabilities.leadsANodo || mayCreate ? (
+            capabilities.canViewConsolidado || leaderView ? (
               <>
                 {capabilities.canViewConsolidado && (
                   <Button asChild variant="outline">
@@ -268,20 +278,6 @@ export default function PlanesListNextPage() {
                     </Link>
                   </Button>
                 )}
-                {mayCreate && (
-                  <Button
-                    type="button"
-                    variant="primary"
-                    onClick={() => {
-                      setCreated(null)
-                      setCreateError(null)
-                      setCreating((open) => !open)
-                    }}
-                  >
-                    <Plus aria-hidden="true" />
-                    {leaderView && ownNodo ? t('tracking.next.planesNewPlanIn', { nodo: ownNodo }) : t('tracking.actions.newPlan')}
-                  </Button>
-                )}
               </>
             ) : undefined
           }
@@ -303,7 +299,7 @@ export default function PlanesListNextPage() {
       {creating && (
         <section
           aria-labelledby="planes-create"
-          className="flex flex-col gap-3 rounded-xl border border-line-default border-l-[3px] border-l-fg-primary bg-surface-card px-5 py-4 shadow-sm"
+          className="flex flex-col gap-3 rounded-xl border border-line-default border-l-[3px] border-l-fg-primary bg-surface-card px-5 py-4"
         >
           <h2 id="planes-create" className="m-0 text-2xl">
             {t('tracking.actions.createPlan')}
@@ -419,10 +415,9 @@ function Tiles({
   })
   return (
     <KpiRow>
-      <KpiTile
+      <KpiCard
         label={leaderView ? t('tracking.next.planesTileYours') : t('tracking.totalPlanes')}
-        value={rows.length}
-        locale={locale}
+        value={new Intl.NumberFormat(locale).format(rows.length)}
         unit={
           leaderView
             ? rows.length === 1
@@ -432,7 +427,7 @@ function Tiles({
               ? t('tracking.next.inOneNodo')
               : t('tracking.next.inNodos', { count: nodos })
         }
-        sub={<span className="text-fg-label">{leaderView ? leaderSub : sub}</span>}
+        footnote={<span className="text-fg-label">{leaderView ? leaderSub : sub}</span>}
       />
       {SEMAFORO_ORDER.map((estado) => {
         const presentation = semaforoPresentation(estado)
@@ -441,14 +436,13 @@ function Tiles({
         const nodoNames = nodoNamesOf(list, nodoOrder)
         const definition = t(TILE_SUB[estado])
         return (
-          <KpiTile
+          <KpiCard
             key={estado}
             label={t(presentation.labelKey)}
-            value={count}
-            locale={locale}
+            value={new Intl.NumberFormat(locale).format(count)}
             unit={count === 1 ? t('tracking.next.unitPlan') : t('tracking.next.unitPlans')}
-            sub={
-              <span className={count > 0 ? TONE_INK[presentation.tone] : 'text-fg-label'} data-state={presentation.countKey}>
+            footnote={
+              <span className={count > 0 ? 'text-fg-primary' : 'text-fg-label'} data-state={presentation.countKey}>
                 {count > 0 && nodoNames.length > 0
                   ? t('tracking.next.joined', { first: definition, second: joinNames(nodoNames, locale) })
                   : definition}
@@ -530,10 +524,10 @@ function Filters({
                 data-scope={value}
                 aria-pressed={selected}
                 onClick={() => onScope(value)}
-                className={cn(chipVariants({ tone: selected ? 'critical' : 'neutral' }), 'cursor-pointer hover:border-line-hover')}
+                className={cn(chipVariants({ tone: selected ? 'accent' : 'neutral' }), 'cursor-pointer hover:border-line-hover')}
               >
                 {t(SCOPE_LABEL[value])}
-                <span className="font-mono tabular-nums">{counts[value]}</span>
+                <span className="tabular-nums">{counts[value]}</span>
               </button>
             )
           })}
@@ -568,15 +562,15 @@ function Filters({
   )
 }
 
-function SectionHead({ id, icon, tone, heading, count, note }: { id: string; icon: ReactNode; tone: string; heading: string; count: number; note: string }) {
+function SectionHead({ id, icon, heading, count, note }: { id: string; icon: ReactNode; tone: string; heading: string; count: number; note: string }) {
   return (
     <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
       <div className="flex items-center gap-2.5">
-        <span className={cn('inline-flex self-center', TONE_INK[tone] ?? 'text-fg-secondary')}>{icon}</span>
+        <span className={cn('inline-flex self-center', 'text-fg-secondary')}>{icon}</span>
         <h2 id={id} className="m-0 text-2xl">
           {heading}
         </h2>
-        <span className="font-mono text-xs tabular-nums text-fg-label">{count}</span>
+        <span className="tabular-nums text-xs text-fg-label">{count}</span>
       </div>
       <span className="text-xs text-fg-label sm:text-right">{note}</span>
     </div>
@@ -604,7 +598,7 @@ function StateSection({
     <section aria-labelledby={id} data-estado={estado} className="flex flex-col gap-2.5">
       <SectionHead id={id} icon={STATE_ICON[estado]} tone={presentation.tone} heading={t(presentation.labelKey)} count={rows.length} note={t(SECTION_NOTE[estado])} />
       {rows.length === 0 ? (
-        <p className="m-0 flex items-start gap-2 rounded-lg border border-line-default bg-surface-card px-3.5 py-3 text-sm text-fg-secondary">
+        <p className="m-0 flex items-start gap-2 rounded-xl border border-line-panel bg-surface-card px-3.5 py-3 text-sm text-fg-secondary">
           <Clock aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-fg-label" />
           {t(SECTION_EMPTY[estado])}
         </p>
@@ -652,7 +646,7 @@ function PlansTable({
   locale: string
 }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-line-default bg-surface-card shadow-sm">
+    <div className="overflow-hidden rounded-xl border border-line-panel bg-surface-card">
       <div className="overflow-x-auto">
         {/* The six fixed columns are the board's 124 / 100 / 170 / 96 / 136 / 136px, each with its
             share of the gap, so "Qué se hará" gets the board's ~286px at 1440 and a title sets on
@@ -723,7 +717,7 @@ function PlanRow({
   return (
     <tr data-plan-code={row.code} className="border-b border-line-light last:border-b-0">
       <td className={TD}>
-        <Link to={`/tracking/planes/${row.id}`} className="font-mono text-xs text-fg-secondary underline decoration-line-hover underline-offset-4">
+        <Link to={`/tracking/planes/${row.id}`} className="tabular-nums text-xs text-fg-secondary underline decoration-line-hover underline-offset-4">
           {row.code}
         </Link>
       </td>
@@ -740,7 +734,7 @@ function PlanRow({
               label={row.canManage ? t('tracking.next.planesPapelTuNodo') : t('tracking.next.planesPapelParticipas')}
               icon={row.canManage ? <LayoutPanelTop /> : <Users />}
             />
-            <span className="text-2xs text-fg-label">
+            <span className="text-xs text-fg-label">
               {row.canManage
                 ? row.nodoName ?? ownNodo
                   ? t('tracking.next.planesPapelRegistras', { nodo: row.nodoName ?? ownNodo ?? '' })
@@ -770,16 +764,16 @@ function PlanRow({
             mark at the end of the detail's track (`ProgressTrack`) belongs to that screen, and the
             printed percentage above is what a reader or a screen reader takes from this cell. */}
         <span className="flex flex-col gap-1.5" data-slot="avance">
-          <span className="font-mono text-sm tabular-nums text-fg-primary">{t('tracking.next.planesPercent', { value: row.percent })}</span>
+          <span className="tabular-nums text-sm text-fg-primary">{t('tracking.next.planesPercent', { value: row.percent })}</span>
           <MiniBar percent={row.percent} className="w-18" />
         </span>
       </td>
       <td className={TD}>
         <span className="flex flex-col gap-0.5">
-          <span className={cn('font-mono text-sm tabular-nums', row.overdue ? 'text-accent-red' : 'text-fg-primary')}>
+          <span className={cn('tabular-nums text-sm', 'text-fg-primary')}>
             {calendarDay(Date.parse(`${row.fechaCompromiso}T00:00:00Z`), locale)}
           </span>
-          <span className={cn('text-2xs', row.overdue ? 'text-accent-red' : 'text-fg-label')}>{compromisoSub(row, t)}</span>
+          <span className={cn('text-xs', row.overdue ? 'font-semibold text-fg-secondary' : 'text-fg-label')}>{compromisoSub(row, t)}</span>
         </span>
       </td>
       <td className={cn(TD, 'text-right')}>
@@ -818,13 +812,13 @@ function Cumplidos({
         // `flex-wrap` and a text column that may shrink: the leader's line names the nodo
         // ("ningún plan de Ingeniería se ha marcado como cumplido todavía") and at 390 the
         // row ran past the card's right edge and was clipped. Only the PNG showed it.
-        className="h-auto flex-wrap justify-start gap-x-2.5 gap-y-1 whitespace-normal rounded-xl border border-line-default bg-surface-card px-4 py-3 text-left font-normal shadow-sm disabled:opacity-100"
+        className="h-auto flex-wrap justify-start gap-x-2.5 gap-y-1 whitespace-normal rounded-xl border border-line-panel bg-surface-card px-4 py-3 text-left font-normal disabled:opacity-100"
       >
         <ChevronRight aria-hidden="true" className={cn('size-4 text-fg-label transition-transform', open && 'rotate-90')} />
         <span id="planes-cumplidos" className="text-sm font-semibold text-fg-primary">
           {t('tracking.next.planesCumplidos')}
         </span>
-        <span className="font-mono text-xs tabular-nums text-fg-label">{rows.length}</span>
+        <span className="tabular-nums text-xs text-fg-label">{rows.length}</span>
         <span className="min-w-0 text-xs text-fg-label">
           {rows.length === 0
             ? leaderView && ownNodo
@@ -880,7 +874,7 @@ function Legend({ asOf, t, locale }: { asOf: string; t: TranslateFn; locale: str
           const presentation = semaforoPresentation(estado)
           return (
             <li key={estado} className="m-0 flex items-start gap-1.5">
-              <span className={cn('mt-px inline-flex', TONE_INK[presentation.tone])}>{STATE_ICON[estado]}</span>
+              <span className={cn('mt-px inline-flex', 'text-fg-primary')}>{STATE_ICON[estado]}</span>
               <span>
                 <b className="font-semibold text-fg-primary">{t(presentation.labelKey)}:</b> {t(LEGEND[estado])}
               </span>

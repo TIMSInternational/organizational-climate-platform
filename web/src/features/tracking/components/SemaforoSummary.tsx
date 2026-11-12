@@ -46,7 +46,7 @@ import SemaforoChip from './SemaforoChip'
  * So the total wears `KpiTile` — it is a plain number and belongs in the shared
  * component — and the three states wear the same geometry with a `SemaforoChip`
  * where the label goes. The typography is copied deliberately rather than
- * approximated: `font-mono text-3xl tabular-nums` is the rule that makes this
+ * approximated: `tabular-nums text-3xl tabular-nums` is the rule that makes this
  * product read as an instrument, and a tile that opted out would be visibly a
  * different size in the same row.
  *
@@ -117,7 +117,7 @@ export default function SemaforoSummary({
                   glyph came out grey and the summary strip had NO colour channel at
                   all, while every state chip in the table below it did. */}
               <SemaforoChip estado={estado} />
-              <div className="mt-1 font-mono text-3xl font-semibold tracking-tight tabular-nums">
+              <div className="mt-1 tabular-nums text-3xl font-semibold tracking-tight">
                 {semaforoCount(counts, estado)}
               </div>
               <div className="mt-px text-xs text-fg-secondary">{t(subKey)}</div>

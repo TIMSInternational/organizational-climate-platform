@@ -13,7 +13,7 @@ import { initials } from './derive'
  * reading in green (red once the compromiso has gone by), and a 2px tick where 100 %
  * sits. `percent` is already whole points (`semaforo.toPercent`) — nothing here scales.
  */
-export function ProgressTrack({ percent, overdue, label }: { percent: number; overdue: boolean; label: string }) {
+export function ProgressTrack({ percent, label }: { percent: number; overdue: boolean; label: string }) {
   return (
     <div
       role="progressbar"
@@ -21,15 +21,15 @@ export function ProgressTrack({ percent, overdue, label }: { percent: number; ov
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={percent}
-      className="relative h-2 rounded-sm bg-surface-icon-box"
+      className="relative h-1.5 rounded-full bg-surface-fill"
     >
       <div
-        className={cn('h-full rounded-sm', overdue ? 'bg-accent-red' : 'bg-accent-green')}
+        className="h-full rounded-full bg-accent-blue"
         style={{ width: `${percent}%` }}
       />
       <span
         aria-hidden="true"
-        className={cn('absolute -top-1 right-0 h-4 w-0.5', overdue ? 'bg-accent-red' : 'bg-accent-green')}
+        className="absolute -top-1 right-0 h-3.5 w-0.5 rounded-full bg-fg-tertiary"
       />
     </div>
   )
@@ -53,12 +53,14 @@ export function InfoBox({
     <div
       className={cn(
         'flex min-w-0 flex-col gap-0.5 rounded-md px-3 py-2.5',
-        alarm ? 'border border-accent-red-ring bg-accent-red-soft' : 'bg-surface-outer',
+        'bg-surface-fill-subtle',
+        alarm && 'border border-line-default',
       )}
+      data-alarm={alarm || undefined}
     >
-      <span className={cn('text-2xs font-bold uppercase tracking-label', alarm ? 'text-accent-red' : 'text-fg-label')}>{label}</span>
-      <span className={cn('text-lg', mono && 'font-mono tabular-nums', alarm ? 'text-accent-red' : 'text-fg-primary')}>{value}</span>
-      {sub && <span className={cn('text-sm', alarm ? 'text-accent-red' : 'text-fg-label')}>{sub}</span>}
+      <span className="text-2xs font-semibold uppercase tracking-tile text-fg-label">{label}</span>
+      <span className={cn('text-lg text-fg-primary', mono && 'tabular-nums', alarm && 'font-semibold')}>{value}</span>
+      {sub && <span className={cn('text-sm', alarm ? 'font-semibold text-fg-secondary' : 'text-fg-tertiary')}>{sub}</span>}
     </div>
   )
 }
@@ -70,7 +72,7 @@ export function PersonaAvatar({ name, size = 'md' }: { name: string | null; size
       aria-hidden="true"
       className={cn(
         'inline-flex shrink-0 items-center justify-center rounded-full border bg-surface-icon-box font-semibold text-fg-secondary',
-        size === 'sm' ? 'size-6 text-2xs' : 'size-7 text-xs',
+        size === 'sm' ? 'size-6 text-xs' : 'size-7 text-xs',
         name ? 'border-line-default' : 'border-dashed border-line-default text-fg-label',
       )}
     >
@@ -99,9 +101,9 @@ export function RowGlyph({ icon }: { icon: ReactNode }) {
 /** A card of the tablero's "Dónde está el nodo" row: a label, a reading, a unit. */
 export function NodoTile({ label, children, aside }: { label: string; children: ReactNode; aside?: ReactNode }) {
   return (
-    <div className="flex min-w-0 flex-col gap-1.5 rounded-lg border border-line-default bg-surface-card px-4 py-3.5 shadow-sm" data-slot="nodo-tile">
+    <div className="flex min-w-0 flex-col gap-1.5 rounded-xl border border-line-panel bg-surface-card px-4 py-3.5" data-slot="nodo-tile">
       <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-        <span data-slot="nodo-tile-label" className="whitespace-nowrap text-2xs font-bold uppercase tracking-label text-fg-label">
+        <span data-slot="nodo-tile-label" className="whitespace-nowrap text-2xs font-semibold uppercase tracking-tile text-fg-label">
           {label}
         </span>
         {aside}

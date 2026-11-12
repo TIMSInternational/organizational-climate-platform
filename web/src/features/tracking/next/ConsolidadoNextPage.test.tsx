@@ -143,10 +143,10 @@ describe('ConsolidadoNextPage — company_admin', () => {
   it('names the nodos behind each state in its tile, from the payload counts', async () => {
     renderPage()
     const rojo = await screen.findByText('vencido o sin avance · Finanzas')
-    expect(rojo.closest('[data-slot="kpi-tile"]')?.textContent).toContain('1')
+    expect(rojo.closest('[data-slot="kpi-card"]')?.textContent).toContain('1')
     expect(screen.getByText('en tiempo · Ingeniería y Operaciones')).toBeTruthy()
     // En riesgo holds nothing, so it names no nodo.
-    expect(screen.getByText('atrasado o sin novedades').closest('[data-slot="kpi-tile"]')?.textContent).toContain('0')
+    expect(screen.getByText('atrasado o sin novedades').closest('[data-slot="kpi-card"]')?.textContent).toContain('0')
   })
 
   it('lists each plan under its own nodo with its responsable, and the total names the nodos without a plan', async () => {

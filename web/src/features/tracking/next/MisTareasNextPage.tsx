@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import { CalendarDays, CircleAlert, Clock, Check, ListChecks, Shield, User, Users } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../i18n'
-import { PageTopBar } from '../../../components/layout'
+import { PageHeader } from '../../../components/layout'
 import { Chip, LoadingRegion, NetworkError, SkeletonText, Table } from '../../../components/ui'
 import { calendarDay } from '../../../lib/calendarDay'
 import { cn } from '../../../lib/cn'
@@ -14,14 +14,9 @@ import { MiniBar } from '../../org-structure/next/super/parts'
 import { useMisTareasModel } from './useMisTareasModel'
 import { byCount } from '../../../i18n/plural'
 
-const TH = 'h-auto bg-transparent px-1.5 pb-2 pt-2 first:pl-3 last:pr-3 text-2xs font-bold uppercase tracking-label text-fg-label whitespace-nowrap'
+const TH = 'h-auto bg-transparent px-1.5 pb-2 pt-2 first:pl-3 last:pr-3 text-xs font-semibold text-fg-label whitespace-nowrap'
 const TD = 'px-1.5 py-3 align-middle first:pl-3 last:pr-3'
 
-const TONE_INK: Record<string, string> = {
-  critical: 'text-accent-red',
-  warning: 'text-accent-amber-ink',
-  good: 'text-accent-green-ink',
-}
 
 const STATE_ICON: Record<SemaforoEstado, ReactNode> = {
   Rojo: <CircleAlert aria-hidden="true" className="size-3.5" />,
@@ -79,7 +74,7 @@ export default function MisTareasNextPage() {
 
   return (
     <div className="flex flex-col gap-section">
-      <PageTopBar
+      <PageHeader
         eyebrow={t('tracking.next.consolidadoEyebrowBare')}
         title={t('tracking.misTareas.title')}
         description={t('tracking.next.misTareasDescription')}
@@ -111,14 +106,14 @@ export default function MisTareasNextPage() {
 
               <section
                 aria-labelledby="mis-tareas-lista"
-                className="overflow-hidden rounded-xl border border-line-default bg-surface-card shadow-sm"
+                className="overflow-hidden rounded-xl border border-line-panel bg-surface-card"
               >
                 <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 px-4 pb-3.5 pt-4">
                   <div className="flex items-center gap-2.5">
                     <h2 id="mis-tareas-lista" className="m-0 text-2xl">
                       {t('tracking.next.misTareasListTitle')}
                     </h2>
-                    <span className="font-mono text-xs tabular-nums text-fg-label">{rows.length}</span>
+                    <span className="tabular-nums text-xs text-fg-label">{rows.length}</span>
                   </div>
                   <span className="text-xs text-fg-label sm:text-right">
                     {rows.length === 0 ? t('tracking.next.misTareasAsOf', { date: asOfDay }) : t('tracking.next.misTareasOrdered')}
@@ -177,7 +172,7 @@ function NextCard({ row, rows, t, locale }: { row: TareaRow; rows: readonly Tare
     <section
       aria-labelledby="mis-tareas-proximo"
       data-slot="lo-proximo"
-      className="flex flex-wrap items-center gap-3.5 rounded-xl border border-line-default bg-surface-card px-4 py-3.5 shadow-sm"
+      className="flex flex-wrap items-center gap-3.5 rounded-xl border border-line-panel bg-surface-card px-4 py-3.5"
     >
       <span
         aria-hidden="true"
@@ -191,12 +186,12 @@ function NextCard({ row, rows, t, locale }: { row: TareaRow; rows: readonly Tare
           "PA-2026-00002" across three lines and the due date across five. A real basis makes
           the line break instead. Only the PNG showed it. */}
       <div className="flex min-w-0 flex-[1_1_17rem] flex-col gap-1">
-        <span id="mis-tareas-proximo" className="text-2xs font-bold uppercase tracking-label text-fg-label">
+        <span id="mis-tareas-proximo" className="text-2xs font-semibold uppercase tracking-tile text-fg-label">
           {t('tracking.next.misTareasNext')}
         </span>
         <div className="flex flex-wrap items-center gap-2.5">
-          <span className="font-mono text-base text-fg-primary">{row.code}</span>
-          <span className={cn('text-base', row.overdue ? 'text-accent-red' : 'text-fg-primary')}>{dueLine(row, t, locale)}</span>
+          <span className="tabular-nums text-base text-fg-primary">{row.code}</span>
+          <span className={cn('text-base', 'text-fg-primary')}>{dueLine(row, t, locale)}</span>
           <SemaforoChip estado={row.estado} />
           <span className="text-xs text-fg-label">
             {row.hasProgress
@@ -209,7 +204,7 @@ function NextCard({ row, rows, t, locale }: { row: TareaRow; rows: readonly Tare
         </div>
       </div>
       <div className="flex min-w-0 shrink-0 flex-col gap-0.5 sm:items-end">
-        <span className="font-mono text-base text-fg-primary">
+        <span className="tabular-nums text-base text-fg-primary">
           {tally.total === 1 ? t('tracking.next.misTareasCountOne') : t('tracking.next.misTareasCountMany', { count: tally.total })}
         </span>
         <span className="text-xs text-fg-label">
@@ -270,7 +265,7 @@ function TareaTableRow({ row, t, locale }: { row: TareaRow; t: TranslateFn; loca
         <Link
           to={`/tracking/planes/${row.id}`}
           aria-label={t('tracking.next.planesOpenNamed', { code: row.code })}
-          className="font-mono text-xs text-fg-secondary underline decoration-line-hover underline-offset-4"
+          className="tabular-nums text-xs text-fg-secondary underline decoration-line-hover underline-offset-4"
         >
           {row.code}
         </Link>
@@ -299,7 +294,7 @@ function TareaTableRow({ row, t, locale }: { row: TareaRow; t: TranslateFn; loca
             saying there is no name above a line that repeats it. */}
         <span className="flex min-w-0 flex-col gap-0.5">
           {row.nodoName && <span className="truncate text-sm text-fg-secondary">{row.nodoName}</span>}
-          <span className={cn('truncate', row.nodoName ? 'text-2xs text-fg-label' : 'text-sm text-fg-secondary')}>
+          <span className={cn('truncate', row.nodoName ? 'text-xs text-fg-label' : 'text-sm text-fg-secondary')}>
             {row.managedByReader
               ? t('tracking.next.planesPapelRegistrasBare')
               : row.nodoName
@@ -310,10 +305,10 @@ function TareaTableRow({ row, t, locale }: { row: TareaRow; t: TranslateFn; loca
       </td>
       <td className={TD}>
         <span className="flex flex-col gap-0.5">
-          <span className={cn('font-mono text-sm tabular-nums', row.overdue ? 'text-accent-red' : 'text-fg-primary')}>
+          <span className={cn('tabular-nums text-sm', 'text-fg-primary')}>
             {calendarDay(Date.parse(`${row.fechaCompromiso}T00:00:00Z`), locale)}
           </span>
-          <span className={cn('text-2xs', row.overdue ? 'text-accent-red' : 'text-fg-label')}>
+          <span className={cn('text-xs', row.overdue ? 'font-semibold text-fg-secondary' : 'text-fg-label')}>
             {row.overdue
               ? t(byCount(-row.daysToCompromiso, 'tracking.next.overdueByOne', 'tracking.next.overdueBy'), { days: -row.daysToCompromiso })
               : row.daysToCompromiso === 0
@@ -329,7 +324,7 @@ function TareaTableRow({ row, t, locale }: { row: TareaRow; t: TranslateFn; loca
       </td>
       <td className={TD}>
         <span className="flex flex-col gap-1.5" data-slot="avance">
-          <span className="font-mono text-sm tabular-nums text-fg-primary">{t('tracking.next.planesPercent', { value: row.percent })}</span>
+          <span className="tabular-nums text-sm text-fg-primary">{t('tracking.next.planesPercent', { value: row.percent })}</span>
           <MiniBar percent={row.percent} className="w-18" />
         </span>
       </td>
@@ -354,7 +349,7 @@ function EmptyBlock({ t }: { t: TranslateFn }) {
         <ListChecks className="size-4.5" />
       </span>
       <div className="flex min-w-0 flex-col gap-1.5">
-        <h3 className="m-0 text-2xl">{t('tracking.next.misTareasEmptyTitle')}</h3>
+        <h3 className="m-0 font-display text-xl font-semibold tracking-title">{t('tracking.next.misTareasEmptyTitle')}</h3>
         <p className="m-0 max-w-[72ch] text-base leading-normal text-fg-secondary">{t('tracking.next.misTareasEmptyBody')}</p>
       </div>
     </div>
@@ -369,7 +364,7 @@ function Legend({ asOfDay, t }: { asOfDay: string; t: TranslateFn }) {
           const presentation = semaforoPresentation(estado)
           return (
             <li key={estado} className="m-0 flex min-w-0 items-start gap-1.5">
-              <span className={cn('mt-px inline-flex shrink-0', TONE_INK[presentation.tone])}>{STATE_ICON[estado]}</span>
+              <span className={cn('mt-px inline-flex shrink-0', 'text-fg-primary')}>{STATE_ICON[estado]}</span>
               <span className="min-w-0">
                 <b className="font-semibold text-fg-primary">{t(presentation.labelKey)}:</b> {t(LEGEND[estado])}
               </span>
