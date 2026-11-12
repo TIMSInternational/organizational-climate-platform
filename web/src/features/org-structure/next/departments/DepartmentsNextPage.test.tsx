@@ -83,6 +83,12 @@ function renderAs(claims: Record<string, unknown>) {
   )
 }
 
+/** The protected mark: a padlock and «Fewer than 3», and no other figure in the cell. */
+function expectProtected(cell: Element) {
+  expect(cell.querySelector('[data-slot="protected-state"]')).not.toBeNull()
+  expect(cell.textContent).toContain(en.ui.protected.short.replace('{floor}', '3'))
+  expect((cell.textContent ?? '').replace(/3/g, '')).not.toMatch(/\d/)
+}
 const rowOf = (name: string) => document.querySelector(`tr[data-department-row="${name}"]`) as HTMLElement | null
 const cardOf = (name: string) => document.querySelector(`li[data-department="${name}"]`) as HTMLElement
 
@@ -127,14 +133,14 @@ describe('DepartmentsNextPage (/departments)', () => {
     renderAs({ role: 'company_admin', companyId: 'c1' })
     const row = await screen.findByText('Ingeniería', { selector: 'td' })
     const cells = row.closest('tr')!.querySelectorAll('td')
-    expect(cells[4].textContent).toBe(copy.protected)
+    expectProtected(cells[4])
     expect(cardOf('Ingeniería').textContent).not.toMatch(/4[.,]4/)
   })
 
   it('re-applies the floor itself: a group under the floor the server did not flag is protected too', async () => {
     renderAs({ role: 'company_admin', companyId: 'c1' })
     await screen.findByText('Ventas', { selector: 'td' })
-    expect(rowOf('Ventas')!.querySelectorAll('td')[4].textContent).toBe(copy.protected)
+    expectProtected(rowOf('Ventas')!.querySelectorAll('td')[4])
     expect(rowOf('Ventas')!.textContent).not.toMatch(/4[.,]1/)
     expect(cardOf('Ventas').textContent).toContain('Protected in Q3')
   })

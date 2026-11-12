@@ -2,7 +2,7 @@ import { useId, useState, type ReactNode } from 'react'
 import { useParams } from 'react-router'
 import { Check, FileText } from 'lucide-react'
 import { useTranslation } from '../../../../i18n'
-import { PageTopBar } from '../../../../components/layout'
+import { PageHeader } from '../../../../components/layout'
 import { ANONYMITY_FLOOR, DEFAULT_RESULT_BANDS } from '../../../../components/charts'
 import { Button, EmptyState, Input, NetworkError, SkeletonText } from '../../../../components/ui'
 import { readViewerClaims, useViewerCapabilities } from '../../../../auth/viewerCapabilities'
@@ -35,7 +35,7 @@ function Readout({ children, mono = false }: { children: ReactNode; mono?: boole
   return (
     <div
       data-slot="settings-readout"
-      className={`flex h-control-lg min-w-0 items-center truncate rounded-md border border-line-default bg-surface-input px-2.5 text-base text-fg-primary${mono ? ' font-mono text-sm tabular-nums' : ''}`}
+      className={`flex h-9 min-w-0 items-center truncate rounded-md border border-line-default bg-surface-fill-subtle px-3 text-base text-fg-primary${mono ? ' font-mono text-sm' : ''}`}
     >
       {children}
     </div>
@@ -65,13 +65,13 @@ export default function CompanySettingsNextView() {
   const allowed = capabilities.canManageOrg && readViewerClaims().companyId === id
   const state = useCompanySettingsModel(allowed ? id : null)
   const [saved, setSaved] = useState(false)
-  const header = { title: t(`${K}.title`), description: t(`${K}.description`) }
+  const header = { eyebrow: t('navigation.sectionOrganization'), title: t(`${K}.title`), description: t(`${K}.description`) }
   const crumbs = [{ label: t('navigation.companyAdministration') }, { label: t(`${K}.crumb`) }]
 
   if (!allowed) {
     return (
       <div>
-        <PageTopBar {...header} breadcrumbs={crumbs} />
+        <PageHeader {...header} breadcrumbs={crumbs} />
         <EmptyState title={t(`${K}.notAllowedTitle`)} description={t(`${K}.notAllowedBody`)} />
       </div>
     )
@@ -79,7 +79,7 @@ export default function CompanySettingsNextView() {
   if (state.status === 'error') {
     return (
       <div>
-        <PageTopBar {...header} breadcrumbs={crumbs} />
+        <PageHeader {...header} breadcrumbs={crumbs} />
         <NetworkError
           title={t(`${K}.loadFailed`)}
           description={state.error ?? undefined}
@@ -92,7 +92,7 @@ export default function CompanySettingsNextView() {
   if (!state.model) {
     return (
       <div>
-        <PageTopBar {...header} breadcrumbs={crumbs} />
+        <PageHeader {...header} breadcrumbs={crumbs} />
         <SkeletonText lines={8} />
       </div>
     )
@@ -180,14 +180,12 @@ function SettingsForm({
 
   return (
     <div>
-      <PageTopBar
+      <PageHeader
         breadcrumbs={crumbs}
-        tightBreadcrumb
         eyebrow={model.companyName}
         title={t(`${K}.title`)}
         description={t(`${K}.description`)}
         actions={
-          <>
             <Button
               variant="outline"
               size="canvas"
@@ -200,19 +198,20 @@ function SettingsForm({
             >
               {t(`${K}.discard`)}
             </Button>
+        }
+        primaryAction={
             <Button variant="primary" size="canvas" disabled={saving || !colourValid || !logoOk || !bandsValid} onClick={() => void save()}>
               <Check aria-hidden="true" />
               {saving ? t(`${K}.saving`) : t(`${K}.save`)}
             </Button>
-          </>
         }
       />
 
-      <p role="status" className={notice ? 'm-0 mb-3 text-sm text-accent-green-ink' : 'sr-only'}>
+      <p role="status" className={notice ? 'm-0 mb-3 text-sm text-fg-secondary' : 'sr-only'}>
         {notice === 'saved' ? t(`${K}.saved`) : notice === 'nothing' ? t(`${K}.nothingToSave`) : ''}
       </p>
       {saveError && (
-        <p role="alert" className="m-0 mb-3 text-sm text-accent-red">
+        <p role="alert" className="m-0 mb-3 text-sm text-accent-red-ink">
           {saveError}
         </p>
       )}
@@ -312,7 +311,7 @@ function SettingsForm({
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
               <div
                 data-slot="logo-box"
-                className="flex h-24 w-30 shrink-0 flex-col items-center justify-center gap-1.5 overflow-hidden rounded-lg border border-dashed border-line-default text-center text-2xs text-fg-tertiary"
+                className="flex h-24 w-30 shrink-0 flex-col items-center justify-center gap-1.5 overflow-hidden rounded-lg border border-dashed border-line-default text-center text-xs text-fg-tertiary"
               >
                 {logoUrl ? (
                   <img src={logoUrl} alt={t(`${K}.logoAlt`, { company: name })} className="max-h-full max-w-full object-contain" />
@@ -328,7 +327,7 @@ function SettingsForm({
                 <Field
                   fieldLabel={t(`${K}.colour`)}
                   htmlFor={`${ids}-colour`}
-                  helper={colourValid ? t(`${K}.colourEmailHelp`) : <span className="text-accent-red">{t(`${K}.colourInvalid`)}</span>}
+                  helper={colourValid ? t(`${K}.colourEmailHelp`) : <span className="text-accent-red-ink">{t(`${K}.colourInvalid`)}</span>}
                 >
                   <div className="flex items-center gap-2">
                     <span
@@ -342,14 +341,14 @@ function SettingsForm({
                       value={draft.primaryColor}
                       aria-invalid={!colourValid}
                       onChange={(event) => set({ primaryColor: event.target.value.trim() })}
-                      className="h-control-lg w-30 font-mono text-sm"
+                      className="h-9 w-30 font-mono text-sm"
                     />
                   </div>
                 </Field>
                 <Field
                   fieldLabel={t(`${K}.logoPath`)}
                   htmlFor={`${ids}-logo`}
-                  helper={logoOk ? t(`${K}.logoPathHelpPublished`) : <span className="text-accent-red">{t(`${K}.logoPathInvalid`)}</span>}
+                  helper={logoOk ? t(`${K}.logoPathHelpPublished`) : <span className="text-accent-red-ink">{t(`${K}.logoPathInvalid`)}</span>}
                 >
                   {/* How a logo is set today: the file is published on this site (under
                       `web/public/brand/`, a deploy) and chosen here by its path. There is no
@@ -365,7 +364,7 @@ function SettingsForm({
                     // `noHardcodedStrings.test.ts` refuses — and it would have said the same
                     // path twice on one row.
                     onChange={(event) => set({ logoUrl: event.target.value })}
-                    className="h-control-lg w-full font-mono text-sm"
+                    className="h-9 w-full font-mono text-sm"
                   />
                 </Field>
                 <Field fieldLabel={t(`${K}.sender`)} helper={t(`${K}.senderPlatform`)}>
@@ -398,9 +397,9 @@ function SettingsForm({
                   viewer and neither reading can be edited here — said to a screen reader. */}
               <span className="sr-only">{t(`${K}.companyHelp`)}</span>
             </Field>
-            <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5 border-t border-line-light pt-1 text-xs">
-              <dt className="text-fg-tertiary">{t(`${K}.departmentsReading`)}</dt>
-              <dd className="m-0 font-mono tabular-nums">
+            <dl className="m-0 grid grid-cols-[minmax(7rem,10rem)_minmax(0,1fr)] gap-x-4 gap-y-2.25 border-t border-line-light pt-3 text-ui">
+              <dt className="text-fg-secondary">{t(`${K}.departmentsReading`)}</dt>
+              <dd className="m-0 tabular-nums">
                 {model.departments
                   ? `${t(byCount(model.departments.active, `${K}.departmentsActiveOne`, `${K}.departmentsActiveMany`), {
                       count: model.departments.active,
@@ -409,10 +408,10 @@ function SettingsForm({
                     })}`
                   : DASH}
               </dd>
-              <dt className="text-fg-tertiary">{t(`${K}.peopleReading`)}</dt>
-              <dd className="m-0 font-mono tabular-nums">{model.departments ? model.departments.people : DASH}</dd>
-              <dt className="text-fg-tertiary">{t(`${K}.surveysReading`)}</dt>
-              <dd className="m-0 font-mono tabular-nums">
+              <dt className="text-fg-secondary">{t(`${K}.peopleReading`)}</dt>
+              <dd className="m-0 tabular-nums">{model.departments ? model.departments.people : DASH}</dd>
+              <dt className="text-fg-secondary">{t(`${K}.surveysReading`)}</dt>
+              <dd className="m-0 tabular-nums">
                 {model.surveys
                   ? t(byCount(model.surveys.active, `${K}.surveysValueOne`, `${K}.surveysValue`), {
                       total: model.surveys.total,
