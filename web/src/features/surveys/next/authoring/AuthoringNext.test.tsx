@@ -426,12 +426,15 @@ const distribution = (
   )
 
 describe('Distribución (Distribution artboard)', () => {
-  it('closes on the sentence the server wrote, verbatim, under the good-ink shield', () => {
+  it('closes on the sentence the server wrote, verbatim, on a neutral note rather than a result colour', () => {
     distribution(invitationList())
-    expect(screen.getByTestId('guarantee').textContent).toContain('Frase del servidor sobre lo que se registra.')
-    expect(screen.getByTestId('guarantee').querySelector('[data-slot="guarantee-shield"]')?.getAttribute('class')).toContain('text-chip-good-ink')
-    // The artboard's 18px serif, not the 14px `text-lg`.
-    expect(screen.getByText('Frase del servidor sobre lo que se registra.').getAttribute('class')).toContain('text-[1.125rem]')
+    const guarantee = screen.getByTestId('guarantee')
+    expect(guarantee.textContent).toContain('Frase del servidor sobre lo que se registra.')
+    expect(guarantee.getAttribute('data-slot')).toBe('note')
+    expect(guarantee.getAttribute('data-tone')).toBe('neutral')
+    // Green is a result area (ruling of 11 Nov): nothing in the note may wear its ink or fill.
+    expect(guarantee.outerHTML).not.toMatch(/chip-good|accent-green|band-str/)
+    expect(guarantee.querySelector('[data-slot="guarantee-shield"]')).not.toBeNull()
   })
 
   it('reads 3 of 3 with a working link and nobody invited yet, and keeps naming the audience', () => {
@@ -485,13 +488,15 @@ describe('Distribución (Distribution artboard)', () => {
     expect(audience).not.toContain('Toda la empresa')
   })
 
-  it("shows the first rows of the invitations and the rest on request, in the artboard's columns and link ink", async () => {
+  it("shows the first rows of the invitations and the rest on request, in the artboard's columns and the action blue", async () => {
     distribution(invitationList(6))
     const table = within(screen.getByTestId('step-invitations')).getByRole('table')
     expect(within(table).getAllByRole('row')).toHaveLength(INVITATION_PREVIEW_ROWS + 1)
     expect([...table.querySelectorAll('col')].map((col) => col.style.width)).toEqual([...INVITATION_COLUMNS])
     const seeAll = screen.getByRole('button', { name: 'Ver las 6' })
-    expect(seeAll.getAttribute('class')).toContain('text-fg-secondary')
+    // The spec's `.btn.t`: the one control on the line is the action blue, not a grey word.
+    expect(seeAll.getAttribute('class')).toContain('text-accent-blue-ink')
+    expect(seeAll.getAttribute('class')).not.toContain('text-fg-secondary')
     await userEvent.click(seeAll)
     expect(within(table).getAllByRole('row')).toHaveLength(7)
   })
@@ -623,9 +628,8 @@ describe('Distribución (Distribution artboard)', () => {
     expect(within(action as HTMLElement).getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent)).toEqual([
       'Registrar la audiencia',
     ])
-    // The artboard's 14px step title (`text-lg` in this scale; `text-base` is 13px).
-    expect(within(step).getByRole('heading', { level: 3 }).className.split(' ')).toContain('text-lg')
-    expect(screen.getByTestId('distribution-readings').className.split(' ')).toContain('-mt-1')
+    // The spec's `.h3`: 15px (`text-base`) semibold sans.
+    expect(within(step).getByRole('heading', { level: 3 }).className.split(' ')).toEqual(expect.arrayContaining(['text-base', 'font-semibold']))
   })
 
   it("prints 'y n personas más' in the label ink (#6c6c71 since the Apple design), which clears AA on the card in both palettes", () => {
@@ -641,11 +645,19 @@ describe('Distribución (Distribution artboard)', () => {
     expect(contrast(inkDark, cardDark)).toBeGreaterThanOrEqual(4.5)
   })
 
-  it("sets the guarantee in the headings' Goudy, never Tailwind's Georgia font-serif", () => {
+  it('sets the guarantee in the body sans: the serif is for titles only, and Goudy never enters the admin frame', () => {
     distribution(invitationList())
     const sentence = screen.getByText('Frase del servidor sobre lo que se registra.')
-    expect(sentence.className.split(' ')).toEqual(expect.arrayContaining(['font-store-serif', 'leading-tight']))
+    expect(sentence.className.split(' ')).toContain('text-base')
+    expect(sentence.className.split(' ')).not.toEqual(expect.arrayContaining(['font-store-serif']))
     expect(sentence.className.split(' ')).not.toContain('font-serif')
+    expect(sentence.className.split(' ')).not.toContain('font-display')
+  })
+
+  it('paints no checklist mark, bucket or invitation chip in a result colour', () => {
+    distribution(invitationList(6))
+    const step = screen.getByTestId('step-invitations')
+    expect(step.outerHTML).not.toMatch(/chip-good|chip-warning|chip-critical|accent-amber|accent-green/)
   })
 })
 

@@ -2,11 +2,12 @@ import { useState, type ReactNode } from 'react'
 import { AlertCircle, Check, ClipboardList, Clock, HelpCircle, KeyRound, MoreHorizontal, ShieldCheck, Users } from 'lucide-react'
 import { Link, useParams } from 'react-router'
 import { useFollowCompany } from '../../../../company-context/useFollowCompany'
-import { PageTopBar } from '../../../../components/layout'
+import { PageHeader } from '../../../../components/layout'
 import {
   Alert,
   AlertDescription,
   Button,
+  Card,
   Chip,
   ConfirmationDialog,
   Dialog,
@@ -18,8 +19,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   ErrorState,
-  LoadingRegion,
-  SkeletonText,
+  KpiCard,
+  LoadingState,
+  Note,
   SwitchField,
   Table,
   TableBody,
@@ -40,8 +42,7 @@ import { useTranslation } from '../../../../i18n'
 import { cn } from '../../../../lib/cn'
 import { canDistribute } from '../../api/surveyInvitationCopy'
 import { isKnownInvitationStatus, isPerSurvey, type SurveyInvitationDetail } from '../../api/surveyDistribution'
-import { IconBox, TH_CLASS } from '../../../shared-next/parts'
-import { Card, Meter, ReadingTile, type ShareLinkAction } from './parts'
+import { Meter, type ShareLinkAction } from './parts'
 import SharePanel from './SharePanel'
 import ParticipationPanel from './ParticipationPanel'
 import SurveyRosterPanel from './SurveyRosterPanel'
@@ -90,9 +91,7 @@ export default function SurveyDistributionNextPage() {
 
   if (state.status === 'loading') {
     return (
-      <LoadingRegion loading label={t('common.loading')}>
-        <SkeletonText lines={8} />
-      </LoadingRegion>
+      <LoadingState rows={8} label={t('common.loading')} />
     )
   }
   if (state.status === 'error') {
@@ -100,11 +99,8 @@ export default function SurveyDistributionNextPage() {
       <ErrorState
         title={t('surveys.distribution.loadFailed')}
         description={state.message}
-        action={
-          <Button variant="outline" onClick={() => void model.reload()}>
-            {t('common.retry')}
-          </Button>
-        }
+        onRetry={() => void model.reload()}
+        retryLabel={t('common.retry')}
       />
     )
   }
@@ -232,7 +228,7 @@ export function DistributionView({
 
   return (
     <div>
-      <PageTopBar
+      <PageHeader
         title={copy('title')}
         eyebrow={title}
         description={copy('description')}
@@ -241,9 +237,8 @@ export function DistributionView({
           { label: title, href: `/surveys/${survey.id}` },
           { label: copy('title') },
         ]}
-        tightBreadcrumb
         actions={
-          <Button asChild variant="outline">
+          <Button asChild variant="default">
             <Link to={`/surveys/${survey.id}`}>
               <ClipboardList aria-hidden="true" className="size-icon" />
               {copy('openSurvey')}
@@ -263,28 +258,29 @@ export function DistributionView({
         </p>
       )}
 
-      {/* `-mt-1`: the header's 24px bottom margin collapses with this one, and the artboard puts
-          the tiles 20px under the hairline (measured: 197.8 → 217.8). */}
-      <section aria-label={copy('readings')} className="-mt-1 grid gap-3 sm:grid-cols-2 xl:grid-cols-4" data-testid="distribution-readings">
-        <ReadingTile
-          testId="tile-reach"
+      <section aria-label={copy('readings')} className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4" data-testid="distribution-readings">
+        <KpiCard
+          data-testid="tile-reach"
           label={copy('reach')}
-          value={reach?.count ?? null}
+          value={<Reading value={reach?.count ?? null} />}
           unit={reach === null ? undefined : copy(REACH_UNIT[reach.source])}
         />
-        <ReadingTile
-          testId="tile-responses"
+        <KpiCard
+          data-testid="tile-responses"
           label={copy('responses')}
-          value={survey.responseCount}
-          unit={rate === null || audience === null ? copy('responsesNoTarget') : copy('responsesOf', { target: audience.count, rate })}
+          value={<Reading value={survey.responseCount} />}
+          // The long "no audience" sentence goes under the reading: as a unit it wrapped on the
+          // 30px figure's line height and left a gap the size of a second reading.
+          unit={rate === null || audience === null ? undefined : copy('responsesOf', { target: audience.count, rate })}
+          footnote={rate === null || audience === null ? copy('responsesNoTarget') : undefined}
         >
           {rate !== null && <Meter percent={rate} label={copy('responses')} />}
-        </ReadingTile>
-        <ReadingTile
-          testId="tile-closes"
+        </KpiCard>
+        <KpiCard
+          data-testid="tile-closes"
           label={closesIn !== null && closesIn < 0 ? copy('closed') : copy('closes')}
-          value={dayMonth(survey.endDate, locale)}
-          unit={
+          value={<Reading value={dayMonth(survey.endDate, locale)} />}
+          footnote={
             closesIn === null
               ? undefined
               : closesIn === 0
@@ -296,24 +292,30 @@ export function DistributionView({
                     : copy(byCount(Math.abs(closesIn), 'closedAgoOne', 'closedAgo'), { days: Math.abs(closesIn) })
           }
         />
-        <ReadingTile testId="tile-ready" label={copy('ready')} value={ready} unit={copy('readyOf', { count: steps.length })}>
-          <span
-            className={cn('text-sm', firstMissing ? 'text-accent-amber-ink' : firstUnknown ? 'text-fg-secondary' : 'text-chip-good-ink')}
-          >
-            {firstMissing
-              ? firstMissing.id === 'invitations'
-                ? copy(perSurvey ? 'send.missingCodes' : 'send.missingShared')
-                : copy(`missing.${firstMissing.id}`)
-              : firstUnknown ? copy(`unknown.${firstUnknown.id}`) : copy('allReady')}
-          </span>
-        </ReadingTile>
+        <KpiCard
+          data-testid="tile-ready"
+          label={copy('ready')}
+          value={<Reading value={ready} />}
+          unit={copy('readyOf', { count: steps.length })}
+          footnote={
+            // Neutral ink in every state: green, amber and red are the three result areas and
+            // nothing else. The words carry the state; the weight marks the one that asks for work.
+            <span className={cn(firstMissing ? 'font-medium text-fg-primary' : 'text-fg-secondary')}>
+              {firstMissing
+                ? firstMissing.id === 'invitations'
+                  ? copy(perSurvey ? 'send.missingCodes' : 'send.missingShared')
+                  : copy(`missing.${firstMissing.id}`)
+                : firstUnknown ? copy(`unknown.${firstUnknown.id}`) : copy('allReady')}
+            </span>
+          }
+        />
       </section>
 
       {/* Above the checklist on purpose. The link and its QR are what an administrator came
           for; being step 2 of 4 is what made them unfindable. The checklist still tracks the
           step -- it just no longer owns the controls. */}
       <section aria-label={t('surveys.next.share.title')} className="mt-6">
-        <Card className="px-4 py-4">
+        <Card className="gap-0 px-5">
           <SharePanel
             publicLink={distribution?.publicLink ?? null}
             accessType={distribution?.accessType}
@@ -321,7 +323,7 @@ export function DistributionView({
             onCreate={actionable ? actions.createLink : undefined}
             creating={busy}
             actions={linkActions}
-          />
+          >
 
           {/* In the share card and nowhere else: this setting changes what the PUBLIC LINK
               asks, so it belongs beside the link rather than in a settings screen the
@@ -367,9 +369,12 @@ export function DistributionView({
               {survey.status === 'active' &&
               new Date(survey.startDate).getTime() > now.getTime() &&
               !(distribution.accessRules?.activeOutsideSchedule ?? false) ? (
-                <p role="status" data-testid="link-waits-for-start" className="m-0 text-sm font-medium text-accent-red-ink">
+                // The link refuses everyone until the start date: the page asking for work, not a
+                // standing fact. The info tone (blue tint, blue glyph) and an AlertCircle, as the
+                // missing step wears, set semibold — and directly above the switch that fixes it.
+                <Note role="status" tone="info" data-testid="link-waits-for-start" icon={<AlertCircle />} className="font-semibold">
                   {t('surveys.next.share.linkWaitsForStart', { date: dayMonth(survey.startDate, locale) })}
-                </p>
+                </Note>
               ) : null}
               <SwitchField
                 label={t('surveys.next.share.opensBeforeStartLabel')}
@@ -395,6 +400,7 @@ export function DistributionView({
             {textsSaved ? <p role="status" className="m-0 text-sm text-fg-secondary">{textsSaved}</p> : null}
           </div>
 
+          </SharePanel>
           {/* The server never asks public-link respondents for a name. Completion is
               recorded separately when the respondent signs in; no authoring toggle is needed. */}
         </Card>
@@ -522,12 +528,8 @@ export function DistributionView({
           </p>
           <div className="grid gap-2.5 sm:grid-cols-3" data-testid="invitation-buckets">
             <Bucket label={perSurvey ? copy('send.withCode') : copy('send.registered')} value={coverage.covered} />
-            <Bucket
-              label={perSurvey ? copy('send.withoutCode') : copy('send.unregistered')}
-              value={coverage.uncovered}
-              warn={coverage.uncovered > 0}
-            />
-            <Bucket label={copy('revoked')} value={coverage.revoked} warn={coverage.revoked > 0} />
+            <Bucket label={perSurvey ? copy('send.withoutCode') : copy('send.unregistered')} value={coverage.uncovered} />
+            <Bucket label={copy('revoked')} value={coverage.revoked} />
           </div>
           {progress !== null && <SendProgressLine progress={progress} copy={copy} />}
           {outcome !== null && progress === null && (
@@ -536,19 +538,19 @@ export function DistributionView({
           {invitations.invitations.length === 0 ? (
             progress === null && <p className="m-0 text-sm text-fg-secondary">{perSurvey ? copy('send.codesNone') : copy('send.sharedNone')}</p>
           ) : (
-            <div className="rounded-md border border-line-light">
+            <div className="overflow-hidden rounded-xl border border-line-panel">
               <Table className="min-w-[36rem] table-fixed text-sm" data-testid="invitation-table">
                 <colgroup>
                   {INVITATION_COLUMNS.map((width) => (
                     <col key={width} style={{ width }} />
                   ))}
                 </colgroup>
-                <TableHeader className="bg-surface-icon-box">
+                <TableHeader>
                   <TableRow>
-                    <TableHead scope="col" className={TH_CLASS}>{copy('person')}</TableHead>
-                    <TableHead scope="col" className={TH_CLASS}>{copy('email')}</TableHead>
-                    <TableHead scope="col" className={TH_CLASS}>{copy('department')}</TableHead>
-                    <TableHead scope="col" className={TH_CLASS}>{copy('state')}</TableHead>
+                    <TableHead scope="col">{copy('person')}</TableHead>
+                    <TableHead scope="col">{copy('email')}</TableHead>
+                    <TableHead scope="col">{copy('department')}</TableHead>
+                    <TableHead scope="col">{copy('state')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -557,16 +559,16 @@ export function DistributionView({
                     const rowBusy = busy || busyInvitationId === invitation.id
                     const state = rowState(invitation, perSurvey)
                     return (
-                      <TableRow key={invitation.id} className="group/row border-t border-line-light">
-                        <TableCell className="truncate px-3 py-2 font-medium">{person?.name ?? '—'}</TableCell>
-                        <TableCell className="truncate px-3 py-2 font-mono text-xs text-fg-secondary">{invitation.email}</TableCell>
-                        <TableCell className="truncate px-3 py-2 text-fg-secondary">
+                      <TableRow key={invitation.id} className="group/row">
+                        <TableCell className="truncate font-medium">{person?.name ?? '—'}</TableCell>
+                        <TableCell className="truncate text-fg-secondary">{invitation.email}</TableCell>
+                        <TableCell className="truncate text-fg-secondary">
                           {person?.departmentId ? (departmentName.get(person.departmentId) ?? '—') : '—'}
                         </TableCell>
-                        <TableCell className="px-3 py-1.5">
+                        <TableCell className="py-1.5">
                           <span className="flex items-center justify-between gap-2">
                             <Chip
-                              tone={state.warn ? 'warning' : 'neutral'}
+                              tone="neutral"
                               label={state.key === null ? invitation.status : state.key.startsWith('send.') ? copy(state.key) : t(state.key)}
                             />
                             {actionable && (
@@ -609,15 +611,14 @@ export function DistributionView({
                 // The artboard's #6e648b line: `text-fg-label` (`--admin-font-section-label`), which
                 // clears AA in both palettes — 5.44:1 on the light card, 6.34:1 on the dark
                 // #1f173b — unlike `text-fg-tertiary`, which `respondContrast.test.ts` bans here.
-                <p data-testid="invitations-more" className="m-0 border-t border-line-light px-3 py-2 text-sm text-fg-label">
+                <p data-testid="invitations-more" className="m-0 border-t border-line-default px-4 py-2.5 text-sm text-fg-label">
                   {!showAll && `${copy('more', { count: invitations.invitations.length - INVITATION_PREVIEW_ROWS })} · `}
-                  {/* The artboard's link ink — `a { color: #4a3d72 }` in Distribution.dc.html, the
-                      secondary ink (tokens.css) — not the accent blue of the link variant; regular
-                      weight and no border, so the row is the artboard's 35px. */}
+                  {/* A text button in the action blue (the spec's `.btn.t`): it is the one thing on
+                      this line a reader can press. */}
                   <Button
                     type="button"
                     variant="link"
-                    className="h-auto border-0 p-0 text-sm font-normal text-fg-secondary"
+                    className="h-auto border-0 p-0 text-sm font-medium"
                     onClick={() => setShowAll(!showAll)}
                   >
                     {showAll ? copy('seeFewer') : copy('seeAll', { count: invitations.invitations.length })}
@@ -628,24 +629,15 @@ export function DistributionView({
           )}
         </Step>
 
-        <div
-          data-testid="guarantee"
-          className="flex items-start gap-3.5 rounded-lg border border-accent-green-ring bg-chip-good-fill px-5 py-4"
-        >
-          <IconBox>
-            {/* The artboard's shield is the good ink (#0f7f4e) in the lavender tile. */}
-            <ShieldCheck data-slot="guarantee-shield" className="text-chip-good-ink" />
-          </IconBox>
-          <div className="flex min-w-0 flex-col gap-1.5">
-            <p className="m-0 text-2xs font-bold uppercase leading-normal tracking-eyebrow text-chip-good-ink">
-              {invitations.anonymity.anonymous ? copy('guaranteeAnonymous') : copy('guaranteeRecorded')}
-            </p>
-            {/* The artboard's `.serif` at 18px: the headings' Goudy (`font-store-serif`; `font-serif`
-                is Tailwind's Georgia stack) at their 1.2 line height. */}
-            <p className="m-0 font-store-serif text-[1.125rem] leading-tight text-fg-primary">{invitations.anonymity.guarantee}</p>
-            <p className="m-0 text-sm text-fg-secondary">{copy('guaranteeSub', { floor: ANONYMITY_FLOOR })}</p>
-          </div>
-        </div>
+        {/* What this survey records, in the server's own sentence, on the quiet note fill. Not the
+            good-ink tint it used to wear: green is a result area, and this is a standing fact. */}
+        <Note data-testid="guarantee" icon={<ShieldCheck data-slot="guarantee-shield" />}>
+          <p className="m-0 text-2xs font-semibold uppercase leading-normal tracking-eyebrow text-fg-label">
+            {invitations.anonymity.anonymous ? copy('guaranteeAnonymous') : copy('guaranteeRecorded')}
+          </p>
+          <p className="m-0 mt-1 text-base text-fg-primary">{invitations.anonymity.guarantee}</p>
+          <p className="m-0 mt-1.5 text-sm text-fg-secondary">{copy('guaranteeSub', { floor: ANONYMITY_FLOOR })}</p>
+        </Note>
       </section>
 
       <Dialog open={audienceOpen} onOpenChange={setAudienceOpen}>
@@ -732,18 +724,19 @@ type Copy = (key: string, vars?: Record<string, string | number>) => string
  * email was deleted nothing is sent and `sentAt` is never written, so every row read "Sin enviar"
  * for ever.
  */
-function rowState(invitation: SurveyInvitationDetail, perSurvey: boolean): { key: string | null; warn: boolean } {
-  if (invitation.status === 'revoked') return { key: 'surveys.distribution.status.revoked', warn: true }
-  if (invitation.status === 'completed') return { key: 'surveys.distribution.status.completed', warn: false }
-  if (perSurvey) return invitation.hasCode ? { key: 'send.rowHasCode', warn: false } : { key: 'send.rowNoCode', warn: true }
-  return isKnownInvitationStatus(invitation.status) ? { key: 'send.rowInAudience', warn: false } : { key: null, warn: false }
+function rowState(invitation: SurveyInvitationDetail, perSurvey: boolean): { key: string | null } {
+  if (invitation.status === 'revoked') return { key: 'surveys.distribution.status.revoked' }
+  if (invitation.status === 'completed') return { key: 'surveys.distribution.status.completed' }
+  if (perSurvey) return invitation.hasCode ? { key: 'send.rowHasCode' } : { key: 'send.rowNoCode' }
+  return isKnownInvitationStatus(invitation.status) ? { key: 'send.rowInAudience' } : { key: null }
 }
 
 /** "Enviando códigos: 200 de 617…", with the meter, while a per-survey send is in flight. */
 function SendProgressLine({ progress, copy }: { progress: SendProgress; copy: Copy }) {
-  const percent = progress.total === null || progress.total === 0 ? 0 : Math.round((progress.done / progress.total) * 100)
+  // Floored: 616 of 617 is 99 %, never a rounded 100 % while someone is still waiting for a key.
+  const percent = progress.total === null || progress.total === 0 ? 0 : Math.floor((progress.done / progress.total) * 100)
   return (
-    <div role="status" data-testid="send-progress" className="flex flex-col gap-1.5 rounded-md border border-line-light px-3 py-2.5">
+    <div role="status" data-testid="send-progress" className="flex flex-col gap-1.5 rounded-xl bg-surface-fill-subtle px-4 py-3">
       <p className="m-0 text-sm font-medium text-fg-primary">
         {progress.total === null ? copy('send.progressStarting') : copy('send.progress', { done: progress.done, total: progress.total })}
       </p>
@@ -789,18 +782,30 @@ function SendOutcomePanel({
     <div
       role="status"
       data-testid="send-outcome"
-      className={cn(
-        'flex flex-col gap-2 rounded-md border px-3 py-2.5',
-        unfinished ? 'border-accent-amber-ring bg-chip-warning-fill' : 'border-line-light',
-      )}
+      data-unfinished={unfinished || undefined}
+      className="flex flex-col gap-2 rounded-xl bg-surface-fill-subtle px-4 py-3"
     >
-      <p className={cn('m-0 text-sm', unfinished ? 'text-chip-warning-ink' : 'text-fg-primary')}>{sentence}</p>
+      {/* Not amber: that is the Oportunidad area. An unfinished send is the page asking for work,
+          so it wears the missing step's mark — the AlertCircle in the action blue — and the
+          sentence goes semibold. A finished one carries a quiet check. The difference never rests
+          on weight alone. */}
+      <p className={cn('m-0 flex items-start gap-2 text-sm text-fg-primary', unfinished && 'font-semibold')}>
+        <span
+          aria-hidden="true"
+          data-slot="send-outcome-mark"
+          data-mark={unfinished ? 'unfinished' : 'finished'}
+          className={cn('mt-0.5 inline-flex shrink-0 [&>svg]:size-4', unfinished ? 'text-accent-blue' : 'text-fg-tertiary')}
+        >
+          {unfinished ? <AlertCircle /> : <Check />}
+        </span>
+        <span className="min-w-0">{sentence}</span>
+      </p>
       {outcome.failedEmails.length > 0 && (
         <div className="flex flex-col gap-1">
           <p className="m-0 text-sm font-medium text-fg-primary">{copy('send.failedTitle', { count: outcome.failedEmails.length })}</p>
           <ul className="m-0 flex list-none flex-col gap-0.5 p-0" data-testid="send-failed">
             {outcome.failedEmails.map((email) => (
-              <li key={email} className="break-all font-mono text-xs text-fg-secondary">
+              <li key={email} className="break-all text-sm text-fg-secondary">
                 {email}
               </li>
             ))}
@@ -846,22 +851,25 @@ function Step({
     <Card
       data-testid={testId}
       data-state={state}
-      className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3.5 gap-y-3 px-5 py-4 sm:grid-cols-[auto_minmax(0,1fr)_auto]"
+      className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3.5 gap-y-3 px-5 sm:grid-cols-[auto_minmax(0,1fr)_auto]"
     >
+      {/* The spec's step marks (`.step`): a met step is the label ink with the card's colour in
+          it, the step that asks for work is the action blue, and the rest sit on the grey fill.
+          The glyph differs in each, so the state never rests on colour alone. */}
       <span
         aria-hidden="true"
         className={cn(
-          'flex size-7 shrink-0 items-center justify-center rounded-full border [&>svg]:size-3.5',
-          state === 'done' && 'border-accent-green-ring bg-chip-good-fill text-chip-good-ink',
-          state === 'missing' && 'border-accent-amber-ring bg-chip-warning-fill text-chip-warning-ink',
-          (state === 'idle' || state === 'unknown') && 'border-line-default bg-surface-icon-box text-fg-secondary',
+          'flex size-7 shrink-0 items-center justify-center rounded-full [&>svg]:size-3.5',
+          state === 'done' && 'bg-fg-primary text-surface-card',
+          state === 'missing' && 'bg-accent-blue-fill text-fg-on-accent',
+          (state === 'idle' || state === 'unknown') && 'bg-surface-fill text-fg-secondary',
         )}
       >
         {state === 'done' ? <Check /> : state === 'missing' ? <AlertCircle /> : state === 'unknown' ? <HelpCircle /> : <Clock />}
       </span>
       <div className="flex min-w-0 flex-col gap-2" data-slot="step-body">
-        {/* 14px (`text-lg` in this scale), the artboard's step title — `text-base` is 13px. */}
-        <h3 className="m-0 text-lg font-semibold text-fg-primary">{title}</h3>
+        {/* The spec's `.h3`: 15px semibold sans. */}
+        <h3 className="m-0 mt-0.5 text-base font-semibold text-fg-primary">{title}</h3>
         {children}
       </div>
       {action && (
@@ -876,17 +884,16 @@ function Step({
   )
 }
 
-function Bucket({ label, value, warn = false }: { label: string; value: number; warn?: boolean }) {
+function Bucket({ label, value }: { label: string; value: number }) {
   return (
-    <div
-      className={cn(
-        'flex flex-col gap-0.5 rounded-md border px-3 py-2.5',
-        warn ? 'border-accent-amber-ring bg-chip-warning-fill' : 'border-line-light',
-      )}
-    >
-      {/* The artboard's bucket: a 10px label on 1.5 (15px) and a 20px mono reading on 1.1 (22px). */}
-      <span className={cn('text-2xs font-bold uppercase leading-normal tracking-wider', warn ? 'text-chip-warning-ink' : 'text-fg-label')}>{label}</span>
-      <span className={cn('font-mono text-2xl leading-[1.1] tabular-nums', warn ? 'text-chip-warning-ink' : 'text-fg-primary')}>{value}</span>
+    <div className="flex flex-col gap-1 rounded-lg bg-surface-fill-subtle px-3.5 py-3">
+      <span className="text-2xs font-semibold uppercase leading-normal tracking-tile text-fg-label">{label}</span>
+      <span className="text-2xl font-semibold leading-none tabular-nums text-fg-primary">{value}</span>
     </div>
   )
+}
+
+/** A KPI reading, marked so the page's tests read the figure apart from its unit. Null is a dash. */
+function Reading({ value }: { value: string | number | null }) {
+  return <span data-slot="reading">{value === null ? '—' : value}</span>
 }
