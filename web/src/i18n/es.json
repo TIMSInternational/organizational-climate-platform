@@ -4701,6 +4701,7 @@
         "closesInOne": "en 1 día",
         "closedAgo": "hace {days} días",
         "closedAgoOne": "hace 1 día",
+        "closesPassed": "Debía cerrar",
         "ready": "Lista para lanzar",
         "readyOf": "de {count} pasos",
         "missing": {

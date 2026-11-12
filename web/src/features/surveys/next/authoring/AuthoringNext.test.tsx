@@ -437,6 +437,19 @@ describe('Distribución (Distribution artboard)', () => {
     expect(guarantee.querySelector('[data-slot="guarantee-shield"]')).not.toBeNull()
   })
 
+  it('says an active survey past its date "debía cerrar", and only a closed one "cerró", as the detail page does', () => {
+    // An active survey still takes responses: "CERRÓ" over its tile contradicted "Activa".
+    distribution(invitationList(), 'company_admin', true, { survey: survey({ status: 'active', endDate: '2026-08-20T12:00:00Z' }) })
+    const live = screen.getByTestId('tile-closes').textContent ?? ''
+    expect(live).toContain('Debía cerrar')
+    expect(live).not.toContain('Cerró')
+    cleanup()
+    distribution(invitationList(), 'company_admin', true, { survey: survey({ status: 'closed', endDate: '2026-08-20T12:00:00Z' }) })
+    const closed = screen.getByTestId('tile-closes').textContent ?? ''
+    expect(closed).toContain('Cerró')
+    expect(closed).not.toContain('Debía cerrar')
+  })
+
   it('reads 3 of 3 with a working link and nobody invited yet, and keeps naming the audience', () => {
     // Was 3 of 4 with `invitations: missing`. The share link is a door, so the survey is
     // launchable and the checklist no longer says otherwise -- the change that stopped a

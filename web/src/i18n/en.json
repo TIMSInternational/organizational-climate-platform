@@ -4701,6 +4701,7 @@
         "closesInOne": "in 1 day",
         "closedAgo": "{days} days ago",
         "closedAgoOne": "1 day ago",
+        "closesPassed": "Was due to close",
         "ready": "Ready to launch",
         "readyOf": "of {count} steps",
         "missing": {
