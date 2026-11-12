@@ -278,7 +278,15 @@ export function DistributionView({
         </KpiCard>
         <KpiCard
           data-testid="tile-closes"
-          label={closesIn !== null && closesIn < 0 ? copy('closed') : copy('closes')}
+          label={
+            closesIn !== null && closesIn < 0
+              ? // Only a survey that actually closed "closed": an active one past its date still takes
+                // responses, and "Cerró" beside "Activa" said otherwise -- the detail page's rule.
+                survey.status === 'closed' || survey.status === 'archived'
+                ? copy('closed')
+                : copy('closesPassed')
+              : copy('closes')
+          }
           value={<Reading value={dayMonth(survey.endDate, locale)} />}
           footnote={
             closesIn === null
