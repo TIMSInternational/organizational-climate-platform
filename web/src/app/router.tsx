@@ -363,187 +363,196 @@ export const router = createBrowserRouter([
           {
             element: <AdminLayout />,
             children: [
-              // #132. One route for all four role dashboards: the page dispatches by
-              // role, and each role's endpoint refuses the other three, so there is no
-              // per-role route to gate and nothing a wrong guess here could leak.
-              { path: '/dashboard', element: <DashboardPage /> },
-              // The redesigned Empresas replaced `CompaniesListPage` here (the per-role
-              // canvas, 10 Sep); the old page stays in the tree unrouted, as the wiring
-              // reference. Super-only on the server, and the page says so to anyone else.
-              { path: '/admin/companies', element: <CompaniesListNextPage /> },
-              { path: '/admin/companies/:id', element: <CompanyDetailPage /> },
-              // The per-role canvas's Usuarios replaced `UsersListPage` here (10 Sep); the old page
-              // stays in the tree unrouted, as the wiring reference. `UsersNextPage` dispatches on the role.
-              { path: '/admin/companies/:companyId/users', element: <UsersNextPage /> },
-              // The per-role canvas's Campos demográficos replaced `DemographicFieldsPage` here (10 Sep);
-              // the old page stays unrouted as the wiring reference. `DemographicsNextPage` dispatches on the role.
-              { path: '/admin/companies/:companyId/demographic-fields', element: <DemographicsNextPage /> },
-              // The redesigned Informes replaced `ReportsListPage` here (ruled 10 Sep, the
-              // same swap as `/surveys`); the old page stays unrouted as the wiring reference.
-              { path: '/admin/companies/:companyId/reports', element: <ReportsListNextPage /> },
-              { path: '/admin/companies/:companyId/analytics', element: <AnalyticsNextPage /> },
-              // The redesigned Configuración del Sistema and Estado del sistema (the per-role
-              // canvas, 10 Sep) replaced SystemSettingsPage and SystemHealthPage here; the old
-              // pages stay in the tree unrouted, as the wiring reference. Super-only on the server.
-              { path: '/admin/system-settings', element: <SystemSettingsNextPage /> },
-              { path: '/admin/system', element: <SystemHealthNextPage /> },
-              // #114, the question BANK — not the question library, which is the
-              // authoring repository and now has its own route just below (#423).
-              // The two reach different tables on purpose; `questionBank.ts` and
-              // `QuestionBankEndpoints.cs` both say why.
-              //
-              // No route-level role gate, matching every sibling here: every
-              // `/admin/question-bank` route checks `Roles.Admin` and then scopes by
-              // role, so a leader or employee who typed the URL gets the page's own
-              // error state rather than another tenant's corpus. `navSections.ts` is
-              // what keeps it out of their sidebar.
-              // The page dispatches by role: the super administrator's platform-wide bank (the
-              // per-role canvas, 10 Sep) is its own view, `questions/next/super/SuperQuestionBankView`.
-              { path: '/admin/question-bank', element: <QuestionBankNextPage /> },
-              // #423, the question LIBRARY's authoring screen. Its endpoints have
-              // accepted POST and PUT since #112; until this route existed the only
-              // way to reach them was `curl` or SQL, because `/dev/question-library`
-              // is inside the `import.meta.env.DEV` guard and ships in no production
-              // build. PROCOMER's instrument had nowhere in the running app to go.
-              //
-              // Ungated at the route level for the same reason as its sibling above:
-              // every `/admin/question-*` endpoint checks `Roles.Admin` and then
-              // scopes by role, so a leader who typed the URL meets the page's own
-              // error state, never another tenant's corpus.
-              // The page dispatches by role: the super administrator's global catalogue (the
-              // per-role canvas, 10 Sep) is its own view, `questions/next/super/SuperQuestionLibraryView`.
-              { path: '/admin/question-library', element: <QuestionLibraryNextPage /> },
-              // G21, the audit log. Ungated at the route like its siblings: `GET /audit/logs`
-              // admits the two admin roles and 403s the rest, which the page says in Spanish.
-              { path: '/admin/audit', element: <AuditLogPage /> },
-              // Flat, with no company id in the path (#142), like /surveys and
-              // /action-plans: the page takes its company from `company-context`,
-              // so one route and one nav entry serve both admin roles.
-              { path: '/departments', element: <DepartmentsNextPage /> },
-              // The redesigned Planes de Acción replaced `ActionPlansListPage` here (ruled
-              // 10 Sep): a redesigned screen takes its real route, never a `/next` sibling.
-              // The old page stays in the tree, unrouted, as the wiring reference.
-              { path: '/action-plans', element: <ActionPlansListNextPage /> },
-              // The redesigned Detalle de plan replaced `ActionPlanDetailPage` here (the
-              // admin-gaps boards of 10 Sep); the old page stays in the tree, unrouted.
-              { path: '/action-plans/:id', element: <ActionPlanDetailNextPage /> },
-              // The redesigned Microclimas replaced `MicroclimatesListPage` here (the
-              // MicroclimatesList artboard, 10 Sep): a redesigned screen takes its real route,
-              // never a `/next` sibling. The old page stays in the tree, unrouted, as the
-              // wiring reference.
-              { path: '/microclimates', element: <MicroclimatesListNextPage /> },
-              // Before `/microclimates/:id` for readability only, same as
-              // `/surveys/my`: react-router ranks a static segment above a dynamic
-              // one whatever the declaration order, so `new` can never be parsed as
-              // a microclimate id.
-              // Crear, Analítica, Detalle and Resultados are the redesigned boards of 10 Sep,
-              // mounted on the real routes in place of the old pages, which stay in the tree
-              // unrouted as the wiring reference. No `/next` sibling exists or may.
-              { path: '/microclimates/new', element: <MicroclimateCreateNextPage /> },
-              { path: '/microclimates/analytics', element: <MicroclimateAnalyticsNextPage /> },
-              { path: '/microclimates/:id', element: <MicroclimateDetailNextPage /> },
-              // No nav entry, deliberately: both are per-session destinations reached
-              // from the session, not places in the sidebar. Same rule as
-              // `/surveys/:id/results`.
-              // The redesigned live session (MicroclimateLive, 10 Sep) replaced
-              // `MicroclimateLivePage` here; the old page stays unrouted as the wiring reference.
-              { path: '/microclimates/:id/live', element: <MicroclimateLiveNextPage /> },
-              { path: '/microclimates/:id/results', element: <MicroclimateResultsNextPage /> },
-              { path: '/microclimates/:id/edit', element: <MicroclimateCreateNextPage /> },
-              // The redesigned Todas las Encuestas replaced `SurveysListPage` on this route
-              // (ruled 10 Sep). The old page stays in the tree, unrouted, as the wiring
-              // reference — its module comment says what it still pins.
-              { path: '/surveys', element: <SurveysListNextPage /> },
-              // Before `/surveys/:id` for the same static-beats-dynamic reason the
-              // two entries below record: `new` is a literal segment and could never
-              // be read as a survey id, so the order is readability only.
-              // The redesigned builder replaced the step-by-step wizard here (ruled 10 Sep); the old
-              // `pages/SurveyCreatePage.tsx` stays unrouted as the wiring reference.
-              { path: '/surveys/import', element: <ClimateWorkbookPage /> },
-              { path: '/surveys/new', element: <SurveyBuilderNextPage /> },
-              // Before `/surveys/:id` for readability only -- react-router ranks a
-              // static segment above a dynamic one regardless of declaration order,
-              // so `/surveys/my` could never be swallowed as an id. (The API relies
-              // on the same property, via the `:guid` route constraint.)
-              //
-              // Not gated beyond RequireAuth: `/surveys/my` scopes itself to the
-              // caller's own user row and reads no role claim, so employee,
-              // supervisor and leader can all load it. See MySurveysNextPage.tsx.
-              { path: '/surveys/my', element: <MySurveysNextPage /> },
-              // Same static-beats-dynamic ranking as `/surveys/my`, so `templates`
-              // is never parsed as a survey id.
-              { path: '/surveys/templates', element: <SurveyTemplatesNextPage /> },
-              { path: '/surveys/templates/:id', element: <TemplateDetailNextPage /> },
-              // Same static-beats-dynamic ranking again, so `climate-trends` is never
-              // parsed as a survey id. Unlike `/surveys/:id/results` this one IS in the
-              // sidebar: it is a company-level reading rather than a per-survey
-              // destination, and there is no survey to reach it from.
-              // The redesigned Clima en el tiempo replaced `ClimateTrendsPage` here (same
-              // ruling as `/surveys`); the old page stays unrouted as the wiring reference.
-              { path: '/surveys/climate-trends', element: <ClimateTrendsNextPage /> },
-              // Same ruling: the redesigned Detalle de encuesta; `pages/SurveyDetailPage.tsx` stays
-              // unrouted as the wiring reference.
-              { path: '/surveys/:id', element: <SurveyDetailNextPage /> },
-              // `/surveys/:id/respond` used to be declared here. It is now a sibling
-              // of this whole `AdminLayout` branch, one level up — see the comment
-              // beside it for why the respondent surface is not in the admin shell.
-              // No nav entry, deliberately: this is a per-survey destination reached from
-              // a survey, not a place in the sidebar. `/surveys` and `/surveys/:id` are
-              // #109's; this route only needs to exist beneath one of them.
-              // The redesigned results replaced the current page here (ruled 10 Sep);
-              // `pages/SurveyResultsPage.tsx` stays in the tree unrouted, as the wiring
-              // reference — its header says until when.
-              { path: '/surveys/:id/results', element: <SurveyResultsNextPage /> },
-              // G17. Same rule as results: a per-survey destination, reached from the survey's
-              // detail page ("Historial"), no nav entry. The page asks the API, which admits only
-              // `CanAdminister`, and renders its refusal.
-              { path: '/surveys/:id/history', element: <SurveyHistoryPage /> },
-              // #273. Same rule as `/surveys/:id/results` above: no nav entry, because it
-              // is a per-survey destination reached from a survey. The way in is on
-              // `SurveyDetailPage`, offered only when the survey can actually be edited —
-              // but the page defends itself anyway, since this URL is typeable and the
-              // server's second refusal (any response row exists) cannot be predicted from
-              // a read.
-              { path: '/surveys/:id/questions', element: <SurveyQuestionsEditorPage /> },
-              // Not under /admin, and gated by nothing beyond RequireAuth: every
-              // authenticated role — plain employees included — owns a profile, and
-              // every endpoint behind this page resolves the caller from their own
-              // token and takes no user id at all (#136).
-              // The per-role canvas's Tu perfil replaced `ProfilePage` here (10 Sep); the old page
-              // stays unrouted as the wiring reference.
-              { path: '/profile', element: <ProfileNextPage /> },
-              // Not under /admin: every authenticated role owns their own preferences,
-              // and the API behind this page takes no user id at all (#103).
-              // Replaced `NotificationPreferencesPage` (10 Sep); the old page stays unrouted.
-              { path: '/settings/notifications', element: <NotificationPreferencesNextPage /> },
-              // #137, and gated the same way for the same reason. `GET /gdpr/access` with
-              // no `userId` is the self-service case and needs no role — the handler says
-              // so — so every authenticated role reaches this page and none of them can
-              // ask it about anybody else. Under `/settings` beside notification
-              // preferences rather than under `/admin`: the erasure endpoint IS admin
-              // surface, but nothing on this page calls it.
-              // Replaced `PrivacySettingsPage` (10 Sep); the old page and its panels stay unrouted.
-              { path: '/settings/privacy', element: <PrivacyNextPage /> },
-              // Self-service, so no role gate beyond RequireAuth: /notifications/mine
-              // is scoped per user and every authenticated role can load it.
-              { path: '/notifications', element: <NotificationsNextPage /> },
-              // Reached from a survey, not from the sidebar: distribution is an action on
-              // one survey rather than a destination, so it gets a route and no nav entry.
-              // Same ruling: the redesigned launch checklist; `pages/SurveyDistributionPage.tsx` stays
-              // unrouted as the wiring reference.
-              { path: '/surveys/:surveyId/distribution', element: <SurveyDistributionNextPage /> },
-              // The redesigned Puntos de Referencia replaced `BenchmarksPage` here (ruled
-              // 10 Sep); the old page stays unrouted as the wiring reference.
-              { path: '/analytics/benchmarks', element: <BenchmarksNextPage /> },
-              // The page dispatches by role: the super administrator's choose-a-company state and
-              // cross-tenant reading (the per-role canvas, 10 Sep) are its own view, `analytics/next/super/SuperAIInsightsView`.
-              { path: '/analytics/ai-insights', element: <AIInsightsNextPage /> },
-              // The tracking module (#125, #126). Inside `AdminLayout` like every
-              // other work surface — these are administration screens, not a
-              // respondent flow — and gated by nothing beyond `RequireAuth`,
-              // because each page reads its own role claim and the tracking
-              // service authorizes every call itself. See `trackingRoutes` above.
-              ...trackingRoutes,
+              {
+                // A page that throws inside the shell keeps the shell: this pathless route
+                // renders its `errorElement` in place of the page only, so the rail, the bar
+                // and the content box stay — see `RouteErrorBoundary`. The root route's
+                // boundary still catches everything outside `AdminLayout`.
+                errorElement: <RouteErrorBoundary placement="shell" />,
+                children: [
+                  // #132. One route for all four role dashboards: the page dispatches by
+                  // role, and each role's endpoint refuses the other three, so there is no
+                  // per-role route to gate and nothing a wrong guess here could leak.
+                  { path: '/dashboard', element: <DashboardPage /> },
+                  // The redesigned Empresas replaced `CompaniesListPage` here (the per-role
+                  // canvas, 10 Sep); the old page stays in the tree unrouted, as the wiring
+                  // reference. Super-only on the server, and the page says so to anyone else.
+                  { path: '/admin/companies', element: <CompaniesListNextPage /> },
+                  { path: '/admin/companies/:id', element: <CompanyDetailPage /> },
+                  // The per-role canvas's Usuarios replaced `UsersListPage` here (10 Sep); the old page
+                  // stays in the tree unrouted, as the wiring reference. `UsersNextPage` dispatches on the role.
+                  { path: '/admin/companies/:companyId/users', element: <UsersNextPage /> },
+                  // The per-role canvas's Campos demográficos replaced `DemographicFieldsPage` here (10 Sep);
+                  // the old page stays unrouted as the wiring reference. `DemographicsNextPage` dispatches on the role.
+                  { path: '/admin/companies/:companyId/demographic-fields', element: <DemographicsNextPage /> },
+                  // The redesigned Informes replaced `ReportsListPage` here (ruled 10 Sep, the
+                  // same swap as `/surveys`); the old page stays unrouted as the wiring reference.
+                  { path: '/admin/companies/:companyId/reports', element: <ReportsListNextPage /> },
+                  { path: '/admin/companies/:companyId/analytics', element: <AnalyticsNextPage /> },
+                  // The redesigned Configuración del Sistema and Estado del sistema (the per-role
+                  // canvas, 10 Sep) replaced SystemSettingsPage and SystemHealthPage here; the old
+                  // pages stay in the tree unrouted, as the wiring reference. Super-only on the server.
+                  { path: '/admin/system-settings', element: <SystemSettingsNextPage /> },
+                  { path: '/admin/system', element: <SystemHealthNextPage /> },
+                  // #114, the question BANK — not the question library, which is the
+                  // authoring repository and now has its own route just below (#423).
+                  // The two reach different tables on purpose; `questionBank.ts` and
+                  // `QuestionBankEndpoints.cs` both say why.
+                  //
+                  // No route-level role gate, matching every sibling here: every
+                  // `/admin/question-bank` route checks `Roles.Admin` and then scopes by
+                  // role, so a leader or employee who typed the URL gets the page's own
+                  // error state rather than another tenant's corpus. `navSections.ts` is
+                  // what keeps it out of their sidebar.
+                  // The page dispatches by role: the super administrator's platform-wide bank (the
+                  // per-role canvas, 10 Sep) is its own view, `questions/next/super/SuperQuestionBankView`.
+                  { path: '/admin/question-bank', element: <QuestionBankNextPage /> },
+                  // #423, the question LIBRARY's authoring screen. Its endpoints have
+                  // accepted POST and PUT since #112; until this route existed the only
+                  // way to reach them was `curl` or SQL, because `/dev/question-library`
+                  // is inside the `import.meta.env.DEV` guard and ships in no production
+                  // build. PROCOMER's instrument had nowhere in the running app to go.
+                  //
+                  // Ungated at the route level for the same reason as its sibling above:
+                  // every `/admin/question-*` endpoint checks `Roles.Admin` and then
+                  // scopes by role, so a leader who typed the URL meets the page's own
+                  // error state, never another tenant's corpus.
+                  // The page dispatches by role: the super administrator's global catalogue (the
+                  // per-role canvas, 10 Sep) is its own view, `questions/next/super/SuperQuestionLibraryView`.
+                  { path: '/admin/question-library', element: <QuestionLibraryNextPage /> },
+                  // G21, the audit log. Ungated at the route like its siblings: `GET /audit/logs`
+                  // admits the two admin roles and 403s the rest, which the page says in Spanish.
+                  { path: '/admin/audit', element: <AuditLogPage /> },
+                  // Flat, with no company id in the path (#142), like /surveys and
+                  // /action-plans: the page takes its company from `company-context`,
+                  // so one route and one nav entry serve both admin roles.
+                  { path: '/departments', element: <DepartmentsNextPage /> },
+                  // The redesigned Planes de Acción replaced `ActionPlansListPage` here (ruled
+                  // 10 Sep): a redesigned screen takes its real route, never a `/next` sibling.
+                  // The old page stays in the tree, unrouted, as the wiring reference.
+                  { path: '/action-plans', element: <ActionPlansListNextPage /> },
+                  // The redesigned Detalle de plan replaced `ActionPlanDetailPage` here (the
+                  // admin-gaps boards of 10 Sep); the old page stays in the tree, unrouted.
+                  { path: '/action-plans/:id', element: <ActionPlanDetailNextPage /> },
+                  // The redesigned Microclimas replaced `MicroclimatesListPage` here (the
+                  // MicroclimatesList artboard, 10 Sep): a redesigned screen takes its real route,
+                  // never a `/next` sibling. The old page stays in the tree, unrouted, as the
+                  // wiring reference.
+                  { path: '/microclimates', element: <MicroclimatesListNextPage /> },
+                  // Before `/microclimates/:id` for readability only, same as
+                  // `/surveys/my`: react-router ranks a static segment above a dynamic
+                  // one whatever the declaration order, so `new` can never be parsed as
+                  // a microclimate id.
+                  // Crear, Analítica, Detalle and Resultados are the redesigned boards of 10 Sep,
+                  // mounted on the real routes in place of the old pages, which stay in the tree
+                  // unrouted as the wiring reference. No `/next` sibling exists or may.
+                  { path: '/microclimates/new', element: <MicroclimateCreateNextPage /> },
+                  { path: '/microclimates/analytics', element: <MicroclimateAnalyticsNextPage /> },
+                  { path: '/microclimates/:id', element: <MicroclimateDetailNextPage /> },
+                  // No nav entry, deliberately: both are per-session destinations reached
+                  // from the session, not places in the sidebar. Same rule as
+                  // `/surveys/:id/results`.
+                  // The redesigned live session (MicroclimateLive, 10 Sep) replaced
+                  // `MicroclimateLivePage` here; the old page stays unrouted as the wiring reference.
+                  { path: '/microclimates/:id/live', element: <MicroclimateLiveNextPage /> },
+                  { path: '/microclimates/:id/results', element: <MicroclimateResultsNextPage /> },
+                  { path: '/microclimates/:id/edit', element: <MicroclimateCreateNextPage /> },
+                  // The redesigned Todas las Encuestas replaced `SurveysListPage` on this route
+                  // (ruled 10 Sep). The old page stays in the tree, unrouted, as the wiring
+                  // reference — its module comment says what it still pins.
+                  { path: '/surveys', element: <SurveysListNextPage /> },
+                  // Before `/surveys/:id` for the same static-beats-dynamic reason the
+                  // two entries below record: `new` is a literal segment and could never
+                  // be read as a survey id, so the order is readability only.
+                  // The redesigned builder replaced the step-by-step wizard here (ruled 10 Sep); the old
+                  // `pages/SurveyCreatePage.tsx` stays unrouted as the wiring reference.
+                  { path: '/surveys/import', element: <ClimateWorkbookPage /> },
+                  { path: '/surveys/new', element: <SurveyBuilderNextPage /> },
+                  // Before `/surveys/:id` for readability only -- react-router ranks a
+                  // static segment above a dynamic one regardless of declaration order,
+                  // so `/surveys/my` could never be swallowed as an id. (The API relies
+                  // on the same property, via the `:guid` route constraint.)
+                  //
+                  // Not gated beyond RequireAuth: `/surveys/my` scopes itself to the
+                  // caller's own user row and reads no role claim, so employee,
+                  // supervisor and leader can all load it. See MySurveysNextPage.tsx.
+                  { path: '/surveys/my', element: <MySurveysNextPage /> },
+                  // Same static-beats-dynamic ranking as `/surveys/my`, so `templates`
+                  // is never parsed as a survey id.
+                  { path: '/surveys/templates', element: <SurveyTemplatesNextPage /> },
+                  { path: '/surveys/templates/:id', element: <TemplateDetailNextPage /> },
+                  // Same static-beats-dynamic ranking again, so `climate-trends` is never
+                  // parsed as a survey id. Unlike `/surveys/:id/results` this one IS in the
+                  // sidebar: it is a company-level reading rather than a per-survey
+                  // destination, and there is no survey to reach it from.
+                  // The redesigned Clima en el tiempo replaced `ClimateTrendsPage` here (same
+                  // ruling as `/surveys`); the old page stays unrouted as the wiring reference.
+                  { path: '/surveys/climate-trends', element: <ClimateTrendsNextPage /> },
+                  // Same ruling: the redesigned Detalle de encuesta; `pages/SurveyDetailPage.tsx` stays
+                  // unrouted as the wiring reference.
+                  { path: '/surveys/:id', element: <SurveyDetailNextPage /> },
+                  // `/surveys/:id/respond` used to be declared here. It is now a sibling
+                  // of this whole `AdminLayout` branch, one level up — see the comment
+                  // beside it for why the respondent surface is not in the admin shell.
+                  // No nav entry, deliberately: this is a per-survey destination reached from
+                  // a survey, not a place in the sidebar. `/surveys` and `/surveys/:id` are
+                  // #109's; this route only needs to exist beneath one of them.
+                  // The redesigned results replaced the current page here (ruled 10 Sep);
+                  // `pages/SurveyResultsPage.tsx` stays in the tree unrouted, as the wiring
+                  // reference — its header says until when.
+                  { path: '/surveys/:id/results', element: <SurveyResultsNextPage /> },
+                  // G17. Same rule as results: a per-survey destination, reached from the survey's
+                  // detail page ("Historial"), no nav entry. The page asks the API, which admits only
+                  // `CanAdminister`, and renders its refusal.
+                  { path: '/surveys/:id/history', element: <SurveyHistoryPage /> },
+                  // #273. Same rule as `/surveys/:id/results` above: no nav entry, because it
+                  // is a per-survey destination reached from a survey. The way in is on
+                  // `SurveyDetailPage`, offered only when the survey can actually be edited —
+                  // but the page defends itself anyway, since this URL is typeable and the
+                  // server's second refusal (any response row exists) cannot be predicted from
+                  // a read.
+                  { path: '/surveys/:id/questions', element: <SurveyQuestionsEditorPage /> },
+                  // Not under /admin, and gated by nothing beyond RequireAuth: every
+                  // authenticated role — plain employees included — owns a profile, and
+                  // every endpoint behind this page resolves the caller from their own
+                  // token and takes no user id at all (#136).
+                  // The per-role canvas's Tu perfil replaced `ProfilePage` here (10 Sep); the old page
+                  // stays unrouted as the wiring reference.
+                  { path: '/profile', element: <ProfileNextPage /> },
+                  // Not under /admin: every authenticated role owns their own preferences,
+                  // and the API behind this page takes no user id at all (#103).
+                  // Replaced `NotificationPreferencesPage` (10 Sep); the old page stays unrouted.
+                  { path: '/settings/notifications', element: <NotificationPreferencesNextPage /> },
+                  // #137, and gated the same way for the same reason. `GET /gdpr/access` with
+                  // no `userId` is the self-service case and needs no role — the handler says
+                  // so — so every authenticated role reaches this page and none of them can
+                  // ask it about anybody else. Under `/settings` beside notification
+                  // preferences rather than under `/admin`: the erasure endpoint IS admin
+                  // surface, but nothing on this page calls it.
+                  // Replaced `PrivacySettingsPage` (10 Sep); the old page and its panels stay unrouted.
+                  { path: '/settings/privacy', element: <PrivacyNextPage /> },
+                  // Self-service, so no role gate beyond RequireAuth: /notifications/mine
+                  // is scoped per user and every authenticated role can load it.
+                  { path: '/notifications', element: <NotificationsNextPage /> },
+                  // Reached from a survey, not from the sidebar: distribution is an action on
+                  // one survey rather than a destination, so it gets a route and no nav entry.
+                  // Same ruling: the redesigned launch checklist; `pages/SurveyDistributionPage.tsx` stays
+                  // unrouted as the wiring reference.
+                  { path: '/surveys/:surveyId/distribution', element: <SurveyDistributionNextPage /> },
+                  // The redesigned Puntos de Referencia replaced `BenchmarksPage` here (ruled
+                  // 10 Sep); the old page stays unrouted as the wiring reference.
+                  { path: '/analytics/benchmarks', element: <BenchmarksNextPage /> },
+                  // The page dispatches by role: the super administrator's choose-a-company state and
+                  // cross-tenant reading (the per-role canvas, 10 Sep) are its own view, `analytics/next/super/SuperAIInsightsView`.
+                  { path: '/analytics/ai-insights', element: <AIInsightsNextPage /> },
+                  // The tracking module (#125, #126). Inside `AdminLayout` like every
+                  // other work surface — these are administration screens, not a
+                  // respondent flow — and gated by nothing beyond `RequireAuth`,
+                  // because each page reads its own role claim and the tracking
+                  // service authorizes every call itself. See `trackingRoutes` above.
+                  ...trackingRoutes,
+                ],
+              },
             ],
           },
         ],

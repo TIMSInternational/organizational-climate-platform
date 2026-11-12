@@ -59,6 +59,14 @@ export interface NavItem {
    * length, so a row whose `href` is the more specific match still wins.
    */
   activeUnder?: readonly string[]
+  /**
+   * Paths under this row's `href` that are NOT this row's — another destination that merely
+   * shares the prefix, and that this role's rail has no row for. `/surveys/my` sits under
+   * `/surveys` but is "Mis encuestas", not "Todas las encuestas": an administrator who opens
+   * it from a link must see no row lit rather than the wrong one (HIG `sidebars.md`: the
+   * selected row says where you are).
+   */
+  activeExcept?: readonly string[]
 }
 
 export interface NavSection {
@@ -139,6 +147,8 @@ const SURVEYS_ITEM: NavItem = {
   labelKey: 'navigation.surveys',
   href: '/surveys',
   icon: RailSurveysIcon,
+  // The admin rails carry no "Mis encuestas"; where a rail does, its own longer href wins.
+  activeExcept: ['/surveys/my'],
 }
 
 // The template catalogue (#107's endpoints, #109's page). `GET /survey-templates` gates on
@@ -195,6 +205,8 @@ const TRACKING_CONSOLIDADO_ITEM: NavItem = {
   labelKey: 'navigation.trackingConsolidado',
   href: '/tracking',
   icon: RailConsolidatedIcon,
+  // An administrator's own task list is not the consolidado; the admin rail has no row for it.
+  activeExcept: ['/tracking/mis-tareas'],
 }
 
 // A node leader's own board. Deliberately NOT offered to either admin role even though the
@@ -550,6 +562,7 @@ export function activeHref(pathname: string, sections: NavSection[]): string | n
   const rows = sections.flatMap((section) => section.items.flatMap((item) => [item, ...(item.sub ?? [])]))
   let best: { href: string; weight: number } | null = null
   for (const row of rows) {
+    if (row.activeExcept?.some((except) => isUnder(pathname, except))) continue
     for (const path of [row.href, ...(row.activeUnder ?? [])]) {
       if (isUnder(pathname, path) && (best === null || path.length > best.weight)) best = { href: row.href, weight: path.length }
     }

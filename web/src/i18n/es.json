@@ -1737,6 +1737,11 @@
     "sessionExpired": "Tu sesión ha expirado. Por favor inicia sesión nuevamente.",
     "validationError": "Error de validación. Por favor verifica tus datos.",
     "somethingWentWrong": "Algo salió mal.",
+    "route": {
+      "title": "No se pudo mostrar esta página",
+      "body": "Ocurrió un error inesperado al abrir esta pantalla. Vuelva a intentarlo; si el problema continúa, regrese al inicio.",
+      "home": "Volver al inicio"
+    },
     "api": {
       "forbidden": "No tiene permiso para hacer esto. Si cree que debería tenerlo, consulte con su administrador.",
       "notFound": "No se encontró lo que busca. Es posible que se haya eliminado; recargue la página.",
@@ -1822,7 +1827,9 @@
     "english": "Inglés",
     "spanish": "Español",
     "switchLanguage": "Cambiar idioma",
-    "selectLanguage": "Seleccionar idioma"
+    "selectLanguage": "Seleccionar idioma",
+    "englishInSentence": "inglés",
+    "spanishInSentence": "español"
   },
   "microclimates": {
     "eyebrow": "Sesiones en vivo",

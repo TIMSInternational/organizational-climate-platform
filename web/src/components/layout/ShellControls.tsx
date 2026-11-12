@@ -8,7 +8,7 @@ import { getToken } from '../../auth/token'
 import { decodeJwtPayload } from '../../auth/jwt'
 import { showsOwnName } from '../../auth/ownName'
 import { readAdminThemeMode, setAdminThemeMode, type AdminThemeMode } from '../../theme/adminTheme'
-import { CHIP_SELECT_LABEL_STYLE, CHIP_SELECT_STYLE } from './chipSelectStyle'
+import { CHIP_SELECT_LABEL_CLASS, CHIP_SELECT_LABEL_STYLE, CHIP_SELECT_STYLE } from './chipSelectStyle'
 
 const THEME_MODES: readonly AdminThemeMode[] = ['light', 'dark', 'system']
 
@@ -48,6 +48,7 @@ export function ThemeSwitcher({
 
   return (
     <label
+      className={chip ? CHIP_SELECT_LABEL_CLASS : undefined}
       style={
         chip
           ? CHIP_SELECT_LABEL_STYLE
