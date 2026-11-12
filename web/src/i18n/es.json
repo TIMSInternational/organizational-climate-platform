@@ -8536,5 +8536,18 @@
       "admin__benchmark-groups__delete": "Eliminó un grupo de referencia",
       "admin__benchmark-groups__reading__read": "Comparó una empresa con un grupo de referencia"
     }
+  },
+  "ui": {
+    "protected": {
+      "short": "Menos de {floor}",
+      "long": "Grupo protegido: menos de {floor} respuestas",
+      "longOne": "Grupo protegido: menos de {floor} respuesta",
+      "noFloor": "Protegido",
+      "noFloorLong": "Grupo protegido: no se muestran sus respuestas"
+    },
+    "state": {
+      "loading": "Cargando…",
+      "retry": "Reintentar"
+    }
   }
 }

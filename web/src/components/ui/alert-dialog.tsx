@@ -1,7 +1,7 @@
 import * as AlertDialogPrimitive from '@radix-ui/react-alert-dialog'
 import type { ComponentProps } from 'react'
 import { cn } from '../../lib/cn'
-import { buttonVariants } from './buttonVariants'
+import { buttonVariants, type ButtonVariantProps } from './buttonVariants'
 
 /**
  * Ported from `climate-project/src/components/ui/alert-dialog.tsx`.
@@ -29,13 +29,16 @@ export function AlertDialogContent({
     <AlertDialogPrimitive.Portal>
       <AlertDialogPrimitive.Overlay
         data-slot="alert-dialog-overlay"
-        className="fixed inset-0 z-50 bg-surface-overlay data-[state=open]:animate-fade-in"
+        // The scrim, as `Dialog`'s: an alert must read as the one thing on screen, and the
+        // white veil it used (`bg-surface-overlay`) left the page competing with it.
+        className="fixed inset-0 z-50 bg-surface-scrim data-[state=open]:animate-fade-in"
       />
       <AlertDialogPrimitive.Content
         data-slot="alert-dialog-content"
         className={cn(
-          'fixed top-1/2 left-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2',
-          'gap-panel-gap rounded-xl border border-line-panel bg-surface-panel p-panel',
+          // `Dialog`'s sheet, narrower: an alert carries a sentence and two buttons.
+          'fixed top-1/2 left-1/2 z-50 grid w-11/12 max-w-120 -translate-x-1/2 -translate-y-1/2 sm:w-full',
+          'gap-4 rounded-sheet border border-line-panel bg-surface-card px-6 py-5.5',
           'text-fg-primary shadow-lg',
           'data-[state=open]:animate-scale-in',
           className,
@@ -67,7 +70,7 @@ export function AlertDialogTitle({
   return (
     <AlertDialogPrimitive.Title
       data-slot="alert-dialog-title"
-      className={cn('text-xl font-semibold leading-tight', className)}
+      className={cn('font-display text-2xl font-semibold leading-tight tracking-title', className)}
       {...props}
     />
   )
@@ -80,19 +83,27 @@ export function AlertDialogDescription({
   return (
     <AlertDialogPrimitive.Description
       data-slot="alert-dialog-description"
-      className={cn('text-sm text-fg-tertiary', className)}
+      className={cn('text-base text-fg-secondary', className)}
       {...props}
     />
   )
 }
 
+/**
+ * The answering action. `primary` by default; pass `variant="destructive"` when the action
+ * destroys something — HIG `buttons.md` § "Role": "Don't assign the primary role to a button
+ * that performs a destructive action, even if that action is the most likely choice."
+ */
 export function AlertDialogAction({
   className,
+  variant = 'primary',
   ...props
-}: ComponentProps<typeof AlertDialogPrimitive.Action>) {
+}: ComponentProps<typeof AlertDialogPrimitive.Action> & Pick<ButtonVariantProps, 'variant'>) {
   return (
     <AlertDialogPrimitive.Action
-      className={cn(buttonVariants({ variant: 'primary' }), className)}
+      data-slot="alert-dialog-action"
+      data-variant={variant}
+      className={cn(buttonVariants({ variant }), className)}
       {...props}
     />
   )
@@ -104,6 +115,7 @@ export function AlertDialogCancel({
 }: ComponentProps<typeof AlertDialogPrimitive.Cancel>) {
   return (
     <AlertDialogPrimitive.Cancel
+      data-slot="alert-dialog-cancel"
       className={cn(buttonVariants({ variant: 'outline' }), className)}
       {...props}
     />

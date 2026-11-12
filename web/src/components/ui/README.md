@@ -291,3 +291,51 @@ entire purpose is switching locale.
 `Omit<DayPickerProps, 'locale'>` collapses it into the no-mode branch and makes
 `<Calendar mode="range">` a type error; `CalendarProps` uses a distributive omit to
 keep each branch intact, with one documented cast on the rest-spread.
+
+---
+
+# The Apple design (11 Nov): the primitives drawn to `occ.css`
+
+The canvas's component classes, translated onto the token layer. What a page should reach for,
+and the one or two decisions per primitive that were measured rather than copied.
+
+| canvas | primitive | use |
+|---|---|---|
+| `.btn.p` | `<Button variant="primary">` | the one filled blue action of a view (`#2563eb`, white 5.17:1) |
+| `.btn` | `<Button>` / `variant="secondary"` / `"outline"` | the bordered neutral button |
+| `.btn.t` | `<Button variant="plain">` | tinted text, no ground (`#1d4ed8`) |
+| `.btn.d` | `<Button variant="destructive">` | the danger INK on the bordered button |
+| `.btn.lg` | `<Button size="lg">` | 44px |
+| `.seg` | `<SegmentedControl label value options onChange>` | a view/filter control: `role="group"` of `aria-pressed` buttons |
+| `.card` | `<Card>` + slots | bordered, flat, 18/20px padding, serif `CardTitle` |
+| `.card.kpi` | `<KpiCard label value unit? footnote?>` | 11px tracked eyebrow, 30px tabular reading |
+| `.tbl` | `<Table zebra?>`, `<TableHead numeric>`, `<TableCell numeric>` | 13px semibold head, 15px rows, right-aligned figures |
+| `.chip` | `<Chip label>` | neutral grey status |
+| `.chip.live` | `<Chip tone="live" label="Activa">` | the ONE blue status chip, with its dot |
+| `.chip.s/.o/.c` | `<Chip tone="good" / "warning" / "critical">` | the result areas; the glyph + name chip is `charts/BandChip` |
+| `.note` / `.note.info` | `<Note icon? tone="neutral" / "info">` | a standing fact about the screen; no `warn` (amber is Oportunidad) |
+| `.prot` | `<ProtectedState floor={payload.floor}>` | padlock + "Menos de {floor}"; takes no count |
+| `.sk` | `<LoadingState rows? label?>`, `<Skeleton>` | placeholder rows + one polite announcement |
+| — | `<ErrorState title onRetry? retryLabel?>` | a failure with its recovery action |
+| `.sheet` | `Dialog` / `AlertDialog` / `Sheet` | 16px radius, 22/24px padding, serif title, scrim |
+| `.tg` | `<Switch>` | 26×42, blue when on |
+| `.in` | `<Input>`, `<Textarea>`, `<SelectTrigger>` | 36px, 15px text, the 3:1 control edge |
+| `.meter` | `<Progress value>` | 6px, blue on the fill track |
+| `.scale` | `<SegmentedScale>` | the respondent's 1–5: 56px, chosen point blue |
+
+## Measured, and why it differs from the canvas
+
+- **Destructive is not a red fill.** White on the dark danger fill (`#ef4444`) is 3.76:1, under the
+  4.5:1 a 14px label needs; HIG `buttons.md` § "Role" keeps the primary (most prominent) style off
+  a destructive action. The danger ink on the bordered button is 6.25:1 light, 6.35:1 dark.
+- **The switch and the meter are the identity blue, not the fill blue.** Both are graphics with no
+  word on them. In dark, the fill blue `#2563eb` sits 2.36:1 from the switch's off track and 2.16:1
+  from the meter's track — under the 3:1 WCAG 1.4.11 asks. The identity blue: 4.79:1 and 4.39:1.
+  The fill blue is for surfaces that carry a white word (the primary button, the chosen scale point).
+- **The segmented control's track is the recessed tile, not `--fill`.** On `--fill` the chosen
+  segment (card ground) is darker than the track in dark, so it sinks instead of rising (HIG
+  `dark-mode.md`: elevated is brighter). A dedicated `--admin-bg-segment-on` token (white light,
+  `#3a4767` dark, the canvas's `--segon`) would let the track be `--fill`; that is a tokens change.
+- **Touch.** Every button size, the segmented control and the inputs grow to 44px under
+  `pointer-coarse` (HIG `buttons.md`: "a hit region of at least 44x44 pt"); the switch grows an
+  invisible hit ring instead, so its drawing does not change.

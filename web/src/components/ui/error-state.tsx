@@ -1,5 +1,6 @@
 import { AlertTriangleIcon, InboxIcon, WifiOffIcon } from 'lucide-react'
 import type { ComponentProps, ReactNode } from 'react'
+import { useTranslation } from '../../i18n'
 import { cn } from '../../lib/cn'
 import { Button } from './button'
 
@@ -44,6 +45,25 @@ export type ErrorStateProps = ComponentProps<'div'> & {
    * fixes. Only a page's primary empty state should set it.
    */
   fill?: boolean
+  /**
+   * The recovery action, when the failure can be retried: renders a bordered button that
+   * calls this. Ignored when `action` is given — that is the caller's own action.
+   *
+   * HIG `feedback.md` § "Best practices": "Show people when a command can't be carried out
+   * and help them understand why" — and, when it can be tried again, give them the way to.
+   */
+  onRetry?: () => void
+  /**
+   * The retry button's word. **Already translated.** Defaults to the catalogue's
+   * `ui.state.retry` ("Reintentar"), so a retry is never an untranslated English default.
+   */
+  retryLabel?: string
+}
+
+/** The catalogue's retry word — a component, so `useTranslation` runs only when it renders. */
+function DefaultRetryLabel() {
+  const { t } = useTranslation()
+  return <>{t('ui.state.retry')}</>
 }
 
 export function ErrorState({
@@ -53,6 +73,8 @@ export function ErrorState({
   icon,
   role = 'alert',
   fill = false,
+  onRetry,
+  retryLabel,
   className,
   // Destructured out rather than read off `props`: spreading `{...props}` after a
   // `style=` attribute puts the caller's `style` back on top and silently drops
@@ -86,10 +108,17 @@ export function ErrorState({
           about 70. `grid` alone would stretch the block; the cap needs the
           centring to stay centred once it stops stretching. */}
       <div className="grid max-w-prose justify-self-center gap-1">
-        <p className="text-lg font-medium text-fg-primary">{title}</p>
-        {description && <p className="text-sm text-fg-secondary">{description}</p>}
+        {/* 17px semibold over 15px secondary: a heading one step over the body and the
+            body itself, the Apple design's `h3` over `.sub`. */}
+        <p className="m-0 text-xl font-semibold text-fg-primary">{title}</p>
+        {description && <p className="m-0 text-base text-fg-secondary">{description}</p>}
       </div>
-      {action}
+      {action ??
+        (onRetry && (
+          <Button type="button" onClick={onRetry}>
+            {retryLabel ?? <DefaultRetryLabel />}
+          </Button>
+        ))}
     </div>
   )
 }
@@ -105,7 +134,7 @@ export function NetworkError({ onRetry, retryText, ...props }: NetworkErrorProps
       icon={<WifiOffIcon className="size-6" />}
       action={
         onRetry && retryText ? (
-          <Button variant="outline" onClick={onRetry}>
+          <Button type="button" variant="outline" onClick={onRetry}>
             {retryText}
           </Button>
         ) : undefined

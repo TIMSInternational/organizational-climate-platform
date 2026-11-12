@@ -167,3 +167,31 @@ describe('Dialog', () => {
     expect(screen.queryByRole('button', { name: 'Close' })).toBeNull()
   })
 })
+
+describe('Dialog, as the Apple design draws a sheet', () => {
+  it('is the sheet: 16px radius, 22px by 24px of padding, 560px wide, on the card ground', async () => {
+    render(<Example />)
+    await userEvent.click(screen.getByRole('button', { name: 'Open' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog.className.split(/\s+/)).toEqual(
+      expect.arrayContaining(['rounded-sheet', 'px-6', 'py-5.5', 'max-w-140', 'bg-surface-card', 'gap-4']),
+    )
+  })
+
+  it('sets its title in the title serif and its description at the body size', async () => {
+    render(<Example />)
+    await userEvent.click(screen.getByRole('button', { name: 'Open' }))
+    const title = await screen.findByText('Delete company')
+    expect(title.className.split(/\s+/)).toEqual(expect.arrayContaining(['font-display', 'text-2xl', 'tracking-title']))
+    expect(screen.getByText('This cannot be undone.').className.split(/\s+/)).toEqual(
+      expect.arrayContaining(['text-base', 'text-fg-secondary']),
+    )
+  })
+
+  it('gives the close button the 32px icon-button box, 44px under a finger', async () => {
+    render(<Example />)
+    await userEvent.click(screen.getByRole('button', { name: 'Open' }))
+    const close = await screen.findByRole('button', { name: 'Close' })
+    expect(close.className.split(/\s+/)).toEqual(expect.arrayContaining(['size-control-lg', 'pointer-coarse:size-11']))
+  })
+})

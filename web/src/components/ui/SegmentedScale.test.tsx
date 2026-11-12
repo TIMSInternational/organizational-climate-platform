@@ -248,18 +248,19 @@ describe('SegmentedScale', () => {
   })
 
   /**
-   * The canvas's chosen point (RespondSurveyPhone, 10 Sep): filled with the INK, the
-   * number in the card colour — `#110a29` behind white in light. Not the accent fill: that
-   * is the red of "Siguiente" beside it, and a scale point in the primary action's red read
-   * as a second call to action. `respondContrast.test.ts` measures the swapped pair in
-   * both themes. Asserted on the split class list so a substring cannot satisfy it.
+   * The Apple design's chosen point (`.scale button[aria-pressed=true]`): the action blue
+   * with a white number — the fill blue, the one surface `tokens.css` lets the on-accent ink
+   * sit on (5.17:1), and NOT the identity blue (4.02:1 with white in light). Blue because a
+   * chosen point is a selection (the user's ruling of 11 Nov). Asserted on the split class
+   * list so a substring cannot satisfy it.
    */
-  it('fills the chosen segment with the ink, never with the primary action’s red', () => {
+  it('fills the chosen segment with the action blue and a white number', () => {
     renderScale({ value: '4' })
     const classes = screen.getByRole('radio', { name: '4' }).className.split(/\s+/)
-    expect(classes).toContain('bg-fg-primary')
-    expect(classes).toContain('text-surface-card')
-    expect(classes).not.toContain('bg-accent-blue-fill')
+    expect(classes).toContain('bg-accent-blue-fill')
+    expect(classes).toContain('text-fg-on-accent')
+    expect(classes).not.toContain('bg-accent-blue')
+    expect(classes).not.toContain('bg-fg-primary')
   })
 
   it('leaves the unchosen segments on the card surface in the ink', () => {
@@ -269,7 +270,7 @@ describe('SegmentedScale', () => {
     const classes = screen.getByRole('radio', { name: '2' }).className.split(/\s+/)
     expect(classes).toContain('bg-surface-card')
     expect(classes).toContain('text-fg-primary')
-    expect(classes).not.toContain('bg-fg-primary')
+    expect(classes).not.toContain('bg-accent-blue-fill')
   })
 
   /**
@@ -294,13 +295,13 @@ describe('SegmentedScale', () => {
     expect(screen.getByRole('radiogroup').className).not.toMatch(/outline-none/)
   })
 
-  it('gives every segment the canvas’s 52px target, past the 44px minimum', () => {
+  it('gives every segment the Apple design’s 56px target, past the 44px minimum', () => {
     // The reason the design replaced the radio row: a native radio is ~13px, far
     // under the WCAG 2.2 target minimum, on the screen most people answer on a
-    // phone. h-13 is 13 x the 4px --spacing token — the canvas's 52px box.
+    // phone. h-14 is 14 x the 4px --spacing token — the `.scale button`'s 56px box.
     renderScale()
     for (const radio of screen.getAllByRole('radio')) {
-      expect(radio.className.split(/\s+/)).toContain('h-13')
+      expect(radio.className.split(/\s+/)).toContain('h-14')
     }
   })
 

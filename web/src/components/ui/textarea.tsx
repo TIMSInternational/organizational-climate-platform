@@ -15,7 +15,8 @@ export function Textarea({ className, ...props }: TextareaProps) {
     <textarea
       data-slot="textarea"
       className={cn(
-        'field-sizing-content h-auto min-h-16 w-full py-2',
+        // The canvas's `textarea.in`: 9px by 12px, 1.45 leading.
+        'field-sizing-content h-auto min-h-16 w-full px-3 py-2.25 leading-normal',
         'rounded-md border border-line-control bg-surface-input text-base text-fg-primary',
         'placeholder:text-fg-tertiary',
         'hover:not-disabled:border-line-hover',
