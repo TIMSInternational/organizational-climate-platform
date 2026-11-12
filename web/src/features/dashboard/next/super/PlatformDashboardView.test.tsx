@@ -238,6 +238,9 @@ describe('PlatformDashboardView', () => {
     renderView()
     expect(await screen.findByText(copy.loadFailed)).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy()
+    // The 500 is said in the reader's words; the server's own "down" is never printed.
+    expect(screen.getByText(en.errors.api.server)).toBeTruthy()
+    expect(screen.queryByText('down')).toBeNull()
   })
 })
 

@@ -157,12 +157,13 @@ describe('AdminDashboardNextView', () => {
     const move = Math.round(latest * 200) / 10 - Math.round(previous * 200) / 10
     const sign = move > 0 ? '+' : ''
     expect(tile.querySelector('[data-slot="climate-move"]')?.textContent).toContain(`${sign}${move.toFixed(1)}`)
-    // Every trend card's headline figure is a whole 0–100 number: no 1–5 reading survives.
+    // Every trend card's headline figure is a 0–100 number at the KPI's own precision (one
+    // decimal on 0–100, the two of 1–5 less one): no 1–5 reading survives.
     const cards = document.querySelectorAll('[data-slot="trend-card"]')
     expect(cards.length).toBeGreaterThan(0)
     for (const card of cards) {
       const figure = card.querySelector('.text-reading')?.textContent ?? ''
-      expect(figure).toMatch(/^\d{2,3}$/)
+      expect(figure).toMatch(/^\d{2,3}\.\d$/)
       expect(Number(figure)).toBeGreaterThanOrEqual(20)
     }
   })
@@ -287,8 +288,10 @@ describe('AdminDashboardNextView', () => {
     // The band's width is a constant of the component, NOT this group's headcount.
     expect(withheld!.children.length).not.toBe(finance.responses)
     const row = withheld!.closest('div')!
-    expect(row.textContent).toContain(copy.protectedWord)
-    expect(row.textContent).not.toMatch(/\d/)
+    // "Fewer than 3": the floor is the one number the row may say, and it is not the count.
+    const said = copy.protectedWord.replace('{floor}', String(ANONYMITY_FLOOR))
+    expect(row.textContent).toContain(said)
+    expect(row.textContent!.replace(said, '')).not.toMatch(/\d/)
 
     // A disclosed group, by contrast, is drawn a mark per person and says its number.
     const disclosed = fullModel.map.rows.find((r) => r.responses >= ANONYMITY_FLOOR)!
@@ -331,13 +334,13 @@ describe('AdminDashboardNextView', () => {
     renderView(fullModel, undefined, live)
     const notices = document.querySelectorAll('[data-slot="region-fallback"]')
     expect(Array.from(notices).map((node) => node.getAttribute('data-region'))).toEqual(['map', 'microclimates'])
-    // The sentence names the region; the server's own reason follows on its own line.
+    // The sentence names the region; why follows on its own line, in the reader's words —
+    // never the server's own text, which is English and can carry paths and ids.
     expect(notices[0].querySelector('[data-slot="region-fallback-text"]')?.textContent).toBe(
       copy.unavailableRegion.replace('{region}', copy.regionMap),
     )
-    expect(notices[0].querySelector('[data-slot="region-fallback-reason"]')?.textContent).toBe(
-      copy.unavailableReason.replace('{error}', 'Service unavailable'),
-    )
+    expect(notices[0].querySelector('[data-slot="region-fallback-reason"]')?.textContent).toBe(copy.failureOther)
+    expect(notices[0].textContent).not.toContain('Service unavailable')
     expect(notices[1].textContent).toBe(copy.unavailableEmpty.replace('{region}', copy.regionMicroclimates))
     expect(notices[1].querySelector('[data-slot="region-fallback-reason"]')).toBeNull()
     // A status notice and nothing to press: the notice is a live region, and a control in it
@@ -347,6 +350,30 @@ describe('AdminDashboardNextView', () => {
     expect(notices[0].textContent).not.toContain('Sample data')
     // The map notice sits inside the map's own section.
     expect(notices[0].closest('section')?.getAttribute('aria-labelledby')).toBe('next-by-group')
+  })
+
+  it('says why a region failed by the cause, never by the server text', () => {
+    const regions: RegionStatuses = {
+      company: { status: 'live' },
+      surveys: { status: 'live' },
+      trends: { status: 'fallback', reason: 'failed', error: 'shot: no fixture for GET /surveys/climate-trends', cause: 'notFound' },
+      map: { status: 'fallback', reason: 'failed', error: 'Forbidden', cause: 'forbidden' },
+      actionPlans: { status: 'fallback', reason: 'failed', error: 'at Foo.Bar() in /src/x.cs', cause: 'server' },
+      tracking: { status: 'off' },
+      microclimates: { status: 'fallback', reason: 'failed', error: 'Failed to fetch', cause: 'network' },
+    }
+    renderView(fullModel, undefined, regions)
+    const reasons = Object.fromEntries(
+      [...document.querySelectorAll('[data-slot="region-fallback"]')].map((node) => [
+        node.getAttribute('data-region'),
+        node.querySelector('[data-slot="region-fallback-reason"]')?.textContent,
+      ]),
+    )
+    expect(reasons.map).toBe(copy.failureForbidden)
+    expect(reasons.microclimates).toBe(copy.failureNetwork)
+    for (const text of ['no fixture', 'Forbidden', 'Foo.Bar', 'Failed to fetch']) {
+      expect(document.body.textContent).not.toContain(text)
+    }
   })
 
   it('offers to create a plan when none covers the lowest cell, and says only what it knows about reminders', () => {
@@ -417,14 +444,17 @@ describe('AdminDashboardNextView', () => {
     expect(vi.mocked(downloadBlobFile)).not.toHaveBeenCalled()
   })
 
-  it('judges a card’s band at the decimal it prints: a 3.96 reads 4.0 and is in the strength area', () => {
+  it('judges a card’s band at the two decimals it prints: a 3.96 reads 3.96 and is in the opportunity area', () => {
     const dimensions = fullModel.dimensions.map((dimension) =>
       dimension.key === 'confianza' ? { ...dimension, values: [3.3, 3.6, 3.96] } : dimension,
     )
     renderView({ ...fullModel, dimensions })
     const card = document.querySelector('[data-slot="trend-card"][data-dimension="confianza"]') as HTMLElement
-    expect(card.textContent).toContain('4.0')
-    expect(card.getAttribute('data-band')).toBe('strength')
+    // Two decimals, as the climate range bar above prints the same reading: at one this
+    // card said "4.0" and Fortaleza beside a bar that said 3.96 and Oportunidad.
+    expect(card.querySelector('.text-reading')?.textContent).toBe('3.96')
+    expect(card.getAttribute('data-band')).toBe('opportunity')
+    expect(card.querySelector('[data-slot="trend-end"]')?.getAttribute('data-band')).toBe('opportunity')
   })
 
   it('draws the trend cards highest latest reading first, whatever order the model holds them in', () => {
@@ -555,13 +585,14 @@ describe('AdminDashboardNextView', () => {
     expect(heads.map((head) => head.getAttribute('title'))).toEqual(heads.map((head) => head.textContent))
   })
 
-  it('prints each card’s move as the difference of the readings it prints: 3,33 → 3,67 is +0,4', () => {
+  it('prints each card’s move as the difference of the readings it prints: 3,334 → 3,666 is +0,34', () => {
+    // Raw, 3.666 − 3.334 = 0.332 rounds to +0.33 beside two figures that subtract to 0.34.
     const dimensions = fullModel.dimensions.map((dimension) =>
-      dimension.key === 'confianza' ? { ...dimension, values: [2.96, 3.33, 3.67] } : dimension,
+      dimension.key === 'confianza' ? { ...dimension, values: [2.96, 3.334, 3.666] } : dimension,
     )
     renderView({ ...fullModel, dimensions })
     const card = document.querySelector('[data-slot="trend-card"][data-dimension="confianza"]') as HTMLElement
-    expect(card.querySelector('[data-slot="trend-move"]')?.textContent).toBe('+0.4')
+    expect(card.querySelector('[data-slot="trend-move"]')?.textContent).toBe('+0.34')
   })
 
   it('words the climate tile, the moves legend and the rail as the artboard does', () => {

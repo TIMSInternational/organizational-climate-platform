@@ -199,7 +199,10 @@ describe('LeaderDashboardView', () => {
   it("draws the artboard's regions: the team's place, the comparison, the plan and the open wave", () => {
     renderLeader()
 
-    expect(screen.getByRole('heading', { level: 1, name: en.dashboard.next.title })).toBeTruthy()
+    // Named for the team, as the rail's "Mi equipo" and the TeamHome board's "Su equipo":
+    // the admin's "Panel de control" did not say this page is one team's.
+    expect(screen.getByRole('heading', { level: 1, name: copy.title })).toBeTruthy()
+    expect(screen.queryByRole('heading', { level: 1, name: en.dashboard.next.title })).toBeNull()
     expect(screen.getByText(`Ingeniería · ${en.users.leader}`)).toBeTruthy()
     expect(screen.getByRole('heading', { level: 2, name: copy.whereHeading })).toBeTruthy()
     expect(screen.getByRole('heading', { level: 2, name: copy.compareHeading })).toBeTruthy()
@@ -230,34 +233,34 @@ describe('LeaderDashboardView', () => {
   })
 
   /**
-   * Seguridad psicológica: the team's 4,00 against the whole company's 3,75. The raw
-   * difference, 0,25, rounds to +0,3 beside two printed readings — 4,0 and 3,8 — that a reader
-   * subtracts to 0,2. The page prints the difference of what it prints.
+   * Seguridad psicológica: the team's 4,00 against the whole company's 3,75, at the two
+   * decimals the climate range bar prints on every home (fix round 1: the leader's bar said
+   * 4,3 where the admin's said 3,92). The move is the difference of what the page prints.
    */
   it('prints each move against the organisation as the difference of the printed readings', () => {
     renderLeader()
 
-    expect(rowReading('psychological_safety')).toBe('4.0')
+    expect(rowReading('psychological_safety')).toBe('4.00')
     const caption = (org: string, move: string) => copy.compareCaption.replace('{org}', org).replace('{move}', move)
-    expect(rowCaption('psychological_safety')).toBe(caption('3.8', '+0.2'))
-    // Pertenencia 4,33 against 4,00: +0,3. Reconocimiento 3,50 against 3,38: 3,5 − 3,4 = +0,1.
-    expect(rowCaption('belonging')).toBe(caption('4.0', '+0.3'))
-    expect(rowCaption('recognition')).toBe(caption('3.4', '+0.1'))
+    expect(rowCaption('psychological_safety')).toBe(caption('3.75', '+0.25'))
+    // Pertenencia 4,33 against 4,00: +0,33. Reconocimiento 3,50 against 3,38: +0,12.
+    expect(rowCaption('belonging')).toBe(caption('4.00', '+0.33'))
+    expect(rowCaption('recognition')).toBe(caption('3.38', '+0.12'))
     // The organisation's mean is the tick on the track, and named for AT.
     const track = dimensionCard('psychological_safety').querySelector('[role="img"]')!
     expect(track.querySelector('[data-comparison]')).not.toBeNull()
-    expect(track.getAttribute('aria-label')).toContain(`${copy.orgName} 3.8`)
+    expect(track.getAttribute('aria-label')).toContain(`${copy.orgName} 3.75`)
   })
 
   it('gives no move a colour or a sign: level is level', () => {
-    // Pertenencia 4,33 against a company 4,34: both print 4,3. Desarrollo 4,17 against 4,40:
-    // 4,2 − 4,4 = −0,2. The move is words in the caption's neutral ink: green and red are
+    // Pertenencia 4,33 against a company 4,334: both print 4,33. Desarrollo 4,17 against
+    // 4,40: −0,23. The move is words in the caption's neutral ink: green and red are
     // result areas (ruling 11 Nov), never a direction.
-    renderLeader({ dashboard: department({ climate: climate(Q3, { organization: organization([4.34, 4.4, 3.75, 3.38, 3.67, 3.33]) }) }) })
+    renderLeader({ dashboard: department({ climate: climate(Q3, { organization: organization([4.334, 4.4, 3.75, 3.38, 3.67, 3.33]) }) }) })
 
     const caption = (org: string, move: string) => copy.compareCaption.replace('{org}', org).replace('{move}', move)
-    expect(rowCaption('belonging')).toBe(caption('4.3', '0.0'))
-    expect(rowCaption('growth')).toBe(caption('4.4', '-0.2'))
+    expect(rowCaption('belonging')).toBe(caption('4.33', '0.00'))
+    expect(rowCaption('growth')).toBe(caption('4.40', '-0.23'))
     expect(dimensionCard('growth').innerHTML).not.toMatch(/accent-(green|red)/)
   })
 
@@ -405,7 +408,7 @@ describe('LeaderDashboardView', () => {
 
     for (const [index, key] of KEYS.entries()) {
       // The organisation's reading of each row, from `climate.organization` — the company's Q3.
-      const org = (Math.round((ORG_Q3[index] ?? 0) * 10) / 10).toFixed(1)
+      const org = (Math.round((ORG_Q3[index] ?? 0) * 100) / 100).toFixed(2)
       expect(rowCaption(key), key).toContain(`${copy.orgName} ${org}`)
       expect(dimensionCard(key).querySelector('[data-comparison]'), key).not.toBeNull()
     }

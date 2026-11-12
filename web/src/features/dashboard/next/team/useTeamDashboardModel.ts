@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from '../../../../i18n'
+import { describeApiError } from '../../../../api/describeApiError'
 import { isApiStatus } from '../../../../api/authFetch'
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { getDepartmentAdminDashboard, type DepartmentAdminDashboardResult } from '../../api/dashboard'
@@ -131,7 +132,8 @@ export function useLeaderDashboardModel(): TeamDashboardState<LeaderDashboardMod
   return {
     gate: bandsFailed ? 'failed' : gate,
     model,
-    error: bandsFailed ? t('resultBands.loadError') : department.error,
+    // Said in the reader's words by the failure's status, never the server's own text.
+    error: bandsFailed ? t('resultBands.loadError') : department.failed ? describeApiError(department.thrown, t) : null,
     reload: () => {
       bands.retry()
       reloadDepartment()
@@ -161,7 +163,7 @@ export function useLeaderDashboardModel(): TeamDashboardState<LeaderDashboardMod
  */
 export function useSupervisorDashboardModel(): TeamDashboardState<SupervisorDashboardModel> {
   const department = useDepartment()
-  const { locale } = useTranslation()
+  const { t, locale } = useTranslation()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const loadPending = useCallback(() => listMySurveys(baseUrl, locale), [baseUrl, locale])
   const pending = useDashboardData(loadPending)
@@ -193,7 +195,7 @@ export function useSupervisorDashboardModel(): TeamDashboardState<SupervisorDash
   return {
     gate: gateOf(department),
     model,
-    error: department.error,
+    error: department.failed ? describeApiError(department.thrown, t) : null,
     reload: () => {
       reloadDepartment()
       pending.reload()
