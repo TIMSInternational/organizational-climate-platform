@@ -397,7 +397,7 @@ function SettingsForm({
                   viewer and neither reading can be edited here — said to a screen reader. */}
               <span className="sr-only">{t(`${K}.companyHelp`)}</span>
             </Field>
-            <dl className="m-0 grid grid-cols-[minmax(7rem,10rem)_minmax(0,1fr)] gap-x-4 gap-y-2.25 border-t border-line-light pt-3 text-ui">
+            <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] sm:grid-cols-[minmax(7rem,10rem)_minmax(0,1fr)] gap-x-4 gap-y-2.25 border-t border-line-light pt-3 text-ui">
               <dt className="text-fg-secondary">{t(`${K}.departmentsReading`)}</dt>
               <dd className="m-0 tabular-nums">
                 {model.departments

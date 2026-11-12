@@ -429,7 +429,7 @@ function DepartmentsCard({ model }: { model: SuperCompanyDetailModel }) {
       <IconBox>
         <Network />
       </IconBox>
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+      <div className="flex min-w-48 flex-1 flex-col gap-0.5">
         <h2 id="detail-departments" className="m-0 text-2xl">
           {t('navigation.departments')}
         </h2>
@@ -608,7 +608,7 @@ function CompanyCard({
           </div>
         </Field>
       </div>
-      <dl className="m-0 grid grid-cols-[minmax(7rem,10rem)_minmax(0,1fr)] items-center gap-x-4 gap-y-2.25 border-t border-line-light pt-3 text-ui">
+      <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] sm:grid-cols-[minmax(7rem,10rem)_minmax(0,1fr)] items-center gap-x-4 gap-y-2.25 border-t border-line-light pt-3 text-ui">
         {readings.map((reading) => (
           <Fragment key={reading.key}>
             <dt className="text-fg-secondary">{reading.name}</dt>
