@@ -154,7 +154,9 @@ const SELF_SERVICE: readonly RoleCapability[] = [
     route: '/notifications',
     labelKey: 'notifications.title',
     authorizedBy: 'GET /notifications/mine — scoped to the caller’s own user id, never to a company or a role.',
-    inNav: true,
+    // Reached from the bell in the top bar ("Ver todas"), not from a rail row: the 11 Nov
+    // regroup moved it there, as the Apple-design boards draw it. Still every role's.
+    inNav: false,
   },
   {
     route: '/profile',

@@ -16,6 +16,8 @@
  */
 
 export { PageTopBar, type PageTopBarProps, type PageBreadcrumb } from './PageTopBar'
+export { PageHeader, type PageHeaderProps } from './PageHeader'
+export { CompanyScopeLabel, type CompanyScopeLabelProps } from './CompanyScopeLabel'
 export { CompanyLogo } from './CompanyLogo'
 export { PoweredByNexadev } from './PoweredByNexadev'
 export { MobileNav, type MobileNavProps } from './MobileNav'

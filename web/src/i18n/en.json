@@ -2613,7 +2613,28 @@
     "systemHealth": "System Health",
     "climateTrends": "Climate over time",
     "questionBank": "Question bank",
-    "questionLibrary": "Question library"
+    "questionLibrary": "Question library",
+    "sectionSurveys": "Surveys",
+    "sectionFollowUp": "Follow-up",
+    "sectionAnalytics": "Analytics",
+    "sectionOrganization": "Organization",
+    "sectionSystem": "System",
+    "homeDesc": "Main overview and KPIs",
+    "overviewDesc": "Benchmarks and AI findings for this company",
+    "templates": "Templates",
+    "templatesDesc": "Reusable survey templates",
+    "questions": "Questions",
+    "references": "Benchmarks",
+    "referencesDesc": "Benchmarks to compare results against",
+    "people": "People",
+    "peopleDesc": "The company's people and their access",
+    "companySettingsDesc": "Company-wide settings",
+    "systemConfiguration": "Settings",
+    "systemConfigurationDesc": "System-wide configuration",
+    "status": "Status",
+    "statusDesc": "Health of the system and its services",
+    "activity": "Activity",
+    "activityDesc": "Audit log: who did what, and when"
   },
   "notifications": {
     "eyebrow": "Inbox",
@@ -3114,7 +3135,9 @@
     "commandPaletteHint": "Type to filter, then press Enter to open a page.",
     "commandPaletteEmpty": "No results found.",
     "commandPaletteResults": "Results",
-    "roleWithDepartment": "{role} · {department}"
+    "roleWithDepartment": "{role} · {department}",
+    "companyScope": "Company:",
+    "companyAndDepartment": "{company} · {department}"
   },
   "success": {
     "saved": "Saved successfully",

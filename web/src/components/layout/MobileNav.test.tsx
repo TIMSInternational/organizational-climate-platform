@@ -50,53 +50,37 @@ describe('MobileNav', () => {
     expect(container.querySelector('nav')).toBeNull()
   })
 
-  it('gives a role with no admin pages a bar with their own three per-user pages', () => {
+  it('gives a role with no admin pages a bar with their own per-user pages', () => {
     renderNav(buildNavSections('employee', COMPANY))
     const bar = screen.getByRole('navigation')
-    // The "More" drawer trigger is always present; the destinations are the three
-    // pages that authorize per *user* rather than per role -- their dashboard
-    // (#132), their assigned surveys (#109) and their inbox (#99). Landing page
-    // first, then work destination, then inbox.
+    // Their home and their assigned surveys (#132, #109): both home rows, so both are tabs.
+    // The inbox left the nav for the bell in the top bar (11 Nov).
     const links = within(bar).getAllByRole('link')
-    expect(links).toHaveLength(3)
+    expect(links.map((link) => link.getAttribute('href'))).toEqual(['/dashboard', '/surveys/my'])
+  })
+
+  it('gives each section of the rail one tab, named for the section', () => {
+    // The bar is the rail's table of contents (`mobileTabs`): Inicio, then Encuestas,
+    // Seguimiento and Analítica, each leading to its section's first page. Taking the first
+    // four rows instead would have spent three tabs on Encuestas.
+    renderNav(companyAdminSections())
+    const bar = screen.getByRole('navigation')
+    const links = within(bar).getAllByRole('link')
+    expect(links.map((link) => link.textContent)).toEqual(['Home', 'Surveys', 'Follow-up', 'Analytics'])
     expect(links.map((link) => link.getAttribute('href'))).toEqual([
       '/dashboard',
-      '/surveys/my',
-      '/notifications',
+      '/surveys',
+      '/action-plans',
+      `/admin/companies/${COMPANY}/analytics`,
     ])
   })
 
-  it('fills its tab slots with leaf destinations, never with a group toggle', () => {
-    // "Company Administration" is a disclosure in the sidebar, not a page. Its
-    // three children are the real destinations.
-    //
-    // #132 put Dashboard in the first slot, which pushed Action Plans off the bar
-    // and into the drawer -- see the note on DASHBOARD_ITEM. That is the same
-    // flatten-in-order consequence the Microclimates test below records, applied
-    // deliberately this time: the bar has to be able to return to the page every
-    // role now lands on.
+  it('never spends a tab on a group toggle', () => {
+    // Preguntas is a disclosure in the sidebar, not a page.
     renderNav(companyAdminSections())
     const bar = screen.getByRole('navigation')
-    const labels = within(bar)
-      .getAllByRole('link')
-      .map((link) => link.textContent)
-
-    expect(labels).not.toContain('Company Administration')
-    expect(labels).toEqual(['Dashboard', 'Company Settings', 'Users', 'Demographic fields'])
-  })
-
-  it('pushes Microclimates off the bar, because three sub-items come before it', () => {
-    // Recorded rather than fixed. This is the legacy ordering: the flatten walks
-    // sections in order, so a group's children take slots before the top-level
-    // rows that follow it. The consequence is that a primary destination
-    // (Microclimates) is only in the drawer while a configuration page
-    // (Demographic fields) is on the bar. Reordering here would invent a
-    // navigation hierarchy that navSections.ts does not state; if the bar should
-    // be ranked rather than flattened, that belongs in navSections.ts as explicit
-    // data, and is worth its own issue.
-    renderNav(companyAdminSections())
-    const bar = screen.getByRole('navigation')
-    expect(within(bar).queryByRole('link', { name: 'Microclimates' })).toBeNull()
+    expect(within(bar).queryByRole('link', { name: 'Questions' })).toBeNull()
+    expect(within(bar).queryByRole('button', { name: 'Questions' })).toBeNull()
   })
 
   it('offers at most four tabs plus More', () => {
@@ -107,13 +91,43 @@ describe('MobileNav', () => {
   })
 
   it('marks the tab for the current route as the current page', () => {
-    // Dashboard rather than Action Plans since #132: Action Plans is no longer one
-    // of the four tabs, and a test that asks for a link the bar does not render
-    // proves nothing about the bar.
     renderNav(companyAdminSections(), '/dashboard')
-    const active = screen.getByRole('link', { name: 'Dashboard' })
+    const active = screen.getByRole('link', { name: 'Home' })
     expect(active.getAttribute('aria-current')).toBe('page')
-    expect(screen.getByRole('link', { name: 'Users' }).getAttribute('aria-current')).toBeNull()
+    expect(screen.getByRole('link', { name: 'Surveys' }).getAttribute('aria-current')).toBeNull()
+  })
+
+  it('marks a section’s tab on every page of that section, and only that tab', () => {
+    // Plantillas and the question library have no tab of their own; they are Encuestas.
+    for (const path of ['/surveys', '/surveys/templates', '/admin/question-library', '/surveys/abc/results']) {
+      cleanup()
+      renderNav(companyAdminSections(), path)
+      const bar = screen.getByRole('navigation')
+      const current = within(bar)
+        .getAllByRole('link')
+        .filter((link) => link.getAttribute('aria-current') === 'page')
+        .map((link) => link.textContent)
+      expect(current, path).toEqual(['Surveys'])
+    }
+  })
+
+  it('marks no tab where the rail lights no row, and never on a bare prefix', () => {
+    for (const path of ['/dev/chart-gallery', '/surveys-archive', '/notifications']) {
+      cleanup()
+      renderNav(companyAdminSections(), path)
+      const bar = screen.getByRole('navigation')
+      const current = within(bar)
+        .getAllByRole('link')
+        .filter((link) => link.getAttribute('aria-current') === 'page')
+      expect(current, path).toEqual([])
+    }
+  })
+
+  it('marks only the home row that owns the page, not every home row', () => {
+    renderNav(buildNavSections('leader', COMPANY), '/surveys/my')
+    const bar = screen.getByRole('navigation')
+    expect(within(bar).getByRole('link', { name: 'My Surveys' }).getAttribute('aria-current')).toBe('page')
+    expect(within(bar).getByRole('link', { name: 'My Team' }).getAttribute('aria-current')).toBeNull()
   })
 
   it('inks the tab labels above the AA threshold, and leaves the hue on the icon', () => {
@@ -123,13 +137,13 @@ describe('MobileNav', () => {
     // colour stays on the row (the icon inherits it) and the label overrides it.
     renderNav(companyAdminSections(), '/dashboard')
 
-    const activeRow = screen.getByRole('link', { name: 'Dashboard' })
+    const activeRow = screen.getByRole('link', { name: 'Home' })
     expect(activeRow.className).toContain('text-accent-blue')
     const activeLabel = activeRow.querySelector('span')!
     expect(activeLabel.className).toContain('text-fg-primary')
     expect(activeLabel.className).toContain('font-semibold')
 
-    const inactiveLabel = screen.getByRole('link', { name: 'Users' }).querySelector('span')!
+    const inactiveLabel = screen.getByRole('link', { name: 'Surveys' }).querySelector('span')!
     expect(inactiveLabel.className).toContain('text-fg-secondary')
   })
 
@@ -159,9 +173,10 @@ describe('MobileNav', () => {
     await userEvent.click(screen.getByRole('button', { name: 'More' }))
     const drawer = await screen.findByRole('dialog')
 
-    // The group the tab bar had to drop is reachable here.
-    expect(within(drawer).getByRole('button', { name: /Company Administration/ })).toBeTruthy()
+    // Every row the tab bar has no slot for is reachable here, the disclosure included.
+    expect(within(drawer).getByRole('button', { name: 'Questions' })).toBeTruthy()
     expect(within(drawer).getByRole('link', { name: 'Microclimates' })).toBeTruthy()
+    expect(within(drawer).getByRole('link', { name: 'People' })).toBeTruthy()
   })
 
   it('carries the shell controls, which the hidden sidebar would otherwise strand', async () => {

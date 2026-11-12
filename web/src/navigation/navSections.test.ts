@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest'
-import { CircleAlert, Copy } from 'lucide-react'
 import { readFileSync, globSync } from 'node:fs'
 import { join, sep } from 'node:path'
 import {
@@ -8,16 +7,21 @@ import {
   isPerUserOnly,
   isUnder,
   leafNavItems,
+  mobileTabs,
   sectionTitleKeyForPath,
-  withUnreadBadge,
   type NavSection,
 } from './navSections'
-import { RailConsolidatedIcon, RailQuestionBankIcon, RailQuestionLibraryIcon } from './railIcons'
+import { RailCompaniesIcon, RailConsolidatedIcon, RailQuestionBankIcon, RailQuestionLibraryIcon, RailStatusIcon } from './railIcons'
+import { canReach } from './roleCapabilities'
 import { CATALOGUES, LOCALES } from '../i18n/locale'
 import { createTranslator } from '../i18n/translate'
 
 function hrefs(sections: ReturnType<typeof buildNavSections>): string[] {
   return sections.flatMap((section) => section.items.flatMap((item) => [item.href, ...(item.sub ?? []).map((sub) => sub.href)]))
+}
+
+function leaves(role: string | undefined, companyId: string | undefined = 'company-1', trackingEnabled = false): string[] {
+  return leafNavItems(buildNavSections(role, companyId, { trackingEnabled })).map((item) => item.href)
 }
 
 function labelKeys(sections: NavSection[]): string[] {
@@ -39,7 +43,161 @@ const ALL_SECTIONS: NavSection[] = [
   ...buildNavSections('super_admin', 'company-1', { trackingEnabled: true }),
   ...buildNavSections('company_admin', 'company-1', { trackingEnabled: true }),
   ...buildNavSections('leader', 'company-1', { trackingEnabled: true }),
+  ...buildNavSections('leader', 'company-1'),
+  ...buildNavSections('employee', 'company-1', { trackingEnabled: true }),
 ]
+
+const ROLES = ['super_admin', 'company_admin', 'leader', 'supervisor', 'employee', undefined] as const
+
+/**
+ * Every destination each role's rail offered BEFORE the 11 Nov regroup, written out by hand
+ * from the pre-regroup `leafNavItems` pins (this file at 5c3f3d6f) — less `/notifications`,
+ * which the regroup moved to the bell. The regroup is presentation: these sets are what
+ * "no role gains or loses a destination" means, asserted as sets so the new ORDER is free.
+ */
+const DESTINATIONS_BEFORE_THE_REGROUP: Record<string, { off: string[]; on: string[] }> = {
+  super_admin: {
+    off: [
+      '/dashboard', '/admin/companies', '/admin/system-settings', '/analytics/benchmarks', '/action-plans',
+      '/microclimates', '/analytics/ai-insights', '/surveys', '/surveys/templates', '/surveys/climate-trends',
+      '/departments', '/admin/system', '/admin/question-bank', '/admin/question-library', '/admin/audit',
+    ],
+    on: [
+      '/dashboard', '/admin/companies', '/admin/system-settings', '/analytics/benchmarks', '/tracking',
+      '/tracking/planes', '/microclimates', '/analytics/ai-insights', '/surveys', '/surveys/templates',
+      '/surveys/climate-trends', '/departments', '/admin/system', '/admin/question-bank',
+      '/admin/question-library', '/admin/audit',
+    ],
+  },
+  company_admin: {
+    off: [
+      '/dashboard', '/admin/companies/company-1', '/admin/companies/company-1/users',
+      '/admin/companies/company-1/demographic-fields', '/action-plans', '/microclimates', '/surveys',
+      '/surveys/templates', '/surveys/climate-trends', '/analytics/benchmarks', '/analytics/ai-insights',
+      '/admin/companies/company-1/reports', '/admin/companies/company-1/analytics', '/departments',
+      '/admin/question-bank', '/admin/question-library', '/admin/audit',
+    ],
+    on: [
+      '/dashboard', '/admin/companies/company-1', '/admin/companies/company-1/users',
+      '/admin/companies/company-1/demographic-fields', '/tracking', '/tracking/planes', '/microclimates',
+      '/surveys', '/surveys/templates', '/surveys/climate-trends', '/analytics/benchmarks',
+      '/analytics/ai-insights', '/admin/companies/company-1/reports', '/admin/companies/company-1/analytics',
+      '/departments', '/admin/question-bank', '/admin/question-library', '/admin/audit',
+    ],
+  },
+  leader: {
+    off: ['/dashboard', '/surveys/my', '/action-plans'],
+    on: ['/dashboard', '/surveys/my', '/tracking/tablero', '/tracking/planes', '/tracking/mis-tareas'],
+  },
+  supervisor: { off: ['/dashboard', '/surveys/my'], on: ['/dashboard', '/surveys/my', '/tracking/mis-tareas'] },
+  employee: { off: ['/dashboard', '/surveys/my'], on: ['/dashboard', '/surveys/my', '/tracking/mis-tareas'] },
+}
+
+describe('the regroup (11 Nov): same destinations, new sections', () => {
+  it.each(Object.keys(DESTINATIONS_BEFORE_THE_REGROUP))(
+    'gives %s exactly the destinations it had before, with tracking off and on',
+    (role) => {
+      const before = DESTINATIONS_BEFORE_THE_REGROUP[role]!
+      expect([...leaves(role, 'company-1', false)].sort()).toEqual([...before.off].sort())
+      expect([...leaves(role, 'company-1', true)].sort()).toEqual([...before.on].sort())
+    },
+  )
+
+  it('repeats no destination within a rail, so no page has two rows to light', () => {
+    for (const role of ROLES) {
+      for (const trackingEnabled of [false, true]) {
+        const list = leaves(role, 'company-1', trackingEnabled)
+        expect(list.length, `${role} tracking=${trackingEnabled}`).toBe(new Set(list).size)
+      }
+    }
+  })
+
+  it('draws the administrators’ rail in the boards’ sections, in the boards’ order', () => {
+    for (const role of ['super_admin', 'company_admin']) {
+      expect(buildNavSections(role, 'company-1').map((section) => section.titleKey), role).toEqual([
+        '',
+        'navigation.sectionSurveys',
+        'navigation.sectionFollowUp',
+        'navigation.sectionAnalytics',
+        'navigation.sectionOrganization',
+        'navigation.sectionSystem',
+      ])
+    }
+  })
+
+  it('files each super administrator destination where the Main board does', () => {
+    const bySection = (trackingEnabled: boolean) =>
+      Object.fromEntries(
+        buildNavSections('super_admin', 'company-1', { trackingEnabled }).map((section) => [section.titleKey, hrefs([section])]),
+      )
+    expect(bySection(false)).toEqual({
+      '': ['/dashboard'],
+      'navigation.sectionSurveys': ['/surveys', '/surveys/templates', '/surveys/climate-trends', '/admin/question-bank', '/admin/question-bank', '/admin/question-library'],
+      'navigation.sectionFollowUp': ['/action-plans', '/microclimates'],
+      'navigation.sectionAnalytics': ['/analytics/benchmarks', '/analytics/ai-insights'],
+      'navigation.sectionOrganization': ['/departments', '/admin/companies'],
+      'navigation.sectionSystem': ['/admin/system-settings', '/admin/system', '/admin/audit'],
+    })
+    // Tracking on: Planes de acción, then the Vista consolidada, as the boards order them.
+    expect(bySection(true)['navigation.sectionFollowUp']).toEqual(['/tracking/planes', '/tracking', '/microclimates'])
+  })
+
+  it('files each company administrator destination where the CompanyHome board does', () => {
+    const bySection = Object.fromEntries(
+      buildNavSections('company_admin', 'company-1').map((section) => [section.titleKey, hrefs([section])]),
+    )
+    expect(bySection).toEqual({
+      '': ['/dashboard'],
+      'navigation.sectionSurveys': ['/surveys', '/surveys/templates', '/surveys/climate-trends', '/admin/question-bank', '/admin/question-bank', '/admin/question-library'],
+      'navigation.sectionFollowUp': ['/action-plans', '/microclimates'],
+      'navigation.sectionAnalytics': [
+        '/admin/companies/company-1/analytics',
+        '/analytics/benchmarks',
+        '/analytics/ai-insights',
+        '/admin/companies/company-1/reports',
+      ],
+      'navigation.sectionOrganization': [
+        '/admin/companies/company-1/users',
+        '/departments',
+        '/admin/companies/company-1/demographic-fields',
+        '/admin/companies/company-1',
+      ],
+      'navigation.sectionSystem': ['/admin/audit'],
+    })
+  })
+
+  it('opens a leader’s rail on their team, as the TeamHome board does', () => {
+    const sections = buildNavSections('leader', 'company-1', { trackingEnabled: true })
+    expect(sections.map((section) => section.titleKey)).toEqual(['', 'navigation.sectionFollowUp'])
+    expect(sections[0]!.items.map((item) => item.labelKey)).toEqual(['navigation.myTeam', 'navigation.mySurveys'])
+    expect(hrefs(sections)).toEqual(['/dashboard', '/surveys/my', '/tracking/tablero', '/tracking/planes', '/tracking/mis-tareas'])
+  })
+
+  it('puts the two question surfaces under one Preguntas disclosure, the bank first', () => {
+    for (const role of ['super_admin', 'company_admin']) {
+      const questions = buildNavSections(role, 'company-1')
+        .flatMap((section) => section.items)
+        .find((item) => item.labelKey === 'navigation.questions')
+      expect(questions?.sub?.map((sub) => sub.href), role).toEqual(['/admin/question-bank', '/admin/question-library'])
+      // A group's own href is its first child's: what the collapsed rail links to.
+      expect(questions?.href).toBe('/admin/question-bank')
+    }
+  })
+
+  /**
+   * Notificaciones left the rail for the bell. The destination did not leave anybody: every
+   * role still holds `/notifications` in `roleCapabilities.ts`, and `AdminLayout.test.tsx`
+   * pins the bell in the shell header of every rail role.
+   */
+  it('offers Notificaciones from no rail, and takes it from no role', () => {
+    for (const role of ROLES) {
+      for (const trackingEnabled of [false, true]) {
+        expect(hrefs(buildNavSections(role, 'company-1', { trackingEnabled })), `${role}`).not.toContain('/notifications')
+      }
+      expect(canReach(role, '/notifications'), `${role} lost /notifications`).toBe(true)
+    }
+  })
+})
 
 describe('buildNavSections', () => {
   it('gives a super_admin links to Companies and System settings, never a company-scoped URL', () => {
@@ -50,29 +208,11 @@ describe('buildNavSections', () => {
   })
 
   /**
-   * The inverse of what this test used to assert.
-   *
-   * It read `expect(links).not.toContain('/action-plans')`, because the page had
-   * no company-picker and a SuperAdmin landing there would have been silently
-   * scoped to whatever company their own user row pointed at. #124 built the
-   * picker (`company-context/`), so the entry is restored -- and the property
-   * that made withholding it correct is now asserted where it actually lives,
-   * in `company-context/companyContext.test.ts`: a SuperAdmin with no selection
-   * resolves to `needs-selection`, never to a company.
-   */
-  /**
    * The leader is the one non-admin role the action plans list answers: `ListAsync` scopes
-   * them to the plans they own, and the due-date nudge sends them there. `inNav: true` was
-   * declared for it and no sidebar offered it -- the union-of-sidebars check in
-   * `roleCapabilities.test.ts` passed because an ADMIN's sidebar has the row.
+   * them to the plans they own, and the due-date nudge sends them there.
    */
   it('gives a leader without a tracking service the per-user links plus their own action plans', () => {
-    expect(hrefs(buildNavSections('leader', 'company-1'))).toEqual([
-      '/dashboard',
-      '/surveys/my',
-      '/action-plans',
-      '/notifications',
-    ])
+    expect(hrefs(buildNavSections('leader', 'company-1'))).toEqual(['/dashboard', '/surveys/my', '/action-plans'])
   })
 
   it('gives a super_admin Action Plans, Microclimates and AI Insights, now that a company-context selector exists', () => {
@@ -82,55 +222,8 @@ describe('buildNavSections', () => {
     expect(links).toContain('/analytics/ai-insights')
   })
 
-  it('still gives a super_admin no company-scoped URL, even though they now reach company-scoped pages', () => {
-    // The company comes from the selector, not from the href. If a company id
-    // ever appeared in one of these links it would be the SuperAdmin's *own*
-    // claim interpolated in -- the exact silent scoping #124 removed.
-    const links = hrefs(buildNavSections('super_admin', 'company-1'))
-    expect(links.some((href) => href.includes('company-1'))).toBe(false)
-  })
-
-  it('gives a company_admin an Action Plans link scoped to their own company session', () => {
-    const links = hrefs(buildNavSections('company_admin', 'company-1'))
-    expect(links).toContain('/action-plans')
-  })
-
-  /**
-   * Benchmarks is the one analytics page a SuperAdmin does get, and the contrast
-   * with Action Plans above is deliberate. `GET /admin/benchmarks` returns every
-   * tenant's rows plus the global ones for this role, so the page is a real
-   * cross-company view rather than a silently single-company one.
-   */
   it('gives a super_admin a Benchmarks link, because that page has a genuine cross-company view', () => {
     expect(hrefs(buildNavSections('super_admin', 'company-1'))).toContain('/analytics/benchmarks')
-  })
-
-  /**
-   * AI Insights takes a required company id, and since #191 a global
-   * super_admin's `companyId` claim is the empty string (`User.CompanyId` is
-   * `Guid?`). That is why this entry used to be withheld from the role: the page
-   * could only ever have said "no company associated". #124's selector is what
-   * supplies the id the claim cannot -- see the restored-entries test above.
-   */
-  it('keeps Benchmarks on a super_admin mobile tab bar, so the restored entries do not displace it', () => {
-    // `leafNavItems` -- not `hrefs` -- is what MobileNav reads, and it takes the
-    // first four. Dashboard leads (#132: it is where every role now lands after
-    // login, so the bar has to be able to return to it), then the group's two
-    // children, so Benchmarks holds the fourth slot and the three #124 entries
-    // still have to be appended after it.
-    const leaves = leafNavItems(buildNavSections('super_admin', 'company-1')).map((item) => item.href)
-    expect(leaves.slice(0, 4)).toEqual([
-      '/dashboard',
-      '/admin/companies',
-      '/admin/system-settings',
-      '/analytics/benchmarks',
-    ])
-  })
-
-  it('gives a company_admin both analytics pages', () => {
-    const links = hrefs(buildNavSections('company_admin', 'company-1'))
-    expect(links).toContain('/analytics/benchmarks')
-    expect(links).toContain('/analytics/ai-insights')
   })
 
   it('gives a company_admin links scoped to their own company only', () => {
@@ -138,104 +231,70 @@ describe('buildNavSections', () => {
     expect(links).toContain('/admin/companies/company-1')
     expect(links).toContain('/admin/companies/company-1/users')
     expect(links).toContain('/admin/companies/company-1/demographic-fields')
+    expect(links).toContain('/admin/companies/company-1/reports')
+    expect(links).toContain('/admin/companies/company-1/analytics')
     expect(links).not.toContain('/admin/system-settings')
   })
 
-  it('gives a company_admin Reports and Analytics links scoped to their own company', () => {
-    const links = hrefs(buildNavSections('company_admin', 'company-1'))
-    expect(links).toContain('/admin/companies/company-1/reports')
-    expect(links).toContain('/admin/companies/company-1/analytics')
-  })
-
   it('does not give a super_admin Reports or Analytics links -- their sections carry no company id', () => {
-    // Unlike Action Plans, these two pages are NOT unsafe for a SuperAdmin: they take
-    // their company from the URL, and ReportEndpoints/BenchmarkEndpoints admit a
-    // SuperAdmin for any company. They are absent here for the plainer reason asserted
-    // just above -- a super_admin's nav is deliberately company-agnostic, so there is
-    // no id to interpolate. A SuperAdmin reaches them from CompanyDetailPage.
     const links = hrefs(buildNavSections('super_admin', 'company-1'))
     expect(links.some((href) => href.endsWith('/reports'))).toBe(false)
     expect(links.some((href) => href.endsWith('/analytics'))).toBe(false)
   })
 
   it('gives a company_admin with no companyId claim only the per-user links', () => {
-    // Replaces an earlier `toEqual([])`. Every company-scoped href this branch could
-    // have built would have been `/admin/companies/undefined/...`, so the empty array
-    // was right until #99 -- but neither /notifications nor /surveys/my needs a
-    // companyId at all, so the fallback is now those two rows rather than nothing.
-    // #132 added a third, for the same reason: /dashboard needs no companyId either
-    // and its employee branch is scoped to the caller's own user row.
-    expect(hrefs(buildNavSections('company_admin', undefined))).toEqual([
-      '/dashboard',
-      '/surveys/my',
-      '/notifications',
-    ])
+    // Every company-scoped href this branch could build would be
+    // `/admin/companies/undefined/...`; neither /dashboard nor /surveys/my needs a companyId.
+    expect(hrefs(buildNavSections('company_admin', undefined))).toEqual(['/dashboard', '/surveys/my'])
   })
 
   it.each(['employee', 'supervisor', undefined])('gives %s only the per-user links (no admin page exists for this role yet)', (role) => {
-    // Both endpoints behind these resolve the caller's OWN user row and read no role
-    // claim, which is precisely what makes them loadable by a role with no admin
-    // surface. Anything company- or role-scoped would 403 here. /dashboard joins
-    // them on the same test (#132): `DashboardPage` dispatches on the role and this
-    // branch's roles reach either the department view (leader/supervisor, scoped to
-    // their own user row's department) or the employee view.
-    expect(hrefs(buildNavSections(role, 'company-1'))).toEqual([
-      '/dashboard',
-      '/surveys/my',
-      '/notifications',
-    ])
-  })
-
-  it('gives every role a Notifications link, because /notifications/mine authorizes per user rather than per role', () => {
-    for (const role of ['super_admin', 'company_admin', 'employee', 'supervisor', 'leader', undefined]) {
-      expect(hrefs(buildNavSections(role, 'company-1')), `${role} has no notifications link`).toContain(
-        '/notifications',
-      )
-    }
+    expect(hrefs(buildNavSections(role, 'company-1'))).toEqual(['/dashboard', '/surveys/my'])
   })
 
   /**
-   * `climate-project#22`, item 4, closed by measurement rather than by a design
-   * pass. The complaint was that "a super admin's sidebar interleaves uppercase
-   * section headers with 5 header-less expandable groups" — `RoleBasedNav` renders
-   * `.nav-section-title` only `if (section.titleKey)`, so a section with `''`
-   * contributes rows under no heading at all.
-   *
-   * The tree that had five such groups did not survive the stack migration, and
-   * the three-group shape #124 arrived at has no unheaded section left in any
-   * branch. This is the pin that keeps it that way: `NavSection.titleKey` still
-   * documents `''` as legal, so nothing but this fails if one comes back.
+   * `climate-project#22`, item 4: a super admin's sidebar "interleaves uppercase section
+   * headers with header-less expandable groups". The boards of 11 Nov open every rail with
+   * the home row on its own, unheaded — so the rule is no longer "every section has a
+   * heading" but "only the FIRST may lack one, and only to hold the home rows". Anything
+   * else unheaded is the interleaving #22 was about.
    */
-  it('gives every section a heading, so no rows hang under nothing', () => {
+  it('leaves only the first section unheaded, and only for the reader’s home rows', () => {
+    const HOME_ROWS = new Set(['/dashboard', '/surveys/my'])
     let swept = 0
-    for (const role of ['super_admin', 'company_admin', 'employee', 'supervisor', 'leader', undefined]) {
+    for (const role of ROLES) {
       for (const companyId of ['company-1', undefined]) {
-        for (const section of buildNavSections(role, companyId)) {
-          swept += 1
-          expect(section.titleKey, `${role}/${companyId} has an unheaded section`).not.toBe('')
+        for (const trackingEnabled of [false, true]) {
+          buildNavSections(role, companyId, { trackingEnabled }).forEach((section, index) => {
+            swept += 1
+            if (index > 0) {
+              expect(section.titleKey, `${role}/${companyId}: section ${index} is unheaded`).not.toBe('')
+            } else if (section.titleKey === '') {
+              for (const item of section.items) expect(HOME_ROWS.has(item.href), `${role}: ${item.href} is not a home row`).toBe(true)
+            }
+          })
         }
       }
     }
-    // Guard the guard: the loop above passes vacuously if `buildNavSections`
-    // ever returns an empty array for every branch it is asked for.
+    // Guard the guard: the loop passes vacuously if every branch returns nothing.
     expect(swept, 'swept no sections at all').toBeGreaterThan(0)
   })
 
   /**
-   * The other half of item 4: a heading with nothing under it is the same defect
-   * seen from the other side — `RoleBasedNav` maps `section.items` unconditionally,
-   * so an empty section renders as a bare uppercase label.
+   * The other half of item 4: a heading with nothing under it is the same defect seen from
+   * the other side — `RoleBasedNav` maps `section.items` unconditionally, so an empty
+   * section renders as a bare uppercase label.
    */
   it('gives every section at least one row', () => {
     let swept = 0
-    for (const role of ['super_admin', 'company_admin', 'employee', undefined]) {
-      for (const section of buildNavSections(role, 'company-1')) {
-        swept += 1
-        expect(section.items.length, `${role}: ${section.titleKey} is empty`).toBeGreaterThan(0)
+    for (const role of ROLES) {
+      for (const trackingEnabled of [false, true]) {
+        for (const section of buildNavSections(role, 'company-1', { trackingEnabled })) {
+          swept += 1
+          expect(section.items.length, `${role}: ${section.titleKey} is empty`).toBeGreaterThan(0)
+        }
       }
     }
-    // Guard the guard, as above: a role that produced no sections at all would
-    // satisfy "every section has a row" without there being one.
     expect(swept, 'swept no sections at all').toBeGreaterThan(0)
   })
 
@@ -250,8 +309,6 @@ describe('buildNavSections', () => {
    */
   describe('the tracking module', () => {
     it('changes nothing at all where no tracking service is configured', () => {
-      // The default. Every other assertion in this file calls `buildNavSections`
-      // with two arguments, so this is what keeps them meaningful.
       for (const role of ['super_admin', 'company_admin', 'leader', 'employee']) {
         const links = hrefs(buildNavSections(role, 'company-1'))
         expect(links.some((href) => href.startsWith('/tracking')), `${role}`).toBe(false)
@@ -269,8 +326,6 @@ describe('buildNavSections', () => {
     })
 
     it('offers the consolidado to exactly the roles the tracking service will not forbid', () => {
-      // `DashboardEndpoints.ConsolidadoAsync` returns Results.Forbid() for anything
-      // outside `Roles.Admin` = company_admin | super_admin.
       for (const role of ['super_admin', 'company_admin']) {
         expect(hrefs(buildNavSections(role, 'company-1', { trackingEnabled: true }))).toContain('/tracking')
       }
@@ -283,49 +338,12 @@ describe('buildNavSections', () => {
     })
 
     it('gives a node leader their own board and nobody else one', () => {
-      // A leader is `Roles.PlanCreator` in the tracking service and the role §7
-      // gives the full board to. `TableroAsync` hands them their own nodo when the
-      // URL names none, so the row needs no id in it.
-      expect(hrefs(buildNavSections('leader', 'company-1', { trackingEnabled: true }))).toContain(
-        '/tracking/tablero',
-      )
-      // Not the admins: their own nodoId claim is `unassigned-<companyId>` or
-      // empty, so this row would lead to an empty board every time — the same
-      // always-empty-page rule that keeps /surveys/my out of the super_admin branch.
+      expect(hrefs(buildNavSections('leader', 'company-1', { trackingEnabled: true }))).toContain('/tracking/tablero')
       for (const role of ['super_admin', 'company_admin', 'supervisor', 'employee']) {
         expect(
           hrefs(buildNavSections(role, 'company-1', { trackingEnabled: true })),
           `${role} is offered a board that would be empty`,
         ).not.toContain('/tracking/tablero')
-      }
-    })
-
-    it('keeps the four mobile tab slots, because the swap is in place rather than appended', () => {
-      // The reason `workspacePlanItems` returns its rows in `/action-plans`' own
-      // position: `leafNavItems` feeds MobileNav the first four leaves, and
-      // removing a row from the middle while appending another at the end would
-      // shift every role's bottom bar.
-      expect(
-        leafNavItems(buildNavSections('super_admin', 'company-1', { trackingEnabled: true }))
-          .slice(0, 4)
-          .map((item) => item.href),
-      ).toEqual(['/dashboard', '/admin/companies', '/admin/system-settings', '/analytics/benchmarks'])
-      expect(
-        leafNavItems(buildNavSections('company_admin', 'company-1', { trackingEnabled: true }))
-          .slice(0, 4)
-          .map((item) => item.href),
-      ).toEqual([
-        '/dashboard',
-        '/admin/companies/company-1',
-        '/admin/companies/company-1/users',
-        '/admin/companies/company-1/demographic-fields',
-      ])
-    })
-
-    it('still ends every admin branch on Notifications', () => {
-      for (const role of ['super_admin', 'company_admin']) {
-        const links = hrefs(buildNavSections(role, 'company-1', { trackingEnabled: true }))
-        expect(links[links.length - 1], `${role}`).toBe('/notifications')
       }
     })
 
@@ -362,19 +380,6 @@ describe('buildNavSections', () => {
         )
       }
     })
-  })
-
-  it('puts Notifications last for an admin, so it does not displace their primary pages', () => {
-    // The mobile tab bar takes the first four leaves (see leafNavItems). A
-    // company_admin's four are their own company's pages; Notifications sits
-    // behind "More" rather than pushing one of them off the bar. Asserted for
-    // both admin roles: #124 appended three entries to the super_admin branch,
-    // and appending them *after* NOTIFICATIONS_ITEM is the obvious way to get
-    // this wrong.
-    for (const role of ['company_admin', 'super_admin']) {
-      const links = hrefs(buildNavSections(role, 'company-1'))
-      expect(links[links.length - 1], `${role} does not end on notifications`).toBe('/notifications')
-    }
   })
 })
 
@@ -416,138 +421,116 @@ describe('nav labels', () => {
     const en = createTranslator(CATALOGUES.en)
     const es = createTranslator(CATALOGUES.es)
     expect(es('navigation.companies')).not.toBe(en('navigation.companies'))
-    expect(es('navigation.users')).not.toBe(en('navigation.users'))
+    expect(es('navigation.people')).not.toBe(en('navigation.people'))
     expect(es('navigation.demographicFields')).not.toBe(en('navigation.demographicFields'))
   })
 })
 
 describe('leafNavItems', () => {
   it('replaces a grouped item with its children, because a group is a toggle and not a destination', () => {
-    const sections = buildNavSections('company_admin', 'company-1')
-    const leaves = leafNavItems(sections)
-
-    expect(leaves.map((item) => item.href)).toEqual([
-      // #132's landing page, first in every branch -- see DASHBOARD_ITEM.
+    expect(leaves('company_admin')).toEqual([
       '/dashboard',
-      '/admin/companies/company-1',
-      '/admin/companies/company-1/users',
-      '/admin/companies/company-1/demographic-fields',
-      '/action-plans',
-      '/microclimates',
-      // After Microclimates, a peer work surface -- and deliberately NOT before
-      // Action Plans, which would take Action Plans' fourth mobile tab slot. The
-      // first four leaves above are unchanged by #109.
       '/surveys',
       '/surveys/templates',
-      // Climate over time, appended beside the other survey rows. Well past the fourth
-      // leaf, so the pinned mobile tab slots above are untouched.
       '/surveys/climate-trends',
+      // Preguntas is a disclosure: its two children, never the group row itself.
+      '/admin/question-bank',
+      '/admin/question-library',
+      '/action-plans',
+      '/microclimates',
+      '/admin/companies/company-1/analytics',
       '/analytics/benchmarks',
       '/analytics/ai-insights',
-      // After the top-level rows, not inside the admin group: `leafNavItems` puts a
-      // group's children ahead of everything that follows it, so grouping these two
-      // would take the fourth mobile tab slot away from Action Plans.
       '/admin/companies/company-1/reports',
-      '/admin/companies/company-1/analytics',
-      // #142. Top-level rather than inside the admin group, and appended after the
-      // existing rows: nested, it would flatten ahead of Action Plans and take its
-      // fourth mobile tab slot.
+      '/admin/companies/company-1/users',
       '/departments',
-      // #114, appended last in Workspace for the same four-slot reason. A curation
-      // surface an admin visits occasionally is not one of the four things they do
-      // most, and every leaf above is unmoved by it.
-      '/admin/question-bank',
-      // #423, appended immediately after the bank: the authoring repository beside the
-      // curation surface. Same four-slot reasoning -- every leaf above is unmoved.
-      '/admin/question-library',
-      // G21, the audit log, appended after the library for the same four-slot reason.
+      '/admin/companies/company-1/demographic-fields',
+      '/admin/companies/company-1',
       '/admin/audit',
-      // Last, for the same four-slot reason -- see 'puts Notifications last' above.
-      '/notifications',
     ])
-    expect(leaves.every((item) => !item.sub?.length)).toBe(true)
+    const items = leafNavItems(buildNavSections('company_admin', 'company-1'))
+    expect(items.every((item) => !item.sub?.length)).toBe(true)
   })
 
   it('keeps a childless item as itself', () => {
-    const leaves = leafNavItems(buildNavSections('super_admin', 'company-1'))
-    expect(leaves.map((item) => item.href)).toEqual([
-      // #132's landing page, first in every branch -- see DASHBOARD_ITEM.
+    expect(leaves('super_admin')).toEqual([
       '/dashboard',
-      '/admin/companies',
-      '/admin/system-settings',
-      '/analytics/benchmarks',
-      // Restored by #124. They sit after Benchmarks rather than before it so the
-      // four-slot mobile tab bar keeps the three rows it already had.
-      '/action-plans',
-      '/microclimates',
-      '/analytics/ai-insights',
-      // A super_admin gets the survey listing because `ListAsync` applies no company
-      // predicate for them -- a genuine cross-company view, the same reason
-      // Benchmarks is here. Appended last of the destinations so #124's pinned first
-      // four leaves are untouched.
       '/surveys',
       '/surveys/templates',
-      // Climate over time, appended for the same reason and in the same place as in the
-      // company_admin branch above.
       '/surveys/climate-trends',
-      // #142, appended for the same reason as the two above.
-      '/departments',
-      // #275's System Health, appended for that same reason -- it belongs beside
-      // Companies by subject, but the ADMINISTRATION section feeds the mobile tab bar.
-      '/admin/system',
-      // #114's question bank, appended last in Workspace for the same reason again.
-      // Both admin branches get the identical entry: no companyId is interpolated,
-      // because the endpoint scopes by role rather than by a URL segment.
       '/admin/question-bank',
-      // #423, appended immediately after the bank in this branch too, for the same
-      // reason and with the same shape: no companyId in the href.
       '/admin/question-library',
-      '/admin/audit',
-      '/notifications',
-    ])
-  })
-
-  /**
-   * The pin behind both `toEqual`s above, stated once as its own assertion.
-   *
-   * The two lists are long enough that appending to them is easy and reordering
-   * them is easy by accident. What actually matters is the first four leaves of
-   * each role: `MobileNav` renders exactly those as the bottom tab bar. This
-   * fails loudly if a future entry is inserted rather than appended, without
-   * anyone having to notice which of thirteen hrefs moved.
-   */
-  it('keeps the four mobile tab slots each role already had', () => {
-    // #132 changed these once, deliberately and for both admin roles: Dashboard
-    // takes the first slot and Action Plans moves behind "More". A bottom bar that
-    // cannot return to the page login lands on is a bar missing its home button.
-    // The pin still does its job -- any FURTHER insertion has to argue with it.
-    expect(leafNavItems(buildNavSections('super_admin', 'company-1')).slice(0, 4).map((item) => item.href)).toEqual([
-      '/dashboard',
+      '/action-plans',
+      '/microclimates',
+      '/analytics/benchmarks',
+      '/analytics/ai-insights',
+      '/departments',
       '/admin/companies',
       '/admin/system-settings',
-      '/analytics/benchmarks',
-    ])
-    expect(leafNavItems(buildNavSections('company_admin', 'company-1')).slice(0, 4).map((item) => item.href)).toEqual([
-      '/dashboard',
-      '/admin/companies/company-1',
-      '/admin/companies/company-1/users',
-      '/admin/companies/company-1/demographic-fields',
+      '/admin/system',
+      '/admin/audit',
     ])
   })
 
   it('does not offer a super_admin the respondent listing, which would always be empty for them', () => {
     // `User.CompanyId` is NULL for a global super_admin (#191), so `/surveys/my`
-    // correctly returns an empty list rather than an error. An always-empty page is
-    // not a destination, so it belongs to the fallback branch and not this one.
+    // correctly returns an empty list rather than an error.
     expect(hrefs(buildNavSections('super_admin', 'company-1'))).not.toContain('/surveys/my')
   })
 
-  it('gives a role with no admin pages exactly its three per-user leaves, so the mobile bar has something to render', () => {
-    expect(leafNavItems(buildNavSections('employee', 'company-1')).map((item) => item.href)).toEqual([
+  it('gives a role with no admin pages exactly its per-user leaves', () => {
+    expect(leaves('employee')).toEqual(['/dashboard', '/surveys/my'])
+  })
+})
+
+/**
+ * The phone's tab bar is one tab per section of the rail (`mobileTabs`). Before the regroup it
+ * was the first four leaves, which in the new order would be Inicio and three Encuestas rows,
+ * with Seguimiento behind "Más".
+ */
+describe('mobileTabs', () => {
+  const tabs = (role: string, trackingEnabled = false) => mobileTabs(buildNavSections(role, 'company-1', { trackingEnabled }))
+
+  it('gives an administrator Inicio and one tab per section, named for the section', () => {
+    for (const role of ['super_admin', 'company_admin']) {
+      expect(tabs(role).map((tab) => tab.labelKey), role).toEqual([
+        'navigation.home',
+        'navigation.sectionSurveys',
+        'navigation.sectionFollowUp',
+        'navigation.sectionAnalytics',
+      ])
+    }
+  })
+
+  it('leads each section tab to the section’s first destination', () => {
+    expect(tabs('super_admin').map((tab) => tab.href)).toEqual(['/dashboard', '/surveys', '/action-plans', '/analytics/benchmarks'])
+    expect(tabs('super_admin', true).map((tab) => tab.href)).toEqual(['/dashboard', '/surveys', '/tracking/planes', '/analytics/benchmarks'])
+    expect(tabs('company_admin').map((tab) => tab.href)).toEqual([
       '/dashboard',
-      '/surveys/my',
-      '/notifications',
+      '/surveys',
+      '/action-plans',
+      '/admin/companies/company-1/analytics',
     ])
+  })
+
+  it('gives every home row its own tab, so a leader keeps Mi equipo and Mis encuestas', () => {
+    expect(tabs('leader').map((tab) => [tab.labelKey, tab.href])).toEqual([
+      ['navigation.myTeam', '/dashboard'],
+      ['navigation.mySurveys', '/surveys/my'],
+      ['navigation.sectionFollowUp', '/action-plans'],
+    ])
+    expect(tabs('leader', true).map((tab) => tab.href)).toEqual(['/dashboard', '/surveys/my', '/tracking/tablero'])
+  })
+
+  it('never spends a slot on a group toggle, and never takes more than four', () => {
+    for (const role of ['super_admin', 'company_admin', 'leader']) {
+      const destinations = new Set(leaves(role))
+      const list = tabs(role)
+      expect(list.length, role).toBeLessThanOrEqual(4)
+      for (const tab of list) expect(destinations.has(tab.href), `${role}: ${tab.href}`).toBe(true)
+    }
+    // The slot count is a parameter, honoured.
+    expect(mobileTabs(buildNavSections('super_admin', 'company-1'), 2)).toHaveLength(2)
   })
 })
 
@@ -555,39 +538,30 @@ describe('sectionTitleKeyForPath', () => {
   const sections = buildNavSections('company_admin', 'company-1')
 
   it('names the group a page sits in, which is what the page eyebrow prints', () => {
-    expect(sectionTitleKeyForPath('/admin/companies/company-1/users', sections)).toBe(
-      'navigation.sectionAdministration',
-    )
-    expect(sectionTitleKeyForPath('/action-plans', sections)).toBe('navigation.sectionWorkspace')
-    expect(sectionTitleKeyForPath('/notifications', sections)).toBe(
-      'navigation.sectionCommunication',
-    )
+    expect(sectionTitleKeyForPath('/admin/companies/company-1/users', sections)).toBe('navigation.sectionOrganization')
+    expect(sectionTitleKeyForPath('/action-plans', sections)).toBe('navigation.sectionFollowUp')
+    expect(sectionTitleKeyForPath('/surveys/templates', sections)).toBe('navigation.sectionSurveys')
+    expect(sectionTitleKeyForPath('/admin/question-library', sections)).toBe('navigation.sectionSurveys')
+    expect(sectionTitleKeyForPath('/admin/audit', sections)).toBe('navigation.sectionSystem')
   })
 
-  /**
-   * The bug `activeHref` exists for, asserted on the eyebrow rather than on the
-   * rail. `/admin/companies/company-1` is a prefix of
-   * `.../demographic-fields`, so a plain `startsWith` matches both — and both are
-   * in the same group here, which is exactly why this needs a case where the two
-   * candidates disagree. `/surveys` (Workspace) is a prefix of nothing in
-   * Administration, so the discriminating pair is a sub-route of a *detail* page:
-   * `/action-plans/abc` sits under `/action-plans` and under nothing else.
-   */
   it('resolves a detail route to its list page group rather than to no group', () => {
-    expect(sectionTitleKeyForPath('/action-plans/abc-123', sections)).toBe(
-      'navigation.sectionWorkspace',
-    )
-    expect(sectionTitleKeyForPath('/surveys/abc-123/results', sections)).toBe(
-      'navigation.sectionWorkspace',
-    )
+    expect(sectionTitleKeyForPath('/action-plans/abc-123', sections)).toBe('navigation.sectionFollowUp')
+    expect(sectionTitleKeyForPath('/surveys/abc-123/results', sections)).toBe('navigation.sectionSurveys')
+  })
+
+  it('prints no eyebrow on the home row, which sits under no heading', () => {
+    expect(sectionTitleKeyForPath('/dashboard', sections)).toBeNull()
   })
 
   it('prints no eyebrow for a route the nav does not cover, rather than guessing one', () => {
     expect(sectionTitleKeyForPath('/dev/chart-gallery', sections)).toBeNull()
     expect(sectionTitleKeyForPath('/login', sections)).toBeNull()
+    // The inbox is reached from the bell now, not from a rail row.
+    expect(sectionTitleKeyForPath('/notifications', sections)).toBeNull()
   })
 
-  it('is empty for a role with no sections at all, so a signed-out header prints nothing', () => {
+  it('is empty for a role with no titled section, so a signed-out header prints nothing', () => {
     expect(sectionTitleKeyForPath('/action-plans', buildNavSections(undefined, undefined))).toBeNull()
   })
 })
@@ -648,56 +622,15 @@ describe('activeHref', () => {
   })
 })
 
-describe('withUnreadBadge', () => {
-  const sections = buildNavSections('company_admin', 'company-1')
-
-  function badges(decorated: NavSection[]) {
-    return decorated
-      .flatMap((section) => section.items)
-      .filter((item) => item.badge !== undefined)
-      .map((item) => [item.href, item.badge])
-  }
-
-  it('badges the notifications row and nothing else', () => {
-    expect(badges(withUnreadBadge(sections, 3))).toEqual([['/notifications', '3']])
-  })
-
-  it('renders no badge at zero, rather than a pill reading 0', () => {
-    expect(badges(withUnreadBadge(sections, 0))).toEqual([])
-    expect(withUnreadBadge(sections, 0)).toBe(sections)
-  })
-
-  it('caps a large count so it cannot push the row label into an ellipsis', () => {
-    expect(badges(withUnreadBadge(sections, 99))).toEqual([['/notifications', '99']])
-    expect(badges(withUnreadBadge(sections, 100))).toEqual([['/notifications', '99+']])
-    expect(badges(withUnreadBadge(sections, 4321))).toEqual([['/notifications', '99+']])
-  })
-
-  it('does not mutate the sections it was given', () => {
-    const before = buildNavSections('company_admin', 'company-1')
-    withUnreadBadge(before, 7)
-    expect(badges(before)).toEqual([])
-  })
-
-  it('badges the row for every role, since every role has notifications', () => {
-    for (const role of ['super_admin', 'company_admin', 'employee', 'supervisor', 'leader']) {
-      expect(badges(withUnreadBadge(buildNavSections(role, 'company-1'), 2))).toEqual([
-        ['/notifications', '2'],
-      ])
-    }
-  })
-})
-
-describe('the super administrator’s rail glyphs', () => {
-  it('draws Empresas, Estado del sistema, Banco and Biblioteca with the canvas’s glyphs (SuperDashboard.dc.html:51,63-65)', () => {
+describe('the administrators’ rail glyphs', () => {
+  it('draws Empresas, Estado, Banco and Biblioteca with their own glyphs', () => {
     const rows = buildNavSections('super_admin', 'company-1').flatMap((section) =>
       section.items.flatMap((item) => [item, ...(item.sub ?? [])]),
     )
     const icon = (key: string) => rows.find((row) => row.labelKey === key)?.icon
-    expect(icon('navigation.companies')).toBe(Copy)
-    expect(icon('navigation.systemHealth')).toBe(CircleAlert)
-    // Banco and Biblioteca are rows both rails share, so they carry the canvas glyphs
-    // railIcons.test.tsx pins for the company administrator: one item, one glyph.
+    expect(icon('navigation.companies')).toBe(RailCompaniesIcon)
+    expect(icon('navigation.status')).toBe(RailStatusIcon)
+    // Banco and Biblioteca sit side by side under Preguntas, so they must not share a glyph.
     expect(icon('navigation.questionBank')).toBe(RailQuestionBankIcon)
     expect(icon('navigation.questionLibrary')).toBe(RailQuestionLibraryIcon)
   })
@@ -741,8 +674,8 @@ describe('isPerUserOnly', () => {
     const withAnAdminPage: NavSection[] = [
       ...sections('employee'),
       {
-        titleKey: 'navigation.sectionAdministration',
-        items: [{ labelKey: 'x', href: '/admin/companies', icon: CircleAlert }],
+        titleKey: 'navigation.sectionOrganization',
+        items: [{ labelKey: 'x', href: '/admin/companies', icon: RailCompaniesIcon }],
       },
     ]
 
