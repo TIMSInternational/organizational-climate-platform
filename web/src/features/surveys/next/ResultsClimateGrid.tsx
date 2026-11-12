@@ -7,7 +7,6 @@ import {
   bandCellStyle,
   bandName,
   bandOf,
-  bandShortName,
   deltaScoreText,
   scoreText,
   type ClimateMapSelection,
@@ -26,7 +25,8 @@ import { deltaInkOf } from './tint'
  * left transparent because a 4px grid gap is exactly where the ring lands, and the
  * surface behind it is this card's. `outline` is left free for the focus ring.
  */
-const OPEN_RING = '0 0 0 2px var(--admin-bg-card), 0 0 0 4px var(--admin-font-primary)'
+// The open cell is a selection, and selection is blue (Apple design ruling, 11 Nov).
+const OPEN_RING = '0 0 0 2px var(--admin-bg-card), 0 0 0 4px var(--admin-accent-blue)'
 
 /**
  * Every `th`/`td` of the grid: no padding and no hairline. `index.css` gives every
@@ -34,7 +34,7 @@ const OPEN_RING = '0 0 0 2px var(--admin-bg-card), 0 0 0 4px var(--admin-font-pr
  * under every tinted cell; the gaps between cells are the table's `border-spacing`.
  */
 const CELL = 'border-0 p-0'
-/** The artboard's `.label`: 10px, bold, uppercase, 0.06em, the tertiary ink. */
+/** The spec's `.hm th` (occ.css): 12px semibold, sentence case, the label ink. */
 // `[overflow-wrap:normal]`: `index.css` lets a cell break an unbreakable run anywhere,
 // which on a narrow column split "RECONOCIMIENTO" mid-word (measured at 1024). A label
 // wraps between words here, and the grid's minimum width keeps every word on a line.
@@ -43,7 +43,7 @@ const CELL = 'border-0 p-0'
 // dimensions at 1440, 2026-10-12). It needs the table's `lang`.
 const HEAD = cn(
   CELL,
-  'text-center align-bottom text-2xs font-bold uppercase leading-tight tracking-label text-fg-label [overflow-wrap:normal] hyphens-auto',
+  'text-center align-bottom text-xs font-semibold leading-tight text-fg-label [overflow-wrap:normal] hyphens-auto',
 )
 /**
  * The grid's minimum width in rem: the label column, the mean (and comparison) column,
@@ -200,7 +200,7 @@ export default function ResultsClimateGrid({
               return (
                 <td key={dimension.key} className={cn(CELL, 'text-center')}>
                   <span className="flex flex-col items-center gap-px">
-                    <span className="inline-flex items-center gap-1 font-mono text-sm tabular-nums text-fg-primary">
+                    <span className="inline-flex items-center gap-1 text-sm tabular-nums text-fg-primary">
                       {band && (
                         <span style={{ color: BAND_PAINT[band].ink }} className="inline-flex">
                           <BandGlyph band={band} />
@@ -210,7 +210,7 @@ export default function ResultsClimateGrid({
                       {band && <span className="sr-only">{` — ${bandName(band, bands, t)}`}</span>}
                     </span>
                     {value !== null && delta !== null && (
-                      <span className={cn('font-mono text-2xs tabular-nums', deltaInkOf(delta, 1, bands.scale))}>{signed(delta)}</span>
+                      <span className={cn('text-xs tabular-nums', deltaInkOf(delta, 1, bands.scale))}>{signed(delta)}</span>
                     )}
                   </span>
                 </td>
@@ -218,7 +218,7 @@ export default function ResultsClimateGrid({
             })}
             <td className={cn(CELL, 'text-center')}>
               {company.mean === null ? (
-                <span className="font-mono text-sm text-fg-primary">—</span>
+                <span className="text-sm text-fg-primary tabular-nums">—</span>
               ) : (
                 // The mean is printed at two decimals, so it is judged at two.
                 <MeanChip mean={company.mean} bands={bands} text={score2(company.mean)} />
@@ -228,7 +228,7 @@ export default function ResultsClimateGrid({
               <td
                 className={cn(
                   CELL,
-                  'text-center font-mono text-xs font-semibold tabular-nums',
+                  'text-center text-xs font-semibold tabular-nums',
                   companyDelta === null ? 'text-fg-label' : deltaInkOf(companyDelta, 1, bands.scale),
                 )}
               >
@@ -287,7 +287,6 @@ export default function ResultsClimateGrid({
                     )
                   }
                   const band = bandOf(value, bands)
-                  const short = bandShortName(band, bands, t)
                   const cellOpen = rowOpen && selection?.dimensionKey === dimension.key
                   return (
                     <td key={dimension.key} className={CELL}>
@@ -303,22 +302,19 @@ export default function ResultsClimateGrid({
                       >
                         <span
                           data-band={band}
-                          className="flex h-11 w-full flex-col items-center justify-center gap-px overflow-hidden rounded border px-1"
+                          className="flex h-10 w-full items-center justify-center gap-1 overflow-hidden rounded-md border px-1"
                           style={{ ...bandCellStyle(band), ...(cellOpen ? { boxShadow: OPEN_RING } : {}) }}
                           title={bandName(band, bands, t)}
                         >
                           <span className="sr-only">{`${description}: `}</span>
-                          <span className="font-mono text-sm font-semibold tabular-nums">{score(value)}</span>
-                          <span className="sr-only">{` — ${bandName(band, bands, t)}`}</span>
-                          {/* The band's word under the number, so the cell never speaks in
-                              colour alone; hidden from AT, which already heard the name. */}
-                          <span
-                            aria-hidden="true"
-                            className="inline-flex max-w-full items-center gap-0.75 text-3xs font-semibold uppercase tracking-label"
-                          >
+                          {/* The spec's `.hm td`: the band's glyph before the number, so the
+                              cell never speaks in colour alone; the legend names the glyphs,
+                              the `title` names the area, and AT hears the full name. */}
+                          <span aria-hidden="true" className="inline-flex text-xs">
                             <BandGlyph band={band} />
-                            <span className="truncate">{short}</span>
                           </span>
+                          <span className="text-sm font-semibold tabular-nums">{score(value)}</span>
+                          <span className="sr-only">{` — ${bandName(band, bands, t)}`}</span>
                         </span>
                       </button>
                     </td>
@@ -337,9 +333,9 @@ export default function ResultsClimateGrid({
                       {null}
                     </ProtectedCell>
                   ) : row.mean === null ? (
-                    <span className="font-mono text-base tabular-nums text-fg-primary">—</span>
+                    <span className="text-base tabular-nums text-fg-primary">—</span>
                   ) : (
-                    <span className="inline-flex items-center gap-1.5 font-mono text-base tabular-nums text-fg-primary">
+                    <span className="inline-flex items-center gap-1.5 text-base tabular-nums text-fg-primary">
                       <span style={{ color: BAND_PAINT[bandOf(row.mean, bands)].ink }} className="inline-flex">
                         <BandGlyph band={bandOf(row.mean, bands)} />
                       </span>
@@ -367,7 +363,7 @@ export default function ResultsClimateGrid({
                       // is nothing to compare with, said in words and never as a 0.
                       t('surveyResults.next.noPrevious', { wave: compare.code })
                     ) : (
-                      <span className={cn('font-mono tabular-nums', deltaInkOf(row.vsPrevious, 1, bands.scale))}>
+                      <span className={cn('tabular-nums', deltaInkOf(row.vsPrevious, 1, bands.scale))}>
                         {signed(row.vsPrevious)}
                       </span>
                     )}
@@ -385,7 +381,7 @@ export default function ResultsClimateGrid({
           {t('surveyResults.next.legendProtected', { floor: threshold })}
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span aria-hidden="true" className="inline-block size-3 rounded-xs border-2 border-fg-primary" />
+          <span aria-hidden="true" className="inline-block size-3 rounded-xs border-2 border-accent-blue" />
           {t('surveyResults.next.legendOpen')}
         </span>
       </BandLegend>
@@ -406,7 +402,7 @@ function MeanChip({ mean, bands, text }: { mean: number; bands: ResultBands; tex
     <span
       data-band={band}
       title={bandName(band, bands, t)}
-      className="inline-flex items-center gap-1.5 font-mono text-sm tabular-nums text-fg-primary"
+      className="inline-flex items-center gap-1.5 text-sm tabular-nums text-fg-primary"
     >
       <span style={{ color: BAND_PAINT[band].ink }} className="inline-flex">
         <BandGlyph band={band} />

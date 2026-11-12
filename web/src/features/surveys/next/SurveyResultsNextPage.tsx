@@ -67,12 +67,15 @@ export default function SurveyResultsNextPage() {
       {loading || !model ? (
         <SkeletonText lines={6} />
       ) : (
-        <>
-          <SurveyResultsNextView model={model} capabilities={capabilities} baseUrl={baseUrl} onError={setActionError} />
-          {/* Below the page rather than inside the view: a cross is a question asked ABOUT
-              the results, and the view above is the results. */}
-          <SurveyCrossPanel surveyId={id} payload={payload} baseUrl={baseUrl} bands={model.bands} />
-        </>
+        <SurveyResultsNextView
+          model={model}
+          capabilities={capabilities}
+          baseUrl={baseUrl}
+          onError={setActionError}
+          // Drawn here and placed by the view under its «Cruces» segment: a cross is a question
+          // asked ABOUT the results, and it keeps its own requests and state.
+          crossPanel={<SurveyCrossPanel surveyId={id} payload={payload} baseUrl={baseUrl} bands={model.bands} />}
+        />
       )}
     </LoadingRegion>
   )

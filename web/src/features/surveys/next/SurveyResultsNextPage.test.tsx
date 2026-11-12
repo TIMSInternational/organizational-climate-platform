@@ -258,7 +258,7 @@ describe('SurveyResultsNextPage', () => {
     const tile = screen.getByText(copy.climateLabelWave.replace('{wave}', 'Q3')).closest('[data-slot="kpi-tile"]') as HTMLElement
     const value = tile.querySelector('[data-slot="kpi-value"]')!.textContent!
     const grid = screen.getByTestId('climate-grid')
-    const cells = [...grid.querySelectorAll('tr[data-testid^="group-row-"] [data-band] span.font-mono.font-semibold')].map((cell) => cell.textContent!)
+    const cells = [...grid.querySelectorAll('tr[data-testid^="group-row-"] [data-band] span.tabular-nums.font-semibold')].map((cell) => cell.textContent!)
     const out = { value, tile: tile.textContent!, cells, bands: [...grid.querySelectorAll('tr[data-testid^="group-row-"] [data-band]')].map((cell) => cell.getAttribute('data-band')) }
     cleanup()
     forgetResultBands()
@@ -483,6 +483,8 @@ describe('SurveyResultsNextPage', () => {
     it('gathers open text into one themes cloud, per language, and says what it withheld', async () => {
       vi.mocked(fetch).mockImplementation(fetching(withOpenText()))
       renderAt({ role: 'company_admin' })
+      // The themes live under their own view; the switch offers it because the survey has open text.
+      await userEvent.click(await screen.findByRole('button', { name: en.surveyResults.next.viewComments }))
       const themes = await screen.findByRole('region', { name: en.surveyResults.themesTitle })
       // Merged across the two questions: the only place "workload" reads 9.
       expect(within(themes).getByLabelText('workload, 9 occurrences')).toBeTruthy()
@@ -501,6 +503,7 @@ describe('SurveyResultsNextPage', () => {
       }
       vi.mocked(fetch).mockImplementation(fetching(allWithheld))
       renderAt({ role: 'company_admin' })
+      await userEvent.click(await screen.findByRole('button', { name: en.surveyResults.next.viewComments }))
       const themes = await screen.findByRole('region', { name: en.surveyResults.themesTitle })
       expect(within(themes).getByText(/9 words are withheld/)).toBeTruthy()
     })
@@ -509,11 +512,15 @@ describe('SurveyResultsNextPage', () => {
       renderAt({ role: 'company_admin' })
       await screen.findByRole('heading', { level: 1 })
       expect(screen.queryByRole('region', { name: en.surveyResults.themesTitle })).toBeNull()
+      // Nor a view for it: the switch offers only the views this survey has.
+      expect(screen.queryByRole('button', { name: en.surveyResults.next.viewComments })).toBeNull()
+      expect(screen.getByRole('button', { name: en.surveyResults.next.viewQuestions })).toBeTruthy()
     })
 
     it('lists every question under the map, and narrows the list by type without a request', async () => {
       vi.mocked(fetch).mockImplementation(fetching(withOpenText()))
       renderAt({ role: 'company_admin' })
+      await userEvent.click(await screen.findByRole('button', { name: en.surveyResults.next.viewQuestions }))
       const list = await screen.findByTestId('question-list')
       // Both scale questions and both open-ended ones: the open-ended pair has no
       // other on-screen surface, since the map is drawn from scale questions only.

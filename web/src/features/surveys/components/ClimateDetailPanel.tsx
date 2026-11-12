@@ -115,7 +115,7 @@ export default function ClimateDetailPanel({
             <p className="mb-1 flex flex-wrap items-baseline gap-2 text-sm font-medium text-fg-primary">
               {dimensionName(dimension.key)}
               {dimension.score !== null && (
-                <span className="font-mono tabular-nums text-fg-secondary">
+                <span className="tabular-nums text-fg-secondary">
                   {score(dimension.score)}
                 </span>
               )}
@@ -148,13 +148,13 @@ export default function ClimateDetailPanel({
                       question, which is the absence of a measurement — the same
                       distinction the map draws between a withheld cell and an
                       empty one, one level further in. */}
-                  <td className="font-mono tabular-nums">
+                  <td className="tabular-nums">
                     {question.score === null ? '—' : score(question.score)}
                   </td>
-                  <td className="font-mono tabular-nums text-fg-secondary">
+                  <td className="tabular-nums text-fg-secondary">
                     {score(question.surveyScore)}
                   </td>
-                  <td className="font-mono tabular-nums text-fg-secondary">
+                  <td className="tabular-nums text-fg-secondary">
                     {question.answeredCount}
                   </td>
                   <td>

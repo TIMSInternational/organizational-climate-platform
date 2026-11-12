@@ -195,13 +195,13 @@ function SurveySection({ section }: { section: ReportSurveySection }) {
                       uncatalogued category as its author wrote it rather than as
                       boilerplate. */}
                   <TableCell>{dimensionLabel(dimension.dimension, t)}</TableCell>
-                  <TableCell className="font-mono tabular-nums">
+                  <TableCell className="tabular-nums">
                     {dimension.questionCount.toLocaleString(locale)}
                   </TableCell>
-                  <TableCell className="font-mono tabular-nums">
+                  <TableCell className="tabular-nums">
                     {dimension.answeredCount.toLocaleString(locale)}
                   </TableCell>
-                  <TableCell className="font-mono tabular-nums">
+                  <TableCell className="tabular-nums">
                     {dimension.averageScore === null
                       ? t('surveyResults.notApplicable')
                       : dimension.averageScore.toLocaleString(locale, {
@@ -236,10 +236,10 @@ function SurveySection({ section }: { section: ReportSurveySection }) {
                   <TableCell colSpan={2}>{t('surveyResults.withheld')}</TableCell>
                 ) : (
                   <>
-                    <TableCell className="font-mono tabular-nums">
+                    <TableCell className="tabular-nums">
                       {department.respondentCount.toLocaleString(locale)}
                     </TableCell>
-                    <TableCell className="font-mono tabular-nums">
+                    <TableCell className="tabular-nums">
                       {department.participationRate === null
                         ? t('surveyResults.notApplicable')
                         : formatMetric(
@@ -378,14 +378,14 @@ function DistributionTable({ question }: { question: SurveyQuestionResult }) {
                 resolved for the section's locale and the stable value is what a bare
                 scale point has instead of one. */}
             <TableCell>{bucket.label ?? bucket.value}</TableCell>
-            <TableCell className="font-mono tabular-nums">
+            <TableCell className="tabular-nums">
               {bucket.count.toLocaleString(locale)}
             </TableCell>
-            <TableCell className="font-mono tabular-nums">
+            <TableCell className="tabular-nums">
               {formatMetric(bucket.percentage, { kind: 'percentage' }, locale)}
             </TableCell>
             {isRanking && (
-              <TableCell className="font-mono tabular-nums">
+              <TableCell className="tabular-nums">
                 {bucket.averageRank === null
                   ? t('surveyResults.notApplicable')
                   : bucket.averageRank.toLocaleString(locale, { maximumFractionDigits: 2 })}
@@ -438,10 +438,10 @@ function WordFrequencies({ question }: { question: SurveyQuestionResult }) {
               <TableRow key={`${word.language}:${word.word}`}>
                 <TableCell>{word.word}</TableCell>
                 <TableCell>{contentLanguageName(t, word.language)}</TableCell>
-                <TableCell className="font-mono tabular-nums">
+                <TableCell className="tabular-nums">
                   {word.count.toLocaleString(locale)}
                 </TableCell>
-                <TableCell className="font-mono tabular-nums">
+                <TableCell className="tabular-nums">
                   {word.responseCount.toLocaleString(locale)}
                 </TableCell>
               </TableRow>
@@ -564,13 +564,13 @@ function DemographicBreakdown({
                 </TableCell>
               ) : (
                 <>
-                  <TableCell className="font-mono tabular-nums">
+                  <TableCell className="tabular-nums">
                     {segment.respondentCount.toLocaleString(locale)}
                   </TableCell>
                   {columns.map((column) => {
                     const score = segment.dimensions.find((row) => row.dimension === column)
                     return (
-                      <TableCell key={column} className="font-mono tabular-nums">
+                      <TableCell key={column} className="tabular-nums">
                         {score === undefined || score.averageScore === null
                           ? t('surveyResults.notApplicable')
                           : score.averageScore.toLocaleString(locale, {
@@ -591,11 +591,11 @@ function DemographicBreakdown({
           {breakdown.unsegmentedRespondentCount !== null && breakdown.unsegmentedRespondentCount > 0 && (
             <TableRow>
               <TableCell>{t('surveyResults.unsegmented')}</TableCell>
-              <TableCell className="font-mono tabular-nums">
+              <TableCell className="tabular-nums">
                 {breakdown.unsegmentedRespondentCount.toLocaleString(locale)}
               </TableCell>
               {columns.map((column) => (
-                <TableCell key={column} className="font-mono tabular-nums">
+                <TableCell key={column} className="tabular-nums">
                   {t('surveyResults.notApplicable')}
                 </TableCell>
               ))}
@@ -707,10 +707,10 @@ function BenchmarkBlock({ benchmark }: { benchmark: ReportBenchmarkComparison })
               return (
                 <TableRow key={change.metricName}>
                   <TableCell>{change.metricName}</TableCell>
-                  <TableCell className="font-mono tabular-nums">
+                  <TableCell className="tabular-nums">
                     <Reading value={change.value} unit={change.unit} />
                   </TableCell>
-                  <TableCell className="font-mono tabular-nums">
+                  <TableCell className="tabular-nums">
                     <Reading value={change.priorValue} unit={change.priorUnit} />
                   </TableCell>
                   {unitsDiffer ? (
@@ -722,7 +722,7 @@ function BenchmarkBlock({ benchmark }: { benchmark: ReportBenchmarkComparison })
                     </TableCell>
                   ) : (
                     <>
-                      <TableCell className="font-mono tabular-nums">
+                      <TableCell className="tabular-nums">
                         {change.delta === null
                           ? t('surveyResults.notApplicable')
                           : change.delta.toLocaleString(locale, {
@@ -730,7 +730,7 @@ function BenchmarkBlock({ benchmark }: { benchmark: ReportBenchmarkComparison })
                               signDisplay: 'exceptZero',
                             })}
                       </TableCell>
-                      <TableCell className="font-mono tabular-nums">
+                      <TableCell className="tabular-nums">
                         {/* `changeRatio` is a FRACTION — 0.057, not 5.7 — so `Intl`
                             does the ×100 as part of formatting it. Multiplying first
                             and appending a `%` is the concatenation bug formatMetric.ts
@@ -772,7 +772,7 @@ function BenchmarkBlock({ benchmark }: { benchmark: ReportBenchmarkComparison })
             {benchmark.metrics.map((metric) => (
               <TableRow key={metric.id}>
                 <TableCell>{metric.metricName}</TableCell>
-                <TableCell className="font-mono tabular-nums">
+                <TableCell className="tabular-nums">
                   <Reading value={metric.value} unit={metric.unit} />
                 </TableCell>
               </TableRow>
@@ -855,7 +855,7 @@ function InsightCard({ insight }: { insight: ReportAIInsight }) {
             how the two surfaces come to word the same fact differently. */}
         <span>
           {t('insights.confidence')}{' '}
-          <span className="font-mono tabular-nums">
+          <span className="tabular-nums">
             {t('insights.confidenceValue', {
               // `ReportAIInsightItem.ConfidenceScore` is an integer 0-100 — #152 was a
               // bug about reading a 0-1 confidence off the wrong model, so this is

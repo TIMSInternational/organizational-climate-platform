@@ -67,7 +67,7 @@ export default function ResultsCriticalAreas({
           <h2 id={`${CRITICAL_SECTION_ID}-heading`} tabIndex={-1} className="mb-0 text-2xl">
             {heading}
           </h2>
-          <span className="font-mono text-sm tabular-nums text-fg-label">{cells.length}</span>
+          <span className="text-sm tabular-nums text-fg-label">{cells.length}</span>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <p className="m-0 text-sm text-fg-label">
@@ -99,7 +99,7 @@ export default function ResultsCriticalAreas({
         </div>
       </div>
 
-      <ul className="m-0 flex list-none flex-col rounded-lg border border-line-default bg-surface-card p-0 shadow-sm">
+      <ul className="m-0 flex list-none flex-col rounded-xl border border-line-panel bg-surface-card p-0">
         {clusters.map((cluster) => {
           const first = cluster.cells[0]
           const title = byGroup ? (first?.rowName ?? '') : dimensionName(cluster.key)
@@ -131,7 +131,7 @@ export default function ResultsCriticalAreas({
                   const box = (
                     <span
                       data-band="critical"
-                      className="inline-flex h-6 min-w-10 shrink-0 items-center justify-center rounded border px-1.5 font-mono text-sm font-semibold tabular-nums"
+                      className="inline-flex h-6 min-w-10 shrink-0 items-center justify-center rounded border px-1.5 text-sm font-semibold tabular-nums"
                       style={bandCellStyle('critical')}
                     >
                       {score(cell.score)}

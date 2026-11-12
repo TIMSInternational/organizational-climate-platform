@@ -121,7 +121,7 @@ describe('the survey results on the tenant’s real payload', () => {
 
   it('names the day the survey closed, not the day of its last response, and the wave it compares with', async () => {
     await open()
-    const eyebrow = document.querySelector('[data-slot="page-eyebrow"]')
+    const eyebrow = document.querySelector('[data-slot="page-header-eyebrow"]')
     expect(eyebrow?.textContent).toBe('Encuesta de Clima Q3 · cerró el 6 de agosto')
     expect(eyebrow?.textContent).not.toContain('última respuesta')
     expect(screen.getByRole('heading', { level: 1, name: 'Resultados de Encuesta de Clima Q3' })).toBeTruthy()
@@ -141,7 +141,9 @@ describe('the survey results on the tenant’s real payload', () => {
     // 3,6533 against Q2's 3,3600; Q1 3,03 → Q2 3,36 → Q3 3,65 makes this the second rise.
     const delta = screen.getByTestId('climate-delta')
     expect(delta.textContent).toBe('+0,29 frente a Q2 · segunda alza seguida')
-    expect(delta.className).toContain('text-accent-green-ink')
+    // The sign carries the rise; green and red belong to the three result areas only.
+    expect(delta.className).toContain('text-fg-secondary')
+    expect(delta.className).not.toContain('text-accent-green-ink')
     expect(tiles).toContain('24respuestas completas')
     expect(tiles).not.toContain('sin terminar')
     expect(tiles).toContain('cerró el 6 de agosto · sin lista de invitados')
@@ -248,10 +250,30 @@ describe('the survey results on the tenant’s real payload', () => {
       expect(within(legend).getByText(name)).toBeTruthy()
       expect(within(legend).getByText(range)).toBeTruthy()
     }
-    // Every disclosed cell prints its band's word under the number: colour is never alone.
+    // Every disclosed cell draws its band's glyph beside the number and names the area to
+    // assistive technology: colour is never alone.
     const operaciones = screen.getByTestId(`group-row-${OPS}`)
-    expect(operaciones.querySelectorAll('[data-band="critical"]')).toHaveLength(3)
-    expect(operaciones.textContent).toContain('Crítica')
+    const critical = [...operaciones.querySelectorAll('[data-band="critical"]')]
+    expect(critical).toHaveLength(3)
+    for (const cell of critical) {
+      expect(cell.querySelector('[data-band-glyph="critical"]')).not.toBeNull()
+      expect(cell.textContent).toContain('Área crítica')
+    }
+  })
+
+  it('draws one climate range bar per dimension: the disclosed groups’ low and high, the whole survey’s dot', async () => {
+    await open()
+    const section = screen.getByRole('region', { name: 'Clima por dimensión' })
+    const tracks = within(section).getAllByRole('img')
+    // One per map column, in the map's order.
+    expect(tracks).toHaveLength(6)
+    // Seguridad psicológica: Operaciones 2,6 is the lowest disclosed cell, Personas 4,4 the
+    // highest, and 3,8 is the company row's own cell in the map — nothing computed here.
+    expect(tracks[0].getAttribute('aria-label')).toBe('De 2,6 a 4,4; media 3,8')
+    expect(section.textContent).toContain('Operaciones 2,6 · Personas 4,4')
+    // The withheld group is neither in the range, nor in a caption, nor in a label.
+    expect(section.textContent).not.toContain('Finanzas')
+    for (const track of tracks) expect(track.getAttribute('aria-label')).not.toContain('Finanzas')
   })
 
   it('never names the withheld group, let alone prints a number for it: no row, no "other group", no name', async () => {

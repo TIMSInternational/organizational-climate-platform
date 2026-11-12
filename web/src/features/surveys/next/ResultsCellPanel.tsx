@@ -31,7 +31,7 @@ import { lowShare, type ResultsCellDetail, type ResultsDistributionPoint } from 
 import { actionPlansOffered } from '../../action-plans/offered'
 
 /** The artboard's `.label`: 10px, bold, uppercase, 0.06em, the tertiary ink. */
-const LABEL = 'm-0 text-2xs font-bold uppercase tracking-label text-fg-label'
+const LABEL = 'm-0 text-2xs font-semibold uppercase tracking-eyebrow text-fg-label'
 
 export interface ResultsCellPanelProps {
   detail: ResultsCellDetail
@@ -129,11 +129,11 @@ export default function ResultsCellPanel({
       id={id}
       aria-labelledby="results-next-cell"
       data-testid="cell-panel"
-      className="flex flex-col gap-3.5 rounded-lg border border-l-3 border-line-default border-l-fg-primary bg-surface-card px-5 pt-4 pb-4.5 shadow-sm"
+      className="flex flex-col gap-3.5 rounded-xl border border-l-3 border-line-panel border-l-accent-blue bg-surface-card px-5 pt-4 pb-4.5"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 flex-col gap-0.5">
-          <p className="m-0 text-2xs font-bold uppercase tracking-eyebrow text-fg-label">
+          <p className="m-0 text-2xs font-semibold uppercase tracking-eyebrow text-fg-label">
             {t('surveyResults.next.cellHeading')}
           </p>
           {/* `tabIndex={-1}` so "Ver la pregunta" can move focus here: the reader
@@ -145,7 +145,7 @@ export default function ResultsCellPanel({
             {detail.score !== null && (
               <>
                 {t('surveyResults.next.cellMean')}{' '}
-                <span className="font-mono tabular-nums text-fg-primary">{score(detail.score)}</span>
+                <span className="tabular-nums text-fg-primary">{score(detail.score)}</span>
                 {' · '}
               </>
             )}
@@ -174,7 +174,7 @@ export default function ResultsCellPanel({
                     {t('surveyResults.next.groupDistribution', { dimension, group: detail.rowName })}
                   </span>
                   <span className="inline-flex items-center gap-2">
-                    <span className="font-mono text-lg tabular-nums text-fg-primary">
+                    <span className="text-lg tabular-nums text-fg-primary">
                       {question.groupScore === null ? '—' : score(question.groupScore)}
                     </span>
                     {question.groupScore !== null && (
@@ -191,7 +191,7 @@ export default function ResultsCellPanel({
               </div>
 
               {/* One axis for the two strips, in the author's own anchor words. */}
-              <div aria-hidden="true" className="flex justify-between gap-2 font-mono text-2xs text-fg-label">
+              <div aria-hidden="true" className="flex justify-between gap-2 text-xs text-fg-label tabular-nums">
                 {axisOf(question, t).map((tick) => (
                   <span key={tick}>{tick}</span>
                 ))}
@@ -203,7 +203,7 @@ export default function ResultsCellPanel({
                     {t('surveyResults.next.companyDistribution')}
                   </span>
                   <span className="inline-flex items-center gap-2">
-                    <span className="font-mono text-lg tabular-nums text-fg-primary">{score(question.surveyScore)}</span>
+                    <span className="text-lg tabular-nums text-fg-primary">{score(question.surveyScore)}</span>
                     <BandChip band={bandOf(question.surveyScore, bands)} bands={bands} short />
                   </span>
                 </div>
@@ -255,9 +255,9 @@ export default function ResultsCellPanel({
                     style={bandCellStyle(other.band)}
                     title={bandName(other.band, bands, t)}
                   >
-                    <span className="font-mono text-sm font-semibold tabular-nums">{score(other.score)}</span>
+                    <span className="text-sm font-semibold tabular-nums">{score(other.score)}</span>
                     <span className="sr-only">{` — ${bandName(other.band, bands, t)}`}</span>
-                    <span aria-hidden="true" className="inline-flex min-w-0 items-center gap-0.75 text-3xs font-semibold uppercase tracking-label">
+                    <span aria-hidden="true" className="inline-flex min-w-0 items-center gap-1 text-xs font-medium">
                       <BandGlyph band={other.band} />
                       <span className="truncate">{bandShortName(other.band, bands, t)}</span>
                     </span>
@@ -469,7 +469,7 @@ function WaveDelta({
   const shown = shownDelta(to - from, scale, 1)
   const text = deltaScoreText(to - from, scale, locale, 1)
   return (
-    <span className={`font-mono text-xs tabular-nums ${deltaInkOf(to - from, 1, scale)}`}>
+    <span className={`text-xs tabular-nums ${deltaInkOf(to - from, 1, scale)}`}>
       <span aria-hidden="true">{shown < 0 ? '▼' : shown > 0 ? '▲' : '–'} </span>
       {text}
       <span className="sr-only">
@@ -519,7 +519,6 @@ function WaveSlope({
   const at = (value: number) => ((Math.min(Math.max(value, SCALE_MIN), SCALE_MAX) - SCALE_MIN) / span) * 100
   const fromAt = at(from)
   const toAt = at(to)
-  const shown = shownDelta(to - from, bands.scale, 1)
   const left = Math.min(fromAt, toAt)
   const width = Math.abs(toAt - fromAt)
   const number = (value: number) => scoreText(value, bands.scale, locale, 1)
@@ -527,9 +526,9 @@ function WaveSlope({
   return (
     <div className="flex flex-col gap-1.5">
       <p className="m-0 flex flex-wrap items-baseline gap-x-2 text-sm text-fg-primary">
-        <span className="font-mono tabular-nums">{`${fromLabel} ${number(from)}`}</span>
+        <span className="tabular-nums">{`${fromLabel} ${number(from)}`}</span>
         <span aria-hidden="true" className="text-fg-label">→</span>
-        <span className="font-mono tabular-nums font-semibold">{`${toLabel} ${number(to)}`}</span>
+        <span className="tabular-nums font-semibold">{`${toLabel} ${number(to)}`}</span>
         <WaveDelta from={from} to={to} scale={bands.scale} locale={locale} t={t} />
       </p>
       {/* Decorative: every value it draws is printed above it, and the band each wave falls
@@ -555,7 +554,8 @@ function WaveSlope({
             style={{
               left: `${left}%`,
               width: `${width}%`,
-              backgroundColor: shown < 0 ? 'var(--admin-accent-red-ink)' : 'var(--admin-accent-green-ink)',
+              // One ink both ways: the dots and the signed figure carry the direction.
+              backgroundColor: 'var(--admin-font-primary)',
             }}
           />
           <span
@@ -567,7 +567,7 @@ function WaveSlope({
             style={{ left: `${toAt}%`, backgroundColor: BAND_PAINT[bandOf(to, bands)].ink }}
           />
         </div>
-        <div className="flex justify-between font-mono text-2xs tabular-nums text-fg-label">
+        <div className="flex justify-between text-xs tabular-nums text-fg-label">
           <span>{number(SCALE_MIN)}</span>
           <span>{number(SCALE_MAX)}</span>
         </div>
