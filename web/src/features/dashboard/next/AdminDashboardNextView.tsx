@@ -1,27 +1,29 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router'
-import { AlertCircle, ArrowRight, Clock, FileText, Plus, Send, Waves } from 'lucide-react'
+import { AlertCircle, ArrowRight, Clock, FileText, Info, Plus, Send, Waves } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../i18n'
-import { PageTopBar } from '../../../components/layout'
+import { PageHeader } from '../../../components/layout'
 import {
   ANONYMITY_FLOOR,
   SINGLE_SEGMENT_FLOOR,
   BandChip,
   ClimateMap,
+  ClimateRangeBar,
   KpiTile,
   bandOf,
   boundaryText,
   scaleUnitText,
   scoreText,
   isSuppressed,
+  type ClimateRangeRow,
   type ResultBands,
 } from '../../../components/charts'
-import { Button, LoadingRegion, SkeletonText } from '../../../components/ui'
+import { Button, Chip, LoadingRegion, Note, SkeletonText } from '../../../components/ui'
 import { useViewerCapabilities, type ViewerCapabilities } from '../../../auth/viewerCapabilities'
 import { calendarDay, instantDay } from '../../../lib/calendarDay'
 import { cn } from '../../../lib/cn'
 import { KpiRow } from '../components/dashboardGrammar'
-import { Eyebrow, PopulationGrid, SectionRule } from '../../../components/signal/SignalPrimitives'
+import { Eyebrow, PopulationGrid } from '../../../components/signal/SignalPrimitives'
 import type { AdminDashboardModel, AttentionItem, DimensionSeries, RegionKey, RegionStatuses, Wave } from './model'
 import {
   closedWaveCount,
@@ -59,7 +61,7 @@ const BOUNDARY_RULE = 'var(--admin-line-control)'
  * region (`compose.ts`). `regions` says which of them fell back to the sample; each
  * section names its own in a sentence, beside the chip in the top bar. The
  * same rules as `CompanyAdminDashboardView` hold — every reading is
- * `font-mono tabular-nums`, prose stays sans; a withheld row is drawn hatched,
+ * set in tabular figures of the sans face, prose too; a withheld row is drawn hatched,
  * never dropped, and never prints a number (`ClimateMap` with `threshold` at the
  * floor); and no colour carries a change alone — every move carries its sign.
  *
@@ -70,10 +72,13 @@ export default function AdminDashboardNextView({
   model,
   regions,
   companyId,
+  onRetry,
 }: {
   model: AdminDashboardModel
   regions?: RegionStatuses
   companyId?: string
+  /** Reads the regions again; the notice of a failed region offers it as "Reintentar". */
+  onRetry?: () => void
 }) {
   const { t, locale } = useTranslation()
   // Every action below shows only when the server would answer it with something other
@@ -115,19 +120,22 @@ export default function AdminDashboardNextView({
     Math.max(...every, bands.strengthMin) + 0.25,
   ]
   const steps = cycleSteps(model.waves, t, locale)
+  const wave = model.latestClosedWave
+  const rangeRows = climateRangeRows(model, ordered, floor)
 
   return (
     <div>
-      <PageTopBar
-        eyebrow={model.companyName ?? undefined}
+      <PageHeader
+        eyebrow={[model.companyName, wave ? t('dashboard.next.eyebrowWave', { wave: wave.code }) : null].filter(Boolean).join(' · ') || undefined}
         title={t('dashboard.next.title')}
         description={t('dashboard.next.description')}
         // The one honest marker on a screen missing a section: nobody may read this page
         // as the whole picture while `isPartial` holds. It does NOT say the numbers are
         // invented — every number still on the page is this tenant's own measurement.
-        badge={model.isPartial ? { text: t('dashboard.next.unavailableChip'), variant: 'warning' } : undefined}
+        // Grey, not amber: amber is the Oportunidad area and nothing else (ruling 11 Nov).
+        titleAccessory={model.isPartial ? <Chip tone="neutral" icon={<Info aria-hidden="true" />} label={t('dashboard.next.unavailableChip')} /> : undefined}
         actions={
-          showExport || capabilities.canLaunchMicroclimate || capabilities.canAuthorSurveys ? (
+          showExport || capabilities.canLaunchMicroclimate ? (
             <>
               {/* The export is the server's own file and works whatever this page read; with
                   no company name it is named `dashboard-<day>` rather than after a tenant
@@ -141,39 +149,31 @@ export default function AdminDashboardNextView({
                   </Link>
                 </Button>
               )}
-              {capabilities.canAuthorSurveys && (
-                <Button asChild variant="primary">
-                  <Link to="/surveys/new">
-                    <Plus aria-hidden="true" />
-                    {t('dashboard.next.newSurvey')}
-                  </Link>
-                </Button>
-              )}
             </>
+          ) : undefined
+        }
+        primaryAction={
+          capabilities.canAuthorSurveys ? (
+            <Button asChild variant="primary">
+              <Link to="/surveys/new">
+                <Plus aria-hidden="true" />
+                {t('dashboard.next.newSurvey')}
+              </Link>
+            </Button>
           ) : undefined
         }
       />
 
-      {/* `-mt-1`: PageTopBar leaves the 24px the list and trends artboards carry under the
-          rule, but Dashboard.dc.html opens its first section at `margin-top: 20px`. */}
+      {/* `-mt-1`: the header leaves the 24px section gap under its rule, and the board
+          opens its first section at 20px. */}
       <div data-slot="dashboard-sections" className="-mt-1 flex flex-col gap-section">
         <section aria-labelledby="next-where" className="flex flex-col gap-3.5">
-          {/* `labelAs="plain"`: the heading stays an `<h2 id>`, because `aria-labelledby`
-              and three tests point at it. The rule and the meta are what this adds. */}
-          <SectionRule
-            labelAs="plain"
-            label={
-              <h2 id="next-where" className="m-0 text-2xl">
-                {t('dashboard.next.whereHeading')}
-              </h2>
-            }
-            meta={model.latestClosedWave?.code}
-          />
-          <RegionNotice regions={regions} region="company" t={t} />
+          <SectionHead id="next-where" heading={t('dashboard.next.whereHeading')} />
+          <RegionNotice regions={regions} region="company" t={t} onRetry={onRetry} />
           <KpiRow>
             <KpiTile
               size="hero"
-              label={t('dashboard.next.climateLabel', { wave: model.latestClosedWave?.code ?? '—' })}
+              label={wave ? t('dashboard.next.climateLabel', { wave: wave.code }) : t('dashboard.next.climateLabelNoWave')}
               value={latest}
               format={{ kind: 'number', decimals: 2 }}
               valueText={latest === null ? undefined : scoreText(latest, bands.scale, locale, 2)}
@@ -187,9 +187,9 @@ export default function AdminDashboardNextView({
               locale={locale}
               sub={
                 move !== null && model.previousWave ? (
-                  // The sign is in the reading, so the colour is a second channel.
-                  <span data-slot="climate-move" className={move >= 0 ? 'text-accent-green-ink' : 'text-accent-red-ink'}>
-                    <span className="font-mono tabular-nums">{signedReading(move, locale, 2, bands.scale)}</span>{' '}
+                  // The sign carries the direction. No green or red: those are result areas.
+                  <span data-slot="climate-move" className="text-fg-secondary">
+                    <span className="tabular-nums">{signedReading(move, locale, 2, bands.scale)}</span>{' '}
                     {t('dashboard.next.climateVs', { wave: model.previousWave.code })}
                     {rises >= 2 && <> · {risesPhrase(rises, t)}</>}
                   </span>
@@ -198,11 +198,13 @@ export default function AdminDashboardNextView({
             />
             <KpiTile
               size="hero"
-              label={t('dashboard.next.participationLabel', { wave: model.latestClosedWave?.code ?? '—' })}
+              label={wave ? t('dashboard.next.participationLabel', { wave: wave.code }) : t('dashboard.next.participationLabelNoWave')}
               value={model.participation.responses}
-              unit={t('dashboard.next.participationSub', {
-                percent: completion === null ? '—' : percentReading(completion, locale),
-              })}
+              unit={
+                completion === null
+                  ? t('dashboard.next.participationSubNoRate')
+                  : t('dashboard.next.participationSub', { percent: percentReading(completion, locale) })
+              }
               locale={locale}
               sub={
                 withheld.length > 0 ? (
@@ -218,7 +220,7 @@ export default function AdminDashboardNextView({
             />
             <KpiTile
               size="hero"
-              label={t('dashboard.next.openSurveyLabel', { wave: open?.code ?? '—' })}
+              label={open ? t('dashboard.next.openSurveyLabel', { wave: open.code }) : t('dashboard.next.openSurveyLabelNone')}
               value={open ? open.responses : null}
               unit={
                 open
@@ -244,10 +246,10 @@ export default function AdminDashboardNextView({
                     aria-valuemin={0}
                     aria-valuemax={open.audience}
                     aria-valuenow={open.responses}
-                    className="mt-0.5 block h-1.5 w-full overflow-hidden rounded-full bg-surface-icon-box"
+                    className="mt-0.5 block h-1.5 w-full overflow-hidden rounded-full bg-surface-fill"
                   >
                     <span
-                      className="block h-full rounded-full bg-accent-blue"
+                      className="block h-full rounded-full bg-accent-blue-fill"
                       style={{ width: `${Math.max(openProgress ?? 0, 2)}%` }}
                     />
                   </span>
@@ -262,14 +264,17 @@ export default function AdminDashboardNextView({
               locale={locale}
               sub={
                 model.plans && model.plans.overdue > 0 ? (
-                  <span className="flex items-center gap-1.5 text-accent-red-ink">
-                    <AlertCircle aria-hidden="true" className="size-3.5 shrink-0" />
+                  // Neutral ink with a clock and the word: overdue is a date, not a result area.
+                  <span className="flex items-center gap-1.5 text-fg-secondary">
+                    <Clock aria-hidden="true" className="size-3.5 shrink-0" />
                     <span>
-                      <span className="font-mono tabular-nums">{model.plans.overdue}</span>{' '}
-                      {t(
-                        model.plans.overdue === 1 ? 'dashboard.next.plansOverdueOne' : 'dashboard.next.plansOverdueMany',
-                        { nodo: model.plans.overdueNodo ?? '—' },
-                      )}
+                      <span className="tabular-nums">{model.plans.overdue}</span>{' '}
+                      {model.plans.overdueNodo
+                        ? t(
+                            model.plans.overdue === 1 ? 'dashboard.next.plansOverdueOne' : 'dashboard.next.plansOverdueMany',
+                            { nodo: model.plans.overdueNodo },
+                          )
+                        : t(model.plans.overdue === 1 ? 'dashboard.next.plansOverdueOneBare' : 'dashboard.next.plansOverdueManyBare')}
                     </span>
                   </span>
                 ) : undefined
@@ -284,20 +289,32 @@ export default function AdminDashboardNextView({
             included. Giving it the row makes the names a wrapping problem instead of a
             truncation one. */}
         <div className="flex flex-col gap-4">
-          <section
-            aria-labelledby="next-moved"
-            className="flex min-w-0 flex-col gap-3 rounded-lg border border-line-default bg-surface-card px-5 pt-4 pb-4.5 shadow-xs"
-          >
-            <SectionRule
-              labelAs="plain"
-              metaAs="plain"
-              label={
-                <h2 id="next-moved" className="m-0 text-2xl">
-                  {t('dashboard.next.movedHeading')}
-                </h2>
-              }
-              meta={
-                <span className="inline-flex items-center gap-2 text-sm text-fg-label">
+          {/* The signature (Main and CompanyHome boards): one climate range bar per
+              dimension — the stretch between the lowest and the highest DISCLOSED
+              department, the dot at the organization's mean as served, the track in the
+              company's own bands. A withheld department never enters a range. */}
+          {rangeRows.length > 0 && (
+            <section aria-labelledby="next-climate" data-slot="climate-by-dimension" className={CARD}>
+              <SectionHead
+                id="next-climate"
+                heading={t('dashboard.next.climateHeading')}
+                sub={wave ? t('dashboard.next.climateSubWave', { wave: wave.code }) : t('dashboard.next.climateSub')}
+                action={
+                  capabilities.seesWholeCompany && wave ? (
+                    <ResultsLink to={`/surveys/${wave.id}/results`} label={t('dashboard.next.seeResults')} />
+                  ) : undefined
+                }
+              />
+              <ClimateRangeBar rows={rangeRows} bands={bands} floor={floor} />
+            </section>
+          )}
+
+          <section aria-labelledby="next-moved" className={CARD}>
+            <SectionHead
+              id="next-moved"
+              heading={t('dashboard.next.movedHeading')}
+              sub={
+                <span className="inline-flex items-center gap-2">
                   <svg aria-hidden="true" width="18" height="2" viewBox="0 0 18 2" className="shrink-0">
                     <line x1="0" x2="18" y1="1" y2="1" stroke={BOUNDARY_RULE} strokeDasharray="3 2" />
                   </svg>
@@ -305,58 +322,46 @@ export default function AdminDashboardNextView({
                 </span>
               }
             />
-            <RegionNotice regions={regions} region="trends" t={t} />
-            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-              {ordered.map((dimension) => (
-                <SparkCard
-                  key={dimension.key}
-                  dimension={dimension}
-                  bands={bands}
-                  labels={waveCodes}
-                  domain={domain}
-                  t={t}
-                  locale={locale}
-                />
-              ))}
-            </div>
+            <RegionNotice regions={regions} region="trends" t={t} onRetry={onRetry} />
+            {ordered.length > 0 && (
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+                {ordered.map((dimension) => (
+                  <SparkCard
+                    key={dimension.key}
+                    dimension={dimension}
+                    bands={bands}
+                    labels={waveCodes}
+                    domain={domain}
+                    t={t}
+                    locale={locale}
+                  />
+                ))}
+              </div>
+            )}
           </section>
 
-          <section
-            aria-labelledby="next-by-group"
-            className="flex min-w-0 flex-col gap-3 rounded-lg border border-line-default bg-surface-card px-5 pt-4 pb-4.5 shadow-xs"
-          >
+          <section aria-labelledby="next-by-group" className={CARD}>
             {/* `GET /surveys/{id}/results` is `CanAdminister` (`SurveyResultsEndpoints.cs:199`):
                 an admin with a company, for any survey of the scoped tenant. And: no wave,
                 no link — there is no results page for a survey nobody read. */}
-            <SectionRule
-              labelAs="plain"
-              metaAs="plain"
-              label={
-                <h2 id="next-by-group" className="m-0 text-2xl">
-                  {t('dashboard.next.byGroupHeading', { wave: model.latestClosedWave?.code ?? '—' })}
-                </h2>
-              }
-              meta={
-                capabilities.seesWholeCompany && model.latestClosedWave ? (
-                  <Link
-                    to={`/surveys/${model.latestClosedWave.id}/results`}
-                    className="inline-flex items-center gap-1 text-sm text-fg-secondary hover:text-fg-primary"
-                  >
-                    {t('dashboard.next.openResults')}
-                    <ArrowRight aria-hidden="true" className="size-3.5" />
-                  </Link>
+            <SectionHead
+              id="next-by-group"
+              heading={wave ? t('dashboard.next.byGroupHeading', { wave: wave.code }) : t('dashboard.next.byGroupHeadingNoWave')}
+              action={
+                capabilities.seesWholeCompany && wave ? (
+                  <ResultsLink to={`/surveys/${wave.id}/results`} label={t('dashboard.next.openResults')} />
                 ) : undefined
               }
             />
-            <RegionNotice regions={regions} region="map" t={t} />
+            <RegionNotice regions={regions} region="map" t={t} onRetry={onRetry} />
             {/* No rows, no grid. An empty ClimateMap is a set of headers promising a
                 table that never arrives; the notice above has already said why. */}
             {model.map.rows.length > 0 && (
             <div className="overflow-x-auto">
               <ClimateMap
                 // The artboard's grid: whole names set small and cut by their column (the
-                // full name on hover and for AT), 34px cells, the grouped legend, and no
-                // ring — the deep red is the mark. Columns in the survey's question order
+                // full name on hover and for AT), the grouped legend, and no ring — the deep
+                // red is the mark. Columns in the survey's question order
                 // (`compose.ts` `questionOrderOf`), which is the artboard's order.
                 variant="canvas"
                 dimensions={model.map.dimensionKeys.map((key) => ({ key, label: dimensionName(key) }))}
@@ -380,9 +385,12 @@ export default function AdminDashboardNextView({
                 grid does not say. A group under the floor draws a fixed band and no
                 count: `PopulationGrid` records why `n` dots would BE the count. */}
             {model.map.rows.length > 0 && (
-              <div className="flex flex-col gap-3 border-t border-line-light pt-3.5">
+              <div className="flex flex-col gap-3 border-t border-line-default pt-3.5">
                 <Eyebrow>{t('dashboard.next.whoAnsweredHeading')}</Eyebrow>
                 <PopulationGrid
+                  // Under `sm` the name column gives the dots room: at 390 its 16rem
+                  // maximum left the dots a 10px column, one dot per line (review finding 4).
+                  className="max-sm:grid-cols-[minmax(0,8rem)_minmax(0,1fr)_auto]"
                   bands={model.map.rows.map((row) => ({
                     name: row.name,
                     responses: row.responses,
@@ -390,7 +398,7 @@ export default function AdminDashboardNextView({
                   }))}
                   protectedLabel={t('dashboard.next.protectedWord')}
                 />
-                <p className="m-0 text-xs text-fg-tertiary">
+                <p className="m-0 text-sm text-fg-tertiary">
                   {t('dashboard.next.whoAnsweredNote', { floor })}
                 </p>
               </div>
@@ -399,75 +407,67 @@ export default function AdminDashboardNextView({
         </div>
 
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-          <section aria-labelledby="next-attention" className="flex min-w-0 flex-col gap-2.5 xl:col-span-7">
-            <SectionRule
-              labelAs="plain"
-              label={
-                <h2 id="next-attention" className="m-0 text-2xl">
-                  {t('dashboard.next.attentionHeading')}
-                </h2>
-              }
-              meta={model.attention.length > 0 ? model.attention.length : undefined}
+          <section aria-labelledby="next-attention" className={cn(CARD_FLUSH, 'xl:col-span-7')}>
+            <SectionHead
+              id="next-attention"
+              heading={t('dashboard.next.attentionHeading')}
+              count={model.attention.length > 0 ? model.attention.length : undefined}
+              className="px-5"
             />
-            <RegionNotice regions={regions} region="actionPlans" t={t} />
-            <RegionNotice regions={regions} region="tracking" t={t} />
-            {/* An empty list still draws its card border and reads as a rule across the
-                section — only the rendered screen shows it, since every assertion about
-                the list passes either way. No items, no card. */}
-            {model.attention.length > 0 && (
-            <ul
-              data-slot="attention-list"
-              className="m-0 list-none divide-y divide-line-light rounded-lg border border-line-default bg-surface-card p-0 shadow-xs"
-            >
-              {model.attention.map((item, index) => (
-                <AttentionRow
-                  key={index}
-                  item={item}
-                  model={model}
-                  t={t}
-                  locale={locale}
-                  capabilities={capabilities}
-                />
-              ))}
-            </ul>
+            <div className="flex flex-col gap-2 px-5 empty:hidden">
+              <RegionNotice regions={regions} region="actionPlans" t={t} onRetry={onRetry} />
+              <RegionNotice regions={regions} region="tracking" t={t} onRetry={onRetry} />
+            </div>
+            {model.attention.length > 0 ? (
+              <ul data-slot="attention-list" className="m-0 list-none divide-y divide-line-default p-0">
+                {model.attention.map((item, index) => (
+                  <AttentionRow
+                    key={index}
+                    item={item}
+                    model={model}
+                    t={t}
+                    locale={locale}
+                    capabilities={capabilities}
+                  />
+                ))}
+              </ul>
+            ) : (
+              <p className="m-0 px-5 pb-1 text-sm text-fg-tertiary">{t('dashboard.next.attentionNone')}</p>
             )}
           </section>
 
-          <section aria-labelledby="next-cycle" className="flex min-w-0 flex-col gap-2.5 xl:col-span-5">
-            <SectionRule
-              labelAs="plain"
-              label={
-                <h2 id="next-cycle" className="m-0 text-2xl">
-                  {t('dashboard.next.cycleHeading')}
-                </h2>
-              }
-            />
-            <RegionNotice regions={regions} region="surveys" t={t} />
-            {/* Same rule as the map: no waves, no timeline — and no note about a cycle
-                nobody read. */}
-            {steps.length > 0 && (
-              <div className="flex flex-col gap-3.5 rounded-lg border border-line-default bg-surface-card px-5 pt-4.5 pb-4 shadow-xs">
-                <CycleTimeline steps={steps} label={t('dashboard.next.cycleLabel')} />
-                <p className="m-0 flex items-center gap-2.5 rounded-md bg-surface-outer px-3 py-2.5 text-sm text-fg-secondary">
-                  <FileText aria-hidden="true" className="size-3.5 shrink-0" />
-                  <span>{t('dashboard.next.cycleNote')}</span>
-                </p>
-              </div>
-            )}
-            <RegionNotice regions={regions} region="microclimates" t={t} />
+          <div className="flex min-w-0 flex-col gap-4 xl:col-span-5">
+            <section aria-labelledby="next-cycle" className={CARD}>
+              <SectionHead id="next-cycle" heading={t('dashboard.next.cycleHeading')} />
+              <RegionNotice regions={regions} region="surveys" t={t} onRetry={onRetry} />
+              {/* Same rule as the map: no waves, no timeline — and no note about a cycle
+                  nobody read. */}
+              {steps.length > 0 && (
+                <>
+                  <CycleTimeline steps={steps} label={t('dashboard.next.cycleLabel')} />
+                  <Note icon={<FileText />} className="text-sm">
+                    {t('dashboard.next.cycleNote')}
+                  </Note>
+                </>
+              )}
+            </section>
+            <RegionNotice regions={regions} region="microclimates" t={t} onRetry={onRetry} />
             {model.liveMicroclimate && (
               <div
                 data-slot="live-microclimate"
-                className="flex items-center justify-between gap-3 rounded-lg border border-line-default bg-surface-card px-4 py-3.5 shadow-xs"
+                className="flex items-center justify-between gap-3 rounded-xl border border-line-panel bg-surface-card px-5 py-3.5"
               >
                 <div className="flex min-w-0 flex-col gap-0.5">
                   {/* The name's head, as the artboard's "Pulso semanal en vivo"; the whole
                       name, subtitle included, is the tooltip. */}
-                  <span className="truncate text-base font-semibold text-fg-primary" title={model.liveMicroclimate.name}>
-                    {t('dashboard.next.liveNamed', { name: nameHead(model.liveMicroclimate.name) })}
+                  <span className="flex min-w-0 items-center gap-2">
+                    <Chip tone="live" label={t('dashboard.next.liveChip')} className="shrink-0" />
+                    <span className="truncate text-base font-semibold text-fg-primary" title={model.liveMicroclimate.name}>
+                      {t('dashboard.next.liveNamed', { name: nameHead(model.liveMicroclimate.name) })}
+                    </span>
                   </span>
-                  <span className="text-sm text-fg-label">
-                    <span className="font-mono tabular-nums">{model.liveMicroclimate.responses}</span>{' '}
+                  <span className="text-sm text-fg-tertiary">
+                    <span className="tabular-nums">{model.liveMicroclimate.responses}</span>{' '}
                     {t('dashboard.next.liveSub', {
                       // An instant, not a calendar day: the minute the session stops
                       // taking answers, read where the reader is (`instantDay`).
@@ -479,21 +479,99 @@ export default function AdminDashboardNextView({
                 {/* The live page loads `GET /microclimates/{id}/live-results`, which is
                     `CanAccessCompany` (`MicroclimateEndpoints.cs:1420`): the same admin-with-a-company. */}
                 {capabilities.seesWholeCompany && (
-                  <Link
-                    to={`/microclimates/${model.liveMicroclimate.id}/live`}
-                    className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-sm text-fg-secondary hover:text-fg-primary"
-                  >
-                    {t('dashboard.next.viewSession')}
-                    <ArrowRight aria-hidden="true" className="size-3.5" />
-                  </Link>
+                  <ResultsLink to={`/microclimates/${model.liveMicroclimate.id}/live`} label={t('dashboard.next.viewSession')} />
                 )}
               </div>
             )}
-          </section>
+          </div>
         </div>
       </div>
     </div>
   )
+}
+
+/** A bordered card in the box (spec `.card`): 12px radius, the panel hairline, no shadow. */
+const CARD = 'flex min-w-0 flex-col gap-3.5 rounded-xl border border-line-panel bg-surface-card px-5 pt-4.5 pb-5'
+/** The same card with its rows edge to edge (spec `.card.flush`). */
+const CARD_FLUSH = 'flex min-w-0 flex-col gap-3 overflow-hidden rounded-xl border border-line-panel bg-surface-card pt-4.5 pb-2'
+
+/**
+ * A section's heading row, as the boards' `.ch`: the serif title (index.css sets every `h2`
+ * in the display face), an optional count and secondary line, and one blue text action at
+ * the end. The `h2` keeps its `id` because `aria-labelledby` and the tests point at it.
+ */
+function SectionHead({
+  id,
+  heading,
+  sub,
+  action,
+  count,
+  className,
+}: {
+  id: string
+  heading: string
+  sub?: ReactNode
+  action?: ReactNode
+  count?: number
+  className?: string
+}) {
+  return (
+    <div className={cn('flex flex-wrap items-start gap-x-3 gap-y-1', className)}>
+      <div className="flex min-w-0 grow basis-60 flex-col gap-1">
+        <div className="flex items-baseline gap-2">
+          <h2 id={id} className="m-0 text-2xl font-semibold">
+            {heading}
+          </h2>
+          {count !== undefined && <span className="text-sm text-fg-tertiary tabular-nums">{count}</span>}
+        </div>
+        {sub && <div className="text-sm text-fg-tertiary">{sub}</div>}
+      </div>
+      {action}
+    </div>
+  )
+}
+
+/** The boards' `.btn.t`: a blue text action with a chevron, 44px tall on touch. */
+function ResultsLink({ to, label }: { to: string; label: string }) {
+  return (
+    <Button asChild variant="plain" className="-mr-2 shrink-0">
+      <Link to={to}>
+        {label}
+        <ArrowRight aria-hidden="true" />
+      </Link>
+    </Button>
+  )
+}
+
+/**
+ * The climate range bar's rows, one per dimension in the trend cards' order (the two views
+ * show the same data, so they read in one order — review finding 17).
+ *
+ * - **The dot** is the organization's own mean for the latest closed wave, as the trends
+ *   endpoint served it — the same figure the climate tile averages. Never a mean of the
+ *   groups below: those are partly withheld.
+ * - **The range** is drawn over the map's departments for that wave. A row the map hatches
+ *   (under the floor the server applied) arrives `protected` and never enters it; a row
+ *   with no score for the dimension arrives with `mean: null`, which is not a 0.
+ */
+function climateRangeRows(
+  model: AdminDashboardModel,
+  ordered: readonly DimensionSeries[],
+  floor: number,
+): ClimateRangeRow[] {
+  return ordered.flatMap((dimension) => {
+    const mean = dimension.values[dimension.values.length - 1]
+    if (mean === undefined) return []
+    const column = model.map.dimensionKeys.indexOf(dimension.key)
+    const groups =
+      column < 0
+        ? []
+        : model.map.rows.map((row) => {
+            const withheld = isSuppressed(row.responses, floor) || row.scores.length === 0
+            return { name: row.name, mean: withheld ? null : (row.scores[column] ?? null), protected: withheld }
+          })
+    return [{ key: dimension.key, label: dimension.name, mean, groups }]
+  })
 }
 
 /** One dimension's card in "Qué se movió": its name, its latest reading and move, its sparkline. */
@@ -524,7 +602,7 @@ function SparkCard({
       data-slot="trend-card"
       data-dimension={dimension.key}
       data-band={band}
-      className="flex min-w-0 flex-col gap-1.5 rounded-md border border-line-light px-3.5 pt-3 pb-2.5"
+      className="flex min-w-0 flex-col gap-1.5 rounded-lg border border-line-default px-3.5 pt-3 pb-2.5"
     >
       <div className="flex min-w-0 items-center justify-between gap-2">
         {/* The dimension name is what the number is OF, so it wraps rather than truncates —
@@ -534,11 +612,12 @@ function SparkCard({
         <BandChip band={band} bands={bands} short className="h-4.5 shrink-0 px-1.5 text-2xs" />
       </div>
       <div className="flex flex-wrap items-baseline gap-2">
-        <span className="font-mono text-reading leading-none tabular-nums text-fg-primary">{reading(value, locale, 1, bands.scale)}</span>
+        <span className="text-reading leading-none font-semibold tabular-nums text-fg-primary">{reading(value, locale, 1, bands.scale)}</span>
         {move !== null && (
           <span
             data-slot="trend-move"
-            className={cn('font-mono text-sm tabular-nums', move >= 0 ? 'text-accent-green-ink' : 'text-accent-red-ink')}
+            // The sign carries the direction; green and red are result areas, never a move.
+            className="text-sm tabular-nums text-fg-secondary"
           >
             {signedReading(move, locale, 1, bands.scale)}
           </span>
@@ -651,7 +730,7 @@ function RichLine({
         'strong' in value ? (
           <strong className="font-semibold text-fg-primary">{value.strong}</strong>
         ) : (
-          <span className="font-mono tabular-nums">{value.mono}</span>
+          <span className="tabular-nums">{value.mono}</span>
         ),
       )
     } else {
@@ -742,9 +821,10 @@ function AttentionRow({
             params={{ nodo: { strong: item.nodo }, plan: item.plan.name }}
           />
         }
-        detail={t('dashboard.next.overduePlanSub', {
+        // A segment whose value is unknown is left out, never printed as "—".
+        detail={t(item.plan.owner ? 'dashboard.next.overduePlanSub' : 'dashboard.next.overduePlanSubNoOwner', {
           date: item.plan.dueAt ? longDay(item.plan.dueAt, locale) : '—',
-          owner: item.plan.owner ?? '—',
+          owner: item.plan.owner ?? '',
           // The tracking plan's own `porcentajeAvance`, printed as the percentage it is.
           progress: percentReading(item.plan.progress, locale),
         })}
@@ -767,6 +847,14 @@ function AttentionRow({
     model.participation.completed !== null && model.participation.responses !== null
       ? percent(model.participation.completed, model.participation.responses)
       : null
+  // Past the close the sentence says when it closed, never "a −45 días del cierre".
+  const days = daysBetween(model.asOf, survey.closesAt)
+  const headlineKey =
+    days < 0
+      ? 'dashboard.next.lowParticipationHeadlineClosed'
+      : days === 0
+        ? 'dashboard.next.lowParticipationHeadlineToday'
+        : 'dashboard.next.lowParticipationHeadline'
   return (
     <AttentionItemRow
       icon={<Send aria-hidden="true" className="size-4" />}
@@ -774,7 +862,7 @@ function AttentionRow({
       headline={
         <RichLine
           t={t}
-          messageKey="dashboard.next.lowParticipationHeadline"
+          messageKey={headlineKey}
           params={{
             // The title as it reads inside the sentence: "Encuesta de Clima Q4", its
             // "(abierta)" dropped because the sentence already says it is open.
@@ -786,21 +874,16 @@ function AttentionRow({
             },
             responses: { mono: survey.responses.toLocaleString(locale) },
             audience: { mono: survey.audience === null ? '—' : survey.audience.toLocaleString(locale) },
-            days: { mono: daysBetween(model.asOf, survey.closesAt).toLocaleString(locale) },
+            days: { mono: Math.abs(days).toLocaleString(locale) },
           }}
         />
       }
-      detail={t(
-        item.remindersSent === null
-          ? 'dashboard.next.lowParticipationSubUnknown'
-          : item.remindersSent === 0
-            ? 'dashboard.next.lowParticipationSubNoReminder'
-            : 'dashboard.next.lowParticipationSubReminders',
-        {
-          wave: model.latestClosedWave?.code ?? '—',
-          percent: previousRate === null ? '—' : percentReading(previousRate, locale),
-          count: item.remindersSent ?? 0,
-        },
+      detail={participationDetail(
+        item.remindersSent,
+        model.latestClosedWave && previousRate !== null
+          ? { wave: model.latestClosedWave.code, percent: percentReading(previousRate, locale) }
+          : null,
+        t,
       )}
       // Not "Enviar recordatorio", but the reason changed on 2026-10-31 and the old one is worth
       // correcting rather than leaving to mislead. It used to be "there is no reminder to send":
@@ -820,6 +903,28 @@ function AttentionRow({
   )
 }
 
+/**
+ * The line under the low-participation item: how the last wave closed, and the reminders,
+ * each said only when known. "Q3 cerró al —" said nothing; with neither known there is no line.
+ */
+function participationDetail(
+  reminders: number | null,
+  last: { wave: string; percent: string } | null,
+  t: TranslateFn,
+): string | undefined {
+  if (last === null) {
+    if (reminders === null) return undefined
+    return reminders === 0
+      ? t('dashboard.next.lowParticipationSubNoReminderBare')
+      : t('dashboard.next.lowParticipationSubRemindersBare', { count: reminders })
+  }
+  const params = { ...last, count: reminders ?? 0 }
+  if (reminders === null) return t('dashboard.next.lowParticipationSubUnknown', params)
+  return reminders === 0
+    ? t('dashboard.next.lowParticipationSubNoReminder', params)
+    : t('dashboard.next.lowParticipationSubReminders', params)
+}
+
 function AttentionItemRow({
   icon,
   tone,
@@ -830,29 +935,28 @@ function AttentionItemRow({
   icon: ReactNode
   tone: 'critical' | 'warning'
   headline: ReactNode
-  detail: string
+  /** Absent when nothing is known to say: a line of dashes says nothing. */
+  detail?: string
   /** Absent when the viewer may not take it: the row still informs, it just offers nothing. */
   action?: { label: string; href: string }
 }) {
   return (
-    <li data-slot="attention-item" className="flex items-center gap-3 px-4 py-3.5">
+    <li data-slot="attention-item" className="flex flex-wrap items-center gap-3 px-5 py-3 sm:flex-nowrap">
+      {/* One neutral glyph box for every kind: red and amber are result areas, and
+          the headline already says what kind of item this is. */}
       <span
         aria-hidden="true"
-        className={cn(
-          'flex size-7 shrink-0 items-center justify-center rounded-md',
-          tone === 'critical'
-            ? 'bg-accent-red-soft text-accent-red'
-            : 'bg-accent-amber-soft text-accent-amber-ink',
-        )}
+        data-tone={tone}
+        className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-fill-subtle text-fg-secondary"
       >
         {icon}
       </span>
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+      <div className="flex min-w-0 flex-1 basis-48 flex-col gap-0.5">
         <div className="text-base text-fg-primary">{headline}</div>
-        <div className="text-sm text-fg-label">{detail}</div>
+        {detail && <div className="text-sm text-fg-tertiary">{detail}</div>}
       </div>
       {action && (
-        <Button asChild variant="outline" className="shrink-0">
+        <Button asChild variant="outline" className="shrink-0 max-sm:ml-11">
           <Link to={action.href}>{action.label}</Link>
         </Button>
       )}
@@ -879,28 +983,40 @@ function RegionNotice({
   regions,
   region,
   t,
+  onRetry,
 }: {
   regions: RegionStatuses | undefined
   region: RegionKey
   t: TranslateFn
+  onRetry?: () => void
 }) {
   const state = regions?.[region]
   if (!state || state.status !== 'fallback') return null
   const name = t(REGION_NAME_KEYS[region])
+  const failed = state.reason === 'failed'
   return (
-    <p
-      data-slot="region-fallback"
-      data-region={region}
-      role="status"
-      className="m-0 mb-inline rounded-md bg-accent-amber-soft px-3 py-2 text-xs text-accent-amber-ink"
-    >
-      {state.reason === 'empty'
-        ? t('dashboard.next.unavailableEmpty', { region: name })
-        : t('dashboard.next.unavailableRegion', {
-            region: name,
-            error: state.error ?? t('dashboard.next.fallbackNoReason'),
-          })}
-    </p>
+    // A grey note, not an amber one: amber is the Oportunidad area (ruling 11 Nov). The
+    // sentence says what is missing in words a reader can act on; the server's own reason
+    // follows on a quieter line of its own, rather than spliced into the sentence.
+    <Note data-slot="region-fallback" data-region={region} role="status" icon={<Info />} className="py-2.5 text-sm">
+      <span className="flex flex-col gap-0.5">
+        <span className="inline-flex flex-wrap items-center gap-x-2">
+          <span data-slot="region-fallback-text">
+            {failed ? t('dashboard.next.unavailableRegion', { region: name }) : t('dashboard.next.unavailableEmpty', { region: name })}
+          </span>
+          {failed && onRetry && (
+            <Button type="button" variant="plain" size="sm" className="-my-1 -ml-2" onClick={onRetry}>
+              {t('ui.state.retry')}
+            </Button>
+          )}
+        </span>
+        {failed && (
+          <span data-slot="region-fallback-reason" className="text-fg-tertiary">
+            {t('dashboard.next.unavailableReason', { error: state.error ?? t('dashboard.next.fallbackNoReason') })}
+          </span>
+        )}
+      </span>
+    </Note>
   )
 }
 
@@ -920,20 +1036,13 @@ export function AdminDashboardNextSkeleton() {
   const { t } = useTranslation()
   return (
     <div>
-      <PageTopBar title={t('dashboard.next.title')} description={t('dashboard.next.description')} />
+      <PageHeader title={t('dashboard.next.title')} description={t('dashboard.next.description')} />
       <div className="flex flex-col gap-section">
         {SECTION_REGIONS.map((section) => (
           <section key={section.id} aria-labelledby={section.id} className="flex flex-col gap-3.5">
             {/* The same rule the loaded screen draws, so the skeleton does not reflow
                 into a different shape the moment the data lands. */}
-            <SectionRule
-              labelAs="plain"
-              label={
-                <h2 id={section.id} className="m-0 text-2xl">
-                  {t(section.headingKey)}
-                </h2>
-              }
-            />
+            <SectionHead id={section.id} heading={t(section.headingKey)} />
             <LoadingRegion
               loading
               label={t('dashboard.next.loadingRegion', { region: t(REGION_NAME_KEYS[section.region]) })}
