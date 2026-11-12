@@ -266,6 +266,10 @@ function AdminShell() {
                 <button
                   type="button"
                   onClick={handleSignOut}
+                  // A 32px target on a phone; HIG `buttons.md` asks for 44x44 under a finger, as
+                  // every Button size already grows to (12 Nov). `min-height` beats the inline
+                  // `height`, so the desktop strip is unchanged.
+                  className="pointer-coarse:min-h-11 pointer-coarse:min-w-11 justify-center"
                   style={{
                     display: 'inline-flex', alignItems: 'center', gap: 6,
                     background: 'transparent', border: 0, borderRadius: 6,

@@ -60,7 +60,7 @@ const NODOS = {
 }
 const PERSONAS = { personas: [{ id: 'persona-2', name: 'Adriana Marín', email: 'adriana@acme.test' }] }
 
-function routeFetch(plans: PlanAccion[] = PLANS, options: { pickers?: boolean; down?: boolean; ownNodo?: { id: string; name: string } } = {}) {
+function routeFetch(plans: PlanAccion[] = PLANS, options: { pickers?: boolean; down?: boolean; refused?: boolean; ownNodo?: { id: string; name: string } } = {}) {
   vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
     const url = String(input)
     const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: 200 }))
@@ -75,6 +75,7 @@ function routeFetch(plans: PlanAccion[] = PLANS, options: { pickers?: boolean; d
     }
     if (url.includes('/api/planes-accion')) {
       if (options.down) throw new TypeError('Failed to fetch')
+      if (options.refused) return Promise.resolve(new Response(JSON.stringify({ message: 'Forbidden' }), { status: 403 }))
       return json(plans)
     }
     return Promise.resolve(new Response(null, { status: 404 }))
@@ -229,6 +230,16 @@ describe('PlanesListNextPage', () => {
     expect(screen.queryByText(/Failed to fetch/)).toBeNull()
     expect(screen.queryByText(T.planesTileRojo)).toBeNull()
     expect(screen.queryByText(T.planesNoneCumplido, { exact: false })).toBeNull()
+  })
+
+  it('says a refusal is a refusal, with no retry, never «no se pudo contactar» over an instant 403', async () => {
+    // The e2e walk of 12 Nov: an account outside the company the service serves got a 403 and
+    // was told the service was down and to try again in a few minutes.
+    routeFetch(PLANS, { refused: true })
+    renderPage()
+    expect(await screen.findByText(es.tracking.noAccessTitle)).toBeTruthy()
+    expect(screen.queryByText(es.tracking.serviceUnavailableTitle)).toBeNull()
+    expect(screen.queryByRole('button', { name: es.common.retry })).toBeNull()
   })
 })
 

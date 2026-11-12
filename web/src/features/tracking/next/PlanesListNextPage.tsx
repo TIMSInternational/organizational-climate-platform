@@ -318,7 +318,11 @@ export default function PlanesListNextPage() {
         </section>
       )}
 
-      {state.status === 'error' ? (
+      {state.status === 'refused' ? (
+        // A REFUSAL, not an outage: the same sentence Mis tareas gives, and no retry — asking
+        // again gets the same answer.
+        <NetworkError title={t('tracking.noAccessTitle')} description={t('tracking.noAccessBody')} />
+      ) : state.status === 'error' ? (
         // `tracking.serviceUnavailable*`, as the old page: never the browser's own words.
         <NetworkError
           title={t('tracking.serviceUnavailableTitle')}

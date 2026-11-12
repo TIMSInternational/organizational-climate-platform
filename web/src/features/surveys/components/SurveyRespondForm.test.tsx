@@ -488,6 +488,19 @@ describe('SurveyRespondForm dimension labels', () => {
    * and grouping on the rendered label would re-section the form when the language
    * changes mid-answer — which is why `dimensionLabel` claims only what it can hold.
    */
+  it('says the content language mid-sentence in lower case, with a space between its two sentences', async () => {
+    // Review of 12 Nov: «…se muestra en Inglés, porque…redactada.Algunas partes…» — a capital
+    // language name mid-sentence, and the two sentences glued together.
+    window.localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
+    respondWith(view({ resolvedLocale: 'en', fallbackFields: ['questions[0].text'], questions: [question({ id: 'a', text: 'Question A' })] }))
+    renderForm()
+    const title = await screen.findByText(copy.es('surveyRespond.contentLanguageTitle'))
+    const body = title.parentElement!.textContent ?? ''
+    expect(body).toContain(copy.es('surveyRespond.contentLanguageBody').replace('{language}', 'inglés'))
+    expect(body).not.toContain('Inglés')
+    expect(body).toMatch(/redactada\. \S/)
+  })
+
   it('reads the same for a catalogued dimension and a category spelled like its label', async () => {
     window.localStorage.setItem(LOCALE_STORAGE_KEY, 'en')
     const enpsHeading = copy.en('surveyRespond.dimensions.enps')

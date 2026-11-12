@@ -5,11 +5,13 @@ import { useViewerCapabilities } from '../../../auth/viewerCapabilities'
 import { listPlanesAccion, type PlanAccion } from '../api/trackingApi'
 import { listNodoOptions, listPersonaOptions, type NodoPickerItem, type PersonaPickerItem } from '../api/trackingPickers'
 import { todayIso } from '../planDates'
+import { isApiStatus } from '../../../api/authFetch'
 import { readViewer } from './viewer'
 import type { Viewer } from './derive'
 
 export interface PlanesListState {
-  status: 'loading' | 'ready' | 'error'
+  /** `refused`: the service answered 401/403 — a refusal, not an outage, so no retry. */
+  status: 'loading' | 'ready' | 'error' | 'refused'
   plans: readonly PlanAccion[]
   /** The nodo directory; `null` when this viewer may not ask it or it was refused. */
   nodos: readonly NodoPickerItem[] | null
@@ -115,7 +117,9 @@ export function usePlanesListModel(): PlanesListState {
       ])
       if (cancelled) return
       if (planes.status === 'rejected') {
-        setStatus('error')
+        // A refusal is not an outage (the e2e walk of 12 Nov: «No se pudo contactar el servicio…
+        // vuelva a intentarlo» over an instant 403 from a service pinned to another company).
+        setStatus(isApiStatus(planes.reason, 403) || isApiStatus(planes.reason, 401) ? 'refused' : 'error')
         return
       }
       setPlans(planes.value)

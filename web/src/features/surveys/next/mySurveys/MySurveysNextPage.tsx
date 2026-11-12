@@ -123,7 +123,7 @@ function SurveyList() {
 
       {status === 'error' ? (
         <NetworkError
-          title={t('errors.generic')}
+          title={t('errors.loadFailed')}
           description={error ?? undefined}
           onRetry={reload}
           retryText={t('common.retry')}

@@ -1655,8 +1655,12 @@ function ContentLanguageNotice({
       <Info aria-hidden="true" />
       <AlertTitle>{t('contentLanguageTitle')}</AlertTitle>
       <AlertDescription>
+        {/* The name mid-sentence, so lower case in Spanish («redactada en inglés»), and a space
+            between the two sentences: they ran together («…redactada.Algunas partes…») until
+            12 Nov. */}
         {resolvedLocale !== requested &&
-          t('contentLanguageBody', { language: tRoot(`language.${localeNameKey(resolvedLocale)}`) })}
+          t('contentLanguageBody', { language: tRoot(`language.${localeNameKey(resolvedLocale)}InSentence`) })}
+        {resolvedLocale !== requested && fallbackCount > 0 && ' '}
         {fallbackCount > 0 && t('contentLanguageFields', { count: fallbackCount })}
       </AlertDescription>
     </Alert>
