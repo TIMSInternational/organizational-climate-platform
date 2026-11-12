@@ -154,16 +154,17 @@ function homeDescription(pendingCount: number, t: TranslateFn): string {
 }
 
 /**
- * The section meta in the canvas's pattern — the survey on the card, then what else is open.
- * The canvas says "una encuesta abierta, y su copia de ensayo" because its second survey is
- * its demo's rehearsal copy; nothing on `DashboardPendingSurvey` says a survey is a copy, so
- * the rest is counted: "una encuesta abierta, y otra más", "…, y 2 más". From
+ * The section meta: the plain total, "1 encuesta abierta", "3 encuestas abiertas". From
  * `pendingSurveyCount`, never from the list, which is a page of it (`SurveyRowLimit` = 5).
+ *
+ * It was the canvas's "una encuesta abierta, y otra más" / "…, y 2 más", which the 12 Nov
+ * review read as unclear: a reader had to add one to the number to get the number the
+ * greeting above had just printed. The total is the same figure as the greeting's.
  */
 function toAnswerMeta(pendingCount: number, t: TranslateFn): string {
   if (pendingCount === 1) return t('employee.next.toAnswerMetaOne')
   if (pendingCount === 2) return t('employee.next.toAnswerMetaAndOneMore')
-  return t('employee.next.toAnswerMetaAndMore', { count: pendingCount - 1 })
+  return t('employee.next.toAnswerMetaAndMore', { count: pendingCount })
 }
 
 function HomeBody({ model }: { model: EmployeeHomeModel }) {
@@ -181,7 +182,7 @@ function HomeBody({ model }: { model: EmployeeHomeModel }) {
               task, and "Ya respondió" over the answered card. The third heading is the
               honest floor between them — see `nothingDueHeading` below. */}
           <h2 id="home-to-answer" className="m-0">
-            {model.lead
+            {model.lead || model.pendingCount > 0
               ? t('employee.next.toAnswerHeading')
               : model.hasAnsweredIdentified
                 ? t('employee.next.answeredHeading')
@@ -211,6 +212,8 @@ function HomeBody({ model }: { model: EmployeeHomeModel }) {
               </Button>
             ) : null}
           </>
+        ) : model.pendingCount > 0 ? (
+          <OpenUnlistedCard model={model} />
         ) : (
           <NothingDueCard model={model} />
         )}
@@ -281,9 +284,12 @@ function LeadCard({ survey, allowsSaveForLater }: { survey: HomeSurvey; allowsSa
           {/* `/surveys/:id/respond` is authorized per user by the respond endpoint itself:
               every role that can be sent a survey can open it, so nothing gates this. */}
           <Button asChild variant="primary" size="canvas">
+            {/* The arrow after the words, as on every other way into a survey (the link
+                entry, the invitation, the pulse invitation, Siguiente): one action, one
+                name, one shape through the flow. */}
             <Link to={`/surveys/${survey.id}/respond`}>
-              <ArrowRight aria-hidden="true" />
               {t('employee.startAnswering')}
+              <ArrowRight aria-hidden="true" />
             </Link>
           </Button>
           {allowsSaveForLater === true ? (
@@ -329,6 +335,45 @@ function LeadCard({ survey, allowsSaveForLater }: { survey: HomeSurvey; allowsSa
  *   name and the floor — and each falls back to a sentence that states neither rather than
  *   assuming one.
  */
+/**
+ * Open surveys the count knows about and the list cannot show.
+ *
+ * `pendingCount` is the server's total less the rows this browser answered, and the list is
+ * a page of at most five. When every listed row was answered here, the count can still be
+ * above zero with no row to lead with. This card used to be `NothingDueCard` -- "No tiene
+ * nada que responder ahora mismo" -- under a greeting that said "Hay 2 encuestas abiertas
+ * para usted" and a meta that said the same (12 Nov review, surveys-my@employee-390): the
+ * screen contradicted itself. Now all three say the count, and this card says what the page
+ * can and cannot do about it.
+ */
+function OpenUnlistedCard({ model }: { model: EmployeeHomeModel }) {
+  // See `navigation/respondentSurface`: /surveys/my is not reachable for a respondent.
+  const lockedToDashboard = useIsRespondent()
+  const { t } = useTranslation()
+
+  return (
+    <div
+      data-slot="home-open-unlisted"
+      className="flex flex-col gap-3 rounded-xl border border-line-panel bg-surface-card px-4 pb-5 pt-4.5 sm:px-5"
+    >
+      <h3 className="m-0 font-display text-2xl font-semibold">
+        {model.pendingCount === 1
+          ? t('employee.next.openUnlistedTitleOne')
+          : t('employee.next.openUnlistedTitleMany', { count: model.pendingCount })}
+      </h3>
+      <p className="mb-0 max-w-measure text-base text-fg-secondary">{t('employee.next.openUnlistedBody')}</p>
+      {!lockedToDashboard && (
+        <Button asChild variant="outline" size="canvas" className="w-fit">
+          <Link to="/surveys/my">
+            <Inbox aria-hidden="true" />
+            {t('navigation.mySurveys')}
+          </Link>
+        </Button>
+      )}
+    </div>
+  )
+}
+
 function NothingDueCard({ model }: { model: EmployeeHomeModel }) {
   // See `navigation/respondentSurface`: /surveys/my is not reachable for a respondent.
   const lockedToDashboard = useIsRespondent()

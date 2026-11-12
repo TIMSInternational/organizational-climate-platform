@@ -872,12 +872,13 @@ describe('SurveyRespondForm layout', () => {
   })
 
   /**
-   * The Respond board's order under the promise: the head (`.ph-top`) — Anterior's chevron,
-   * the survey's name with where the respondent is, and the bar — then the one question
-   * card, then the foot (`.ph-foot`) with the way on alone, and "Guardar y terminar
-   * después" under it.
+   * The order under the promise: the head (`.ph-top`) — the survey's name with where the
+   * respondent is, and the bar — then the one question card, then the foot (`.ph-foot`)
+   * with a labelled Anterior and the way on, and "Guardar y terminar después" under it.
+   * Anterior was a bare chevron in the head until the 12 Nov review measured it as the
+   * smallest target on the screen; it is a 44px labelled button in the foot now.
    */
-  it('heads the question with Anterior, the position and the bar, and puts the way on and the save under the card', async () => {
+  it('heads the question with the position and the bar, and puts Anterior, the way on and the save under the card', async () => {
     respondWith(
       view({
         showProgress: true,
@@ -896,9 +897,12 @@ describe('SurveyRespondForm layout', () => {
     const card = container.querySelector('fieldset[id^="question-"]') as HTMLElement
     const nav = container.querySelector('[data-slot="respond-nav"]') as HTMLElement
     const save = container.querySelector('[data-slot="respond-save"]') as HTMLElement
-    expect(within(head).getByRole('button', { name: 'Anterior' })).toBeTruthy()
-    // The foot holds the one primary action and nothing else, as the board draws it.
-    expect(within(nav).getAllByRole('button').map((button) => button.textContent?.trim())).toEqual(['Siguiente'])
+    // The head carries no control at all; the way back is in the foot, labelled.
+    expect(within(head).queryAllByRole('button')).toEqual([])
+    // The foot: Anterior, by its visible words and not only an sr-only name, then the way on.
+    expect(within(nav).getAllByRole('button').map((button) => button.textContent?.trim())).toEqual(['Anterior', 'Siguiente'])
+    // 44px, the canvas's `.btn.lg`, the same height as Siguiente beside it.
+    expect(within(nav).getByRole('button', { name: 'Anterior' }).className).toMatch(/(^|\s)h-11(\s|$)/)
     // While the bar is pinned over a phone screen, the document keeps a focused control
     // out from under it (WCAG 2.2 SC 2.4.11). happy-dom evaluates neither `:has()` nor the
     // media query, so the class carrying it is what can be asserted here; the measurement

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { render, screen, cleanup, waitFor } from '@testing-library/react'
+import { render, screen, cleanup, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import AcceptInvitationNextPage from './AcceptInvitationNextPage'
@@ -66,6 +66,26 @@ describe('AcceptInvitationNextPage — the form', () => {
         'En las encuestas anónimas, su cuenta solo comprueba que usted pertenece a su organización; no se vincula con sus respuestas.',
       ),
     ).toBeTruthy()
+  })
+
+  /**
+   * Under the card, the sign-in line and the anonymity promise stood on the photograph from
+   * `lg` up and on the theme's own ground below it; in light their page inks measured
+   * 1.58:1 and 2.15:1 on the navy (12 Nov review). On the card they have one paper at every
+   * width and in both themes, and the promise's shield is blue, never a result-area green.
+   */
+  it('keeps the sign-in line and the anonymity promise on the card', () => {
+    renderPage()
+    const card = document.querySelector('[data-slot="invitation-card"]') as HTMLElement
+    expect(card, 'the invitation card renders').toBeTruthy()
+    expect(within(card).getByRole('link', { name: 'Iniciar sesión' }).getAttribute('href')).toBe('/login')
+    const promise = within(card).getByText(/^En las encuestas anónimas/)
+    const shield = promise.parentElement?.querySelector('svg')
+    expect(shield?.getAttribute('class') ?? '').toContain('text-accent-blue-ink')
+    expect(shield?.getAttribute('class') ?? '').not.toMatch(/accent-green/)
+    // The sibling auth screens' placeholder and their 34px canvas button.
+    expect((screen.getByLabelText(/^Correo/) as HTMLInputElement).placeholder).toBe('nombre@empresa.com')
+    expect(screen.getByRole('button', { name: 'Unirme' }).className).toContain('h-control-canvas')
   })
 
   /**

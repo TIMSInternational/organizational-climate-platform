@@ -144,10 +144,16 @@ function SurveyList() {
                     {t('employee.next.toAnswerHeading')}
                     {/* The tally beside the heading, a size down, in tabular figures.
                         `open.length` and not a server count: this payload is the whole list,
-                        not a page of one — that is the note under it. */}
-                    <span data-slot="my-surveys-tally" className="font-sans text-sm font-normal tabular-nums text-fg-secondary">{open.length}</span>
+                        not a page of one — that is the note under it. Only over a list: a
+                        bare "0" over nothing read as a load that never finished (12 Nov
+                        review); the sentence below says it instead. */}
+                    {open.length > 0 ? (
+                      <span data-slot="my-surveys-tally" className="font-sans text-sm font-normal tabular-nums text-fg-secondary">{open.length}</span>
+                    ) : null}
                   </h2>
-                  <span className="text-sm text-fg-secondary">{t('employee.next.toAnswerSorted')}</span>
+                  {open.length > 0 ? (
+                    <span className="text-sm text-fg-secondary">{t('employee.next.toAnswerSorted')}</span>
+                  ) : null}
                 </div>
 
                 {open.length > 0 ? (
@@ -156,11 +162,18 @@ function SurveyList() {
                       <OpenSurveyRow key={row.id} row={row} head={index === 0} />
                     ))}
                   </ul>
-                ) : null}
+                ) : (
+                  <p data-slot="my-surveys-none-open" className="mb-0 max-w-measure text-base text-fg-secondary">
+                    {t('employee.next.toAnswerNone')}
+                  </p>
+                )}
 
                 {/* True of every payload: `SurveyEndpoints.ListMineAsync` pages nothing,
-                    while Home's `DashboardQueries.PendingSurveys` takes `SurveyRowLimit` = 5. */}
-                <p className="mb-0 max-w-measure text-sm text-fg-secondary">{t('employee.next.wholeListNote')}</p>
+                    while Home's `DashboardQueries.PendingSurveys` takes `SurveyRowLimit` = 5.
+                    Said about a list, so not printed when there is none. */}
+                {open.length > 0 ? (
+                  <p className="mb-0 max-w-measure text-sm text-fg-secondary">{t('employee.next.wholeListNote')}</p>
+                ) : null}
               </section>
 
               {answeredHere.length > 0 ? (

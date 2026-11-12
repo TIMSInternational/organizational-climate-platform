@@ -1093,14 +1093,6 @@ export default function SurveyRespondForm({
         />
 
         <header data-slot="respond-progress" className={RESPOND_HEAD}>
-          <RespondBack
-            label={t('next.previous')}
-            disabled={demographicStep === 0 || busy !== 'idle'}
-            onClick={() => {
-              setDemographicInvalid(false)
-              setDemographicStep((step) => step - 1)
-            }}
-          />
           <div className="flex min-w-0 flex-1 items-baseline justify-between gap-2">
             <h1 className="m-0 min-w-0 font-sans text-2xs font-semibold uppercase leading-snug tracking-eyebrow text-fg-secondary">
               {t('demographics.eyebrow')}
@@ -1135,6 +1127,14 @@ export default function SurveyRespondForm({
                 prelude writes nothing to the server, so there is no submission to
                 guard against here. The two `key`s the question nav needs exist because
                 that pair's `type` flips to "submit"; these never do. */}
+            <RespondBack
+              label={t('next.previous')}
+              disabled={demographicStep === 0 || busy !== 'idle'}
+              onClick={() => {
+                setDemographicInvalid(false)
+                setDemographicStep((step) => step - 1)
+              }}
+            />
             <Button
               type="button"
               variant="primary"
@@ -1189,14 +1189,6 @@ export default function SurveyRespondForm({
         />
 
         <header data-slot="respond-progress" className={RESPOND_HEAD}>
-          <RespondBack
-            label={t('next.previous')}
-            disabled={demographics.length === 0 || busy !== 'idle'}
-            onClick={() => {
-              setIdentityProblem(null)
-              setDemographicStep(demographics.length - 1)
-            }}
-          />
           <h1 className="m-0 min-w-0 flex-1 font-sans text-2xs font-semibold uppercase leading-snug tracking-eyebrow text-fg-secondary">
             {t('identity.eyebrow')}
           </h1>
@@ -1230,6 +1222,14 @@ export default function SurveyRespondForm({
           />
 
           <div data-slot="respond-nav" className={RESPOND_NAV}>
+            <RespondBack
+              label={t('next.previous')}
+              disabled={demographics.length === 0 || busy !== 'idle'}
+              onClick={() => {
+                setIdentityProblem(null)
+                setDemographicStep(demographics.length - 1)
+              }}
+            />
             <Button type="submit" variant="primary" size="lg" className="flex-1" disabled={busy !== 'idle'}>
               {t('demographics.start')}
               <ArrowRight aria-hidden="true" />
@@ -1283,11 +1283,6 @@ export default function SurveyRespondForm({
           count and the bar are `ShowProgress`'s, as they always were; the `2/6` chip on
           the card says the position either way. */}
       <header data-slot="respond-progress" className={RESPOND_HEAD}>
-        <RespondBack
-          label={t('next.previous')}
-          disabled={index === 0 || busy !== 'idle'}
-          onClick={() => turnTo(index - 1)}
-        />
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           <div className="flex items-baseline justify-between gap-2">
             <h1 className="m-0 min-w-0 font-sans text-2xs font-semibold uppercase leading-snug tracking-eyebrow text-fg-secondary">
@@ -1401,8 +1396,8 @@ export default function SurveyRespondForm({
           </Alert>
         )}
 
-        {/* The Respond board's foot: the way on alone, full width and 44px tall —
-            Anterior is the chevron in the head (`RespondBack`). On the last question
+        {/* The foot: Anterior, labelled and 44px tall, then the way on filling the rest
+            of the row (`RespondBack` says why Anterior left the head). On the last question
             the way on is the submit — the one POST that completes the response,
             unchanged.
 
@@ -1411,6 +1406,11 @@ export default function SurveyRespondForm({
             browser then runs that click's default action against the new type and sends
             the form, so the last question was never shown (TIMS dry run, 9 of 9). */}
         <div data-slot="respond-nav" className={RESPOND_NAV}>
+          <RespondBack
+            label={t('next.previous')}
+            disabled={index === 0 || busy !== 'idle'}
+            onClick={() => turnTo(index - 1)}
+          />
           {isLast ? (
             <Button key="submit" type="submit" variant="primary" size="lg" className="flex-1" disabled={busy !== 'idle'}>
               {busy === 'submitting' ? tRoot('common.submitting') : t('submitResponse')}
@@ -1504,9 +1504,9 @@ const RESPOND_BAR_CLEARANCE =
   'max-md:[:root:has(&)]:scroll-pb-[calc(6rem+env(safe-area-inset-bottom))]'
 
 /**
- * The bar the way on lives in: the one primary action, the full width of the column, as
- * the Respond board's `.ph-foot` draws it. Anterior is not here; it is the chevron at the
- * head of the page (`RespondBack`, the board's `.ph-top`).
+ * The bar the way on lives in: Anterior, then the one primary action filling the rest of
+ * the column's width, on the Respond board's `.ph-foot`. Anterior used to be a chevron at
+ * the head of the page (the board's `.ph-top`); `RespondBack` says why it moved here.
  *
  * On a phone it is pinned to the bottom of the screen — the Respond board's `.ph-foot`:
  * a hairline over a translucent page ground, the primary full width — so Siguiente is
@@ -1523,35 +1523,30 @@ const RESPOND_NAV = [
 ].join(' ')
 
 /**
- * The page's head row, the Respond board's `.ph-top`: Anterior's chevron first, then the
- * eyebrow, the position and the bar. Centred on the cross axis, so the chevron sits level
- * with the two-line block of eyebrow and bar beside it.
+ * The page's head row, the Respond board's `.ph-top`: the eyebrow, the position and the
+ * bar. It no longer carries Anterior (see `RespondBack`).
  */
 const RESPOND_HEAD = 'flex items-center gap-2'
 
 /**
- * Anterior, as the Respond board's `.ph-top` draws it: a borderless chevron button at the
- * head of the page (34px, 44px under a finger), named "Anterior" for assistive technology.
+ * Anterior: a labelled, bordered 44px button at the start of the foot, beside the way on.
+ *
+ * It was the Respond board's `.ph-top` chevron: a borderless 34px glyph at the head of the
+ * page, named only for assistive technology. The 12 Nov review measured it as the smallest
+ * target on the screen, and unlabelled, on the one task a respondent does when they want to
+ * change an answer (HIG › Accessibility › Mobility: 44x44 pt). The redesign-before shots
+ * had a labelled Anterior beside Siguiente; this is that, in the canvas's `.btn.lg`.
  *
  * Drawn disabled where there is nothing to go back to (the first question, the first
- * demographic field) rather than removed, so the eyebrow and the bar do not shift sideways
- * between the first page and the second. A disabled ghost button is a dimmed glyph on no
- * ground, so it does not read as an empty box the way the outlined arrow beside Siguiente
- * did. `type="button"`: on the question pages the head is outside the `<form>` anyway, but
- * the identity screen's nav is inside one.
+ * demographic field) rather than removed, so Siguiente does not change width between the
+ * first page and the second. `type="button"`: the identity screen's nav is inside a
+ * `<form>`, and on the last question the way on beside it is the submit.
  */
 function RespondBack({ label, disabled, onClick }: { label: string; disabled: boolean; onClick: () => void }) {
   return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon-canvas"
-      className="-ml-2 shrink-0 text-fg-primary"
-      disabled={disabled}
-      onClick={onClick}
-    >
+    <Button type="button" variant="outline" size="lg" className="shrink-0" disabled={disabled} onClick={onClick}>
       <ChevronLeft aria-hidden="true" />
-      <span className="sr-only">{label}</span>
+      {label}
     </Button>
   )
 }

@@ -489,6 +489,24 @@ describe('MySurveysNextPage answered on this device', () => {
   })
 
   /**
+   * With nothing left to answer, "Para responder 0" over nothing read as a load that never
+   * finished (12 Nov review). The section says so in a sentence, and prints no figure and no
+   * note about a list it does not have.
+   */
+  it('says there is nothing to answer instead of printing a bare 0 over nothing', async () => {
+    markAnswered(ANSWERED)
+    serves({ surveys: [item({ id: ANSWERED, title: 'Encuesta ya respondida' })] })
+    renderPage()
+
+    const heading = await screen.findByRole('heading', { name: new RegExp(es('employee.next.toAnswerHeading')) })
+    const section = heading.closest('section') as HTMLElement
+    expect(heading.querySelector('[data-slot="my-surveys-tally"]')).toBeNull()
+    expect(heading.textContent).not.toMatch(/\d/)
+    expect(within(section).getByText(es('employee.next.toAnswerNone'))).toBeTruthy()
+    expect(within(section).queryByText(es('employee.next.wholeListNote'))).toBeNull()
+  })
+
+  /**
    * The chip says "on this device", not "answered". `SurveyResponse.UserId` is NULL on an
    * anonymous response, so the platform does not know this reader answered and the page
    * must not imply that it does.

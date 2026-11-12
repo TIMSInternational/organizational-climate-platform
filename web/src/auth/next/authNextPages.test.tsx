@@ -382,6 +382,19 @@ describe('RegisterNextPage', () => {
 
     expect(screen.getByRole('link', { name: 'Sign in' }).getAttribute('href')).toBe('/login')
   })
+
+  /**
+   * Under the card, the line stood on the photograph from `lg` up and on the theme's own
+   * ground below it, and its page inks measured 1.56:1 and 1.19:1 on the navy in light
+   * (12 Nov review). On the card they have one paper at every width and in both themes.
+   */
+  it('keeps the way back to sign in on the card, where its inks have a paper to be read on', () => {
+    renderAuthRoutes('/register')
+
+    const link = screen.getByRole('link', { name: 'Sign in' })
+    expect(link.closest('[data-slot="auth-card"]'), 'the sign-in line is on the card').toBeTruthy()
+    expect(link.className).toContain('text-accent-blue-ink')
+  })
 })
 
 describe('AuthErrorNextPage', () => {

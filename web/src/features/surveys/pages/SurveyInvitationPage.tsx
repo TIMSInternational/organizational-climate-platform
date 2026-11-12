@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router'
 import { useTranslation } from '../../../i18n'
 import { RespondCaption, RespondReading, RespondShell } from '../../../components/layout'
-import { Button, LoadingState } from '../../../components/ui'
+import { Button, CanvasArrowRightIcon, LoadingState } from '../../../components/ui'
 import { instantDay } from '../../../lib/calendarDay'
 import SurveyRespondForm, {
   AnonymityNotice,
@@ -273,6 +273,7 @@ function Landing({
       {/* The one primary action, full width and 44px: the Respond board's «Comenzar». */}
       <Button type="button" variant="primary" size="lg" className="w-full" onClick={onBegin}>
         {t('beginSurvey')}
+        <CanvasArrowRightIcon className="size-icon" />
       </Button>
     </>
   )
