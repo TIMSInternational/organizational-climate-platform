@@ -8,6 +8,7 @@ import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../co
 import ClimateTrendsPage from './ClimateTrendsPage'
 import { getClimateTrends, type ClimateTrendsResponse } from '../api/climateTrends'
 import { tokenFor } from '../../../test/jwtFixture'
+import en from '../../../i18n/en.json'
 
 /**
  * The grid `/surveys/climate-trends` drew until the redesign replaced it with
@@ -148,8 +149,10 @@ describe('ClimateTrendsPage', () => {
     ])
 
     // No reading of any kind on the withheld row — and in particular not the "0" its
-    // respondentCount carries, which is the number the floor exists to withhold.
-    expect(withheld.textContent).not.toMatch(/\d/)
+    // respondentCount carries, which is the number the floor exists to withhold. The row
+    // is pinned whole: the survey's name plus «Fewer than {floor}» once, the floor being
+    // the one number a withheld row may say. Any withheld reading or count changes it.
+    expect(withheld.textContent).toBe('January' + en.charts.protectedUnderFloor.replace('{threshold}', '5'))
   })
 
   it('says which dimensions were left out rather than quietly narrowing the grid', async () => {
