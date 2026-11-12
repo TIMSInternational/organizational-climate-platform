@@ -35,7 +35,7 @@ import {
 } from '../api/questionLibraryAdmin'
 import { Eyebrow } from '../../shared-next/parts'
 import { Count, QSelect, SearchField, TABLE_CARD } from './parts'
-import { categoryTree, flattenTree, libraryTypeLabel, matchesSearch, parseOptions, type CategoryNode } from './model'
+import { categoryTree, dimensionName, flattenTree, libraryForCompany, libraryTypeLabel, matchesSearch, parseOptions, type CategoryNode } from './model'
 import { useQuestionLibraryModel } from './useQuestionModels'
 import SuperQuestionLibraryView from './super/SuperQuestionLibraryView'
 import { describeApiError } from '../../../api/describeApiError'
@@ -110,9 +110,15 @@ function QuestionLibraryForCompany() {
   const canWriteRow = (row: { companyId: string | null }) =>
     scope.isSuperAdmin || (canAuthor && row.companyId !== null && row.companyId === scope.companyId)
 
+  // Only the global rows and this company's own are drawn or counted: another tenant's row is
+  // dropped here whatever the payload carries (`libraryForCompany`).
+  const visible = useMemo(
+    () => (state.status === 'ready' ? libraryForCompany(state.data.categories, state.data.items, scope.companyId) : { categories: [], items: [] }),
+    [state, scope.companyId],
+  )
   const tree = useMemo(
-    () => (state.status === 'ready' ? categoryTree(state.data.categories, state.data.items) : { globals: [], own: [] }),
-    [state],
+    () => (state.status === 'ready' ? categoryTree(state.data.categories, state.data.items, scope.companyId) : { globals: [], own: [] }),
+    [state, scope.companyId],
   )
   const all = useMemo(() => [...flattenTree(tree.globals), ...flattenTree(tree.own)], [tree])
   const selected = all.find((node) => node.category.id === selectedId) ?? tree.globals[0] ?? tree.own[0] ?? null
@@ -136,7 +142,7 @@ function QuestionLibraryForCompany() {
 
   const itemsOf = (categoryId: string) =>
     state.status === 'ready'
-      ? state.data.items.filter((item) => item.questionCategoryId === categoryId && matchesSearch(item, search) && (!type || item.type === type))
+      ? visible.items.filter((item) => item.questionCategoryId === categoryId && matchesSearch(item, search) && (!type || item.type === type))
       : []
 
   function openCreate() {
@@ -250,8 +256,8 @@ function QuestionLibraryForCompany() {
   }
 
   const readOnly = drawer.mode === 'view'
-  const globalCategoryCount = state.status === 'ready' ? state.data.categories.filter((c) => c.companyId === null).length : 0
-  const ownCategoryCount = state.status === 'ready' ? state.data.categories.filter((c) => c.companyId !== null).length : 0
+  const globalCategoryCount = flattenTree(tree.globals).length
+  const ownCategoryCount = flattenTree(tree.own).length
 
   return (
     <div>
@@ -344,7 +350,7 @@ function QuestionLibraryForCompany() {
                 </div>
                 <p data-testid="library-category-description" className="mb-3 mt-1 max-w-[30rem] text-sm leading-normal text-fg-secondary">
                   {descriptionOf(selected.category) ? `${descriptionOf(selected.category)} ` : ''}
-                  {usageSentence(t, selected, state.data.items)}
+                  {usageSentence(t, selected, visible.items)}
                 </p>
                 <div className="mb-3 flex flex-wrap gap-3">
                   {/* `max-w-none` on the input: index.css caps every `label > input` at the field
@@ -587,18 +593,20 @@ function CategoryList({
             aria-current={node.category.id === selectedId ? 'true' : undefined}
             onClick={() => onSelect(node.category.id)}
             className={cn(
-              'h-9 w-full justify-between gap-2 px-2.5 text-base font-normal',
+              'h-auto min-h-9 w-full items-start justify-between gap-2 px-2.5 py-1.5 text-left text-base font-normal whitespace-normal',
               depth > 0 && 'pl-10',
               node.category.id === selectedId
                 ? 'bg-accent-blue-soft font-semibold text-accent-blue-ink hover:bg-accent-blue-soft'
                 : 'text-fg-primary',
             )}
           >
-            <span className="flex min-w-0 items-center gap-1.5">
+            <span className="flex min-w-0 items-start gap-1.5">
               {depth === 0 && (
-                <ChevronDown aria-hidden="true" className={cn('size-3.5 shrink-0', node.children.length === 0 && 'invisible')} />
+                <ChevronDown aria-hidden="true" className={cn('mt-1 size-3.5 shrink-0', node.children.length === 0 && 'invisible')} />
               )}
-              <span className="truncate" title={nameOf(node.category)}>{nameOf(node.category)}</span>
+              {/* Two lines before the ellipsis, and the full name on hover: the 17rem rail cut
+                  «Confianza en el liderazgo» to one line with nothing to read it in full. */}
+              <span className="line-clamp-2 break-words" title={nameOf(node.category)}>{nameOf(node.category)}</span>
             </span>
             <Count className={node.category.id === selectedId ? 'text-accent-blue-ink' : undefined}>{node.count}</Count>
           </Button>
@@ -615,7 +623,9 @@ function CategoryList({
 // a buttons list read out as «Ver, Ver, Ver» does not say which one is which (WCAG 2.4.6).
 function ItemRow({ item, primary, secondary, owner, action, actionLabel, onOpen }: { item: QuestionLibraryItem; primary: string; secondary: string; owner: string; action: string; actionLabel: string; onOpen: () => void }) {
   const { t, locale } = useTranslation()
-  const meta = [libraryTypeLabel(t, item.type), item.dimension ? t('questionLibrary.next.dimensionOf', { dimension: item.dimension }) : null, t('questionLibrary.next.version', { version: item.version })]
+  // The dimension's words, never its code: «psychological_safety» on a Spanish screen is left out.
+  const dimension = dimensionName(item.dimension, t)
+  const meta = [libraryTypeLabel(t, item.type), dimension ? t('questionLibrary.next.dimensionOf', { dimension }) : null, t('questionLibrary.next.version', { version: item.version })]
     .filter(Boolean)
     .join(' · ')
   return (
@@ -629,7 +639,7 @@ function ItemRow({ item, primary, secondary, owner, action, actionLabel, onOpen 
         <Chip tone="neutral" icon={item.companyId === null ? <Lock className="size-3" /> : undefined} label={owner} />
       </TableCell>
       <TableCell className="py-2 pr-4 text-right align-top">
-        <Button type="button" size="sm" variant="plain" aria-label={actionLabel} onClick={onOpen}>
+        <Button type="button" variant="outline" aria-label={actionLabel} onClick={onOpen}>
           {action}
         </Button>
       </TableCell>

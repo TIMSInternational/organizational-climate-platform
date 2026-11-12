@@ -33,6 +33,7 @@ import { QUESTION_BANK_TYPES, type QuestionBankItem } from '../../api/questionBa
 import { OWNER_ALL, OWNER_GLOBAL, askedAnsweredSkipped, canWriteRow, needsAttention } from './bankDerive'
 import { useQuestionBankModel, type BankDraft, type QuestionBankModelState } from './useQuestionBankModel'
 import { EDITOR_CARD, QSelect, SearchField, TABLE_CARD } from '../parts'
+import { dimensionName } from '../model'
 
 const EMPTY_DRAFT: BankDraft = { text: '', type: 'likert', category: '', subcategory: '' }
 
@@ -198,7 +199,7 @@ function Filters({ model, t }: { model: QuestionBankModelState; t: TranslateFn }
         <option value="">{t('questionBank.next.allCategories')}</option>
         {[...new Set(model.categories.map((row) => row.category))].map((category) => (
           <option key={category} value={category}>
-            {category}
+            {dimensionName(category, t) ?? t('questionLibrary.dimensionUnnamed')}
           </option>
         ))}
       </QSelect>
@@ -289,8 +290,7 @@ function BankTable({ model, onEdit }: { model: QuestionBankModelState; onEdit: (
                         <span>{owner ?? t('questionBank.next.ownerOtherCompany')}</span>
                       )}
                       <span>
-                        {item.category}
-                        {item.subcategory ? ` · ${item.subcategory}` : ''} · {questionTypeLabel(t, item.type)}
+                        {[dimensionName(item.category, t), dimensionName(item.subcategory, t), questionTypeLabel(t, item.type)].filter(Boolean).join(' · ')}
                       </span>
                       <span className="basis-full tabular-nums text-fg-tertiary">
                         {(
@@ -325,8 +325,7 @@ function BankTable({ model, onEdit }: { model: QuestionBankModelState; onEdit: (
                     )}
                   </TableCell>
                   <TableCell className={cn('py-3 align-top text-sm break-words text-fg-secondary', WIDE)}>
-                    {item.category}
-                    {item.subcategory ? ` · ${item.subcategory}` : ''}
+                    {[dimensionName(item.category, t), dimensionName(item.subcategory, t)].filter(Boolean).join(' · ') || '—'}
                   </TableCell>
                   <TableCell className={cn('py-3 align-top text-sm text-fg-secondary', WIDE)}>{questionTypeLabel(t, item.type)}</TableCell>
                   <TableCell numeric className={cn('py-3 align-top text-fg-primary', WIDE)}>
@@ -344,7 +343,7 @@ function BankTable({ model, onEdit }: { model: QuestionBankModelState; onEdit: (
                         <DropdownMenuTrigger asChild>
                           <Button
                             type="button"
-                            variant="ghost"
+                            variant="outline"
                             size="icon"
                             data-slot="bank-row-menu"
                             aria-label={t('questionBank.next.rowActions', { text })}

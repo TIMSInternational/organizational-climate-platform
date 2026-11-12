@@ -40,6 +40,7 @@ import {
 } from './libraryDerive'
 import { useQuestionLibraryModel, type QuestionLibraryModelState } from './useQuestionLibraryModel'
 import { Count, EDITOR_CARD, QSelect, TABLE_CARD } from '../parts'
+import { dimensionName } from '../model'
 
 type EditorMode = 'item' | 'new-item' | 'new-category'
 
@@ -186,7 +187,10 @@ function CategoryTreeCard({
             : 'bg-transparent font-normal text-fg-primary hover:bg-state-hover',
         )}
       >
-        <span className="min-w-0 flex-1 truncate text-base">{categoryName(category, locale)}</span>
+        {/* Two lines before the ellipsis and the full name on hover, never a one-line cut. */}
+        <span className="line-clamp-2 min-w-0 flex-1 break-words text-base" title={categoryName(category, locale)}>
+          {categoryName(category, locale)}
+        </span>
         <Count className={selected ? 'text-accent-blue-ink' : undefined}>{category.itemCount}</Count>
       </button>
     )
@@ -424,7 +428,7 @@ function QuestionRow({
             <OwnerChip companyId={item.companyId} model={model} t={t} />
             <span>
               {t(`questionLibraryAdmin.type_${item.type}`)}
-              {item.dimension ? ` · ${item.dimension}` : ''}
+              {dimensionName(item.dimension, t) ? ` · ${dimensionName(item.dimension, t)}` : ''}
             </span>
           </span>
         </span>
@@ -435,15 +439,14 @@ function QuestionRow({
         </span>
       </TableCell>
       <TableCell className={cn('py-3 text-sm text-fg-secondary', WIDE)}>{t(`questionLibraryAdmin.type_${item.type}`)}</TableCell>
-      <TableCell className={cn('py-3 text-sm break-words text-fg-secondary', WIDE)}>{item.dimension ?? '—'}</TableCell>
+      <TableCell className={cn('py-3 text-sm break-words text-fg-secondary', WIDE)}>{dimensionName(item.dimension, t) ?? '—'}</TableCell>
       <TableCell className={cn('py-3', WIDE)}>
         <OwnerChip companyId={item.companyId} model={model} t={t} />
       </TableCell>
       <TableCell className="py-2 pr-4 text-right">
         <Button
           type="button"
-          variant="plain"
-          size="sm"
+          variant="outline"
           aria-label={t(writable ? 'questionLibraryAdmin.next.editRow' : 'questionLibraryAdmin.next.viewRow', { text: item.textEs })}
           onClick={onOpen}
         >
