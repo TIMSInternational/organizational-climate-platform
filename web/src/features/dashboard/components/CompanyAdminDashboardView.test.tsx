@@ -165,7 +165,7 @@ describe('CompanyAdminDashboardView', () => {
    * Asserted from both sides so it cannot pass vacuously: the reading is mono AND the survey
    * name beside it is not. A blanket `font-mono` on the table would satisfy the first alone.
    */
-  it('sets the survey table readings in mono and its prose in the sans face', async () => {
+  it('sets the survey table readings in tabular figures and its prose plain', async () => {
     setToken(tokenFor('company_admin', 'c1'))
     serves(companyPayload())
 
@@ -175,11 +175,12 @@ describe('CompanyAdminDashboardView', () => {
     // column's `12` — the first version of this test read Target, so dropping mono from the
     // responses cell left it green. (`20` is the company-wide total, not in this table.)
     const responses = await screen.findByRole('cell', { name: '7' })
-    expect(responses.className).toContain('font-mono')
+    // Tabular figures in the sans face since the Apple design (one UI typeface, ruling 11 Nov).
     expect(responses.className).toContain('tabular-nums')
+    expect(responses.className).not.toContain('font-mono')
 
     const title = screen.getByRole('cell', { name: 'Company-wide pulse' })
-    expect(title.className).not.toContain('font-mono')
+    expect(title.className).not.toContain('tabular-nums')
   })
 
   it('does link a company_admin to the survey page, which their role can load', async () => {

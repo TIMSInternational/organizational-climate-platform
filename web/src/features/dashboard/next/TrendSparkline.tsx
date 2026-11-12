@@ -116,7 +116,7 @@ export default function TrendSparkline({
           />
         )}
       </svg>
-      <div data-slot="trend-labels" aria-hidden="true" className="flex justify-between font-mono text-2xs leading-normal text-fg-label">
+      <div data-slot="trend-labels" aria-hidden="true" className="flex justify-between text-2xs tabular-nums leading-normal text-fg-label">
         {labels.map((text, index) => (
           <span key={`${index}-${text}`}>{text}</span>
         ))}
