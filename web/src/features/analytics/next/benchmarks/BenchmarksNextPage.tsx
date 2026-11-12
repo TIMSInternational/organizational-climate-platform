@@ -105,7 +105,7 @@ function ReferencesPage() {
       <PageHeader
         // The cohort this company is read against: a property of the data, not the route.
         eyebrow={state.cohortName}
-        title={t('navigation.benchmarks')}
+        title={t('navigation.references')}
         description={t('benchmarks.description')}
         primaryAction={
           state.createCompanyId !== undefined ? (

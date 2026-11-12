@@ -71,7 +71,7 @@ function AnalyticsNextPageForAdmins() {
           <Button asChild variant="outline">
             <Link to="/analytics/benchmarks">
               <Gauge aria-hidden="true" />
-              {t('navigation.benchmarks')}
+              {t('navigation.references')}
             </Link>
           </Button>
         }

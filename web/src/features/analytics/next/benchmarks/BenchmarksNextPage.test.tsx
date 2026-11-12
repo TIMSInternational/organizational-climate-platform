@@ -428,7 +428,7 @@ describe('BenchmarksNextPage — one test per role that matters', () => {
   it.each(['leader', 'supervisor', 'employee'])('%s: no request the server would refuse, and a sentence saying whose screen it is', async (role) => {
     routeFetch()
     renderAs({ role, companyId: CID })
-    expect(await screen.findByText('Los puntos de referencia son de la administración')).toBeTruthy()
+    expect(await screen.findByText('Las referencias son de la administración')).toBeTruthy()
     expect(vi.mocked(fetch).mock.calls.filter((call) => String(call[0]).includes('/admin/benchmarks'))).toHaveLength(0)
     expect(screen.queryByRole('button', { name: 'Nueva referencia' })).toBeNull()
   })
