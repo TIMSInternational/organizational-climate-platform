@@ -338,15 +338,42 @@ describe('ActionPlansListNextPage — company_admin', () => {
 
   // Apple design, 11 Nov: lateness is the danger ink with a clock and the words, never a
   // traffic-light chip — green, amber and red belong to the three result areas alone.
-  it('marks what is behind on the seguimiento tile with the clock and the words, in the danger ink, and no coloured chip', async () => {
+  // Fix round 12 Nov: one red cue per row — the clock. The place and plan read in secondary
+  // ink, so the tile does not wear the Crítica band's red as a sentence beside that chip.
+  it('marks what is behind on the seguimiento tile with a red clock and the words in secondary ink, and no coloured chip', async () => {
     renderPage()
     const first = await screen.findByText('Finanzas · Reponer la reunión de handover entre turnos')
     const tile = first.closest('[data-slot="kpi-card"]') as HTMLElement
     const line = tile.querySelector('[data-slot="seguimiento-line"]') as HTMLElement
-    expect(line.className).toContain('text-accent-red-ink')
-    expect(line.querySelector('svg.lucide-clock')?.getAttribute('aria-hidden')).toBe('true')
+    expect(line.className).toContain('text-fg-secondary')
+    expect(line.className).not.toContain('text-accent-red-ink')
+    const clock = line.querySelector('svg.lucide-clock') as SVGElement
+    expect(clock.getAttribute('aria-hidden')).toBe('true')
+    expect(clock.getAttribute('class')).toContain('text-accent-red-ink')
     expect(within(tile).getByText(next.overdueOne, { exact: false })).toBeTruthy()
     expect(tile.querySelector('[data-slot="chip"]')).toBeNull()
+  })
+
+  it('keeps a late row’s date in primary ink and gives the row one red cue: the clock and the words under it', async () => {
+    vi.setSystemTime(new Date(2026, 10, 11, 12, 0, 0))
+    renderPage()
+    await screen.findByRole('link', { name: 'Programa de reconocimiento entre pares' })
+    const notes = [...document.querySelectorAll('[data-plan-row] [data-slot="plan-due-note"]')] as HTMLElement[]
+    const late = notes.filter((note) => note.querySelector('svg.lucide-clock'))
+    expect(late.length).toBeGreaterThan(0)
+    for (const note of late) {
+      expect(note.className).toContain('text-accent-red-ink')
+      const date = note.parentElement?.querySelector('[data-slot="plan-due-date"]') as HTMLElement
+      expect(date.className).toContain('text-fg-primary')
+      expect(date.className).not.toContain('text-accent-red-ink')
+    }
+  })
+
+  it('names the sidebar section in the eyebrow, as Microclimas does, not the company', async () => {
+    renderPage()
+    await screen.findByRole('link', { name: 'Programa de reconocimiento entre pares' })
+    const eyebrow = document.querySelector('[data-slot="page-header-eyebrow"]') as HTMLElement
+    expect(eyebrow.textContent).toBe(es.navigation.sectionFollowUp)
   })
 
   it('draws every priority as a gray chip that hugs its word', async () => {
