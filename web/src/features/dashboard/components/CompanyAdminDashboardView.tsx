@@ -211,7 +211,7 @@ export default function CompanyAdminDashboardView({ companyId }: CompanyAdminDas
                 locale={locale}
                 sub={
                   <span>
-                    <span className="font-mono tabular-nums">{data.draftSurveyCount}</span>{' '}
+                    <span className="tabular-nums">{data.draftSurveyCount}</span>{' '}
                     {t('dashboard.inDraft')}
                   </span>
                 }
@@ -222,7 +222,7 @@ export default function CompanyAdminDashboardView({ companyId }: CompanyAdminDas
                 locale={locale}
                 sub={
                   <span>
-                    <span className="font-mono tabular-nums">{data.overdueActionPlanCount}</span>{' '}
+                    <span className="tabular-nums">{data.overdueActionPlanCount}</span>{' '}
                     {t('dashboard.overdueSuffix')}
                   </span>
                 }
@@ -315,7 +315,7 @@ export default function CompanyAdminDashboardView({ companyId }: CompanyAdminDas
                     {unmeasurable > 0 && (
                       <p className="mb-0 mt-1 text-xs text-fg-tertiary">
                         {t('dashboard.departmentsWithoutMembers')}{' '}
-                        <span className="font-mono tabular-nums">{unmeasurable}</span>
+                        <span className="tabular-nums">{unmeasurable}</span>
                       </p>
                     )}
                   </div>
@@ -339,7 +339,7 @@ export default function CompanyAdminDashboardView({ companyId }: CompanyAdminDas
                     unmeasurable > 0 ? (
                       <p className="mb-0 text-xs text-fg-tertiary">
                         {t('dashboard.departmentsWithoutMembers')}{' '}
-                        <span className="font-mono tabular-nums">{unmeasurable}</span>
+                        <span className="tabular-nums">{unmeasurable}</span>
                       </p>
                     ) : undefined
                   }

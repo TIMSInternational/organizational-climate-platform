@@ -72,6 +72,7 @@ describe('AdminDashboardNextView', () => {
     const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)
     expect(headings).toEqual([
       copy.whereHeading,
+      copy.climateHeading,
       copy.movedHeading,
       copy.byGroupHeading.replace('{wave}', 'Q3'),
       copy.attentionHeading,
@@ -330,10 +331,18 @@ describe('AdminDashboardNextView', () => {
     renderView(fullModel, undefined, live)
     const notices = document.querySelectorAll('[data-slot="region-fallback"]')
     expect(Array.from(notices).map((node) => node.getAttribute('data-region'))).toEqual(['map', 'microclimates'])
-    expect(notices[0].textContent).toBe(
-      copy.unavailableRegion.replace('{region}', copy.regionMap).replace('{error}', 'Service unavailable'),
+    // The sentence names the region; the server's own reason follows on its own line.
+    expect(notices[0].querySelector('[data-slot="region-fallback-text"]')?.textContent).toBe(
+      copy.unavailableRegion.replace('{region}', copy.regionMap),
+    )
+    expect(notices[0].querySelector('[data-slot="region-fallback-reason"]')?.textContent).toBe(
+      copy.unavailableReason.replace('{error}', 'Service unavailable'),
     )
     expect(notices[1].textContent).toBe(copy.unavailableEmpty.replace('{region}', copy.regionMicroclimates))
+    expect(notices[1].querySelector('[data-slot="region-fallback-reason"]')).toBeNull()
+    // A status notice and nothing to press: the notice is a live region, and a control in it
+    // would be announced as part of the sentence. It also asks the server for nothing.
+    for (const notice of Array.from(notices)) expect(notice.querySelector('button')).toBeNull()
     // The sentence no longer calls anything sample data, because nothing is.
     expect(notices[0].textContent).not.toContain('Sample data')
     // The map notice sits inside the map's own section.
@@ -425,12 +434,15 @@ describe('AdminDashboardNextView', () => {
     expect(order).toEqual(['pertenencia', 'seguridad', 'desarrollo', 'confianza', 'reconocimiento', 'carga'])
   })
 
-  it('shows the climate move signed and without an arrow, in the good-news ink when it rose', () => {
+  // Ruling 11 Nov: green, amber and red are the three result areas and nothing else, so a
+  // move is told by its sign in the secondary ink — never a green "good news".
+  it('shows the climate move signed and without an arrow, in the neutral ink rather than a result colour', () => {
     renderView()
     const move = document.querySelector('[data-slot="climate-move"]') as HTMLElement
     expect(move.textContent).toContain('+0.32')
     expect(move.textContent).not.toMatch(/[▲▼]/)
-    expect(move.className).toContain('text-accent-green-ink')
+    expect(move.className).toContain('text-fg-secondary')
+    expect(move.className).not.toMatch(/accent-(green|red)/)
   })
 
   it('projects the next quarter as a hollow "to plan" step when nothing is planned after the open wave', () => {
@@ -589,6 +601,79 @@ describe('AdminDashboardNextView', () => {
     expect(text).toContain(`15${copy.openSurveySubNoAudience.replace('{date}', '')}`)
     expect(text).not.toContain('of —')
     expect(document.querySelector('[role="progressbar"]')).toBeNull()
+  })
+
+  /**
+   * The signature: one climate range bar per dimension. The dot is the organization's mean as
+   * the trends endpoint served it; the range runs over the DISCLOSED departments only. The
+   * fixture's Finanzas sits under the floor but still carries scores (a payload that sent
+   * them beside the flag), so a bar that read them would name it or move its range.
+   */
+  it('draws a climate range bar per dimension over the disclosed departments only, never the withheld one', () => {
+    const map = {
+      ...fullModel.map,
+      // Finanzas, withheld, given the lowest carga of all: it must move nothing.
+      rows: fullModel.map.rows.map((row) =>
+        row.departmentId === 'd-fin' ? { ...row, scores: row.scores.map((score, i) => (i === 1 ? 1.5 : score)) } : row,
+      ),
+    }
+    renderView({ ...fullModel, map })
+    const section = document.querySelector('section[aria-labelledby="next-climate"]') as HTMLElement
+    expect(section).not.toBeNull()
+    const rows = [...section.querySelectorAll('li[data-dimension]')]
+    expect(rows.map((row) => row.getAttribute('data-dimension'))).toEqual(
+      [...document.querySelectorAll('[data-slot="trend-card"]')].map((card) => card.getAttribute('data-dimension')),
+    )
+    const carga = section.querySelector('li[data-dimension="carga"]') as HTMLElement
+    expect(carga.getAttribute('data-range')).toBe('range')
+    const track = carga.querySelector('[role="img"]') as HTMLElement
+    // Operaciones 2,4 is the lowest disclosed carga; Personas 4,0 the highest; the dot is
+    // the organization's latest carga (3,3), not a mean of the rows.
+    expect(track.getAttribute('aria-label')).toContain('2.40')
+    expect(track.getAttribute('aria-label')).toContain('4.00')
+    expect(track.getAttribute('aria-label')).toContain('3.30')
+    expect(section.textContent).not.toContain('Finanzas')
+    expect(section.textContent).not.toContain('1.50')
+    expect(track.getAttribute('aria-label')).not.toContain('1.50')
+  })
+
+  it('lets a single department into the range when the server applies the floor of 1 for an administrator', () => {
+    const map = {
+      ...fullModel.map,
+      rows: fullModel.map.rows.map((row) =>
+        row.departmentId === 'd-fin' ? { ...row, scores: row.scores.map((score, i) => (i === 1 ? 1.5 : score)) } : row,
+      ),
+    }
+    renderView({ ...fullModel, minimumGroupSize: 1, map })
+    const carga = document.querySelector('section[aria-labelledby="next-climate"] li[data-dimension="carga"]') as HTMLElement
+    expect(carga.textContent).toContain('Finanzas')
+    expect(carga.querySelector('[role="img"]')?.getAttribute('aria-label')).toContain('1.50')
+  })
+
+  it('says when an open survey already closed, never a negative count of days to its close', () => {
+    const openSurvey = fullModel.openSurvey ? { ...fullModel.openSurvey, closesAt: '2020-01-01' } : null
+    renderView({ ...fullModel, openSurvey })
+    const item = [...document.querySelectorAll('[data-slot="attention-item"]')].at(-1) as HTMLElement
+    expect(item.textContent).not.toMatch(/[−-]\d/)
+    // 2020-01-01 to 2026-09-10 is 2,444 days.
+    expect(item.textContent).toContain('closed 2,444 days ago')
+  })
+
+  it('says nothing needs attention only when every region an item comes from was read', () => {
+    const live: RegionStatuses = {
+      company: { status: 'live' },
+      surveys: { status: 'live' },
+      trends: { status: 'live' },
+      map: { status: 'live' },
+      actionPlans: { status: 'live' },
+      tracking: { status: 'off' },
+      microclimates: { status: 'live' },
+    }
+    renderView({ ...fullModel, attention: [] }, undefined, live)
+    expect(screen.getByText(copy.attentionNone)).toBeTruthy()
+    cleanup()
+    renderView({ ...fullModel, attention: [] }, undefined, { ...live, actionPlans: { status: 'fallback', reason: 'failed', error: null } })
+    expect(screen.queryByText(copy.attentionNone)).toBeNull()
   })
 
   it('sets the four tiles at the artboard’s hero size', () => {

@@ -142,7 +142,7 @@ describe('TeamDashboardPage', () => {
     expect(requested().some((url) => url.includes('/api/tablero-seguimiento'))).toBe(false)
   })
 
-  it("draws a supervisor's proposal from the department read, her own surveys and her own tasks — never the leader's board", async () => {
+  it("draws a supervisor's panel from the department read, her own surveys and her own tasks — never the leader's board", async () => {
     serve({
       '/dashboard/department-admin': { body: department() },
       '/surveys/my': { body: { surveys: [] } },
@@ -151,8 +151,7 @@ describe('TeamDashboardPage', () => {
 
     renderPage('supervisor')
 
-    expect(await screen.findByRole('note')).toBeTruthy()
-    expect(screen.getByRole('heading', { level: 2, name: en.dashboard.next.supervisor.coverageHeading })).toBeTruthy()
+    expect(await screen.findByRole('heading', { level: 2, name: en.dashboard.next.supervisor.coverageHeading })).toBeTruthy()
     const urls = requested()
     expect(urls.some((url) => url.includes('/surveys/my'))).toBe(true)
     expect(urls.some((url) => url.includes('/api/mis-tareas'))).toBe(true)

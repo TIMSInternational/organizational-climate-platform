@@ -1,12 +1,11 @@
 import { Link } from 'react-router'
 import { ArrowRight, Plus, Target } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
-import { PageTopBar } from '../../../../components/layout'
-import { BandChip, ProtectedCell, bandName, boundaryText, type ResultBands } from '../../../../components/charts'
-import { Button, Chip, LoadingRegion, SkeletonText } from '../../../../components/ui'
+import { PageHeader } from '../../../../components/layout'
+import { BandChip, ClimateRangeBar, bandName, type ClimateRangeRow } from '../../../../components/charts'
+import { Button, Chip, LoadingRegion, ProtectedState, SkeletonText } from '../../../../components/ui'
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { calendarDay } from '../../../../lib/calendarDay'
-import { cn } from '../../../../lib/cn'
 import { dimensionLabel } from '../../../surveys/dimensionLabel'
 import SemaforoChip from '../../../tracking/components/SemaforoChip'
 import { InfoBox, NodoTile } from '../../../tracking/next/parts'
@@ -15,12 +14,9 @@ import { planCalendarDay } from '../../../tracking/planDates'
 import DashboardExportMenu from '../DashboardExportMenu'
 import { percentReading, reading, signedReading } from '../derive'
 import { dimensionBand, dimensionMove } from './compose'
-import { barPercent, count, daysNote } from './format'
-import type { LeaderDashboardModel, TeamClosedWave, TeamDimension, TeamOpenSurvey, TeamPlan } from './model'
+import { count, daysNote } from './format'
+import type { LeaderDashboardModel, TeamClosedWave, TeamOpenSurvey, TeamPlan } from './model'
 import { HatchedCount, TeamCard, TeamPlanRow } from './parts'
-
-/** The band-boundary rule's ink, as every banded chart draws it (`TrendSparkline`). */
-const BOUNDARY_RULE = 'var(--admin-line-control)'
 
 /** How many open plans the card lists before it points at the board for the rest. */
 const PLANS_LISTED = 3
@@ -70,7 +66,7 @@ export default function LeaderDashboardView({ model }: { model: LeaderDashboardM
 
   return (
     <div>
-      <PageTopBar
+      <PageHeader
         eyebrow={`${model.departmentName} · ${t('users.leader')}`}
         title={t('dashboard.next.title')}
         description={t('dashboard.next.leader.description')}
@@ -80,15 +76,15 @@ export default function LeaderDashboardView({ model }: { model: LeaderDashboardM
       {/* `-mt-1`: the top bar leaves 24px under its rule; the artboard opens at 20px. */}
       <div data-slot="team-sections" className="-mt-1 flex flex-col gap-section">
         <section aria-labelledby="team-where" className="flex flex-col gap-2.5">
-          <h2 id="team-where" className="m-0 text-2xl">
+          <h2 id="team-where" className="m-0 text-2xl font-semibold">
             {t('dashboard.next.leader.whereHeading')}
           </h2>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             <NodoTile label={t('dashboard.next.leader.membersLabel')}>
-              <span className="font-mono text-kpi-hero leading-none tabular-nums">{count(model.activeMemberCount, locale)}</span>
-              <span className="text-sm text-fg-label">{t('dashboard.next.leader.membersActive')}</span>
+              <span className="text-kpi-hero leading-none font-semibold tabular-nums">{count(model.activeMemberCount, locale)}</span>
+              <span className="text-sm text-fg-tertiary">{t('dashboard.next.leader.membersActive')}</span>
               {model.memberCount !== model.activeMemberCount && (
-                <span className="text-sm text-fg-label">
+                <span className="text-sm text-fg-tertiary">
                   {t('dashboard.next.leader.membersOfTotal', { total: count(model.memberCount, locale) })}
                 </span>
               )}
@@ -100,7 +96,7 @@ export default function LeaderDashboardView({ model }: { model: LeaderDashboardM
 
         <CompareCard model={model} mayCreatePlan={mayCreatePlan} t={t} locale={locale} />
 
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+        <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-12">
           <PlansCard model={model} canOpen={capabilities.canRecordProgress} t={t} locale={locale} />
           <ParticipationCard model={model} t={t} locale={locale} />
         </div>
@@ -113,8 +109,8 @@ function ResponsesTile({ wave, t, locale }: { wave: TeamClosedWave | null; t: Tr
   if (wave === null) {
     return (
       <NodoTile label={t('dashboard.next.leader.responsesLabelNoWave')}>
-        <span className="font-mono text-kpi-hero leading-none tabular-nums">—</span>
-        <span className="text-sm text-fg-label">{t('dashboard.next.leader.responsesNone')}</span>
+        <span className="text-kpi-hero leading-none font-semibold tabular-nums">—</span>
+        <span className="text-sm text-fg-tertiary">{t('dashboard.next.leader.responsesNone')}</span>
       </NodoTile>
     )
   }
@@ -129,12 +125,12 @@ function ResponsesTile({ wave, t, locale }: { wave: TeamClosedWave | null; t: Tr
             text={t('dashboard.next.leader.responsesWithheld', { floor: wave.floor })}
             label={t('dashboard.next.leader.responsesWithheldLabel', { floor: wave.floor })}
           />
-          {date !== null && <span className="text-sm text-fg-label">{t('dashboard.next.leader.closedOn', { date })}</span>}
+          {date !== null && <span className="text-sm text-fg-tertiary">{t('dashboard.next.leader.closedOn', { date })}</span>}
         </>
       ) : (
         <>
-          <span className="font-mono text-kpi-hero leading-none tabular-nums">{count(wave.respondents, locale)}</span>
-          <span className="text-sm text-fg-label">
+          <span className="text-kpi-hero leading-none font-semibold tabular-nums">{count(wave.respondents, locale)}</span>
+          <span className="text-sm text-fg-tertiary">
             {date !== null
               ? t('dashboard.next.leader.responsesUnit', { date })
               : t('dashboard.next.leader.responsesUnitNoDate')}
@@ -170,18 +166,9 @@ function OpenSurveysTile({
 }) {
   return (
     <NodoTile label={t('dashboard.next.leader.openLabel')}>
-      <span className="font-mono text-kpi-hero leading-none tabular-nums">{count(total, locale)}</span>
-      <span className="text-sm text-fg-label">{openUnit(surveys, total, t, locale)}</span>
+      <span className="text-kpi-hero leading-none font-semibold tabular-nums">{count(total, locale)}</span>
+      <span className="text-sm text-fg-tertiary">{openUnit(surveys, total, t, locale)}</span>
     </NodoTile>
-  )
-}
-
-/** The dashed boundary mark, beside "límites de área 3,00 y 4,00". */
-function BoundaryMark() {
-  return (
-    <svg aria-hidden="true" width="18" height="2" viewBox="0 0 18 2" className="shrink-0">
-      <line x1="0" x2="18" y1="1" y2="1" stroke={BOUNDARY_RULE} strokeDasharray="3 2" />
-    </svg>
   )
 }
 
@@ -197,10 +184,6 @@ function CompareCard({
   locale: string
 }) {
   const wave = model.closedWave
-  const boundaries = t('resultBands.boundaries', {
-    low: boundaryText(model.bands.opportunityMin, locale, model.bands.scale),
-    high: boundaryText(model.bands.strengthMin, locale, model.bands.scale),
-  })
   const surveyName = wave?.name ?? t('surveys.untitled')
   const meta = wave ? (
     <>
@@ -208,56 +191,68 @@ function CompareCard({
       {wave.respondents !== null && (
         <span>· {t('dashboard.next.leader.compareResponses', { count: count(wave.respondents, locale) })}</span>
       )}
-      <span className="inline-flex items-center gap-1.5">
-        · <BoundaryMark /> {boundaries}
-      </span>
     </>
   ) : undefined
+  // The organisation's side is drawn only where the team's own reading is: half a
+  // comparison would give the other half back. And not at all when the server withheld it.
+  const orgShown = wave !== null && !wave.withheld && model.organizationRespondents !== null
+  const rows: ClimateRangeRow[] = (wave?.dimensions ?? []).map((dimension) => {
+    const label = dimensionLabel(dimension.key, t)
+    const team = dimension.team
+    const org = orgShown && team !== null ? dimension.organization : null
+    const move = org === null ? null : dimensionMove({ ...dimension, organization: org }, model.bands.scale)
+    return {
+      key: dimension.key,
+      label,
+      mean: team,
+      protected: team === null,
+      comparison: org === null ? undefined : { label: t('dashboard.next.leader.orgName'), mean: org },
+      // "Organización 3,8 · +0,2 frente a la org." — the move is the difference of the two
+      // readings AS PRINTED (`dimensionMove`), at the decimal the bar prints.
+      caption:
+        org === null || move === null
+          ? undefined
+          : t('dashboard.next.leader.compareCaption', {
+              org: reading(org, locale, 1, model.bands.scale),
+              move: move === 0 ? reading(0, locale, 1, model.bands.scale) : signedReading(move, locale, 1, model.bands.scale),
+            }),
+    }
+  })
+  // Plans are offered for a reading outside the strength area, as before; the bar itself
+  // stays quiet, so they are listed under it.
+  const planWorthy = mayCreatePlan && wave !== null && !wave.surveyWithheld
+    ? wave.dimensions.flatMap((dimension) => {
+        const band = dimensionBand(dimension, model.bands)
+        return band !== null && band !== 'strength' ? [{ key: dimension.key, band }] : []
+      })
+    : []
 
   return (
     <TeamCard id="team-compare" heading={t('dashboard.next.leader.compareHeading')} meta={meta}>
       {wave === null ? (
-        <p className="m-0 text-sm text-fg-label">{t('dashboard.next.leader.noClosedSurvey')}</p>
+        <p className="m-0 text-sm text-fg-tertiary">{t('dashboard.next.leader.noClosedSurvey')}</p>
       ) : wave.surveyWithheld ? (
-        <ProtectedCell
-          responses={0}
-          threshold={wave.floor}
-          description={surveyName}
-          showWord={false}
-          suppressedClassName="h-8.5 w-full"
-        >
-          {null}
-        </ProtectedCell>
+        <ProtectedState floor={wave.floor} />
       ) : (
-        <div
-          data-slot="team-dimensions"
-          className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"
-        >
-          {wave.dimensions.map((dimension) => (
-            <DimensionCard
-              key={dimension.key}
-              dimension={dimension}
-              wave={wave}
-              department={model.departmentName}
-              bands={model.bands}
-              mayCreatePlan={mayCreatePlan}
-              t={t}
-              locale={locale}
-            />
-          ))}
-        </div>
+        <>
+          <p className="-mt-2 mb-0 text-sm text-fg-tertiary">
+            {orgShown ? t('dashboard.next.leader.compareSub') : t('dashboard.next.leader.compareSubTeamOnly')}
+          </p>
+          <div data-slot="team-dimensions">
+            <ClimateRangeBar rows={rows} bands={model.bands} floor={wave.floor} decimals={1} />
+          </div>
+        </>
       )}
       {wave !== null && (wave.withheld || wave.surveyWithheld) && (
-        <p className="m-0 text-sm text-fg-label">
+        <p className="m-0 text-sm text-fg-tertiary">
           {wave.surveyWithheld
             ? t('dashboard.next.leader.surveyWithheld', { survey: surveyName, floor: wave.floor })
             : t('dashboard.next.leader.teamWithheld', { survey: surveyName, floor: wave.floor })}
         </p>
       )}
       {wave !== null && !wave.surveyWithheld && (
-        <div data-slot="team-legend" className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-fg-label">
-          <span className="inline-flex items-center gap-1.5">
-            <span aria-hidden="true" className="h-2 w-3.5 rounded bg-accent-blue" />
+        <div data-slot="team-legend" className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-fg-tertiary">
+          <span>
             {t('dashboard.next.leader.legendTeam', {
               department: model.departmentName,
               count: count(model.memberCount, locale),
@@ -265,14 +260,10 @@ function CompareCard({
           </span>
           {!wave.withheld &&
             (model.organizationRespondents !== null ? (
-              <span className="inline-flex items-center gap-1.5">
-                <span aria-hidden="true" className="h-2 w-3.5 rounded bg-chart-div-mid" />
-                {t('dashboard.next.leader.legendOrg', { count: count(model.organizationRespondents, locale) })}
-              </span>
+              <span>{t('dashboard.next.leader.legendOrg', { count: count(model.organizationRespondents, locale) })}</span>
             ) : (
               // The server withheld the organisation's side: fewer than the floor answered
-              // outside the team. Said in words, with no number and no swatch for bars that
-              // are not drawn.
+              // outside the team. Said in words, with no number and no tick on the bars.
               <span data-slot="team-legend-org-withheld">
                 {t('dashboard.next.leader.legendOrgWithheld', { floor: wave.floor })}
               </span>
@@ -282,157 +273,32 @@ function CompareCard({
           )}
         </div>
       )}
-    </TeamCard>
-  )
-}
-
-function DimensionCard({
-  dimension,
-  wave,
-  department,
-  bands,
-  mayCreatePlan,
-  t,
-  locale,
-}: {
-  dimension: TeamDimension
-  wave: TeamClosedWave
-  department: string
-  bands: ResultBands
-  mayCreatePlan: boolean
-  t: TranslateFn
-  locale: string
-}) {
-  const name = dimensionLabel(dimension.key, t)
-  const band = dimensionBand(dimension, bands)
-  const move = dimensionMove(dimension, bands.scale)
-  // A plan is offered for any reading outside the strength area; only the critical one
-  // tints the whole card.
-  const planWorthy = band !== null && band !== 'strength'
-  const critical = band === 'critical'
-
-  return (
-    <div
-      data-slot="team-dimension"
-      data-dimension={dimension.key}
-      data-band={band ?? 'withheld'}
-      className={cn(
-        'flex min-w-0 flex-col gap-2 rounded-md border px-3.5 py-3',
-        critical ? 'border-accent-red-ring bg-accent-red-soft' : 'border-line-light bg-surface-card',
-      )}
-    >
-      <span className="truncate text-sm text-fg-secondary" title={name}>
-        {name}
-      </span>
-      {dimension.team === null ? (
-        <ProtectedCell
-          responses={0}
-          threshold={wave.floor}
-          description={`${department}, ${name}`}
-          mark="word"
-          suppressedClassName="h-8.5 w-full"
-        >
-          {null}
-        </ProtectedCell>
-      ) : (
-        <>
-          <div className="flex items-baseline gap-2">
-            <span data-slot="team-reading" className="font-mono text-3xl leading-none text-fg-primary tabular-nums">
-              {reading(dimension.team, locale, 1, bands.scale)}
-            </span>
-            <span className="text-xs text-fg-label">{t('dashboard.next.leader.teamWord')}</span>
-          </div>
-          {move !== null && (
-            <span className="text-xs whitespace-nowrap text-fg-label">
-              <span
-                data-slot="team-move"
-                data-direction={move > 0 ? 'up' : move < 0 ? 'down' : 'level'}
-                className={cn(
-                  'font-mono text-sm tabular-nums',
-                  // No colour for no move: a green "+0,0" would claim an advantage the two
-                  // printed readings do not show. The sign carries direction; colour doubles it.
-                  move > 0 ? 'text-accent-green-ink' : move < 0 ? 'text-accent-red-ink' : 'text-fg-label',
-                )}
+      {planWorthy.length > 0 && (
+        <ul data-slot="team-plan-offers" className="m-0 flex list-none flex-col border-t border-line-default p-0">
+          {planWorthy.map(({ key, band }) => {
+            const name = dimensionLabel(key, t)
+            return (
+              <li
+                key={key}
+                data-slot="team-plan-offer"
+                data-dimension={key}
+                data-band={band}
+                className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-line-default py-2.5 last:border-b-0"
               >
-                {move === 0 ? reading(0, locale, 1, bands.scale) : signedReading(move, locale, 1, bands.scale)}
-              </span>{' '}
-              {t('dashboard.next.leader.vsOrg')}
-            </span>
-          )}
-          <div aria-hidden="true" className="mt-0.5 flex flex-col gap-1">
-            <CompareBar who={t('dashboard.next.leader.teamWord')} value={dimension.team} tone="team" bands={bands} locale={locale} />
-            {dimension.organization !== null && (
-              <CompareBar
-                who={t('dashboard.next.leader.orgWord')}
-                value={dimension.organization}
-                tone="org"
-                bands={bands}
-                locale={locale}
-              />
-            )}
-          </div>
-          <div className="mt-auto pt-0.5">
-            {planWorthy && band !== null ? (
-              <div className="flex flex-col gap-2">
-                <span>
-                  <BandChip band={band} bands={bands} />
-                </span>
-                {mayCreatePlan && (
-                  <Button asChild variant="primary" size="canvas" className="w-full">
-                    <Link
-                      to="/tracking/planes"
-                      aria-label={t('dashboard.next.leader.createPlanFor', { dimension: name })}
-                    >
-                      <Plus aria-hidden="true" />
-                      {t('dashboard.next.leader.createPlan')}
-                    </Link>
-                  </Button>
-                )}
-              </div>
-            ) : (
-              <div className="flex h-5.5 items-center">
-                {band !== null && <BandChip band={band} bands={bands} />}
-              </div>
-            )}
-          </div>
-        </>
+                <span className="min-w-0 grow text-base text-fg-primary">{name}</span>
+                <BandChip band={band} bands={model.bands} />
+                <Button asChild variant="outline" size="canvas">
+                  <Link to="/tracking/planes" aria-label={t('dashboard.next.leader.createPlanFor', { dimension: name })}>
+                    <Plus aria-hidden="true" />
+                    {t('dashboard.next.leader.createPlan')}
+                  </Link>
+                </Button>
+              </li>
+            )
+          })}
+        </ul>
       )}
-    </div>
-  )
-}
-
-/** One bar of a dimension card: who, the 8px track with a dashed mark at each band boundary, the reading. */
-function CompareBar({
-  who,
-  value,
-  tone,
-  bands,
-  locale,
-}: {
-  who: string
-  value: number
-  tone: 'team' | 'org'
-  bands: ResultBands
-  locale: string
-}) {
-  return (
-    <div className="grid grid-cols-[38px_minmax(0,1fr)_26px] items-center gap-1.5">
-      <span className="text-2xs text-fg-label">{who}</span>
-      <div className="relative h-2 rounded bg-surface-icon-box">
-        <div
-          className={cn('h-full rounded', tone === 'team' ? 'bg-accent-blue' : 'bg-chart-div-mid')}
-          style={{ width: `${barPercent(value)}%` }}
-        />
-        {[bands.opportunityMin, bands.strengthMin].map((boundary) => (
-          <span
-            key={boundary}
-            className="absolute -top-[3px] h-3.5 border-l border-dashed"
-            style={{ left: `${barPercent(boundary)}%`, borderColor: BOUNDARY_RULE }}
-          />
-        ))}
-      </div>
-      <span className="text-right font-mono text-2xs text-fg-label tabular-nums">{reading(value, locale, 1, bands.scale)}</span>
-    </div>
+    </TeamCard>
   )
 }
 
@@ -471,18 +337,18 @@ function PlansCard({
         </LoadingRegion>
       )}
       {plans.source === 'failed' && (
-        <p role="status" className="m-0 text-sm text-fg-label">
+        <p role="status" className="m-0 text-sm text-fg-tertiary">
           {t('dashboard.next.leader.plansFailedNoReason')}
         </p>
       )}
       {plans.source === 'refused' && (
-        <p role="status" className="m-0 text-sm text-fg-label">
+        <p role="status" className="m-0 text-sm text-fg-tertiary">
           {t('dashboard.next.leader.plansRefused')}
         </p>
       )}
-      {plans.source === 'counts' && <p className="m-0 text-sm text-fg-label">{t('dashboard.next.leader.plansCountsOnly')}</p>}
+      {plans.source === 'counts' && <p className="m-0 text-sm text-fg-tertiary">{t('dashboard.next.leader.plansCountsOnly')}</p>}
       {plans.source === 'tracking' && plans.plans.length === 0 && (
-        <p className="m-0 text-sm text-fg-label">
+        <p className="m-0 text-sm text-fg-tertiary">
           {t('resultBands.leader.plansNoneOpen', { band: bandName('strength', model.bands, t) })}
         </p>
       )}
@@ -511,7 +377,7 @@ function LeaderPlanRow({ plan, canOpen, t, locale }: { plan: TeamPlan; canOpen: 
       chips={
         <>
           <SemaforoChip estado={plan.estado} long />
-          <span className="text-sm text-fg-label">
+          <span className="text-sm text-fg-tertiary">
             {plan.nodoName
               ? t('dashboard.next.leader.planOpenedSince', { nodo: plan.nodoName, date: since })
               : t('dashboard.next.leader.planOpenedSinceNoNodo', { date: since })}
@@ -587,10 +453,10 @@ function ParticipationCard({ model, t, locale }: { model: LeaderDashboardModel; 
       className="xl:col-span-5"
     >
       {first === undefined ? (
-        <p className="m-0 text-sm text-fg-label">{t('dashboard.next.leader.participationNone')}</p>
+        <p className="m-0 text-sm text-fg-tertiary">{t('dashboard.next.leader.participationNone')}</p>
       ) : (
         <>
-          <p className="m-0 max-w-[70ch] text-sm text-fg-label">
+          <p className="m-0 max-w-[70ch] text-sm text-fg-tertiary">
             {t('dashboard.next.leader.participationNote', { floor: model.floor })}
           </p>
           <ul className="m-0 flex list-none flex-col p-0">
@@ -605,7 +471,7 @@ function ParticipationCard({ model, t, locale }: { model: LeaderDashboardModel; 
                       its "(Copia)" in full, because in a list the parenthetical is what tells
                       two rows apart. `sentenceName` is for a title inside a sentence. */}
                   <span className="text-base text-fg-primary">{survey.name ?? t('surveys.untitled')}</span>
-                  <span className="text-sm text-fg-label">{closesLine(survey, t, locale)}</span>
+                  <span className="text-sm text-fg-tertiary">{closesLine(survey, t, locale)}</span>
                 </div>
                 {survey.responses === null ? (
                   <HatchedCount
@@ -613,7 +479,7 @@ function ParticipationCard({ model, t, locale }: { model: LeaderDashboardModel; 
                     label={t('dashboard.next.leader.participationUnderFloorLabel', { floor: model.floor })}
                   />
                 ) : (
-                  <span className="font-mono text-sm tabular-nums">
+                  <span className="text-sm tabular-nums">
                     {t('dashboard.next.leader.participationCount', {
                       count: count(survey.responses, locale),
                       members: count(model.activeMemberCount, locale),
@@ -627,7 +493,7 @@ function ParticipationCard({ model, t, locale }: { model: LeaderDashboardModel; 
             ))}
           </ul>
           {first.company !== null && (
-            <p data-slot="team-company-line" className="m-0 pt-1 text-sm text-fg-label">
+            <p data-slot="team-company-line" className="m-0 pt-1 text-sm text-fg-tertiary">
               {companyLine(first.company, model.floor, t, locale)}
             </p>
           )}
