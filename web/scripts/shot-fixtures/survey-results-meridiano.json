@@ -1097,7 +1097,7 @@
     "responseCount": 24,
     "targetAudienceCount": null,
     "version": 1,
-    "departmentIds": [],
+    "departmentIds": [], "userIds": [],
     "questions": [
       {
         "id": "2233394c-b0c6-4f74-a3fb-7014c53c0d08",

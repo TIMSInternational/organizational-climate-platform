@@ -136,7 +136,7 @@ const document = {
       ],
       isSuppressed: false,
       suppressionReason: null,
-      minimumGroupSize: 5,
+      minimumGroupSize: 3,
     },
     {
       surveyId: '55555555-5555-5555-5555-555555555555',
@@ -163,7 +163,7 @@ const document = {
       suppressedDepartmentCount: null,
       isSuppressed: true,
       suppressionReason: 'below_minimum_respondents',
-      minimumGroupSize: 5,
+      minimumGroupSize: 3,
     },
   ],
   // Benchmark comparisons: the company's own rows plus the global ones every tenant

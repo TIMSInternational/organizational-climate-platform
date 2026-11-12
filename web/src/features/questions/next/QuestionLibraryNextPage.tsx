@@ -371,7 +371,9 @@ function QuestionLibraryForCompany() {
                     <TableHeader>
                       <TableRow className="hover:bg-transparent">
                         <TableHead scope="col" className="px-4">{t('questionLibrary.next.colQuestion')}</TableHead>
-                        <TableHead scope="col" className="w-32">{t('questionLibrary.next.colOwner')}</TableHead>
+                        {/* Below sm the owner folds into the row's meta line: at 390 this column and the
+                            action squeezed the question itself to about 100px (review 12 Nov). */}
+                        <TableHead scope="col" className="hidden w-32 sm:table-cell">{t('questionLibrary.next.colOwner')}</TableHead>
                         <TableHead scope="col" className="w-20 pr-4">
                           <span className="sr-only">{t('questionLibrary.next.colAction')}</span>
                         </TableHead>
@@ -634,8 +636,11 @@ function ItemRow({ item, primary, secondary, owner, action, actionLabel, onOpen 
         <div className="font-medium text-fg-primary">{primary}</div>
         <div lang={locale === 'es' ? 'en' : 'es'} className="text-sm text-fg-secondary">{secondary}</div>
         <div className="mt-0.5 text-sm text-fg-tertiary">{meta}</div>
+        <div data-slot="library-owner-folded" className="mt-1.5 sm:hidden">
+          <Chip tone="neutral" icon={item.companyId === null ? <Lock className="size-3" /> : undefined} label={owner} />
+        </div>
       </TableCell>
-      <TableCell className="py-3 align-top">
+      <TableCell className="hidden py-3 align-top sm:table-cell">
         <Chip tone="neutral" icon={item.companyId === null ? <Lock className="size-3" /> : undefined} label={owner} />
       </TableCell>
       <TableCell className="py-2 pr-4 text-right align-top">
