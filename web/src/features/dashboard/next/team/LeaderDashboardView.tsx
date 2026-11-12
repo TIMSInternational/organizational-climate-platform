@@ -13,7 +13,7 @@ import { fullDay } from '../../../tracking/next/derive'
 import { planCalendarDay } from '../../../tracking/planDates'
 import DashboardExportMenu from '../DashboardExportMenu'
 import { percentReading, reading, signedReading } from '../derive'
-import { dimensionBand, dimensionMove } from './compose'
+import { TEAM_DECIMALS, dimensionBand, dimensionMove } from './compose'
 import { count, daysNote } from './format'
 import type { LeaderDashboardModel, TeamClosedWave, TeamOpenSurvey, TeamPlan } from './model'
 import { HatchedCount, TeamCard, TeamPlanRow } from './parts'
@@ -68,7 +68,9 @@ export default function LeaderDashboardView({ model }: { model: LeaderDashboardM
     <div>
       <PageHeader
         eyebrow={`${model.departmentName} · ${t('users.leader')}`}
-        title={t('dashboard.next.title')}
+        // Named as the rail's "Mi equipo" and the TeamHome board's "Su equipo" name it: the
+        // admin's "Panel de control" did not say this page is one team's.
+        title={t('dashboard.next.leader.title')}
         description={t('dashboard.next.leader.description')}
         actions={showExport ? <DashboardExportMenu subject={model.departmentName} scope="department" /> : undefined}
       />
@@ -213,8 +215,11 @@ function CompareCard({
         org === null || move === null
           ? undefined
           : t('dashboard.next.leader.compareCaption', {
-              org: reading(org, locale, 1, model.bands.scale),
-              move: move === 0 ? reading(0, locale, 1, model.bands.scale) : signedReading(move, locale, 1, model.bands.scale),
+              org: reading(org, locale, TEAM_DECIMALS, model.bands.scale),
+              move:
+                move === 0
+                  ? reading(0, locale, TEAM_DECIMALS, model.bands.scale)
+                  : signedReading(move, locale, TEAM_DECIMALS, model.bands.scale),
             }),
     }
   })
@@ -239,7 +244,7 @@ function CompareCard({
             {orgShown ? t('dashboard.next.leader.compareSub') : t('dashboard.next.leader.compareSubTeamOnly')}
           </p>
           <div data-slot="team-dimensions">
-            <ClimateRangeBar rows={rows} bands={model.bands} floor={wave.floor} decimals={1} />
+            <ClimateRangeBar rows={rows} bands={model.bands} floor={wave.floor} decimals={TEAM_DECIMALS} />
           </div>
         </>
       )}

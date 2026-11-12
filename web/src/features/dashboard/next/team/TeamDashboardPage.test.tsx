@@ -209,6 +209,9 @@ describe('TeamDashboardPage', () => {
     renderPage('leader')
 
     const retry = await screen.findByRole('button', { name: en.common.retry })
+    // The 500 is said in the reader's words; the server's own text is never printed.
+    expect(screen.getByText(en.errors.api.server)).toBeTruthy()
+    expect(screen.queryByText(/Database unavailable/)).toBeNull()
     const before = requested().filter((url) => url.includes('/dashboard/department-admin')).length
     serve({ '/dashboard/department-admin': { body: department() }, '/api/tablero-seguimiento': { body: board } })
     fireEvent.click(retry)
