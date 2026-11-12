@@ -2189,7 +2189,7 @@
       },
       "create": {
         "title": "New microclimate",
-        "eyebrow": "Workspace · Create",
+        "eyebrow": "Follow-up · Create",
         "description": "Two questions, a team and a closing date. Launch it and you get the link to share.",
         "saveDraft": "Save draft",
         "questionsTitle": "Name and questions",
@@ -2274,7 +2274,7 @@
         "timezoneBrowser": "The company's time zone could not be read: dates and times in this browser's, {zone}."
       },
       "detail": {
-        "eyebrow": "Workspace · Share",
+        "eyebrow": "Follow-up · Share",
         "description": "Get it to people: the link or QR code for anyone answering without signing in, or an email invitation. Then watch it live.",
         "metaActive": "open until {date} at {time}",
         "metaClosed": "closed on {date} at {time}",
@@ -2340,7 +2340,7 @@
       },
       "analytics": {
         "title": "Microclimate analytics",
-        "eyebrow": "Workspace",
+        "eyebrow": "Follow-up",
         "description": "How many people answer each session and how the pulse moves from one session to the next. A pulse with fewer than {floor} responses shows no figures, in any chart.",
         "participationTitle": "Participation by session",
         "participationAside": "against those expected",
@@ -2383,7 +2383,7 @@
         "note": "Every figure of a pulse is computed over the whole session and only from {floor} responses. Words are counted, never quoted."
       },
       "results": {
-        "eyebrow": "Workspace · Read",
+        "eyebrow": "Follow-up · Read",
         "description": "What this session collected: how many answered and the most frequent words, from {floor} responses.",
         "metaActive": "closes on {date} at {time}; until then the figures can move",
         "metaClosed": "closed on {date} at {time}",

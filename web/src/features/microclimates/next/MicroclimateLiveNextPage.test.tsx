@@ -118,11 +118,13 @@ afterEach(() => {
 })
 
 describe('the figure', () => {
-  it('reads the count from /live-results, in the figure face', async () => {
+  it('reads the count from /live-results, in tabular figures of the UI face', async () => {
     renderPage()
     // The detail says 12; the poll says 13. 13 on screen is proof the poll landed.
     await waitFor(() => expect(figure()).toBe('13'))
-    expect(document.querySelector('[data-slot="live-figure"]')?.className).toMatch(/font-mono/)
+    const figureClasses = document.querySelector('[data-slot="live-figure"]')!.className.split(/\s+/)
+    expect(figureClasses).toContain('tabular-nums')
+    expect(figureClasses).not.toContain('font-mono')
     expect(screen.getByText('of 40 expected responses')).toBeTruthy()
   })
 
@@ -218,7 +220,9 @@ describe('what people wrote', () => {
     await waitFor(() => expect(figure()).toBe(String(BELOW_THE_FLOOR)))
 
     const block = wordsBlock()
-    expect(within(block).getByText(`Protected until ${MINIMUM_RESPONDENTS} responses`)).toBeTruthy()
+    // The ProtectedState primitive: the padlock and "Fewer than {floor}", never a count.
+    const mark = within(block).getByText(`Fewer than ${MINIMUM_RESPONDENTS}`)
+    expect(mark.closest('[data-slot="protected-state"]')).toBeTruthy()
     expect(block.querySelector('[data-slot="words-hatch"]')).toBeTruthy()
     expect(screen.queryByText('visa')).toBeNull()
     expect(screen.queryByText('handover')).toBeNull()

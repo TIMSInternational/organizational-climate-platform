@@ -14,11 +14,12 @@ const TITLE_KEY: Record<JourneyKey, string> = {
  * "Crear · Compartir · Ver en vivo · Leer" — the rail the Crear and Detalle boards draw
  * under the header, the triage's "as one flow: create, share, watch, read" made visible.
  *
- * A done step is a green check, the current one a red numbered disc (the identity fill,
- * `bg-accent-blue-fill`, which is `#dd0c15` in both palettes and carries white at 5.47:1),
- * a pending one a hollow numbered disc. Pending ink is `text-fg-tertiary`, not the board's
- * `#8a82a5`: that is `text-fg-light`, a non-text ink under 4.5:1 (`inkContrast.test.ts`). The rule after a done step is green. The state is
- * never the colour alone: the current step is `aria-current="step"` and its note says so.
+ * Drawn as the Apple design's `.steps` (occ.css): a done step is a check on a disc in the
+ * label ink, the current one a blue disc inside a blue-tinted pill with its note in the blue
+ * ink (blue is selection and "where you are"), a pending one a numbered disc on the gray fill.
+ * Green is not used: it means the Fortaleza result area and nothing else. Pending ink is
+ * `text-fg-tertiary` (4.5:1 or better on the card). The state is never the colour alone: the
+ * current step is `aria-current="step"`, a done one carries the check, and the notes say so.
  */
 export function JourneyRail({
   states,
@@ -32,7 +33,7 @@ export function JourneyRail({
   return (
     <nav
       aria-label={t('microclimates.next.journey.label')}
-      className="rounded-xl border border-line-default bg-surface-card px-5 py-3 shadow-xs"
+      className="rounded-xl border border-line-default bg-surface-card px-4 py-3"
     >
       {/* Below `xl` a grid, not a wrapping row: one step per line on a phone, two by two from
           `sm`. The wrapping row gave each of four `flex-1` steps a quarter of 390px, so every
@@ -54,21 +55,25 @@ export function JourneyRail({
               {index > 0 && (
                 <span
                   aria-hidden="true"
-                  className={cn('hidden h-px min-w-5 flex-1 xl:block', previous === 'done' ? 'bg-accent-green' : 'bg-line-default')}
+                  className={cn('hidden h-px min-w-5 flex-1 xl:block', previous === 'done' ? 'bg-fg-tertiary' : 'bg-line-default')}
                 />
               )}
-              <span className="flex min-w-0 items-center gap-2.5">
+              <span
+                data-slot="journey-step"
+                className={cn(
+                  'flex min-w-0 items-center gap-2.5 rounded-full py-1 pr-3 pl-1',
+                  state === 'current' && 'bg-accent-blue-soft',
+                )}
+              >
                 {state === 'done' ? (
-                  <span className="inline-flex size-5.5 shrink-0 items-center justify-center rounded-full border border-accent-green-ring bg-accent-green-soft text-accent-green-ink">
+                  <span className="inline-flex size-5.5 shrink-0 items-center justify-center rounded-full bg-fg-primary text-surface-card">
                     <Check aria-hidden="true" className="size-3" strokeWidth={2.4} />
                   </span>
                 ) : (
                   <span
                     className={cn(
-                      'inline-flex size-5.5 shrink-0 items-center justify-center rounded-full font-mono text-xs tabular-nums',
-                      state === 'current'
-                        ? 'bg-accent-blue-fill font-semibold text-fg-on-accent'
-                        : 'border border-line-default bg-surface-icon-box text-fg-tertiary',
+                      'inline-flex size-5.5 shrink-0 items-center justify-center rounded-full text-xs font-bold tabular-nums',
+                      state === 'current' ? 'bg-accent-blue-fill text-fg-on-accent' : 'bg-surface-fill text-fg-secondary',
                     )}
                   >
                     {index + 1}
@@ -78,15 +83,15 @@ export function JourneyRail({
                   <span
                     className={cn(
                       'text-sm font-semibold',
-                      state === 'current' ? 'text-fg-primary' : state === 'done' ? 'text-fg-secondary' : 'text-fg-tertiary',
+                      state === 'current' ? 'text-accent-blue-ink' : state === 'done' ? 'text-fg-primary' : 'text-fg-secondary',
                     )}
                   >
                     {t(TITLE_KEY[key])}
                   </span>
                   <span
                     className={cn(
-                      'text-xs xl:whitespace-nowrap',
-                      state === 'current' ? 'text-accent-red-ink' : 'text-fg-tertiary',
+                      'text-xs',
+                      state === 'current' ? 'text-accent-blue-ink' : 'text-fg-tertiary',
                     )}
                   >
                     {notes[key]}

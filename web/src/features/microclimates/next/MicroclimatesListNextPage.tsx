@@ -1,8 +1,8 @@
 import { Fragment, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { Check } from 'lucide-react'
-import { useTranslation, type TranslateFn } from '../../../i18n'
-import { PageTopBar } from '../../../components/layout'
+import { useTranslation, type TranslateFn, type TranslateParams } from '../../../i18n'
+import { PageHeader } from '../../../components/layout'
 import {
   Button,
   CanvasArrowRightIcon,
@@ -21,7 +21,6 @@ import { ProtectedCell } from '../../../components/charts'
 import { useViewerCapabilities } from '../../../auth/viewerCapabilities'
 import { RailMicroclimatesIcon } from '../../../navigation/railIcons'
 import { cn } from '../../../lib/cn'
-import { MonoReadings } from '../../dashboard/components/dashboardGrammar'
 import type { Microclimate } from '../api/microclimates'
 import { MINIMUM_RESPONDENTS } from '../microclimatePrivacy'
 import { statusLabel } from '../microclimateVocabulary'
@@ -47,8 +46,8 @@ const STEPS: readonly { step: FlowStep; titleKey: string; hintKey: string }[] = 
   { step: 4, titleKey: 'microclimates.next.list.stepRead', hintKey: 'microclimates.next.list.stepReadHint' },
 ]
 
-/** The artboard's `.card`: 8px, the default hairline, the faint shadow. */
-const CARD = 'rounded-xl border border-line-default bg-surface-card shadow-sm'
+/** The Apple design's `.card`: 12px corners and the default hairline, no shadow (occ.css). */
+const CARD = 'rounded-xl border border-line-default bg-surface-card'
 
 /**
  * `/microclimates` — the redesigned Microclimas, drawn as the MicroclimatesList
@@ -77,10 +76,11 @@ export default function MicroclimatesListNextPage() {
 
   return (
     <div>
-      <PageTopBar
+      <PageHeader
+        eyebrow={t('navigation.sectionFollowUp')}
         title={t('navigation.microclimates')}
         description={t('microclimates.next.list.description')}
-        actions={
+        primaryAction={
           capabilities.canLaunchMicroclimate ? (
             <Button asChild variant="primary" size="canvas">
               <Link to="/microclimates/new">
@@ -158,9 +158,12 @@ function ListBody({ model, timeZone }: { model: MicroclimatesListNextModel; time
             body={t('microclimates.next.list.nothingInProgressBody')}
           />
         ) : (
-          model.inProgress.map((session) => (
-            <InProgressRow key={session.row.id} session={session} zone={zone} outcome={outcome} onCopy={copy} />
-          ))
+          // One card, its rows divided by hairlines: the Apple design's `.list` / `.row`.
+          <div data-slot="session-list" className={cn(CARD, 'flex flex-col divide-y divide-line-default')}>
+            {model.inProgress.map((session) => (
+              <InProgressRow key={session.row.id} session={session} zone={zone} outcome={outcome} onCopy={copy} />
+            ))}
+          </div>
         )}
         {/* Said once, under the rows, wherever a row prints an hour. */}
         {model.inProgress.some((session) => session.detail !== null) && (
@@ -197,7 +200,11 @@ function ListBody({ model, timeZone }: { model: MicroclimatesListNextModel; time
             }
           />
         ) : (
-          model.past.map((row) => <PastRow key={row.id} row={row} locale={locale} zone={zone} />)
+          <div data-slot="past-list" className={cn(CARD, 'flex flex-col divide-y divide-line-default')}>
+            {model.past.map((row) => (
+              <PastRow key={row.id} row={row} locale={locale} zone={zone} />
+            ))}
+          </div>
         )}
       </section>
     </div>
@@ -255,9 +262,7 @@ function FlowCard({ step, session }: { step: FlowStep | null; session: SessionRe
   const reached = step ?? 0
 
   return (
-    // `-mt-1`: the artboard sets its first section 20px under the header's rule, and
-    // `PageTopBar` keeps 24px below itself for every screen.
-    <section aria-labelledby="mc-flow" className={cn(CARD, '-mt-1 flex flex-col gap-3 px-5 pt-4 pb-4.5')}>
+    <section aria-labelledby="mc-flow" className={cn(CARD, 'flex flex-col gap-3 px-5 pt-4 pb-4.5')}>
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <h2 id="mc-flow" className="m-0 text-2xl">
           {t('microclimates.next.list.flowTitle')}
@@ -283,7 +288,7 @@ function FlowCard({ step, session }: { step: FlowStep | null; session: SessionRe
                 // 26px outside: the artboard's 24px circle is content-box with a 1px
                 // border (measured off MicroclimatesList.png, 281-306 by 237-262).
                 className={cn(
-                  'inline-flex size-6.5 flex-none items-center justify-center rounded-full border font-mono text-xs tabular-nums',
+                  'inline-flex size-6.5 flex-none items-center justify-center rounded-full border text-xs font-bold tabular-nums',
                   n <= reached
                     ? 'border-accent-blue bg-accent-blue text-fg-on-accent'
                     : 'border-line-default bg-surface-card text-fg-tertiary',
@@ -330,11 +335,12 @@ function DashedNote({ icon, title, body }: { icon: ReactNode; title: string; bod
   )
 }
 
-/** The row's grid: the icon, the text, the actions — the actions drop under the text below md. */
-const ROW = cn(
-  CARD,
-  'grid grid-cols-[1.75rem_minmax(0,1fr)] items-center gap-x-3.5 gap-y-3 px-5 py-3.5 md:grid-cols-[1.75rem_minmax(0,1fr)_auto]',
-)
+/**
+ * A row of the list card (occ.css `.row`): the icon, the text, the actions — the actions drop
+ * under the text below md. The card draws the hairline between rows.
+ */
+const ROW =
+  'grid min-h-13 grid-cols-1 items-center gap-x-3.5 gap-y-3 px-4 py-3.5 sm:grid-cols-[1.75rem_minmax(0,1fr)] sm:px-5 md:grid-cols-[1.75rem_minmax(0,1fr)_auto]'
 
 function InProgressRow({
   session,
@@ -363,8 +369,8 @@ function InProgressRow({
       <span
         aria-hidden="true"
         className={cn(
-          'inline-flex size-7 items-center justify-center rounded-lg',
-          isOpen ? 'bg-accent-green-soft text-accent-green-ink' : 'bg-surface-icon-box text-fg-tertiary',
+          'hidden size-7 items-center justify-center rounded-lg sm:inline-flex',
+          isOpen ? 'bg-accent-blue-soft text-accent-blue-ink' : 'bg-surface-icon-box text-fg-tertiary',
         )}
       >
         <RailMicroclimatesIcon className="size-4" />
@@ -399,7 +405,7 @@ function InProgressRow({
         )}
       </div>
 
-      <div className="col-span-2 flex flex-wrap items-center gap-2 md:col-span-1 md:justify-end">
+      <div className="flex flex-wrap items-center gap-2 sm:col-span-2 md:col-span-1 md:justify-end">
         {canShare && (
           <Button type="button" variant="outline" size="canvas" onClick={() => void onCopy(row.id, link)}>
             {copied?.ok ? <Check aria-hidden="true" /> : <CanvasLinkIcon />}
@@ -418,8 +424,43 @@ function InProgressRow({
 }
 
 /**
+ * A sentence whose numbers are set in tabular figures of the UI face (the Apple design's
+ * `.num`), each wrapped so a column of them lines up; the prose around them is untouched.
+ * The numbers are formatted in the reader's locale. A `\u0000` marker splits the sentence, so
+ * the catalogue decides where each number sits.
+ */
+const MARK = '\u0000'
+function Readings({ t, messageKey, params, locale }: { t: TranslateFn; messageKey: string; params: TranslateParams; locale: string }) {
+  const readings: string[] = []
+  const marked: TranslateParams = {}
+  for (const [name, value] of Object.entries(params)) {
+    if (typeof value === 'number') {
+      marked[name] = `${MARK}${readings.length}${MARK}`
+      readings.push(value.toLocaleString(locale))
+    } else {
+      marked[name] = value
+    }
+  }
+  return (
+    <span>
+      {t(messageKey, marked)
+        .split(MARK)
+        .map((piece, index) =>
+          index % 2 === 1 ? (
+            <span key={index} data-slot="reading" className="tabular-nums">
+              {readings[Number(piece)]}
+            </span>
+          ) : (
+            piece
+          ),
+        )}
+    </span>
+  )
+}
+
+/**
  * "0 de 20 respuestas · abierto hasta el 11 sept a las 21:06 · 2 preguntas · anónimo ·
- * palabras protegidas hasta 5". The counts are readings, so mono; the rest is prose. The
+ * palabras protegidas hasta 5". The counts are readings, in tabular figures; the rest is prose. The
  * three facts from the detail read are left off when that read failed.
  */
 function SessionMeta({ session, locale, zone }: { session: InProgressSession; locale: string; zone: string }) {
@@ -427,7 +468,7 @@ function SessionMeta({ session, locale, zone }: { session: InProgressSession; lo
   const { row, detail } = session
   const pieces: ReactNode[] = [
     row.targetParticipantCount > 0 ? (
-      <MonoReadings
+      <Readings
         key="responses"
         t={t}
         messageKey="microclimates.next.list.responsesOf"
@@ -435,7 +476,7 @@ function SessionMeta({ session, locale, zone }: { session: InProgressSession; lo
         locale={locale}
       />
     ) : (
-      <MonoReadings
+      <Readings
         key="responses"
         t={t}
         messageKey="microclimates.next.list.responsesNoTarget"
@@ -495,7 +536,7 @@ function PastRow({ row, locale, zone }: { row: Microclimate; locale: string; zon
     <div data-slot="past-row" className={ROW}>
       <span
         aria-hidden="true"
-        className="inline-flex size-7 items-center justify-center rounded-lg bg-surface-icon-box text-fg-tertiary"
+        className="hidden size-7 items-center justify-center rounded-lg bg-surface-icon-box text-fg-tertiary sm:inline-flex"
       >
         <RailMicroclimatesIcon className="size-4" />
       </span>
@@ -511,14 +552,14 @@ function PastRow({ row, locale, zone }: { row: Microclimate; locale: string; zon
         </div>
         <span className="text-sm text-fg-tertiary">
           {row.targetParticipantCount > 0 ? (
-            <MonoReadings
+            <Readings
               t={t}
               messageKey="microclimates.next.list.responsesOf"
               params={{ responses: row.responseCount, target: row.targetParticipantCount }}
               locale={locale}
             />
           ) : (
-            <MonoReadings
+            <Readings
               t={t}
               messageKey="microclimates.next.list.responsesNoTarget"
               params={{ responses: row.responseCount }}
@@ -533,7 +574,7 @@ function PastRow({ row, locale, zone }: { row: Microclimate; locale: string; zon
           )}
         </span>
       </div>
-      <div className="col-span-2 flex flex-wrap items-center gap-2 md:col-span-1 md:justify-end">
+      <div className="flex flex-wrap items-center gap-2 sm:col-span-2 md:col-span-1 md:justify-end">
         <ProtectedCell
           responses={row.responseCount}
           threshold={MINIMUM_RESPONDENTS}
