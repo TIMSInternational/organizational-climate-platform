@@ -112,6 +112,12 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+/** The flow card's four steps, drawn by the journey rail's `JourneySteps`. */
+function flowSteps(): HTMLElement[] {
+  const card = document.getElementById('mc-flow')?.closest('section')
+  return [...(card?.querySelectorAll<HTMLElement>('[data-slot="journey-rail"] > li') ?? [])]
+}
+
 function section(name: string): HTMLElement {
   return screen.getByRole('region', { name })
 }
@@ -121,9 +127,12 @@ describe('the flow card', () => {
     renderPage()
     await screen.findByText('“Pulso semanal” is at step 3')
 
-    const steps = document.querySelectorAll('[data-slot="flow-step"]')
-    expect([...steps].map((step) => step.getAttribute('data-reached'))).toEqual(['true', 'true', 'true', 'false'])
-    expect(steps[2].getAttribute('aria-current')).toBe('step')
+    // The same stepper as the Crear and Detalle rail: the steps passed done, the session's
+    // step current (the blue pill), the rest pending.
+    const steps = flowSteps()
+    expect(steps.map((step) => step.getAttribute('data-state'))).toEqual(['done', 'done', 'current', 'pending'])
+    expect(steps.map((step) => step.getAttribute('aria-current'))).toEqual([null, null, 'step', null])
+    expect(steps[2].querySelector('[data-slot="journey-step"]')?.className.split(/\s+/)).toContain('bg-accent-blue-soft')
   })
 
   it('puts a draft at the first step', async () => {
@@ -132,8 +141,8 @@ describe('the flow card', () => {
     renderPage()
     await screen.findByText('“Pulso semanal” is at step 1')
 
-    const steps = document.querySelectorAll('[data-slot="flow-step"]')
-    expect([...steps].map((step) => step.getAttribute('data-reached'))).toEqual(['true', 'false', 'false', 'false'])
+    const steps = flowSteps()
+    expect(steps.map((step) => step.getAttribute('data-state'))).toEqual(['current', 'pending', 'pending', 'pending'])
   })
 
   it('names the session in progress as the artboard does: its noun behind its article', async () => {

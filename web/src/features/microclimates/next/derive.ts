@@ -2,7 +2,7 @@ import { ANONYMITY_FLOOR, isSuppressed } from '../../../components/charts'
 import type { Locale } from '../../../i18n'
 import type { Microclimate, Question, WordCloudEntry } from '../api/microclimates'
 import type { MicroclimateAnonymityGuarantee } from '../api/microclimateLinks'
-import { participationPercent, suppressWordCloud } from '../microclimatePrivacy'
+import { flooredParticipationPercent, participationPercent, suppressWordCloud } from '../microclimatePrivacy'
 import type { FlowStep } from './model'
 
 /**
@@ -330,9 +330,13 @@ export function displayLink(origin: string, id: string): string {
   return `${origin.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '')}${respondPath(id)}`
 }
 
-/** The bar's fill, 0–100, or `null` when there is no target — a denominator is never invented. */
+/**
+ * The bar's fill, a whole 0–100 floored, or `null` when there is no target — a denominator
+ * is never invented. Floored like every response rate, so a meter is never full (and its
+ * `aria-valuenow` never says 100) before everyone has answered.
+ */
 export function fillPercent(responses: number, target: number): number | null {
-  const rate = participationPercent(responses, target)
+  const rate = flooredParticipationPercent(responses, target)
   return rate === null ? null : Math.max(0, Math.min(100, rate))
 }
 

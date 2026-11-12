@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   MINIMUM_RESPONDENTS,
   MINIMUM_WORD_OCCURRENCES,
+  flooredParticipationPercent,
   participationPercent,
   suppressWordCloud,
 } from './microclimatePrivacy'
@@ -70,5 +71,27 @@ describe('participationPercent', () => {
     // An anonymous link can be answered by more people than were expected. Clamping
     // to 100% would hide that the target was wrong.
     expect(participationPercent(50, 40)).toBeCloseTo(125)
+  })
+})
+
+describe('flooredParticipationPercent', () => {
+  it('floors, never rounds: a rate is a claim about completion', () => {
+    // 31 of 48 is 64.58 %: rounded it would read 65 %, floored 64 %.
+    expect(flooredParticipationPercent(31, 48)).toBe(64)
+    expect(flooredParticipationPercent(18, 57)).toBe(31)
+    // 199 of 200 must never read as everyone.
+    expect(flooredParticipationPercent(199, 200)).toBe(99)
+    expect(flooredParticipationPercent(200, 200)).toBe(100)
+  })
+
+  it('divides the counts, so an exact rate is not floored one below by floating point', () => {
+    // (29 / 100) * 100 is 28.999999999999996; flooring that would print 28 %.
+    expect(flooredParticipationPercent(29, 100)).toBe(29)
+    expect(flooredParticipationPercent(57, 100)).toBe(57)
+  })
+
+  it('returns null rather than zero when there is no target, and does not cap over-response', () => {
+    expect(flooredParticipationPercent(4, 0)).toBeNull()
+    expect(flooredParticipationPercent(50, 40)).toBe(125)
   })
 })

@@ -380,7 +380,7 @@ describe('MicroclimateLivePage', () => {
     routeFetch(detail({ language: 'es', resolvedLocale: 'es' }), results())
     renderPage()
 
-    expect(await screen.findByText('Language of this content')).toBeTruthy()
+    expect(await screen.findByText('Not everything is available in your language')).toBeTruthy()
   })
 
   it('gates the plate on the plate, never on the viewport', async () => {
