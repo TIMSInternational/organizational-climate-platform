@@ -152,7 +152,7 @@ export default function SuperUsersView() {
     <div className="flex flex-col gap-section">
       <div className="-mb-6">
         <PageHeader
-          eyebrow={companyName ?? t('navigation.sectionOrganization')}
+          eyebrow={t('navigation.sectionOrganization')}
           title={t('navigation.users')}
           description={t('superadmin.next.users.description')}
           breadcrumbs={breadcrumbs}
@@ -246,7 +246,7 @@ export default function SuperUsersView() {
         </div>
         <label className="m-0 xl:ml-auto">
           <span className="sr-only">{t('superadmin.next.users.departmentFilterLabel')}</span>
-          <CanvasSelect className="w-52" value={department} onChange={(event) => setDepartment(event.target.value)}>
+          <CanvasSelect className="w-56" value={department} onChange={(event) => setDepartment(event.target.value)}>
             <option value="">{t('superadmin.next.users.allDepartments')}</option>
             {state.departments.map((unit) => (
               <option key={unit.id} value={unit.id}>

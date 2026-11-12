@@ -1539,7 +1539,7 @@
     "parentLockedOnEdit": "The parent department cannot be changed after a department is created.",
     "inactiveHidesFromAssignment": "Inactive departments stay on record but are not offered when assigning people.",
     "next": {
-      "description": "Who is in each area, who leads it and which plans it has open. Administrators see a department from one response; a cross or a leader's own team from {threshold}.",
+      "description": "Who is in each area, who leads it and which plans it has open. Administrators see a department from one response; a cross or a leader's own team from {threshold} responses.",
       "importPeople": "Import people",
       "notAllowedTitle": "Departments are not yours to manage",
       "notAllowedBody": "Only the company's administration sees and changes them.",
@@ -1603,7 +1603,8 @@
       "rootPeopleMany": "{count} people",
       "meanOfOne": "· mean of {count} dimension",
       "inactiveHiddenOne": "{count} inactive department hidden. It keeps its survey history and receives no invitations.",
-      "inactiveShownOne": "{count} inactive department shown. It keeps its survey history and receives no invitations."
+      "inactiveShownOne": "{count} inactive department shown. It keeps its survey history and receives no invitations.",
+      "noteProtectedOne": "Protected in {wave}: fewer than {threshold} response"
     }
   },
   "demographicFields": {
@@ -1689,7 +1690,8 @@
         "notOfferedSub": "inactive field",
         "edit": "Edit",
         "editNamed": "Edit {label}",
-        "useNamed": "Start a new field from {label}"
+        "useNamed": "Start a new field from {label}",
+        "createFrom": "Create"
       },
       "types": {
         "heading": "Field types",
@@ -3584,7 +3586,7 @@
         "roleEmployee": "Employees · {count}",
         "allDepartments": "All departments",
         "departmentFilterLabel": "Filter by department",
-        "searchPlaceholder": "Search by name or email",
+        "searchPlaceholder": "Search name or email",
         "shown": "{shown} of {total}",
         "editTitle": "Edit {name}",
         "editMeta": "a role change applies on save, immediately",

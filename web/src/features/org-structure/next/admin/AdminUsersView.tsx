@@ -143,18 +143,15 @@ export default function AdminUsersView() {
     state.reload()
   }
 
-  // The UsersList board sets the breadcrumb 14px over the header (its glyphs at y=76, the
-  // eyebrow's at y=110 at 1440), not the 38px of the other admin boards: PageHeader draws it 16px over.
+  // One header rule for the sidebar's destinations (fix round 1): the eyebrow is the sidebar
+  // section the page sits in, and no breadcrumb — «Personas» is a top-level row of
+  // Organización, so a crumb over it would name a parent the rail does not have.
   const header = (
     <div className="-mb-6">
       <PageHeader
-        eyebrow={companyName ?? t('navigation.sectionOrganization')}
+        eyebrow={t('navigation.sectionOrganization')}
         title={t('navigation.users')}
         description={t('users.next.description')}
-        breadcrumbs={[
-          { label: t('navigation.companyAdministration'), href: `/admin/companies/${companyId}` },
-          { label: t('navigation.users') },
-        ]}
         actions={
           allowed ? (
             <>
@@ -490,7 +487,7 @@ function RailItem({
         onClick={onSelect}
         className={cn(
           'flex h-auto w-full flex-col items-stretch gap-1 whitespace-normal rounded-md border-0 border-l-[3px] px-3 py-2 text-left font-normal',
-          selected ? 'border-l-fg-primary bg-surface-icon-box hover:not-disabled:bg-surface-icon-box' : 'border-l-transparent',
+          selected ? 'border-l-accent-blue bg-surface-icon-box hover:not-disabled:bg-surface-icon-box' : 'border-l-transparent',
         )}
       >
         <span className="flex items-baseline justify-between gap-2">
@@ -622,7 +619,7 @@ function Roster({
           </span>
         </div>
         <div className="flex min-w-0 items-center gap-2.5">
-          <label htmlFor={searchId} className="relative m-0 min-w-0 flex-1 sm:w-60 sm:flex-none">
+          <label htmlFor={searchId} className="relative m-0 min-w-0 flex-1 sm:w-72 sm:flex-none">
             <span className="sr-only">{t('users.next.roster.search')}</span>
             <Search aria-hidden="true" className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-fg-tertiary" />
             <Input

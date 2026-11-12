@@ -73,7 +73,7 @@ export default function DepartmentsNextPage() {
   // band — never the product default in the company's name.
   const bandsState = useResultBands()
   const bands = bandsState.bands
-  const header = { eyebrow: companyName ?? t('navigation.sectionOrganization'), title: t('navigation.departments'), description: t(`${K}.description`, { threshold: ANONYMITY_FLOOR }) }
+  const header = { eyebrow: t('navigation.sectionOrganization'), title: t('navigation.departments'), description: t(`${K}.description`, { threshold: ANONYMITY_FLOOR }) }
 
   if (scope.status === 'needs-selection') {
     return (
@@ -175,7 +175,7 @@ function DepartmentsView({
   return (
     <div>
       <PageHeader
-        eyebrow={companyName ?? t('navigation.sectionOrganization')}
+        eyebrow={t('navigation.sectionOrganization')}
         title={t('navigation.departments')}
         description={t(`${K}.description`, { threshold: ANONYMITY_FLOOR })}
         actions={
@@ -303,19 +303,10 @@ function DepartmentsView({
                 </span>
               </span>
             </div>
-            <div aria-hidden="true" className="hidden w-full flex-col items-center xl:flex">
-              <span className="h-4.5 w-px bg-line-default" />
-              <span className="h-px w-4/5 bg-line-default" />
-              <span className="grid w-full grid-cols-5">
-                {active.slice(0, 5).map((row) => (
-                  <span key={row.id} className="flex justify-center">
-                    <span className="h-3.5 w-px bg-line-default" />
-                  </span>
-                ))}
-              </span>
-            </div>
           </div>
-          <ul className="m-0 mt-3 grid list-none gap-3 p-0 sm:grid-cols-2 lg:grid-cols-3 xl:mt-0 xl:grid-cols-5">
+          {/* No connector rails: the departments are one flat level under the company, and a rail
+              drawn to the first row only read as five children of thirteen (fix round 1). */}
+          <ul className="m-0 mt-3 grid list-none gap-3 p-0 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             {active.map((row) => (
               <li key={row.id} data-slot="department-card" data-department={row.name} className="flex min-w-0 flex-col gap-2 rounded-xl border border-line-panel bg-surface-card px-4 py-3.5">
                 {/* No «Activo» chip: the chart draws active departments only, so it said nothing. */}
@@ -332,7 +323,7 @@ function DepartmentsView({
                     <PlansCell plans={row.plans} t={t} />
                   </dd>
                 </dl>
-                <CardNoteLine row={row} wave={wave} bands={bands} t={t} locale={locale} />
+                <CardNoteLine row={row} wave={wave} floor={model.floor} bands={bands} t={t} locale={locale} />
               </li>
             ))}
           </ul>
@@ -394,7 +385,7 @@ function DepartmentsView({
                         <PlansCell plans={row.plans} t={t} />
                       </td>
                       <td className={cn(CELL, 'whitespace-nowrap')}>
-                        <ClimateCell climate={row.climate} bands={bands} t={t} locale={locale} />
+                        <ClimateCell climate={row.climate} floor={model.floor} bands={bands} t={t} locale={locale} />
                       </td>
                       {showInactive && (
                         <td className={CELL}>
@@ -484,22 +475,26 @@ function PlansCell({ plans, t }: { plans: PlansReading | null; t: TranslateFn })
 
 function ClimateCell({
   climate,
+  floor,
   bands,
   t,
   locale,
 }: {
   climate: ClimateReading
+  /** The floor the server applied to the climate payload (`DepartmentsModel.floor`). */
+  floor: number
   bands: ResultBands | null
   t: TranslateFn
   locale: string
 }) {
   if (climate.kind === 'protected') {
     return (
-      // The one protected mark (user ruling, 11 Nov): a padlock and «Menos de 3», never a number
-      // of respondents. The floor is the one this page applies (`ANONYMITY_FLOOR`, re-applied in
-      // `derive.ts` to a group the server did not flag).
+      // The one protected mark (user ruling, 11 Nov): a padlock and «Menos de {floor}», never a
+      // number of respondents. The floor is the one the model withheld at — the server's own
+      // `minimumGroupSize` for this payload — not a constant: an administrator sees a single
+      // department from 1, and a cell that said «Menos de 3» would contradict the header.
       <span data-slot="protected-cell">
-        <ProtectedState floor={ANONYMITY_FLOOR} />
+        <ProtectedState floor={floor} />
       </span>
     )
   }
@@ -523,19 +518,21 @@ function ClimateCell({
 function CardNoteLine({
   row,
   wave,
+  floor,
   bands,
   t,
   locale,
 }: {
   row: DepartmentRow
   wave: Wave | null
+  floor: number
   bands: ResultBands | null
   t: TranslateFn
   locale: string
 }) {
   const note = noteOf(row, wave, bands)
   const base = 'border-t border-line-light pt-1.5 text-xs'
-  if (note.kind === 'protected') return <span className={cn(base, 'text-fg-tertiary')}>{t(`${K}.noteProtected`, { wave: note.wave, threshold: ANONYMITY_FLOOR })}</span>
+  if (note.kind === 'protected') return <span className={cn(base, 'text-fg-tertiary')}>{t(byCount(floor, `${K}.noteProtectedOne`, `${K}.noteProtected`), { wave: note.wave, threshold: floor })}</span>
   if (note.kind === 'lowest') {
     const key = `surveyRespond.dimensions.${note.key}`
     const name = t(key)
