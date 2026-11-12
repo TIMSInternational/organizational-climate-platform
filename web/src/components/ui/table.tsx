@@ -52,7 +52,13 @@ export function Table({ className, zebra = false, ...props }: TableProps) {
     // sideways. `w-full` sits on the table rather than the base layer for the
     // reason in the block above; pass `className="w-auto"` for a table that
     // should shrink-wrap instead (HeatMap does).
-    <div data-slot="table-container" className="w-full overflow-x-auto">
+    //
+    // `relative`, because a scroller only clips what it is the containing block of. An
+    // absolutely positioned descendant — every `sr-only` span is one — takes its containing
+    // block from the nearest POSITIONED ancestor, and with none it escapes the scroller and
+    // widens the document. Measured on /dashboard at 390px: the climate map's 48 cell labels
+    // pushed the page to 646px wide while the table itself scrolled correctly inside here.
+    <div data-slot="table-container" className="relative w-full overflow-x-auto">
       <TableZebraContext.Provider value={zebra}>
         <table
           data-slot="table"

@@ -50,6 +50,25 @@ describe('Table', () => {
       'overflow-x-auto',
     )
   })
+
+  it('is the containing block of its cells, so a screen-reader label cannot widen the page', () => {
+    // `sr-only` is `position: absolute`. Without a positioned ancestor a label in a cell
+    // past the scroller's edge escapes the clip and gives the page a sideways scroll: the
+    // climate map's labels made /dashboard 646px wide at 390. happy-dom has no layout, so
+    // the class is the proxy; the screenshot is the measurement.
+    const { container } = render(
+      <Table>
+        <TableBody>
+          <TableRow>
+            <TableCell>
+              <span className="sr-only">x</span>
+            </TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>,
+    )
+    expect(container.querySelector('[data-slot=table-container]')?.classList.contains('relative')).toBe(true)
+  })
 })
 
 describe('TableSortHeader', () => {
