@@ -653,6 +653,7 @@
     "protectedLegend": "Protected — under {threshold} responses",
     "protectedLegendInert": "Protected — under {threshold} responses, and cannot be opened",
     "protectedWord": "Protected",
+    "protectedUnderFloor": "Fewer than {threshold}",
     "targetLabel": "Target {value}",
     "progressToTarget": "{value} of {target}",
     "previousValue": "vs {value} previously",

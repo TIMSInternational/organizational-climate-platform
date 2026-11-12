@@ -437,6 +437,11 @@ export default function ClimateMap({
                           // and an `h-7` cell has no room for a word anyway — a
                           // dense grid repeating "protected" is noise, not clarity.
                           showWord={false}
+                          // The ruled pattern for a withheld group is the padlock
+                          // plus «Menos de N», so the row's FIRST cell says it in
+                          // words; the rest keep the padlock alone, one statement
+                          // per row rather than six (fix round 2, 12 Nov).
+                          mark={index === 0 ? 'floor' : 'shield'}
                           // The same `box` the disclosed reading uses. A withheld
                           // row between two disclosed ones must not be a different
                           // height, or the grid steps where the floor bites.

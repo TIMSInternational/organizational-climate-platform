@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { Lock } from 'lucide-react'
 import { cn } from '../../lib/cn'
 
 /**
@@ -187,7 +188,12 @@ export function PopulationGrid({
           )}
           {/* The count, or the word — never both, and never a 0 standing in for the word. */}
           {band.isProtected ? (
-            <span className="text-xs text-fg-tertiary">{protectedLabel}</span>
+            // The padlock before the words: the ruled pattern for a withheld group, the
+            // same one the map draws on that group's row.
+            <span data-slot="population-protected" className="inline-flex items-center gap-1 text-xs text-fg-tertiary">
+              <Lock aria-hidden="true" className="size-3 shrink-0" />
+              {protectedLabel}
+            </span>
           ) : (
             <span className="text-sm tabular-nums text-fg-primary">{band.responses}</span>
           )}
