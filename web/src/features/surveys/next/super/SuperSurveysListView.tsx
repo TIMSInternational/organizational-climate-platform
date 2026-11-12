@@ -221,7 +221,7 @@ export default function SuperSurveysListView() {
               </option>
             ))}
           </FilterSelect>
-          <p data-slot="list-summary" className="m-0 text-sm whitespace-nowrap tabular-nums text-fg-tertiary sm:ml-auto">
+          <p data-slot="list-summary" className="m-0 text-sm whitespace-nowrap tabular-nums text-fg-secondary sm:ml-auto">
             {companies === 1
               ? t('surveys.next.super.summaryOneCompany', { count: model.rows.length })
               : t('surveys.next.super.summary', { count: model.rows.length, companies })}
@@ -371,10 +371,10 @@ function SectionBlock({
           <h2 id={`surveys-super-${section}`} className={cn('m-0', archived ? 'font-sans text-base font-semibold text-fg-label' : 'text-2xl')}>
             {heading}
           </h2>
-          <span className="text-sm tabular-nums text-fg-tertiary">{rows.length}</span>
+          <span className="text-sm tabular-nums text-fg-secondary">{rows.length}</span>
         </div>
         {note && (
-          <p data-slot="section-note" className="m-0 text-sm text-fg-tertiary sm:text-right">
+          <p data-slot="section-note" className="m-0 text-sm text-fg-secondary sm:text-right">
             {note}
           </p>
         )}
@@ -416,7 +416,7 @@ function SectionBlock({
           </Table>
         </div>
       </div>
-      {archived && <p className="m-0 text-sm text-fg-tertiary">{t('surveys.next.list.archivedNote')}</p>}
+      {archived && <p className="m-0 text-sm text-fg-secondary">{t('surveys.next.list.archivedNote')}</p>}
     </section>
   )
 }
@@ -526,7 +526,7 @@ function SuperRow({ row, model, t, locale }: { row: SurveyRow; model: SuperSurve
             {t('surveys.next.list.noInviteList')}
           </span>
         ) : archived ? (
-          <span className="text-sm tabular-nums text-fg-tertiary">{formatMetric(counts.percent, { kind: 'percentage' }, locale)}</span>
+          <span className="text-sm tabular-nums text-fg-secondary">{formatMetric(counts.percent, { kind: 'percentage' }, locale)}</span>
         ) : (
           <span className="flex items-center gap-2">
             <span aria-hidden="true" className="h-1.5 w-22.5 shrink-0 overflow-hidden rounded-full bg-surface-fill">

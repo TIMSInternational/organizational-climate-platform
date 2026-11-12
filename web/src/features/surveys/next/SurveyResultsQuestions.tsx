@@ -78,7 +78,7 @@ export default function SurveyResultsQuestions({ questions, dimensionName, scale
         <H2 id="results-next-questions" className="mb-0 text-2xl">
           {t('surveyResults.questions')}
         </H2>
-        <p className="m-0 max-w-measure text-sm text-fg-tertiary">{t('surveyResults.questionsIntro')}</p>
+        <p className="m-0 max-w-measure text-sm text-fg-secondary">{t('surveyResults.questionsIntro')}</p>
       </div>
       <div className="flex flex-wrap items-end gap-4">
         <label className={FIELD}>

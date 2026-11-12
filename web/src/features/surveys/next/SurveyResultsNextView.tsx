@@ -555,7 +555,7 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
                   <h2 id="results-next-range" className="mb-0 text-2xl">
                     {t('surveyResults.next.rangeHeading')}
                   </h2>
-                  <p className="m-0 text-sm text-fg-tertiary">{t('surveyResults.next.rangeSub')}</p>
+                  <p className="m-0 text-sm text-fg-secondary">{t('surveyResults.next.rangeSub')}</p>
                 </div>
                 <ClimateRangeBar rows={rangeRows} bands={bands} floor={climate.threshold} decimals={1} />
               </section>

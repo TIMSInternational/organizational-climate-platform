@@ -321,7 +321,7 @@ function ClimateTrendsNextView({
                 <h2 id="trends-next-range" className="m-0 text-2xl">
                   {t('surveys.next.trends.rangeHeading', { wave: latestWave?.code ?? '' })}
                 </h2>
-                <p className="m-0 text-sm text-fg-tertiary">
+                <p className="m-0 text-sm text-fg-secondary">
                   {waves.length > 1
                     ? t('surveys.next.trends.rangeSub', { group: groupName, first: waves[0]?.code ?? '' })
                     : t('surveys.next.trends.rangeSubOne', { group: groupName })}
@@ -406,7 +406,7 @@ function ClimateTrendsNextView({
                 <h2 id="trends-next-table" className="m-0 text-2xl">
                   {t('surveys.next.trends.tableHeading')}
                 </h2>
-                <p className="m-0 text-sm text-fg-tertiary">{t(bands.scale === 'percent' ? 'surveys.next.trends.tableScalePercent' : 'surveys.next.trends.tableScale', { group: groupName })}</p>
+                <p className="m-0 text-sm text-fg-secondary">{t(bands.scale === 'percent' ? 'surveys.next.trends.tableScalePercent' : 'surveys.next.trends.tableScale', { group: groupName })}</p>
               </div>
               <TrendsNumbersTable
                 waves={waves}
@@ -422,7 +422,7 @@ function ClimateTrendsNextView({
                   department withheld in every wave says so in its own segment, where every
                   cell is hatched; the bands are the company's, and the legend above
                   already names them. */}
-              <p data-slot="trends-footnote" className="m-0 -mt-1 text-sm leading-normal text-fg-tertiary">
+              <p data-slot="trends-footnote" className="m-0 -mt-1 text-sm leading-normal text-fg-secondary">
                 {t('surveys.next.trends.floorNote', { floor: model.floor })}
                 {!model.companyWithheld.some(Boolean) && <> {t('surveys.next.trends.companyNeverWithheld')}</>}
               </p>
@@ -476,7 +476,7 @@ function TrendCard({
         </span>
         {sincePrevious !== null && previousWave && <Move value={sincePrevious} scale={bands.scale} />}
         {(sincePrevious !== null || sinceFirst !== null) && (
-          <span className="text-sm text-fg-tertiary">
+          <span className="text-sm text-fg-secondary">
             {sincePrevious !== null && previousWave && (
               <span>{t('surveys.next.trends.sinceWave', { wave: previousWave.code })}</span>
             )}
