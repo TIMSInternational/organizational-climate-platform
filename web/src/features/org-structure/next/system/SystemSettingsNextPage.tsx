@@ -162,7 +162,10 @@ function SettingsBody({
               // The pending position, not the saved one: the warning appears while the
               // operator is deciding (the old form's rule, `SystemSettingsForm.tsx:71-73`).
               // A neutral note with the warning glyph and its title: amber is a result area.
-              <Note data-slot="lockout-warning" role="alert" icon={<TriangleAlert />}>
+              // `status`, the polite live role the old `<Alert>` carried by default
+              // (`alert.tsx`): it appears as the operator flips a switch, and an assertive
+              // `alert` would interrupt the screen reader on every flip.
+              <Note data-slot="lockout-warning" role="status" icon={<TriangleAlert />}>
                 <p className="m-0 font-semibold">{t('settings.lockoutWarningTitle')}</p>
                 <p className="m-0 text-sm text-fg-secondary">{t('settings.lockoutWarningDescription')}</p>
               </Note>

@@ -221,10 +221,15 @@ export default function NotificationsNextPage() {
             ) : (
               <p className="m-0 text-sm text-fg-tertiary">{t(`${K}.preferencesUnavailable`)}</p>
             )}
-            {/* The artboard's link is the secondary ink (`a { color: #4a3d72 }`), not the
-                app's blue link colour the base layer gives every anchor. */}
+            {/* Blue, the action colour, with a 44px target: the same treatment as the
+                Privacy page's link to this destination, so a link reads as a link on both
+                screens (the user's ruling: blue = action). */}
             {respondent ? null : (
-              <Link to="/settings/notifications" data-slot="by-type-link" className="text-sm text-fg-secondary">
+              <Link
+                to="/settings/notifications"
+                data-slot="by-type-link"
+                className="inline-flex min-h-11 items-center self-start text-sm text-accent-blue-ink"
+              >
                 {t(`${K}.byType`)}
               </Link>
             )}

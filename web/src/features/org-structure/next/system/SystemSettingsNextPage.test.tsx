@@ -112,6 +112,9 @@ describe('SystemSettingsNextPage', () => {
     expect(screen.queryByText(en.settings.lockoutWarningTitle)).toBeNull()
     await userEvent.click(login)
     expect(screen.getByText(en.settings.lockoutWarningTitle)).toBeTruthy()
+    // Polite, as the old `<Alert>` was: an assertive `alert` interrupts on every flip.
+    const warning = document.querySelector('[data-slot="lockout-warning"]')
+    expect(warning?.getAttribute('role')).toBe('status')
   })
 
   it('states the password policy and the stored mail settings read-only, with where they are really decided', async () => {
