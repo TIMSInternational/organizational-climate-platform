@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { useParams } from 'react-router'
 import { Check, FileText, Filter, Lock, Plus, Shield } from 'lucide-react'
 import { useTranslation } from '../../../../i18n'
-import { PageTopBar } from '../../../../components/layout'
+import { PageHeader } from '../../../../components/layout'
 import { ANONYMITY_FLOOR, KpiTile, isSuppressed } from '../../../../components/charts'
 import { PROTECTED_HATCH } from '../../../../components/charts/suppression'
 import {
@@ -28,7 +28,7 @@ import { SAMPLE_CATALOGUE } from './sampleCatalogue'
 import { useAdminDemographicsModel } from './useAdminDemographicsModel'
 
 const TH =
-  'border-b border-line-default bg-transparent px-1.5 pb-2 pt-1 first:pl-3 last:pr-3 text-2xs font-bold uppercase tracking-label whitespace-nowrap text-fg-tertiary'
+  'border-b border-line-default bg-transparent px-1.5 pb-2 pt-1 first:pl-3 last:pr-3 text-xs font-semibold whitespace-nowrap text-fg-secondary'
 /**
  * The board's row is a grid with a 12px gap inside 12px of padding; a cell's 6px either side,
  * 12px at the row's two ends, is the same rhythm, so the column widths below are the board's.
@@ -100,13 +100,12 @@ export default function AdminDemographicFieldsView() {
   const usable = state.people === undefined ? null : usableCuts(state.fields, state.people, ANONYMITY_FLOOR)
 
   // The DemographicFields board sets the breadcrumb 14px over the header (its glyphs at y=76, the
-  // eyebrow's at y=110 at 1440), not the 38px of the other admin boards: `tightBreadcrumb`.
+  // eyebrow's at y=110 at 1440), not the 38px of the other admin boards: PageHeader draws it 16px over.
   const header = (
     <div className="-mb-6">
-      <PageTopBar
-        eyebrow={state.companyName ?? t('navigation.companyAdministration')}
+      <PageHeader
+        eyebrow={state.companyName ?? t('navigation.sectionOrganization')}
         title={t('navigation.demographicFields')}
-        tightBreadcrumb
         description={t('demographicFields.next.description', { floor: ANONYMITY_FLOOR })}
         breadcrumbs={[
           { label: t('navigation.companyAdministration'), href: `/admin/companies/${companyId}` },
@@ -290,14 +289,14 @@ function Catalogue({
       data-sample={isSample ? 'true' : undefined}
       className={cn(
         'flex min-w-0 flex-col overflow-hidden rounded-xl bg-surface-card',
-        isSample ? 'border border-dashed border-line-default' : 'border border-line-default shadow-sm',
+        isSample ? 'border border-dashed border-line-default' : 'border border-line-default',
       )}
     >
       <div className="flex flex-col gap-1.5 px-4 pt-4 pb-3">
         {isSample && (
           <div className="flex flex-wrap items-center gap-2">
             <p className="m-0 text-2xs font-bold uppercase tracking-label text-fg-tertiary">{t('demographicFields.next.catalogue.eyebrowSample')}</p>
-            <CanvasChip tone="warning" label={t('dashboard.next.sampleChip')} />
+            <CanvasChip tone="neutral" label={t('dashboard.next.sampleChip')} />
           </div>
         )}
         <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
@@ -305,7 +304,7 @@ function Catalogue({
             <h2 id="demographics-catalogue" className="m-0 text-2xl">
               {isSample ? t('demographicFields.next.catalogue.headingSample') : t('demographicFields.next.catalogue.heading')}
             </h2>
-            <span className="font-mono text-xs tabular-nums text-fg-tertiary">{rows.length}</span>
+            <span className="text-xs tabular-nums text-fg-tertiary">{rows.length}</span>
           </div>
           <span className="text-xs text-fg-tertiary">
             {isSample ? t('demographicFields.next.catalogue.metaSample', { company }) : t('demographicFields.next.catalogue.metaReal')}
@@ -373,12 +372,12 @@ function CatalogueRow({ row, people, onEdit }: { row: Row; people: number | unde
     cut = { chip: <CanvasChip tone="neutral" label={t('demographicFields.next.catalogue.notOffered')} />, sub: t('demographicFields.next.catalogue.notOfferedSub') }
   } else if (verdict === 'usable') {
     cut = {
-      chip: <CanvasChip tone="good" icon={<Check className="size-3" />} label={t('demographicFields.next.catalogue.usable')} />,
+      chip: <CanvasChip tone="neutral" icon={<Check className="size-3" />} label={t('demographicFields.next.catalogue.usable')} />,
       sub: t('demographicFields.next.catalogue.usableSub', { floor: ANONYMITY_FLOOR }),
     }
   } else if (verdict === 'narrow') {
     cut = {
-      chip: <CanvasChip tone="warning" icon={<Lock className="size-3" />} label={t('demographicFields.next.catalogue.narrow')} />,
+      chip: <CanvasChip tone="neutral" icon={<Lock className="size-3" />} label={t('demographicFields.next.catalogue.narrow')} />,
       sub: merged
         ? t('demographicFields.next.catalogue.narrowSub', { ranges: merged.ranges, perValue: merged.perValue })
         : t('demographicFields.next.catalogue.narrowSubNone'),
@@ -398,7 +397,7 @@ function CatalogueRow({ row, people, onEdit }: { row: Row; people: number | unde
             {row.required && <CanvasChip tone="neutral" label={t('demographicFields.next.catalogue.required')} />}
             {!row.isActive && <CanvasChip tone="neutral" label={t('demographicFields.next.catalogue.inactive')} />}
           </span>
-          <span className="font-mono text-2xs text-fg-tertiary">{row.field}</span>
+          <span className="font-mono text-xs text-fg-tertiary">{row.field}</span>
         </div>
       </td>
       <td className={TD}>
@@ -426,14 +425,14 @@ function CatalogueRow({ row, people, onEdit }: { row: Row; people: number | unde
               <HatchSwatch />
               {t('demographicFields.next.catalogue.belowFloor', { floor: ANONYMITY_FLOOR })}
             </span>
-            <span className="text-2xs text-fg-tertiary">{t('demographicFields.next.catalogue.perValueProtectedSub', { values: count })}</span>
+            <span className="text-xs text-fg-tertiary">{t('demographicFields.next.catalogue.perValueProtectedSub', { values: count })}</span>
           </span>
         ) : (
           <span className="flex flex-col gap-0.5">
-            <span data-per-value className="font-mono text-sm tabular-nums text-fg-primary">
+            <span data-per-value className="text-sm tabular-nums text-fg-primary">
               {perValue}
             </span>
-            <span className="text-2xs text-fg-tertiary">
+            <span className="text-xs text-fg-tertiary">
               {t('demographicFields.next.catalogue.perValueSub', { people: people ?? 0, values: count })}
             </span>
           </span>
@@ -442,7 +441,7 @@ function CatalogueRow({ row, people, onEdit }: { row: Row; people: number | unde
       <td className={TD}>
         <span className="flex flex-col items-start gap-1">
           {cut.chip}
-          {cut.sub && <span className="text-2xs leading-snug text-fg-tertiary">{cut.sub}</span>}
+          {cut.sub && <span className="text-xs leading-snug text-fg-tertiary">{cut.sub}</span>}
         </span>
       </td>
       <td className={cn(TD, 'text-right')}>

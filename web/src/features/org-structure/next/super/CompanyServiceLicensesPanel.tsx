@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from 'react'
 import { useTranslation } from '../../../../i18n'
-import { Alert, AlertDescription, Button, Input, SkeletonText } from '../../../../components/ui'
+import { Alert, AlertDescription, Button, Chip, Input, SkeletonText } from '../../../../components/ui'
 import {
   listServiceLicenses,
   grantServiceLicense,
@@ -8,7 +8,7 @@ import {
   reactivateServiceLicense,
   type CompanyServiceLicense,
 } from '../../api/licenses'
-import { CanvasChip, Field, MiniBar, Panel } from './parts'
+import { Field, MiniBar, Panel } from './parts'
 
 const SERVICE_LABEL_KEY: Readonly<Record<string, string>> = {
   general_climate: 'superadmin.next.companyDetail.licenses.serviceGeneralClimate',
@@ -121,8 +121,8 @@ function ServiceRow({
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <span className="font-medium text-fg-primary">{name}</span>
         {service.licensed ? (
-          <CanvasChip
-            tone={service.status === 'suspended' ? 'warning' : 'good'}
+          <Chip
+            tone={service.status === 'suspended' ? 'neutral' : 'live'}
             label={
               service.status === 'suspended'
                 ? t('superadmin.next.companyDetail.licenses.statusSuspended')
@@ -130,7 +130,7 @@ function ServiceRow({
             }
           />
         ) : (
-          <CanvasChip tone="neutral" label={t('superadmin.next.companyDetail.licenses.notLicensed')} />
+          <Chip tone="neutral" label={t('superadmin.next.companyDetail.licenses.notLicensed')} />
         )}
       </div>
 
@@ -161,7 +161,7 @@ function ServiceRow({
         </Field>
         <Button
           type="button"
-          variant="primary"
+          variant="default"
           disabled={busy || !seatsValid}
           onClick={() => void run(() => grantServiceLicense(baseUrl, companyId, service.serviceType, { seatsTotal: parsed }))}
         >

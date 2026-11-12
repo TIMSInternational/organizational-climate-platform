@@ -2,7 +2,7 @@ import { useId, useState, type ReactNode } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import { ArrowRight, Check, Info, Link2, Lock, Mail, Search, Shield, Upload, UserPlus } from 'lucide-react'
 import { useTranslation } from '../../../../i18n'
-import { PageTopBar } from '../../../../components/layout'
+import { PageHeader } from '../../../../components/layout'
 import { KpiTile } from '../../../../components/charts'
 import {
   Alert,
@@ -55,7 +55,7 @@ import {
 import { useAdminUsersModel } from './useAdminUsersModel'
 
 const TH =
-  'border-b border-line-default bg-transparent px-3 pb-2 pt-1 text-2xs font-bold uppercase tracking-label whitespace-nowrap text-fg-tertiary'
+  'border-b border-line-default bg-transparent px-3 pb-2 pt-2 text-xs font-semibold whitespace-nowrap text-fg-secondary'
 const EYEBROW = 'm-0 text-2xs font-bold uppercase tracking-label text-fg-tertiary'
 
 /** The query parameters: `?departamento=<id|none>` filters the roster, `?editar=<userId>` opens a person. */
@@ -144,13 +144,12 @@ export default function AdminUsersView() {
   }
 
   // The UsersList board sets the breadcrumb 14px over the header (its glyphs at y=76, the
-  // eyebrow's at y=110 at 1440), not the 38px of the other admin boards: `tightBreadcrumb`.
+  // eyebrow's at y=110 at 1440), not the 38px of the other admin boards: PageHeader draws it 16px over.
   const header = (
     <div className="-mb-6">
-      <PageTopBar
-        eyebrow={companyName ?? t('navigation.companyAdministration')}
+      <PageHeader
+        eyebrow={companyName ?? t('navigation.sectionOrganization')}
         title={t('navigation.users')}
-        tightBreadcrumb
         description={t('users.next.description')}
         breadcrumbs={[
           { label: t('navigation.companyAdministration'), href: `/admin/companies/${companyId}` },
@@ -359,7 +358,7 @@ function Tiles({ tally, invitations }: { tally: ReturnType<typeof rosterTally>; 
           tally.never === 0 ? (
             <span>{t('users.next.tiles.neverNone')}</span>
           ) : tally.leadersNever > 0 ? (
-            <span data-tone="warning" className="text-accent-amber-ink">
+            <span data-tone="warning" className="text-fg-secondary">
               {t('users.next.tiles.neverLeaders', { never: tally.leadersNever, leaders: tally.leaders })}
             </span>
           ) : (
@@ -402,7 +401,7 @@ function Avatar({ name, strong = false }: { name: string; strong?: boolean }) {
     <span
       aria-hidden="true"
       className={cn(
-        'inline-flex size-7 shrink-0 items-center justify-center rounded-full text-2xs font-semibold',
+        'inline-flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
         strong ? 'bg-surface-shell text-fg-on-accent' : 'border border-line-default bg-surface-icon-box text-fg-secondary',
       )}
     >
@@ -423,7 +422,7 @@ function Names({ people }: { people: readonly User[] }) {
           {!hasSignedIn(person) && (
             <>
               {' · '}
-              <span className="text-accent-amber-ink">{t('users.next.rail.neverEntered')}</span>
+              <span className="text-fg-secondary">{t('users.next.rail.neverEntered')}</span>
             </>
           )}
         </span>
@@ -496,13 +495,13 @@ function RailItem({
       >
         <span className="flex items-baseline justify-between gap-2">
           <span className="text-sm font-semibold text-fg-primary">{name}</span>
-          <span className="font-mono text-xs tabular-nums text-fg-primary">{people}</span>
+          <span className="text-xs tabular-nums text-fg-primary">{people}</span>
         </span>
-        <span className="flex items-center gap-2 text-2xs text-fg-tertiary">
+        <span className="flex items-center gap-2 text-xs text-fg-tertiary">
           <MiniBar percent={people === 0 ? 0 : (signedIn / people) * 100} />
           {t('users.next.rail.signedIn', { signedIn, total: people })}
         </span>
-        <span className="text-2xs leading-snug text-fg-tertiary">{sub}</span>
+        <span className="text-xs leading-snug text-fg-tertiary">{sub}</span>
       </Button>
     </li>
   )
@@ -534,11 +533,11 @@ function DepartmentRail({
   return (
     <nav
       aria-label={t('users.next.rail.heading')}
-      className="flex min-w-0 flex-col gap-1 rounded-xl border border-line-default bg-surface-card px-2 py-3 shadow-sm"
+      className="flex min-w-0 flex-col gap-1 rounded-xl border border-line-panel bg-surface-card px-2 py-3"
     >
       <div className="flex items-baseline justify-between gap-2 px-3 pb-1">
         <p className={EYEBROW}>{t('users.next.rail.heading')}</p>
-        <span className="text-2xs text-fg-tertiary">{t('users.next.rail.meta')}</span>
+        <span className="text-xs text-fg-tertiary">{t('users.next.rail.meta')}</span>
       </div>
       <ul className="m-0 flex list-none flex-col gap-1 p-0">
         <RailItem
@@ -608,7 +607,7 @@ function Roster({
   return (
     <section
       aria-labelledby="users-roster"
-      className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-line-default bg-surface-card shadow-sm"
+      className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-line-panel bg-surface-card"
     >
       <div className="flex flex-wrap items-start justify-between gap-3 px-4 pt-4 pb-3">
         <div className="flex min-w-0 flex-col gap-0.5">
@@ -616,7 +615,7 @@ function Roster({
             <h2 id="users-roster" className="m-0 text-2xl">
               {heading}
             </h2>
-            <span className="font-mono text-xs tabular-nums text-fg-tertiary">{people.length}</span>
+            <span className="text-xs tabular-nums text-fg-tertiary">{people.length}</span>
           </div>
           <span className="text-xs text-fg-tertiary">
             {never === 0 ? t('users.next.roster.subNone') : t('users.next.roster.sub', { never })}
@@ -635,7 +634,7 @@ function Roster({
               className="w-full pl-8"
             />
           </label>
-          <span className="whitespace-nowrap font-mono text-xs tabular-nums text-fg-tertiary">
+          <span className="whitespace-nowrap text-xs tabular-nums text-fg-tertiary">
             {t('users.next.roster.shown', { shown: visible.length, total })}
           </span>
         </div>
@@ -678,7 +677,7 @@ function Roster({
                             <span className="truncate font-semibold text-fg-primary">{user.name}</span>
                             {!user.isActive && <CanvasChip tone="neutral" label={t('users.next.roster.deactivated')} />}
                           </span>
-                          <span className="truncate font-mono text-2xs text-fg-tertiary">{user.email}</span>
+                          <span className="truncate text-xs text-fg-tertiary">{user.email}</span>
                           {/* The generated sign-in name, under the email, for the launch-day phone call: on
                               a mass invite the person on the line knows their email and not the `usuario`
                               the platform chose for them, and the password is unrecoverable by design -- so
@@ -694,7 +693,7 @@ function Roster({
                               after it. Null or absent, the row is unchanged -- which is every account
                               whose holder chose their own password. */}
                           {user.username ? (
-                            <span className="truncate text-2xs text-fg-tertiary">
+                            <span className="truncate text-xs text-fg-tertiary">
                               {t('users.next.roster.username')}{' '}
                               <span className="font-mono text-fg-secondary">{user.username}</span>
                             </span>
@@ -714,11 +713,11 @@ function Roster({
                     </td>
                     <td className="px-3 py-2.5">
                       {user.lastLoginAt ? (
-                        <span className="font-mono text-xs tabular-nums text-fg-primary">
+                        <span className="text-xs tabular-nums text-fg-primary">
                           {calendarDay(Date.parse(user.lastLoginAt), locale)}
                         </span>
                       ) : (
-                        <span className="text-xs text-accent-amber-ink">{t('users.next.roster.never')}</span>
+                        <span className="text-xs text-fg-secondary">{t('users.next.roster.never')}</span>
                       )}
                     </td>
                     <td className="px-3 py-2.5 text-right">
@@ -919,7 +918,7 @@ function EditPerson({
               checked={isActive}
               disabled={accountLocked}
               onCheckedChange={setIsActive}
-              className="data-[state=checked]:bg-accent-green"
+              
             />
             <span>{isActive ? t('users.next.edit.active') : t('users.next.edit.inactive')}</span>
           </span>
@@ -962,14 +961,14 @@ function PendingInvitations({
   return (
     <section
       aria-labelledby="users-invitations"
-      className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-line-default bg-surface-card shadow-sm"
+      className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-line-panel bg-surface-card"
     >
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 px-4 pt-4 pb-2">
         <div className="flex items-baseline gap-2.5">
           <h2 id="users-invitations" className="m-0 text-2xl">
             {t('users.next.invitations.heading')}
           </h2>
-          {rows !== null && <span className="font-mono text-xs tabular-nums text-fg-tertiary">{rows.length}</span>}
+          {rows !== null && <span className="text-xs tabular-nums text-fg-tertiary">{rows.length}</span>}
         </div>
         <span className="text-xs text-fg-tertiary">{t('users.next.invitations.meta')}</span>
       </div>
@@ -1009,21 +1008,21 @@ function PendingInvitations({
               ) : (
                 rows.map((invitation) => (
                   <tr key={invitation.id}>
-                    <td className="truncate px-3 py-2.5 font-mono text-xs text-fg-primary">
+                    <td className="truncate px-3 py-2.5 text-xs tabular-nums text-fg-primary">
                       {invitation.email ?? t('users.next.invitations.link')}
                     </td>
                     <td className="px-3 py-2.5">
                       <CanvasChip tone="neutral" label={roleText(t, invitation.role)} />
                     </td>
-                    <td className="px-3 py-2.5 font-mono text-xs tabular-nums text-fg-secondary">
+                    <td className="px-3 py-2.5 text-xs tabular-nums text-fg-secondary">
                       {invitation.sentAt ? calendarDay(Date.parse(invitation.sentAt), locale) : '—'}
                     </td>
-                    <td className="px-3 py-2.5 font-mono text-xs tabular-nums text-fg-secondary">
+                    <td className="px-3 py-2.5 text-xs tabular-nums text-fg-secondary">
                       {calendarDay(Date.parse(invitation.expiresAt), locale)}
                     </td>
                     <td className="px-3 py-2.5">
                       <span className="flex items-center justify-between gap-2">
-                        <span className="font-mono text-xs tabular-nums text-fg-secondary">{invitation.reminderCount}</span>
+                        <span className="text-xs tabular-nums text-fg-secondary">{invitation.reminderCount}</span>
                         {invitation.email && (
                           <Button
                             type="button"
