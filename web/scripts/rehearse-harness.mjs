@@ -16,7 +16,7 @@ export const NAMES = {
   discardDraft: /Descartarla|Discard/i,
   preview: /Vista previa|Preview/i,
   share: /Compartir|Share/i,
-  yourTeam: /Tu equipo|Your team/i,
+  yourTeam: /Su equipo|Your team/i,
   drillIn: /Celda abierta|Open cell/i,
   submitAnswers: /Enviar mis respuestas|Enviar|Submit/i,
   openPlan: /^(Abrir|Open)$/i,
