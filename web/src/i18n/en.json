@@ -8118,6 +8118,7 @@
       "countNoneUsed": "{count} questions · none used in a survey yet",
       "countOneUnused": "1 question · not used in a survey yet",
       "countSomeUsed": "{count} questions · {used} used in surveys",
+      "countOneUsed": "1 question · used in surveys",
       "colTextEs": "Question (Spanish)",
       "colTextEn": "Question (English)",
       "colType": "Type",

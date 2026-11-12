@@ -123,6 +123,30 @@ describe('QuestionBankNextPage', () => {
     expect(within(rows[1]).getByRole('button', { name: bank.retire })).toBeTruthy()
     expect(within(rows[0]).getAllByRole('cell')[4].textContent).toBe('—')
   })
+
+  // happy-dom applies no media query, so this pins the classes that do the work at 390px: the
+  // six secondary columns leave below `sm`, and the question cell's meta line (shown only there)
+  // carries owner, category, type and the three counts.
+  it('stacks a row as a list cell below sm, keeping every column from sm up', async () => {
+    vi.mocked(listQuestionBankItems).mockResolvedValue({
+      items: [{ id: 'g', companyId: null, text: 'Global row', type: 'likert', category: 'trust', isActive: true } as QuestionBankItem],
+      total: 1,
+    })
+    vi.mocked(listQuestionBankCategories).mockResolvedValue([])
+    vi.mocked(listQuestionBankEffectiveness).mockResolvedValue([])
+    vi.mocked(listQuestionCategories).mockResolvedValue(categories)
+    vi.mocked(listQuestionLibraryItems).mockResolvedValue(items)
+    renderAs(<QuestionBankNextPage />)
+    const [row] = await screen.findAllByTestId('bank-row')
+    const cells = within(row).getAllByRole('cell')
+    expect(cells).toHaveLength(7)
+    expect(cells[0].className).not.toContain('hidden')
+    for (const cell of cells.slice(1)) expect(cell.className.split(/\s+/)).toEqual(expect.arrayContaining(['hidden', 'sm:table-cell']))
+    const meta = row.querySelector('[data-slot="bank-row-meta"]') as HTMLElement
+    expect(meta.className.split(/\s+/)).toContain('sm:hidden')
+    expect(within(meta).getByText(bank.ownerGlobal)).toBeTruthy()
+    expect(meta.textContent).toContain(`${bank.colAsked} — · ${bank.colAnswered} — · ${bank.colSkipped} —`)
+  })
 })
 
 describe('QuestionLibraryNextPage', () => {
@@ -136,6 +160,14 @@ describe('QuestionLibraryNextPage', () => {
     renderAs(<QuestionLibraryNextPage />)
     const rows = await screen.findAllByTestId('library-row')
     expect(rows.map((row) => within(row).getByRole('button').textContent)).toEqual([lib.view, lib.view, lib.view, lib.edit])
+    // Each button's accessible name says which question it opens, not a bare «Ver» four times.
+    const admin = en.questionLibraryAdmin.next
+    expect(rows.map((row) => within(row).getByRole('button').getAttribute('aria-label'))).toEqual([
+      admin.viewRow.replace('{text}', 'Global lead A'),
+      admin.viewRow.replace('{text}', 'Global lead B'),
+      admin.viewRow.replace('{text}', 'Global feedback C'),
+      admin.editRow.replace('{text}', 'Own feedback D'),
+    ])
     expect(screen.getByText(lib.subcategoryOf.replace('{parent}', 'Leadership').replace('{count}', '2'))).toBeTruthy()
   })
 
@@ -252,7 +284,7 @@ describe('QuestionLibraryNextPage — drawer link, multiple choice, vocabulary',
     vi.mocked(updateQuestionLibraryItem).mockResolvedValue({} as never)
     renderAs(<QuestionLibraryNextPage />)
     const [row] = await screen.findAllByTestId('library-row')
-    await userEvent.click(within(row).getByRole('button', { name: lib.edit }))
+    await userEvent.click(within(row).getByRole('button', { name: en.questionLibraryAdmin.next.editRow.replace('{text}', 'Own MC') }))
     await screen.findByDisplayValue('Yes')
     await userEvent.type(screen.getByLabelText(label(lib.textEn)), ' edited')
     await userEvent.click(screen.getByRole('button', { name: en.common.save }))

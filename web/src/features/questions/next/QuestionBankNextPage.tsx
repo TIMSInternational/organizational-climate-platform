@@ -1,8 +1,23 @@
 import { useState } from 'react'
-import { ArrowRight, Library, Search, SquareLibrary } from 'lucide-react'
+import { ArrowRight, Library, SquareLibrary } from 'lucide-react'
 import { Link } from 'react-router'
-import { PageTopBar } from '../../../components/layout'
-import { Alert, AlertDescription, Button, Chip, ErrorState, Input, LoadingRegion, SkeletonText, Switch, Table } from '../../../components/ui'
+import { PageHeader } from '../../../components/layout'
+import {
+  Alert,
+  AlertDescription,
+  Button,
+  Chip,
+  ErrorState,
+  LoadingState,
+  Note,
+  Switch,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../../../components/ui'
 import { readViewerClaims, useViewerCapabilities } from '../../../auth/viewerCapabilities'
 import { useCompanyScope } from '../../../company-context'
 import { useCompanyName } from '../../../company-context/useCompanyName'
@@ -10,7 +25,8 @@ import { useTranslation } from '../../../i18n'
 import { questionTypeLabel } from '../../surveys/surveyVocabulary'
 import { dimensionLabel } from '../../surveys/dimensionLabel'
 import { QUESTION_BANK_TYPES, type QuestionBankItem } from '../api/questionBank'
-import { EmptyRow, IconBox, TABLE_CARD_CLASS, TH_CLASS } from '../../shared-next/parts'
+import { EmptyRow } from '../../shared-next/parts'
+import { QSelect, SearchField, TABLE_CARD } from './parts'
 import { LOW_RESPONSE_RATE, MIN_ASKINGS_FOR_A_VERDICT } from './model'
 import { useQuestionBankModel } from './useQuestionModels'
 import SuperQuestionBankView from './super/SuperQuestionBankView'
@@ -25,9 +41,6 @@ import SuperQuestionBankView from './super/SuperQuestionBankView'
  * administrator on their own company's rows. The previous `pages/QuestionBankPage.tsx` stays
  * in the tree as the wiring reference for authoring; the router no longer mounts it.
  */
-
-export const SELECT_CLASS =
-  'h-8 rounded-md border border-line-default bg-surface-card px-2 text-base text-fg-primary'
 
 export default function QuestionBankNextPage() {
   // The per-role canvas (10 Sep): the super administrator's variant — the platform-wide bank with its owner column — is its own
@@ -58,62 +71,72 @@ function QuestionBankForCompany() {
 
   return (
     <div>
-      <PageTopBar eyebrow={companyName} title={t('questionBank.next.title')} description={t('questionBank.next.description')} />
+      <PageHeader
+        eyebrow={companyName}
+        title={t('questionBank.next.title')}
+        description={t('questionBank.next.description')}
+        actions={
+          <Button asChild variant="outline">
+            <Link to="/admin/question-library">
+              {t('questionBank.next.openLibrary')}
+              <ArrowRight aria-hidden="true" />
+            </Link>
+          </Button>
+        }
+      />
 
-      {/* The board's column: header, 24px, this card, 24px, the filters (QuestionBank.dc.html). */}
-      <div data-testid="bank-split" className="mb-section flex flex-wrap items-center gap-3.5 rounded-lg border border-line-default bg-surface-card px-4 py-3">
-        <IconBox>
-          <SquareLibrary />
-        </IconBox>
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <p className="m-0 text-base font-semibold text-fg-primary">{t('questionBank.next.splitTitle')}</p>
-          <p className="m-0 text-sm leading-normal text-fg-secondary">
-            {t('questionBank.next.splitBody')}
-            {state.status === 'ready' && state.data.library && (
-              <>
-                {' '}
-                {t('questionBank.next.splitCounts', {
-                  questions: state.data.library.questions,
-                  categories: state.data.library.categories,
-                })}
-              </>
-            )}
-          </p>
-        </div>
-        <Link to="/admin/question-library" className="inline-flex items-center gap-1 whitespace-nowrap text-sm text-fg-secondary">
-          {t('questionBank.next.openLibrary')}
-          <ArrowRight aria-hidden="true" className="size-3" />
-        </Link>
-      </div>
+      {/* The bank/library split as the board's quiet `.note`: a standing fact about the screen,
+          not an alert. 24px over the filters, the board's column gap. */}
+      <Note data-testid="bank-split" icon={<SquareLibrary />} className="mb-section">
+        <p className="m-0 font-semibold">{t('questionBank.next.splitTitle')}</p>
+        <p className="m-0 text-sm leading-normal text-fg-secondary">
+          {t('questionBank.next.splitBody')}
+          {state.status === 'ready' && state.data.library && (
+            <>
+              {' '}
+              {t('questionBank.next.splitCounts', {
+                questions: state.data.library.questions,
+                categories: state.data.library.categories,
+              })}
+            </>
+          )}
+        </p>
+      </Note>
 
       <div className="mb-3 flex flex-wrap items-center gap-3">
-        <label className="relative mb-0 min-w-60 flex-1 basis-60 sm:max-w-75">
-          <span className="sr-only">{t('questionBank.next.searchPlaceholder')}</span>
-          <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-fg-tertiary" />
-          <Input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder={t('questionBank.next.searchPlaceholder')}
-            className="mt-0 pl-8"
-          />
-        </label>
-        <select aria-label={t('questionBank.next.allCategories')} className={`${SELECT_CLASS} w-50`} value={category} onChange={(e) => setCategory(e.target.value)}>
+        <SearchField
+          label={t('questionBank.next.searchPlaceholder')}
+          value={search}
+          onChange={setSearch}
+          className="w-full sm:w-75"
+        />
+        <QSelect
+          aria-label={t('questionBank.next.allCategories')}
+          className="w-full sm:w-50"
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+        >
           <option value="">{t('questionBank.next.allCategories')}</option>
           {categoryNames.map((name) => (
             <option key={name} value={name}>
               {dimensionLabel(name, t)}
             </option>
           ))}
-        </select>
-        <select aria-label={t('questionBank.next.allTypes')} className={`${SELECT_CLASS} w-40`} value={type} onChange={(e) => setType(e.target.value)}>
+        </QSelect>
+        <QSelect
+          aria-label={t('questionBank.next.allTypes')}
+          className="w-full sm:w-44"
+          value={type}
+          onChange={(e) => setType(e.target.value)}
+        >
           <option value="">{t('questionBank.next.allTypes')}</option>
           {QUESTION_BANK_TYPES.map((value) => (
             <option key={value} value={value}>
               {questionTypeLabel(t, value)}
             </option>
           ))}
-        </select>
-        <label className="mb-0 ml-auto inline-flex items-center gap-2 text-sm text-fg-secondary">
+        </QSelect>
+        <label className="mb-0 inline-flex min-h-9 items-center gap-2 text-sm font-normal text-fg-secondary sm:ml-auto">
           <Switch checked={includeRetired} onCheckedChange={(value) => setIncludeRetired(value === true)} />
           {t('questionBank.next.showRetired')}
         </label>
@@ -126,9 +149,7 @@ function QuestionBankForCompany() {
       )}
 
       {state.status === 'loading' ? (
-        <LoadingRegion loading label={t('common.loading')}>
-          <SkeletonText lines={4} />
-        </LoadingRegion>
+        <LoadingState rows={4} label={t('common.loading')} />
       ) : state.status === 'failed' ? (
         <ErrorState
           title={t('errors.generic')}
@@ -140,46 +161,72 @@ function QuestionBankForCompany() {
           }
         />
       ) : (
-        <div className={TABLE_CARD_CLASS}>
-          <div className="overflow-x-auto">
-            <Table className="w-full border-collapse text-base">
-              <thead className="border-b border-line-light">
+        <section aria-label={t('questionBank.next.title')} className={TABLE_CARD}>
+          {/* Below `sm` the table is a list: the secondary columns step out (`hidden sm:table-cell`) and
+              the question cell carries them as a meta line, so a phone reads the question at full
+              width instead of scrolling Categoría, Tipo and the counts off the card's right edge
+              (lists-and-tables.md, layout.md > Adapt to the width). From `sm` up it is the board's table. */}
+          <Table zebra className="sm:min-w-200">
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead scope="col" className="px-4">{t('questionBank.next.colQuestion')}</TableHead>
+                <TableHead scope="col" className="hidden w-40 sm:table-cell">{t('questionBank.next.colOwner')}</TableHead>
+                <TableHead scope="col" className="hidden w-36 sm:table-cell">{t('questionBank.next.colCategory')}</TableHead>
+                <TableHead scope="col" className="hidden w-36 sm:table-cell">{t('questionBank.next.colType')}</TableHead>
+                <TableHead scope="col" numeric className="hidden w-26 sm:table-cell">{t('questionBank.next.colAsked')}</TableHead>
+                <TableHead scope="col" numeric className="hidden w-28 sm:table-cell">{t('questionBank.next.colAnswered')}</TableHead>
+                <TableHead scope="col" numeric className="hidden w-26 pr-4 sm:table-cell">{t('questionBank.next.colSkipped')}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {state.data.rows.length === 0 ? (
                 <tr>
-                  <th scope="col" className={TH_CLASS}>{t('questionBank.next.colQuestion')}</th>
-                  <th scope="col" className={`${TH_CLASS} w-36`}>{t('questionBank.next.colOwner')}</th>
-                  <th scope="col" className={`${TH_CLASS} w-36`}>{t('questionBank.next.colCategory')}</th>
-                  <th scope="col" className={`${TH_CLASS} w-32`}>{t('questionBank.next.colType')}</th>
-                  <th scope="col" className={`${TH_CLASS} w-26`}>{t('questionBank.next.colAsked')}</th>
-                  <th scope="col" className={`${TH_CLASS} w-28`}>{t('questionBank.next.colAnswered')}</th>
-                  <th scope="col" className={`${TH_CLASS} w-28`}>{t('questionBank.next.colSkipped')}</th>
+                  <td colSpan={7} className="p-0">
+                    <EmptyRow
+                      measure="max-w-[100ch]"
+                      icon={<Library />}
+                      title={t('questionBank.next.emptyTitle')}
+                      lines={[t('questionBank.next.emptyWhen'), t('questionBank.next.emptyMeanwhile', { company })]}
+                    />
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {state.data.rows.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="p-0">
-                      <EmptyRow
-                        measure="max-w-[100ch]"
-                        icon={<Library />}
-                        title={t('questionBank.next.emptyTitle')}
-                        lines={[t('questionBank.next.emptyWhen'), t('questionBank.next.emptyMeanwhile', { company })]}
-                      />
-                    </td>
-                  </tr>
-                ) : (
-                  state.data.rows.map((row) => (
-                    <tr key={row.item.id} data-testid="bank-row" className="border-b border-line-light last:border-b-0">
-                      <td className="px-3 py-2.5 align-top">
-                        <div className="text-fg-primary">{row.item.text ?? '—'}</div>
-                        <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                          {row.attention && <Chip tone="warning" label={t('questionBank.next.attention')} />}
+              ) : (
+                state.data.rows.map((row) => (
+                  <TableRow key={row.item.id} data-testid="bank-row">
+                    <TableCell className="px-4 py-3 align-top">
+                      <div className="text-fg-primary">{row.item.text ?? '—'}</div>
+                      <div data-slot="bank-row-meta" className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-fg-secondary sm:hidden">
+                        <Chip
+                          tone="neutral"
+                          label={row.item.companyId === null ? t('questionBank.next.ownerGlobal') : company}
+                        />
+                        <span>
+                          {dimensionLabel(row.item.category, t)} · {questionTypeLabel(t, row.item.type)}
+                        </span>
+                        <span className="basis-full tabular-nums text-fg-tertiary">
+                          {(
+                            [
+                              [t('questionBank.next.colAsked'), row.asked],
+                              [t('questionBank.next.colAnswered'), row.answered],
+                              [t('questionBank.next.colSkipped'), row.skipped],
+                            ] satisfies Array<[string, number | null]>
+                          )
+                            .map(([label, value]) => `${label} ${value === null ? '—' : value.toLocaleString(locale)}`)
+                            .join(' · ')}
+                        </span>
+                      </div>
+                      {(row.attention || !row.item.isActive || canWrite(row.item)) && (
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                          {/* Status words, so neutral: amber, green and red are the three result
+                              areas and nothing else (the 11 Nov ruling). */}
+                          {row.attention && <Chip tone="neutral" label={t('questionBank.next.attention')} />}
                           {!row.item.isActive && <Chip tone="neutral" label={t('questionBank.next.retired')} />}
                           {canWrite(row.item) && (
                             <Button
                               type="button"
                               size="sm"
-                              variant="ghost"
-                              className="h-6 px-1.5 text-xs"
+                              variant="plain"
+                              className="px-1.5"
                               disabled={busyId !== null}
                               onClick={() => void toggleLifecycle(row.item.id, row.item.isActive)}
                             >
@@ -187,27 +234,27 @@ function QuestionBankForCompany() {
                             </Button>
                           )}
                         </div>
-                      </td>
-                      <td className="px-3 py-2.5 align-top">
-                        <Chip
-                          tone="neutral"
-                          label={row.item.companyId === null ? t('questionBank.next.ownerGlobal') : company}
-                        />
-                      </td>
-                      <td className="px-3 py-2.5 align-top text-fg-secondary">{dimensionLabel(row.item.category, t)}</td>
-                      <td className="px-3 py-2.5 align-top text-fg-secondary">{questionTypeLabel(t, row.item.type)}</td>
-                      {[row.asked, row.answered, row.skipped].map((value, index) => (
-                        <td key={index} className="px-3 py-2.5 align-top font-mono text-fg-primary tabular-nums">
-                          {value === null ? '—' : value.toLocaleString(locale)}
-                        </td>
-                      ))}
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </Table>
-          </div>
-        </div>
+                      )}
+                    </TableCell>
+                    <TableCell className="hidden py-3 align-top sm:table-cell">
+                      <Chip
+                        tone="neutral"
+                        label={row.item.companyId === null ? t('questionBank.next.ownerGlobal') : company}
+                      />
+                    </TableCell>
+                    <TableCell className="hidden py-3 align-top text-sm text-fg-secondary sm:table-cell">{dimensionLabel(row.item.category, t)}</TableCell>
+                    <TableCell className="hidden py-3 align-top text-sm text-fg-secondary sm:table-cell">{questionTypeLabel(t, row.item.type)}</TableCell>
+                    {[row.asked, row.answered, row.skipped].map((value, index) => (
+                      <TableCell key={index} numeric className={`hidden py-3 align-top text-fg-primary sm:table-cell ${index === 2 ? 'pr-4' : ''}`}>
+                        {value === null ? '—' : value.toLocaleString(locale)}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </section>
       )}
 
       <p className="mt-3 mb-0 text-sm text-fg-tertiary">

@@ -1,9 +1,25 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
-import { ArrowRight, Check, ChevronDown, ChevronRight, Plus } from 'lucide-react'
+import { ArrowRight, Check, ChevronRight, Plus } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
-import { PageTopBar } from '../../../../components/layout'
+import { PageHeader } from '../../../../components/layout'
 import CompanyContextBar from '../../../../components/layout/CompanyContextBar'
-import { Alert, AlertDescription, Button, Chip, ErrorState, Input, SkeletonText, Table, Textarea, chipVariants } from '../../../../components/ui'
+import {
+  Alert,
+  AlertDescription,
+  Button,
+  Chip,
+  ErrorState,
+  Input,
+  LoadingState,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  Textarea,
+  chipVariants,
+} from '../../../../components/ui'
 import { useCompanyScope } from '../../../../company-context'
 import { readViewerClaims } from '../../../../auth/viewerCapabilities'
 import { cn } from '../../../../lib/cn'
@@ -23,15 +39,9 @@ import {
   type LibraryDraft,
 } from './libraryDerive'
 import { useQuestionLibraryModel, type QuestionLibraryModelState } from './useQuestionLibraryModel'
+import { Count, EDITOR_CARD, QSelect, TABLE_CARD } from '../parts'
 
 type EditorMode = 'item' | 'new-item' | 'new-category'
-
-// The canvas's `.label` head over the default hairline, as the survey list draws its tables.
-// Each cell pads its left edge only — the artboard's 12px grid gap — so a column's text runs
-// the board's full measure (Spanish 257px, English 205px at 1440) and starts on its x; the
-// last column also pads its right edge, as the grid's padding.
-// The header row pads only its bottom (the card's `pt-2` is the board's 8px above it).
-const HEAD = 'pt-0 pb-2 pl-3 pr-0 text-left text-2xs font-bold uppercase leading-normal tracking-label text-fg-label whitespace-nowrap border-b border-line-default'
 
 /**
  * `/admin/question-library` — the redesigned Biblioteca de preguntas, which replaced
@@ -77,12 +87,12 @@ export default function SuperQuestionLibraryView() {
   return (
     <div>
       <CompanyContextBar note={note} />
-      <PageTopBar
+      <PageHeader
         eyebrow={t('navigation.sectionWorkspace')}
         title={t('navigation.questionLibrary')}
         description={t('questionLibraryAdmin.next.description')}
-        actions={
-          <Button type="button" variant="outline" onClick={() => setMode('new-item')}>
+        primaryAction={
+          <Button type="button" variant="primary" onClick={() => setMode('new-item')}>
             <Plus aria-hidden="true" />
             {t('questionLibraryAdmin.next.newQuestion')}
           </Button>
@@ -100,9 +110,9 @@ export default function SuperQuestionLibraryView() {
           }
         />
       ) : model.loading && model.categories.length === 0 ? (
-        <SkeletonText lines={8} />
+        <LoadingState rows={8} label={t('common.loading')} />
       ) : (
-        <div className="grid items-start gap-4 xl:grid-cols-[270px_minmax(0,1fr)]">
+        <div className="grid items-start gap-5 xl:grid-cols-[270px_minmax(0,1fr)]">
           <CategoryTreeCard model={model} onNewCategory={() => setMode('new-category')} onPick={() => setMode('item')} />
           <div className="flex min-w-0 flex-col gap-4">
             <CategoryQuestions model={model} onOpen={() => setMode('item')} />
@@ -167,13 +177,17 @@ function CategoryTreeCard({
           onPick()
         }}
         className={cn(
-          'flex h-auto w-full items-center gap-2 rounded-md border-0 px-2.5 py-1.5 text-left shadow-none',
+          'flex h-auto min-h-9 w-full items-center gap-2 rounded-md border-0 px-2.5 py-1.5 text-left shadow-none pointer-coarse:min-h-11',
           indent && 'pl-6',
-          selected ? 'bg-surface-icon-box font-semibold' : 'bg-transparent font-normal hover:bg-state-hover',
+          // Blue is selection (the 11 Nov ruling): the chosen category wears the tint, as a
+          // source list marks its selected row.
+          selected
+            ? 'bg-accent-blue-soft font-semibold text-accent-blue-ink'
+            : 'bg-transparent font-normal text-fg-primary hover:bg-state-hover',
         )}
       >
-        <span className="min-w-0 flex-1 truncate text-base text-fg-primary">{categoryName(category, locale)}</span>
-        <span className="font-mono text-xs tabular-nums text-fg-tertiary">{category.itemCount}</span>
+        <span className="min-w-0 flex-1 truncate text-base">{categoryName(category, locale)}</span>
+        <Count className={selected ? 'text-accent-blue-ink' : undefined}>{category.itemCount}</Count>
       </button>
     )
   }
@@ -181,16 +195,16 @@ function CategoryTreeCard({
   return (
     <section
       aria-labelledby="library-categories"
-      className="flex min-w-0 flex-col gap-3 rounded-lg border border-line-default bg-surface-card p-4 shadow-xs"
+      className="flex min-w-0 flex-col gap-3 rounded-xl border border-line-panel bg-surface-card p-4"
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 id="library-categories" className="m-0 text-2xl">
+        <h2 id="library-categories" className="m-0 text-2xl leading-tight">
           {t('questionLibraryAdmin.next.categoriesHeading')}
         </h2>
         <span className="text-sm text-fg-tertiary">{meta}</span>
       </div>
       <div className="flex flex-col gap-0.5">
-        <span className="px-2.5 py-1 text-2xs font-bold uppercase tracking-label text-fg-label">
+        <span className="px-2.5 py-1 text-2xs font-semibold uppercase tracking-eyebrow text-fg-label">
           {t('questionLibraryAdmin.next.globalGroup')}
         </span>
         {tree.global.map((category) => row(category))}
@@ -200,7 +214,7 @@ function CategoryTreeCard({
           const copiesItems = group.copies.reduce((sum, category) => sum + category.itemCount, 0)
           return (
             <div key={group.companyId} className="flex flex-col gap-0.5" data-tenant={group.companyId}>
-              <span className="px-2.5 pt-3 pb-1 text-2xs font-bold uppercase tracking-label text-fg-label">
+              <span className="px-2.5 pt-3 pb-1 text-2xs font-semibold uppercase tracking-eyebrow text-fg-label">
                 {t('questionLibraryAdmin.next.tenantGroup', { company: name })}
               </span>
               {group.copies.length > 0 && (
@@ -217,7 +231,7 @@ function CategoryTreeCard({
                         return next
                       })
                     }
-                    className="flex h-auto w-full items-center gap-2 rounded-md border-0 bg-transparent px-2.5 py-1.5 text-left font-normal shadow-none hover:bg-state-hover"
+                    className="flex h-auto min-h-9 w-full items-center gap-2 rounded-md border-0 bg-transparent px-2.5 py-1.5 text-left font-normal shadow-none hover:bg-state-hover pointer-coarse:min-h-11"
                   >
                     <ChevronRight aria-hidden="true" className={cn('size-3.5 shrink-0 text-fg-tertiary transition-transform', open && 'rotate-90')} />
                     <span className="flex-1 text-base text-fg-secondary">
@@ -225,7 +239,7 @@ function CategoryTreeCard({
                         ? t('questionLibraryAdmin.next.copiesRowOne')
                         : t('questionLibraryAdmin.next.copiesRow', { count: group.copies.length })}
                     </span>
-                    <span className="font-mono text-xs tabular-nums text-fg-tertiary">{copiesItems}</span>
+                    <Count>{copiesItems}</Count>
                   </button>
                   {open && group.copies.map((category) => row(category, true))}
                 </>
@@ -235,20 +249,21 @@ function CategoryTreeCard({
           )
         })}
       </div>
-      <div className="border-t border-line-light pt-2.5">
+      <div className="border-t border-line-default pt-3">
         <Button type="button" variant="outline" onClick={onNewCategory}>
           <Plus aria-hidden="true" />
           {t('questionLibraryAdmin.next.newCategory')}
         </Button>
       </div>
-      <p className="m-0 text-xs text-fg-label">{t('questionLibraryAdmin.next.categoryFootnote')}</p>
+      <p className="m-0 text-sm leading-normal text-fg-tertiary">{t('questionLibraryAdmin.next.categoryFootnote')}</p>
     </section>
   )
 }
 
 function OwnerChip({ companyId, model, t }: { companyId: string | null; model: QuestionLibraryModelState; t: TranslateFn }) {
   if (companyId === null) return <Chip tone="neutral" label={t('questionLibraryAdmin.next.ownerGlobal')} />
-  return <Chip tone="accent" label={model.companyNames.get(companyId) ?? t('questionLibraryAdmin.next.otherCompany')} />
+  // Neutral like Global: an owner is a fact, not an action, a selection or a live state.
+  return <Chip tone="neutral" label={model.companyNames.get(companyId) ?? t('questionLibraryAdmin.next.otherCompany')} />
 }
 
 function CategoryQuestions({ model, onOpen }: { model: QuestionLibraryModelState; onOpen: () => void }) {
@@ -260,7 +275,9 @@ function CategoryQuestions({ model, onOpen }: { model: QuestionLibraryModelState
   const used = usedCount(rows)
   const meta =
     used > 0
-      ? t('questionLibraryAdmin.next.countSomeUsed', { count: rows.length, used })
+      ? rows.length === 1
+        ? t('questionLibraryAdmin.next.countOneUsed')
+        : t('questionLibraryAdmin.next.countSomeUsed', { count: rows.length, used })
       : rows.length === 1
         ? t('questionLibraryAdmin.next.countOneUnused')
         : t('questionLibraryAdmin.next.countNoneUsed', { count: rows.length })
@@ -270,58 +287,59 @@ function CategoryQuestions({ model, onOpen }: { model: QuestionLibraryModelState
     <section aria-labelledby="library-category-title" className="flex min-w-0 flex-col gap-3">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div className="flex items-center gap-2.5">
-          <h2 id="library-category-title" className="m-0 text-2xl">
+          <h2 id="library-category-title" className="m-0 text-2xl leading-tight">
             {categoryName(category, locale)}
           </h2>
           <OwnerChip companyId={category.companyId} model={model} t={t} />
         </div>
         <span className="text-sm text-fg-tertiary">{meta}</span>
       </div>
-      <div className="overflow-hidden rounded-lg border border-line-default bg-surface-card pt-2 shadow-xs">
-        <div className="relative overflow-x-auto">
-          <Table className="w-full min-w-180 table-fixed border-collapse">
-            <colgroup>
-              {/* 12 + 1.25fr of the board's 856px table (268.8px); English takes what is left
-                  (217px there); Tipo, Dimensión, Propietario and the action are 12 + 84, 76, 84
-                  and 12 + 66 + 12. */}
-              <col className="w-[31.4%]" />
-              <col />
-              <col className="w-24" />
-              <col className="w-22" />
-              <col className="w-24" />
-              <col className="w-22.5" />
-            </colgroup>
-            <thead>
-              <tr>
-                <th className={HEAD}>{t('questionLibraryAdmin.next.colTextEs')}</th>
-                <th className={HEAD}>{t('questionLibraryAdmin.next.colTextEn')}</th>
-                <th className={HEAD}>{t('questionLibraryAdmin.next.colType')}</th>
-                <th className={HEAD}>{t('questionLibraryAdmin.next.colDimension')}</th>
-                <th className={HEAD}>{t('questionLibraryAdmin.next.colOwner')}</th>
-                <th className={HEAD}>
-                  <span className="sr-only">{t('common.actions')}</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((item) => (
-                <QuestionRow
-                  key={item.id}
-                  item={item}
-                  model={model}
-                  selected={item.id === model.selectedItemId}
-                  writable={canWriteLibraryRow(item, viewer)}
-                  onOpen={() => {
-                    model.selectItem(item.id)
-                    onOpen()
-                  }}
-                  t={t}
-                />
-              ))}
-            </tbody>
-          </Table>
-        </div>
-        {rows.length === 0 && <p className="m-0 px-3 py-4 text-sm text-fg-secondary">{t('questionLibraryAdmin.next.emptyCategory')}</p>}
+      <div className={TABLE_CARD}>
+        {/* Below `sm` the table is a list: the English text and the three short columns step out
+            (`hidden sm:table-cell`, and their <col>s with them) and the Spanish cell carries them
+            under the question, so a phone keeps Editar on screen instead of scrolling it off the
+            card (lists-and-tables.md, layout.md > Adapt to the width). From `sm` up it is the board's table. */}
+        <Table className="sm:min-w-180 sm:table-fixed">
+          <colgroup>
+            {/* The two languages share what the four short columns leave, so neither wraps to a
+                ribbon at 1440: Tipo, Dimensión and Propietario at 104px, the action at 80. */}
+            <col />
+            <col className="hidden sm:table-column" />
+            <col className="hidden w-26 sm:table-column" />
+            <col className="hidden w-26 sm:table-column" />
+            <col className="hidden w-26 sm:table-column" />
+            <col className="w-20" />
+          </colgroup>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead scope="col" className="pl-4">{t('questionLibraryAdmin.next.colTextEs')}</TableHead>
+              <TableHead scope="col" className={WIDE}>{t('questionLibraryAdmin.next.colTextEn')}</TableHead>
+              <TableHead scope="col" className={WIDE}>{t('questionLibraryAdmin.next.colType')}</TableHead>
+              <TableHead scope="col" className={WIDE}>{t('questionLibraryAdmin.next.colDimension')}</TableHead>
+              <TableHead scope="col" className={WIDE}>{t('questionLibraryAdmin.next.colOwner')}</TableHead>
+              <TableHead scope="col" className="pr-4">
+                <span className="sr-only">{t('common.actions')}</span>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((item) => (
+              <QuestionRow
+                key={item.id}
+                item={item}
+                model={model}
+                selected={item.id === model.selectedItemId}
+                writable={canWriteLibraryRow(item, viewer)}
+                onOpen={() => {
+                  model.selectItem(item.id)
+                  onOpen()
+                }}
+                t={t}
+              />
+            ))}
+          </TableBody>
+        </Table>
+        {rows.length === 0 && <p className="m-0 px-4 py-4 text-sm text-fg-secondary">{t('questionLibraryAdmin.next.emptyCategory')}</p>}
         {copies.length > 0 && <CopyNote category={category} copies={copies} model={model} rows={rows} t={t} />}
       </div>
     </section>
@@ -350,7 +368,7 @@ function CopyNote({
   const texts = new Set(rows.map((item) => item.textEs.trim()))
   const same = copyRows.length === rows.length && copyRows.every((item) => texts.has(item.textEs.trim()))
   return (
-    <div data-slot="copy-note" className="flex items-center justify-between gap-3 border-t border-line-light px-3 py-2.5 text-sm text-fg-tertiary">
+    <div data-slot="copy-note" className="flex flex-wrap items-center justify-between gap-3 border-t border-line-default px-4 py-3 text-sm text-fg-tertiary">
       <span className="min-w-0 flex-1">
         {same
           ? rows.length === 1
@@ -361,7 +379,7 @@ function CopyNote({
       <button
         type="button"
         onClick={() => model.selectCategory(copy.id)}
-        className="inline-flex h-auto shrink-0 items-center gap-1 whitespace-nowrap border-0 bg-transparent p-0 text-sm font-normal text-fg-secondary shadow-none hover:text-fg-primary hover:underline"
+        className="inline-flex h-auto min-h-9 shrink-0 items-center gap-1 whitespace-nowrap border-0 bg-transparent p-0 text-sm font-semibold text-accent-blue-ink shadow-none hover:underline"
       >
         {t('questionLibraryAdmin.next.copyLink', { company: companyShort })}
         <ArrowRight aria-hidden="true" className="size-3.5" />
@@ -369,6 +387,9 @@ function CopyNote({
     </div>
   )
 }
+
+// A column only a wide screen has room for; below `sm` the row's meta line carries it.
+const WIDE = 'hidden sm:table-cell'
 
 function QuestionRow({
   item,
@@ -386,41 +407,60 @@ function QuestionRow({
   t: TranslateFn
 }) {
   return (
-    <tr data-library-item={item.id} aria-selected={selected} className={cn('border-b border-line-light', selected && 'bg-surface-icon-box')}>
-      <td className="py-3 pr-0 pl-3 align-middle">
+    <TableRow
+      data-library-item={item.id}
+      aria-selected={selected}
+      // Blue is selection (the 11 Nov ruling): the question open in the editor below wears the
+      // same tint as the chosen category.
+      className={cn(selected && 'bg-accent-blue-soft hover:bg-accent-blue-soft')}
+    >
+      <TableCell className="py-3 pl-4">
         <span className={cn('block text-base leading-snug text-fg-primary', selected ? 'font-semibold' : 'font-medium')}>{item.textEs}</span>
-      </td>
-      <td className="py-3 pr-0 pl-3 align-middle">
+        <span data-slot="library-row-meta" className="mt-1 flex flex-col gap-1 sm:hidden">
+          <span lang="en" className="block text-sm leading-snug text-fg-secondary">
+            {item.textEn}
+          </span>
+          <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-fg-tertiary">
+            <OwnerChip companyId={item.companyId} model={model} t={t} />
+            <span>
+              {t(`questionLibraryAdmin.type_${item.type}`)}
+              {item.dimension ? ` · ${item.dimension}` : ''}
+            </span>
+          </span>
+        </span>
+      </TableCell>
+      <TableCell className={cn('py-3', WIDE)}>
         <span lang="en" className="block text-sm leading-snug text-fg-secondary">
           {item.textEn}
         </span>
-      </td>
-      <td className="py-3 pr-0 pl-3 align-middle text-sm text-fg-secondary">{t(`questionLibraryAdmin.type_${item.type}`)}</td>
-      <td className="py-3 pr-0 pl-3 align-middle text-sm text-fg-secondary">{item.dimension ?? '—'}</td>
-      <td className="py-3 pr-0 pl-3 align-middle">
+      </TableCell>
+      <TableCell className={cn('py-3 text-sm text-fg-secondary', WIDE)}>{t(`questionLibraryAdmin.type_${item.type}`)}</TableCell>
+      <TableCell className={cn('py-3 text-sm break-words text-fg-secondary', WIDE)}>{item.dimension ?? '—'}</TableCell>
+      <TableCell className={cn('py-3', WIDE)}>
         <OwnerChip companyId={item.companyId} model={model} t={t} />
-      </td>
-      <td className="px-3 py-3 text-right align-middle">
+      </TableCell>
+      <TableCell className="py-2 pr-4 text-right">
         <Button
           type="button"
-          variant="outline"
+          variant="plain"
+          size="sm"
           aria-label={t(writable ? 'questionLibraryAdmin.next.editRow' : 'questionLibraryAdmin.next.viewRow', { text: item.textEs })}
           onClick={onOpen}
         >
           {writable ? t('common.edit') : t('questionLibraryAdmin.next.view')}
         </Button>
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   )
 }
 
 function Field({ label, required, help, children, className }: { label: string; required?: boolean; help?: string; children: ReactNode; className?: string }) {
   return (
     <div className={cn('flex min-w-0 flex-col gap-1.5', className)}>
-      <span className="text-sm font-semibold text-fg-secondary">
+      <span className="text-sm font-semibold text-fg-primary">
         {label}
         {required && (
-          <span aria-hidden="true" className="text-accent-red">
+          <span aria-hidden="true" className="text-accent-red-ink">
             {' '}
             *
           </span>
@@ -435,12 +475,9 @@ function Field({ label, required, help, children, className }: { label: string; 
 
 function CanvasSelect({ value, onChange, disabled, label, children }: { value: string; onChange: (value: string) => void; disabled?: boolean; label: string; children: ReactNode }) {
   return (
-    <span className="relative block">
-      <ChevronDown aria-hidden="true" className="pointer-events-none absolute top-1/2 right-2.5 size-3.5 -translate-y-1/2 text-fg-label" />
-      <select aria-label={label} className="mt-0 block w-full appearance-none pr-8" value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)}>
-        {children}
-      </select>
-    </span>
+    <QSelect aria-label={label} className="flex w-full" value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)}>
+      {children}
+    </QSelect>
   )
 }
 
@@ -512,10 +549,10 @@ function ItemEditor({
       onSubmit={(event) => void submit(event)}
       aria-labelledby="library-editor-title"
       data-slot="library-editor"
-      className="flex flex-col gap-3.5 rounded-lg border border-line-default border-l-[3px] border-l-fg-primary bg-surface-card px-5 pt-4 pb-4.5 shadow-xs"
+      className={EDITOR_CARD}
     >
       <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <h2 id="library-editor-title" className="m-0 text-2xl">
+        <h2 id="library-editor-title" className="m-0 text-2xl leading-tight">
           {creating ? t('questionLibraryAdmin.next.editorNew') : t('questionLibraryAdmin.next.editorEdit')}
         </h2>
         {detail && (
@@ -627,8 +664,8 @@ function ItemEditor({
           </CanvasSelect>
         </Field>
       </div>
-      <div className="flex items-center justify-between gap-3 border-t border-line-light pt-2.5">
-        <span className="min-w-0 flex-1 text-xs leading-normal text-fg-label">{readOnly ? t('questionLibraryAdmin.next.readOnlyNote') : t('questionLibraryAdmin.next.saveNote')}</span>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-default pt-3">
+        <span className="min-w-0 flex-1 basis-60 text-sm leading-normal text-fg-tertiary">{readOnly ? t('questionLibraryAdmin.next.readOnlyNote') : t('questionLibraryAdmin.next.saveNote')}</span>
         {!readOnly && (
           <div className="flex shrink-0 gap-2">
             <Button
@@ -690,9 +727,9 @@ function CategoryEditor({ model, onDone }: { model: QuestionLibraryModelState; o
       onSubmit={(event) => void submit(event)}
       aria-labelledby="library-category-editor"
       data-slot="category-editor"
-      className="flex flex-col gap-3.5 rounded-lg border border-line-default border-l-[3px] border-l-fg-primary bg-surface-card px-5 pt-4 pb-4.5 shadow-xs"
+      className={EDITOR_CARD}
     >
-      <h2 id="library-category-editor" className="m-0 text-2xl">
+      <h2 id="library-category-editor" className="m-0 text-2xl leading-tight">
         {t('questionLibraryAdmin.next.categoryEditorTitle')}
       </h2>
       <div className="grid gap-x-4 gap-y-3 md:grid-cols-2">
@@ -727,7 +764,7 @@ function CategoryEditor({ model, onDone }: { model: QuestionLibraryModelState; o
           </CanvasSelect>
         </Field>
       </div>
-      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line-light pt-2.5">
+      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line-default pt-3">
         <Button type="button" variant="outline" onClick={onDone}>
           {t('common.cancel')}
         </Button>
