@@ -77,6 +77,7 @@ import { QuestionBankPicker } from './QuestionBankPicker'
 import { PasteQuestionsDialog } from './PasteQuestionsDialog'
 import { Card, PanelHeading } from './parts'
 import { dimensionSections } from './launch'
+import { QUIET_DISABLED } from './model'
 import { templateCovers } from './templateRows'
 import { useSurveyBuilderModel } from './useSurveyBuilderModel'
 import { BuilderSettingsStep } from './BuilderSettingsStep'
@@ -208,6 +209,7 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
           <Button
             type="button"
             variant="outline"
+            className={QUIET_DISABLED}
             disabled={!hasDraftableContent(values) || draft.state.status === 'saving' || draft.state.status === 'conflict'}
             onClick={draft.saveNow}
           >
@@ -263,7 +265,10 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                   onClick={() => setStepIndex(index)}
                   // `shrink-0`: a shrinking button let its nowrap label spill over the connector
                   // beside it, so the line ran under «Datos básicos» like a link underline.
-                  className="flex shrink-0 items-center gap-2.5 border-0 bg-transparent p-0 text-left shadow-none disabled:cursor-default"
+                  // `disabled:opacity-100`: index.css halves every `button:disabled`, which took the
+                  // pending rungs' «Pendiente» and step names from 5.22:1 to 2.07:1 light and
+                  // 2.82:1 dark. A pending rung is status the user reads, so it keeps its ink.
+                  className="flex shrink-0 items-center gap-2.5 border-0 bg-transparent p-0 text-left shadow-none disabled:cursor-default disabled:opacity-100"
                 >
                   {/* Blue marks the step you are on (blue = selection); the others are grey and say
                       their state in words and a glyph. Red is OCC's mark and green/amber the result
@@ -597,7 +602,7 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
           )}
         </span>
         <span className="flex gap-2">
-          <Button type="button" variant="outline" disabled={stepIndex === 0} onClick={() => setStepIndex(stepIndex - 1)}>
+          <Button type="button" variant="outline" className={QUIET_DISABLED} disabled={stepIndex === 0} onClick={() => setStepIndex(stepIndex - 1)}>
             {copy('back')}
           </Button>
           <Button type="button" variant="primary" disabled={m.submitting || m.unsaved !== null} onClick={goNext}>
@@ -738,7 +743,7 @@ function QuestionEditor({
         </div>
       </fieldset>
       {needsScaleLabels(question.type) && (
-        <div className="grid gap-2 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
           {columns.map((col) => (
             <div key={col} className="contents">
               <TextField
@@ -821,7 +826,10 @@ function StepForm({
     return (
       <>
         <PanelHeading title={t('surveys.stepBasics')} />
-        <div className="grid gap-3 md:grid-cols-2">
+        {/* `grid-cols-1` (minmax(0, 1fr)): below md the implicit column sized itself to the
+            longest option, «Ninguno — esta encuesta no consume licencia», and pushed all three
+            selects past the card's right edge at 390px (surveys-new-390-light.png). */}
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <SelectField
             label={t('surveys.startFromTemplate')}
             value={values.templateId === '' ? NO_TEMPLATE : values.templateId}
@@ -838,6 +846,9 @@ function StepForm({
           {/* A separate axis from the type above, and optional. Leaving it on "none" is
               what keeps a survey unmetered — see LICENSED_SERVICES (#496). */}
           <SelectField
+            // The field is a grid too: its `auto` column kept the long option's width even in a
+            // shrinkable outer column, so the trigger still overran the card at 390px.
+            className="grid-cols-1"
             label={t('surveys.serviceLabel')}
             value={values.serviceType === '' ? NO_SERVICE : values.serviceType}
             onChange={(next) => patch({ serviceType: next === NO_SERVICE ? '' : next })}
@@ -871,7 +882,7 @@ function StepForm({
     return (
       <>
         <PanelHeading title={t('surveys.stepSchedule')} />
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <TextField required type="datetime-local" label={t('surveys.startDate')} value={values.startDate} onChange={(next) => patch({ startDate: next })} />
           <TextField required type="datetime-local" label={t('surveys.endDate')} value={values.endDate} onChange={(next) => patch({ endDate: next })} />
         </div>

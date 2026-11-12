@@ -213,6 +213,13 @@ describe('Detalle de encuesta (SurveyDetail artboard)', () => {
     expect((within(status).getByRole('button', { name: 'Programar' }) as HTMLButtonElement).disabled).toBe(true)
     expect((within(status).getByRole('button', { name: 'Archivar' }) as HTMLButtonElement).disabled).toBe(false)
     expect(screen.getByTestId('status-end-passed').textContent).toContain('La fecha de cierre ya pasó')
+    // Held disabled for a stated reason, so the verbs keep a readable ink: the Button's
+    // `disabled:opacity-45` printed them at 2.88:1 on white (detail-draft-super_admin-light.png).
+    for (const name of ['Activar', 'Programar']) {
+      const classes = within(status).getByRole('button', { name }).className.split(' ')
+      expect(classes).toEqual(expect.arrayContaining(['disabled:opacity-100', 'disabled:text-fg-label']))
+      expect(classes).not.toContain('disabled:opacity-45')
+    }
     // The warning spans the row under the readings, not inside the Estado tile: inside, it made
     // that tile ~330px taller than the other three (detail-draft-light.png).
     expect(status.contains(screen.getByTestId('status-end-passed-block'))).toBe(false)
@@ -1280,6 +1287,37 @@ describe('Nueva encuesta (SurveyBuilder artboard)', () => {
     expect(buttons).toHaveLength(2)
     for (const button of buttons) expect(button.className.split(' ')).toEqual(expect.arrayContaining(['h-7.5', 'font-medium']))
     expect(document.querySelector('[data-slot="preview-answered"]')?.className.split(' ')).toContain('text-fg-label')
+  })
+
+  it('keeps the ink of its disabled controls: the pending rungs, Guardar borrador and Atrás', async () => {
+    // surveys-new light/dark: index.css's `button:disabled { opacity: 0.5 }` took «Pendiente» and
+    // the pending step names to 2.07:1 light / 2.82:1 dark, and the Button's `disabled:opacity-45`
+    // took Guardar borrador and Atrás to 2.88:1. On the first step Atrás and steps 2-6 are disabled.
+    renderAs('company_admin', <SurveyBuilderNextPage />)
+    const save = await screen.findByRole('button', { name: 'Guardar borrador' })
+    const back = screen.getByRole<HTMLButtonElement>('button', { name: 'Atrás' })
+    expect(back.disabled).toBe(true)
+    for (const button of [save, back]) {
+      const classes = button.className.split(' ')
+      expect(classes).toEqual(expect.arrayContaining(['disabled:opacity-100', 'disabled:text-fg-label']))
+      expect(classes).not.toContain('disabled:opacity-45')
+    }
+    const rungs = within(screen.getByTestId('builder-rail')).getAllByRole('listitem').map((item) => item.querySelector('button'))
+    const pending = rungs.filter((rung) => rung?.disabled)
+    expect(pending.length).toBeGreaterThan(0)
+    for (const rung of pending) expect(rung?.className.split(' ')).toContain('disabled:opacity-100')
+  })
+
+  it('keeps the basics selects inside the card on a phone: the grid column may shrink', async () => {
+    // surveys-new-390: the grid's implicit `auto` column took the width of the longest option,
+    // «Ninguno — esta encuesta no consume licencia», and pushed all three selects past the card.
+    renderAs('company_admin', <SurveyBuilderNextPage />)
+    const step = await screen.findByTestId('builder-step')
+    const grid = within(step).getByText('Partir de una plantilla').closest('.md\\:grid-cols-2')
+    expect(grid?.className.split(' ')).toContain('grid-cols-1')
+    // …and so may the service field's own grid, whose trigger holds the longest option.
+    const field = within(step).getByText('Servicio licenciado').closest('.grid')
+    expect(field?.className.split(' ')).toContain('grid-cols-1')
   })
 
   it("saves the draft under the artboard's plain page glyph, not a page of text lines", async () => {
