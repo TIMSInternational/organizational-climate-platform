@@ -1,4 +1,4 @@
-import { Shield } from 'lucide-react'
+import { Lock } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import { cn } from '../../lib/cn'
 import { ANONYMITY_FLOOR, PROTECTED_HATCH, isSuppressed } from './suppression'
@@ -103,7 +103,7 @@ export interface ProtectedCellProps {
    */
   suppressedClassName?: string
   /**
-   * What the hatched box carries: the shield (the default), or the word itself,
+   * What the hatched box carries: the padlock (the default), or the word itself,
    * set small inside the box.
    *
    * The SurveyResults artboard (10 Sep) prints *protegido* inside a withheld
@@ -111,6 +111,9 @@ export interface ProtectedCellProps {
    * it the hatched box stands in for the number, so the word goes where the number
    * would have been. With `'word'` the box already says it, so `showWord` has
    * nothing left to add beside it and is ignored.
+   *
+   * `'shield'` is the value's historical name, kept so no caller breaks; since the
+   * Apple design it draws the padlock (see the glyph below).
    */
   mark?: 'shield' | 'word'
 }
@@ -146,11 +149,11 @@ export default function ProtectedCell({
       title={label}
       className={cn(
         // No border: the approved artboards (Dashboard and SurveyResults, 10 Sep)
-        // draw a withheld cell as the hatch and the shield alone, flush with the
+        // draw a withheld cell as the hatch and the glyph alone, flush with the
         // tinted cells beside it; the dashed hairline that shipped first read as a
         // third state between "withheld" and "empty".
         'flex items-center justify-center rounded',
-        // `text-fg-tertiary`, not `text-fg-light`: the shield is the message, and
+        // `text-fg-tertiary`, not `text-fg-light`: the padlock is the message, and
         // `--admin-font-light` is #999 on #f0f0f0 in light (2.0:1) and #555 on
         // #2a2a2a in dark (2.2:1) — a glyph a reader has to hunt for. #818181 is
         // the same value in both themes and clears 3:1 against both surfaces.
@@ -167,16 +170,18 @@ export default function ProtectedCell({
         suppressedClassName,
       )}
     >
-      {/* The shield, not a padlock: the canvas draws a shield in every withheld
-          cell and in the privacy note beside the opened cell, so the one glyph
-          means "the floor is enforced here" wherever it appears. */}
+      {/* The padlock, as of the Apple design (11 Nov): its canvas draws a padlock
+          on every withheld group (`.prot`, TeamHome) and keeps the shield for the
+          privacy NOTE that explains the rule. So the padlock says "this group is
+          withheld" and the shield says "here is why", wherever either appears —
+          and `ProtectedMark` beside a climate bar wears the same padlock. */}
       {mark === 'word' ? (
         // `aria-hidden`: the box's own label already says it, in a full sentence.
         <span aria-hidden="true" className="font-mono text-2xs lowercase">
           {t('charts.protectedWord')}
         </span>
       ) : (
-        <Shield aria-hidden="true" className="size-3" />
+        <Lock aria-hidden="true" className="size-3" />
       )}
     </span>
   )

@@ -751,7 +751,23 @@
       "legendOn": "en la meta",
       "legendAbove": "sobre la meta",
       "legendProtected": "protegido, menos de {threshold} respuestas"
-    }
+    },
+    "range": {
+      "aria": "De {low} a {high}; media {mean}",
+      "ariaMean": "Media {mean}",
+      "ariaProtected": "Protegido: menos de {floor} respuestas",
+      "ariaComparison": "{reading}; {label} {value}",
+      "protected": "Menos de {floor}",
+      "group": "{name} {value}",
+      "groups": "{low} · {high}",
+      "comparison": "{label} {value}"
+    },
+    "groupSizeSr": "{count} respuestas",
+    "groupSizeSrOne": "1 respuesta",
+    "gallerySectionRangeBar": "Barra de clima",
+    "galleryRangeBarCompany": "Por dimensión: del departamento más bajo al más alto, con el punto en la media de la empresa. Finanzas está protegido y no mueve la barra.",
+    "galleryRangeBarTeam": "Vista de un equipo, con las áreas de otra empresa (oportunidad desde 3,50 y fortaleza desde 4,30). La marca fina es la organización.",
+    "galleryClimateMapBanded": "Mapa de clima en las áreas de la empresa, con el tamaño de cada grupo"
   },
   "common": {
     "loading": "Cargando...",
