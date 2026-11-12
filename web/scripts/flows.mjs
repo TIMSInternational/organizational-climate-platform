@@ -269,7 +269,7 @@ await flow('microclimate: live page shows the respond link, and it opens anonymo
 
 await flow('leader: dashboard reads the team, not a person', values.leader, async ({ page }) => {
   await go(page, '/dashboard')
-  await page.getByText(/Tu equipo|Your team/).first().waitFor({ timeout: 15000 })
+  await page.getByText(/Su equipo|Your team/).first().waitFor({ timeout: 15000 })
   return 'team row rendered'
 })
 
