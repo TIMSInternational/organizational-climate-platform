@@ -105,6 +105,21 @@ describe('ClimateMap', () => {
       expect(container.querySelectorAll('[role="img"]')).toHaveLength(DIMENSIONS.length)
     })
 
+    it('says «fewer than the floor» in words, once, on the first cell of the row', () => {
+      // The ruled pattern for a withheld group is the padlock plus «Menos de N».
+      // With the padlock alone the row only meant something to a reader who found
+      // the legend under the card (fix round 2, 12 Nov).
+      const { container } = render(
+        <ClimateMap dimensions={DIMENSIONS} rows={suppressed} target={70} />,
+      )
+      const words = en.charts.protectedUnderFloor.replace('{threshold}', String(ANONYMITY_FLOOR))
+      const cells = [...container.querySelectorAll('[role="img"]')]
+      expect(cells[0].textContent).toBe(words)
+      expect(cells[0].querySelector('svg')).not.toBeNull()
+      // One statement per row, not one per cell.
+      expect(cells.slice(1).map((cell) => cell.textContent)).toEqual([''])
+    })
+
     it('does not leak the response count', () => {
       const { container } = render(
         <ClimateMap dimensions={DIMENSIONS} rows={suppressed} target={70} />,
@@ -129,6 +144,15 @@ describe('ClimateMap', () => {
     // ClimateMap renders that legend itself from its own `threshold`, so it is true
     // whatever it forwards.
     const belowRaisedFloor = [{ id: 'sup', label: 'Support', responses: 7, scores: [79, 81] }]
+
+    it('prints the raised floor in the row\'s words, not the default', () => {
+      const { container } = render(
+        <ClimateMap dimensions={DIMENSIONS} rows={belowRaisedFloor} target={70} threshold={10} />,
+      )
+      expect(container.querySelector('[role="img"]')?.textContent).toBe(
+        en.charts.protectedUnderFloor.replace('{threshold}', '10'),
+      )
+    })
 
     it('announces the raised floor on the cell, not the default', () => {
       const { container } = render(
@@ -584,7 +608,12 @@ describe('ClimateMap, in the company’s areas (the Apple canvas’s table.hm)',
     expect(ops.textContent).toContain('118 responses')
     // Finance is under the floor: its name stays, its count goes nowhere.
     expect(fin.textContent).toBe('Finance')
-    expect(container.querySelector('tbody tr:nth-child(2)')?.textContent ?? '').not.toMatch(/\d/)
+    // The row says exactly two things: the name, and the floor in words. The floor is
+    // not sensitive (it is the same for every withheld group); any other digit would be
+    // the group's count, so the row is pinned whole rather than scanned for digits.
+    expect(container.querySelector('tbody tr:nth-child(2)')?.textContent).toBe(
+      `Finance${en.charts.protectedUnderFloor.replace('{threshold}', '3')}`,
+    )
   })
 
   it('keeps the group names in place when the grid scrolls sideways', () => {

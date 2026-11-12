@@ -653,6 +653,7 @@
     "protectedLegend": "Protegido — menos de {threshold} respuestas",
     "protectedLegendInert": "Protegido — menos de {threshold} respuestas; no se puede abrir",
     "protectedWord": "Protegido",
+    "protectedUnderFloor": "Menos de {threshold}",
     "targetLabel": "Meta {value}",
     "progressToTarget": "{value} de {target}",
     "previousValue": "frente a {value} antes",
