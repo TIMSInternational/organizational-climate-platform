@@ -872,12 +872,12 @@ describe('SurveyRespondForm layout', () => {
   })
 
   /**
-   * The canvas's order under the promise: the survey's name with where the respondent is
-   * and a 6px bar, the one question card, then the pair — Anterior and the way on — with
-   * "Guardar y terminar después" under it. Nothing pinned to the viewport: every page is
-   * one question, so the pair is always right under the card it acts on.
+   * The Respond board's order under the promise: the head (`.ph-top`) — Anterior's chevron,
+   * the survey's name with where the respondent is, and the bar — then the one question
+   * card, then the foot (`.ph-foot`) with the way on alone, and "Guardar y terminar
+   * después" under it.
    */
-  it('heads the question with the position and the bar, and puts the pair and the save under the card', async () => {
+  it('heads the question with Anterior, the position and the bar, and puts the way on and the save under the card', async () => {
     respondWith(
       view({
         showProgress: true,
@@ -896,8 +896,14 @@ describe('SurveyRespondForm layout', () => {
     const card = container.querySelector('fieldset[id^="question-"]') as HTMLElement
     const nav = container.querySelector('[data-slot="respond-nav"]') as HTMLElement
     const save = container.querySelector('[data-slot="respond-save"]') as HTMLElement
-    expect(within(nav).getByRole('button', { name: 'Anterior' })).toBeTruthy()
-    expect(within(nav).getByRole('button', { name: 'Siguiente' })).toBeTruthy()
+    expect(within(head).getByRole('button', { name: 'Anterior' })).toBeTruthy()
+    // The foot holds the one primary action and nothing else, as the board draws it.
+    expect(within(nav).getAllByRole('button').map((button) => button.textContent?.trim())).toEqual(['Siguiente'])
+    // While the bar is pinned over a phone screen, the document keeps a focused control
+    // out from under it (WCAG 2.2 SC 2.4.11). happy-dom evaluates neither `:has()` nor the
+    // media query, so the class carrying it is what can be asserted here; the measurement
+    // (41px of the comment box under the bar before, 0px after) is in the component.
+    expect(nav.className).toContain('max-md:[:root:has(&)]:scroll-pb-')
     expect(within(save).getByRole('button', { name: 'Guardar y terminar después' })).toBeTruthy()
     // In that order down the page. Read off `querySelectorAll`, which returns document
     // order — happy-dom's `compareDocumentPosition` answered 0 for the header against the

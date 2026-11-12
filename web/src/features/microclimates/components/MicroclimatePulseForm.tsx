@@ -23,6 +23,17 @@ import MicroclimateContentNotice from './MicroclimateContentNotice'
 const SCALE_MIN = 1
 const SCALE_MAX = 5
 
+/**
+ * Keeps a focused field out from under the Send bar pinned over the bottom of a phone.
+ * Focusing a control already inside the viewport scrolls nothing, and the strip the bar
+ * covers counts as inside (WCAG 2.2 SC 2.4.11 Focus Not Obscured). `scroll-padding-bottom`
+ * on the document shrinks what counts as "in view", so the focus scroll lifts the field
+ * above the bar; `:root:has(<the bar>)` sets it only while the bar is mounted. The same
+ * class, and the measurement behind it, as `SurveyRespondForm`'s `RESPOND_BAR_CLEARANCE`.
+ */
+const RESPOND_BAR_CLEARANCE =
+  'max-md:[:root:has(&)]:scroll-pb-[calc(6rem+env(safe-area-inset-bottom))]'
+
 /** The `<legend>` that names one question's group of controls. */
 function questionLegendId(questionId: string): string {
   return `microclimate-question-${questionId}`
@@ -718,10 +729,11 @@ export default function MicroclimatePulseForm({
               persisted against a respondent. */}
             {/* Pinned to the bottom of a phone screen, the Respond board's `.ph-foot`, so
               Send is under the thumb however many questions the session asks; in the
-              flow from `md` up. */}
+              flow from `md` up. `RESPOND_BAR_CLEARANCE` keeps a focused field from
+              landing under it (WCAG 2.2 SC 2.4.11). */}
             <div
               data-slot="pulse-send"
-              className="max-md:sticky max-md:bottom-0 max-md:z-10 max-md:-mx-4 max-md:border-t max-md:border-line-default max-md:bg-surface-outer/90 max-md:px-4 max-md:pt-3 max-md:pb-[max(0.75rem,env(safe-area-inset-bottom))] max-md:backdrop-blur-md"
+              className={`max-md:sticky max-md:bottom-0 max-md:z-10 max-md:-mx-4 max-md:border-t max-md:border-line-default max-md:bg-surface-outer/90 max-md:px-4 max-md:pt-3 max-md:pb-[max(0.75rem,env(safe-area-inset-bottom))] max-md:backdrop-blur-md ${RESPOND_BAR_CLEARANCE}`}
             >
               <Button type="submit" variant="primary" size="lg" disabled={submitting} className="w-full">
                 {submitting ? t('common.submitting') : t('common.submit')}

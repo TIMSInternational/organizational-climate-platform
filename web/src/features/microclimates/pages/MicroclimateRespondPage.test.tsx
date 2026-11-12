@@ -276,6 +276,9 @@ describe('MicroclimateRespondPage as a respondent surface', () => {
     const send = container.querySelector('[data-slot="pulse-send"]') as HTMLElement
     expect(send.className.split(/\s+/)).toContain('max-md:sticky')
     expect(send.className.split(/\s+/)).not.toContain('sticky')
+    // Pinned, so the document keeps a focused field out from under it (WCAG 2.2 SC 2.4.11);
+    // happy-dom evaluates neither `:has()` nor the media query, so the class is asserted.
+    expect(send.className).toContain('max-md:[:root:has(&)]:scroll-pb-')
     expect(send.querySelector('button[type="submit"]')).toBeTruthy()
     expect(
       [...container.querySelectorAll('[class]')].filter(
