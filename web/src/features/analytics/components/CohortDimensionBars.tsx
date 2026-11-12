@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
 import { useTranslation } from '../../../i18n'
-import { Chip, type ChipTone } from '../../../components/ui'
-import { cn } from '../../../lib/cn'
+import { Chip } from '../../../components/ui'
 import { dimensionStanding, signedDelta, type Standing } from '../next/benchmarks/derive'
 
 /**
@@ -16,14 +15,17 @@ import { dimensionStanding, signedDelta, type Standing } from '../next/benchmark
  * make the reader compare two lengths instead, which is the comparison people are
  * measurably worst at.
  *
- * ## The colour rule, and what carries it
+ * ## No colour for the standing (Apple design, 11 Nov)
  *
- * The fill turns red when the score is BELOW its own cohort median, not below some fixed
- * target: a 61 that beats a cohort of 58 is good news, and a 74 that trails a cohort of 80
- * is not. Colour is never the only carrier — every row states the direction as a signed
- * delta AND as a word ("bajo la mediana"), so it survives greyscale and a reader who cannot
- * separate the two hues. A dimension the cohort carries no median for says so in words
- * ("sin mediana del grupo") rather than showing a tick-less bar that reads as level.
+ * The fill used to turn red below the median and the chips went red / green. Under the
+ * product's colour rule green, amber and red are the three result areas — Fortaleza,
+ * Oportunidad, Crítica, set by the company's bands on the climate scale — and nothing else;
+ * a 0–100 index against a cohort median is not one of them, and painting it red would read as
+ * "Crítica" beside a result that is not. So every fill is this company's blue, the median is
+ * the ink tick, and the standing is carried by position, the signed delta and the word
+ * ("bajo la mediana") — which already carried it alone in greyscale (HIG `color.md` › Best
+ * practices: never rely on colour alone). A dimension the cohort carries no median for says so
+ * in words ("sin mediana del grupo") rather than showing a tick-less bar that reads as level.
  */
 
 export interface CohortDimension {
@@ -55,10 +57,10 @@ function percent(value: number): number {
   return Math.max(0, Math.min(100, value))
 }
 
-const CHIP: Record<Exclude<Standing, 'none'>, { tone: ChipTone; key: string; ink: string }> = {
-  below: { tone: 'critical', key: 'benchmarks.next.chipBelow', ink: 'text-accent-red' },
-  at: { tone: 'neutral', key: 'benchmarks.next.chipAt', ink: 'text-fg-label' },
-  above: { tone: 'good', key: 'benchmarks.next.chipAbove', ink: 'text-accent-green-ink' },
+const CHIP: Record<Exclude<Standing, 'none'>, { key: string }> = {
+  below: { key: 'benchmarks.next.chipBelow' },
+  at: { key: 'benchmarks.next.chipAt' },
+  above: { key: 'benchmarks.next.chipAbove' },
 }
 
 export default function CohortDimensionBars({
@@ -74,11 +76,11 @@ export default function CohortDimensionBars({
   return (
     <div
       data-slot="cohort-dimension-bars"
-      className="flex flex-col gap-3 rounded-xl border border-line-default bg-surface-card px-5 pt-4 pb-4.5 shadow-xs"
+      className="flex min-w-0 flex-col gap-3 rounded-xl border border-line-panel bg-surface-card px-4 pt-4 pb-4.5 sm:px-5"
     >
       {(heading || summary) && (
         <div className="flex flex-wrap items-baseline justify-between gap-3">
-          {heading && <h2 className="m-0 text-2xl">{heading}</h2>}
+          {heading && <h2 className="m-0 min-w-0 text-2xl">{heading}</h2>}
           {summary && (
             <p data-slot="cohort-below-summary" className="m-0 text-sm text-fg-label">
               {summary}
@@ -99,15 +101,17 @@ export default function CohortDimensionBars({
               data-standing={standing}
               // 170px / fill / 190px with 16px between, the artboard's row; `items-center` so
               // a long dimension name that wraps keeps its bar centred against it.
-              className="grid grid-cols-[minmax(0,130px)_minmax(0,1fr)_minmax(0,150px)] items-center gap-4 border-b border-line-light py-2.25 md:grid-cols-[170px_minmax(0,1fr)_190px]"
+              // Below `md` the bar drops to its own line under the name and the reading, as the
+              // canvas's `.cb` does under 640px, so a phone keeps the whole track.
+              className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 border-b border-line-light py-2.5 last:border-b-0 md:grid-cols-[170px_minmax(0,1fr)_190px] md:gap-y-0"
             >
-              <span className="min-w-0 truncate text-base text-fg-primary">{dimension.label}</span>
+              <span className="min-w-0 break-words text-base text-fg-primary md:truncate">{dimension.label}</span>
 
-              <span className="relative block h-2.5 w-full rounded-full bg-line-light">
+              <span className="relative order-3 col-span-2 block h-2 w-full rounded-full bg-band-track md:order-none md:col-span-1">
                 {dimension.score !== null && (
                   <span
                     data-slot="cohort-dimension-fill"
-                    className={cn('block h-2.5 rounded-full', standing === 'below' ? 'bg-accent-red' : 'bg-accent-blue')}
+                    className="block h-2 rounded-full bg-accent-blue"
                     style={{ width: `${percent(dimension.score)}%` }}
                   />
                 )}
@@ -117,7 +121,7 @@ export default function CohortDimensionBars({
                   <span
                     aria-hidden="true"
                     data-slot="cohort-median-tick"
-                    className="absolute -top-0.75 h-4 w-0.5 rounded-xs bg-fg-primary"
+                    className="absolute -top-1 h-4 w-0.5 -translate-x-1/2 rounded-xs bg-fg-primary"
                     style={{ left: `${percent(dimension.cohortMedian)}%` }}
                   />
                 )}
@@ -125,16 +129,11 @@ export default function CohortDimensionBars({
 
               {chip && delta !== null ? (
                 <span className="flex items-center justify-end gap-2">
-                  <span className={cn('font-mono text-base font-semibold tabular-nums', chip.ink)}>
-                    {signedDelta(delta, locale)}
-                  </span>
-                  {/* The canvas's chip is 24px tall (22px plus its border, content-box); the
-                      primitive's is 22px, which put these rows 41px apart where the artboard's
-                      are 43 — the row's 9px padding is the artboard's own. */}
-                  <Chip tone={chip.tone} label={t(chip.key)} className="h-6" />
+                  <span className="text-base font-semibold tabular-nums text-fg-primary">{signedDelta(delta, locale)}</span>
+                  <Chip tone="neutral" label={t(chip.key)} />
                 </span>
               ) : (
-                <span data-slot="cohort-no-median" className="whitespace-nowrap text-xs text-fg-label">
+                <span data-slot="cohort-no-median" className="whitespace-nowrap text-right text-sm text-fg-tertiary">
                   {t('benchmarks.next.noMedian')}
                 </span>
               )}
@@ -143,7 +142,7 @@ export default function CohortDimensionBars({
         })}
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-4.5 gap-y-2 text-sm text-fg-label">
+      <div className="flex flex-wrap items-center gap-x-4.5 gap-y-2 text-sm text-fg-tertiary">
         <span className="flex items-center gap-1.5">
           <span aria-hidden="true" className="inline-block h-3 w-0.5 bg-fg-primary" />
           {typeof cohortSize === 'number'
@@ -156,11 +155,7 @@ export default function CohortDimensionBars({
             {t('benchmarks.next.legendCompany', { survey: surveyTitle })}
           </span>
         )}
-        <span className="flex items-center gap-1.5">
-          <span aria-hidden="true" className="inline-block h-2 w-3.5 rounded-full bg-accent-red" />
-          {t('benchmarks.next.chipBelow')}
-        </span>
-        <span className="ml-auto text-fg-label">{t('benchmarks.next.legendScale')}</span>
+        <span className="text-fg-tertiary md:ml-auto">{t('benchmarks.next.legendScale')}</span>
       </div>
     </div>
   )

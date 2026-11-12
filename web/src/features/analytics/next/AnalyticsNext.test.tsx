@@ -120,7 +120,10 @@ describe('AIInsightsNextPage', () => {
     expect(await screen.findByText(insightsCopy.emptyTitle)).toBeTruthy()
     expect(screen.getByText(insightsCopy.emptyReason.replace('{company}', 'Grupo Meridiano S.A.'))).toBeTruthy()
     expect(screen.getByRole('heading', { name: `${insightsCopy.heading} 0` })).toBeTruthy()
-    expect(screen.getByText(insightsCopy.privacy.replace('{floor}', String(ANONYMITY_FLOOR)))).toBeTruthy()
+    // The note states only what the page keeps — it shows no responses. The old floor sentence
+    // promised a check the create path never makes (AIInsightValidation.cs), so it is gone.
+    expect(screen.getByText(insightsCopy.privacyNote)).toBeTruthy()
+    expect(screen.queryByText(insightsCopy.privacy.replace('{floor}', String(ANONYMITY_FLOOR)))).toBeNull()
   })
 
   it('names each category in words, never the raw slug', async () => {
@@ -146,10 +149,33 @@ describe('AIInsightsNextPage', () => {
     vi.mocked(acknowledgeAIInsight).mockResolvedValue({} as never)
     renderAt('/analytics/ai-insights', <AIInsightsNextPage />, '/analytics/ai-insights')
     const rows = await screen.findAllByTestId('insight-row')
-    expect(rows.map((row) => within(row).getAllByRole('cell')[1].textContent)).toEqual(['Critical one', 'Low one'])
-    await userEvent.click(within(rows[0]).getByRole('button', { name: insightsCopy.acknowledge }))
+    expect(rows.map((row) => row.querySelector('[data-slot="finding-title"]')?.textContent)).toEqual(['Critical one', 'Low one'])
+    // The verb in the review column (md and up); its words always show, never an icon alone.
+    const button = within(rows[0].querySelector('[data-slot="finding-review"]') as HTMLElement).getByRole('button', { name: insightsCopy.acknowledge })
+    expect(button.textContent).toBe(insightsCopy.acknowledge)
+    await userEvent.click(button)
     expect(vi.mocked(acknowledgeAIInsight).mock.calls[0][1]).toBe('b')
     await waitFor(() => expect(listAIInsights).toHaveBeenCalledTimes(2))
+  })
+
+  it('folds the priority and the verb into the finding under md, so a phone keeps the title wide', async () => {
+    vi.mocked(listAIInsights).mockResolvedValue([insight({ id: 'a', title: 'Open one', priority: 'high' })])
+    vi.mocked(acknowledgeAIInsight).mockResolvedValue({} as never)
+    renderAt('/analytics/ai-insights', <AIInsightsNextPage />, '/analytics/ai-insights')
+    const [row] = await screen.findAllByTestId('insight-row')
+    const cells = within(row).getAllByRole('cell')
+    // Every column but the finding is display:none under md...
+    for (const index of [0, 2, 3, 4]) expect(cells[index].className.split(' ')).toEqual(expect.arrayContaining(['hidden', 'md:table-cell']))
+    expect(cells[1].className.split(' ')).not.toContain('hidden')
+    // ...and its priority and its verb, with words, ride in the finding cell only there.
+    const priority = row.querySelector('[data-slot="finding-folded-priority"]') as HTMLElement
+    expect(priority.className.split(' ')).toContain('md:hidden')
+    expect(priority.textContent).toBe(cells[0].textContent)
+    expect(priority.textContent).not.toBe('')
+    const folded = row.querySelector('[data-slot="finding-folded-review"]') as HTMLElement
+    expect(folded.className.split(' ')).toContain('md:hidden')
+    await userEvent.click(within(folded).getByRole('button', { name: insightsCopy.acknowledge }))
+    expect(vi.mocked(acknowledgeAIInsight).mock.calls.at(-1)?.[1]).toBe('a')
   })
 
   it('offers no acknowledge button to a role the server would refuse', async () => {
@@ -194,6 +220,13 @@ describe('AnalyticsNextPage', () => {
     expect(within(row).getByText('42')).toBeTruthy()
     expect(within(row).getByText(analyticsCopy.qualityPending)).toBeTruthy()
     expect(within(row).getByText(analyticsCopy.scopeGlobal)).toBeTruthy()
+    // Under md the group and the quality fold into the reference's facts line.
+    const folded = row.querySelector('[data-slot="reference-folded"]') as HTMLElement
+    expect(folded.className.split(' ')).toContain('md:hidden')
+    expect(folded.textContent).toBe(
+      `${analyticsCopy.groupFact.replace('{count}', '42')} · ${analyticsCopy.qualityFact.replace('{value}', analyticsCopy.qualityPending)}`,
+    )
+    for (const index of [2, 3]) expect(within(row).getAllByRole('cell')[index].className.split(' ')).toEqual(expect.arrayContaining(['hidden', 'md:table-cell']))
     expect(screen.getByText('against Q3 Climate Survey · 24 responses')).toBeTruthy()
     expect(screen.getByText(analyticsCopy.noOwnTitle.replace('{company}', 'Grupo Meridiano S.A.'))).toBeTruthy()
     expect(screen.getByText(analyticsCopy.insightsEmpty)).toBeTruthy()
@@ -204,6 +237,10 @@ describe('AnalyticsNextPage', () => {
     const row = await screen.findByTestId('benchmark-row')
     const group = within(row).getAllByRole('cell')[2]
     expect(group.textContent).toBe('—')
+    // Folded, an unreadable group is left out of the line, never printed as 0.
+    expect(row.querySelector('[data-slot="reference-folded"]')?.textContent).toBe(
+      analyticsCopy.qualityFact.replace('{value}', analyticsCopy.qualityPending),
+    )
   })
 
   it('sets the two columns 16px apart, and the no-own row on the ground tint under a white tile', async () => {
@@ -229,6 +266,6 @@ describe('AIInsightsNextPage — the board\'s spacing and inks', () => {
     expect(reason).not.toContain('max-w-measure')
     expect(screen.getByText(insightsCopy.emptyNext).className.split(' ')).toContain('text-fg-tertiary')
     // AIInsights.dc.html: the page column's 24px between the table and the privacy note.
-    expect(screen.getByText(insightsCopy.privacy.replace('{floor}', String(ANONYMITY_FLOOR))).closest('[data-slot="note"]')?.className.split(' ')).toContain('mt-section')
+    expect(screen.getByText(insightsCopy.privacyNote).closest('[data-slot="note"]')?.className.split(' ')).toContain('mt-section')
   })
 })
