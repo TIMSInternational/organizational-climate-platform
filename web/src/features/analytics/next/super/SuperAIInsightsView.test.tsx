@@ -212,7 +212,8 @@ describe('AIInsightsNextPage — reading and acknowledging (moved and extended)'
     // is both a card and the panel's heading.
     expect(await screen.findByRole('heading', { name: 'Two' })).toBeTruthy()
     const tiles = document.querySelector('[data-slot="insight-tiles"]') as HTMLElement
-    const values = [...tiles.querySelectorAll('[data-slot="kpi-value"]')].map((node) => node.textContent)
+    // KpiCard sets the unit ("de 3") inside the reading's line, so the count is its first text.
+    const values = [...tiles.querySelectorAll('[data-slot="kpi-value"]')].map((node) => node.firstChild?.textContent)
     expect(values).toEqual(['2', '2', '1'])
     expect(within(tiles).getByText(next.criticalOne)).toBeTruthy()
   })
@@ -276,7 +277,7 @@ describe('AIInsightsNextPage — reading and acknowledging (moved and extended)'
     expect(card.textContent).toContain('Support')
   })
 
-  it('sets the selected finding on the board\'s line boxes — 15px labels, 24px chips, the score in mono', async () => {
+  it('sets the selected finding on the board\'s line boxes — 15px labels, neutral chips, the score in tabular figures', async () => {
     routeFetch([
       [/\/admin\/ai-insights\/i1$/, json(insightDetail({ isAcknowledged: true, acknowledgedAt: '2026-08-13T15:00:00Z' }))],
       [/\/admin\/ai-insights\?companyId=/, json([listRow({ isAcknowledged: true })])],
@@ -291,16 +292,21 @@ describe('AIInsightsNextPage — reading and acknowledging (moved and extended)'
     for (const label of [copy.selectedInsight, next.evidence, copy.affectedSegments, copy.recommendedActions]) {
       expect(within(panel).getByText(label).className.split(/\s+/)).toContain('leading-normal')
     }
-    // "confianza 82 %" on a 1.5 line, its figure in the canvas's mono face.
+    // "confianza 82 %" on a 1.5 line, its figure in its own span at tabular figures — no third face.
     const confidence = panel.querySelector('[data-slot="insight-confidence"]') as HTMLElement
     expect(confidence.className.split(/\s+/)).toContain('leading-normal')
     expect(confidence.textContent).toBe(next.confidence.replace('{score}', '82'))
-    expect((confidence.querySelector('[data-slot="score"]') as HTMLElement).textContent).toBe('82')
-    // The board's chip is 24px outside: three on the card, three in the panel, and the segment.
+    const score = confidence.querySelector('[data-slot="score"]') as HTMLElement
+    expect(score.textContent).toBe('82')
+    expect(score.className.split(/\s+/)).toContain('tabular-nums')
+    expect(score.className.split(/\s+/)).not.toContain('font-mono')
+    // Three chips on the card; three in the panel, its "Generado por IA" label and the segment.
+    // Every one neutral: a priority, a type and "Revisado" are not result areas (ruling 11 Nov).
     const card = document.querySelector('[data-slot="insight-card"]') as HTMLElement
     const chips = [...document.querySelectorAll('[data-slot="chip"]')].filter((chip) => panel.contains(chip) || card.contains(chip))
-    expect(chips).toHaveLength(7)
-    for (const chip of chips) expect(chip.className.split(/\s+/)).toContain('h-6')
+    expect(chips).toHaveLength(8)
+    for (const chip of chips) expect(chip.className).not.toMatch(/chip-(good|warning|critical)/)
+    expect(within(panel).getByText(next.generatedLabel)).toBeTruthy()
     // The card's meta line sits on the board's 16.5px line, not snug's 14.85.
     const meta = [...card.querySelectorAll('span')].find((span) => span.children.length === 0 && (span.textContent ?? '').includes(next.confidence.replace('{score}', '82')))
     expect(meta?.className.split(/\s+/)).toContain('leading-normal')

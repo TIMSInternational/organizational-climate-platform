@@ -150,7 +150,7 @@ describe('BenchmarksNextPage — the read-out', () => {
     routeFetch()
     renderAs({ role: 'company_admin', companyId: CID })
 
-    const tiles = [...(await readout()).querySelectorAll('[data-slot="kpi-tile"]')].map((tile) => tile.textContent)
+    const tiles = [...(await readout()).querySelectorAll('[data-slot="kpi-card"]')].map((tile) => tile.textContent)
     expect(tiles[0]).toContain('67')
     expect(tiles[0]).toContain('de 100')
     expect(tiles[0]).toContain('Encuesta de Clima Q3 · 24 respuestas')
@@ -169,6 +169,12 @@ describe('BenchmarksNextPage — the read-out', () => {
     // carries `safety`, not `psychological_safety`, so that row has no tick and says so.
     const rows = [...document.querySelectorAll('[data-slot="cohort-dimension-row"]')]
     expect(rows.map((row) => row.getAttribute('data-standing'))).toEqual(['none', 'below', 'below', 'below', 'at', 'above'])
+    // No red and no green for a standing (ruling 11 Nov): those three hues are the result
+    // areas only. Every fill is this company's blue, and no chip wears a result tone.
+    const fills = [...document.querySelectorAll('[data-slot="cohort-dimension-fill"]')]
+    expect(fills.length).toBe(6)
+    for (const fill of fills) expect(fill.className.split(/\s+/)).toEqual(expect.arrayContaining(['bg-accent-blue']))
+    for (const row of rows) expect(row.innerHTML).not.toMatch(/accent-red|accent-green|chip-(good|warning|critical)/)
     expect(rows[0].textContent).toContain('Seguridad psicológica')
     expect(rows[0].textContent).toContain('sin mediana del grupo')
     expect(rows[1].textContent).toContain('−8')
@@ -182,7 +188,7 @@ describe('BenchmarksNextPage — the read-out', () => {
       '3 dimensiones bajo la mediana · la mayor distancia: Carga de trabajo',
     )
     // The cohort names the page: the eyebrow is the data's, not the route's.
-    expect(document.querySelector('[data-slot="page-top-bar"]')?.textContent).toContain('Manufactura · 500–1000 personas')
+    expect(document.querySelector('[data-slot="page-header"]')?.textContent).toContain('Manufactura · 500–1000 personas')
     // Every region is real: no sample chip anywhere on this screen.
     expect(screen.queryByText('Datos de muestra')).toBeNull()
   })
@@ -200,7 +206,7 @@ describe('BenchmarksNextPage — the read-out', () => {
       ],
     ])
     renderAs({ role: 'company_admin', companyId: CID })
-    const tiles = [...(await readout()).querySelectorAll('[data-slot="kpi-tile"]')].map((tile) => tile.textContent ?? '')
+    const tiles = [...(await readout()).querySelectorAll('[data-slot="kpi-card"]')].map((tile) => tile.textContent ?? '')
     expect(tiles[1]).toContain('60')
     expect(tiles[2]).toContain('7 puntos sobre la mediana')
     expect(tiles[2]).toContain('sin calcular')
@@ -219,8 +225,9 @@ describe('BenchmarksNextPage — the read-out', () => {
       ],
     ])
     renderAs({ role: 'company_admin', companyId: CID })
-    const tiles = [...(await readout()).querySelectorAll('[data-slot="kpi-tile"]')]
-    const value = (tile: Element) => tile.querySelector('[data-slot="kpi-value"]')?.textContent
+    const tiles = [...(await readout()).querySelectorAll('[data-slot="kpi-card"]')]
+    // The reading's first text: KpiCard sets the unit ("de 100") on the same line.
+    const value = (tile: Element) => tile.querySelector('[data-slot="kpi-value"]')?.firstChild?.textContent
     // 67 and 68 on screen, one point apart — never "67,6" beside "1 punto".
     expect(value(tiles[0])).toBe('67')
     expect(value(tiles[1])).toBe('68')

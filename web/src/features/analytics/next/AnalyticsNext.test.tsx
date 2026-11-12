@@ -120,7 +120,10 @@ describe('AIInsightsNextPage', () => {
     expect(await screen.findByText(insightsCopy.emptyTitle)).toBeTruthy()
     expect(screen.getByText(insightsCopy.emptyReason.replace('{company}', 'Grupo Meridiano S.A.'))).toBeTruthy()
     expect(screen.getByRole('heading', { name: `${insightsCopy.heading} 0` })).toBeTruthy()
-    expect(screen.getByText(insightsCopy.privacy.replace('{floor}', String(ANONYMITY_FLOOR)))).toBeTruthy()
+    // The note states only what the page keeps — it shows no responses. The old floor sentence
+    // promised a check the create path never makes (AIInsightValidation.cs), so it is gone.
+    expect(screen.getByText(insightsCopy.privacyNote)).toBeTruthy()
+    expect(screen.queryByText(insightsCopy.privacy.replace('{floor}', String(ANONYMITY_FLOOR)))).toBeNull()
   })
 
   it('names each category in words, never the raw slug', async () => {
@@ -146,7 +149,8 @@ describe('AIInsightsNextPage', () => {
     vi.mocked(acknowledgeAIInsight).mockResolvedValue({} as never)
     renderAt('/analytics/ai-insights', <AIInsightsNextPage />, '/analytics/ai-insights')
     const rows = await screen.findAllByTestId('insight-row')
-    expect(rows.map((row) => within(row).getAllByRole('cell')[1].textContent)).toEqual(['Critical one', 'Low one'])
+    // The title is the cell's first text; under md the type and category fold in after it.
+    expect(rows.map((row) => within(row).getAllByRole('cell')[1].firstChild?.textContent)).toEqual(['Critical one', 'Low one'])
     await userEvent.click(within(rows[0]).getByRole('button', { name: insightsCopy.acknowledge }))
     expect(vi.mocked(acknowledgeAIInsight).mock.calls[0][1]).toBe('b')
     await waitFor(() => expect(listAIInsights).toHaveBeenCalledTimes(2))
@@ -229,6 +233,6 @@ describe('AIInsightsNextPage — the board\'s spacing and inks', () => {
     expect(reason).not.toContain('max-w-measure')
     expect(screen.getByText(insightsCopy.emptyNext).className.split(' ')).toContain('text-fg-tertiary')
     // AIInsights.dc.html: the page column's 24px between the table and the privacy note.
-    expect(screen.getByText(insightsCopy.privacy.replace('{floor}', String(ANONYMITY_FLOOR))).closest('[data-slot="note"]')?.className.split(' ')).toContain('mt-section')
+    expect(screen.getByText(insightsCopy.privacyNote).closest('[data-slot="note"]')?.className.split(' ')).toContain('mt-section')
   })
 })
