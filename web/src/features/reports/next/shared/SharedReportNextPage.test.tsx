@@ -213,6 +213,16 @@ function hostileDocument() {
                 delta: 4.1,
                 changeRatio: 4.1 / 70.1,
               },
+              {
+                // Recorded in different units: the server withholds the change.
+                metricName: 'tiempo de respuesta',
+                value: 1.2,
+                unit: 's',
+                priorValue: 1400,
+                priorUnit: 'ms',
+                delta: null,
+                changeRatio: null,
+              },
             ],
           },
         },
@@ -327,8 +337,33 @@ describe('SharedReportNextPage', () => {
 
     // And the counts of withheld groups ARE reported: "withheld" and "none" are
     // different statements, and a list quietly shortened reads as the whole of it.
-    expect(screen.getByText(/Se reservan 1 departamento/)).toBeTruthy()
+    expect(screen.getByText(/^Se reserva 1 departamento porque tiene menos de 5/)).toBeTruthy()
+    expect(screen.getByText(/^Se reserva 1 grupo porque tiene menos de 5/)).toBeTruthy()
+    expect(text).not.toContain('(s)')
     expect(screen.getByText(/119 palabras/)).toBeTruthy()
+
+    // A hatched row is drawn, so the legend names the hatch.
+    expect(view.container.querySelector('[data-testid="map-legend-protected"]')).not.toBeNull()
+
+    // The benchmark's category and a unit, in Spanish words rather than stored codes.
+    expect(text).toContain('Categoría: compromiso')
+    expect(text).not.toContain('engagement')
+    expect(text).toContain('Se registró en segundos frente a milisegundos un periodo antes')
+  })
+
+  it('draws no hatch in the legend when the withheld group has no row, and counts it in the singular', async () => {
+    const doc = hostileDocument()
+    const section = doc.surveys[0] as { demographics: { segments: { isSuppressed: boolean }[] }[] }
+    // The server's current shape: a withheld group is counted, never sent.
+    section.demographics[0].segments = section.demographics[0].segments.filter((segment) => !segment.isSuppressed)
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(reportBody(doc)))
+
+    const view = renderPage()
+    await screen.findByRole('heading', { name: 'Informe ejecutivo de clima — Q3 2026' })
+    expect(view.container.querySelector('[data-testid^="map-row-"]')).not.toBeNull()
+    // No hatched cell anywhere, so no swatch promising one.
+    expect(view.container.querySelector('[data-testid="map-legend-protected"]')).toBeNull()
+    expect(screen.getByText(/^Se reserva 1 grupo porque tiene menos de 5/)).toBeTruthy()
   })
 
   /**
@@ -395,6 +430,12 @@ describe('SharedReportNextPage', () => {
     expect(
       screen.getByText('toda la encuesta está bajo el umbral de 5: no se publica ningún grupo'),
     ).toBeTruthy()
+    // And the tile itself prints no figure: "0 de 0 legibles" read as "no groups exist".
+    const groupsTile = screen.getByText('Grupos').parentElement
+    expect(groupsTile?.textContent).toContain('Reservado')
+    expect(groupsTile?.textContent).toContain('menos de 5 respuestas')
+    expect(groupsTile?.textContent).not.toContain('legibles')
+    expect(groupsTile?.textContent?.replaceAll('5', '')).not.toMatch(/\d/)
   })
 
   /**
@@ -570,6 +611,16 @@ describe('SharedReportNextPage', () => {
     expect(text).toContain('Promedio de cada dimensión en toda la empresa, de 1 a 5.')
     expect(text).toContain('3,80')
     expect(screen.getByText('7,8').closest('tr')?.textContent).toContain('fuera de la escala de 1 a 5')
+  })
+
+  it('names the areas in the map legend as every banded surface does — never a second, short name', async () => {
+    const bands = { opportunityMin: 3.8, strengthMin: 4.3, criticalName: null, opportunityName: null, strengthName: null }
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(reportBody(hostileDocument(), { resultBands: bands })))
+    const view = renderPage()
+    await screen.findByRole('heading', { name: 'Informe ejecutivo de clima — Q3 2026' })
+    const legend = view.container.querySelector('[data-testid="map-legend-protected"]')?.parentElement
+    const words = legend?.textContent ?? ''
+    for (const name of ['Área crítica', 'Área de oportunidad', 'Área de fortaleza']) expect(words).toContain(name)
   })
 
   it('reads a percent report on 0 to 100, banded on the 1–5 value, off-scale figures untouched', async () => {

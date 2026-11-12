@@ -1,4 +1,5 @@
 import { useTranslation } from '../../../i18n'
+import { byCount } from '../../../i18n/plural'
 import { Card, Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '../../../components/ui'
 import KpiTile from '../../../components/charts/KpiTile'
 import ProtectedCell from '../../../components/charts/ProtectedCell'
@@ -258,7 +259,7 @@ function SurveySection({ section }: { section: ReportSurveySection }) {
 
       {section.suppressedDepartmentCount !== null && section.suppressedDepartmentCount > 0 && (
         <p className="max-w-prose text-sm text-fg-secondary">
-          {t('sharedReport.departmentsWithheld', {
+          {t(byCount(section.suppressedDepartmentCount, 'sharedReport.departmentsWithheldOne', 'sharedReport.departmentsWithheld'), {
             count: section.suppressedDepartmentCount,
             minimum: section.minimumGroupSize,
           })}
@@ -606,7 +607,7 @@ function DemographicBreakdown({
 
       {breakdown.suppressedSegmentCount > 0 && (
         <p className="max-w-prose text-sm text-fg-secondary">
-          {t('sharedReport.groupsWithheld', {
+          {t(byCount(breakdown.suppressedSegmentCount, 'sharedReport.groupsWithheldOne', 'sharedReport.groupsWithheld'), {
             count: breakdown.suppressedSegmentCount,
             minimum: minimumGroupSize,
           })}
