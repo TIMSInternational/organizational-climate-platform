@@ -120,7 +120,7 @@ export function TeamPlanRow({
 /** One of the supervisor's three coverage boxes: a label, the reading, a line under it. */
 export function CoverageBox({ label, children, sub }: { label: string; children: ReactNode; sub: ReactNode }) {
   return (
-    <div data-slot="coverage-box" className="flex min-w-0 flex-col gap-1.5 rounded-xl border border-line-panel bg-surface-card px-5 py-4.5">
+    <div data-slot="coverage-box" className="flex min-w-0 flex-col gap-1.5 rounded-lg bg-surface-fill-subtle px-4 py-3.5">
       <span className="text-2xs font-semibold uppercase tracking-tile text-fg-label">{label}</span>
       {children}
       <span className="text-sm text-fg-tertiary">{sub}</span>

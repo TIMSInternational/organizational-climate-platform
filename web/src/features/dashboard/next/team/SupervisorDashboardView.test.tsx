@@ -125,14 +125,17 @@ describe('SupervisorDashboardView', () => {
     window.localStorage.clear()
   })
 
-  it('says it is a proposal, in the eyebrow and in a note, before anything else', () => {
+  // The canvas's "Propuesta" was meta-copy about the design's status and shipped to the
+  // supervisor (review finding 7): the eyebrow names her team and role, and no note says
+  // the screen is a proposal.
+  it('names her team and role in the eyebrow, and ships no proposal note', () => {
     renderSupervisor()
 
     expect(screen.getByRole('heading', { level: 1, name: en.dashboard.next.title })).toBeTruthy()
-    expect(screen.getByText(`${copy.proposal} · Ingeniería · ${en.users.supervisor}`)).toBeTruthy()
-    const note = screen.getByRole('note')
-    expect(note.textContent).toContain(copy.proposalLead)
-    expect(note.textContent).toContain(copy.proposalBody.replace('{floor}', String(ANONYMITY_FLOOR)))
+    expect(screen.getByText(`Ingeniería · ${en.users.supervisor}`)).toBeTruthy()
+    expect(screen.queryByRole('note')).toBeNull()
+    expect(document.body.textContent).not.toContain(copy.proposalLead)
+    expect(document.body.textContent).not.toContain(copy.proposal)
   })
 
   /**

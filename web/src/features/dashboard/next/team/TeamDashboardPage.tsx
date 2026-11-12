@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { AlertTriangle, Info } from 'lucide-react'
 import { useTranslation } from '../../../../i18n'
-import { PageTopBar } from '../../../../components/layout'
+import { PageHeader } from '../../../../components/layout'
 import { Alert, AlertDescription, AlertTitle, LoadingRegion, SkeletonText } from '../../../../components/ui'
 import DashboardState from '../../components/DashboardState'
 import EmployeeHomeView from '../employee/EmployeeHomeView'
@@ -68,8 +68,8 @@ function TeamGate<M>({ state, render }: { state: TeamDashboardState<M>; render: 
   if (state.gate === 'no-user-record') {
     return (
       <div>
-        <PageTopBar title={t('dashboard.next.title')} />
-        <Alert variant="warning">
+        <PageHeader title={t('dashboard.next.title')} />
+        <Alert variant="default">
           <AlertTriangle aria-hidden="true" />
           <AlertTitle>{t('dashboard.noUserRecordTitle')}</AlertTitle>
           <AlertDescription>{t('dashboard.noUserRecordBody')}</AlertDescription>
@@ -81,7 +81,7 @@ function TeamGate<M>({ state, render }: { state: TeamDashboardState<M>; render: 
   if (state.gate === 'failed') {
     return (
       <div>
-        <PageTopBar title={t('dashboard.next.title')} />
+        <PageHeader title={t('dashboard.next.title')} />
         <DashboardState loading={false} failed error={state.error} onRetry={state.reload}>
           {null}
         </DashboardState>
@@ -92,7 +92,7 @@ function TeamGate<M>({ state, render }: { state: TeamDashboardState<M>; render: 
   if (state.model === null) {
     return (
       <div>
-        <PageTopBar title={t('dashboard.next.title')} />
+        <PageHeader title={t('dashboard.next.title')} />
         <LoadingRegion loading label={t('dashboard.next.team.loading')}>
           <SkeletonText lines={4} />
         </LoadingRegion>
