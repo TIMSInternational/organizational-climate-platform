@@ -128,7 +128,7 @@ export default function RespondDemographicField({
         </span>
         <span
           data-slot="demographic-text"
-          className="mt-2.5 block font-display text-[1.5rem] font-semibold leading-tight tracking-title text-fg-primary"
+          className="mt-2.5 block font-display text-respond-display font-semibold tracking-title text-fg-primary"
         >
           {label}
           {field.required ? <span className="sr-only"> {t('requiredMarker')}</span> : null}

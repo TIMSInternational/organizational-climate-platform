@@ -792,7 +792,7 @@ describe('SurveyRespondForm numeric scales', () => {
     const group = await screen.findByRole('radiogroup')
     const text = container.querySelector('[data-slot="question-text"]') as HTMLElement
     expect(text.className.split(/\s+/)).toContain('font-display')
-    expect(text.className.split(/\s+/)).toContain('text-[1.5rem]')
+    expect(text.className.split(/\s+/)).toContain('text-respond-display')
     expect(text.className.split(/\s+/)).not.toContain('text-question')
     for (const point of within(group).getAllByRole('radio')) {
       expect(point.className.split(/\s+/)).toContain('text-question')

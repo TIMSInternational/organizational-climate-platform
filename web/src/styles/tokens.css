@@ -113,7 +113,7 @@
   --admin-text-respond-sm: 0.8125rem; /* 13px — the respond page's readings and meta: the position, the n/total chip, the foot */
   --admin-text-respond-lg: 1rem; /* 16px — the same, from `md` up */
   --admin-text-respond-question: 1.25rem; /* 20px — the question itself, from `md` up */
-  --admin-text-respond-display: 1.5rem; /* 24px — the Apple design's Respond board sets the question in the serif at this step; additive, no screen on this branch uses it yet */
+  --admin-text-respond-display: 1.5rem; /* 24px — the Apple design's Respond board sets the question in the serif at this step; the respond question, demographic and participant fields use it */
 
   --admin-leading-tight: 1.2; /* headings — globals.css h1..h6 */
   --admin-leading-snug: 1.35; /* dense table/data rows */

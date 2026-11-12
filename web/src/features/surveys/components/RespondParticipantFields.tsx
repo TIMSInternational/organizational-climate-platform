@@ -41,7 +41,7 @@ export default function RespondParticipantFields({
       className="-m-2 min-w-0 rounded-xl border-0 p-2"
     >
       <legend className="float-left m-0 w-full p-0">
-        <span className="block font-display text-[1.5rem] font-semibold leading-tight tracking-title text-fg-primary">
+        <span className="block font-display text-respond-display font-semibold tracking-title text-fg-primary">
           {t('identity.question')}
         </span>
       </legend>
