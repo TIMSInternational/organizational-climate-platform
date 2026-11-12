@@ -23,6 +23,7 @@ it, which is the regression that would ship the chunk while the route stayed hid
 | `RealTimeChartContainer` | `RealTimeChartContainer` | done — polls at 3–5s, no WebSockets |
 | `SentimentVisualization` | `SentimentVisualization` | done — placeholder data pending #67 |
 | `RecommendationCard` | `RecommendationCard` | done |
+| `ClimateRangeBar` | — | the Apple design's signature (11 Nov): per dimension, the company's areas on a 1–5 track, lit between the lowest and highest disclosed group, the served mean as a dot, an optional comparison tick, band chip + value. Pure math in `climateRange.ts`; axis `ClimateScaleAxis`; withheld look `ProtectedMark` |
 
 Pure logic sits beside the components in its own modules, because a file exporting
 both a component and a helper breaks React Fast Refresh: `foldSlices`, `palette`,
@@ -317,3 +318,23 @@ Spanish.
   so they survive in production even though the page does not. Dropping them would mean
   exempting the gallery from `noHardcodedStrings`, and weakening a guard is a worse trade
   than 1.8 kB of unreferenced strings — but it is a real cost, recorded rather than hidden.
+
+## The climate range bar (`ClimateRangeBar`)
+
+The one chart the Apple design repeats on every results surface (dashboards, results, team
+view, trends). Three rules are in the component, not in its callers:
+
+- **The company's bands paint it.** `segmentsOf(bands)` on the 1–5 scale — never a fixed
+  3,00 / 4,00 — and the chip at the end is judged at the printed precision (`bandOf(mean,
+  bands, decimals)`).
+- **Only disclosed groups make the range.** Groups arrive as served, `{ name, mean,
+  protected }`; a protected group or a `null` mean never enters the low/high, the caption or
+  the accessible label. Fewer than two visible groups: a dot and no range. The component never
+  computes a mean.
+- **A withheld row says so.** `mean: null` or `protected: true` draws a grey track, no dot, and
+  `ProtectedMark` — a padlock and "Menos de {floor}", with `floor` the server's value (required
+  prop). Never a number, never a 0.
+
+The areas are cut to the range rather than masked: a grey mask antialiased over a painted area
+at the rounded end left a pink fringe at the start of every track (seen on the gallery shot).
+

@@ -751,7 +751,23 @@
       "legendOn": "on target",
       "legendAbove": "above target",
       "legendProtected": "protected, fewer than {threshold} responses"
-    }
+    },
+    "range": {
+      "aria": "From {low} to {high}; mean {mean}",
+      "ariaMean": "Mean {mean}",
+      "ariaProtected": "Protected: fewer than {floor} responses",
+      "ariaComparison": "{reading}; {label} {value}",
+      "protected": "Fewer than {floor}",
+      "group": "{name} {value}",
+      "groups": "{low} · {high}",
+      "comparison": "{label} {value}"
+    },
+    "groupSizeSr": "{count} responses",
+    "groupSizeSrOne": "1 response",
+    "gallerySectionRangeBar": "Climate range bar",
+    "galleryRangeBarCompany": "By dimension: from the lowest department to the highest, with the dot on the company mean. Finance is protected and does not move the bar.",
+    "galleryRangeBarTeam": "A team's view, with another company's areas (opportunity from 3.50 and strength from 4.30). The thin mark is the organization.",
+    "galleryClimateMapBanded": "Climate map in the company's areas, with each group's size"
   },
   "common": {
     "loading": "Loading...",

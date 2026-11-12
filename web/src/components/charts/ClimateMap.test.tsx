@@ -544,3 +544,55 @@ describe('ClimateMap, the canvas grid', () => {
     }
   })
 })
+
+describe('ClimateMap, in the company’s areas (the Apple canvas’s table.hm)', () => {
+  const BANDS = { opportunityMin: 3, strengthMin: 4, names: { critical: null, opportunity: null, strength: null }, scale: 'mean' as const }
+  const ROWS: ClimateMapRow[] = [
+    { id: 'ops', label: 'Operations', responses: 118, scores: [4.2, 2.7] },
+    { id: 'fin', label: 'Finance', responses: 2, scores: [1.9, 1.4] },
+  ]
+
+  it('paints a cell in its area’s soft fill and ink, glyph first, with no border and no monospace', () => {
+    const { container } = render(
+      <ClimateMap variant="canvas" dimensions={DIMENSIONS} rows={ROWS} target={3} bands={BANDS} decimals={1} threshold={3} />,
+    )
+    const cell = container.querySelector('td [data-band="strength"]') as HTMLElement
+    expect(cell.style.backgroundColor).toBe('var(--admin-chip-bg-good)')
+    expect(cell.style.color).toBe('var(--admin-chip-ink-good)')
+    const classes = cell.className.split(/\s+/)
+    expect(classes).toEqual(expect.arrayContaining(['h-11', 'rounded-md', 'font-semibold', 'tabular-nums']))
+    expect(classes).not.toContain('border')
+    expect(classes).not.toContain('font-mono')
+    // The glyph comes before the figure, as the canvas prints "▲4,24".
+    const children = [...cell.childNodes]
+    const glyphAt = children.findIndex((node) => node instanceof Element && node.hasAttribute('data-band-glyph'))
+    const figureAt = children.findIndex((node) => node.nodeType === Node.TEXT_NODE && node.textContent === '4.2')
+    expect(glyphAt).toBeGreaterThan(-1)
+    expect(glyphAt).toBeLessThan(figureAt)
+  })
+
+  it('prints a disclosed group’s size only when asked, and never a withheld group’s', () => {
+    const quiet = render(<ClimateMap variant="canvas" dimensions={DIMENSIONS} rows={ROWS} target={3} bands={BANDS} threshold={3} />)
+    expect(quiet.container.querySelector('tbody')?.textContent).not.toContain('118')
+    cleanup()
+
+    const { container } = render(
+      <ClimateMap variant="canvas" dimensions={DIMENSIONS} rows={ROWS} target={3} bands={BANDS} threshold={3} showGroupSize />,
+    )
+    const [ops, fin] = [...container.querySelectorAll('tbody th[scope="row"]')] as HTMLElement[]
+    expect(ops.textContent).toContain('118')
+    expect(ops.textContent).toContain('118 responses')
+    // Finance is under the floor: its name stays, its count goes nowhere.
+    expect(fin.textContent).toBe('Finance')
+    expect(container.querySelector('tbody tr:nth-child(2)')?.textContent ?? '').not.toMatch(/\d/)
+  })
+
+  it('keeps the group names in place when the grid scrolls sideways', () => {
+    const { container } = render(<ClimateMap variant="canvas" dimensions={DIMENSIONS} rows={ROWS} target={3} bands={BANDS} threshold={3} />)
+    for (const head of container.querySelectorAll('tbody th[scope="row"]')) {
+      expect(head.className.split(/\s+/)).toEqual(expect.arrayContaining(['sticky', 'left-0', 'bg-surface-card']))
+    }
+    // And the grid has a floor, so on a phone it scrolls rather than crushing the readings.
+    expect((container.querySelector('table') as HTMLElement).style.minWidth).toBe('calc(var(--admin-space-4) * 82)')
+  })
+})

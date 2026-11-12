@@ -106,7 +106,10 @@ export default function HeatMap({
 
               None of this is visible to happy-dom, which does no layout -- it was
               caught by rendering the chart gallery. */}
-          <Table className="w-auto text-sm">
+          {/* The Apple canvas's `table.hm` geometry: separate cells 4px apart, each a 44px
+              rounded tile read at 14px semibold with tabular figures, no rules between them
+              (`border-0` turns off the line `index.css` draws under every bare th/td). */}
+          <Table className="w-auto border-separate border-spacing-1 text-sm">
             {/* Generic on purpose: when a title is given the figcaption already names
                     this figure, and repeating it here makes a screen reader announce it
                     twice. */}
@@ -115,9 +118,9 @@ export default function HeatMap({
               <tr>
                 {/* Empty corner cell: it heads the row-label column, which has no
                     column name of its own. */}
-                <td />
+                <td className="border-0" />
                 {xLabels.map((x) => (
-                  <th key={x} scope="col" className="px-2 text-left font-normal text-fg-secondary">
+                  <th key={x} scope="col" className="border-0 px-1.5 py-1 text-center align-bottom text-sm font-semibold text-fg-secondary">
                     {x}
                   </th>
                 ))}
@@ -126,7 +129,7 @@ export default function HeatMap({
             <tbody>
               {yLabels.map((y) => (
                 <tr key={y}>
-                  <th scope="row" className="pr-2 text-left font-normal text-fg-secondary">
+                  <th scope="row" className="border-0 py-0 pr-2 pl-0 text-left text-sm font-medium text-fg-primary">
                     {y}
                   </th>
                   {xLabels.map((x) => {
@@ -134,7 +137,7 @@ export default function HeatMap({
                     if (value === undefined) {
                       // A gap is a gap. An absent pair is not a zero score, and
                       // colouring it as one would invent data.
-                      return <td key={x} className="h-8 w-12" />
+                      return <td key={x} className="h-11 min-w-18 border-0" />
                     }
                     const fraction = span === 0 ? 1 : (value - min) / span
                     // Fill and ink come out of one call so they cannot land on
@@ -144,7 +147,7 @@ export default function HeatMap({
                     return (
                       <td
                         key={x}
-                        className="h-8 w-12 text-center"
+                        className="h-11 min-w-18 rounded-md border-0 px-2 py-0 text-center text-ui font-semibold tabular-nums"
                         // `color` is set even when the value is hidden: it is
                         // inherited, and a future child drawn in this cell should
                         // start from the ink that matches the fill rather than
