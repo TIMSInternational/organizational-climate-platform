@@ -50,7 +50,12 @@ export interface DimensionTrendChartProps {
   height?: number
 }
 
-const LINE = '#4d76c7'
+/**
+ * The series line, in the secondary label ink: a token, so it holds in dark mode, and gray
+ * because blue means action, selection and live (the user's ruling of 11 Nov). The points
+ * carry the result areas' fills; the line between them carries nothing.
+ */
+const LINE = 'var(--admin-font-secondary)'
 const BOUNDARY = 'var(--admin-line-control)'
 /** Where the plot starts; the tick labels end 6px before it. */
 const AXIS_LEFT = 30
@@ -185,8 +190,8 @@ export default function DimensionTrendChart({
             y={y(tick) + 3.5}
             textAnchor="end"
             fill="currentColor"
-            fontSize={10}
-            className="font-mono"
+            fontSize={11}
+            className="tabular-nums"
           >
             {format(tick)}
           </text>
@@ -215,7 +220,7 @@ export default function DimensionTrendChart({
             y={zone.spot.y}
             textAnchor={zone.spot.anchor}
             fill={BAND_PAINT[zone.band].ink}
-            fontSize={9}
+            fontSize={11}
             fontWeight={600}
             letterSpacing="0.06em"
           >
@@ -253,7 +258,7 @@ export default function DimensionTrendChart({
                 y={plotBottom - 9}
                 textAnchor={anchorAt(index)}
                 fill="currentColor"
-                fontSize={10}
+                fontSize={11}
               >
                 {withheldText}
               </text>
@@ -279,7 +284,7 @@ export default function DimensionTrendChart({
               y={y(value) - 10}
               textAnchor="middle"
               fontSize={11}
-              data-slot="trend-value" className="fill-fg-primary font-mono"
+              data-slot="trend-value" className="fill-fg-primary tabular-nums"
             >
               {format(value)}
             </text>
@@ -293,8 +298,8 @@ export default function DimensionTrendChart({
           y={height - 8}
           textAnchor="middle"
           fill="currentColor"
-          fontSize={10}
-          className="font-mono"
+          fontSize={11}
+          className="tabular-nums"
         >
           {text}
         </text>

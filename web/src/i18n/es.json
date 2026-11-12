@@ -4235,7 +4235,10 @@
         "csvColGroup": "Grupo",
         "csvColClosed": "Cerró",
         "csvColResponses": "Respuestas",
-        "tableScalePercent": "{group} · escala de 0 a 100"
+        "tableScalePercent": "{group} · escala de 0 a 100",
+        "rangeHeading": "Cada dimensión en {wave}",
+        "rangeSub": "{group} · el punto es la última encuesta; la marca, {first}",
+        "rangeSubOne": "{group} · el punto es la última encuesta"
       },
       "list": {
         "description": "Cuál encuesta está abierta hoy, cuánto le falta para cerrar y dónde leer las que ya cerraron.",
@@ -4274,7 +4277,8 @@
         "closedNoteCompletion": "{percent} completadas",
         "createdOn": "creada el {date}",
         "moreActions": "Más acciones: {title}",
-        "viewSurvey": "Ver la encuesta"
+        "viewSurvey": "Ver la encuesta",
+        "closesOn": "cierra el {date}"
       },
       "authoring": {
         "title": "Editar preguntas",
@@ -4425,7 +4429,7 @@
         }
       },
       "super": {
-        "barNoteUnchosen": "Esta lista es de toda la plataforma y no depende de la selección. Para crear una encuesta, elige primero la empresa en la que va.",
+        "barNoteUnchosen": "Esta lista es de toda la plataforma y no depende de la selección. Para crear una encuesta, elija primero la empresa en la que va.",
         "barNoteChosen": "Esta lista es de toda la plataforma y no depende de la selección. Una encuesta nueva se crea en la empresa elegida.",
         "exportAll": "Descargar todas las respuestas",
         "exportOne": "Descargar las respuestas de este clima",

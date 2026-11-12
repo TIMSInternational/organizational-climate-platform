@@ -45,7 +45,7 @@ describe('TrendsNumbersTable', () => {
       { key: 'c', name: 'C', values: [4.04, 1.0] },
     ])
     const cells = [...document.querySelectorAll('[data-slot="trends-cell"]')].map((cell) => ({
-      text: cell.querySelector('.font-mono')?.textContent,
+      text: cell.querySelector('[data-slot="trends-cell-value"]')?.textContent,
       band: cell.getAttribute('data-band'),
     }))
     // Row by row: Q1's three cells, then Q2's. Judged RAW, 3,96 would be opportunity and 2,96
@@ -117,5 +117,25 @@ describe('TrendsNumbersTable on the artboard grid', () => {
     // index.css pads every bare th 8px; above the heads it put the table 9px under the artboard's.
     expect(/const HEAD = '[^']*\bpt-0\b/.test(source)).toBe(true)
     expect(source.match(/border-line-light pt-2 pb-0/g)).toHaveLength(2)
+  })
+
+  it('never cuts a band name short: the word prints whole and the table is wide enough to hold it', () => {
+    renderTable([
+      { key: 'a', name: 'A', values: [3.5, 3.5] },
+      { key: 'b', name: 'B', values: [3.5, 3.5] },
+      { key: 'c', name: 'C', values: [3.5, 3.5] },
+      { key: 'd', name: 'D', values: [3.5, 3.5] },
+      { key: 'e', name: 'E', values: [3.5, 3.5] },
+      { key: 'f', name: 'F', values: [3.5, 3.5] },
+    ])
+    for (const cell of document.querySelectorAll('[data-slot="trends-cell"]')) {
+      const word = cell.querySelector('[aria-hidden="true"] > span:last-child') as HTMLElement
+      expect(word.textContent).toBe(en.resultBands.short.opportunity)
+      expect(word.className.split(/\s+/)).not.toContain('truncate')
+      expect(word.className.split(/\s+/)).toContain('whitespace-nowrap')
+    }
+    // 180px survey column + six columns of at least 128px: at 390 the table scrolls in its card.
+    const table = document.querySelector('[data-slot="trends-table"]') as HTMLElement
+    expect(Number.parseFloat(table.style.minWidth)).toBeGreaterThanOrEqual(180 + 6 * 128)
   })
 })

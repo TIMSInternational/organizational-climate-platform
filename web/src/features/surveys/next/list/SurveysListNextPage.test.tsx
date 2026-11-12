@@ -147,6 +147,37 @@ describe('SurveysListNextPage', () => {
     expect(text).not.toContain('1 preguntas')
   })
 
+  it('at phone width sets each survey as one two-line row, the reading and the actions on screen, with no table behind them', async () => {
+    // happy-dom has no viewport, so the compact query is answered here; the geometry is the shot's.
+    const media = vi.spyOn(window, 'matchMedia').mockImplementation(
+      (query: string) =>
+        ({
+          matches: query === '(max-width: 639.98px)',
+          media: query,
+          onchange: null,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          addListener: () => {},
+          removeListener: () => {},
+          dispatchEvent: () => false,
+        }) as MediaQueryList,
+    )
+    try {
+      renderAs({ role: 'company_admin', companyId: 'c1' })
+      await waitFor(() => expect(document.querySelector('li[data-survey-id="q4"]')).not.toBeNull())
+      expect(document.querySelectorAll('tr[data-survey-id]')).toHaveLength(0)
+      const open = document.querySelector('li[data-survey-id="q4"]') as HTMLElement
+      const reading = open.querySelector('[data-slot="compact-reading"]')?.textContent ?? ''
+      expect(reading.startsWith(`1 ${copy.ofAudience.replace('{target}', '24')} · `)).toBe(true)
+      expect(reading).toContain(` · ${copy.closesOn.replace('{date}', '')}`)
+      // One copy of each link and menu, not a hidden second one.
+      expect(within(open).getAllByRole('link', { name: en.surveys.openNamed.replace('{title}', 'Q4') })).toHaveLength(1)
+      expect(within(open).getAllByRole('button', { name: copy.moreActions.replace('{title}', 'Q4') })).toHaveLength(1)
+    } finally {
+      media.mockRestore()
+    }
+  })
+
   it('sends no companyId and asks for the titles in the reader’s language', async () => {
     renderAs({ role: 'super_admin' })
     await screen.findByRole('heading', { name: new RegExp(copy.openHeading) })
@@ -191,6 +222,15 @@ describe('SurveysListNextPage', () => {
     for (const head of heads) {
       expect(head.className.split(/\s+/)).toEqual(expect.arrayContaining(['leading-normal', 'border-b', 'border-line-default']))
     }
+    // The board's `.tbl th`, the TableHead primitive: sentence case at 13px, never the 11px
+    // uppercase the type ruling keeps for eyebrows.
+    for (const head of heads) {
+      expect(head.getAttribute('data-slot')).toBe('table-head')
+      expect(head.className.split(/\s+/)).not.toContain('uppercase')
+    }
+    // A status chip hugs its word; stretched to the column it read as a form field.
+    const chip = (cells[1] as HTMLElement).querySelector('[data-slot="chip"]') as HTMLElement
+    expect(chip.className.split(/\s+/)).not.toContain('w-full')
     const meta = (cells[0] as HTMLElement).querySelector('span.text-xs') as HTMLElement
     expect(meta.className.split(/\s+/)).toContain('leading-normal')
   })
@@ -254,7 +294,7 @@ describe('SurveysListNextPage', () => {
     )
     renderAs({ role: 'leader', companyId: 'c1' })
     await waitFor(() => {
-      expect(document.querySelector('[data-slot="page-eyebrow"]')?.textContent).toBe('Acme Corporation')
+      expect(document.querySelector('[data-slot="page-header-eyebrow"]')?.textContent).toBe('Acme Corporation')
     })
   })
 
@@ -266,16 +306,19 @@ describe('SurveysListNextPage', () => {
    * two things that are not results. The chosen pill is the blue `accent` tone, Activa the
    * `live` chip (the blue tint with its dot), every other status the gray `neutral`.
    */
-  it('chooses a status pill in blue and marks the open survey with the blue live chip, never a result colour', async () => {
+  it('chooses a status segment without a result colour and marks the open survey with the blue live chip, never a result colour', async () => {
     renderAs({ role: 'company_admin', companyId: 'c1' })
     await screen.findByRole('heading', { name: new RegExp(copy.openHeading) })
     const chips = screen.getByRole('group', { name: en.surveys.filterByStatus })
     const chosen = within(chips)
       .getAllByRole('button')
       .find((chip) => chip.getAttribute('aria-pressed') === 'true') as HTMLElement
-    const chosenClasses = chosen.className.split(/\s+/)
-    expect(chosenClasses).toContain('bg-chip-accent-fill')
-    expect(chosenClasses.filter((name) => /chip-(good|warning|critical)/.test(name))).toEqual([])
+    // The board's segmented control: the chosen segment is raised and told by `aria-pressed`,
+    // and no segment ever wears a result tone.
+    expect(chosen.getAttribute('data-slot')).toBe('segmented-control-item')
+    for (const segment of within(chips).getAllByRole('button')) {
+      expect(segment.className.split(/\s+/).filter((name) => /chip-(good|warning|critical)|band-/.test(name))).toEqual([])
+    }
 
     const live = rowOf('q4').querySelector('[data-slot="chip"]') as HTMLElement
     expect(live.getAttribute('data-live')).toBe('true')
