@@ -72,13 +72,10 @@ export default function AdminDashboardNextView({
   model,
   regions,
   companyId,
-  onRetry,
 }: {
   model: AdminDashboardModel
   regions?: RegionStatuses
   companyId?: string
-  /** Reads the regions again; the notice of a failed region offers it as "Reintentar". */
-  onRetry?: () => void
 }) {
   const { t, locale } = useTranslation()
   // Every action below shows only when the server would answer it with something other
@@ -174,7 +171,7 @@ export default function AdminDashboardNextView({
       <div data-slot="dashboard-sections" className="-mt-1 flex flex-col gap-section">
         <section aria-labelledby="next-where" className="flex flex-col gap-3.5">
           <SectionHead id="next-where" heading={t('dashboard.next.whereHeading')} />
-          <RegionNotice regions={regions} region="company" t={t} onRetry={onRetry} />
+          <RegionNotice regions={regions} region="company" t={t} />
           <KpiRow>
             <KpiTile
               size="hero"
@@ -330,7 +327,7 @@ export default function AdminDashboardNextView({
                 )
               }
             />
-            <RegionNotice regions={regions} region="trends" t={t} onRetry={onRetry} />
+            <RegionNotice regions={regions} region="trends" t={t} />
             {ordered.length > 0 && (
               <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
                 {ordered.map((dimension) => (
@@ -361,7 +358,7 @@ export default function AdminDashboardNextView({
                 ) : undefined
               }
             />
-            <RegionNotice regions={regions} region="map" t={t} onRetry={onRetry} />
+            <RegionNotice regions={regions} region="map" t={t} />
             {/* No rows, no grid. An empty ClimateMap is a set of headers promising a
                 table that never arrives; the notice above has already said why. */}
             {model.map.rows.length > 0 && (
@@ -423,8 +420,8 @@ export default function AdminDashboardNextView({
               className="px-5"
             />
             <div className="flex flex-col gap-2 px-5 empty:hidden">
-              <RegionNotice regions={regions} region="actionPlans" t={t} onRetry={onRetry} />
-              <RegionNotice regions={regions} region="tracking" t={t} onRetry={onRetry} />
+              <RegionNotice regions={regions} region="actionPlans" t={t} />
+              <RegionNotice regions={regions} region="tracking" t={t} />
             </div>
             {model.attention.length > 0 ? (
               <ul data-slot="attention-list" className="m-0 list-none divide-y divide-line-default p-0">
@@ -447,7 +444,7 @@ export default function AdminDashboardNextView({
           <div className="flex min-w-0 flex-col gap-4 xl:col-span-5">
             <section aria-labelledby="next-cycle" className={CARD}>
               <SectionHead id="next-cycle" heading={t('dashboard.next.cycleHeading')} />
-              <RegionNotice regions={regions} region="surveys" t={t} onRetry={onRetry} />
+              <RegionNotice regions={regions} region="surveys" t={t} />
               {/* Same rule as the map: no waves, no timeline — and no note about a cycle
                   nobody read. */}
               {steps.length > 0 && (
@@ -459,7 +456,7 @@ export default function AdminDashboardNextView({
                 </>
               )}
             </section>
-            <RegionNotice regions={regions} region="microclimates" t={t} onRetry={onRetry} />
+            <RegionNotice regions={regions} region="microclimates" t={t} />
             {model.liveMicroclimate && (
               <div
                 data-slot="live-microclimate"
@@ -991,12 +988,10 @@ function RegionNotice({
   regions,
   region,
   t,
-  onRetry,
 }: {
   regions: RegionStatuses | undefined
   region: RegionKey
   t: TranslateFn
-  onRetry?: () => void
 }) {
   const state = regions?.[region]
   if (!state || state.status !== 'fallback') return null
@@ -1008,15 +1003,8 @@ function RegionNotice({
     // follows on a quieter line of its own, rather than spliced into the sentence.
     <Note data-slot="region-fallback" data-region={region} role="status" icon={<Info />} className="py-2.5 text-sm">
       <span className="flex flex-col gap-0.5">
-        <span className="inline-flex flex-wrap items-center gap-x-2">
-          <span data-slot="region-fallback-text">
-            {failed ? t('dashboard.next.unavailableRegion', { region: name }) : t('dashboard.next.unavailableEmpty', { region: name })}
-          </span>
-          {failed && onRetry && (
-            <Button type="button" variant="plain" size="sm" className="-my-1 -ml-2" onClick={onRetry}>
-              {t('ui.state.retry')}
-            </Button>
-          )}
+        <span data-slot="region-fallback-text">
+          {failed ? t('dashboard.next.unavailableRegion', { region: name }) : t('dashboard.next.unavailableEmpty', { region: name })}
         </span>
         {failed && (
           <span data-slot="region-fallback-reason" className="text-fg-tertiary">

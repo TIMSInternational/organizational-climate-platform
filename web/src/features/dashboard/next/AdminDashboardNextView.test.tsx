@@ -340,6 +340,9 @@ describe('AdminDashboardNextView', () => {
     )
     expect(notices[1].textContent).toBe(copy.unavailableEmpty.replace('{region}', copy.regionMicroclimates))
     expect(notices[1].querySelector('[data-slot="region-fallback-reason"]')).toBeNull()
+    // A status notice and nothing to press: the notice is a live region, and a control in it
+    // would be announced as part of the sentence. It also asks the server for nothing.
+    for (const notice of Array.from(notices)) expect(notice.querySelector('button')).toBeNull()
     // The sentence no longer calls anything sample data, because nothing is.
     expect(notices[0].textContent).not.toContain('Sample data')
     // The map notice sits inside the map's own section.

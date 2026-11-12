@@ -1300,8 +1300,8 @@
         "standingBelow": "below target {target}",
         "createPlan": "Create plan",
         "createPlanFor": "Create a plan for {dimension}",
-        "legendTeam": "team: {department}, {count} members",
-        "legendOrg": "org.: the whole organisation, {count} responses",
+        "legendTeam": "Team: {department}, {count} members",
+        "legendOrg": "Organisation: {count} responses",
         "planRule": "A plan is born from the cell that is below target; it links to the dimension and the team, never to responses.",
         "surveyWithheld": "{survey} stayed under the minimum of {floor} responses, so no reading is published — neither the team's nor the organisation's.",
         "teamWithheld": "Fewer than {floor} people in the team answered {survey}, so its reading is protected: the dimensions are named, no score is shown.",
@@ -1346,7 +1346,7 @@
         "companyCountNoTarget": "Whole company: {count} responses.",
         "companyUnderFloor": "Whole company: fewer than {floor} of {target} responses.",
         "companyUnderFloorNoTarget": "Whole company: fewer than {floor} responses.",
-        "legendOrgWithheld": "org.: not compared — fewer than {floor} answered outside the team"
+        "legendOrgWithheld": "Organisation: not compared — fewer than {floor} answered outside the team"
       },
       "supervisor": {
         "proposal": "Proposal",

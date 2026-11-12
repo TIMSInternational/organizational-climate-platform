@@ -18,8 +18,8 @@ import {
   languageText,
   longDay,
   percentOf,
-  type SurveyStatusKey,
 } from '../../../org-structure/next/super/labels'
+import { SEGMENTS, SYSTEM_CHIP_WEIGHT } from './mixSegments'
 import { ago, latestSuccess, plainTitle, shortCompanyName, toneOf, withoutLegalForm, worstJob } from './derive'
 import type { MissingPart, PlatformAttention, PlatformCompanyRow, PlatformModel } from './model'
 import { usePlatformDashboardModel } from './usePlatformDashboardModel'
@@ -54,18 +54,6 @@ function countWord(t: (key: string) => string, count: number): string {
   const key = WORD_KEYS[count]
   return key ? t(key) : String(count)
 }
-
-/** The status mix's bar, in the canvas's order and colours. */
-const SEGMENTS: ReadonlyArray<{ key: SurveyStatusKey; className: string }> = [
-  { key: 'active', className: 'bg-accent-blue' },
-  // Greys for everything but the live blue: amber is the Oportunidad area (ruling 11 Nov).
-  // The legend names each one; the colour is never the only channel.
-  { key: 'closed', className: 'bg-line-control' },
-  { key: 'draft', className: 'bg-line-hover' },
-  // `line-default`, not `line-light`: in dark `--admin-border-light` IS the card's colour
-  // (#1f173b both), so a light swatch vanished on the dark card.
-  { key: 'archived', className: 'bg-line-default' },
-]
 
 const STATUS_KEY: Readonly<Record<string, string>> = {
   ok: 'systemHealth.statusOk',
@@ -556,10 +544,15 @@ function SystemRow({
         <span className="text-2xs text-fg-tertiary">{sub}</span>
       </div>
       {/* Grey with a glyph and the word: a system's health is not a result area, so it
-          wears none of the three result colours (ruling 11 Nov). */}
+          wears none of the three result colours (ruling 11 Nov). A failing system must
+          still stand out from a healthy one (HIG feedback.md), so the weight carries it:
+          critical is the INVERTED neutral chip (ink fill, card-coloured word, 16.8:1 light,
+          14.4:1 dark), degraded keeps the card fill with the primary ink and a 3:1
+          `line-control` edge, healthy is the quiet tint. */}
       <CanvasChip
         tone="neutral"
         data-tone={tone}
+        className={SYSTEM_CHIP_WEIGHT[tone]}
         icon={tone === 'good' ? <Check className="size-3" /> : tone === 'critical' ? <AlertCircle className="size-3" /> : <Clock className="size-3" />}
         label={statusText(t, status)}
       />
@@ -681,6 +674,7 @@ function MixPanel({ model }: { model: PlatformModel }) {
               {SEGMENTS.filter((segment) => mix[segment.key] > 0).map((segment) => (
                 <span
                   key={segment.key}
+                  data-mix-segment={segment.key}
                   className={segment.className}
                   style={{ width: `${percentOf(mix[segment.key], mix.total)}%` }}
                 />
@@ -689,7 +683,7 @@ function MixPanel({ model }: { model: PlatformModel }) {
             <ul className="m-0 flex list-none flex-wrap gap-x-3.5 gap-y-1.5 p-0">
               {SEGMENTS.map((segment) => (
                 <li key={segment.key} className="inline-flex items-center gap-1.5 text-2xs text-fg-tertiary">
-                  <span aria-hidden="true" className={cn('inline-block size-2.5 rounded-sm', segment.className)} />
+                  <span aria-hidden="true" data-mix-swatch={segment.key} className={cn('inline-block size-2.5 rounded-sm', segment.className)} />
                   {countText(t, STATUS_COUNT_KEYS[segment.key], mix[segment.key])}
                 </li>
               ))}
