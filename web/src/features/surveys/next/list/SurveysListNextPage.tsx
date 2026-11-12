@@ -219,7 +219,9 @@ function SurveysListForCompany() {
               placeholder={t('surveys.next.list.searchPlaceholder')}
               value={state.draft.q}
               onChange={(event) => state.setDraft({ ...state.draft, q: event.target.value })}
-              className="pl-8"
+              // The artboard's 32px filter row (`h-control-lg`), the select's height beside it:
+              // one control height on the bar (the review of 12 Nov). Touch keeps the primitive's 44.
+              className="h-control-lg pl-8"
             />
           </div>
           {/* A native <select> (ui/select.tsx says to prefer one for a plain list), with no
@@ -335,7 +337,9 @@ function SurveySectionBlock({
         <div className="flex items-baseline gap-2.5">
           <h2
             id={`surveys-next-${section}`}
-            className={cn('m-0', archived ? 'font-sans text-base font-semibold text-fg-label' : 'text-2xl')}
+            // One section head for every group (the review of 12 Nov): the archived block is
+            // told apart by its muted rows and its footnote, not by a heading of another face.
+            className="m-0 text-2xl"
           >
             {t(SECTION_KEY[section])}
           </h2>

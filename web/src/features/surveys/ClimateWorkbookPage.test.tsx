@@ -14,6 +14,18 @@ function renderPage(){return render(<TranslationProvider><RouterProvider router=
 beforeEach(()=>{vi.resetAllMocks();localStorage.setItem(LOCALE_STORAGE_KEY,'es');vi.mocked(previewClimateWorkbook).mockResolvedValue(plan);vi.mocked(applyClimateWorkbook).mockResolvedValue({companyId:'company',surveyId:'survey',total:1,created:1,reused:0,credentialsNotSent:[],credentialMode:'shared'})})
 afterEach(()=>{cleanup();localStorage.clear()})
 async function review(heading='Clima 800'){const user=userEvent.setup();await user.upload(screen.getByLabelText(/Libro completo/),new File(['xlsx'],'clima.xlsx',{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));await user.click(screen.getByRole('button',{name:'Revisar archivo'}));await screen.findByRole('heading',{name:heading});return user}
+describe('the workbook picker',()=>{
+ it('speaks Spanish in its own words, not the browser\'s, and opens the hidden input from a Button',async()=>{
+   renderPage();const user=userEvent.setup()
+   const input=screen.getByLabelText(/Libro completo/) as HTMLInputElement
+   expect(input.type).toBe('file');expect(input.className.split(/\s+/)).toContain('sr-only');expect(input.tabIndex).toBe(-1)
+   expect(screen.getByTestId('workbook-file-name').textContent).toBe('Ningún archivo elegido')
+   const click=vi.spyOn(input,'click')
+   await user.click(screen.getByRole('button',{name:'Elegir archivo'}));expect(click).toHaveBeenCalledOnce()
+   await user.upload(input,new File(['xlsx'],'clima.xlsx'))
+   expect(screen.getByTestId('workbook-file-name').textContent).toBe('clima.xlsx')
+ })
+})
 describe('complete Excel review',()=>{
  it('lets a super administrator without a selected company review all sections and requires approval before sending',async()=>{
    renderPage();const user=await review()

@@ -8377,6 +8377,8 @@
     "description": "One workbook for your company, climate survey, questions, demographic fields and participants. The survey is left as a draft: you publish it and send the invitations from Distribution.",
     "download": "Download TIMS + NEXA template",
     "file": "Completed workbook (.xlsx, up to 10 MB)",
+    "chooseFile": "Choose file",
+    "noFileChosen": "No file chosen",
     "previewOnly": "Reviewing creates no records and sends no emails. Complete EMPRESA, DESCRIPCION, ESCALAS, PREGUNTAS and DEMOGRAFICOS.",
     "review": "Review workbook",
     "incompleteTitle": "Complete your workbook before importing",

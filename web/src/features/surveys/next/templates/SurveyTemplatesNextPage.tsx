@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { ArrowRight, Download, FileText, Filter, Pencil, Plus, Rows2, Trash2 } from 'lucide-react'
+import { ArrowRight, Download, FileText, Filter, Pencil, Plus, Rows2, Search, Trash2 } from 'lucide-react'
 import { RailQuestionLibraryIcon } from '../../../../navigation/railIcons'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { PageHeader } from '../../../../components/layout'
@@ -136,7 +136,7 @@ export default function SurveyTemplatesNextPage() {
 
       <form
         role="search"
-        className="mb-6 flex flex-wrap items-center justify-between gap-3"
+        className="mb-6 flex flex-wrap items-center gap-3"
         onSubmit={(event) => {
           event.preventDefault()
           setQ(draft.trim())
@@ -166,15 +166,24 @@ export default function SurveyTemplatesNextPage() {
           />
           </div>
         )}
-        <div className="ml-auto flex min-w-0 max-w-full items-center gap-2">
-          <Input
-            type="search"
-            aria-label={t(`${K}.searchPlaceholder`)}
-            placeholder={t(`${K}.searchPlaceholder`)}
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            className="w-70 min-w-0 max-w-full"
-          />
+        {/* The list's filter bar, in its order (the review of 12 Nov): the segmented control,
+            then on its own line the search (the leading glyph, 300px, the 32px field at 15px)
+            and the one control that applies it, at the field's height. */}
+        <div data-slot="templates-search-row" className="flex w-full min-w-0 flex-wrap items-center gap-3">
+          <div className="relative w-full sm:w-75">
+            <Search
+              aria-hidden="true"
+              className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-fg-label"
+            />
+            <Input
+              type="search"
+              aria-label={t(`${K}.searchPlaceholder`)}
+              placeholder={t(`${K}.searchPlaceholder`)}
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              className="h-control-lg pl-8"
+            />
+          </div>
           <Button type="submit" variant="outline" className="shrink-0">
             <Filter aria-hidden="true" />
             {t('common.filter')}

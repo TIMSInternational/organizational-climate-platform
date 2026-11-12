@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { Link, useBlocker } from 'react-router'
 import { Download } from 'lucide-react'
 import { PageHeader } from '../../components/layout'
-import { Alert, AlertDescription, Button, Input, Note, Table, TableHead } from '../../components/ui'
+import { Alert, AlertDescription, Button, Note, Table, TableHead } from '../../components/ui'
 import { readViewerClaims, useViewerCapabilities } from '../../auth/viewerCapabilities'
 import { useTranslation } from '../../i18n'
 import { roleLabelKey } from '../org-structure/labels'
@@ -34,6 +34,9 @@ export default function ClimateWorkbookPage() {
   const [progress, setProgress] = useState<WorkbookProgress | null>(null)
   const [result, setResult] = useState<WorkbookResult | null>(null)
   const inFlight = useRef(false)
+  const fileInput = useRef<HTMLInputElement>(null)
+  const fileInputId = useId()
+  const fileNameId = useId()
   // A tab close can interrupt a multi-batch import. Nothing is persisted in browser storage.
   useEffect(() => {
     if (!applying) return
@@ -93,11 +96,18 @@ export default function ClimateWorkbookPage() {
     />
     <div className="flex max-w-3xl flex-col gap-6">
     {!result && <section className={CARD}>
-      <label className="mb-0 flex flex-col gap-2">
-        <span className="text-sm font-semibold text-fg-primary">{t('climateWorkbook.file')}</span>
-        {/* The native picker, its button drawn as the bordered button and the 36px field around it. */}
-        <Input type="file" accept=".xlsx" disabled={busy} className="h-auto min-h-9 py-1.5 text-sm text-fg-secondary file:mr-3 file:h-7 file:rounded-md file:border file:border-solid file:border-line-control file:bg-surface-card file:px-3 file:text-sm file:font-medium file:text-fg-primary pointer-coarse:min-h-11" onChange={e => { setFile(e.target.files?.[0] ?? null); setPlan(null); setApproved(false); setError(null); setProgress(null) }} />
-      </label>
+      <div className="flex flex-col gap-2">
+        <label htmlFor={fileInputId} className="mb-0 text-sm font-semibold text-fg-primary">{t('climateWorkbook.file')}</label>
+        {/* The browser's own picker prints «Choose File» / «No file chosen» in the viewer's
+            browser language, which no catalogue reaches (the review of 12 Nov). It stays the
+            control the label names and the one that holds the file, hidden; the outline
+            Button opens it and the line beside it says, in our words, what was chosen. */}
+        <input id={fileInputId} ref={fileInput} type="file" accept=".xlsx" disabled={busy} tabIndex={-1} className="sr-only" onChange={e => { setFile(e.target.files?.[0] ?? null); setPlan(null); setApproved(false); setError(null); setProgress(null) }} />
+        <div className="flex min-w-0 items-center gap-3">
+          <Button type="button" variant="outline" disabled={busy} aria-describedby={fileNameId} onClick={() => fileInput.current?.click()}>{t('climateWorkbook.chooseFile')}</Button>
+          <span id={fileNameId} data-testid="workbook-file-name" className="min-w-0 truncate text-sm text-fg-secondary">{file?.name ?? t('climateWorkbook.noFileChosen')}</span>
+        </div>
+      </div>
       <p className="m-0 text-sm text-fg-secondary">{t('climateWorkbook.previewOnly')}</p>
       {/* The step's one primary until a plan is on screen; then the approval below holds it. */}
       <div><Button variant={plan ? 'outline' : 'primary'} disabled={!file || busy} onClick={() => void review()}>{t(busy ? 'common.loading' : 'climateWorkbook.review')}</Button></div>

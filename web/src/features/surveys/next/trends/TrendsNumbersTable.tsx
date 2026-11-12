@@ -5,7 +5,6 @@ import {
   bandCellStyle,
   bandName,
   bandOf,
-  bandShortName,
   type ResultBands,
 } from '../../../../components/charts'
 import { Table } from '../../../../components/ui'
@@ -18,13 +17,13 @@ import type { TrendDimension, TrendWave } from './model'
  * "Los mismos números, en tabla" — the six charts' readings as the accessible table
  * the canvas draws under them: one row per closed wave (its name, when it closed and
  * how many of the drawn group answered it), one column per dimension, every reading painted
- * and named by its result band (the company's bands, judged at the printed reading like
+ * and marked with its result band's glyph (named for AT, and once in the page's legend) (the company's bands, judged at the printed reading like
  * every banded screen), and a last row with each dimension's move from the first wave to
  * the last, the difference of the two readings as printed (`printedMove`).
  *
  * ## Three kinds of cell, never confused
  *
- * - A reading: the number, in its tint.
+ * - A reading: the band's glyph and the number, in its tint.
  * - A wave the floor withheld for this group: `ProtectedCell` — the hatch and the
  *   shield, and no number, whatever the payload carried.
  * - A dimension the wave did not ask: an em dash on the recessed surface, named for AT.
@@ -62,8 +61,8 @@ const HEAD = 'border-0 px-1 pt-0 pb-1 align-bottom text-xs font-semibold normal-
 /** The survey column, px (`w-45`). */
 const SURVEY_COL = 180
 /**
- * The narrowest a dimension column may be, px: «OPORTUNIDAD» at 11px semibold uppercase with
- * the label tracking, its glyph and the cell's padding measure about 112px; 128 leaves room.
+ * The narrowest a dimension column may be, px: a head such as «Reconocimiento» at 12px
+ * semibold, hyphenated at most once, and a cell's glyph and reading with room around them.
  */
 export const DIMENSION_COL_MIN = 128
 
@@ -85,9 +84,8 @@ export default function TrendsNumbersTable({
     // `table-fixed` + the colgroup: a 180px survey column and six EQUAL dimension columns,
     // as the artboard's grid draws them — auto layout gave "Seguridad psicológica" twice
     // the width of "Confianza".
-    // The minimum width keeps every dimension column at least `DIMENSION_COL_MIN` wide, so
-    // «● OPORTUNIDAD» prints whole at 11px; narrower than that (390) the table scrolls inside
-    // its card, as `Table` provides, and the band's name is never cut to «● OPORT…».
+    // The minimum width keeps every dimension column at least `DIMENSION_COL_MIN` wide;
+    // narrower than that (390) the table scrolls inside its card, as `Table` provides.
     <Table
       data-slot="trends-table"
       className="table-fixed border-separate border-spacing-1 text-sm"
@@ -169,18 +167,18 @@ export default function TrendsNumbersTable({
                     // reference a test cannot resolve.
                     data-band={band}
                     title={bandName(band, bands, t)}
-                    className="flex h-10 flex-col items-center justify-center gap-px overflow-hidden rounded border px-1"
+                    // The dashboard map's cell (`ClimateMap`): the band's glyph BEFORE the
+                    // figure, and no name. Eighteen «● OPORTUNIDAD» in tracked capitals drowned
+                    // the readings the table exists to show (the review of 12 Nov); the names
+                    // live once, in the legend the page prints under the table.
+                    className="flex h-10 items-center justify-center gap-1 overflow-hidden rounded border px-1"
                     style={bandCellStyle(band)}
                   >
+                    <span data-slot="trends-cell-glyph" aria-hidden="true" className="inline-flex">
+                      <BandGlyph band={band} />
+                    </span>
                     <span data-slot="trends-cell-value" className="text-sm font-semibold tabular-nums">{reading(value, locale, 1, bands.scale)}</span>
                     <span className="sr-only">{` — ${bandName(band, bands, t)}`}</span>
-                    <span
-                      aria-hidden="true"
-                      className="inline-flex max-w-full items-center gap-0.75 text-3xs font-semibold uppercase tracking-label"
-                    >
-                      <BandGlyph band={band} />
-                      <span className="whitespace-nowrap">{bandShortName(band, bands, t)}</span>
-                    </span>
                   </span>
                 </td>
               )

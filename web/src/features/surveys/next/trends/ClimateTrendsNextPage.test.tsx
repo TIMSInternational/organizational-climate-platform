@@ -173,7 +173,15 @@ describe('ClimateTrendsNextPage', () => {
     // Belonging 4,0 is in the strength area; Workload 3,3 in the opportunity area.
     expect(belonging?.getAttribute('data-band')).toBe('strength')
     expect(workload?.getAttribute('data-band')).toBe('opportunity')
-    expect(within(belonging as HTMLElement).getByText(en.resultBands.name.strength)).toBeTruthy()
+    // The card's chip prints the area's SHORT name, as the chips over the range bar do — one
+    // name per area on the screen — and keeps the full name in its title.
+    expect(within(belonging as HTMLElement).getByTitle(en.resultBands.name.strength).textContent).toBe(en.resultBands.short.strength)
+    // The table's cells carry no area name of their own; the legend under the table names all three.
+    const tableLegend = document.querySelector('[data-testid="trends-table-legend"]') as HTMLElement
+    expect(tableLegend).toBeTruthy()
+    for (const band of ['strength', 'opportunity', 'critical'] as const) {
+      expect(tableLegend.textContent).toContain(en.resultBands.short[band])
+    }
     expect(within(belonging as HTMLElement).getByRole('img').getAttribute('aria-label')).toContain('3.3 → 3.7 → 4.0')
     // Both trends requests carried the resolved company, and the department breakdown was asked for.
     expect(vi.mocked(getClimateTrends).mock.calls.map(([, query]) => [query?.companyId, query?.groupBy])).toEqual([
@@ -260,7 +268,8 @@ describe('ClimateTrendsNextPage', () => {
     await waitFor(() => expect(document.querySelectorAll('[data-slot="trend-card"]')).toHaveLength(2))
     const workload = document.querySelector('[data-slot="trend-card"][data-dimension="workload"]') as HTMLElement
     expect(workload.getAttribute('data-band')).toBe('critical')
-    expect(within(workload).getByText('Zona roja')).toBeTruthy()
+    // The chip, by its title: the chart names the area in the same words.
+    expect(within(workload).getByTitle('Zona roja').textContent).toBe('Zona roja')
     // The one dimension in the critical area rose since Q2 (3,0 → 3,3), and the tile says so.
     expect(tile('Zona roja').textContent).toContain(copy.risingOne)
   })
