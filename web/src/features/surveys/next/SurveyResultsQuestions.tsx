@@ -14,6 +14,7 @@ import {
   type QuestionFilter,
 } from '../surveyResultsView'
 import { UNCATEGORISED_DIMENSION, dimensionKeyOf, surveyQuestionStandings } from '../surveyResultsMap'
+import { questionNumber } from '../questionNumber'
 
 interface SurveyResultsQuestionsProps {
   questions: readonly SurveyQuestionResult[]
@@ -69,8 +70,9 @@ export default function SurveyResultsQuestions({ questions, dimensionName, scale
   const visible = useMemo(() => filterQuestions(questions, filter), [questions, filter])
   const standings = useMemo(() => surveyQuestionStandings(questions), [questions])
 
-  // `order` is the 0-based position the builder stores; a reader counts from 1 ("P1", not "P0").
-  const shortLabel = (question: SurveyQuestionResult) => t('surveyResults.questionShort', { order: question.order + 1 })
+  // `order` is the 0-based position the builder stores; a reader counts from 1 ("P1", not "P0"),
+  // through the one helper the CSV and the legacy page also use.
+  const shortLabel = (question: SurveyQuestionResult) => t('surveyResults.questionShort', { order: questionNumber(question) })
 
   return (
     <section aria-labelledby="results-next-questions" className="flex flex-col gap-4">

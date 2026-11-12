@@ -37,7 +37,7 @@ import { calendarDay, calendarDayLong } from '../../../lib/calendarDay'
 import { cn } from '../../../lib/cn'
 import { dimensionLabel } from '../../surveys/dimensionLabel'
 import { reading } from '../../dashboard/next/derive'
-import { ANONYMITY_FLOOR, BandChip, bandOf } from '../../../components/charts'
+import { BandChip, bandOf } from '../../../components/charts'
 import { useResultBands } from '../../result-bands/useResultBands'
 import ProgressUpdateForm from '../components/ProgressUpdateForm'
 import PlanEditForm from '../components/PlanEditForm'
@@ -638,11 +638,11 @@ function FindingBlock({
         <div className="flex flex-wrap items-center gap-2">
           <Chip label={scope} />
           {/* The padlock and "Menos de {floor}": the floor `planFinding` withheld this group
-              under, and no number of its own. */}
-          <ProtectedState floor={ANONYMITY_FLOOR} />
+              under (the payload's own), and no number of its own. */}
+          <ProtectedState floor={value.floor} />
         </div>
         <span className="text-sm text-fg-tertiary">
-          {t('actionPlans.next.finding.protectedNote', { survey: value.surveyTitle, scope, floor: ANONYMITY_FLOOR })}
+          {t('actionPlans.next.finding.protectedNote', { survey: value.surveyTitle, scope, floor: value.floor })}
         </span>
         {openLink}
       </div>
@@ -700,7 +700,7 @@ function MoveLine({ move }: { move: Settled<PlanMove> }) {
   }
   if (value.status === 'protected') {
     return (
-      <span className="text-sm text-fg-tertiary">{t('actionPlans.next.finding.moveProtected', { code: value.code, floor: ANONYMITY_FLOOR })}</span>
+      <span className="text-sm text-fg-tertiary">{t('actionPlans.next.finding.moveProtected', { code: value.code, floor: value.floor })}</span>
     )
   }
   const delta = value.to - value.from

@@ -4,6 +4,7 @@ import type {
   SurveyQuestionResult,
 } from './api/surveyResults'
 import { bucketLabel } from './surveyResultsView'
+import { questionNumber } from './questionNumber'
 
 /**
  * CSV serialisation of **what is on the screen**, which is not the same thing as the
@@ -115,7 +116,7 @@ export function buildQuestionResultsCsv(
   for (const question of questions) {
     if (question.distribution.length === 0) {
       rows.push([
-        question.order,
+        questionNumber(question),
         question.text,
         question.type,
         null,
@@ -129,7 +130,7 @@ export function buildQuestionResultsCsv(
 
     for (const bucket of question.distribution) {
       rows.push([
-        question.order,
+        questionNumber(question),
         question.text,
         question.type,
         bucket.value,

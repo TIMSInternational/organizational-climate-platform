@@ -304,7 +304,9 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
             : t('surveyResults.next.description')
         }
         breadcrumbs={[
-          { label: t('surveys.title'), href: '/surveys' },
+          // The sidebar's own name for the list («Todas las encuestas»), as every other survey page's
+          // trail starts (review 12 Nov).
+          { label: t('navigation.surveys'), href: '/surveys' },
           { label: name, href: `/surveys/${model.surveyId}` },
           { label: t('surveys.results') },
         ]}

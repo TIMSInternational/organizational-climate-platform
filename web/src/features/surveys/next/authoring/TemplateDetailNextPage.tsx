@@ -118,7 +118,8 @@ export default function TemplateDetailNextPage() {
   return (
     <div>
       <PageHeader
-        breadcrumbs={[{ label: t('navigation.surveyTemplates'), href: '/surveys/templates' }, { label: primary.name }]}
+        // The sidebar's name («Plantillas»), so the trail's root reads as the row it came from.
+        breadcrumbs={[{ label: t('navigation.templates'), href: '/surveys/templates' }, { label: primary.name }]}
         eyebrow={copy('eyebrow', { category: categoryLabel(t, primary.category) })}
         title={primary.name}
         description={copy(locales.length === 2 ? 'descriptionBoth' : 'descriptionOne', { count: n })}

@@ -77,6 +77,7 @@ import {
   resultsFileName,
   type CsvLabels,
 } from '../surveyResultsCsv'
+import { questionNumber } from '../questionNumber'
 
 /**
  * One decimal, everywhere a score is printed on this page.
@@ -238,7 +239,7 @@ export default function SurveyResultsPage() {
   }, [baseUrl, id, locale, t])
 
   const questionLabel = useCallback(
-    (question: { order: number }) => t('surveyResults.questionShort', { order: question.order }),
+    (question: { order: number }) => t('surveyResults.questionShort', { order: questionNumber(question) }),
     [t],
   )
 
