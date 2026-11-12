@@ -1,4 +1,4 @@
-import { ChevronDown, EyeOff, ShieldCheck } from 'lucide-react'
+import { ChevronDown, Lock, ShieldCheck } from 'lucide-react'
 import { useTranslation } from '../../../i18n'
 
 /**
@@ -27,29 +27,28 @@ import { useTranslation } from '../../../i18n'
  * plus sex on one row makes it thinner than it sounds. Ruled out rather than reworded:
  * the two sentences that remain are each checkable against a column or a threshold.
  *
- * ## The canvas's block (RespondSurveyPhone, EmployeeDashboard, 10 Sep)
+ * ## The block (Apple design, Respond board, 12 Nov)
  *
- * One compact block, first on the respond page and beside the task on Home: a soft
- * green box with a hairline, the eye-off glyph, an uppercase label and one paragraph.
- * The label is the state word (`anonymousChip` / `identifiedChip`) and the paragraph is
- * the body, both unchanged — the lane that drew this ruled the copy of the promise
- * untouched, so only the box moved. The title (`anonymousTitle` / `identifiedTitle`)
- * is kept as the block's heading for assistive technology and the document outline,
- * and is visually hidden: the canvas draws no third line, and the label already says
- * the same thing in a word.
+ * One quiet card, first on the respond page and beside the task on Home: the card
+ * surface with its hairline, a padlock in the blue tint, an uppercase label and one
+ * paragraph. The label is the state word (`anonymousChip` / `identifiedChip`) and the
+ * paragraph is the body, both unchanged — the copy of the promise is ruled, only the box
+ * moved. The title (`anonymousTitle` / `identifiedTitle`) is kept as the block's heading
+ * for assistive technology and the document outline, and is visually hidden.
+ *
+ * ## Why it is no longer green
+ *
+ * It used to be a soft green box with a green label. The Apple-design ruling (11 Nov)
+ * gives green, amber and red to the three result areas and nothing else — a green panel
+ * on the respond page reads as «Fortaleza». The board draws the promise as a plain card
+ * row with the padlock in the tint, so that is what this is. The label is set in the
+ * secondary ink on the card, which `respondContrast.test.ts` measures in both palettes.
  *
  * ## The state is carried by a word, never by the colour
  *
- * Green means anonymous and blue means identified, but the label spells out which —
- * WCAG 1.4.1, and the same rule the rest of the redesign keeps.
- *
- * The anonymous label is green, as the canvas draws it, but not the canvas's `#0f7f4e`:
- * `respondContrast.test.ts` measures that ink at 4.31:1 on the soft green fill over the
- * respond page's ground — under AA for 10px text — and records it as rejected. The label
- * takes `text-chip-good-ink` (`#0e7246` light, `#4ade80` dark), the ink the product's own
- * green chip was measured onto, which the same file measures on this fill in both
- * palettes, over the page ground and over a card. The identified label stays in the secondary ink: there is no measured blue
- * ink for the soft blue fill.
+ * Both modes say «Anónima» (ruled 2026-10-16: every survey is anonymous to the client),
+ * and the two are told apart by `data-anonymous` and by the body, never by a colour —
+ * WCAG 1.4.1.
  *
  * ## One component for every place the promise is made
  *
@@ -94,22 +93,17 @@ export function AnonymityNotice({
 }) {
   const { t } = useTranslation('surveyRespond')
 
-  const box = anonymous
-    ? 'rounded-xl border border-accent-green-ring bg-accent-green-soft px-3.5 py-3'
-    : 'rounded-xl border border-accent-blue-ring bg-accent-blue-soft px-3.5 py-3'
+  const frame = 'rounded-xl border border-line-panel bg-surface-card'
+  const box = `${frame} px-4 py-3.5`
   const glyph = anonymous ? (
-    <EyeOff aria-hidden="true" className="mt-px size-icon shrink-0 text-accent-green-ink" />
+    <Lock aria-hidden="true" className="mt-px size-icon shrink-0 text-accent-blue-ink" />
   ) : (
-    <ShieldCheck aria-hidden="true" className="mt-px size-icon shrink-0 text-accent-blue" />
+    <ShieldCheck aria-hidden="true" className="mt-px size-icon shrink-0 text-accent-blue-ink" />
   )
   const label = (
     <span
       data-slot="anonymity-label"
-      className={
-        anonymous
-          ? 'text-sm font-bold uppercase tracking-label text-chip-good-ink'
-          : 'text-sm font-bold uppercase tracking-label text-fg-secondary'
-      }
+      className="text-2xs font-semibold uppercase tracking-eyebrow text-fg-secondary"
     >
       {anonymous ? t('anonymousChip') : t('identifiedChip')}
     </span>
@@ -155,8 +149,10 @@ export function AnonymityNotice({
    */
   if (collapsible) {
     return (
-      <details data-slot="anonymity-notice" data-anonymous={anonymous} className={`group ${box}`}>
-        <summary className="flex cursor-pointer list-none items-center gap-2.5 [&::-webkit-details-marker]:hidden">
+      <details data-slot="anonymity-notice" data-anonymous={anonymous} className={`group ${frame}`}>
+        {/* The padding is on the summary, not the box, so the whole 44px row is the tap
+            target (HIG › Accessibility: hit targets of at least 44pt). */}
+        <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2.5 rounded-xl px-4 py-2.5 [&::-webkit-details-marker]:hidden">
           {glyph}
           {label}
           <ChevronDown
@@ -166,7 +162,7 @@ export function AnonymityNotice({
         </summary>
         {/* Indented past the glyph so the sentence lands under the state word, exactly
             where it sits in the open block above. `gap-2.5` is the summary's own gap. */}
-        <div className="mt-2 flex min-w-0 flex-col gap-0.5 pl-[calc(var(--admin-size-icon)+calc(var(--spacing)*2.5))]">
+        <div className="flex min-w-0 flex-col gap-0.5 pb-3.5 pl-[calc(var(--admin-size-icon)+calc(var(--spacing)*6.5))] pr-4">
           {heading}
           {body}
         </div>

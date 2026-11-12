@@ -10,8 +10,8 @@ import { useAcceptInvitationModel } from './useAcceptInvitationModel'
 /** `SystemSettings.PasswordPolicy.MinLength` defaults to 8; the server is authoritative. */
 const DEFAULT_MIN_PASSWORD_LENGTH = 8
 
-/** The artboard's `.card`: 8px, the default hairline, the faint shadow. */
-const CARD = 'rounded-xl border border-line-default bg-surface-card shadow-sm'
+/** The Apple design's `.card`: 12px corners, the panel hairline, no shadow. */
+const CARD = 'rounded-xl border border-line-panel bg-surface-card'
 
 /**
  * `/accept-invitation/:token` — accepting an invitation and choosing a password, drawn as
@@ -91,10 +91,10 @@ function Form({
     <div className="flex flex-col gap-panel-gap">
       <section className={cn(CARD, 'flex flex-col gap-5 p-7 pb-6')}>
         <header className="grid gap-2">
-          <span className="text-2xs font-semibold uppercase tracking-eyebrow text-fg-secondary">
+          <span className="text-2xs font-semibold uppercase tracking-eyebrow text-fg-label">
             {t('auth.next.accept.eyebrow')}
           </span>
-          <h1 className="text-2xl font-semibold tracking-tight text-fg-primary">
+          <h1 className="mb-0 font-display text-3xl font-semibold leading-tight tracking-display text-fg-primary">
             {t('auth.next.accept.title')}
           </h1>
           <p className="max-w-prose text-base text-fg-secondary">
@@ -139,7 +139,7 @@ function Form({
           <Button
             type="submit"
             variant="primary"
-            size="canvas"
+            size="lg"
             className="w-full"
             disabled={model.password.length > 0 && model.password.length < DEFAULT_MIN_PASSWORD_LENGTH}
           >
@@ -156,7 +156,7 @@ function Form({
       {/* The one promise this page can make about what the account is for, and the reason
           an employee should be willing to create one at all. */}
       <p className="flex items-start gap-inline px-1 text-sm text-fg-secondary">
-        <ShieldCheck aria-hidden="true" className="size-icon shrink-0 translate-y-0.5 text-accent-green" />
+        <ShieldCheck aria-hidden="true" className="size-icon shrink-0 translate-y-0.5 text-accent-blue-ink" />
         <span className="min-w-0">{t('auth.next.accept.anonymityNote')}</span>
       </p>
     </div>
@@ -191,7 +191,7 @@ function DeadState({
       live="alert"
       action={
         offerSignIn ? (
-          <Button asChild variant="primary" size="canvas" className="w-full">
+          <Button asChild variant="primary" size="lg" className="w-full">
             <Link to="/login">{t('next.accept.signIn')}</Link>
           </Button>
         ) : undefined
@@ -243,9 +243,9 @@ function CreatedState() {
       title={t('auth.accountCreated')}
       body={t('auth.accountCreatedRoleNote')}
       live="status"
-      icon={<CheckCircle2 aria-hidden="true" className="size-icon text-accent-green" />}
+      icon={<CheckCircle2 aria-hidden="true" className="size-icon text-accent-blue-ink" />}
       action={
-        <Button asChild variant="primary" size="canvas" className="w-full">
+        <Button asChild variant="primary" size="lg" className="w-full">
           <Link to="/login">{t('auth.backToSignIn')}</Link>
         </Button>
       }
@@ -274,12 +274,12 @@ function StateCard({
 }) {
   return (
     <section role={live} className={cn(CARD, 'flex flex-col gap-2.5 p-7 pb-6')}>
-      <span className="flex items-center gap-inline text-2xs font-semibold uppercase tracking-label text-fg-tertiary">
+      <span className="flex items-center gap-inline text-2xs font-semibold uppercase tracking-eyebrow text-fg-label">
         {icon}
         {label}
       </span>
       <div className="grid min-w-0 gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight text-fg-primary">{title}</h1>
+        <h1 className="mb-0 font-display text-3xl font-semibold leading-tight tracking-display text-fg-primary">{title}</h1>
         <p className="max-w-prose text-base text-fg-secondary">{body}</p>
       </div>
       {action}

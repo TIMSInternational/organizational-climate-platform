@@ -71,7 +71,7 @@ export default function AuthErrorNextPage() {
 
         <div className="flex flex-col gap-3.5">
           {notice && (
-            <Alert variant="warning" role="alert" className="px-3.5">
+            <Alert variant="default" role="alert" className="px-3.5">
               <AlertDescription>{notice}</AlertDescription>
             </Alert>
           )}

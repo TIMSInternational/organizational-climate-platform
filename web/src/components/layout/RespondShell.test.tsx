@@ -245,17 +245,17 @@ describe('RespondCaption', () => {
 
 describe('RespondReading', () => {
   /**
-   * The one typographic rule the redesign rests on: every reading is set in mono
-   * with tabular figures, and prose stays in the sans face. A reading that inherits
-   * the sans face reflows as it changes and reads as a sentence rather than as a
-   * measurement.
+   * The one typographic rule the redesign rests on: every reading is set with tabular
+   * figures, in the one UI face (Apple design, 12 Nov: no third typeface — the mono
+   * reading was retired for the sans `.num`). A reading without tabular figures
+   * reflows as it changes and reads as a sentence rather than as a measurement.
    */
-  it('sets the value in mono with tabular figures and leaves the label alone', () => {
+  it('sets the value with tabular figures in the sans, never in mono', () => {
     render(<RespondReading label="Time left" value="09:41" sub="Nothing is submitted for you" />)
 
     const value = screen.getByText('09:41')
-    expect(value.className).toContain('font-mono')
     expect(value.className).toContain('tabular-nums')
+    expect(value.className).not.toContain('font-mono')
 
     const label = screen.getByText('Time left')
     expect(label.className).not.toContain('font-mono')

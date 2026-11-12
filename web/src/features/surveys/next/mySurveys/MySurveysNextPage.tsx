@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import { ArrowRight, Check, ClipboardList, EyeOff, Inbox, LayoutGrid, Lock } from 'lucide-react'
-import { PageTopBar } from '../../../../components/layout'
+import { PageHeader } from '../../../../components/layout'
 import {
   Button,
   Chip,
@@ -113,7 +113,7 @@ function SurveyList() {
 
   return (
     <div>
-      <PageTopBar
+      <PageHeader
         // The artboard's eyebrow, less its role half and — for a respondent — less its
         // department half as well. See `eyebrowFor`.
         eyebrow={eyebrowFor(departmentName, respondent)}
@@ -142,10 +142,10 @@ function SurveyList() {
                 <div className="flex flex-wrap items-baseline justify-between gap-3">
                   <h2 id="my-surveys-to-answer" className="m-0 flex items-baseline gap-2">
                     {t('employee.next.toAnswerHeading')}
-                    {/* The artboard sets the tally in mono beside the heading, a size down.
+                    {/* The tally beside the heading, a size down, in tabular figures.
                         `open.length` and not a server count: this payload is the whole list,
                         not a page of one — that is the note under it. */}
-                    <span className="font-mono text-sm font-normal tabular-nums text-fg-secondary">{open.length}</span>
+                    <span data-slot="my-surveys-tally" className="font-sans text-sm font-normal tabular-nums text-fg-secondary">{open.length}</span>
                   </h2>
                   <span className="text-sm text-fg-secondary">{t('employee.next.toAnswerSorted')}</span>
                 </div>
@@ -168,7 +168,7 @@ function SurveyList() {
                   <div className="flex flex-wrap items-baseline justify-between gap-3">
                     <h2 id="my-surveys-answered-here" className="m-0 flex items-baseline gap-2">
                       {t('employee.next.answeredHereHeading')}
-                      <span className="font-mono text-sm font-normal tabular-nums text-fg-secondary">
+                      <span data-slot="my-surveys-tally" className="font-sans text-sm font-normal tabular-nums text-fg-secondary">
                         {answeredHere.length}
                       </span>
                     </h2>
@@ -254,7 +254,8 @@ function timeLeftLabel(days: number, t: TranslateFn): string {
  * A survey still open to the reader: the artboard's card row — glyph box, title, reading
  * line, one chip, one action.
  *
- * The accent frame and the amber chip are **one** rule, not two decisions. Nothing in
+ * The accent frame and the blue chip are **one** rule, not two decisions (the chip was
+ * amber until the 11 Nov ruling kept amber for «Oportunidad», a result area, alone). Nothing in
  * `MySurveyListItem` separates two open rows except how soon they close, so closing soon is
  * what lights a row up and the chip that says so wears the matching tone. Accenting *every*
  * open row would paint the whole page one colour and mark nothing.
@@ -280,7 +281,7 @@ function OpenSurveyRow({ row, head }: { row: MySurveyRow; head: boolean }) {
       className={
         soon
           ? 'flex flex-wrap items-center gap-4 rounded-xl border border-accent-blue-ring bg-accent-blue-soft px-4 py-3.5'
-          : 'flex flex-wrap items-center gap-4 rounded-xl border border-line-default bg-surface-card px-4 py-3.5 shadow-sm'
+          : 'flex flex-wrap items-center gap-4 rounded-xl border border-line-panel bg-surface-card px-4 py-3.5'
       }
     >
       {/* The glyph and the text are one block, so a phone never strands the glyph on a line
@@ -301,7 +302,7 @@ function OpenSurveyRow({ row, head }: { row: MySurveyRow; head: boolean }) {
         </div>
       </div>
       {row.daysLeft !== null ? (
-        <Chip tone={soon ? 'warning' : 'neutral'} label={timeLeftLabel(row.daysLeft, t)} />
+        <Chip tone={soon ? 'accent' : 'neutral'} label={timeLeftLabel(row.daysLeft, t)} />
       ) : null}
       {/* A real destination: `/surveys/:id/respond` is a registered route, and the respond
           endpoint authorizes it per user rather than per role. */}
@@ -330,7 +331,7 @@ function ClosedSurveyRow({ row }: { row: MySurveyRow }) {
     <li
       data-slot="my-survey-row"
       data-open="false"
-      className="flex flex-wrap items-center gap-4 rounded-xl border border-line-default bg-surface-card px-4 py-3.5 shadow-sm"
+      className="flex flex-wrap items-center gap-4 rounded-xl border border-line-panel bg-surface-card px-4 py-3.5"
     >
       <div className="flex min-w-0 grow basis-72 items-center gap-3">
         <span
@@ -373,7 +374,7 @@ function AnsweredHereRow({ row }: { row: MySurveyRow }) {
     <li
       data-slot="my-surveys-answered-here-row"
       data-open="false"
-      className="flex flex-wrap items-center gap-4 rounded-xl border border-line-default bg-surface-card px-4 py-3.5 shadow-sm"
+      className="flex flex-wrap items-center gap-4 rounded-xl border border-line-panel bg-surface-card px-4 py-3.5"
     >
       {/* `grow basis-72` around the glyph and the text, exactly as `ClosedSurveyRow` has
           it, and not four flex siblings on one line. With the chip as a sibling of the
@@ -417,7 +418,7 @@ function NotKeptCard() {
     <section
       aria-labelledby="my-surveys-not-kept"
       data-slot="my-surveys-not-kept"
-      className="mt-section flex flex-col gap-3 rounded-xl border border-line-default bg-surface-card px-5 pb-4.5 pt-4 shadow-sm"
+      className="mt-section flex flex-col gap-3 rounded-xl border border-line-panel bg-surface-card px-5 pb-4.5 pt-4"
     >
       <h2 id="my-surveys-not-kept" className="m-0">
         {t('employee.next.notKeptHeading')}
@@ -476,14 +477,14 @@ function NoCompanyState({ superAdmin }: { superAdmin: boolean }) {
 
   return (
     <div>
-      <PageTopBar
+      <PageHeader
         eyebrow={t('employee.next.noCompanyEyebrow')}
         title={t('navigation.mySurveys')}
         description={t('employee.next.noCompanyDescription')}
       />
       <section
         data-slot="my-surveys-no-company"
-        className="flex flex-col items-center gap-3 rounded-xl border border-line-default bg-surface-card px-8 py-10 text-center shadow-sm"
+        className="flex flex-col items-center gap-3 rounded-xl border border-line-panel bg-surface-card px-8 py-10 text-center"
       >
         <span
           aria-hidden="true"

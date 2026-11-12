@@ -103,7 +103,7 @@ export default function RespondDemographicField({
       // here when the respondent turns to this field, and when the way on finds it
       // unanswered, so they land on the question and not on a control to hunt from.
       tabIndex={-1}
-      className="min-w-0 rounded-xl border border-line-default bg-surface-card p-panel shadow-sm transition-colors focus-within:border-accent-blue-ring"
+      className="-m-2 min-w-0 rounded-xl border-0 p-2"
     >
       {/* `float-left w-full` for `RespondQuestionField`'s reason: a `<legend>` in its
           default flow is cut out of the fieldset's border, so the question straddles the
@@ -113,7 +113,7 @@ export default function RespondDemographicField({
           <span
             aria-hidden="true"
             data-slot="demographic-index"
-            className="inline-flex h-6 items-center rounded-lg border border-line-default bg-surface-icon-box px-2 font-mono text-respond-sm font-medium tabular-nums text-fg-secondary"
+            className="inline-flex h-6 items-center rounded-md bg-surface-fill-subtle px-2 text-xs font-semibold tabular-nums text-fg-secondary"
           >
             {`${position}/${total}`}
           </span>
@@ -128,7 +128,7 @@ export default function RespondDemographicField({
         </span>
         <span
           data-slot="demographic-text"
-          className="mt-3.5 block text-question font-normal text-fg-primary md:text-respond-question"
+          className="mt-2.5 block font-display text-[1.5rem] font-semibold leading-tight tracking-title text-fg-primary"
         >
           {label}
           {field.required ? <span className="sr-only"> {t('requiredMarker')}</span> : null}

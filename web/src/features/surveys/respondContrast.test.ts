@@ -173,6 +173,14 @@ const PAIRS: readonly Pair[] = [
   // apart in both.
   { what: 'the anonymity block label on the page ground', ink: '--admin-chip-ink-good', fill: '--admin-accent-bg-green', base: '--admin-bg-outer' },
   { what: 'the anonymity block label on a card', ink: '--admin-chip-ink-good', fill: '--admin-accent-bg-green', base: '--admin-bg-card' },
+  // The Apple-design respond page (12 Nov): the promise is a plain card — the label in the
+  // secondary ink, the body in the secondary ink, the padlock in the blue ink (non-text,
+  // but measured at text strength anyway) — and the chosen scale point is the blue fill
+  // under a white figure. The two green pairs above stay as a record of what was measured.
+  { what: 'the anonymity card label and body', ink: '--admin-font-secondary', fill: '--admin-bg-card', base: '--admin-bg-outer' },
+  { what: 'the anonymity card padlock', ink: '--admin-accent-blue-ink', fill: '--admin-bg-card', base: '--admin-bg-outer' },
+  { what: 'the chosen scale point on the blue fill', ink: '--admin-font-on-accent', fill: '--admin-accent-blue-fill', base: '--admin-bg-card' },
+  { what: 'the thank-you check on the blue tint', ink: '--admin-accent-blue-ink', fill: '--admin-accent-bg-blue', base: '--admin-bg-outer' },
   { what: 'the chosen scale point', ink: '--admin-bg-card', fill: '--admin-font-primary', base: '--admin-bg-card' },
   { what: 'an unchosen scale point', ink: '--admin-font-primary', fill: '--admin-bg-card', base: '--admin-bg-outer' },
 ]

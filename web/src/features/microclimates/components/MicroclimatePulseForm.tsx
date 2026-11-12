@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { EyeOff, Info, Send } from 'lucide-react'
+import { EyeOff, Info, Lock, Send } from 'lucide-react'
 import {
   getMicroclimatePublic,
   MicroclimateRespondError,
@@ -8,7 +8,7 @@ import {
   type Question,
 } from '../api/microclimates'
 import { isLocale, useTranslation } from '../../../i18n'
-import { Alert, AlertDescription, AlertTitle, Button, Input } from '../../../components/ui'
+import { Alert, AlertDescription, AlertTitle, Button, Input, LoadingState } from '../../../components/ui'
 import { SegmentedScale } from '../../../components/ui/SegmentedScale'
 import { MINIMUM_RESPONDENTS } from '../microclimatePrivacy'
 import { estimatedMinutes, formatDayMonth, isUnderAMinute } from '../../surveys/respondEstimate'
@@ -570,21 +570,21 @@ export default function MicroclimatePulseForm({
   return (
     <Surface>
       {error ? (
-        <Alert variant="warning" role="alert">
+        <Alert variant="default" role="alert">
           <Info aria-hidden="true" />
           <AlertTitle>{t('microclimates.respondLoadFailedTitle')}</AlertTitle>
           <AlertDescription>{t(loadFailureKey(error))}</AlertDescription>
         </Alert>
       ) : submitted ? (
-        <Alert variant="success" role="status">
+        <Alert variant="default" role="status">
           <EyeOff aria-hidden="true" />
           <AlertTitle>{t('microclimates.respondThanksTitle')}</AlertTitle>
           <AlertDescription>{t('microclimates.thankYouForResponse')}</AlertDescription>
         </Alert>
       ) : !microclimate ? (
-        <p className="text-base text-fg-secondary">{t('common.loading')}</p>
+        <LoadingState label={t('common.loading')} />
       ) : microclimate.status !== 'active' ? (
-        <Alert variant="warning" role="status">
+        <Alert variant="default" role="status">
           <Info aria-hidden="true" />
           <AlertTitle>{t('microclimates.respondClosedTitle')}</AlertTitle>
           <AlertDescription>{t('microclimates.notAcceptingResponses')}</AlertDescription>
@@ -604,12 +604,12 @@ export default function MicroclimatePulseForm({
             `<h1>`, in the serif at 22px as the artboard sets it: context above the
             cards, the question inside them. */}
           <header className="flex flex-col gap-1">
-            <span className="text-2xs font-bold uppercase tracking-eyebrow text-fg-secondary">
+            <span className="text-2xs font-semibold uppercase tracking-eyebrow text-fg-label">
               {total === 1
                 ? t('microclimates.next.eyebrowOne')
                 : t('microclimates.next.eyebrow', { count: total })}
             </span>
-            <h1 className="m-0 text-reading">
+            <h1 className="m-0 font-display text-3xl font-semibold leading-tight tracking-display text-fg-primary">
               {microclimate.title ?? t('microclimates.respondUntitled')}
             </h1>
           </header>
@@ -624,7 +624,7 @@ export default function MicroclimatePulseForm({
             again — their answers and the button — is still on screen, which is the whole
             reason a failed submit is not the same state as a failed load. */}
           {submitError ? (
-            <Alert variant="warning" role="alert">
+            <Alert variant="default" role="alert">
               <Info aria-hidden="true" />
               <AlertTitle>{t('microclimates.respondSubmitFailedTitle')}</AlertTitle>
               {/* A 402 never reaches the screen as the server wrote it. The copy is about
@@ -649,7 +649,7 @@ export default function MicroclimatePulseForm({
                   // unbroken option label would otherwise widen the card, the
                   // column and the document, and send the Send button off the
                   // side of a phone. `respondSticky.test.tsx` measures it.
-                  className="min-w-0 rounded-xl border border-line-default bg-surface-card p-panel shadow-sm transition-colors focus-within:border-accent-blue-ring"
+                  className="min-w-0 rounded-xl border border-line-panel bg-surface-card p-panel transition-colors focus-within:border-accent-blue-ring"
                 >
                   {/* `float-left w-full` closes the card's frame: a `<legend>`
                     in its default flow is cut out of the fieldset's own
@@ -666,13 +666,13 @@ export default function MicroclimatePulseForm({
                         is a second question to be somewhere in. */}
                       {total > 1 && (
                         <>
-                          {/* The position as a reading: mono, tabular, and hidden
+                          {/* The position as a reading: tabular figures, and hidden
                             from assistive tech because the sentence beside it is
                             what "3/8" is supposed to say out loud. */}
                           <span
                             aria-hidden="true"
                             data-slot="question-index"
-                            className="inline-flex h-5.5 items-center rounded-lg border border-line-default bg-surface-icon-box px-2 font-mono text-xs font-medium tabular-nums text-fg-secondary"
+                            className="inline-flex h-6 items-center rounded-md bg-surface-fill-subtle px-2 text-xs font-semibold tabular-nums text-fg-secondary"
                           >
                             {`${index + 1}/${total}`}
                           </span>
@@ -693,9 +693,10 @@ export default function MicroclimatePulseForm({
                           : t('microclimates.next.optional')}
                       </span>
                     </span>
-                    {/* The one thing being asked, the largest sans type on the card.
-                      This is the whole page for most respondents. */}
-                    <span data-slot="question-text" className="mt-3.5 block text-question font-normal text-fg-primary">
+                    {/* The one thing being asked, in the serif — the Apple-design ruling
+                      gives the display face to the respondent's question text. This is
+                      the whole page for most respondents. */}
+                    <span data-slot="question-text" className="mt-2.5 block font-display text-2xl font-semibold leading-snug tracking-title text-fg-primary">
                       {question.text}
                     </span>
                   </legend>
@@ -715,10 +716,18 @@ export default function MicroclimatePulseForm({
               glyph after the word. The design draws a single Send and no second
               control: there is no draft to save on a session whose responses are not
               persisted against a respondent. */}
-            <Button type="submit" variant="primary" disabled={submitting} className="h-11 w-full">
-              {submitting ? t('common.submitting') : t('common.submit')}
-              <Send aria-hidden="true" />
-            </Button>
+            {/* Pinned to the bottom of a phone screen, the Respond board's `.ph-foot`, so
+              Send is under the thumb however many questions the session asks; in the
+              flow from `md` up. */}
+            <div
+              data-slot="pulse-send"
+              className="max-md:sticky max-md:bottom-0 max-md:z-10 max-md:-mx-4 max-md:border-t max-md:border-line-default max-md:bg-surface-outer/90 max-md:px-4 max-md:pt-3 max-md:pb-[max(0.75rem,env(safe-area-inset-bottom))] max-md:backdrop-blur-md"
+            >
+              <Button type="submit" variant="primary" size="lg" disabled={submitting} className="w-full">
+                {submitting ? t('common.submitting') : t('common.submit')}
+                <Send aria-hidden="true" />
+              </Button>
+            </div>
           </form>
 
           {/* The foot, as the canvas prints it: until when the session takes answers,
@@ -748,18 +757,17 @@ export default function MicroclimatePulseForm({
 /**
  * What this page does with the answers, stated as narrowly as it can be verified.
  *
- * The canvas's block (RespondMicroclimatePhone, 10 Sep), first on the page: the soft
- * green box with the eye-off glyph, the state word as an uppercase label and one
- * paragraph. The copy is unchanged — the label is `respondAnonymityChip`, which is the
+ * First on the page, as the Respond board draws the promise: a quiet card with a padlock
+ * in the blue tint, the state word as an uppercase label and one paragraph. It was a soft
+ * green box until the Apple-design ruling (11 Nov) kept green for the three result areas
+ * only. The copy is unchanged — the label is `respondAnonymityChip`, which is the
  * word the artboard prints, and the body is `respondAnonymityBody`. The title stays as
  * the block's heading for assistive technology and is visually hidden, because the
  * canvas draws no third line and the label already says it in a word.
  *
- * Green plus the word: the label spells out the state, so the colour is never the
- * only thing carrying it. The label is `text-chip-good-ink`, not the artboard's
- * `#0f7f4e`: `features/surveys/respondContrast.test.ts` measures the artboard's ink at
- * 4.31:1 on this fill over the page ground, under AA, and measures this one over it in
- * both palettes — the same ink `surveys/AnonymityNotice` uses.
+ * The label spells out the state, so no colour carries it. It is the secondary ink on
+ * the card, the pair `features/surveys/respondContrast.test.ts` measures in both palettes
+ * — the same treatment `surveys/AnonymityNotice` uses.
  */
 function AnonymityNote() {
   const { t } = useTranslation()
@@ -767,12 +775,12 @@ function AnonymityNote() {
   return (
     <section
       data-slot="anonymity-notice"
-      className="flex gap-2.5 rounded-xl border border-accent-green-ring bg-accent-green-soft px-3.5 py-3"
+      className="flex gap-2.5 rounded-xl border border-line-panel bg-surface-card px-4 py-3.5"
     >
-      <EyeOff aria-hidden="true" className="mt-px size-icon shrink-0 text-accent-green-ink" />
+      <Lock aria-hidden="true" className="mt-px size-icon shrink-0 text-accent-blue-ink" />
       <div className="flex min-w-0 flex-col gap-0.5">
         <h2 className="sr-only">{t('microclimates.respondAnonymityTitle')}</h2>
-        <span className="text-2xs font-bold uppercase tracking-label text-chip-good-ink">
+        <span className="text-2xs font-semibold uppercase tracking-eyebrow text-fg-secondary">
           {t('microclimates.respondAnonymityChip')}
         </span>
         <p className="m-0 text-sm text-fg-secondary">{t('microclimates.respondAnonymityBody')}</p>

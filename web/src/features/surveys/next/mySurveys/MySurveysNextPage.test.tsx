@@ -194,7 +194,7 @@ describe('MySurveysNextPage', () => {
     const relaxed = rowAround('Queda tiempo')
 
     expect(urgent.className).toContain('bg-accent-blue-soft')
-    expect(chipIn(urgent).className).toContain('chip-warning')
+    expect(chipIn(urgent).className).toContain('chip-accent')
 
     expect(relaxed.className).not.toContain('bg-accent-blue-soft')
     expect(chipIn(relaxed).className).toContain('chip-neutral')
@@ -317,7 +317,7 @@ describe('MySurveysNextPage', () => {
       expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/dashboard/employee'))).toBe(true),
     )
     // Null rather than a replacement word: this eyebrow has always been allowed to be absent.
-    expect(document.querySelector('[data-slot="page-eyebrow"]')).toBeNull()
+    expect(document.querySelector('[data-slot="page-header-eyebrow"]')).toBeNull()
     expect(document.body.textContent).not.toContain(es('users.employee'))
   })
 
@@ -330,7 +330,7 @@ describe('MySurveysNextPage', () => {
     renderPage({ role: 'leader', companyId: COMPANY })
 
     await waitFor(() =>
-      expect(document.querySelector('[data-slot="page-eyebrow"]')?.textContent).toBe('Ingeniería'),
+      expect(document.querySelector('[data-slot="page-header-eyebrow"]')?.textContent).toBe('Ingeniería'),
     )
   })
 
@@ -349,7 +349,7 @@ describe('MySurveysNextPage', () => {
     await waitFor(() =>
       expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/dashboard/employee'))).toBe(true),
     )
-    expect(document.querySelector('[data-slot="page-eyebrow"]')).toBeNull()
+    expect(document.querySelector('[data-slot="page-header-eyebrow"]')).toBeNull()
   })
 
   it('renders the centred employee empty state rather than an admin “adjust your filters”', async () => {
@@ -379,7 +379,7 @@ describe('MySurveysNextPage — an account that belongs to no company', () => {
 
     expect(await screen.findByText(es('employee.next.noCompanyTitle'))).toBeTruthy()
     expect(screen.getByText(es('employee.next.noCompanyBodySuperAdmin'))).toBeTruthy()
-    expect(document.querySelector('[data-slot="page-eyebrow"]')?.textContent).toBe(
+    expect(document.querySelector('[data-slot="page-header-eyebrow"]')?.textContent).toBe(
       es('employee.next.noCompanyEyebrow'),
     )
     // The old page promised "Todavía no le han enviado nada" — a delivery that can never
@@ -485,7 +485,7 @@ describe('MySurveysNextPage answered on this device', () => {
     renderPage()
 
     const heading = await screen.findByRole('heading', { name: new RegExp(es('employee.next.toAnswerHeading')) })
-    expect(heading.querySelector('.font-mono')?.textContent).toBe('1')
+    expect(heading.querySelector('[data-slot="my-surveys-tally"]')?.textContent).toBe('1')
   })
 
   /**
