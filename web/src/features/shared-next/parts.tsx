@@ -13,7 +13,7 @@ import { cn } from '../../lib/cn'
 export function Panel({ className, children, ...rest }: HTMLAttributes<HTMLElement>) {
   return (
     <section
-      className={cn('rounded-lg border border-line-default bg-surface-card p-card', className)}
+      className={cn('rounded-xl border border-line-panel bg-surface-card p-card', className)}
       {...rest}
     >
       {children}
@@ -37,7 +37,7 @@ export function PanelHeading({
       <h2 id={id} className="m-0 flex items-baseline gap-2 text-2xl">
         {title}
         {count !== undefined && (
-          <span className="font-mono text-sm text-fg-tertiary tabular-nums">{count}</span>
+          <span className="text-sm text-fg-tertiary tabular-nums">{count}</span>
         )}
       </h2>
       {aside && <div className="text-sm text-fg-tertiary">{aside}</div>}
@@ -47,7 +47,7 @@ export function PanelHeading({
 
 export function Eyebrow({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <p className={cn('m-0 text-2xs font-bold uppercase tracking-eyebrow text-fg-label', className)}>
+    <p className={cn('m-0 text-2xs font-semibold uppercase tracking-eyebrow text-fg-label', className)}>
       {children}
     </p>
   )
@@ -170,8 +170,7 @@ export function Segmented<T extends string>({
   )
 }
 
-/** The table header cell the artboards use: 10px, bold, uppercase, tracked. */
-export const TH_CLASS =
-  'px-3 py-2 text-left text-2xs font-bold uppercase tracking-wider text-fg-label whitespace-nowrap'
+/** The spec's `.tbl th` (occ.css): 12px semibold, sentence case, the label ink. 11px uppercase is for eyebrows only. */
+export const TH_CLASS = 'px-3 py-2 text-left text-xs font-semibold text-fg-label whitespace-nowrap'
 
 export const TABLE_CARD_CLASS = 'overflow-hidden rounded-lg border border-line-default bg-surface-card'

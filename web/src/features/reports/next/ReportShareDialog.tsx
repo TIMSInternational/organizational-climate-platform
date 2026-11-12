@@ -43,7 +43,7 @@ import {
 import { describeApiError } from '../../../api/describeApiError'
 
 /** The canvas's small-caps label: 10px, bold, spaced .06em, in the label ink. */
-const LABEL = 'text-2xs font-bold uppercase tracking-label text-fg-label'
+const LABEL = 'text-2xs font-semibold uppercase tracking-eyebrow text-fg-label'
 
 export interface ReportShareDialogProps {
   open: boolean
@@ -208,7 +208,7 @@ export default function ReportShareDialog({ open, onOpenChange, baseUrl, report,
                 theme's snug 2xs line made the header 1px short and lifted everything under it. */}
             <p
               data-slot="share-eyebrow"
-              className="m-0 text-2xs font-bold uppercase leading-normal tracking-tile text-fg-label"
+              className="m-0 text-2xs font-semibold uppercase leading-normal tracking-eyebrow text-fg-label"
             >
               {t('reports.next.shareEyebrow', { title: report.title, format: reportFormatLabel(t, report.format) })}
             </p>
@@ -230,9 +230,9 @@ export default function ReportShareDialog({ open, onOpenChange, baseUrl, report,
         <div
           role="note"
           data-slot="share-warning"
-          className="flex items-start gap-2.5 rounded-lg border border-accent-amber-ring bg-accent-amber-soft px-3.5 py-3"
+          className="flex items-start gap-2.5 rounded-md bg-surface-fill-subtle px-3.5 py-3"
         >
-          <AlertCircle aria-hidden="true" className="mt-px size-4 shrink-0 text-accent-amber-ink" />
+          <AlertCircle aria-hidden="true" className="mt-px size-4 shrink-0 text-fg-secondary" />
           <div className="flex flex-col gap-0.5 text-sm">
             <span className="font-semibold text-fg-primary">{t('reports.shareWarningTitle')}</span>
             <span className="text-fg-secondary">{t('reports.next.shareWarning')}</span>
@@ -322,7 +322,7 @@ export default function ReportShareDialog({ open, onOpenChange, baseUrl, report,
                           // that line at 21px of extra dialog, "Mostrar revocados" pushed down.
                           title={isMinted ? undefined : t('reports.next.maskedNote')}
                           className={cn(
-                            'font-mono text-sm leading-normal tabular-nums text-fg-primary',
+                            'text-sm leading-normal tabular-nums text-fg-primary',
                             isMinted ? 'break-all select-all' : 'truncate',
                           )}
                         >
@@ -341,7 +341,7 @@ export default function ReportShareDialog({ open, onOpenChange, baseUrl, report,
                             opens: opensPhrase(t, share.accessCount),
                           })}
                         </span>
-                        {isMinted && <span className="text-xs text-accent-amber-ink">{t('reports.next.mintedNote')}</span>}
+                        {isMinted && <span className="text-xs text-fg-secondary">{t('reports.next.mintedNote')}</span>}
                       </div>
                       <div className="flex gap-2">
                         {isMinted && (
@@ -392,7 +392,7 @@ export default function ReportShareDialog({ open, onOpenChange, baseUrl, report,
                           className={cn('size-3.5 text-fg-label transition-transform', showInactive && 'rotate-90')}
                         />
                         {allRevoked ? t('reports.next.showRevoked') : t('reports.next.showInactive')}
-                        <span className="font-mono text-sm tabular-nums text-fg-label">{inactive.length}</span>
+                        <span className="text-sm tabular-nums text-fg-label">{inactive.length}</span>
                       </Button>
                     </CollapsibleTrigger>
                     {span && (
@@ -411,7 +411,7 @@ export default function ReportShareDialog({ open, onOpenChange, baseUrl, report,
                           data-slot="inactive-link"
                           className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line-light px-3.5 py-2 text-xs text-fg-label"
                         >
-                          <span className="font-mono">{maskedShareUrl(window.location.host)}</span>
+                          <span className="tabular-nums">{maskedShareUrl(window.location.host)}</span>
                           <span>
                             {share.revokedAt !== null
                               ? t('reports.next.revokedMeta', {
@@ -467,11 +467,11 @@ function MintedLink({
       className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-line-default px-3.5 py-3"
     >
       <div className="flex min-w-0 flex-col gap-0.5">
-        <span data-slot="report-share-url" className="break-all font-mono text-sm tabular-nums text-fg-primary select-all">
+        <span data-slot="report-share-url" className="break-all text-sm tabular-nums text-fg-primary select-all">
           {url}
         </span>
         <span className="text-xs text-fg-label">{t('reports.shareExpiresOn', { date: expiresAt })}</span>
-        <span className="text-xs text-accent-amber-ink">{t('reports.next.mintedNote')}</span>
+        <span className="text-xs text-fg-secondary">{t('reports.next.mintedNote')}</span>
       </div>
       <Button type="button" variant="outline" size="canvas" onClick={() => void onCopy(url)}>
         <Copy aria-hidden="true" />

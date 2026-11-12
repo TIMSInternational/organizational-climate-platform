@@ -118,7 +118,7 @@ function CrossCell({
   directionLabel: (delta: number) => string
 }) {
   if (value === null) {
-    return <span className="font-mono text-sm text-fg-label">—</span>
+    return <span className="text-sm text-fg-label tabular-nums">—</span>
   }
   const band = bandOf(value, bands)
   const text = scoreText(value, bands.scale, locale, decimals)
@@ -131,7 +131,7 @@ function CrossCell({
       className={cn('flex flex-col items-center gap-px rounded px-1 py-1.5', painted && 'border')}
       style={painted ? bandCellStyle(band) : undefined}
     >
-      <span className="inline-flex items-center gap-1 font-mono text-sm tabular-nums">
+      <span className="inline-flex items-center gap-1 text-sm tabular-nums">
         {!painted && (
           <span style={{ color: BAND_PAINT[band].ink }} className="inline-flex">
             <BandGlyph band={band} />
@@ -142,7 +142,7 @@ function CrossCell({
       </span>
       {shown !== null && (
         <>
-          <span className={cn('font-mono text-2xs tabular-nums', widest && 'font-bold')}>
+          <span className={cn('text-xs tabular-nums', widest && 'font-bold')}>
             <span aria-hidden="true">{shown < 0 ? '▼' : shown > 0 ? '▲' : '–'} </span>
             {deltaScoreText(delta ?? 0, bands.scale, locale, 1)}
             <span className="sr-only">{` ${directionLabel(shown)}`}</span>
@@ -152,7 +152,9 @@ function CrossCell({
             <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-line-default" />
             {reach > 0 && (
               <span
-                className={cn('absolute inset-y-0 rounded-sm', shown < 0 ? 'bg-accent-red-ink' : 'bg-accent-green-ink')}
+                // One ink both ways: the arrow and the sign carry the direction, and green and
+                // red belong to the three result areas only.
+                className="absolute inset-y-0 rounded-sm bg-fg-tertiary"
                 style={shown < 0 ? { right: '50%', width: `${reach}%` } : { left: '50%', width: `${reach}%` }}
               />
             )}
@@ -166,7 +168,7 @@ function CrossCell({
 const CROSS_CELL = 'border-0 p-0'
 const CROSS_HEAD = cn(
   CROSS_CELL,
-  'text-center align-bottom text-2xs font-bold uppercase leading-tight tracking-label text-fg-label [overflow-wrap:normal]',
+  'text-center align-bottom text-xs font-semibold leading-tight text-fg-label [overflow-wrap:normal]',
 )
 /** The cohort names are long, so their column stays put while the scores scroll under it. */
 const CROSS_STICKY = 'sticky left-0 z-10 bg-surface-card'
@@ -441,7 +443,7 @@ export default function SurveyCrossPanel({
   }
 
   return (
-    <Card className="mt-6">
+    <Card>
       <CardHeader>
         <CardTitle>{t('surveyResults.cross.title')}</CardTitle>
         <CardDescription>
@@ -477,7 +479,7 @@ export default function SurveyCrossPanel({
           </Button>
           <Button
             type="button"
-            variant="ghost"
+            variant="plain"
             onClick={() => {
               setChosen({})
               setCohorts([])
@@ -495,7 +497,7 @@ export default function SurveyCrossPanel({
 
         {cohorts.length > 0 ? (
           <div className="mt-4">
-            <p className="text-xs uppercase tracking-wide text-fg-secondary">
+            <p className="m-0 text-sm font-semibold text-fg-secondary">
               {t('surveyResults.cross.cohorts')}
             </p>
             <div className="mt-2 flex flex-wrap gap-2">
@@ -694,7 +696,7 @@ export default function SurveyCrossPanel({
             </Table>
 
             <BandLegend bands={bands} className="mt-3">
-              <span className="text-2xs text-fg-label">
+              <span className="text-xs text-fg-label">
                 {t('surveyResults.cross.barNote', { scale: scoreText(DELTA_SCALE, bands.scale, locale, 2) })}
               </span>
             </BandLegend>
