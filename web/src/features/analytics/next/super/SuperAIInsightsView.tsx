@@ -133,7 +133,7 @@ function ChooseCompany({ picks, error }: { picks: readonly CompanyPick[] | null;
     <section
       aria-labelledby="insights-choose"
       data-slot="choose-company"
-      className={`${CARD} grid items-center gap-8 p-6 lg:grid-cols-[minmax(0,1fr)_420px]`}
+      className={`${CARD} grid items-center gap-8 p-6 lg:grid-cols-[minmax(0,1fr)_--spacing(105)]`}
     >
       <div className="flex flex-col items-start gap-2.5">
         <span

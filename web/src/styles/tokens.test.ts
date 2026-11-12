@@ -90,10 +90,12 @@ describe('type scale', () => {
     // The legacy eight, the canvas's five named steps (10 Sep) -- 11, 17, 22, 26 and 30px
     // since the Apple design (11 Nov) re-set the 9px and 28px ones -- the respond page's
     // own four, the Apple canvas's 14px row/control step (`--admin-text-ui`), and the
-    // Respond board's 24px serif question (`--admin-text-respond-display`). The count
+    // Respond board's 24px serif question (`--admin-text-respond-display`), and the 40px
+    // deadline count on an action plan (`--admin-text-kpi-display`, 12 Nov: it was a bare
+    // `text-[2.5rem]` in the component). The count
     // is the tripwire: a new type token has to be declared HERE, with what it is for,
     // rather than appearing in the scale unremarked.
-    expect(sizes.length).toBe(19)
+    expect(sizes.length).toBe(20)
     expect(token('--admin-text-ui')).toBe('0.875rem')
     for (const size of sizes) expect(size).toMatch(/rem$/)
     expect([token('--admin-text-3xs'), token('--admin-text-reading'), token('--admin-text-kpi-lg'), token('--admin-text-kpi-hero')]).toEqual(
@@ -144,7 +146,7 @@ describe('type scale', () => {
     // token, read at a 16px default, must be at least 0.6875rem -- the 9px column heads and
     // the 10px eyebrows of the 10 Sep scale were the two steps under it.
     const steps = [...tokensCss.matchAll(/^\s*(--admin-text-[\w-]+):\s*([\d.]+)rem;/gm)]
-    expect(steps.length).toBe(19)
+    expect(steps.length).toBe(20)
     const under = steps.filter((m) => Number(m[2]) * 16 < 11).map((m) => `${m[1]} ${Number(m[2]) * 16}px`)
     expect(under).toEqual([])
     expect(token('--admin-text-2xs')).toBe('0.6875rem')

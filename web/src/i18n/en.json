@@ -1179,6 +1179,7 @@
       "whereHeading": "Where the organisation stands",
       "climateLabel": "Climate · survey {wave}",
       "climateSub": "of 5 · target {target}",
+      "climateRangeSub": "The bar runs from the lowest department to the highest; the dot is the organisation's mean.",
       "climateVs": "vs {wave}",
       "risesInARow": "{count} rises in a row",
       "participationLabel": "Participation · {wave}",

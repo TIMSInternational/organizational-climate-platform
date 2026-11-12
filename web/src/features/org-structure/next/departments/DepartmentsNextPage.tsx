@@ -351,12 +351,12 @@ function DepartmentsView({
                     1024 every column — the actions included — is on screen. */}
                 <colgroup>
                   <col style={{ width: '18.15%' }} />
-                  <col style={{ width: '102px' }} />
+                  <col className="w-25.5" />
                   <col style={{ width: '18.15%' }} />
                   <col style={{ width: '12.45%' }} />
                   <col style={{ width: '18.15%' }} />
-                  {showInactive && <col style={{ width: '102px' }} />}
-                  <col style={{ width: '174px' }} />
+                  {showInactive && <col className="w-25.5" />}
+                  <col className="w-43.5" />
                 </colgroup>
                 <thead>
                   <tr>

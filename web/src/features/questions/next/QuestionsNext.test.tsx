@@ -310,7 +310,7 @@ describe('QuestionLibraryNextPage — drawer link, multiple choice, vocabulary',
     // its right edge at the board's 392px, painted above the rows. happy-dom has no layout, so
     // the classes are the pin and library-new-light.png is the evidence.
     expect(drawer.className.split(' ')).toEqual(
-      expect.arrayContaining(['xl:col-[2]', 'xl:row-[1]', 'xl:justify-self-end', 'xl:w-[24.5rem]', 'xl:z-1']),
+      expect.arrayContaining(['xl:col-[2]', 'xl:row-[1]', 'xl:justify-self-end', 'xl:w-98', 'xl:z-1']),
     )
     expect(list?.className.split(' ')).toEqual(expect.arrayContaining(['xl:col-[2]', 'xl:row-[1]']))
     // …and never as a third column that narrows the list.
@@ -444,7 +444,7 @@ describe('question bank and library — the boards\' spacing, inks and type', ()
     const description = await screen.findByTestId('library-category-description')
     // QuestionLibrary.dc.html: `max-width: 480px; line-height: 1.5` — library-new-light.png shows it
     // wrapping at "Ninguna de sus 4 / preguntas…", clear of the drawer, as the board does.
-    expect(description.className.split(' ')).toEqual(expect.arrayContaining(['max-w-[30rem]', 'leading-normal']))
+    expect(description.className.split(' ')).toEqual(expect.arrayContaining(['max-w-120', 'leading-normal']))
   })
 
   it("caps the globals note at the board's 480px of text, so it wraps before the drawer", async () => {
@@ -452,6 +452,7 @@ describe('question bank and library — the boards\' spacing, inks and type', ()
     renderAs(<QuestionLibraryNextPage />)
     const note = await screen.findByTestId('library-globals-note')
     expect(note.textContent).toBe(lib.globalsNote)
-    expect(note.className.split(' ')).toContain('max-w-[31.5rem]')
+    // 126 steps of the 4px spacing token: 504px (31.5rem), in the token, not a literal.
+    expect(note.className.split(' ')).toContain('max-w-126')
   })
 })

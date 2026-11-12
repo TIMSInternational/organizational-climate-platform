@@ -10,6 +10,7 @@ import {
   ClimateMap,
   ClimateRangeBar,
   KpiTile,
+  ProtectedMark,
   bandOf,
   boundaryText,
   scaleUnitText,
@@ -211,9 +212,14 @@ export default function AdminDashboardNextView({
               sub={
                 withheld.length > 0 ? (
                   <span className="flex flex-col">
+                    {/* The ruled mark for a group under the floor — the padlock and «Menos de N»,
+                        as «Quién respondió» and the map print the same group on this page.
+                        It read «… bajo el umbral de 3: protegido» until 12 Nov: one group
+                        named two ways on one page. Never a count. */}
                     {withheld.map((row) => (
-                      <span key={row.departmentId}>
-                        {t('dashboard.next.participationProtected', { group: row.name, floor })}
+                      <span key={row.departmentId} data-slot="participation-withheld" className="flex flex-wrap items-center gap-x-1.5">
+                        <span>{row.name}</span>
+                        <ProtectedMark floor={floor} className="text-xs" />
                       </span>
                     ))}
                   </span>
@@ -300,7 +306,7 @@ export default function AdminDashboardNextView({
               <SectionHead
                 id="next-climate"
                 heading={t('dashboard.next.climateHeading')}
-                sub={wave ? t('dashboard.next.climateSubWave', { wave: wave.code }) : t('dashboard.next.climateSub')}
+                sub={wave ? t('dashboard.next.climateSubWave', { wave: wave.code }) : t('dashboard.next.climateRangeSub')}
                 action={
                   capabilities.seesWholeCompany && wave ? (
                     <ResultsLink to={`/surveys/${wave.id}/results`} label={t('dashboard.next.seeResults')} />

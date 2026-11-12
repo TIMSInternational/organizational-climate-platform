@@ -103,6 +103,7 @@
   --admin-text-reading: 1.375rem; /* 22px — a reading on a card (sparkline cards, trend charts) */
   --admin-text-kpi-lg: 1.625rem; /* 26px — the KPI reading on Clima en el tiempo and SurveyResults */
   --admin-text-kpi-hero: 1.875rem; /* 30px — the KPI reading on the Panel de Control (canvas `.kpi .v`) */
+  --admin-text-kpi-display: 2.5rem; /* 40px — the one large count on an action plan's deadline card */
   --admin-text-question: 1.0625rem; /* 17px — the question and its scale points on a respond card (RespondSurveyPhone, RespondMicroclimatePhone) */
   /* The respond surface is read by employees on their own phones and monitors, not by
      an operator in a dense console, so it does not take the admin scale. Measured on the

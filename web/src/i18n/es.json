@@ -1179,6 +1179,7 @@
       "whereHeading": "Dónde está la organización",
       "climateLabel": "Clima · encuesta {wave}",
       "climateSub": "de 5 · meta {target}",
+      "climateRangeSub": "La barra va del departamento más bajo al más alto; el punto es la media de la organización.",
       "climateVs": "frente a {wave}",
       "risesInARow": "{count} alzas seguidas",
       "participationLabel": "Participación · {wave}",

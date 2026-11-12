@@ -504,7 +504,7 @@ function Filters({
         aria-label={t('actionPlans.next.statusFilter')}
         value={filters.status}
         onChange={(event) => onChange({ ...filters, status: event.target.value })}
-        className="w-full sm:w-[170px]"
+        className="w-full sm:w-42.5"
       >
         <option value="">{t('actionPlans.next.allStates')}</option>
         {ACTION_PLAN_STATUSES.map((status) => (
@@ -645,21 +645,21 @@ function PlanTable({
                 {t('actionPlans.next.colPlan')}
               </span>
             </th>
-            <th role="columnheader" className={cn(HEAD, WIDE_ONLY, 'w-[222px]')} data-col="finding">
+            <th role="columnheader" className={cn(HEAD, WIDE_ONLY, 'w-55.5')} data-col="finding">
               <span className={HEAD_STACK}>
                 {t('actionPlans.next.colFinding')}
               </span>
             </th>
-            <th role="columnheader" className={cn(HEAD, WIDE_ONLY, 'w-[162px]')} data-col="owner">
+            <th role="columnheader" className={cn(HEAD, WIDE_ONLY, 'w-40.5')} data-col="owner">
               {t('actionPlans.next.colOwner')}
             </th>
-            <th role="columnheader" className={cn(HEAD, 'w-[176px]')} data-col="due">
+            <th role="columnheader" className={cn(HEAD, 'w-44')} data-col="due">
               {t('actionPlans.next.colDue')}
             </th>
-            <th role="columnheader" className={cn(HEAD, 'w-[92px]')} data-col="priority">
+            <th role="columnheader" className={cn(HEAD, 'w-23')} data-col="priority">
               {t('actionPlans.next.colPriority')}
             </th>
-            <th role="columnheader" className={cn(HEAD, 'w-[144px]')} data-col="actions">
+            <th role="columnheader" className={cn(HEAD, 'w-36')} data-col="actions">
               <span className="sr-only">{t('common.actions')}</span>
             </th>
           </tr>
