@@ -104,7 +104,7 @@ export default function AdminDemographicFieldsView() {
   const header = (
     <div className="-mb-6">
       <PageHeader
-        eyebrow={state.companyName ?? t('navigation.companyAdministration')}
+        eyebrow={state.companyName ?? t('navigation.sectionOrganization')}
         title={t('navigation.demographicFields')}
         description={t('demographicFields.next.description', { floor: ANONYMITY_FLOOR })}
         breadcrumbs={[

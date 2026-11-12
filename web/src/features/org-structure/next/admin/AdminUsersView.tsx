@@ -148,7 +148,7 @@ export default function AdminUsersView() {
   const header = (
     <div className="-mb-6">
       <PageHeader
-        eyebrow={companyName ?? t('navigation.companyAdministration')}
+        eyebrow={companyName ?? t('navigation.sectionOrganization')}
         title={t('navigation.users')}
         description={t('users.next.description')}
         breadcrumbs={[

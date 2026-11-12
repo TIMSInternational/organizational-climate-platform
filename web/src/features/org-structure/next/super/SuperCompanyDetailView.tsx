@@ -602,7 +602,7 @@ function CompanyCard({
           </CanvasSelect>
         </Field>
         <Field fieldLabel={t('superadmin.next.companyDetail.company.added')}>
-          <div className="flex h-control-lg items-center gap-2 rounded-md border border-line-default bg-surface-input px-2.5">
+          <div className="flex h-9 items-center gap-2 rounded-md border border-line-default bg-surface-fill-subtle px-3 text-base">
             <Calendar aria-hidden="true" className="size-3.5 text-fg-tertiary" />
             <span className="tabular-nums text-fg-primary">{dayWithYear(model.company.createdAt, locale)}</span>
           </div>

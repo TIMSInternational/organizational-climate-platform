@@ -190,12 +190,12 @@ export default function CompaniesListNextPage() {
               <Table zebra aria-label={t('superadmin.next.companies.tableLabel')} className="table-fixed text-ui">
                 <colgroup>
                   <col />
-                  <col className="w-40" />
+                  <col className="w-36" />
                   <col className="w-28" />
-                  <col className="w-30" />
+                  <col className="w-26" />
                   <col className="w-28" />
                   <col className="w-22" />
-                  <col className="w-44" />
+                  <col className="w-40" />
                   <col className="w-28" />
                   <col className="w-22" />
                 </colgroup>
