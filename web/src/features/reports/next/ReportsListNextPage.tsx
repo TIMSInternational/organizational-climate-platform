@@ -434,13 +434,24 @@ function ReportTableRow({
           >
             {row.title}
           </span>
-          <span data-slot="report-meta" className="text-xs leading-normal text-fg-label xl:truncate">
+          {/* Wraps, never truncates: the schedule ("Mensualmente · el próximo el 1 sept") is
+              the line's useful half, and an ellipsis cut it at every width (review 12 Nov). */}
+          <span data-slot="report-meta" className="text-xs leading-normal text-fg-label">
             {meta}
           </span>
         </div>
       </td>
       <td className="py-3.5 pr-3 pl-0">
-        {row.contents ? <ContentsCell contents={row.contents} t={t} /> : null}
+        {row.contents ? (
+          <ContentsCell contents={row.contents} t={t} />
+        ) : (
+          // Said, never left blank: a completed report whose document could not be read
+          // says so, as its links cell does; one with no document yet says that. No
+          // number either way — an empty column read as a broken layout (review 12 Nov).
+          <span data-slot="report-contents-none" className="text-sm text-fg-label">
+            {completed ? t('reports.next.containsNotRead') : t('reports.next.containsNoDocument')}
+          </span>
+        )}
       </td>
       <td className="py-3.5 pr-3 pl-0">
         <Chip tone="neutral" label={reportFormatLabel(t, row.format)} />

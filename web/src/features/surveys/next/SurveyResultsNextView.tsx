@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { ArrowDown, ArrowRight, Check, ChevronDown, Download, MoreHorizontal } from 'lucide-react'
+import { ArrowDown, ArrowRight, Check, ChevronDown, Download, Lock, MoreHorizontal } from 'lucide-react'
 import { useTranslation } from '../../../i18n'
 import { PageHeader } from '../../../components/layout'
 import {
@@ -478,9 +478,21 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
           />
           <KpiTile
             label={t('surveyResults.next.groupsLabel')}
-            value={groups.legible}
+            // Below the whole-survey floor the groups are withheld, not absent: no figure,
+            // a padlock and the floor. "0 de 0 legibles" read as "there are no groups".
+            value={model.isSuppressed ? null : groups.legible}
+            valueText={model.isSuppressed ? t('surveyResults.next.groupsReserved') : undefined}
             locale={locale}
-            unit={t('surveyResults.next.groupsSub', { total: groups.total })}
+            unit={
+              model.isSuppressed ? (
+                <span className="inline-flex items-center gap-1" data-testid="groups-reserved">
+                  <Lock aria-hidden="true" className="size-3.5" />
+                  {t('surveyResults.next.groupsReservedUnit', { floor: model.minimumGroupSize })}
+                </span>
+              ) : (
+                t('surveyResults.next.groupsSub', { total: groups.total })
+              )
+            }
             sub={
               <span className="text-fg-label">
                 {groups.total === 0

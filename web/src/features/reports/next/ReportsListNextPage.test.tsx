@@ -252,6 +252,8 @@ describe('ReportsListNextPage — what it reads', () => {
       'Resumen de clima · creado el 10 sept · Sin programar',
     )
     expect(document.body.textContent).not.toContain('climate_summary')
+    // The schedule is the line's useful half: it wraps, never ends in an ellipsis.
+    expect(rowOf('r-csv').querySelector('[data-slot="report-meta"]')?.className).not.toMatch(/truncate/)
   })
 
   /**
@@ -340,6 +342,8 @@ describe('ReportsListNextPage — what it reads', () => {
     expect(rowOf('r-csv').querySelector('[data-slot="report-contents"]')).toBeNull()
     // Not another report's summary, and not a zero.
     expect(rowOf('r-csv').textContent).not.toContain('respuestas')
+    // Said, not left blank: an empty column read as a broken layout (review 12 Nov).
+    expect(rowOf('r-csv').querySelector('[data-slot="report-contents-none"]')?.textContent).toBe('Sin leer')
   })
 
   /**
@@ -384,6 +388,9 @@ describe('ReportsListNextPage — what it reads', () => {
     for (const id of ['r-gen', 'r-fail']) {
       expect(rowOf(id).querySelector('[data-slot="report-contents"]'), id).toBeNull()
       expect(rowOf(id).textContent, id).not.toContain('respuestas')
+      expect(rowOf(id).querySelector('[data-slot="report-contents-none"]')?.textContent, id).toBe(
+        'Todavía sin documento',
+      )
     }
     unmount()
 

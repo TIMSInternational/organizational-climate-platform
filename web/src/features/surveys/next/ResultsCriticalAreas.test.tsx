@@ -104,6 +104,10 @@ describe('ResultsCriticalAreas', () => {
     expect(rows()[0]).toBe('Condiciones físicasen 3 grupos3,6Agua3,7Carga3,7Datos')
     expect(rows().at(-1)).toBe('Crecimientoen 1 grupo3,7Banca')
     expect(screen.getByText('12')).toBeTruthy()
+    // Every chip carries the band's glyph, never the red alone (accessibility.md).
+    const chips = screen.getByTestId('critical-areas').querySelectorAll('[data-band="critical"]')
+    expect(chips.length).toBe(12)
+    for (const chip of chips) expect(chip.querySelector('[data-testid="critical-glyph"] svg')).not.toBeNull()
   })
 
   it('regroups by group on request, each group naming its dimensions', async () => {

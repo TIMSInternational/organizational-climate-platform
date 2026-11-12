@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from '../../../i18n'
-import { bandCellStyle } from '../../../components/charts'
+import { BandGlyph, bandCellStyle } from '../../../components/charts'
 import { Button } from '../../../components/ui'
 import { criticalByDimension, criticalByGroup, type CriticalCell } from './derive'
 
@@ -131,9 +131,15 @@ export default function ResultsCriticalAreas({
                   const box = (
                     <span
                       data-band="critical"
-                      className="inline-flex h-6 min-w-10 shrink-0 items-center justify-center rounded border px-1.5 text-sm font-semibold tabular-nums"
+                      className="inline-flex h-6 min-w-10 shrink-0 items-center justify-center gap-1 rounded border px-1.5 text-sm font-semibold tabular-nums"
                       style={bandCellStyle('critical')}
                     >
+                      {/* The band's glyph before the figure, as on the map: the red alone
+                          never names the area (accessibility.md; ruling of 1 Oct). The
+                          section's heading is the area's name. */}
+                      <span aria-hidden="true" data-testid="critical-glyph" className="inline-flex text-xs">
+                        <BandGlyph band="critical" />
+                      </span>
                       {score(cell.score)}
                     </span>
                   )

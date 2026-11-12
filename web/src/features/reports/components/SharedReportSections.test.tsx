@@ -560,7 +560,7 @@ describe('the shared report body', () => {
 
     expect(screen.getByText(/Menos de 8 personas han completado esta encuesta/)).toBeTruthy()
     expect(
-      screen.getByText(/Se reservan 1 departamento\(s\) porque cada uno tiene menos de 8 personas/),
+      screen.getByText(/Se reserva 1 departamento porque tiene menos de 8 personas/),
     ).toBeTruthy()
     expect(screen.queryByText(/menos de 5/i)).toBeNull()
   })
@@ -741,7 +741,7 @@ describe('the shared report body', () => {
     const { container } = renderSections()
 
     expect(
-      screen.getByText(/Se reservan 2 grupo\(s\) porque cada uno tiene menos de 8 personas/),
+      screen.getByText(/Se reservan 2 grupos porque cada uno tiene menos de 8 personas/),
     ).toBeTruthy()
     expect(container.textContent ?? '').not.toContain(String(WITHHELD_HEADCOUNT))
   })
