@@ -621,7 +621,7 @@ describe('Distribución (Distribution artboard)', () => {
     expect(screen.getByTestId('distribution-readings').className.split(' ')).toContain('-mt-1')
   })
 
-  it("prints 'y n personas más' in the artboard's #5e6a82: the label ink, which clears AA on the card in both palettes", () => {
+  it("prints 'y n personas más' in the label ink (#6c6c71 since the Apple design), which clears AA on the card in both palettes", () => {
     distribution(invitationList(6))
     const more = screen.getByTestId('invitations-more')
     expect(more.textContent).toContain('y 2 personas más')
@@ -629,7 +629,7 @@ describe('Distribución (Distribution artboard)', () => {
     expect(more.className.split(' ')).not.toContain('text-fg-secondary')
     const [inkLight, inkDark] = tokenPair('admin-font-section-label')
     const [cardLight, cardDark] = tokenPair('admin-bg-card')
-    expect(inkLight).toBe('#5e6a82')
+    expect(inkLight).toBe('#6c6c71')
     expect(contrast(inkLight, cardLight)).toBeGreaterThanOrEqual(4.5)
     expect(contrast(inkDark, cardDark)).toBeGreaterThanOrEqual(4.5)
   })

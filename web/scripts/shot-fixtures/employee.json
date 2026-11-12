@@ -95,7 +95,7 @@
     "responseCount": 24,
     "departmentCount": 5,
     "protectedDepartmentCount": 1,
-    "minimumGroupSize": 5,
+    "minimumGroupSize": 3,
     "plansOpenedSince": [
       {
         "departmentName": "Engineering",

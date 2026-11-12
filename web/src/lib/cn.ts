@@ -41,6 +41,11 @@ const SPACING_STEPS = [
   // Shell widths
   'sidebar',
   'sidebar-collapsed',
+  // The canvas button height and the Apple design's content-box padding
+  'control-canvas',
+  'box-x',
+  'box-top',
+  'box-bottom',
 ]
 
 const twMerge = extendTailwindMerge({
@@ -51,8 +56,16 @@ const twMerge = extendTailwindMerge({
       // The named steps that are not t-shirt sizes. tailwind-merge already reads `2xs`/`3xs`
       // as font sizes; an unregistered `text-reading` or `text-kpi-hero` is read as a COLOUR
       // and silently drops the colour class beside it (`cn.test.ts`).
-      text: ['2xs', 'reading', 'kpi-lg', 'kpi-hero', 'question'],
-      tracking: ['label', 'eyebrow', 'kpi'],
+      //
+      // The respond page's four steps were missing, and that is the defect this list exists
+      // for: `<Button variant="primary" className="text-respond">` merged to a button whose
+      // `text-fg-on-accent` had been dropped as "the earlier colour", so "Siguiente" printed
+      // in the inherited near-black on the blue fill — 3.26:1 — on every respond screen.
+      // `text-ui` is the Apple design's 14px row/control step.
+      text: ['2xs', 'reading', 'kpi-lg', 'kpi-hero', 'question', 'ui', 'respond', 'respond-sm', 'respond-lg', 'respond-question'],
+      tracking: ['label', 'eyebrow', 'kpi', 'tile', 'display', 'title'],
+      // The Apple design's content box and sheet radii (`rounded-box`, `rounded-sheet`).
+      radius: ['box', 'sheet'],
     },
   },
 })

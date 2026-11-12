@@ -1042,7 +1042,7 @@
       }
     ],
     "suppressedGroupCount": 1,
-    "minimumGroupSize": 5,
+    "minimumGroupSize": 3,
     "generatedAt": "2026-09-11T04:38:41.874237+00:00"
   },
   "GET /surveys/climate-trends": {
@@ -1169,7 +1169,7 @@
       }
     ],
     "suppressedGroupCount": 0,
-    "minimumGroupSize": 5,
+    "minimumGroupSize": 3,
     "generatedAt": "2026-09-11T04:38:41.886578+00:00"
   },
   "GET /surveys": {

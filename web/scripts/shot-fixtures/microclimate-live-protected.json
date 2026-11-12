@@ -10,7 +10,7 @@
     "companyId": "11111111-1111-1111-1111-111111111111",
     "createdBy": "00000000-0000-0000-0000-000000000001",
     "status": "active",
-    "responseCount": 3,
+    "responseCount": 2,
     "targetParticipantCount": 48,
     "startTime": "2026-08-11T09:00:00Z",
     "endTime": "2026-08-11T09:20:00Z",
@@ -50,10 +50,10 @@
     "sentimentScore": null,
     "engagementLevel": "low",
     "wordCloud": [],
-    "responseCount": 3,
+    "responseCount": 2,
     "targetParticipantCount": 48,
     "isSuppressed": true,
     "suppressionReason": "below_minimum_respondents",
-    "minimumGroupSize": 5
+    "minimumGroupSize": 3
   }
 }

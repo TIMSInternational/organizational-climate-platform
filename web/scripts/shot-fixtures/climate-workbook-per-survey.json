@@ -289,7 +289,7 @@
       "surveyEndDate": "2026-03-31T00:00:00+00:00",
       "respondentCount": 23,
       "isSuppressed": false,
-      "minimumGroupSize": 5,
+      "minimumGroupSize": 3,
       "dimensions": [
         {
           "dimension": "Pertenencia",
@@ -325,7 +325,7 @@
     "responseCount": 178,
     "departmentCount": 6,
     "protectedDepartmentCount": 1,
-    "minimumGroupSize": 5,
+    "minimumGroupSize": 3,
     "openPlanCount": 7,
     "plansOpenedSince": [
       {
@@ -763,7 +763,7 @@
     },
     "isSuppressed": false,
     "suppressionReason": null,
-    "minimumGroupSize": 5,
+    "minimumGroupSize": 3,
     "generatedAt": "2026-08-19T18:00:00Z",
     "questions": [
       {
@@ -2273,7 +2273,7 @@
       }
     ],
     "suppressedGroupCount": 0,
-    "minimumGroupSize": 5,
+    "minimumGroupSize": 3,
     "generatedAt": "2026-10-01T09:00:00+00:00"
   },
   "GET /surveys/drafts/latest": {
@@ -2680,7 +2680,7 @@
       }
     ],
     "suppressedGroupCount": 1,
-    "minimumGroupSize": 5,
+    "minimumGroupSize": 3,
     "generatedAt": "2026-10-01T09:00:00+00:00"
   },
   "GET /profile": {
@@ -3378,7 +3378,7 @@
     "targetParticipantCount": 57,
     "isSuppressed": false,
     "suppressionReason": null,
-    "minimumGroupSize": 5,
+    "minimumGroupSize": 3,
     "sentimentScore": null,
     "engagementLevel": "medium",
     "wordCloud": [

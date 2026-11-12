@@ -148,7 +148,7 @@ describe('the survey results on the tenant’s real payload', () => {
     expect(tiles).toContain('de 5 legibles')
     // Finanzas is withheld: counted, and since 2026-10-12 never named -- beside the
     // withheld headcount /analytics serves, its name was its size.
-    expect(tiles).toContain('1 grupo bajo el umbral de 5: protegido, sin nombre')
+    expect(tiles).toContain('1 grupo bajo el umbral de 3: protegido, sin nombre')
     expect(tiles).not.toContain('Finanzas')
     // The fourth tile counts the map's cells in the critical area — all three Operaciones'.
     expect(tiles).toContain('Área crítica')
@@ -239,7 +239,7 @@ describe('the survey results on the tenant’s real payload', () => {
       '«Frente a Q2» por grupo aparece cuando la encuesta anterior tiene ese mismo grupo por encima del umbral.',
     )
     const legend = screen.getByTestId('grid-legend')
-    expect(within(legend).getByText('protegido, menos de 5 respuestas')).toBeTruthy()
+    expect(within(legend).getByText('protegido, menos de 3 respuestas')).toBeTruthy()
     for (const [name, range] of [
       ['Área de fortaleza', '4,00 a 5,00'],
       ['Área de oportunidad', '3,00 a 3,99'],
@@ -481,8 +481,8 @@ describe('the survey results on the tenant’s real payload', () => {
     expect(screen.queryByText('Los resultados por pregunta están reservados')).toBeNull()
     expect(within(grid).getByTestId('company-row')).toBeTruthy()
     expect(within(grid).queryAllByTestId(/^group-row-/)).toHaveLength(0)
-    expect(screen.getByText('ningún grupo llegó a 5 respuestas, así que el mapa muestra solo a toda la empresa')).toBeTruthy()
-    expect(screen.getByText('ningún grupo llegó al umbral de 5')).toBeTruthy()
+    expect(screen.getByText('ningún grupo llegó a 3 respuestas, así que el mapa muestra solo a toda la empresa')).toBeTruthy()
+    expect(screen.getByText('ningún grupo llegó al umbral de 3')).toBeTruthy()
     // Findings rank GROUP cells; with none, the section would claim "every cell is in
     // Fortaleza" about a map that has no group cell.
     expect(screen.queryByRole('heading', { level: 2, name: 'Dónde mirar primero' })).toBeNull()

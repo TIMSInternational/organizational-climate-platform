@@ -16,6 +16,11 @@ import { cn } from '../../lib/cn'
  * `translateX(-100%)` indicator inside a rounded, clipped track left an antialiased
  * sliver of fill at the track's left end (sampled (207,208,239) on the microclimate
  * live bar at 2x, 11 Sep), where every artboard draws an empty track flat.
+ *
+ * The track is the Apple design's control fill (`bg-surface-fill`, the canvas's
+ * `.prog` / `.meter` on `--fill`), translucent so it reads on any ground. It was
+ * the recessed tile colour, which since 11 Nov is the same #f5f5f7 as the respond
+ * page's ground — the track vanished there and only the blue indicator was left.
  */
 export type ProgressProps = ComponentProps<typeof ProgressPrimitive.Root> & {
   /**
@@ -38,7 +43,7 @@ export function Progress({ className, indicatorClassName, value, ...props }: Pro
       data-slot="progress"
       value={value}
       className={cn(
-        'relative h-1.5 w-full overflow-hidden rounded-full bg-surface-icon-box',
+        'relative h-1.5 w-full overflow-hidden rounded-full bg-surface-fill',
         className,
       )}
       {...props}

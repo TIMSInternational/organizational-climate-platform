@@ -219,7 +219,7 @@
       }
     ],
     "suppressedGroupCount": 0,
-    "minimumGroupSize": 5,
+    "minimumGroupSize": 3,
     "generatedAt": "2026-09-10T17:14:25.578153+00:00"
   },
   "GET /surveys/climate-trends?groupBy=department": {
@@ -578,7 +578,7 @@
       }
     ],
     "suppressedGroupCount": 1,
-    "minimumGroupSize": 5,
+    "minimumGroupSize": 3,
     "generatedAt": "2026-09-10T17:14:25.608839+00:00"
   },
   "GET /dashboard/company-admin": {

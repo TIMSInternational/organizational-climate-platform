@@ -29,7 +29,7 @@
     "targetParticipantCount": 20,
     "isSuppressed": true,
     "suppressionReason": "below_minimum_respondents",
-    "minimumGroupSize": 5
+    "minimumGroupSize": 3
   },
   "GET /microclimates/*": {
     "id": "5e4cf7fd-d792-4cf5-9750-11f7748bd37e",

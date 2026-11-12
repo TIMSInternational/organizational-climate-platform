@@ -54,7 +54,8 @@ describe('Dialog', () => {
     expect(overlay.className).not.toContain('bg-surface-overlay')
 
     const tokens = readFileSync(join(process.cwd(), 'src', 'styles', 'tokens.css'), 'utf8')
-    expect(tokens).toMatch(/--admin-bg-scrim:\s*rgba\(7, 15, 33, 0\.45\);/)
+    // The Apple design's `.scrim` (occ.css, 11 Nov): the frame's navy at 45%.
+    expect(tokens).toMatch(/--admin-bg-scrim:\s*rgba\(6, 12, 25, 0\.45\);/)
     // Light and dark both declare it, so a theme switch cannot fall back to nothing.
     expect(tokens.match(/--admin-bg-scrim:/g)).toHaveLength(2)
     const theme = readFileSync(join(process.cwd(), 'src', 'styles', 'theme.css'), 'utf8')

@@ -167,7 +167,11 @@ export default function RoleBasedNav({ sections, collapsed = false, onNavigate }
     // three-way selected state — a selected leaf is white on the blue accent, a
     // selected parent stays on the panel and goes bold, everything else is
     // secondary text. The two colour properties live in `index.css` now, keyed on
-    // `data-nav-state`; see `NavRowState` for why.
+    // `data-nav-state`; see `NavRowState` for why. Type: the rail keeps the app's own
+    // 13px (`--admin-text-sm`) while the body moved to 15px (11 Nov). The canvas sets its
+    // rows at 14px (`--admin-text-ui`), but with today's labels "Administración de
+    // Empresa" truncates at 14px in the 236px rail (measured in the shot); the 14px step
+    // belongs with the canvas's regrouped, shorter labels.
     const rowStyle = {
       display: 'flex',
       alignItems: 'center',
@@ -183,7 +187,7 @@ export default function RoleBasedNav({ sections, collapsed = false, onNavigate }
       border: 'none',
       borderRadius: 'var(--admin-radius-md)',
       fontFamily: 'inherit',
-      fontSize: 'var(--admin-text-base)',
+      fontSize: 'var(--admin-text-sm)',
       fontWeight: isActive && hasSub && isExpanded ? 'var(--admin-weight-bold)' : 'var(--admin-weight-medium)',
       textAlign: 'left' as const,
       textDecoration: 'none',
@@ -467,7 +471,7 @@ function SubItemRow({
         height: 'var(--admin-size-control-md)',
         padding: elbow ? '0 var(--admin-space-4) 0 0' : '0 var(--admin-space-8)',
         borderRadius: 'var(--admin-radius-md)',
-        fontSize: 'var(--admin-text-base)',
+        fontSize: 'var(--admin-text-sm)',
         fontWeight: 'var(--admin-weight-medium)',
         textDecoration: 'none',
       }}

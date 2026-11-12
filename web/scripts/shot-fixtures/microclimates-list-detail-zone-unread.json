@@ -35,7 +35,7 @@
     "targetParticipantCount": 20,
     "isSuppressed": true,
     "suppressionReason": "below_minimum_respondents",
-    "minimumGroupSize": 5
+    "minimumGroupSize": 3
   },
   "GET /microclimates/seats": {
     "licensed": true,

@@ -62,5 +62,20 @@ describe('cn', () => {
     // The respond card's 17px question step (`text-question`), beside an ink and over another size.
     expect(cn('text-question', 'text-fg-primary')).toBe('text-question text-fg-primary')
     expect(cn('text-xl', 'text-question')).toBe('text-question')
+    // The respond steps: unregistered, `text-respond` read as a colour and dropped the
+    // primary button's `text-fg-on-accent` -- a near-black label on the blue fill.
+    expect(cn('text-fg-on-accent', 'text-respond')).toBe('text-fg-on-accent text-respond')
+    expect(cn('text-respond-sm', 'text-fg-secondary')).toBe('text-respond-sm text-fg-secondary')
+    expect(cn('text-base', 'text-respond-question')).toBe('text-respond-question')
+    // The Apple design's 14px row/control step.
+    expect(cn('text-ui', 'text-fg-primary')).toBe('text-ui text-fg-primary')
+    expect(cn('text-base', 'text-ui')).toBe('text-ui')
+  })
+
+  it('resolves the Apple design radii and box padding as their own groups', () => {
+    expect(cn('rounded-xl', 'rounded-box')).toBe('rounded-box')
+    expect(cn('rounded-box', 'rounded-sheet')).toBe('rounded-sheet')
+    expect(cn('px-6', 'px-box-x')).toBe('px-box-x')
+    expect(cn('tracking-tight', 'tracking-display')).toBe('tracking-display')
   })
 })

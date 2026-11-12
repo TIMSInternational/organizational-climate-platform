@@ -130,7 +130,7 @@
       }
     ],
     "suppressedGroupCount": 0,
-    "minimumGroupSize": 5,
+    "minimumGroupSize": 3,
     "generatedAt": "2026-09-10T19:52:48.333137+00:00"
   },
   "GET /surveys/7321a9bb-9e83-465a-a31d-73bdc186d626/analytics": {
@@ -604,7 +604,7 @@
     ],
     "isSuppressed": false,
     "suppressionReason": null,
-    "minimumGroupSize": 5,
+    "minimumGroupSize": 3,
     "generatedAt": "2026-09-10T19:53:27.214173+00:00"
   },
   "GET /surveys/*/analytics": {
@@ -1078,7 +1078,7 @@
     ],
     "isSuppressed": false,
     "suppressionReason": null,
-    "minimumGroupSize": 5,
+    "minimumGroupSize": 3,
     "generatedAt": "2026-09-10T19:53:27.159882+00:00"
   },
   "GET /surveys/*": {
