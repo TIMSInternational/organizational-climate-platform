@@ -258,7 +258,7 @@ export function CanvasSelect({ className, children, ...props }: ComponentProps<'
     <span data-slot="canvas-select" className={cn('relative inline-flex min-w-0 max-w-full', className)}>
       <select
         {...props}
-        className="h-control-lg w-full min-w-0 appearance-none truncate rounded-md border border-line-default bg-surface-input py-0 pl-2.5 pr-8 text-base text-fg-primary"
+        className="h-9 w-full min-w-0 appearance-none truncate rounded-md border border-line-control bg-surface-input py-0 pl-2.5 pr-8 text-base text-fg-primary"
       >
         {children}
       </select>

@@ -193,7 +193,7 @@ export default function CompaniesListNextPage() {
                   <col className="w-24" />
                   <col className="w-28" />
                   <col className="w-22" />
-                  <col className="w-36" />
+                  <col className="w-44" />
                   <col className="w-28" />
                   <col className="w-22" />
                 </colgroup>

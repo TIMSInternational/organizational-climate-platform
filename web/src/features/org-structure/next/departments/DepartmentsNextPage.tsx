@@ -317,8 +317,8 @@ function DepartmentsView({
           <ul className="m-0 mt-3 grid list-none gap-3 p-0 sm:grid-cols-2 lg:grid-cols-3 xl:mt-0 xl:grid-cols-5">
             {active.map((row) => (
               <li key={row.id} data-slot="department-card" data-department={row.name} className="flex min-w-0 flex-col gap-2 rounded-xl border border-line-default bg-surface-card px-4 py-3.5 shadow-sm">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="truncate text-lg font-semibold">{row.name}</span>
+                <div className="flex items-start justify-between gap-2">
+                  <span className="min-w-0 break-words text-lg font-semibold leading-tight">{row.name}</span>
                   <CanvasChip tone="good" label={t(`${K}.active`)} />
                 </div>
                 <div className="flex items-baseline gap-1.5">

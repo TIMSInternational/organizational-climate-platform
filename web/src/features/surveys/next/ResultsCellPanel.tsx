@@ -236,7 +236,7 @@ export default function ResultsCellPanel({
           <p className={LABEL}>{t('surveyResults.next.othersHeading', { dimension })}</p>
           <ul className="m-0 flex list-none flex-col gap-1.5 p-0" data-testid="others-in-dimension">
             {detail.others.map((other) => (
-              <li key={other.id} data-testid={`other-${other.id}`} className="grid grid-cols-[1fr_9rem] items-center gap-2">
+              <li key={other.id} data-testid={`other-${other.id}`} className="grid grid-cols-[1fr_10.5rem] items-center gap-2">
                 <span className="text-sm text-fg-secondary">{other.name}</span>
                 {other.isProtected || other.score === null || other.band === null ? (
                   <ProtectedCell

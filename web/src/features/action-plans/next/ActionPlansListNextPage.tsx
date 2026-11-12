@@ -491,7 +491,7 @@ function Filters({
         aria-label={t('actionPlans.next.priorityFilter')}
         value={filters.priority}
         onChange={(event) => onChange({ ...filters, priority: event.target.value })}
-        className="w-full sm:w-[180px]"
+        className="w-full sm:w-auto"
       >
         <option value="">{t('actionPlans.allPriorities')}</option>
         {ACTION_PLAN_PRIORITIES.map((priority) => (
