@@ -1,7 +1,7 @@
 import { Link } from 'react-router'
 import { ChevronDown, MoreHorizontal, Plus, Search } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
-import { PageTopBar } from '../../../../components/layout'
+import { PageHeader } from '../../../../components/layout'
 import {
   Alert,
   AlertDescription,
@@ -15,9 +15,10 @@ import {
   Input,
   LoadingRegion,
   NetworkError,
+  SegmentedControl,
   SkeletonText,
   Table,
-  chipVariants,
+  TableHead,
 } from '../../../../components/ui'
 import { useViewerCapabilities, type ViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { StatusWorkbookButton } from '../StatusWorkbookButton'
@@ -66,10 +67,11 @@ const FACET_KEY: Record<string, string> = {
   archived: 'surveys.next.list.facetArchived',
 }
 
-// The canvas's `.label` head: 10px in a 15px line box, 8px above and below, over a rule in the
-// default hairline (`border-bottom: 1px solid #e0dbee`) — `index.css` rules every bare th in the
-// light one, and a cell's rule wins over its row's.
-const HEAD = 'px-3 pt-2 pb-2 text-left text-2xs font-bold uppercase leading-normal tracking-label text-fg-label whitespace-nowrap border-b border-line-default'
+// The column head is the `TableHead` primitive — the Apple board's `.tbl th`: 13px semibold in the
+// tertiary ink, sentence case, never the 11px uppercase that the type ruling keeps for eyebrows.
+// Its rule is the default hairline (`index.css` rules every bare th in the light one, and a
+// cell's rule wins over its row's), in a 15px line box.
+const HEAD = 'leading-normal border-b border-line-default'
 /** Every cell after the first, from xl: its column's left edge is the canvas's gap. */
 const GAP_CELL = 'xl:pl-0'
 
@@ -113,27 +115,37 @@ function SurveysListForCompany() {
 
   return (
     <div>
-      <PageTopBar
+      {/* The board's `.hdr`: the company as the eyebrow, the serif title, the sub, the
+          secondary actions bordered and ONE primary — Nueva encuesta — at the trailing edge. */}
+      <PageHeader
         eyebrow={state.model.companyName}
         title={t('navigation.surveys')}
         description={t('surveys.next.list.description')}
         actions={
           capabilities.canAuthorSurveys ? (
-            <div className="flex flex-wrap gap-2">{companyId && (
-              <StatusWorkbookButton
-                companyId={companyId}
-                companyName={state.model.companyName ?? ''}
-                baseUrl={import.meta.env.VITE_API_BASE_URL as string}
-                label={t('surveys.next.list.statusExport')}
-              />
-            )}
-            <Button asChild variant="outline"><Link to="/surveys/import">{t('climateWorkbook.title')}</Link></Button>
+            <>
+              {companyId && (
+                <StatusWorkbookButton
+                  companyId={companyId}
+                  companyName={state.model.companyName ?? ''}
+                  baseUrl={import.meta.env.VITE_API_BASE_URL as string}
+                  label={t('surveys.next.list.statusExport')}
+                />
+              )}
+              <Button asChild variant="outline">
+                <Link to="/surveys/import">{t('climateWorkbook.title')}</Link>
+              </Button>
+            </>
+          ) : undefined
+        }
+        primaryAction={
+          capabilities.canAuthorSurveys ? (
             <Button asChild variant="primary">
               <Link to="/surveys/new">
                 <Plus aria-hidden="true" />
                 {t('surveys.newSurvey')}
               </Link>
-            </Button></div>
+            </Button>
           ) : undefined
         }
       />
@@ -147,71 +159,64 @@ function SurveysListForCompany() {
           state.apply()
         }}
       >
-        <div className="relative w-full sm:w-75">
-          <Search
-            aria-hidden="true"
-            className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-fg-label"
-          />
-          <Input
-            type="search"
-            aria-label={t('surveys.next.list.searchPlaceholder')}
-            placeholder={t('surveys.next.list.searchPlaceholder')}
-            value={state.draft.q}
-            onChange={(event) => state.setDraft({ ...state.draft, q: event.target.value })}
-            className="pl-8"
-          />
-        </div>
-        {/* A native <select> (ui/select.tsx says to prefer one for a plain list), drawn
-            as the artboard draws it: no platform arrow, the canvas's thin 14px chevron.
-            `mt-0 block`: `index.css` gives a select in a label 4px above it, and an inline
-            one sits on the label's baseline; either made the filter row 36px, not 32. */}
-        <label className="relative mb-0 w-full sm:w-42.5">
-          <span className="sr-only">{t('surveys.typeLabel')}</span>
-          <ChevronDown
-            aria-hidden="true"
-            data-slot="type-chevron"
-            className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-fg-label"
-          />
-          <select
-            className="mt-0 block w-full appearance-none pr-8"
-            value={state.draft.type}
-            onChange={(event) => state.apply({ ...state.draft, type: event.target.value })}
-          >
-            <option value="">{t('surveys.next.list.allTypes')}</option>
-            {state.availableTypes.map((type) => (
-              <option key={type} value={type}>
-                {typeLabel(t, type)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div role="group" aria-label={t('surveys.filterByStatus')} className="flex flex-wrap items-center gap-1.5">
-          {facets.map((facet) => {
-            const selected = state.statusFilter === facet.status
-            return (
-              // The canvas's chip, pressable: the blue chip is the one chosen — blue is
-              // selection, and red is the Crítica result area only (the user's ruling of
-              // 11 Nov). Styled whole from `chipVariants`, so `index.css`'s bare-button card
-              // never shows.
-              <button
-                key={facet.status}
-                type="button"
-                data-slot="status-pill"
-                aria-pressed={selected}
-                onClick={() => state.setStatusFilter(facet.status)}
-                className={cn(chipVariants({ tone: selected ? 'accent' : 'neutral' }), 'cursor-pointer hover:border-line-hover')}
-              >
-                {t('surveys.next.list.chipCount', {
-                  label: FACET_KEY[facet.status] ? t(FACET_KEY[facet.status]) : statusLabel(t, facet.status),
-                  count: facet.count,
-                })}
-              </button>
-            )
-          })}
-        </div>
-        <p className="m-0 ml-auto text-sm text-fg-label">
+        {/* The board's `.seg`: the status filter as one segmented control, its segments only
+            the statuses this company has (`visibleFacets`) — no "Borradores · 0". It filters
+            the rows already read; it never sends a request. */}
+        <SegmentedControl
+          label={t('surveys.filterByStatus')}
+          value={state.statusFilter}
+          onChange={state.setStatusFilter}
+          className="max-w-full flex-wrap"
+          options={facets.map((facet) => ({
+            value: facet.status,
+            label: t('surveys.next.list.chipCount', {
+              label: FACET_KEY[facet.status] ? t(FACET_KEY[facet.status]) : statusLabel(t, facet.status),
+              count: facet.count,
+            }),
+          }))}
+        />
+        <p className="m-0 text-sm text-fg-tertiary tabular-nums sm:ml-auto">
           {t('surveys.next.list.countSummary', { count: state.model.rows.length })}
         </p>
+        <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto">
+          <div className="relative w-full sm:w-75">
+            <Search
+              aria-hidden="true"
+              className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-fg-label"
+            />
+            <Input
+              type="search"
+              aria-label={t('surveys.next.list.searchPlaceholder')}
+              placeholder={t('surveys.next.list.searchPlaceholder')}
+              value={state.draft.q}
+              onChange={(event) => state.setDraft({ ...state.draft, q: event.target.value })}
+              className="pl-8"
+            />
+          </div>
+          {/* A native <select> (ui/select.tsx says to prefer one for a plain list), with no
+              platform arrow and the board's thin 14px chevron. `mt-0 block`: `index.css` gives a
+              select in a label 4px above it, and an inline one sits on the label's baseline. */}
+          <label className="relative mb-0 w-full sm:w-42.5">
+            <span className="sr-only">{t('surveys.typeLabel')}</span>
+            <ChevronDown
+              aria-hidden="true"
+              data-slot="type-chevron"
+              className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-fg-label"
+            />
+            <select
+              className="mt-0 block w-full appearance-none pr-8"
+              value={state.draft.type}
+              onChange={(event) => state.apply({ ...state.draft, type: event.target.value })}
+            >
+              <option value="">{t('surveys.next.list.allTypes')}</option>
+              {state.availableTypes.map((type) => (
+                <option key={type} value={type}>
+                  {typeLabel(t, type)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
       </form>
 
       {state.actionError && (
@@ -304,21 +309,22 @@ function SurveySectionBlock({
           >
             {t(SECTION_KEY[section])}
           </h2>
-          <span className="font-mono text-sm tabular-nums text-fg-label">{rows.length}</span>
+          <span className="text-sm tabular-nums text-fg-tertiary">{rows.length}</span>
         </div>
-        {note && <p className="m-0 text-sm text-fg-label">{note}</p>}
+        {note && <p className="m-0 text-sm text-fg-tertiary">{note}</p>}
       </div>
       <div
         className={cn(
-          'overflow-hidden rounded-lg border border-line-default bg-surface-card',
-          archived ? 'border-dashed' : 'shadow-xs',
+          // The board's `.card.flush`: 12px radius, the panel hairline, no shadow.
+          'overflow-hidden rounded-xl border border-line-panel bg-surface-card',
+          archived && 'border-dashed',
         )}
       >
         {/* The canvas's columns from `xl`; below it they tighten and the participation bar
             steps aside for its percentage, so at 1024 the row's actions stay on screen
             instead of behind a horizontal scroll. Narrower than that, the table scrolls
             inside this card and never pushes the page. */}
-        <Table className="min-w-180 table-fixed xl:min-w-240">
+        <Table className="min-w-205 table-fixed lg:min-w-180 xl:min-w-240">
           <colgroup>
             <col />
             {/* From xl, the canvas's grid: `minmax(0,1fr) 110px 120px 210px 130px 190px`
@@ -336,14 +342,14 @@ function SurveySectionBlock({
               stays in the tree for assistive technology. */}
           <thead className={archived ? 'sr-only' : undefined}>
             <tr className="border-b border-line-default">
-              <th className={HEAD}>{t('surveys.next.list.colSurvey')}</th>
-              <th className={cn(HEAD, GAP_CELL)}>{t('common.status')}</th>
-              <th className={cn(HEAD, GAP_CELL)}>{t('surveys.responses')}</th>
-              <th className={cn(HEAD, GAP_CELL)}>{t('surveys.participation')}</th>
-              <th className={cn(HEAD, GAP_CELL)}>{t('surveys.next.list.colClose')}</th>
-              <th className={cn(HEAD, GAP_CELL, 'text-right')}>
+              <TableHead className={HEAD}>{t('surveys.next.list.colSurvey')}</TableHead>
+              <TableHead className={cn(HEAD, GAP_CELL)}>{t('common.status')}</TableHead>
+              <TableHead className={cn(HEAD, GAP_CELL)}>{t('surveys.responses')}</TableHead>
+              <TableHead className={cn(HEAD, GAP_CELL)}>{t('surveys.participation')}</TableHead>
+              <TableHead className={cn(HEAD, GAP_CELL)}>{t('surveys.next.list.colClose')}</TableHead>
+              <TableHead className={cn(HEAD, GAP_CELL, 'text-right')}>
                 <span className="sr-only">{t('common.actions')}</span>
-              </th>
+              </TableHead>
             </tr>
           </thead>
           <tbody>
@@ -362,7 +368,7 @@ function SurveySectionBlock({
           </tbody>
         </Table>
       </div>
-      {archived && <p className="m-0 text-sm text-fg-label">{t('surveys.next.list.archivedNote')}</p>}
+      {archived && <p className="m-0 text-sm text-fg-tertiary">{t('surveys.next.list.archivedNote')}</p>}
     </section>
   )
 }
@@ -449,10 +455,11 @@ function SurveyTableRow({
         </div>
       </td>
       <td className="px-3 py-3 xl:pl-0">
-        <Chip tone={running ? 'live' : 'neutral'} label={statusLabel(t, row.status)} className="w-full justify-start" />
+        {/* The chip hugs its word (22px, 8px padding): a chip is a label, not a field. */}
+        <Chip tone={running ? 'live' : 'neutral'} label={statusLabel(t, row.status)} />
       </td>
       <td className="px-3 py-3 xl:pl-0 whitespace-nowrap">
-        <span className={cn('font-mono text-lg tabular-nums', ink)}>{counts.count}</span>
+        <span className={cn('text-lg font-semibold tabular-nums', ink)}>{counts.count}</span>
         {section === 'closed' ? (
           <span className="ml-1.5 text-sm text-fg-secondary">{t('surveys.next.list.completedUnit')}</span>
         ) : counts.target !== null ? (
@@ -467,18 +474,18 @@ function SurveyTableRow({
             {archived && counts.count === 0 ? t('surveys.next.list.noSubmissions') : t('surveys.next.list.noInviteList')}
           </span>
         ) : archived ? (
-          <span className="font-mono text-sm tabular-nums text-fg-label">
+          <span className="text-sm tabular-nums text-fg-tertiary">
             {formatMetric(counts.percent, { kind: 'percentage' }, locale)}
           </span>
         ) : (
           <span className="flex items-center gap-2">
-            <span aria-hidden="true" className="hidden h-1.5 w-27.5 shrink-0 overflow-hidden rounded-full bg-line-light xl:block">
+            <span aria-hidden="true" className="hidden h-1.5 w-27.5 shrink-0 overflow-hidden rounded-full bg-surface-fill xl:block">
               <span
                 className="block h-full rounded-full bg-accent-blue"
                 style={{ width: `${Math.min(counts.percent, 100)}%` }}
               />
             </span>
-            <span className="font-mono text-sm tabular-nums text-fg-secondary">
+            <span className="text-sm tabular-nums text-fg-secondary">
               {formatMetric(counts.percent, { kind: 'percentage' }, locale)}
             </span>
           </span>
@@ -491,7 +498,7 @@ function SurveyTableRow({
           </span>
         ) : (
           <span className="flex flex-col">
-            <span className="font-mono text-base tabular-nums text-fg-primary">
+            <span className="text-base tabular-nums text-fg-primary">
               {calendarDay(Date.parse(row.endDate), locale)}
             </span>
             {closeLine && (

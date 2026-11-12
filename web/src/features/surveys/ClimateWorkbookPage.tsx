@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useBlocker } from 'react-router'
-import { PageTopBar } from '../../components/layout'
-import { Alert, AlertDescription, Button, Input, Table } from '../../components/ui'
+import { Download } from 'lucide-react'
+import { PageHeader } from '../../components/layout'
+import { Alert, AlertDescription, Button, Input, Note, Table, TableHead } from '../../components/ui'
 import { readViewerClaims, useViewerCapabilities } from '../../auth/viewerCapabilities'
 import { useTranslation } from '../../i18n'
 import { roleLabelKey } from '../org-structure/labels'
@@ -79,57 +80,77 @@ export default function ClimateWorkbookPage() {
   const access = plan ? modeCopy(plan.credentialMode) : null
   const goToCompany = () => { if (result && readViewerClaims().role === 'super_admin') writeSelectedCompanyId(result.companyId) }
   if (!canAuthorSurveys && readViewerClaims().role !== 'super_admin') return <Alert role="alert"><AlertDescription>{t('climateWorkbook.forbidden')}</AlertDescription></Alert>
-  return <div className="mx-auto max-w-5xl space-y-6">
-    <PageTopBar title={t('climateWorkbook.title')} description={t('climateWorkbook.description')} actions={<Button variant="outline" disabled={busy} onClick={() => void download()}>{t('climateWorkbook.download')}</Button>} />
-    {!result && <section className="space-y-4 rounded-lg border border-line-default bg-surface-card p-6">
-      <label className="block space-y-2"><span>{t('climateWorkbook.file')}</span><Input type="file" accept=".xlsx" disabled={busy} onChange={e => { setFile(e.target.files?.[0] ?? null); setPlan(null); setApproved(false); setError(null); setProgress(null) }} /></label>
-      <p>{t('climateWorkbook.previewOnly')}</p>
-      <Button disabled={!file || busy} onClick={() => void review()}>{t(busy ? 'common.loading' : 'climateWorkbook.review')}</Button>
+  // The Apple board's surfaces: a `.card` (12px radius, the panel hairline, no shadow, 18/20px
+  // padding) for each step, serif card titles, 15px body and 13px secondary lines.
+  const CARD = 'flex flex-col gap-4 rounded-xl border border-line-panel bg-surface-card px-5 py-4.5'
+  const CARD_TITLE = 'm-0 text-2xl'
+  return <div className="flex flex-col">
+    <PageHeader
+      breadcrumbs={[{ label: t('navigation.surveys'), href: '/surveys' }, { label: t('climateWorkbook.title') }]}
+      title={t('climateWorkbook.title')}
+      description={t('climateWorkbook.description')}
+      actions={<Button variant="outline" disabled={busy} onClick={() => void download()}><Download aria-hidden="true" />{t('climateWorkbook.download')}</Button>}
+    />
+    <div className="flex max-w-3xl flex-col gap-6">
+    {!result && <section className={CARD}>
+      <label className="mb-0 flex flex-col gap-2">
+        <span className="text-sm font-semibold text-fg-primary">{t('climateWorkbook.file')}</span>
+        {/* The native picker, its button drawn as the bordered button and the 36px field around it. */}
+        <Input type="file" accept=".xlsx" disabled={busy} className="h-auto min-h-9 py-1.5 text-sm text-fg-secondary file:mr-3 file:h-7 file:rounded-md file:border file:border-solid file:border-line-control file:bg-surface-card file:px-3 file:text-sm file:font-medium file:text-fg-primary pointer-coarse:min-h-11" onChange={e => { setFile(e.target.files?.[0] ?? null); setPlan(null); setApproved(false); setError(null); setProgress(null) }} />
+      </label>
+      <p className="m-0 text-sm text-fg-secondary">{t('climateWorkbook.previewOnly')}</p>
+      {/* The step's one primary until a plan is on screen; then the approval below holds it. */}
+      <div><Button variant={plan ? 'outline' : 'primary'} disabled={!file || busy} onClick={() => void review()}>{t(busy ? 'common.loading' : 'climateWorkbook.review')}</Button></div>
     </section>}
     {error && <Alert variant="destructive" role="alert"><AlertDescription className="whitespace-pre-wrap">{error}</AlertDescription></Alert>}
-    {plan && !result && <section className="space-y-5 rounded-lg border border-line-default bg-surface-card p-6">
+    {plan && !result && <section className={CARD}>
       {plan.errors.length > 0 ? <>
-        <h2>{t('climateWorkbook.incompleteTitle')}</h2>
-        <p>{t('climateWorkbook.incompleteHelp')}</p>
+        <h2 className={CARD_TITLE}>{t('climateWorkbook.incompleteTitle')}</h2>
+        <p className="m-0">{t('climateWorkbook.incompleteHelp')}</p>
         <Alert variant="destructive" role="alert"><AlertDescription><ul>{plan.errors.map((e, i) => <li key={i}>{e}</li>)}</ul></AlertDescription></Alert>
       </> : <>
-      <h2>{plan.content.title}</h2>
-      <p>{plan.content.company.name} · {plan.content.company.emailDomain} · {plan.content.company.language} · {plan.content.company.timezone}</p>
-      <p>{t('climateWorkbook.counts', { people: plan.content.people.length, questions: plan.content.questions.length, fields: plan.fields.length, created: plan.content.people.length - plan.existingPeople.length, reused: plan.existingPeople.length })}</p>
-      <p>{t('climateWorkbook.dates', { start: plan.content.startDate, end: plan.content.endDate })}</p>
-      <p>{t(plan.content.company.anonymous ? 'climateWorkbook.anonymous' : 'climateWorkbook.identified')}</p>
-      <p>{t('climateWorkbook.bands', { low: plan.content.company.resultBands.opportunityMin, high: plan.content.company.resultBands.strengthMin, scale: plan.content.company.resultBands.scale === 'percent' ? '0–100' : '1–5' })}</p>
-      <p>{t(plan.companyId ? 'climateWorkbook.existingCompany' : 'climateWorkbook.newCompany')}</p>
-      {access && <div className="space-y-2 rounded-md border border-line-default p-4" data-testid="workbook-access">
-        <h3 className="font-medium">{t('climateWorkbook.mode.title')}</h3>
+      <div className="flex flex-col gap-1">
+        <h2 className={CARD_TITLE}>{plan.content.title}</h2>
+        <p className="m-0 text-sm text-fg-secondary">{plan.content.company.name} · {plan.content.company.emailDomain} · {plan.content.company.language} · {plan.content.company.timezone}</p>
+      </div>
+      <div className="flex flex-col gap-2 tabular-nums">
+        <p className="m-0">{t('climateWorkbook.counts', { people: plan.content.people.length, questions: plan.content.questions.length, fields: plan.fields.length, created: plan.content.people.length - plan.existingPeople.length, reused: plan.existingPeople.length })}</p>
+        <p className="m-0">{t('climateWorkbook.dates', { start: plan.content.startDate, end: plan.content.endDate })}</p>
+        <p className="m-0">{t(plan.content.company.anonymous ? 'climateWorkbook.anonymous' : 'climateWorkbook.identified')}</p>
+        <p className="m-0">{t('climateWorkbook.bands', { low: plan.content.company.resultBands.opportunityMin, high: plan.content.company.resultBands.strengthMin, scale: plan.content.company.resultBands.scale === 'percent' ? '0–100' : '1–5' })}</p>
+        <p className="m-0">{t(plan.companyId ? 'climateWorkbook.existingCompany' : 'climateWorkbook.newCompany')}</p>
+      </div>
+      {access && <Note data-testid="workbook-access"><div className="flex flex-col gap-2">
+        <h3 className="m-0 text-base font-semibold">{t('climateWorkbook.mode.title')}</h3>
         {'unknown' in access
           ? <Alert variant="destructive" role="alert"><AlertDescription>{t('climateWorkbook.mode.unknown', { mode: access.unknown })}</AlertDescription></Alert>
-          : <><p>{t(access.mode)}</p><ul className="list-disc space-y-1 pl-6">{access.lines.map(line => <li key={line}>{t(line)}</li>)}</ul></>}
-      </div>}
-      <p>{t('climateWorkbook.credentials')}</p>
+          : <><p className="m-0">{t(access.mode)}</p><ul className="m-0 list-disc space-y-1 pl-6">{access.lines.map(line => <li key={line}>{t(line)}</li>)}</ul></>}
+      </div></Note>}
+      <p className="m-0 text-sm text-fg-secondary">{t('climateWorkbook.credentials')}</p>
       </>}
-      <details><summary>{t('climateWorkbook.questions')}</summary><ol className="list-decimal space-y-2 pl-6">{plan.content.questions.map((q, i) => <li key={i}><strong>{q.category}</strong> · {typeof q.text === 'string' ? q.text : q.text.es ?? q.text.en} · {t(q.type === 'open_ended' ? 'climateWorkbook.openQuestion' : 'climateWorkbook.scaleQuestion')}</li>)}</ol></details>
+      <details className="border-t border-line-default pt-3"><summary className="cursor-pointer font-medium">{t('climateWorkbook.questions')}</summary><ol className="mt-2 list-decimal space-y-2 pl-6 text-sm">{plan.content.questions.map((q, i) => <li key={i}><strong>{q.category}</strong> · {typeof q.text === 'string' ? q.text : q.text.es ?? q.text.en} · {t(q.type === 'open_ended' ? 'climateWorkbook.openQuestion' : 'climateWorkbook.scaleQuestion')}</li>)}</ol></details>
       {plan.errors.length === 0 && access && !('unknown' in access) && <>
-      <details><summary>{t('climateWorkbook.fields')}</summary><ul>{plan.fields.map(f => <li key={f.field}>{f.label}: {f.options.map(o => o.label).join(', ')}</li>)}</ul></details>
-      <details><summary>{t('climateWorkbook.people')}</summary><div className="max-h-96 overflow-auto"><Table><thead><tr>{['name', 'email', 'department', 'role'].map(k => <th key={k}>{t(`climateWorkbook.${k}`)}</th>)}</tr></thead><tbody>{plan.content.people.map(p => <tr key={p.email}><td>{p.name}</td><td>{p.email}</td><td>{p.department}</td><td>{t(roleLabelKey(plan.existingPeople.find(u => u.email.toLowerCase() === p.email.toLowerCase())?.role ?? p.role) ?? 'users.employee')}</td></tr>)}</tbody></Table></div></details>
-        <label className="flex items-start gap-3"><input type="checkbox" checked={approved} disabled={busy} onChange={e => setApproved(e.target.checked)} /><span>{t('climateWorkbook.approve')}</span></label>
-        <Button disabled={!approved || busy} onClick={() => void apply()}>{t('climateWorkbook.apply')}</Button>
+      <details className="border-t border-line-default pt-3"><summary className="cursor-pointer font-medium">{t('climateWorkbook.fields')}</summary><ul className="mt-2 list-disc space-y-1 pl-6 text-sm">{plan.fields.map(f => <li key={f.field}>{f.label}: {f.options.map(o => o.label).join(', ')}</li>)}</ul></details>
+      <details className="border-t border-line-default pt-3"><summary className="cursor-pointer font-medium">{t('climateWorkbook.people')}</summary><div className="mt-2 max-h-96 overflow-auto"><Table zebra className="text-sm"><thead><tr>{['name', 'email', 'department', 'role'].map(k => <TableHead key={k} className="border-b border-line-default">{t(`climateWorkbook.${k}`)}</TableHead>)}</tr></thead><tbody>{plan.content.people.map(p => <tr key={p.email}><td>{p.name}</td><td>{p.email}</td><td>{p.department}</td><td>{t(roleLabelKey(plan.existingPeople.find(u => u.email.toLowerCase() === p.email.toLowerCase())?.role ?? p.role) ?? 'users.employee')}</td></tr>)}</tbody></Table></div></details>
+        <label className="mb-0 flex items-start gap-3 border-t border-line-default pt-4"><input type="checkbox" checked={approved} disabled={busy} onChange={e => setApproved(e.target.checked)} className="mt-1 size-4 shrink-0 accent-accent-blue-fill" /><span>{t('climateWorkbook.approve')}</span></label>
+        <div><Button variant="primary" disabled={!approved || busy} onClick={() => void apply()}>{t('climateWorkbook.apply')}</Button></div>
       </>}
     </section>}
-    {progress && <div role="status" aria-live="polite"><p>{t(`climateWorkbook.stages.${progress.stage}`)} · {progress.done} / {progress.total}</p>{applying && <p>{t('climateWorkbook.keepOpen')}</p>}</div>}
-    {result && <section className="space-y-4 rounded-lg border border-line-default p-6">
-      <h2>{t('climateWorkbook.complete')}</h2>
-      <p>{t('climateWorkbook.result', { total: result.total, created: result.created, reused: result.reused })}</p>
+    {progress && <div role="status" aria-live="polite" className="flex flex-col gap-1"><p className="m-0 tabular-nums">{t(`climateWorkbook.stages.${progress.stage}`)} · {progress.done} / {progress.total}</p>{applying && <p className="m-0 text-sm text-fg-secondary">{t('climateWorkbook.keepOpen')}</p>}</div>}
+    {result && <section className={CARD}>
+      <h2 className={CARD_TITLE}>{t('climateWorkbook.complete')}</h2>
+      <p className="m-0 tabular-nums">{t('climateWorkbook.result', { total: result.total, created: result.created, reused: result.reused })}</p>
       {result.credentialMode === 'per_survey'
-        ? <p>{t('climateWorkbook.deliveryPerSurvey')}</p>
-        : <p>{t('climateWorkbook.deliveryShared')} {t('climateWorkbook.delivery')}</p>}
+        ? <p className="m-0">{t('climateWorkbook.deliveryPerSurvey')}</p>
+        : <p className="m-0">{t('climateWorkbook.deliveryShared')} {t('climateWorkbook.delivery')}</p>}
       {result.credentialsNotSent.length > 0 && <Alert variant="destructive"><AlertDescription>{t('climateWorkbook.emailFailures')}<ul>{result.credentialsNotSent.map(email => <li key={email}>{email}</li>)}</ul></AlertDescription></Alert>}
-      <h3 className="font-medium">{t('climateWorkbook.draftTitle')}</h3>
-      <p>{t('climateWorkbook.nextStep')}</p>
-      <div className="flex flex-wrap gap-3">
-        <Button asChild><Link reloadDocument to={`/surveys/${result.surveyId}`} onClick={goToCompany}>{t('climateWorkbook.openSurvey')}</Link></Button>
+      <h3 className="m-0 font-display text-xl font-semibold tracking-title">{t('climateWorkbook.draftTitle')}</h3>
+      <p className="m-0">{t('climateWorkbook.nextStep')}</p>
+      <div className="flex flex-wrap gap-2">
+        <Button asChild variant="primary"><Link reloadDocument to={`/surveys/${result.surveyId}`} onClick={goToCompany}>{t('climateWorkbook.openSurvey')}</Link></Button>
         <Button asChild variant="outline"><Link reloadDocument to={`/surveys/${result.surveyId}/distribution`} onClick={goToCompany}>{t('climateWorkbook.openDistribution')}</Link></Button>
       </div>
     </section>}
+    </div>
   </div>
 }

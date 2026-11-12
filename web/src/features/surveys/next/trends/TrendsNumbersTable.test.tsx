@@ -45,7 +45,7 @@ describe('TrendsNumbersTable', () => {
       { key: 'c', name: 'C', values: [4.04, 1.0] },
     ])
     const cells = [...document.querySelectorAll('[data-slot="trends-cell"]')].map((cell) => ({
-      text: cell.querySelector('.font-mono')?.textContent,
+      text: cell.querySelector('[data-slot="trends-cell-value"]')?.textContent,
       band: cell.getAttribute('data-band'),
     }))
     // Row by row: Q1's three cells, then Q2's. Judged RAW, 3,96 would be opportunity and 2,96

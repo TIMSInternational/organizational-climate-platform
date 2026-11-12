@@ -4211,7 +4211,10 @@
         "csvColGroup": "Group",
         "csvColClosed": "Closed",
         "csvColResponses": "Responses",
-        "tableScalePercent": "{group} · scale of 0 to 100"
+        "tableScalePercent": "{group} · scale of 0 to 100",
+        "rangeHeading": "Each dimension in {wave}",
+        "rangeSub": "{group} · the dot is the latest survey, the tick {first}",
+        "rangeSubOne": "{group} · the dot is the latest survey"
       },
       "list": {
         "description": "Which survey is open today, how long until it closes, and where to read the ones that already closed.",

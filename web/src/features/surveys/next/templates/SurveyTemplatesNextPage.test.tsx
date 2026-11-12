@@ -118,8 +118,18 @@ describe('SurveyTemplatesNextPage (/surveys/templates)', () => {
     expect(await screen.findByRole('heading', { name: '2 templates' })).toBeTruthy()
     const names = [...document.querySelectorAll('[data-slot="template-card"] h3')].map((node) => node.textContent)
     expect(names).toEqual(['Engagement pulse', 'Climate standard'])
-    const chips = [...document.querySelectorAll('[data-slot="category-chip"]')].map((node) => node.textContent)
+    const chips = [...document.querySelectorAll('[data-slot="segmented-control-item"]')].map((node) => node.textContent)
     expect(chips).toEqual(['All 2', 'Climate 1', 'Pulse 1', 'Engagement 0', 'Exit 0'])
+    // The board's segmented control: the chosen category is raised and pressed, never a result tone.
+    const group = screen.getByRole('group', { name: copy.categoriesLabel })
+    expect(group.getAttribute('data-slot')).toBe('segmented-control')
+    for (const segment of group.querySelectorAll('button')) {
+      expect(segment.className.split(/\s+/).filter((name) => /chip-(good|warning|critical)/.test(name))).toEqual([])
+    }
+    // A template's name is a card title, so the display serif.
+    for (const title of document.querySelectorAll('[data-slot="template-card"] h3')) {
+      expect(title.className.split(/\s+/)).toContain('font-display')
+    }
     expect(screen.getByText('Climate · 2 questions · Likert 1–5')).toBeTruthy()
     expect(screen.getByText('Trust · Workload')).toBeTruthy()
     expect(screen.getByText(copy.dimensionsUnavailable)).toBeTruthy()
@@ -129,7 +139,7 @@ describe('SurveyTemplatesNextPage (/surveys/templates)', () => {
     vi.mocked(listSurveyTemplates).mockRejectedValue(new Error('boom'))
     renderAs({ role: 'company_admin', companyId: 'c1' })
     expect(await screen.findByText(copy.loadFailed)).toBeTruthy()
-    expect(document.querySelectorAll('[data-slot="category-chip"]')).toHaveLength(0)
+    expect(document.querySelectorAll('[data-slot="segmented-control-item"]')).toHaveLength(0)
     expect(screen.queryByRole('group', { name: copy.categoriesLabel })).toBeNull()
   })
 

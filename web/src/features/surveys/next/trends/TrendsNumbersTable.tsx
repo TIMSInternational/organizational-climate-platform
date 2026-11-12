@@ -55,7 +55,9 @@ export interface TrendsNumbersTableProps {
 // `hyphens-auto`: at 1024 a column is narrower than "RECONOCIMIENTO", and `index.css`'s
 // `overflow-wrap: break-word` split it as "RECONOCIMIE / NTO"; the document carries the
 // reader's `lang` (`TranslationProvider`), so the word breaks where the language breaks it.
-const HEAD = 'border-0 px-1 pt-0 pb-1 align-bottom text-3xs font-bold uppercase leading-tight tracking-label text-fg-label hyphens-auto'
+// The heads are the board's `.tbl th` in sentence case (12px semibold, the tertiary ink): the
+// 11px uppercase was the eyebrow's size spent on a dimension name.
+const HEAD = 'border-0 px-1 pt-0 pb-1 align-bottom text-xs font-semibold normal-case leading-tight tracking-normal text-fg-tertiary hyphens-auto'
 
 export default function TrendsNumbersTable({
   waves,
@@ -75,7 +77,7 @@ export default function TrendsNumbersTable({
     // `table-fixed` + the colgroup: a 180px survey column and six EQUAL dimension columns,
     // as the artboard's grid draws them — auto layout gave "Seguridad psicológica" twice
     // the width of "Confianza".
-    <Table data-slot="trends-table" className="table-fixed border-separate border-spacing-1 text-sm">
+    <Table data-slot="trends-table" className="min-w-180 table-fixed border-separate border-spacing-1 text-sm">
       <caption className="sr-only">{caption}</caption>
       <colgroup>
         <col className="w-45" />
@@ -100,7 +102,7 @@ export default function TrendsNumbersTable({
           <tr key={wave.id} data-wave={wave.id}>
             <th scope="row" className="border-0 py-0 pr-2 pl-0 text-left align-middle font-normal">
               <span className="block text-base text-fg-primary">{wave.name?.trim() || wave.code}</span>
-              <span className="block text-xs text-fg-label">
+              <span className="block text-sm tabular-nums text-fg-tertiary">
                 {/* The count is the drawn GROUP's, never the survey's: "24 resp." beside
                     Ingeniería's row would be the company's figure under a department's
                     name. A withheld wave prints its date and nothing else. */}
@@ -155,7 +157,7 @@ export default function TrendsNumbersTable({
                     className="flex h-10 flex-col items-center justify-center gap-px overflow-hidden rounded border px-1"
                     style={bandCellStyle(band)}
                   >
-                    <span className="font-mono text-sm font-semibold tabular-nums">{reading(value, locale, 1, bands.scale)}</span>
+                    <span data-slot="trends-cell-value" className="text-sm font-semibold tabular-nums">{reading(value, locale, 1, bands.scale)}</span>
                     <span className="sr-only">{` — ${bandName(band, bands, t)}`}</span>
                     <span
                       aria-hidden="true"
@@ -189,12 +191,8 @@ export default function TrendsNumbersTable({
                       <span className="sr-only">{t('surveys.next.trends.noMove')}</span>
                     </span>
                   ) : (
-                    <span
-                      className={cn(
-                        'font-mono text-sm font-semibold tabular-nums',
-                        move >= 0 ? 'text-accent-green-ink' : 'text-fg-primary',
-                      )}
-                    >
+                    // The sign tells the move; green is Fortaleza's and nothing else.
+                    <span className="text-sm font-semibold tabular-nums text-fg-secondary">
                       {signedReading(move, locale, 1, bands.scale)}
                     </span>
                   )}

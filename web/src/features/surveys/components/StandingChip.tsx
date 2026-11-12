@@ -1,24 +1,19 @@
-import { divergingPair } from '../../../components/charts'
+import { Chip } from '../../../components/ui'
 
 /**
- * A score's standing against a stated baseline: a diverging swatch **and the
- * word beside it**, never the colour alone.
+ * A score's standing against a stated baseline: the word — Above, Level, Below — on the gray
+ * status chip.
  *
- * Extracted from `SurveyResultsPage` when the per-question rows gained the same
- * chip as the dimensions table — one component, so the two surfaces cannot
- * disagree about what "Above" looks like.
+ * It used to wear a diverging swatch (light blue, gray, solid red), which made it a second
+ * verdict language beside the three result areas: a 3,3 read as red "Below" here and as amber
+ * "● Oportunidad" in the climate map beside it. One colour, one meaning (the user's ruling of
+ * 11 Nov): green, amber and red belong to Fortaleza, Oportunidad and Crítica only, so the
+ * standing is told by its word alone. The band of a value is `charts/BandChip`'s job.
  *
- * The fill comes from `divergingPair` on the same -1..1 polarity `ClimateMap`
- * computes, from the same dead band. `divergingStep` calls a value neutral when
- * `-deadBand <= value <= deadBand`, and the word is chosen by the caller with the
- * complementary pair of comparisons on the unscaled score, so the swatch and the
- * word are one decision rather than two that can drift.
+ * The props are unchanged so no caller moves; `score`, `target`, `deadBandAt` and `extremeAt`
+ * stay in the signature because the caller still chooses the word from them.
  */
 export default function StandingChip({
-  score,
-  target,
-  deadBandAt,
-  extremeAt,
   label,
 }: {
   score: number
@@ -28,16 +23,5 @@ export default function StandingChip({
   /** Already-translated standing word — Above, Below or Level. */
   label: string
 }) {
-  const { fill, ink } = divergingPair(
-    (score - target) / (2 * extremeAt),
-    deadBandAt / (2 * extremeAt),
-  )
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 rounded-sm px-2 py-0.5 text-xs font-semibold"
-      style={{ backgroundColor: fill, color: ink }}
-    >
-      {label}
-    </span>
-  )
+  return <Chip tone="neutral" label={label} data-slot="standing-chip" />
 }

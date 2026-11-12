@@ -4,7 +4,7 @@ import type { SurveyListItem } from '../api/surveys'
 import { useTranslation, type TranslateFn } from '../../../i18n'
 import { formatMetric } from '../../../components/charts/formatMetric'
 import { cn } from '../../../lib/cn'
-import { Button, EmptyState, Table } from '../../../components/ui'
+import { Button, Chip, EmptyState, Table } from '../../../components/ui'
 import { statusLabel, typeLabel } from '../surveyVocabulary'
 import { surveyResponseReading } from '../surveyListView'
 import { calendarDay } from '../../../lib/calendarDay'
@@ -14,46 +14,17 @@ interface SurveyListProps {
   surveys: readonly SurveyListItem[]
 }
 
-/** Header cells share one look: small caps, tracked, on the recessed surface. */
-const HEAD =
-  'bg-surface-icon-box text-2xs font-semibold uppercase tracking-label text-fg-secondary whitespace-nowrap'
+/** Header cells share one look: the board's `.tbl th`, 13px semibold in sentence case, on the recessed surface. */
+const HEAD = 'bg-surface-icon-box text-sm font-semibold text-fg-tertiary whitespace-nowrap'
 
 /**
- * The status chip.
- *
- * ## One status is a state, the other four are facts
- *
- * The design tints only *Active* and leaves Scheduled, Closed, Draft and Archived
- * neutral, and that is the third principle rather than a shortcut: colour does one
- * job. "Running right now" is the state a reader scans for; "archived" is not a
- * worse "active", it is a different fact, and giving each status its own hue would
- * enrol four more colours into a vocabulary that means nothing.
- *
- * The tint is on the fill and the dot; the word is `text-fg-primary`. Tinting the
- * *text* is the obvious reading and it is measured to fail WCAG AA 1.4.3 in the
- * light theme — `--admin-accent-green` over `--admin-accent-bg-green` composited on
- * the panel measures **3.49:1**, against 4.5:1 for 11px type. That is the `success`
- * badge variant's row in the table `reports/components/ReportList.tsx` records, and
- * it is why this listing has never used that variant. So the hue marks the row and
- * the word carries the meaning, which is what WCAG 1.4.1 asks for.
+ * The status chip: the `Chip` primitive. Only *Active* is tinted, in the blue live tone with its
+ * dot; Scheduled, Closed, Draft and Archived are gray facts. Colour does one job.
  */
 function StatusChip({ t, status }: { t: TranslateFn; status: string }) {
-  const running = status === 'active'
-  return (
-    <span
-      className={cn(
-        'inline-flex h-5 w-fit items-center gap-1 rounded-lg border px-2 text-xs font-semibold',
-        running
-          ? 'border-accent-green-ring bg-accent-green-soft text-fg-primary'
-          : 'border-line-light bg-surface-icon-box text-fg-secondary',
-      )}
-    >
-      {running && (
-        <span aria-hidden="true" className="size-1.5 rounded-full bg-accent-green" />
-      )}
-      {statusLabel(t, status)}
-    </span>
-  )
+  // Gray except Activa, which wears the blue live chip (the user's ruling of 11 Nov): green is
+  // Fortaleza's and nothing else.
+  return <Chip tone={status === 'active' ? 'live' : 'neutral'} label={statusLabel(t, status)} />
 }
 
 /**
@@ -62,7 +33,7 @@ function StatusChip({ t, status }: { t: TranslateFn; status: string }) {
  * ## The typographic rule
  *
  * Every *reading* — the response count, the participation figure, the close date —
- * is `font-mono tabular-nums`; the survey's name and its type stay in the sans
+ * is `tabular-nums`; the survey's name and its type stay in the sans
  * face. That single split is what makes the table read as a measuring device, and
  * tabular figures keep the columns from shifting as the numbers change.
  *
@@ -155,7 +126,7 @@ export default function SurveyList({ surveys }: SurveyListProps) {
                 {/* `whitespace-nowrap` for the same reason the Closes cell has it:
                     a reading split across two lines ("175 de" / "208") is exactly
                     what the tabular-figures rule exists to prevent. */}
-                <td className="whitespace-nowrap font-mono tabular-nums">
+                <td className="whitespace-nowrap tabular-nums">
                   {/* There is a denominator only when there is a rate — a survey may
                       declare no expected audience at all, or declare zero. Either way
                       "12 of 40" degrades to "12" rather than to a denominator the
@@ -170,7 +141,7 @@ export default function SurveyList({ surveys }: SurveyListProps) {
                 <td>
                   {reading.percent === null ? (
                     <span
-                      className="font-mono tabular-nums text-fg-secondary"
+                      className="tabular-nums text-fg-secondary"
                       title={t('surveys.noParticipationTarget')}
                     >
                       —
@@ -179,20 +150,20 @@ export default function SurveyList({ surveys }: SurveyListProps) {
                     <span className="flex items-center gap-inline">
                       <span
                         aria-hidden="true"
-                        className="h-1.5 w-16 shrink-0 overflow-hidden rounded-full bg-line-light"
+                        className="h-1.5 w-16 shrink-0 overflow-hidden rounded-full bg-surface-fill"
                       >
                         <span
                           className="block h-full rounded-full bg-accent-blue"
                           style={{ width: `${Math.min(reading.percent, 100)}%` }}
                         />
                       </span>
-                      <span className="font-mono tabular-nums text-fg-secondary">
+                      <span className="tabular-nums text-fg-secondary">
                         {formatMetric(reading.percent, { kind: 'percentage' }, locale)}
                       </span>
                     </span>
                   )}
                 </td>
-                <td className="whitespace-nowrap font-mono tabular-nums text-fg-secondary">
+                <td className="whitespace-nowrap tabular-nums text-fg-secondary">
                   {calendarDay(Date.parse(survey.endDate), locale)}
                 </td>
                 <td className="text-right">

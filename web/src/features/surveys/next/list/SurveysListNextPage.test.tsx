@@ -191,6 +191,15 @@ describe('SurveysListNextPage', () => {
     for (const head of heads) {
       expect(head.className.split(/\s+/)).toEqual(expect.arrayContaining(['leading-normal', 'border-b', 'border-line-default']))
     }
+    // The board's `.tbl th`, the TableHead primitive: sentence case at 13px, never the 11px
+    // uppercase the type ruling keeps for eyebrows.
+    for (const head of heads) {
+      expect(head.getAttribute('data-slot')).toBe('table-head')
+      expect(head.className.split(/\s+/)).not.toContain('uppercase')
+    }
+    // A status chip hugs its word; stretched to the column it read as a form field.
+    const chip = (cells[1] as HTMLElement).querySelector('[data-slot="chip"]') as HTMLElement
+    expect(chip.className.split(/\s+/)).not.toContain('w-full')
     const meta = (cells[0] as HTMLElement).querySelector('span.text-xs') as HTMLElement
     expect(meta.className.split(/\s+/)).toContain('leading-normal')
   })
@@ -254,7 +263,7 @@ describe('SurveysListNextPage', () => {
     )
     renderAs({ role: 'leader', companyId: 'c1' })
     await waitFor(() => {
-      expect(document.querySelector('[data-slot="page-eyebrow"]')?.textContent).toBe('Acme Corporation')
+      expect(document.querySelector('[data-slot="page-header-eyebrow"]')?.textContent).toBe('Acme Corporation')
     })
   })
 
@@ -266,16 +275,19 @@ describe('SurveysListNextPage', () => {
    * two things that are not results. The chosen pill is the blue `accent` tone, Activa the
    * `live` chip (the blue tint with its dot), every other status the gray `neutral`.
    */
-  it('chooses a status pill in blue and marks the open survey with the blue live chip, never a result colour', async () => {
+  it('chooses a status segment without a result colour and marks the open survey with the blue live chip, never a result colour', async () => {
     renderAs({ role: 'company_admin', companyId: 'c1' })
     await screen.findByRole('heading', { name: new RegExp(copy.openHeading) })
     const chips = screen.getByRole('group', { name: en.surveys.filterByStatus })
     const chosen = within(chips)
       .getAllByRole('button')
       .find((chip) => chip.getAttribute('aria-pressed') === 'true') as HTMLElement
-    const chosenClasses = chosen.className.split(/\s+/)
-    expect(chosenClasses).toContain('bg-chip-accent-fill')
-    expect(chosenClasses.filter((name) => /chip-(good|warning|critical)/.test(name))).toEqual([])
+    // The board's segmented control: the chosen segment is raised and told by `aria-pressed`,
+    // and no segment ever wears a result tone.
+    expect(chosen.getAttribute('data-slot')).toBe('segmented-control-item')
+    for (const segment of within(chips).getAllByRole('button')) {
+      expect(segment.className.split(/\s+/).filter((name) => /chip-(good|warning|critical)|band-/.test(name))).toEqual([])
+    }
 
     const live = rowOf('q4').querySelector('[data-slot="chip"]') as HTMLElement
     expect(live.getAttribute('data-live')).toBe('true')

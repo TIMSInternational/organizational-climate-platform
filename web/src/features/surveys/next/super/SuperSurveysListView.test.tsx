@@ -155,6 +155,28 @@ describe('SuperSurveysListView — the super administrator\'s /surveys', () => {
     for (const head of heads) expect(head.className.split(/\s+/)).toEqual(expect.arrayContaining(['pt-0', 'pb-2']))
   })
 
+  /**
+   * One colour, one meaning (11 Nov): the open survey wears the blue live chip and every other
+   * status the gray one; the chosen status is a raised segment. The open row was Fortaleza's
+   * green, a draft Oportunidad's amber, and the chosen pill Crítica's red.
+   */
+  it('never spends a result colour on a status: Activa is the live chip, the rest gray, the filter a segmented control', async () => {
+    renderAs({ role: 'super_admin' })
+    await waitFor(() => expect(rowOf('m-q4')).toBeTruthy())
+    const live = rowOf('m-q4').querySelector('[data-slot="chip"]') as HTMLElement
+    expect(live.getAttribute('data-live')).toBe('true')
+    const closed = rowOf('m-q3').querySelector('[data-slot="chip"]') as HTMLElement
+    expect(closed.className.split(/\s+/)).toContain('bg-chip-neutral-fill')
+    const group = screen.getByRole('group', { name: en.surveys.filterByStatus })
+    expect(group.getAttribute('data-slot')).toBe('segmented-control')
+    for (const element of document.querySelectorAll('[data-slot="chip"], [data-slot="segmented-control-item"]')) {
+      expect(element.className.split(/\s+/).filter((name) => /chip-(good|warning|critical)/.test(name))).toEqual([])
+    }
+    for (const head of document.querySelectorAll('[data-section="open"] th')) {
+      expect(head.className.split(/\s+/)).not.toContain('uppercase')
+    }
+  })
+
   it('leaves a company administrator on the company list, with no Empresa column', async () => {
     vi.mocked(listSurveys).mockResolvedValue(PLATFORM.filter((survey) => survey.companyId === 'meridiano'))
     renderAs({ role: 'company_admin', companyId: 'meridiano' })
