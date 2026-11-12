@@ -100,7 +100,7 @@ export function EntryOutcomeCard({ outcome }: EntryOutcomeCardProps) {
         // The artboard's full-width primary control. `asChild` because this is
         // navigation and has to be a link — `index.css` cards a bare `<button>` and a
         // button that navigates is unreachable to anyone browsing by links.
-        <Button asChild variant="primary" className="h-11 w-full">
+        <Button asChild variant="primary" size="lg" className="w-full">
           <Link to="/login">{t('signIn')}</Link>
         </Button>
       )}
@@ -109,19 +109,19 @@ export function EntryOutcomeCard({ outcome }: EntryOutcomeCardProps) {
 }
 
 /**
- * The tile fills, as the artboard tints them: the plain recessed tile for an outcome
- * nobody did anything wrong in, amber for one that needs attention, green for the one
- * that is not a failure at all.
+ * The tile fills: the plain grey tile for every outcome that is not a success, and the
+ * blue tint for the one that is not a failure at all (already answered).
  *
- * The glyph is `aria-hidden` and the sentence beside it carries the whole meaning, so
- * no state here is told by colour alone (WCAG 1.4.1). As non-text content the inks need
- * 3:1 rather than 4.5:1 (1.4.11), which is why `accent-green-ink` is usable here and is
- * not for the 10px label in `AnonymityNotice`.
+ * They used to be amber for "needs attention" and green for "done". The Apple-design
+ * ruling (11 Nov) keeps green, amber and red for the three result areas only — an amber
+ * tile on a dead link reads as «Oportunidad» — so attention is carried by the glyph and
+ * the sentence, which is where it always lived (WCAG 1.4.1: the glyph is `aria-hidden`
+ * and the sentence beside it carries the whole meaning).
  */
 const TILE: Readonly<Record<string, string>> = {
-  neutral: 'bg-surface-icon-box text-fg-secondary',
-  warning: 'bg-accent-amber-soft text-accent-amber-ink',
-  good: 'bg-accent-green-soft text-accent-green-ink',
+  neutral: 'bg-surface-fill-subtle text-fg-secondary',
+  warning: 'bg-surface-fill-subtle text-fg-secondary',
+  good: 'bg-accent-blue-soft text-accent-blue-ink',
 }
 
 /**

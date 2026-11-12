@@ -84,7 +84,8 @@ export function PublicRespondEntryView({ view, locale, onBegin }: PublicRespondE
         variant="primary"
         onClick={onBegin}
         data-slot="entry-begin"
-        className="h-11 w-full"
+        size="lg"
+        className="w-full"
       >
         {t('next.entryStart')}
         <CanvasArrowRightIcon className="size-icon" />

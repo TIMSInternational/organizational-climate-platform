@@ -296,7 +296,7 @@ export function RespondCaption({
 }) {
   return (
     <header className="grid gap-1 border-b border-line-light pb-panel-gap">
-      <span className="text-2xs font-semibold uppercase tracking-eyebrow text-fg-secondary">
+      <span className="text-2xs font-semibold uppercase tracking-eyebrow text-fg-label">
         {eyebrow}
       </span>
       {/* `min-w-0 break-words`: the title is author-supplied and this caption is drawn
@@ -309,7 +309,9 @@ export function RespondCaption({
           there was no overflow left for `overflow-wrap` to act on. `min-w-0` lets the
           track shrink to the page; `break-words` then breaks the word inside it.
           Neither changes anything for a title that already fits. */}
-      <h1 className="min-w-0 break-words text-2xl font-semibold tracking-tight text-fg-primary">
+      {/* The page title in the serif at 30px, the Respond board's `.lt`: the one place on
+          this screen the display face is spent before the first question. */}
+      <h1 className="mb-0 min-w-0 break-words font-display text-3xl font-semibold leading-tight tracking-display text-fg-primary">
         {title}
       </h1>
       {description ? <p className="max-w-prose text-base text-fg-secondary">{description}</p> : null}
@@ -320,8 +322,8 @@ export function RespondCaption({
 /**
  * One reading, in the instrument's typographic rule.
  *
- * The value is set in `--admin-font-mono` with tabular figures; the label and the
- * sub-line stay in the sans face. `KpiTile` states the same rule for a number it
+ * The value is set in the sans with tabular figures (the Apple design's `.num`: one UI
+ * face, figures that do not shift width); the label and the sub-line are secondary. `KpiTile` states the same rule for a number it
  * can format itself — this is the form for a reading that is not a bare number: a
  * countdown, a date, a fraction.
  */
@@ -332,17 +334,17 @@ export function RespondReading({
 }: {
   /** Already-translated. */
   label: string
-  /** The reading itself. Set in mono with tabular figures. */
+  /** The reading itself. Set with tabular figures. */
   value: string
   /** Already-translated line under the value. */
   sub?: string
 }) {
   return (
-    <div className="grid gap-0.5 rounded-lg border border-line-light bg-surface-icon-box p-3">
-      <span className="text-2xs font-semibold uppercase tracking-label text-fg-secondary">
+    <div className="grid gap-0.5 rounded-xl border border-line-panel bg-surface-card px-4 py-3">
+      <span className="text-2xs font-semibold uppercase tracking-eyebrow text-fg-label">
         {label}
       </span>
-      <span className="font-mono text-xl font-semibold tracking-tight tabular-nums text-fg-primary">
+      <span className="text-xl font-semibold tabular-nums text-fg-primary">
         {value}
       </span>
       {sub ? <span className="text-xs text-fg-secondary">{sub}</span> : null}

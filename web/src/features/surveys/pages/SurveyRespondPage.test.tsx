@@ -561,8 +561,8 @@ describe('SurveyRespondPage settings', () => {
       return found as HTMLElement
     })
     expect(countdown.textContent).toBe('Queda 10:00')
-    expect(countdown.className).toContain('font-mono')
     expect(countdown.className).toContain('tabular-nums')
+    expect(countdown.className).not.toContain('font-mono')
   })
 
   it('replaces the countdown with an alert once the suggested time is up', async () => {
@@ -1909,8 +1909,8 @@ describe('SurveyRespondPage as an instrument', () => {
   })
 
   /**
-   * The position is the one reading a respondent watches change, so it is set in mono with
-   * tabular figures — "1 de 6" to "10 de 12" must not reflow the row — and it is not
+   * The position is the one reading a respondent watches change, so it is set in tabular
+   * figures (in the sans: the Apple design retired the mono reading) — "1 de 6" to "10 de 12" must not reflow the row — and it is not
    * hidden from assistive technology. The bar beside it carries the same fact in words
    * (its `aria-label`) and as `aria-valuenow`.
    */
@@ -1921,8 +1921,8 @@ describe('SurveyRespondPage as an instrument', () => {
     await screen.findByRole('progressbar')
     const reading = document.querySelector('[data-slot="respond-position"]') as HTMLElement
     expect(reading.textContent).toBe('1 de 2')
-    expect(reading.className).toContain('font-mono')
     expect(reading.className).toContain('tabular-nums')
+    expect(reading.className).not.toContain('font-mono')
     expect(reading.closest('[aria-hidden="true"]')).toBeNull()
 
     const bar = screen.getByRole('progressbar')
@@ -1939,13 +1939,13 @@ describe('SurveyRespondPage as an instrument', () => {
    * of 24" says, so the glyph form is hidden and the sentence is the accessible one
    * — both inside the `<legend>`, which is what names the radio group.
    */
-  it('numbers each question as a mono reading with the sentence beside it', async () => {
+  it('numbers each question as a tabular reading with the sentence beside it', async () => {
     respondWith(view({ questions: [question(), question({ id: 'q2' })] }))
     renderPage()
 
     const marker = await screen.findByText('1/2')
-    expect(marker.className).toContain('font-mono')
     expect(marker.className).toContain('tabular-nums')
+    expect(marker.className).not.toContain('font-mono')
     expect(marker.getAttribute('aria-hidden')).toBe('true')
     expect(marker.closest('legend')?.textContent).toContain('Pregunta 1 de 2')
   })
@@ -1963,7 +1963,7 @@ describe('SurveyRespondPage as an instrument', () => {
 
     expect(await screen.findByText('Respuestas registradas')).toBeTruthy()
     // The server's count as a reading beside what it is out of — the canvas's "6 de 6".
-    const reading = document.querySelector('[data-slot="respond-receipt"] .font-mono.tabular-nums')
+    const reading = document.querySelector('[data-slot="respond-receipt"] .tabular-nums')
     expect(reading?.textContent).toBe('1 de 1')
   })
 

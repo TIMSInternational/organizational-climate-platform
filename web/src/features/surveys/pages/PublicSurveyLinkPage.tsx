@@ -1,4 +1,5 @@
 import { useParams } from 'react-router'
+import { LoadingState } from '../../../components/ui'
 import { useTranslation } from '../../../i18n'
 import { RespondShell } from '../../../components/layout'
 import SurveyRespondForm, { RespondSurface } from '../components/SurveyRespondForm'
@@ -87,5 +88,5 @@ export default function PublicSurveyLinkPage() {
 function ResolvingNotice() {
   const { t: tRoot } = useTranslation()
 
-  return <p className="text-base text-fg-secondary">{tRoot('common.loading')}</p>
+  return <LoadingState label={tRoot('common.loading')} />
 }

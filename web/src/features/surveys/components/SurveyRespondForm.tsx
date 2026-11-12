@@ -3,9 +3,9 @@ import { Link } from 'react-router'
 import {
   AlertCircle,
   AppWindow,
-  ArrowLeft,
   ArrowRight,
   Check,
+  ChevronLeft,
   Clock,
   EyeOff,
   FileText,
@@ -21,6 +21,7 @@ import {
   Button,
   LiveRegion,
   Progress,
+  LoadingState,
 } from '../../../components/ui'
 // Straight from the module rather than from `components/charts`, which is the one
 // place this project asks callers to import charts from. The floor is a policy
@@ -950,7 +951,7 @@ export default function SurveyRespondForm({
   if (state.status === 'loading') {
     return (
       <RespondSurface>
-        <p className="text-base text-fg-secondary">{tRoot('common.loading')}</p>
+        <LoadingState label={tRoot('common.loading')} />
       </RespondSurface>
     )
   }
@@ -1091,9 +1092,17 @@ export default function SurveyRespondForm({
           fallbackCount={view.fallbackFields.length}
         />
 
-        <header data-slot="respond-progress" className="flex flex-col gap-1.5">
-          <div className="flex items-baseline justify-between gap-2">
-            <h1 className="m-0 min-w-0 font-sans text-sm font-bold uppercase leading-snug tracking-eyebrow text-fg-secondary">
+        <header data-slot="respond-progress" className={RESPOND_HEAD}>
+          <RespondBack
+            label={t('next.previous')}
+            disabled={demographicStep === 0 || busy !== 'idle'}
+            onClick={() => {
+              setDemographicInvalid(false)
+              setDemographicStep((step) => step - 1)
+            }}
+          />
+          <div className="flex min-w-0 flex-1 items-baseline justify-between gap-2">
+            <h1 className="m-0 min-w-0 font-sans text-2xs font-semibold uppercase leading-snug tracking-eyebrow text-fg-secondary">
               {t('demographics.eyebrow')}
             </h1>
           </div>
@@ -1121,20 +1130,7 @@ export default function SurveyRespondForm({
             }}
           />
 
-          <div data-slot="respond-nav" className="flex gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              className="h-11 flex-1 text-respond"
-              disabled={demographicStep === 0 || busy !== 'idle'}
-              onClick={() => {
-                setDemographicInvalid(false)
-                setDemographicStep((step) => step - 1)
-              }}
-            >
-              <ArrowLeft aria-hidden="true" />
-              {t('next.previous')}
-            </Button>
+          <div data-slot="respond-nav" className={RESPOND_NAV}>
             {/* `type="button"` on both, and there is no `<form>` around them: the
                 prelude writes nothing to the server, so there is no submission to
                 guard against here. The two `key`s the question nav needs exist because
@@ -1142,7 +1138,7 @@ export default function SurveyRespondForm({
             <Button
               type="button"
               variant="primary"
-              className="h-11 flex-2 text-respond"
+              size="lg" className="flex-1"
               disabled={busy !== 'idle'}
               onClick={advance}
             >
@@ -1192,8 +1188,16 @@ export default function SurveyRespondForm({
           fallbackCount={view.fallbackFields.length}
         />
 
-        <header data-slot="respond-progress" className="flex flex-col gap-1.5">
-          <h1 className="m-0 min-w-0 font-sans text-sm font-bold uppercase leading-snug tracking-eyebrow text-fg-secondary">
+        <header data-slot="respond-progress" className={RESPOND_HEAD}>
+          <RespondBack
+            label={t('next.previous')}
+            disabled={demographics.length === 0 || busy !== 'idle'}
+            onClick={() => {
+              setIdentityProblem(null)
+              setDemographicStep(demographics.length - 1)
+            }}
+          />
+          <h1 className="m-0 min-w-0 flex-1 font-sans text-2xs font-semibold uppercase leading-snug tracking-eyebrow text-fg-secondary">
             {t('identity.eyebrow')}
           </h1>
         </header>
@@ -1225,21 +1229,8 @@ export default function SurveyRespondForm({
             }}
           />
 
-          <div data-slot="respond-nav" className="flex gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              className="h-11 flex-1 text-respond"
-              disabled={demographics.length === 0 || busy !== 'idle'}
-              onClick={() => {
-                setIdentityProblem(null)
-                setDemographicStep(demographics.length - 1)
-              }}
-            >
-              <ArrowLeft aria-hidden="true" />
-              {t('next.previous')}
-            </Button>
-            <Button type="submit" variant="primary" className="h-11 flex-2 text-respond" disabled={busy !== 'idle'}>
+          <div data-slot="respond-nav" className={RESPOND_NAV}>
+            <Button type="submit" variant="primary" size="lg" className="flex-1" disabled={busy !== 'idle'}>
               {t('demographics.start')}
               <ArrowRight aria-hidden="true" />
             </Button>
@@ -1291,26 +1282,33 @@ export default function SurveyRespondForm({
           question, not its container — where the respondent is, and a 6px bar. The
           count and the bar are `ShowProgress`'s, as they always were; the `2/6` chip on
           the card says the position either way. */}
-      <header data-slot="respond-progress" className="flex flex-col gap-1.5">
-        <div className="flex items-baseline justify-between gap-2">
-          <h1 className="m-0 min-w-0 font-sans text-sm font-bold uppercase leading-snug tracking-eyebrow text-fg-secondary">
-            {view.title ?? t('untitledSurvey')}
-          </h1>
+      <header data-slot="respond-progress" className={RESPOND_HEAD}>
+        <RespondBack
+          label={t('next.previous')}
+          disabled={index === 0 || busy !== 'idle'}
+          onClick={() => turnTo(index - 1)}
+        />
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+          <div className="flex items-baseline justify-between gap-2">
+            <h1 className="m-0 min-w-0 font-sans text-2xs font-semibold uppercase leading-snug tracking-eyebrow text-fg-secondary">
+              {view.title ?? t('untitledSurvey')}
+            </h1>
+            {view.showProgress && total > 0 ? (
+              <span
+                data-slot="respond-position"
+                className="shrink-0 text-respond-sm tabular-nums text-fg-secondary"
+              >
+                {t('next.position', { position, total })}
+              </span>
+            ) : null}
+          </div>
           {view.showProgress && total > 0 ? (
-            <span
-              data-slot="respond-position"
-              className="shrink-0 font-mono text-respond-sm tabular-nums text-fg-secondary"
-            >
-              {t('next.position', { position, total })}
-            </span>
+            <Progress
+              value={Math.round((position / total) * 100)}
+              aria-label={t('questionPosition', { position, total })}
+            />
           ) : null}
         </div>
-        {view.showProgress && total > 0 ? (
-          <Progress
-            value={Math.round((position / total) * 100)}
-            aria-label={t('questionPosition', { position, total })}
-          />
-        ) : null}
       </header>
 
       {/* The author's description, on the first page only: it introduces the survey,
@@ -1343,7 +1341,7 @@ export default function SurveyRespondForm({
             the respondent is doing right now, and `role="alert"` beside the form is
             where it will be read. */}
         {remainingMs !== null && remainingMs <= 0 && (
-          <Alert variant="warning" role="alert">
+          <Alert variant="default" role="alert">
             <Info aria-hidden="true" />
             <AlertTitle>{t('timeLimitExpired')}</AlertTitle>
             <AlertDescription>{t('timeLimitExpiredHelp')}</AlertDescription>
@@ -1403,29 +1401,18 @@ export default function SurveyRespondForm({
           </Alert>
         )}
 
-        {/* The canvas's pair, 44px tall: Anterior outlined on the left, the way on in
-            red on the right and twice as wide. On the last question the way on is the
-            submit — the one POST that completes the response, unchanged. Anterior is
-            drawn on the first question too, disabled, so the primary action does not
-            jump sideways between the first page and the second.
+        {/* The Respond board's foot: the way on alone, full width and 44px tall —
+            Anterior is the chevron in the head (`RespondBack`). On the last question
+            the way on is the submit — the one POST that completes the response,
+            unchanged.
 
             The two `key`s are load-bearing. Without them React reuses ONE `<button>` and
             flips its `type` to "submit" inside the click that turns to the last page; the
             browser then runs that click's default action against the new type and sends
             the form, so the last question was never shown (TIMS dry run, 9 of 9). */}
-        <div data-slot="respond-nav" className="flex gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            className="h-11 flex-1 text-respond"
-            disabled={index === 0 || busy !== 'idle'}
-            onClick={() => turnTo(index - 1)}
-          >
-            <ArrowLeft aria-hidden="true" />
-            {t('next.previous')}
-          </Button>
+        <div data-slot="respond-nav" className={RESPOND_NAV}>
           {isLast ? (
-            <Button key="submit" type="submit" variant="primary" className="h-11 flex-2 text-respond" disabled={busy !== 'idle'}>
+            <Button key="submit" type="submit" variant="primary" size="lg" className="flex-1" disabled={busy !== 'idle'}>
               {busy === 'submitting' ? tRoot('common.submitting') : t('submitResponse')}
             </Button>
           ) : (
@@ -1433,7 +1420,7 @@ export default function SurveyRespondForm({
               key="next"
               type="button"
               variant="primary"
-              className="h-11 flex-2 text-respond"
+              size="lg" className="flex-1"
               disabled={busy !== 'idle'}
               onClick={() => goNext(index)}
             >
@@ -1455,12 +1442,14 @@ export default function SurveyRespondForm({
             on it. */}
         {view.allowPartialResponses && !publicEntry && (
           <div data-slot="respond-save" className="flex flex-col items-center gap-1">
+            {/* The board's tinted text button (`.btn.t`): a secondary action, blue because
+                it is an action, with no ground so it never competes with Siguiente. */}
             <Button
               type="button"
-              variant="link"
+              variant="plain"
               disabled={busy !== 'idle'}
               onClick={() => void send(false)}
-              className="p-2 text-respond font-normal text-fg-secondary underline"
+              className="min-h-11 text-respond"
             >
               {busy === 'saving' ? t('savingProgress') : t('saveAndFinishLater')}
             </Button>
@@ -1479,7 +1468,7 @@ export default function SurveyRespondForm({
       >
         <span>{t('next.closesOn', { date: formatDayMonth(view.endDate, locale) })}</span>
         {remainingMs !== null && remainingMs > 0 ? (
-          <span data-slot="respond-time-left" className="font-mono tabular-nums">
+          <span data-slot="respond-time-left" className="tabular-nums">
             {t('timeLimitRemaining', { time: formatDuration(remainingMs) })}
           </span>
         ) : (
@@ -1493,6 +1482,77 @@ export default function SurveyRespondForm({
 
       <LiveRegion>{announcement}</LiveRegion>
     </RespondSurface>
+  )
+}
+
+/**
+ * Keeps a focused control out from under the pinned bar, on a phone, while the bar is on
+ * the page.
+ *
+ * Focusing a control that is already inside the viewport (Tab, or the tap that raises the
+ * on-screen keyboard) scrolls nothing — and "inside the viewport" includes the strip the
+ * bar covers. Measured at 390x844 before this: the optional comment textarea, focused, had
+ * 41 of its 64px under the ~69px bar (WCAG 2.2 SC 2.4.11 Focus Not Obscured). A
+ * `scroll-margin` on the controls did not move it (measured: 39px still covered), because
+ * no scroll is triggered at all. `scroll-padding-bottom` on the document — the scrollport —
+ * shrinks the region the browser counts as "in view", so the focus scroll lifts the
+ * control above the bar (measured: 0px covered). It is set by `:root:has(<this bar>)`, so
+ * it exists exactly while a pinned bar is mounted, and goes when the respondent leaves.
+ * `MicroclimatePulseForm`'s Send bar, the same `.ph-foot`, carries the same class.
+ */
+const RESPOND_BAR_CLEARANCE =
+  'max-md:[:root:has(&)]:scroll-pb-[calc(6rem+env(safe-area-inset-bottom))]'
+
+/**
+ * The bar the way on lives in: the one primary action, the full width of the column, as
+ * the Respond board's `.ph-foot` draws it. Anterior is not here; it is the chevron at the
+ * head of the page (`RespondBack`, the board's `.ph-top`).
+ *
+ * On a phone it is pinned to the bottom of the screen — the Respond board's `.ph-foot`:
+ * a hairline over a translucent page ground, the primary full width — so Siguiente is
+ * under the thumb on every question instead of below the fold (HIG › Designing for iOS:
+ * controls in the middle or bottom of the display are easier to reach). `<main>` has no
+ * `overflow` (see `RespondShell`), so the document is the scrollport and `sticky` sticks.
+ * From `md` up the bar sits in the flow under the question, where it always was.
+ */
+const RESPOND_NAV = [
+  'flex gap-2',
+  'max-md:sticky max-md:bottom-0 max-md:z-10 max-md:-mx-4 max-md:border-t max-md:border-line-default',
+  'max-md:bg-surface-outer/90 max-md:px-4 max-md:pt-3 max-md:pb-[max(0.75rem,env(safe-area-inset-bottom))] max-md:backdrop-blur-md',
+  RESPOND_BAR_CLEARANCE,
+].join(' ')
+
+/**
+ * The page's head row, the Respond board's `.ph-top`: Anterior's chevron first, then the
+ * eyebrow, the position and the bar. Centred on the cross axis, so the chevron sits level
+ * with the two-line block of eyebrow and bar beside it.
+ */
+const RESPOND_HEAD = 'flex items-center gap-2'
+
+/**
+ * Anterior, as the Respond board's `.ph-top` draws it: a borderless chevron button at the
+ * head of the page (34px, 44px under a finger), named "Anterior" for assistive technology.
+ *
+ * Drawn disabled where there is nothing to go back to (the first question, the first
+ * demographic field) rather than removed, so the eyebrow and the bar do not shift sideways
+ * between the first page and the second. A disabled ghost button is a dimmed glyph on no
+ * ground, so it does not read as an empty box the way the outlined arrow beside Siguiente
+ * did. `type="button"`: on the question pages the head is outside the `<form>` anyway, but
+ * the identity screen's nav is inside one.
+ */
+function RespondBack({ label, disabled, onClick }: { label: string; disabled: boolean; onClick: () => void }) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-canvas"
+      className="-ml-2 shrink-0 text-fg-primary"
+      disabled={disabled}
+      onClick={onClick}
+    >
+      <ChevronLeft aria-hidden="true" />
+      <span className="sr-only">{label}</span>
+    </Button>
   )
 }
 
@@ -1566,7 +1626,7 @@ function SaveState({ state, locale }: { state: RespondSaveState; locale: string 
       className="flex items-center gap-inline text-sm text-fg-secondary"
     >
       {state.status === 'saved' && (
-        <Check aria-hidden="true" className="size-icon text-accent-green" />
+        <Check aria-hidden="true" className="size-icon text-fg-secondary" />
       )}
       <span>{text}</span>
     </span>
@@ -1596,7 +1656,7 @@ function ContentLanguageNotice({
   if (resolvedLocale === requested && fallbackCount === 0) return null
 
   return (
-    <Alert variant="warning">
+    <Alert variant="default">
       <Info aria-hidden="true" />
       <AlertTitle>{t('contentLanguageTitle')}</AlertTitle>
       <AlertDescription>
@@ -1660,7 +1720,7 @@ function LoadFailure({
 
   return (
     <div className="grid gap-row">
-      <Alert variant="warning" role="alert">
+      <Alert variant="default" role="alert">
         <Info aria-hidden="true" />
         <AlertTitle>{title}</AlertTitle>
         <AlertDescription>{description}</AlertDescription>
@@ -1678,7 +1738,7 @@ function AlreadyCompleted() {
   const { t } = useTranslation('surveyRespond')
 
   return (
-    <Alert variant="success" role="status">
+    <Alert variant="default" role="status">
       <ShieldCheck aria-hidden="true" />
       <AlertTitle>{t('alreadyCompletedTitle')}</AlertTitle>
       <AlertDescription>{t('alreadyCompletedBody')}</AlertDescription>
@@ -1724,7 +1784,7 @@ function AnsweredOnThisDevice({
   const { t } = useTranslation('surveyRespond')
 
   return (
-    <Alert variant="success" role="status">
+    <Alert variant="default" role="status">
       <ShieldCheck aria-hidden="true" />
       <AlertTitle>{t('answeredOnThisDeviceTitle')}</AlertTitle>
       <AlertDescription>
@@ -1830,27 +1890,43 @@ function Submitted({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* The canvas's thank-you (RespondConfirmationPhone, 10 Sep) is the product's own
-          success alert — the soft green block with the shield — so it stays that. */}
-      {/* A survey's own closing message (Eagle's corrections, 2026-10-20, set per survey in
-          "Textos para quien responde") is the whole of the green block — no second line. The
-          receipt below stays. Without one, the default thanks every other survey shows. */}
-      <Alert variant="success" role="status">
-        <ShieldCheck aria-hidden="true" />
+      {/* The Respond board's thank-you (Apple design, 12 Nov): a check in the blue tint,
+          the thanks in the serif, the line under it. It used to be the green success
+          alert; green is a result area now and nothing else. `role="status"` stays, so
+          the thanks is still announced the moment the form is replaced by it.
+          A survey's own closing message (Eagle's corrections, 2026-10-20, set per survey
+          in "Textos para quien responde") is the whole of the thanks — no second line. */}
+      <div
+        role="status"
+        data-slot="respond-thanks"
+        className="flex flex-col items-center gap-3 py-6 text-center"
+      >
+        <span
+          aria-hidden="true"
+          className="grid size-18 place-items-center rounded-full bg-accent-blue-soft text-accent-blue-ink"
+        >
+          <Check className="size-9" strokeWidth={2.25} />
+        </span>
         {result.alreadySubmitted ? (
           <>
-            <AlertTitle>{t('alreadyCompletedTitle')}</AlertTitle>
-            <AlertDescription>{t('alreadyCompletedBody')}</AlertDescription>
+            <p className="m-0 max-w-[24ch] font-display text-3xl font-semibold leading-tight tracking-display text-fg-primary">
+              {t('alreadyCompletedTitle')}
+            </p>
+            <p className="m-0 max-w-[36ch] text-base text-fg-secondary">{t('alreadyCompletedBody')}</p>
           </>
         ) : closingMessage ? (
-          <AlertTitle className="whitespace-pre-line">{closingMessage}</AlertTitle>
+          <p className="m-0 max-w-[30ch] whitespace-pre-line font-display text-2xl font-semibold leading-snug tracking-title text-fg-primary">
+            {closingMessage}
+          </p>
         ) : (
           <>
-            <AlertTitle>{t('thankYouTitle')}</AlertTitle>
-            <AlertDescription>{t('thankYouBody')}</AlertDescription>
+            <p className="m-0 max-w-[24ch] font-display text-3xl font-semibold leading-tight tracking-display text-fg-primary">
+              {t('thankYouTitle')}
+            </p>
+            <p className="m-0 text-base text-fg-secondary">{t('thankYouBody')}</p>
           </>
         )}
-      </Alert>
+      </div>
 
       {/* The receipt row, as the canvas draws it: the tile, and beside it when and how.
           A respondent who has just handed over forty answers with no copy of them gets
@@ -1858,11 +1934,11 @@ function Submitted({
           count rather than the form's, what was stored rather than what was typed. The
           count is the tile's, so the sentence beside it says only the rest. */}
       <div data-slot="respond-receipt" className="flex items-center gap-3.5">
-        <div className="flex shrink-0 flex-col gap-0.5 rounded-lg bg-surface-icon-box px-3.5 py-2.5">
-          <span className="text-2xs font-bold uppercase tracking-label text-fg-secondary">
+        <div className="flex shrink-0 flex-col gap-0.5 rounded-xl border border-line-panel bg-surface-card px-3.5 py-2.5">
+          <span className="text-2xs font-semibold uppercase tracking-eyebrow text-fg-secondary">
             {t('receiptReading')}
           </span>
-          <span className="font-mono text-reading leading-tight tabular-nums text-fg-primary">
+          <span className="text-reading font-semibold leading-tight tabular-nums text-fg-primary">
             {result.answeredQuestionCount}{' '}
             <span className="text-sm font-normal text-fg-secondary">
               {t('next.receiptOf', { total: result.questionCount })}
@@ -1921,11 +1997,11 @@ function Submitted({
       <section
         aria-labelledby={WHAT_HAPPENS_HEADING_ID}
         data-slot="respond-what-happens"
-        className="flex flex-col rounded-xl border border-line-default bg-surface-card px-4 py-1 shadow-sm"
+        className="flex flex-col rounded-xl border border-line-panel bg-surface-card px-4 py-1"
       >
         <h2
           id={WHAT_HAPPENS_HEADING_ID}
-          className="m-0 border-b border-line-light pb-1 pt-3 font-sans text-2xs font-bold uppercase leading-snug tracking-eyebrow text-fg-secondary"
+          className="m-0 border-b border-line-light pb-2 pt-3 font-sans text-2xs font-semibold uppercase leading-snug tracking-eyebrow text-fg-secondary"
         >
           {t('whatHappensNowTitle')}
         </h2>
@@ -1969,7 +2045,7 @@ function Submitted({
       {!publicEntry && (
         // The canvas's way back: an outlined button the width of the column, 44px, the
         // arrow before the word.
-        <Button asChild variant="outline" className="h-11 w-full">
+        <Button asChild variant="outline" size="lg" className="w-full">
           <Link to="/dashboard">
             <ArrowRight aria-hidden="true" />
             {t('backToHome')}

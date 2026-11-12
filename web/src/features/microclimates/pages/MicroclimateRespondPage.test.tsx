@@ -250,7 +250,12 @@ describe('MicroclimateRespondPage as a respondent surface', () => {
    * `components/layout/respondSticky.test.tsx` asserted a sticky panel on this
    * route. The canvas draws one column (RespondMicroclimatePhone, 10 Sep): the
    * promise, the eyebrow and the session's name, one card per question, a single
-   * Send, and the session's two readings at the foot. Nothing is pinned.
+   * Send, and the session's two readings at the foot.
+   *
+   * One exception since the Apple-design Respond board (12 Nov): on a phone the single
+   * Send is pinned to the bottom of the screen (`.ph-foot`), so the one primary action is
+   * under the thumb. That is the only pinned thing, it is phone-only (`max-md:`), and
+   * nothing else on the page may stick or split into columns.
    */
   it('draws one column with no rail beside it and no bar under it', async () => {
     vi.mocked(fetch).mockResolvedValue(
@@ -268,9 +273,17 @@ describe('MicroclimateRespondPage as a respondent surface', () => {
     // here, so neither may be present.
     expect(screen.queryByRole('region', { name: 'Sobre esta sesión' })).toBeNull()
     expect(container.querySelector('[data-slot="respond-submit-bar"]')).toBeNull()
+    const send = container.querySelector('[data-slot="pulse-send"]') as HTMLElement
+    expect(send.className.split(/\s+/)).toContain('max-md:sticky')
+    expect(send.className.split(/\s+/)).not.toContain('sticky')
+    // Pinned, so the document keeps a focused field out from under it (WCAG 2.2 SC 2.4.11);
+    // happy-dom evaluates neither `:has()` nor the media query, so the class is asserted.
+    expect(send.className).toContain('max-md:[:root:has(&)]:scroll-pb-')
+    expect(send.querySelector('button[type="submit"]')).toBeTruthy()
     expect(
-      [...container.querySelectorAll('[class]')].filter((element) =>
-        /grid-cols-|sticky/.test(element.getAttribute('class') ?? ''),
+      [...container.querySelectorAll('[class]')].filter(
+        (element) =>
+          element !== send && /grid-cols-|sticky/.test(element.getAttribute('class') ?? ''),
       ),
       'no multi-column track and nothing pinned — the pulse is a plain reading order',
     ).toEqual([])
@@ -338,7 +351,8 @@ describe('MicroclimateRespondPage as a respondent surface', () => {
     })
     expect(legend.textContent).toContain('Pregunta 1 de 2')
     const marker = screen.getByText('1/2')
-    expect(marker.className).toContain('font-mono')
+    expect(marker.className).toContain('tabular-nums')
+    expect(marker.className).not.toContain('font-mono')
     expect(marker.getAttribute('aria-hidden')).toBe('true')
   })
 
@@ -448,8 +462,12 @@ describe('MicroclimateRespondPage as a respondent surface', () => {
     expect(container.querySelector('form')?.closest('[data-slot="pulse-column"]')).toBe(column)
   })
 
-  /** RespondMicroclimatePhone.dc.html sets each question at 17px, line-height 1.4, as the survey card. */
-  it('sets each question at the canvas’s 17px step, as the survey card does', async () => {
+  /**
+   * The Apple-design ruling gives the serif to the respondent's question text. A pulse asks
+   * several questions on one page, each on its own card, so they are set a step under the
+   * survey's one-question-per-screen 24px: the 20px card-title step.
+   */
+  it('sets each question in the serif at the card-title step', async () => {
     vi.mocked(fetch).mockResolvedValue(
       new Response(JSON.stringify(pulseMicroclimate()), { status: 200 }),
     )
@@ -459,8 +477,8 @@ describe('MicroclimateRespondPage as a respondent surface', () => {
     const texts = [...container.querySelectorAll('[data-slot="question-text"]')]
     expect(texts).toHaveLength(pulseMicroclimate().questions.length)
     for (const text of texts) {
-      expect(text.className.split(/\s+/)).toContain('text-question')
-      expect(text.className).not.toMatch(/\bleading-/)
+      expect(text.className.split(/\s+/)).toContain('font-display')
+      expect(text.className.split(/\s+/)).toContain('text-2xl')
     }
   })
 
