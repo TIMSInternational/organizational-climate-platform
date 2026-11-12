@@ -7167,8 +7167,8 @@
       "agregarInvolucrados": "Agregar involucrados",
       "abrirAgregarInvolucrados": "Agregar personas al plan"
     },
-    "consolidadoTitle": "Vista Consolidada",
-    "tableroTitle": "Tablero de Seguimiento",
+    "consolidadoTitle": "Vista consolidada",
+    "tableroTitle": "Tablero de seguimiento",
     "next": {
       "consolidadoEyebrow": "Seguimiento · {company}",
       "consolidadoEyebrowBare": "Seguimiento",
@@ -7212,9 +7212,9 @@
       "tableroEyebrow": "{nodo} · Nodo",
       "tableroDescription": "Los planes de tu nodo con su semáforo, y el avance que registras aquí mismo.",
       "noNodoTitle": "Esta vista es para quien lidera un nodo",
-      "noNodoBody": "Su cuenta no tiene un nodo asignado, así que aquí no hay planes que registrar. Si lidera un equipo, pida a la administración que la asigne a su nodo; mientras tanto, los planes en los que participa están en Planes de Acción.",
-      "goToPlans": "Ir a Planes de Acción",
-      "backToDashboard": "Volver al Panel de Control",
+      "noNodoBody": "Su cuenta no tiene un nodo asignado, así que aquí no hay planes que registrar. Si lidera un equipo, pida a la administración que la asigne a su nodo; mientras tanto, los planes en los que participa están en Planes de acción.",
+      "goToPlans": "Ir a Planes de acción",
+      "backToDashboard": "Volver al Panel de control",
       "goToMisTareas": "Ir a Mis tareas",
       "whereHeading": "Dónde está el nodo",
       "tilePlanes": "Planes del nodo",
