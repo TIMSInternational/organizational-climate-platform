@@ -116,9 +116,13 @@ describe('semáforo states', () => {
     expect(new Set(labels).size).toBe(SEMAFORO_ORDER.length)
   })
 
-  it('gives every state its own TONE', () => {
+  // The semáforo is a schedule STATUS, not a climate result. Green, amber and red are
+  // reserved for the three result areas (Apple design ruling, 11 Nov 2026), so every
+  // state is drawn in the neutral status tone and told apart by its shape and word.
+  it('never paints a state in a result-area tone', () => {
     const tones = SEMAFORO_ORDER.map((estado) => semaforoPresentation(estado).tone)
-    expect(new Set(tones).size).toBe(SEMAFORO_ORDER.length)
+    for (const tone of tones) expect(['good', 'warning', 'critical']).not.toContain(tone)
+    expect(new Set(tones)).toEqual(new Set(['neutral']))
   })
 
   it('orders worst first, which is the order a leader triages in', () => {

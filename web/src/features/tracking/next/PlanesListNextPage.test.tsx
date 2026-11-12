@@ -134,6 +134,19 @@ describe('PlanesListNextPage', () => {
     expect(screen.getByText(/3 planes en 3 de 4 nodos · Personas sin plan/)).toBeTruthy()
   })
 
+  it('leads every state tile with its shape, the same grammar as Vista consolidada', async () => {
+    renderPage()
+    await screen.findByText('PA-2026-00001')
+    const stateTiles = Array.from(document.querySelectorAll('[data-slot="kpi-card"]')).filter((card) =>
+      card.querySelector('[data-state]'),
+    )
+    expect(stateTiles).toHaveLength(3)
+    for (const tile of stateTiles) {
+      expect(tile.querySelector('[data-slot="state-footnote"] svg'), tile.textContent ?? '').not.toBeNull()
+      expect(tile.querySelector('[data-slot="chip"]'), tile.textContent ?? '').toBeNull()
+    }
+  })
+
   it('names the responsable from the directory, marks the viewer, and links each code to its plan', async () => {
     renderPage()
     const red = (await screen.findByText('PA-2026-00001')).closest('tr') as HTMLElement

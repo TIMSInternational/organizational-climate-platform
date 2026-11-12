@@ -82,14 +82,16 @@ describe('the semáforo chip', () => {
     expect(glyphOf('Verde')).toBe('lucide-check')
   })
 
-  it('gives each state a different tone as the THIRD signal', () => {
-    const classes = SEMAFORO_ORDER.map((estado) => {
+  // A status, not a result: no state borrows the result areas' green, amber or red.
+  // The shape and the word (above) are what tell the three apart.
+  it('draws every state in the neutral status tone, never a result-area one', () => {
+    for (const estado of SEMAFORO_ORDER) {
       renderChip(estado)
       const className = document.querySelector('[data-slot="chip"]')?.className ?? ''
       cleanup()
-      return className
-    })
-    expect(new Set(classes).size).toBe(SEMAFORO_ORDER.length)
+      expect(className).toContain('chip-neutral')
+      expect(className).not.toMatch(/chip-(good|warning|critical)/)
+    }
   })
 
   /**

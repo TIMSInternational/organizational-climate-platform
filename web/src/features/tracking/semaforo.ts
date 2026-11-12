@@ -97,7 +97,7 @@ export interface SemaforoPresentation {
 const PRESENTATION: Record<SemaforoEstado, SemaforoPresentation> = {
   Rojo: {
     estado: 'Rojo',
-    tone: 'critical',
+    tone: 'neutral',
     shape: 'octagon',
     labelKey: 'tracking.semaforo.rojo',
     subKey: 'tracking.semaforo.subRojo',
@@ -106,7 +106,7 @@ const PRESENTATION: Record<SemaforoEstado, SemaforoPresentation> = {
   },
   Amarillo: {
     estado: 'Amarillo',
-    tone: 'warning',
+    tone: 'neutral',
     shape: 'clock',
     labelKey: 'tracking.semaforo.amarillo',
     subKey: 'tracking.semaforo.subAmarillo',
@@ -115,7 +115,7 @@ const PRESENTATION: Record<SemaforoEstado, SemaforoPresentation> = {
   },
   Verde: {
     estado: 'Verde',
-    tone: 'good',
+    tone: 'neutral',
     shape: 'check',
     labelKey: 'tracking.semaforo.verde',
     subKey: 'tracking.semaforo.subVerde',
