@@ -41,7 +41,7 @@ import { ANONYMITY_FLOOR, BandChip, bandOf } from '../../../components/charts'
 import { useResultBands } from '../../result-bands/useResultBands'
 import ProgressUpdateForm from '../components/ProgressUpdateForm'
 import PlanEditForm from '../components/PlanEditForm'
-import { ACTION_PLAN_PRIORITIES, ACTION_PLAN_STATUSES, kpiProgressPercent, priorityLabel, statusLabel } from '../actionPlanVocabulary'
+import { ACTION_PLAN_PRIORITIES, ACTION_PLAN_STATUSES, kpiProgressPercent, priorityLabel, progressPercentText, statusLabel } from '../actionPlanVocabulary'
 import { daysToDue, dueDay, elapsedShare, type PlanFinding, type PlanMove } from './planDetailDerive'
 import type { ActionPlanDetailModel, Settled } from './planDetailModel'
 import { useActionPlanDetailModel, type ActionPlanDetailState } from './useActionPlanDetailModel'
@@ -105,7 +105,7 @@ function statusWord(t: TranslateFn, status: string): string {
  * Every status and priority chip is gray. Blue is for what is live and what can be acted on;
  * green, amber and red are the three result areas and nothing else (ruling of 11 Nov, HIG
  * `color.md` › "Avoid using the same color to mean different things"). A plan's lateness is
- * said by the due sentence beside them, in the danger ink with a clock and the words.
+ * said by the due sentence beside them: a red clock and the words in the meta line's ink.
  */
 
 /** A plan that is over: its due date no longer counts down. */
@@ -197,8 +197,10 @@ function ActionPlanDetailView({ state, model }: { state: ActionPlanDetailState; 
           <PageMeta>
             <Chip label={statusWord(t, plan.status)} />
             <Chip label={t('actionPlans.next.priorityChip', { priority: priorityWord })} />
-            <span data-slot="plan-due-sentence" className={cn('inline-flex items-center gap-1', !settled && days < 0 && 'text-accent-red-ink')}>
-              {!settled && days < 0 && <Clock aria-hidden="true" className="size-3.5 shrink-0" />}
+            {/* One red cue: the clock. The words keep the meta line's ink, so "Venció el…" does
+                not wear the Crítica band's red beside the area chip (one colour per meaning). */}
+            <span data-slot="plan-due-sentence" className="inline-flex items-center gap-1">
+              {!settled && days < 0 && <Clock aria-hidden="true" data-slot="plan-due-clock" className="size-3.5 shrink-0 text-accent-red-ink" />}
               {dueSentence}
             </span>
           </PageMeta>
@@ -486,7 +488,9 @@ function DeadlineCard({
   return (
     <CanvasCard title={t('actionPlans.next.deadline.title')}>
       <div className="flex items-end gap-5">
-        <span className={cn('shrink-0 text-[2.5rem] font-semibold leading-none tracking-display tabular-nums', late ? 'text-accent-red-ink' : 'text-fg-primary')}>
+        {/* Primary ink even when late: a large red numeral reads as the Crítica area, and the
+            lead sentence beside it already says "de retraso" (one colour per meaning). */}
+        <span data-slot="deadline-count" className="shrink-0 text-[2.5rem] font-semibold leading-none tracking-display tabular-nums text-fg-primary">
           {count}
         </span>
         <div className="flex min-w-0 flex-col gap-1 pb-1">
@@ -726,7 +730,7 @@ function MoveLine({ move }: { move: Settled<PlanMove> }) {
 }
 
 function MeasuresCard({ model }: { model: ActionPlanDetailModel }) {
-  const { t } = useTranslation()
+  const { t, locale } = useTranslation()
   const { plan } = model
   const none = plan.kpis.length === 0 && plan.objectives.length === 0
   return (
@@ -762,7 +766,7 @@ function MeasuresCard({ model }: { model: ActionPlanDetailModel }) {
                   <div className="flex w-40 items-center gap-2 max-sm:min-w-40 max-sm:flex-1">
                     <Progress value={percent} className="min-w-16 flex-1" aria-label={kpi.name} />
                     <span className="text-sm tabular-nums text-fg-secondary">
-                      {t('actionPlans.percentValue', { percent: Math.round(percent) })}
+                      {progressPercentText(percent, locale)}
                     </span>
                   </div>
                 )}
@@ -800,7 +804,7 @@ function MeasuresCard({ model }: { model: ActionPlanDetailModel }) {
                   aria-label={objective.description}
                 />
                 <span className="text-sm tabular-nums text-fg-secondary">
-                  {t('actionPlans.percentValue', { percent: objective.completionPercentage })}
+                  {progressPercentText(objective.completionPercentage, locale)}
                 </span>
               </div>
             </li>

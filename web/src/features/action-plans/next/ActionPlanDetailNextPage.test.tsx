@@ -223,6 +223,38 @@ describe('ActionPlanDetailNextPage', () => {
     expect(screen.getByRole('button', { name: new RegExp(copy.changeStatus) })).toBeTruthy()
   })
 
+  it('counts a late plan’s days in primary ink: the large red numeral is the Crítica area’s alone', async () => {
+    vi.setSystemTime(new Date(2026, 9, 20, 12, 0))
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    await screen.findByRole('heading', { level: 1, name: plan.title })
+    const count = document.querySelector('[data-slot="deadline-count"]') as HTMLElement
+    expect(count.textContent).toBe('5')
+    expect(count.className).toContain('text-fg-primary')
+    expect(count.className).not.toContain('text-accent-red-ink')
+  })
+
+  it('gives a late plan’s header sentence one red cue, the clock, and keeps its words out of the danger ink', async () => {
+    vi.setSystemTime(new Date(2026, 9, 20, 12, 0))
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    await screen.findByRole('heading', { level: 1, name: plan.title })
+    const sentence = document.querySelector('[data-slot="plan-due-sentence"]') as HTMLElement
+    expect(sentence.className).not.toContain('text-accent-red-ink')
+    const clock = sentence.querySelector('[data-slot="plan-due-clock"]') as SVGElement
+    expect(clock.getAttribute('class')).toContain('text-accent-red-ink')
+  })
+
+  it('floors a KPI’s progress and prints it in the Spanish percent form: 58 of 70 is 82 %, never 83%', async () => {
+    vi.mocked(getActionPlan).mockResolvedValue({
+      ...plan,
+      kpis: [{ id: 'k1', name: 'Rotación', currentValue: 58, targetValue: 70, unit: '%' } as never],
+    })
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    await screen.findByText('Rotación')
+    const bar = screen.getByRole('progressbar', { name: 'Rotación' })
+    const text = (bar.nextElementSibling?.textContent ?? '').replace(/\s/g, ' ')
+    expect(text).toBe('82 %')
+  })
+
   it('draws the header’s actions at the canvas’s 34px', async () => {
     renderAs({ role: 'company_admin', companyId: COMPANY })
     const record = await screen.findByRole('button', { name: new RegExp(copy.recordProgress) })

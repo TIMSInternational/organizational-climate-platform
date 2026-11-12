@@ -118,3 +118,16 @@ export function kpiProgressPercent(currentValue: number, targetValue: number): n
   if (!Number.isFinite(currentValue)) return null
   return Math.max(0, Math.min(100, (currentValue / targetValue) * 100))
 }
+
+/**
+ * A 0–100 progress percentage as words, FLOORED and in the locale's own percent form, so
+ * Spanish reads "82 %" the way the board and the microclimate screens print it.
+ *
+ * Floored, never rounded: 58 of 70 is 82.86, and a rounded 83 — or 99.6 shown as 100 —
+ * claims more progress than there is. The 1e-9 nudge absorbs the binary error of the
+ * division (0.29 × 100 is 28.999999999999996) without lifting any real value a whole point.
+ */
+export function progressPercentText(percent: number, locale: string): string {
+  const floored = Math.floor(Math.max(0, Math.min(100, percent)) + 1e-9)
+  return (floored / 100).toLocaleString(locale, { style: 'percent', maximumFractionDigits: 0 })
+}
