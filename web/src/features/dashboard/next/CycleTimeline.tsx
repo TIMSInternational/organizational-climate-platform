@@ -34,7 +34,7 @@ export interface CycleTimelineProps {
 
 const DOT: Record<WaveStatus, string> = {
   closed: 'size-3 border-2 border-surface-card bg-accent-blue ring-1 ring-accent-blue',
-  open: 'size-4 border-3 border-surface-card bg-accent-red ring-1 ring-accent-red',
+  open: 'size-4 border-3 border-surface-card bg-accent-blue-fill ring-1 ring-accent-blue-fill',
   planned: 'size-3 border border-dashed border-line-hover bg-surface-card',
 }
 
@@ -63,12 +63,12 @@ export default function CycleTimeline({ steps, label }: CycleTimelineProps) {
               <span
                 className={cn(
                   'font-semibold',
-                  current ? 'text-accent-red-ink' : planned ? 'text-fg-label' : 'text-fg-primary',
+                  current ? 'text-accent-blue-ink' : planned ? 'text-fg-label' : 'text-fg-primary',
                 )}
               >
                 {step.code}
               </span>
-              <span className={cn(planned ? undefined : 'font-mono tabular-nums', current ? 'text-accent-red-ink' : 'text-fg-label')}>
+              <span className={cn(planned ? undefined : 'font-mono tabular-nums', current ? 'text-accent-blue-ink' : 'text-fg-label')}>
                 {step.srDetail ? (
                   <>
                     <span className="sr-only">{step.srDetail}</span>

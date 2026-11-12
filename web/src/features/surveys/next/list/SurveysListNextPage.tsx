@@ -434,7 +434,7 @@ function SurveyTableRow({
     <tr
       data-survey-id={row.id}
       data-status={row.status}
-      className={cn('border-b border-line-light last:border-b-0', archived && 'opacity-85')}
+      className={cn('border-b border-line-light last:border-b-0')}
     >
       <td className="px-3 py-3">
         <div className="flex min-w-0 flex-col">

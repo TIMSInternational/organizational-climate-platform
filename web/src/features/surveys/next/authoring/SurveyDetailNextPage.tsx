@@ -538,7 +538,7 @@ function StatusTile({
   // is over; the server's state machine allows it, so the screen is the guard.
   const opensIntoThePast = (status: string) => endPassed && (status === 'active' || status === 'scheduled')
   const verbOf = (status: string) => (KNOWN_STATUSES.includes(status) ? copy(`verb.${status}`) : statusLabel(t, status))
-  const tone = survey.status === 'active' ? 'good' : survey.status === 'draft' || survey.status === 'scheduled' ? 'accent' : 'neutral'
+  const tone = survey.status === 'active' ? 'live' : 'neutral'
   // Closing is the one transition on this tile that cannot be taken back: the server allows
   // `closed → archived` and nothing else out of it, so a mis-click ends the measurement for
   // good and loses whatever half-finished answers were in flight. It fired on a single press

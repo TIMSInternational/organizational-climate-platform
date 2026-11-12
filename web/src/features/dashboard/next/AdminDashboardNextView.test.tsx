@@ -227,6 +227,10 @@ describe('AdminDashboardNextView', () => {
     expect(current).toHaveLength(1)
     expect(current[0].textContent).toContain('Q4')
     expect(document.querySelectorAll('[data-slot="cycle-step"]')).toHaveLength(5)
+    // Open is live, and live is blue: red belongs to the Crítica area on the same page.
+    const painted = Array.from(current[0].querySelectorAll('*')).map((el) => el.getAttribute('class') ?? '').join(' ')
+    expect(painted).not.toMatch(/accent-red/)
+    expect(painted).toMatch(/accent-blue/)
   })
 
   /**
