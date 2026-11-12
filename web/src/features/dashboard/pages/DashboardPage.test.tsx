@@ -326,7 +326,7 @@ describe('DashboardPage', () => {
       await waitFor(() => expect(fetch).toHaveBeenCalled())
       // The redesigned team panels (the canvas's LeaderDashboard and SupervisorDashboard):
       // titled after what the page IS, as every screen is, with the department and the role
-      // in the eyebrow — and the supervisor's says first that it is a proposal. Before the
+      // in the eyebrow (no "Propuesta" since review finding 7). Before the
       // first redesign a leader's document heading was "Engineering"; both halves are
       // pinned so neither can quietly move back.
       expect(await screen.findByRole('heading', { level: 1, name: nextCopy.title })).toBeTruthy()
@@ -335,7 +335,7 @@ describe('DashboardPage', () => {
       const eyebrow =
         role === 'leader'
           ? `Engineering · ${en.users.leader}`
-          : `${nextCopy.supervisor.proposal} · Engineering · ${en.users.supervisor}`
+          : `Engineering · ${en.users.supervisor}`
       expect(screen.getByText(eyebrow)).toBeTruthy()
     },
   )

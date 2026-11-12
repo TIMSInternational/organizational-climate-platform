@@ -656,6 +656,23 @@ describe('AdminDashboardNextView', () => {
     expect(item.textContent).toContain('closed 2,444 days ago')
   })
 
+  it('says nothing needs attention only when every region an item comes from was read', () => {
+    const live: RegionStatuses = {
+      company: { status: 'live' },
+      surveys: { status: 'live' },
+      trends: { status: 'live' },
+      map: { status: 'live' },
+      actionPlans: { status: 'live' },
+      tracking: { status: 'off' },
+      microclimates: { status: 'live' },
+    }
+    renderView({ ...fullModel, attention: [] }, undefined, live)
+    expect(screen.getByText(copy.attentionNone)).toBeTruthy()
+    cleanup()
+    renderView({ ...fullModel, attention: [] }, undefined, { ...live, actionPlans: { status: 'fallback', reason: 'failed', error: null } })
+    expect(screen.queryByText(copy.attentionNone)).toBeNull()
+  })
+
   it('sets the four tiles at the artboard’s hero size', () => {
     renderView()
     const values = [...document.querySelectorAll('[data-slot="kpi-value"]')]

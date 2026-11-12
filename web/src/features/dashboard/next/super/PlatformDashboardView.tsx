@@ -2,9 +2,9 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import { AlertCircle, ArrowRight, Check, Clock, Copy, FileText, Mail, Plus } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
-import { PageTopBar } from '../../../../components/layout'
+import { PageHeader } from '../../../../components/layout'
 import { KpiTile } from '../../../../components/charts'
-import { Button, LoadingRegion, NetworkError, SkeletonText, Table } from '../../../../components/ui'
+import { Button, ErrorState, LoadingRegion, SkeletonText, Table } from '../../../../components/ui'
 import { useCompanyContext } from '../../../../company-context'
 import { calendarDay } from '../../../../lib/calendarDay'
 import { cn } from '../../../../lib/cn'
@@ -26,7 +26,9 @@ import { usePlatformDashboardModel } from './usePlatformDashboardModel'
 import type { SystemAggregateStatus, SystemComponentStatus, SystemStatusResponse } from '../../../org-structure/api/systemStatus'
 
 const TH =
-  'border-b border-line-default bg-transparent px-3 pb-2 pt-1 text-2xs font-bold uppercase tracking-label whitespace-nowrap text-fg-tertiary'
+  // The spec's `.tbl th`: 12px semibold in the secondary ink, not uppercase — uppercase at
+  // 11px is for eyebrows only.
+  'border-b border-line-default bg-transparent px-3 pb-2 pt-1 text-xs font-semibold whitespace-nowrap text-fg-secondary'
 
 const MISSING_KEY: Readonly<Record<MissingPart, string>> = {
   sector: 'superadmin.next.dashboard.attention.missingSector',
@@ -56,8 +58,10 @@ function countWord(t: (key: string) => string, count: number): string {
 /** The status mix's bar, in the canvas's order and colours. */
 const SEGMENTS: ReadonlyArray<{ key: SurveyStatusKey; className: string }> = [
   { key: 'active', className: 'bg-accent-blue' },
-  { key: 'closed', className: 'bg-line-hover' },
-  { key: 'draft', className: 'bg-accent-amber' },
+  // Greys for everything but the live blue: amber is the Oportunidad area (ruling 11 Nov).
+  // The legend names each one; the colour is never the only channel.
+  { key: 'closed', className: 'bg-line-control' },
+  { key: 'draft', className: 'bg-line-hover' },
   // `line-default`, not `line-light`: in dark `--admin-border-light` IS the card's colour
   // (#1f173b both), so a light swatch vanished on the dark card.
   { key: 'archived', className: 'bg-line-default' },
@@ -102,11 +106,11 @@ export default function PlatformDashboardView() {
   return (
     <div>
       <CompanyContextBar mode="platform" companies={state.model?.rows ?? []} value={null} onChange={selectCompany} />
-      <PageTopBar
+      <PageHeader
         eyebrow={t('dashboard.platform')}
         title={t('superadmin.next.dashboard.title')}
         description={t('superadmin.next.dashboard.description')}
-        actions={
+        primaryAction={
           <Button asChild variant="primary">
             <Link to="/admin/companies?new=1">
               <Plus aria-hidden="true" />
@@ -116,11 +120,11 @@ export default function PlatformDashboardView() {
         }
       />
       {state.status === 'error' ? (
-        <NetworkError
+        <ErrorState
           title={t('superadmin.next.dashboard.loadFailed')}
           description={state.error ?? undefined}
           onRetry={state.reload}
-          retryText={t('common.retry')}
+          retryLabel={t('common.retry')}
         />
       ) : (
         <LoadingRegion loading={state.status === 'loading'} label={t('common.loading')}>
@@ -238,7 +242,7 @@ function CompaniesSection({ model, onOpen }: { model: PlatformModel; onOpen: (co
       {model.missing.surveys && (
         <p className="m-0 text-xs text-fg-secondary">{t('superadmin.next.dashboard.companies.surveysUnavailable')}</p>
       )}
-      <div className="overflow-hidden rounded-xl border border-line-default bg-surface-card pt-2 shadow-sm">
+      <div className="overflow-hidden rounded-xl border border-line-panel bg-surface-card pt-2">
         {/* The table's minimum sits on a div: Chrome ignores `min-width` on a `<table>`. */}
         <div className="overflow-x-auto">
         <div className="min-w-[46rem]">
@@ -324,7 +328,7 @@ function CompanyRow({ row, onOpen }: { row: PlatformCompanyRow; onOpen: (company
           survey.audience !== null && survey.audience > 0 ? (
             <span className="flex items-center gap-1.5">
               <MiniBar percent={percentOf(survey.responses, survey.audience)} />
-              <span className="whitespace-nowrap font-mono text-xs tabular-nums text-fg-secondary">
+              <span className="whitespace-nowrap text-xs tabular-nums text-fg-secondary">
                 {t('superadmin.next.dashboard.companies.participation', {
                   responses: survey.responses,
                   audience: survey.audience,
@@ -342,10 +346,10 @@ function CompanyRow({ row, onOpen }: { row: PlatformCompanyRow; onOpen: (company
           <span className="text-xs text-fg-tertiary">{t('superadmin.next.dashboard.companies.noSubmissions')}</span>
         )}
       </td>
-      <td className="px-3 py-3 text-right font-mono text-sm tabular-nums text-fg-primary">{row.people}</td>
+      <td className="px-3 py-3 text-right text-sm tabular-nums text-fg-primary">{row.people}</td>
       <td
         className={cn(
-          'px-3 py-3 text-right font-mono text-sm tabular-nums',
+          'px-3 py-3 text-right text-sm tabular-nums',
           row.completedResponses === 0 ? 'text-fg-tertiary' : 'text-fg-primary',
         )}
       >
@@ -379,7 +383,7 @@ function AttentionSection({
       {items.length === 0 ? (
         <p className="m-0 text-sm text-fg-secondary">{t('superadmin.next.dashboard.attention.empty')}</p>
       ) : (
-        <ul className="m-0 list-none overflow-hidden rounded-xl border border-line-default bg-surface-card p-0 shadow-sm">
+        <ul className="m-0 list-none overflow-hidden rounded-xl border border-line-panel bg-surface-card p-0">
           {items.map((item, index) => (
             <li
               key={item.kind === 'mail-off' ? 'mail-off' : `${item.kind}-${item.companyId}`}
@@ -413,7 +417,7 @@ function AttentionRow({ item, onOpen }: { item: PlatformAttention; onOpen: (comp
     case 'behind-pace':
       return (
         <>
-          <IconBox tone="critical">
+          <IconBox tone="neutral">
             <AlertCircle />
           </IconBox>
           <AttentionText
@@ -442,7 +446,7 @@ function AttentionRow({ item, onOpen }: { item: PlatformAttention; onOpen: (comp
     case 'mail-off':
       return (
         <>
-          <IconBox tone="warning">
+          <IconBox tone="neutral">
             <Mail />
           </IconBox>
           <AttentionText
@@ -551,9 +555,12 @@ function SystemRow({
         <span className="text-base font-medium text-fg-primary">{name}</span>
         <span className="text-2xs text-fg-tertiary">{sub}</span>
       </div>
+      {/* Grey with a glyph and the word: a system's health is not a result area, so it
+          wears none of the three result colours (ruling 11 Nov). */}
       <CanvasChip
-        tone={tone}
-        icon={tone === 'good' ? <Check className="size-3" /> : <Clock className="size-3" />}
+        tone="neutral"
+        data-tone={tone}
+        icon={tone === 'good' ? <Check className="size-3" /> : tone === 'critical' ? <AlertCircle className="size-3" /> : <Clock className="size-3" />}
         label={statusText(t, status)}
       />
     </li>
@@ -736,14 +743,14 @@ function PeoplePanel({ model }: { model: PlatformModel }) {
           <li key={row.id} className="grid grid-cols-[8rem_minmax(0,1fr)_2.5rem] items-center gap-2.5 text-xs">
             <span className="truncate text-fg-primary">{withoutLegalForm(row.name)}</span>
             <MiniBar percent={percentOf(row.people, most)} className="w-full" />
-            <span className="text-right font-mono tabular-nums text-fg-primary">{row.people}</span>
+            <span className="text-right tabular-nums text-fg-primary">{row.people}</span>
           </li>
         ))}
         {model.peopleWithoutCompany > 0 && (
           <li className="grid grid-cols-[8rem_minmax(0,1fr)_2.5rem] items-center gap-2.5 text-xs">
             <span className="truncate text-fg-tertiary">{t('superadmin.next.dashboard.people.noCompany')}</span>
             <MiniBar percent={percentOf(model.peopleWithoutCompany, most)} muted className="w-full" />
-            <span className="text-right font-mono tabular-nums text-fg-tertiary">{model.peopleWithoutCompany}</span>
+            <span className="text-right tabular-nums text-fg-tertiary">{model.peopleWithoutCompany}</span>
           </li>
         )}
       </ul>

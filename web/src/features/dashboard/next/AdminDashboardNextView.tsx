@@ -122,6 +122,11 @@ export default function AdminDashboardNextView({
   const steps = cycleSteps(model.waves, t, locale)
   const wave = model.latestClosedWave
   const rangeRows = climateRangeRows(model, ordered, floor)
+  // "Nothing needs your attention" only when every region an item comes from was read: with
+  // one missing, an empty list is not the claim that nothing is wrong.
+  const attentionComplete = (['actionPlans', 'tracking', 'surveys', 'map'] as const).every(
+    (region) => regions?.[region]?.status !== 'fallback',
+  )
 
   return (
     <div>
@@ -313,13 +318,16 @@ export default function AdminDashboardNextView({
             <SectionHead
               id="next-moved"
               heading={t('dashboard.next.movedHeading')}
+              // No legend over no series: "0 encuestas cerradas" described a chart not drawn.
               sub={
+                closedWaveCount(model) === 0 ? undefined : (
                 <span className="inline-flex items-center gap-2">
                   <svg aria-hidden="true" width="18" height="2" viewBox="0 0 18 2" className="shrink-0">
                     <line x1="0" x2="18" y1="1" y2="1" stroke={BOUNDARY_RULE} strokeDasharray="3 2" />
                   </svg>
                   {movedLegend(closedWaveCount(model), bands, t, locale)}
                 </span>
+                )
               }
             />
             <RegionNotice regions={regions} region="trends" t={t} onRetry={onRetry} />
@@ -406,7 +414,7 @@ export default function AdminDashboardNextView({
           </section>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+        <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-12">
           <section aria-labelledby="next-attention" className={cn(CARD_FLUSH, 'xl:col-span-7')}>
             <SectionHead
               id="next-attention"
@@ -431,9 +439,9 @@ export default function AdminDashboardNextView({
                   />
                 ))}
               </ul>
-            ) : (
+            ) : attentionComplete ? (
               <p className="m-0 px-5 pb-1 text-sm text-fg-tertiary">{t('dashboard.next.attentionNone')}</p>
-            )}
+            ) : null}
           </section>
 
           <div className="flex min-w-0 flex-col gap-4 xl:col-span-5">
