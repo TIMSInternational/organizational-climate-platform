@@ -14,6 +14,12 @@ export interface DepartmentsModel {
   rows: DepartmentRow[]
   summary: DepartmentsSummary
   wave: Wave | null
+  /**
+   * The privacy floor the rows were withheld at: the server's `minimumGroupSize` for the
+   * climate payload, or the single-segment floor when the payload was not read. A protected
+   * cell names THIS figure, never a constant of the page.
+   */
+  floor: number
   /** Which enrichments failed — each column then prints a dash, never a zero. */
   missing: { users: boolean; plans: boolean; climate: boolean }
 }
@@ -65,6 +71,7 @@ export function useDepartmentsModel(companyId: string | null, scopeCompanyId?: s
     const userList: User[] | null = users.status === 'fulfilled' ? users.value : null
     const planList: ActionPlan[] | null = plans.status === 'fulfilled' ? plans.value : null
     const climate: ClimateTrendsResponse | null = trends.status === 'fulfilled' ? trends.value : null
+    const floor = climate?.minimumGroupSize ?? SINGLE_SEGMENT_FLOOR
     const rows = rowsOf({
       departments: departments.value,
       users: userList,
@@ -74,7 +81,7 @@ export function useDepartmentsModel(companyId: string | null, scopeCompanyId?: s
       // The floor the SERVER applied to this very payload, not a constant of our own: since
       // 2026-10-15 a department is a single dimension and reported at any size, and a page
       // that kept hatching at 3 would be withholding a number the API had already sent.
-      floor: climate?.minimumGroupSize ?? SINGLE_SEGMENT_FLOOR,
+      floor,
       locale,
     })
     setState({
@@ -85,6 +92,7 @@ export function useDepartmentsModel(companyId: string | null, scopeCompanyId?: s
         rows,
         summary: summaryOf(rows, planList, today),
         wave: latestClosedWave(climate),
+        floor,
         missing: { users: userList === null, plans: planList === null, climate: climate === null },
       },
     })

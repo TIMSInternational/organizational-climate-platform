@@ -65,13 +65,14 @@ export default function CompanySettingsNextView() {
   const allowed = capabilities.canManageOrg && readViewerClaims().companyId === id
   const state = useCompanySettingsModel(allowed ? id : null)
   const [saved, setSaved] = useState(false)
+  // One header rule for the sidebar's destinations (fix round 1): the eyebrow is the sidebar
+  // section, and no breadcrumb — «Configuración de empresa» is a top-level row of Organización.
   const header = { eyebrow: t('navigation.sectionOrganization'), title: t(`${K}.title`), description: t(`${K}.description`) }
-  const crumbs = [{ label: t('navigation.companyAdministration') }, { label: t(`${K}.crumb`) }]
 
   if (!allowed) {
     return (
       <div>
-        <PageHeader {...header} breadcrumbs={crumbs} />
+        <PageHeader {...header} />
         <EmptyState title={t(`${K}.notAllowedTitle`)} description={t(`${K}.notAllowedBody`)} />
       </div>
     )
@@ -79,7 +80,7 @@ export default function CompanySettingsNextView() {
   if (state.status === 'error') {
     return (
       <div>
-        <PageHeader {...header} breadcrumbs={crumbs} />
+        <PageHeader {...header} />
         <NetworkError
           title={t(`${K}.loadFailed`)}
           description={state.error ?? undefined}
@@ -92,7 +93,7 @@ export default function CompanySettingsNextView() {
   if (!state.model) {
     return (
       <div>
-        <PageHeader {...header} breadcrumbs={crumbs} />
+        <PageHeader {...header} />
         <SkeletonText lines={8} />
       </div>
     )
@@ -102,7 +103,6 @@ export default function CompanySettingsNextView() {
       key={state.version}
       companyId={id}
       model={state.model}
-      crumbs={crumbs}
       initialNotice={saved ? 'saved' : null}
       onSaved={(settings) => {
         state.replaceSettings(settings)
@@ -115,13 +115,11 @@ export default function CompanySettingsNextView() {
 function SettingsForm({
   companyId,
   model,
-  crumbs,
   initialNotice,
   onSaved,
 }: {
   companyId: string
   model: CompanySettingsModel
-  crumbs: { label: string }[]
   initialNotice: 'saved' | null
   onSaved: (settings: CompanySettingsModel['settings']) => void
 }) {
@@ -181,8 +179,7 @@ function SettingsForm({
   return (
     <div>
       <PageHeader
-        breadcrumbs={crumbs}
-        eyebrow={model.companyName}
+        eyebrow={t('navigation.sectionOrganization')}
         title={t(`${K}.title`)}
         description={t(`${K}.description`)}
         actions={

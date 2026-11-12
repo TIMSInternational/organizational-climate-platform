@@ -1547,7 +1547,7 @@
     "parentLockedOnEdit": "El departamento padre no se puede cambiar una vez creado el departamento.",
     "inactiveHidesFromAssignment": "Los departamentos inactivos se conservan, pero no se ofrecen al asignar personas.",
     "next": {
-      "description": "Quién está en cada área, quién la lidera y qué planes tiene abiertos. A la administración, un departamento se le muestra desde una respuesta; un cruce o el equipo propio de un líder, desde {threshold}.",
+      "description": "Quién está en cada área, quién la lidera y qué planes tiene abiertos. A la administración, un departamento se le muestra desde una respuesta; un cruce o el equipo propio de un líder, desde {threshold} respuestas.",
       "importPeople": "Importar personas",
       "notAllowedTitle": "Los departamentos no están a su cargo",
       "notAllowedBody": "Solo la administración de la empresa los ve y los cambia.",
@@ -1611,7 +1611,8 @@
       "rootPeopleMany": "{count} personas",
       "meanOfOne": "· media de {count} dimensión",
       "inactiveHiddenOne": "{count} departamento inactivo oculto. Conserva su historial de encuestas y no recibe invitaciones.",
-      "inactiveShownOne": "{count} departamento inactivo a la vista. Conserva su historial de encuestas y no recibe invitaciones."
+      "inactiveShownOne": "{count} departamento inactivo a la vista. Conserva su historial de encuestas y no recibe invitaciones.",
+      "noteProtectedOne": "Protegido en {wave}: menos de {threshold} respuesta"
     }
   },
   "demographicFields": {
@@ -1697,7 +1698,8 @@
         "notOfferedSub": "campo inactivo",
         "edit": "Editar",
         "editNamed": "Editar {label}",
-        "useNamed": "Empezar un campo nuevo a partir de {label}"
+        "useNamed": "Empezar un campo nuevo a partir de {label}",
+        "createFrom": "Crear"
       },
       "types": {
         "heading": "Tipos de campo",
@@ -3604,7 +3606,7 @@
         "roleEmployee": "Empleados · {count}",
         "allDepartments": "Todos los departamentos",
         "departmentFilterLabel": "Filtrar por departamento",
-        "searchPlaceholder": "Buscar por nombre o correo",
+        "searchPlaceholder": "Buscar nombre o correo",
         "shown": "{shown} de {total}",
         "editTitle": "Editar a {name}",
         "editMeta": "el cambio de rol se aplica al guardar y de inmediato",

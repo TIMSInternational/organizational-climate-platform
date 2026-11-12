@@ -205,7 +205,27 @@ describe('AdminDemographicFieldsView (company administrator)', () => {
     renderAt()
     await user.click(await screen.findByRole('button', { name: fill(T.catalogue.useNamed, { label: es.demographicFields.next.sample.tenure }) }))
     expect(screen.getByRole('heading', { name: es.superadmin.next.demographics.form.newHeading })).toBeTruthy()
-    expect(screen.getByDisplayValue(es.superadmin.next.demographics.starter.label)).toBeTruthy()
+    expect(screen.getByDisplayValue(es.demographicFields.next.sample.tenure)).toBeTruthy()
+  })
+
+  it('offers «Crear», not «Editar», on a sample row, and starts the new field from THAT row', async () => {
+    vi.stubGlobal('fetch', fetchWith())
+    const user = userEvent.setup()
+    renderAt()
+    const sample = es.demographicFields.next.sample
+    const shift = await screen.findByRole('button', { name: fill(T.catalogue.useNamed, { label: sample.shift }) })
+    // A sample row is not a field of this company: nothing on it says «Editar».
+    const table = shift.closest('table') as HTMLTableElement
+    expect(within(table).queryByText(T.catalogue.edit)).toBeNull()
+    expect(within(table).getAllByText(T.catalogue.createFrom)).toHaveLength(SAMPLE_CATALOGUE.length)
+    await user.click(shift)
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByDisplayValue(sample.shift)).toBeTruthy()
+    expect(within(dialog).getByDisplayValue('tipo_jornada')).toBeTruthy()
+    for (const value of [sample.shiftDay, sample.shiftMixed, sample.shiftNight]) {
+      expect(within(dialog).getAllByText(value).length).toBeGreaterThan(0)
+    }
+    expect(within(dialog).queryByDisplayValue(es.superadmin.next.demographics.starter.label)).toBeNull()
   })
 
   it('tells a leader the page is not theirs and asks the server for nothing', async () => {
@@ -218,13 +238,16 @@ describe('AdminDemographicFieldsView (company administrator)', () => {
     expect(screen.queryByRole('button', { name: T.newField })).toBeNull()
   })
 
-  it('sets the breadcrumb 16px over the header, in the shared PageHeader (spec .hdr)', async () => {
+  it('uses the shared PageHeader under the sidebar section’s eyebrow, with no breadcrumb over a top-level row', async () => {
     vi.stubGlobal('fetch', fetchWith())
     renderAt()
     expect(await screen.findByRole('heading', { name: T.catalogue.headingSample })).toBeTruthy()
     const bar = document.querySelector('[data-slot="page-header"]') as HTMLElement
     expect(bar.className).toContain('gap-4')
     expect(bar.className).not.toContain('gap-9.5')
-    expect(bar.querySelector('nav')).not.toBeNull()
+    // «Campos demográficos» is a row of Organización in the rail: a crumb over it named
+    // «Administración de empresa», a parent the rail no longer has (fix round 1).
+    expect(bar.querySelector('nav')).toBeNull()
+    expect(bar.textContent).toContain(es.navigation.sectionOrganization)
   })
 })

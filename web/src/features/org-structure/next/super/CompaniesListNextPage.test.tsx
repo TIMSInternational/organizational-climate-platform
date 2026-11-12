@@ -127,7 +127,7 @@ afterEach(() => {
 })
 
 describe('CompaniesListNextPage', () => {
-  it('lists every tenant by activity, with sector, plan, headcount and open wave; the language is read in the detail', async () => {
+  it('lists every tenant by activity, with sector, plan, headcount and open wave; with no language in the list there is no Idioma column', async () => {
     serve()
     renderPage()
     expect(screen.getByRole('heading', { level: 1, name: 'Companies' })).toBeTruthy()
@@ -140,7 +140,9 @@ describe('CompaniesListNextPage', () => {
     expect(rows[1].textContent).toContain('Q4')
     expect(rows[2].textContent).toContain(copy.noPlan)
     expect(rows[2].textContent).toContain(copy.noSurveys)
-    expect(screen.getAllByText(copy.languageInDetail)).toHaveLength(2)
+    // A column of the same placeholder on every row carries nothing: it is not drawn at all.
+    expect(screen.queryByRole('columnheader', { name: copy.colLanguage })).toBeNull()
+    expect(screen.queryByText(copy.languageInDetail)).toBeNull()
   })
 
   it('names each company’s language when the list carries it, and says where to read it when it does not', async () => {
@@ -157,6 +159,7 @@ describe('CompaniesListNextPage', () => {
     expect(northwind.textContent).toContain(copy.languageEs)
     expect(northwind.textContent).not.toContain(copy.languageInDetail)
     expect(contoso.textContent).toContain(copy.languageInDetail)
+    expect(screen.getByRole('columnheader', { name: copy.colLanguage })).toBeTruthy()
   })
 
   it('marks its three notes with the board’s glyphs: an open book, a circle alert, a plus', async () => {

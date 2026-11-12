@@ -22,7 +22,7 @@ import type { DemographicField } from '../../api/demographicFields'
 import { peoplePerValue } from '../../components/demographicReach'
 import { fieldVerdict, usableCuts } from '../super/demographics'
 import { CanvasChip, IconBox, Panel } from '../super/parts'
-import { FieldForm, FloorRules } from '../super/SuperDemographicFieldsView'
+import { FieldForm, FloorRules, type FieldSeed } from '../super/SuperDemographicFieldsView'
 import { mergedRanges } from './adminDemographics'
 import { SAMPLE_CATALOGUE } from './sampleCatalogue'
 import { useAdminDemographicsModel } from './useAdminDemographicsModel'
@@ -48,7 +48,7 @@ interface Row {
   real: DemographicField | null
 }
 
-type Editing = { kind: 'new'; seed: boolean } | { kind: 'field'; field: DemographicField } | null
+type Editing = { kind: 'new'; seed: boolean; from?: FieldSeed } | { kind: 'field'; field: DemographicField } | null
 
 /**
  * `/admin/companies/:companyId/demographic-fields` for a company administrator — the canvas's
@@ -99,18 +99,14 @@ export default function AdminDemographicFieldsView() {
   const active = state.fields.filter((field) => field.isActive).length
   const usable = state.people === undefined ? null : usableCuts(state.fields, state.people, ANONYMITY_FLOOR)
 
-  // The DemographicFields board sets the breadcrumb 14px over the header (its glyphs at y=76, the
-  // eyebrow's at y=110 at 1440), not the 38px of the other admin boards: PageHeader draws it 16px over.
+  // One header rule for the sidebar's destinations (fix round 1): the eyebrow is the sidebar
+  // section, and no breadcrumb over a top-level row of Organización.
   const header = (
     <div className="-mb-6">
       <PageHeader
-        eyebrow={state.companyName ?? t('navigation.sectionOrganization')}
+        eyebrow={t('navigation.sectionOrganization')}
         title={t('navigation.demographicFields')}
         description={t('demographicFields.next.description', { floor: ANONYMITY_FLOOR })}
-        breadcrumbs={[
-          { label: t('navigation.companyAdministration'), href: `/admin/companies/${companyId}` },
-          { label: t('navigation.demographicFields') },
-        ]}
         actions={
           allowed ? (
             <Button type="button" variant="primary" onClick={() => setEditing(editing ? null : { kind: 'new', seed: false })}>
@@ -159,12 +155,13 @@ export default function AdminDemographicFieldsView() {
         >
           {editing && companyId && state.status === 'ready' && (
             <FieldForm
-              key={editing.kind === 'field' ? editing.field.id : `new-${String(editing.seed)}`}
+              key={editing.kind === 'field' ? editing.field.id : `new-${String(editing.seed)}-${editing.from?.field ?? ''}`}
               companyId={companyId}
               field={editing.kind === 'field' ? editing.field : null}
               people={state.people}
               nextOrder={state.fields.length + 1}
               seedExample={editing.kind === 'new' && editing.seed}
+              seedFrom={editing.kind === 'new' ? editing.from : undefined}
               onDone={() => {
                 setEditing(null)
                 state.reload()
@@ -254,7 +251,15 @@ export default function AdminDemographicFieldsView() {
                 isSample={isSample}
                 company={company}
                 people={state.people}
-                onEdit={(row) => setEditing(row.real ? { kind: 'field', field: row.real } : { kind: 'new', seed: true })}
+                onEdit={(row) =>
+                  // A sample row is not a field of this company: its action starts a NEW field
+                  // filled from that row, and nothing exists until «Crear campo».
+                  setEditing(
+                    row.real
+                      ? { kind: 'field', field: row.real }
+                      : { kind: 'new', seed: false, from: { label: row.label, field: row.field, type: row.type, values: row.values, required: row.required } },
+                  )
+                }
               />
 
               <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
@@ -455,7 +460,7 @@ function CatalogueRow({ row, people, onEdit }: { row: Row; people: number | unde
           }
           onClick={onEdit}
         >
-          {t('demographicFields.next.catalogue.edit')}
+          {row.real ? t('demographicFields.next.catalogue.edit') : t('demographicFields.next.catalogue.createFrom')}
         </Button>
       </td>
     </tr>
