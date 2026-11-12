@@ -3,6 +3,7 @@ import { useTranslation } from '../../../../i18n'
 import { administersSurvey, readViewerClaims } from '../../../../auth/viewerCapabilities'
 import { listDepartments, type Department } from '../../../org-structure/api/departments'
 import { listUsers, type User } from '../../../org-structure/api/users'
+import { getCompanySettings } from '../../../org-structure/api/companySettings'
 import {
   getSurvey,
   setSurveyCollectParticipantIdentity,
@@ -36,6 +37,12 @@ export interface DistributionModel {
   users: User[]
   /** The viewer administers the survey's own company — the audience may be read and changed. */
   scoped: boolean
+  /**
+   * The company's IANA zone, which the survey's window is written in; `null` when it could not
+   * be read (the page then reads the browser's, and says nothing it cannot back). Read exactly
+   * as the detail page reads it (`useSurveyDetailModel`), so the two print one close date.
+   */
+  timeZone?: string | null
 }
 
 export type DistributionState =
@@ -126,15 +133,18 @@ export function useDistributionModel(surveyId: string) {
       const scoped = administersSurvey(readViewerClaims(), survey)
       let departments: Department[] = []
       let users: User[] = []
+      let timeZone: string | null = null
       if (scoped) {
-        const [departmentList, userList] = await Promise.allSettled([
+        const [departmentList, userList, settings] = await Promise.allSettled([
           listDepartments(baseUrl, survey.companyId),
           listUsers(baseUrl, survey.companyId),
+          getCompanySettings(baseUrl, survey.companyId),
         ])
         departments = departmentList.status === 'fulfilled' ? departmentList.value : []
         users = userList.status === 'fulfilled' ? userList.value : []
+        timeZone = settings.status === 'fulfilled' ? (settings.value?.settings?.timezone ?? null) : null
       }
-      setState({ status: 'ready', model: { survey, distribution, invitations, departments, users, scoped } })
+      setState({ status: 'ready', model: { survey, distribution, invitations, departments, users, scoped, timeZone } })
     } catch (error) {
       setState({ status: 'error', message: describeApiError(error, t, 'surveys.distribution.loadFailed') })
     }

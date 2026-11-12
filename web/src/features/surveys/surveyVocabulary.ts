@@ -223,3 +223,19 @@ export function licensedServiceLabel(t: TranslateFn, service: string): string {
 export function languageLabel(t: TranslateFn, language: string): string {
   return label(t, LANGUAGE_KEYS, language)
 }
+
+const LANGUAGE_IN_SENTENCE_KEYS: Record<string, string> = {
+  en: 'language.englishInSentence',
+  es: 'language.spanishInSentence',
+  both: 'language.bothInSentence',
+}
+
+/**
+ * A language's name as it reads INSIDE a sentence: lower case in Spanish ("redactada en
+ * inglés", "Impreso en español"), capitalised in English. `languageLabel` is the name on its
+ * own — a chip, a table cell, a menu option — where Spanish capitalises it like any first
+ * word. Falls back to the code, like every label here.
+ */
+export function languageInSentence(t: TranslateFn, language: string): string {
+  return label(t, LANGUAGE_IN_SENTENCE_KEYS, language)
+}

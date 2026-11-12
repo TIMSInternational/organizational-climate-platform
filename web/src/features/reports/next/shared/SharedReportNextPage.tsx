@@ -40,6 +40,7 @@ import {
   ReportCard,
   ScaleStrip,
 } from './parts'
+import { languageInSentence } from '../../../surveys/surveyVocabulary'
 
 const K = 'sharedReport.next'
 /** The 1-to-5 axis over the scale strip, drawn once for the whole column. */
@@ -397,7 +398,8 @@ function SurveyBlock({ section, named }: { section: SharedSection; named: boolea
       {section.resolvedLocale !== '' && section.resolvedLocale !== locale && (
         <p className="m-0 max-w-prose text-xs text-fg-tertiary">
           {t('sharedReport.contentLanguage', {
-            language: contentLanguageName(t, section.resolvedLocale),
+            // Mid-sentence, so lower case in Spanish: «Impreso en inglés».
+            language: languageInSentence(t, section.resolvedLocale),
           })}
         </p>
       )}

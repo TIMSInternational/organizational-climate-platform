@@ -173,9 +173,9 @@ describe('ClimateTrendsNextPage', () => {
     // Belonging 4,0 is in the strength area; Workload 3,3 in the opportunity area.
     expect(belonging?.getAttribute('data-band')).toBe('strength')
     expect(workload?.getAttribute('data-band')).toBe('opportunity')
-    // The card's chip prints the area's SHORT name, as the chips over the range bar do — one
-    // name per area on the screen — and keeps the full name in its title.
-    expect(within(belonging as HTMLElement).getByTitle(en.resultBands.name.strength).textContent).toBe(en.resultBands.short.strength)
+    // The card's chip prints the area's one full name, as the chips over the range bar and every
+    // other banded screen do — one name per area — never the short «Strength».
+    expect(within(belonging as HTMLElement).getByTitle(en.resultBands.name.strength).textContent).toBe(en.resultBands.name.strength)
     // The table's cells carry no area name of their own; the legend under the table names all three.
     const tableLegend = document.querySelector('[data-testid="trends-table-legend"]') as HTMLElement
     expect(tableLegend).toBeTruthy()
@@ -357,9 +357,10 @@ describe('ClimateTrendsNextPage', () => {
     const rows = [...range.querySelectorAll('li[data-dimension]')]
     expect(rows.map((row) => row.getAttribute('data-dimension'))).toEqual(['belonging', 'workload'])
     for (const row of rows) expect(row.getAttribute('data-range')).toBe('mean')
-    // The server's 4.0 for belonging in Q3, ticked at its 3.3 in Q1.
+    // The server's 4.0 for belonging in Q3, ticked at its 3.3 in Q1 — at one decimal, as the
+    // cards and the table under the bar print the same dimension (app-wide-mean.md).
     expect(within(range).getAllByRole('img')[0].getAttribute('aria-label')).toBe(
-      `${en.charts.range.ariaMean.replace('{mean}', '4.00')}; Q1 3.30`,
+      `${en.charts.range.ariaMean.replace('{mean}', '4.0')}; Q1 3.3`,
     )
 
     await userEvent.click(within(screen.getByRole('group', { name: copy.breakDownBy })).getByRole('button', { name: 'Finanzas' }))

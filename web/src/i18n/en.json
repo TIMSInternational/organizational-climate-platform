@@ -759,7 +759,8 @@
       "legendBelow": "below target",
       "legendOn": "on target",
       "legendAbove": "above target",
-      "legendProtected": "protected, fewer than {threshold} responses"
+      "legendProtected": "protected, fewer than {threshold} responses",
+      "legendOneDecimal": "Figures to one decimal"
     },
     "range": {
       "aria": "From {low} to {high}; mean {mean}",
@@ -1178,6 +1179,7 @@
       "whereHeading": "Where the organisation stands",
       "climateLabel": "Climate · survey {wave}",
       "climateSub": "of 5 · target {target}",
+      "climateRangeSub": "The bar runs from the lowest department to the highest; the dot is the organisation's mean.",
       "climateVs": "vs {wave}",
       "risesInARow": "{count} rises in a row",
       "participationLabel": "Participation · {wave}",
@@ -1744,10 +1746,11 @@
     "networkError": "Network error. Please check your connection.",
     "serverError": "Server error. Please try again later.",
     "notFound": "Resource not found",
-    "unauthorized": "You don't have permission to access this resource",
-    "sessionExpired": "Your session has expired. Please login again.",
+    "unauthorized": "You don't have permission to access this resource.",
+    "sessionExpired": "Your session has expired. Sign in again.",
     "validationError": "Validation error. Please check your input.",
     "somethingWentWrong": "Something went wrong.",
+    "loadFailed": "This page could not be loaded",
     "route": {
       "title": "This page could not be shown",
       "body": "Something unexpected went wrong while opening this screen. Try again; if the problem continues, go back to the start.",
@@ -1840,7 +1843,8 @@
     "switchLanguage": "Switch Language",
     "selectLanguage": "Select Language",
     "englishInSentence": "English",
-    "spanishInSentence": "Spanish"
+    "spanishInSentence": "Spanish",
+    "bothInSentence": "Spanish and English"
   },
   "microclimates": {
     "eyebrow": "Live sessions",

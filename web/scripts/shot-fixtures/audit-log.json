@@ -1863,7 +1863,7 @@
       "anonymous": false,
       "highestRecordableState": "completed",
       "suppressedStates": [],
-      "guarantee": "This survey is not anonymous; every state is recorded against the invitation."
+      "guarantee": "This survey is anonymous: your organisation sees who has answered, never what they answered. The results are received and analysed by TIMS International, which gives your organisation grouped results only. The full invitation lifecycle is recorded per invitee."
     }
   },
   "GET /survey-invitations/*": {
@@ -2081,7 +2081,7 @@
       "anonymous": false,
       "highestRecordableState": "completed",
       "suppressedStates": [],
-      "guarantee": "This microclimate is not anonymous; it already requires respondents to sign in. The full invitation lifecycle is recorded per invitee."
+      "guarantee": "This microclimate is anonymous: your organisation sees who took part, never what they answered. It already requires respondents to sign in. The results are received and analysed by TIMS International, which gives your organisation grouped results only. The full invitation lifecycle is recorded per invitee."
     }
   },
   "GET /microclimate-invitations/*": {
@@ -2158,7 +2158,7 @@
   "GET /microclimates/*": {
     "id": "m0000000-0000-0000-0000-000000000001",
     "companyId": "11111111-1111-1111-1111-111111111111",
-    "title": "How did this week's release land?",
+    "title": "¿Cómo se recibió el lanzamiento de esta semana?",
     "description": null,
     "status": "active",
     "language": "en",
@@ -2996,7 +2996,7 @@
     "endDate": "2026-10-31T00:00:00Z",
     "responseCount": 101,
     "targetAudienceCount": null,
-    "departmentIds": [],
+    "departmentIds": [], "userIds": [],
     "questions": [
       {
         "id": "q1",
@@ -3364,7 +3364,7 @@
       {
         "id": "m0000000-0000-0000-0000-000000000001",
         "companyId": "11111111-1111-1111-1111-111111111111",
-        "title": "How did this week's release land?",
+        "title": "¿Cómo se recibió el lanzamiento de esta semana?",
         "status": "active",
         "language": "en",
         "responseCount": 18,
@@ -3643,7 +3643,7 @@
         "text": "I can raise a concern without fear",
         "language": "en",
         "category": "psychological_safety",
-        "subcategory": "voice",
+        "subcategory": "voz",
         "isActive": true,
         "metrics": {
           "questionBankItemId": "c0000000-0000-0000-0000-000000000001",
@@ -3681,7 +3681,7 @@
         "text": "Describe anything that made this quarter harder than it needed to be",
         "language": "en",
         "category": "workload",
-        "subcategory": "open feedback",
+        "subcategory": "comentarios abiertos",
         "isActive": true,
         "metrics": {
           "questionBankItemId": "c0000000-0000-0000-0000-000000000003",
@@ -3757,7 +3757,7 @@
         "text": "Is it clear who decides what on your team?",
         "language": "en",
         "category": "leadership",
-        "subcategory": "clarity",
+        "subcategory": "claridad",
         "isActive": true,
         "metrics": {
           "questionBankItemId": "c0000000-0000-0000-0000-000000000007",
@@ -3782,7 +3782,7 @@
         "language": "en",
         "type": "likert",
         "category": "psychological_safety",
-        "subcategory": "voice",
+        "subcategory": "voz",
         "industry": null,
         "companySize": null,
         "usageCount": 9,
@@ -3824,7 +3824,7 @@
         "language": "en",
         "type": "open_ended",
         "category": "workload",
-        "subcategory": "open feedback",
+        "subcategory": "comentarios abiertos",
         "industry": null,
         "companySize": null,
         "usageCount": 9,
@@ -3906,7 +3906,7 @@
         "language": "en",
         "type": "yes_no",
         "category": "leadership",
-        "subcategory": "clarity",
+        "subcategory": "claridad",
         "industry": null,
         "companySize": null,
         "usageCount": 6,

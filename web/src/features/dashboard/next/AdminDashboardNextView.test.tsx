@@ -128,7 +128,7 @@ describe('AdminDashboardNextView', () => {
     // The band is said in words on every card, never by colour alone.
     for (const card of cards) {
       const band = card.getAttribute('data-band') as 'strength' | 'opportunity'
-      expect(within(card).getByText(en.resultBands.short[band])).toBeTruthy()
+      expect(within(card).getByText(en.resultBands.name[band])).toBeTruthy()
     }
   })
 
@@ -280,6 +280,18 @@ describe('AdminDashboardNextView', () => {
     const small = fullModel.map.rows.find((row) => row.responses > 0 && row.responses < 3)!
     const dots = [...document.querySelectorAll('[data-slot="population-dots"]')]
     expect(dots.some((node) => node.children.length === small.responses)).toBe(true)
+  })
+
+  it('names a withheld group on the participation tile by the padlock and «Fewer than N», never a count or «protected»', () => {
+    renderView()
+    const finance = fullModel.map.rows.find((row) => row.responses < ANONYMITY_FLOOR)!
+    const marks = [...document.querySelectorAll('[data-slot="participation-withheld"]')]
+    expect(marks.length).toBeGreaterThan(0)
+    const mark = marks.find((node) => node.textContent?.startsWith(finance.name))!
+    // The whole text, pinned: the group's name and the floor, as «Quién respondió» says it.
+    expect(mark.textContent).toBe(finance.name + en.charts.range.protected.replace('{floor}', String(ANONYMITY_FLOOR)))
+    expect(mark.querySelector('[data-protected-mark] svg')).not.toBeNull()
+    expect(mark.textContent).not.toMatch(/protected/i)
   })
 
   it('draws a withheld group a fixed band, never one mark per respondent, and never a count', () => {

@@ -150,6 +150,16 @@
   --color-chart-div-mid-ink: var(--admin-chart-div-mid-ink);
   --color-chart-div-pos-1-ink: var(--admin-chart-div-pos-1-ink);
   --color-chart-div-pos-2-ink: var(--admin-chart-div-pos-2-ink);
+  --color-chart-neutral-1: var(--admin-chart-neutral-1);
+  --color-chart-neutral-2: var(--admin-chart-neutral-2);
+  --color-chart-neutral-3: var(--admin-chart-neutral-3);
+  --color-chart-neutral-4: var(--admin-chart-neutral-4);
+  --color-chart-neutral-5: var(--admin-chart-neutral-5);
+  --color-chart-neutral-1-ink: var(--admin-chart-neutral-1-ink);
+  --color-chart-neutral-2-ink: var(--admin-chart-neutral-2-ink);
+  --color-chart-neutral-3-ink: var(--admin-chart-neutral-3-ink);
+  --color-chart-neutral-4-ink: var(--admin-chart-neutral-4-ink);
+  --color-chart-neutral-5-ink: var(--admin-chart-neutral-5-ink);
 
   --color-chart-grid: var(--admin-chart-grid);
   --color-chart-axis: var(--admin-chart-axis);
@@ -298,6 +308,8 @@
   --text-kpi-lg--line-height: 1;
   --text-kpi-hero: var(--admin-text-kpi-hero);
   --text-kpi-hero--line-height: 1;
+  --text-kpi-display: var(--admin-text-kpi-display);
+  --text-kpi-display--line-height: 1;
   /* The respond card's question: the canvas sets it at 17px with line-height 1.4. */
   --text-question: var(--admin-text-question);
   --text-question--line-height: 1.4;

@@ -291,7 +291,7 @@ function QuestionLibraryForCompany() {
         // Two columns from lg. From xl an open drawer overlays the list instead of taking a third
         // column, as the board draws it (QuestionLibrary.dc.html: the drawer shares the list's
         // grid cell — `grid-area: 1 / 1; justify-self: end; width: 392px; z-index: 1`).
-        <div className="grid items-start gap-4 lg:grid-cols-[17rem_minmax(0,1fr)]">
+        <div className="grid items-start gap-4 lg:grid-cols-[--spacing(68)_minmax(0,1fr)]">
           <nav aria-label={t('questionLibrary.next.categories')} className="rounded-xl border border-line-panel bg-surface-card p-4">
             <h2 className="m-0 text-2xl leading-tight">{t('questionLibrary.next.categories')}</h2>
             <p className="mb-3 mt-0.5 text-sm text-fg-tertiary">
@@ -348,7 +348,7 @@ function QuestionLibraryForCompany() {
                     label={selected.category.companyId === null ? t('questionLibrary.next.global') : company}
                   />
                 </div>
-                <p data-testid="library-category-description" className="mb-3 mt-1 max-w-[30rem] text-sm leading-normal text-fg-secondary">
+                <p data-testid="library-category-description" className="mb-3 mt-1 max-w-120 text-sm leading-normal text-fg-secondary">
                   {descriptionOf(selected.category) ? `${descriptionOf(selected.category)} ` : ''}
                   {usageSentence(t, selected, visible.items)}
                 </p>
@@ -371,7 +371,9 @@ function QuestionLibraryForCompany() {
                     <TableHeader>
                       <TableRow className="hover:bg-transparent">
                         <TableHead scope="col" className="px-4">{t('questionLibrary.next.colQuestion')}</TableHead>
-                        <TableHead scope="col" className="w-32">{t('questionLibrary.next.colOwner')}</TableHead>
+                        {/* Below sm the owner folds into the row's meta line: at 390 this column and the
+                            action squeezed the question itself to about 100px (review 12 Nov). */}
+                        <TableHead scope="col" className="hidden w-32 sm:table-cell">{t('questionLibrary.next.colOwner')}</TableHead>
                         <TableHead scope="col" className="w-20 pr-4">
                           <span className="sr-only">{t('questionLibrary.next.colAction')}</span>
                         </TableHead>
@@ -393,7 +395,7 @@ function QuestionLibraryForCompany() {
                   {/* The note caps at 480px of text (31.5rem with its 16px pads), so it wraps before
                       the drawer that overlays the list; the rule above it is the card's own. */}
                   <div className="border-t border-line-default">
-                    <p data-testid="library-globals-note" className="m-0 max-w-[31.5rem] px-4 py-3 text-sm leading-normal text-fg-tertiary">
+                    <p data-testid="library-globals-note" className="m-0 max-w-126 px-4 py-3 text-sm leading-normal text-fg-tertiary">
                       {t('questionLibrary.next.globalsNote')}
                     </p>
                   </div>
@@ -410,7 +412,7 @@ function QuestionLibraryForCompany() {
               // Below xl the drawer takes a full row under the list rather than the 14rem category
               // column (library-new-light-1024.png). From xl it lies over the list's right edge in
               // the list's own cell, at the board's 392px, 3px ink edge and lifted shadow.
-              className="overflow-hidden rounded-xl border border-line-panel bg-surface-card lg:col-span-2 xl:col-[2] xl:row-[1] xl:justify-self-end xl:w-[24.5rem] xl:z-1 xl:shadow-lg"
+              className="overflow-hidden rounded-xl border border-line-panel bg-surface-card lg:col-span-2 xl:col-[2] xl:row-[1] xl:justify-self-end xl:w-98 xl:z-1 xl:shadow-lg"
             >
               {/* The board's drawer header: 14px 18px 12px, 4px from the eyebrow to the 20px title. */}
               <div className="flex items-start justify-between gap-3 border-b border-line-default px-4.5 pb-3 pt-3.5">
@@ -466,10 +468,10 @@ function QuestionLibraryForCompany() {
                       </QSelect>
                     </Field>
                     <Field label={t('questionLibrary.next.textEs')} required>
-                      <Textarea rows={2} className="min-h-[3.375rem]" value={draft.textEs} onChange={(e) => setDraft({ ...draft, textEs: e.target.value })} />
+                      <Textarea rows={2} className="min-h-13.5" value={draft.textEs} onChange={(e) => setDraft({ ...draft, textEs: e.target.value })} />
                     </Field>
                     <Field label={t('questionLibrary.next.textEn')} required hint={t('questionLibrary.next.bothRequired')}>
-                      <Textarea rows={2} className="min-h-[3.375rem]" value={draft.textEn} onChange={(e) => setDraft({ ...draft, textEn: e.target.value })} />
+                      <Textarea rows={2} className="min-h-13.5" value={draft.textEn} onChange={(e) => setDraft({ ...draft, textEn: e.target.value })} />
                     </Field>
                     <div className="grid grid-cols-2 gap-3">
                       <Field label={t('questionLibrary.next.type')} hint={t('questionLibrary.next.typeHint')}>
@@ -634,8 +636,11 @@ function ItemRow({ item, primary, secondary, owner, action, actionLabel, onOpen 
         <div className="font-medium text-fg-primary">{primary}</div>
         <div lang={locale === 'es' ? 'en' : 'es'} className="text-sm text-fg-secondary">{secondary}</div>
         <div className="mt-0.5 text-sm text-fg-tertiary">{meta}</div>
+        <div data-slot="library-owner-folded" className="mt-1.5 sm:hidden">
+          <Chip tone="neutral" icon={item.companyId === null ? <Lock className="size-3" /> : undefined} label={owner} />
+        </div>
       </TableCell>
-      <TableCell className="py-3 align-top">
+      <TableCell className="hidden py-3 align-top sm:table-cell">
         <Chip tone="neutral" icon={item.companyId === null ? <Lock className="size-3" /> : undefined} label={owner} />
       </TableCell>
       <TableCell className="py-2 pr-4 text-right align-top">

@@ -27,7 +27,7 @@ describe('DistributionStrip', () => {
     }))
   }
 
-  it('lands the five points of a 1-5 scale on the five diverging steps, fills and inks paired', () => {
+  it('lands the five points of a 1-5 scale on the five neutral steps, fills and inks paired', () => {
     render(
       <DistributionStrip segments={likert([10, 10, 10, 10, 10])} min={1} max={5} {...ends} />,
     )
@@ -36,32 +36,20 @@ describe('DistributionStrip', () => {
     const fills = marks.map((mark) => mark.style.backgroundColor)
     const inks = marks.map((mark) => mark.style.color)
 
-    // Disagree red, neutral gray, agree blue — the climate map's own ramp, in
-    // scale order. A strip whose colour said something else would put two
-    // meanings on one hue on the results page.
-    expect(fills).toEqual([
-      'var(--admin-chart-div-neg-2)',
-      'var(--admin-chart-div-neg-1)',
-      'var(--admin-chart-div-mid)',
-      'var(--admin-chart-div-pos-1)',
-      'var(--admin-chart-div-pos-2)',
-    ])
+    // Lightest to darkest grey in scale order: no red (the Crítica area) and no blue (the
+    // action), because a share of answers is neither (review 12 Nov).
+    expect(fills).toEqual([1, 2, 3, 4, 5].map((step) => `var(--admin-chart-neutral-${step})`))
     // Each ink belongs to its own step — pairing them independently is the exact
-    // bug divergingPair exists to prevent (#208).
-    expect(inks).toEqual([
-      'var(--admin-chart-div-neg-2-ink)',
-      'var(--admin-chart-div-neg-1-ink)',
-      'var(--admin-chart-div-mid-ink)',
-      'var(--admin-chart-div-pos-1-ink)',
-      'var(--admin-chart-div-pos-2-ink)',
-    ])
+    // bug neutralPair, like divergingPair, exists to prevent (#208).
+    expect(inks).toEqual([1, 2, 3, 4, 5].map((step) => `var(--admin-chart-neutral-${step}-ink)`))
+    expect(fills.join(' ')).not.toMatch(/div-|accent/)
   })
 
   it('colours by scale position, never by render index', () => {
     // Nobody disagreed at all: the answered buckets are 3, 4 and 5, sitting in
     // the UPPER half of the scale. An index-based mapping spreads any three
     // segments evenly across the whole ramp and would paint "Neutral" in
-    // saturated red — a symmetric fixture (1/3/5) cannot tell the two apart,
+    // its lightest grey — a symmetric fixture (1/3/5) cannot tell the two apart,
     // which is exactly how the first version of this test let that mutant live.
     const segments = [
       { key: '3', position: 3, count: 5, label: '3: 5 of 20' },
@@ -72,9 +60,9 @@ describe('DistributionStrip', () => {
 
     const fills = screen.getAllByRole('img').map((mark) => mark.style.backgroundColor)
     expect(fills).toEqual([
-      'var(--admin-chart-div-mid)',
-      'var(--admin-chart-div-pos-1)',
-      'var(--admin-chart-div-pos-2)',
+      'var(--admin-chart-neutral-3)',
+      'var(--admin-chart-neutral-4)',
+      'var(--admin-chart-neutral-5)',
     ])
   })
 

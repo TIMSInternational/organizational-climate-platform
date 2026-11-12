@@ -112,7 +112,7 @@ export default function MicroclimatesListNextPage() {
         <p role="alert">{t('common.noCompanyAssociated')}</p>
       ) : state.status === 'error' ? (
         <NetworkError
-          title={t('errors.generic')}
+          title={t('errors.loadFailed')}
           description={state.error ?? undefined}
           onRetry={state.reload}
           retryText={t('common.retry')}

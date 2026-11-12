@@ -773,8 +773,10 @@ describe('the shared report body', () => {
   it('names the language each section’s content is printed in', () => {
     renderSections()
 
-    expect(screen.getByText(/Impreso en Español/)).toBeTruthy()
-    expect(screen.getByText(/Impreso en Inglés/)).toBeTruthy()
+    // Mid-sentence, so lower case: «Impreso en inglés», never «en Inglés».
+    expect(screen.getByText(/Impreso en español/)).toBeTruthy()
+    expect(screen.getByText(/Impreso en inglés/)).toBeTruthy()
+    expect(screen.queryByText(/Impreso en (Español|Inglés)/)).toBeNull()
     // Three surveys, two of which carry a resolved locale.
     expect(screen.getAllByText(/Impreso en/)).toHaveLength(2)
   })

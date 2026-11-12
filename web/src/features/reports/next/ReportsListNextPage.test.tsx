@@ -3,6 +3,7 @@ import { render, screen, cleanup, waitFor, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { TranslationProvider, LOCALE_STORAGE_KEY } from '../../../i18n'
+import es from '../../../i18n/es.json'
 import { setToken, clearToken } from '../../../auth/token'
 import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../company-context'
 import { tokenFor } from '../../../test/jwtFixture'
@@ -616,6 +617,17 @@ describe('ReportsListNextPage — which survey a report covers', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Crear informe' }))
     await waitFor(() => expect(postedBody()).not.toBeNull())
     expect(postedBody()).not.toHaveProperty('filters')
+  })
+
+  it('heads the page with its sidebar section and no breadcrumb for a company administrator', async () => {
+    // Informes is a top-level page in a company administrator's sidebar, and their top bar
+    // names the company: the header rule (review 12 Nov) gives it the section and no trail.
+    routeFetch({ companyName: 'Empresa de Servicios Públicos de Heredia' })
+    renderAs({ role: 'company_admin', companyId: CID })
+    await screen.findByText('Datos de clima — T3 2026')
+    expect(screen.getByText(es.navigation.sectionAnalytics)).toBeTruthy()
+    expect(screen.queryByRole('navigation', { name: es.shell.breadcrumb })).toBeNull()
+    expect(screen.queryByText('Empresa de Servicios Públicos de Heredia')).toBeNull()
   })
 
   it('names the client in the header for a super administrator', async () => {

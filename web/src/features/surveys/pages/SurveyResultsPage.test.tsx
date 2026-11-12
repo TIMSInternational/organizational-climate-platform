@@ -341,17 +341,18 @@ describe('SurveyResultsPage', () => {
       expect(within(section).getByText('5 · Strongly agree')).toBeTruthy()
     })
 
-    it('colours the strip on the climate map ramp, by scale position', async () => {
+    it('colours the strip on the neutral ramp, by scale position', async () => {
       renderPage()
       const section = await screen.findByRole('region', { name: 'Per-question results' })
 
-      // Bucket "1" (2 answers) sits at the red end, bucket "4" (22) on the
-      // near-blue step — position decides, not render order. (The thin-segment
-      // tooltip rule is DistributionStrip's own test.)
+      // Bucket "1" (2 answers) sits on the lightest grey, bucket "4" (22) on the
+      // fourth step — position decides, not render order, and no red or blue: a share
+      // of answers is not the Crítica area nor an action (review 12 Nov). (The
+      // thin-segment tooltip rule is DistributionStrip's own test.)
       const disagree = within(section).getByRole('img', { name: 'Strongly disagree: 2 of 24' })
       const agree = within(section).getByRole('img', { name: 'Agree: 22 of 24' })
-      expect(disagree.style.backgroundColor).toBe('var(--admin-chart-div-neg-2)')
-      expect(agree.style.backgroundColor).toBe('var(--admin-chart-div-pos-1)')
+      expect(disagree.style.backgroundColor).toBe('var(--admin-chart-neutral-1)')
+      expect(agree.style.backgroundColor).toBe('var(--admin-chart-neutral-4)')
       expect(agree.textContent).toBe('22')
       expect(disagree.getAttribute('title')).toBe('Strongly disagree: 2 of 24')
     })

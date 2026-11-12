@@ -103,7 +103,7 @@ export default function CohortDimensionBars({
               // a long dimension name that wraps keeps its bar centred against it.
               // Below `md` the bar drops to its own line under the name and the reading, as the
               // canvas's `.cb` does under 640px, so a phone keeps the whole track.
-              className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 border-b border-line-light py-2.5 last:border-b-0 md:grid-cols-[170px_minmax(0,1fr)_190px] md:gap-y-0"
+              className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 border-b border-line-light py-2.5 last:border-b-0 md:grid-cols-[--spacing(42.5)_minmax(0,1fr)_--spacing(47.5)] md:gap-y-0"
             >
               <span className="min-w-0 break-words text-base text-fg-primary md:truncate">{dimension.label}</span>
 

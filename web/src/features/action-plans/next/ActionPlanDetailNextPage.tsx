@@ -37,7 +37,7 @@ import { calendarDay, calendarDayLong } from '../../../lib/calendarDay'
 import { cn } from '../../../lib/cn'
 import { dimensionLabel } from '../../surveys/dimensionLabel'
 import { reading } from '../../dashboard/next/derive'
-import { ANONYMITY_FLOOR, BandChip, bandOf } from '../../../components/charts'
+import { BandChip, bandOf } from '../../../components/charts'
 import { useResultBands } from '../../result-bands/useResultBands'
 import ProgressUpdateForm from '../components/ProgressUpdateForm'
 import PlanEditForm from '../components/PlanEditForm'
@@ -293,7 +293,7 @@ function ActionPlanDetailView({ state, model }: { state: ActionPlanDetailState; 
         </Alert>
       )}
 
-      <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_--spacing(85)]">
         <div className="flex min-w-0 flex-col gap-4">
           <DeadlineCard model={model} days={days} dueLong={dueLong} dueShort={dueShort} createdDay={createdDay} author={author} />
           <WhatCard model={model} scopeName={scopeName} manages={manages} />
@@ -490,7 +490,7 @@ function DeadlineCard({
       <div className="flex items-end gap-5">
         {/* Primary ink even when late: a large red numeral reads as the Crítica area, and the
             lead sentence beside it already says "de retraso" (one colour per meaning). */}
-        <span data-slot="deadline-count" className="shrink-0 text-[2.5rem] font-semibold leading-none tracking-display tabular-nums text-fg-primary">
+        <span data-slot="deadline-count" className="shrink-0 text-kpi-display font-semibold leading-none tracking-display tabular-nums text-fg-primary">
           {count}
         </span>
         <div className="flex min-w-0 flex-col gap-1 pb-1">
@@ -574,7 +574,7 @@ function WhatCard({
   return (
     <CanvasCard title={t('actionPlans.next.what.title')}>
       {/* One column at phone width — the 136px term column left the answer ~130px at 390. */}
-      <div className="grid grid-cols-1 gap-x-4 gap-y-1.5 text-base sm:grid-cols-[136px_minmax(0,1fr)] sm:gap-y-3">
+      <div className="grid grid-cols-1 gap-x-4 gap-y-1.5 text-base sm:grid-cols-[--spacing(34)_minmax(0,1fr)] sm:gap-y-3">
         <Label>{t('actionPlans.next.what.what')}</Label>
         <p className="m-0 text-fg-primary">{plan.title}</p>
         <Label>{t('actionPlans.next.what.why')}</Label>
@@ -638,11 +638,11 @@ function FindingBlock({
         <div className="flex flex-wrap items-center gap-2">
           <Chip label={scope} />
           {/* The padlock and "Menos de {floor}": the floor `planFinding` withheld this group
-              under, and no number of its own. */}
-          <ProtectedState floor={ANONYMITY_FLOOR} />
+              under (the payload's own), and no number of its own. */}
+          <ProtectedState floor={value.floor} />
         </div>
         <span className="text-sm text-fg-tertiary">
-          {t('actionPlans.next.finding.protectedNote', { survey: value.surveyTitle, scope, floor: ANONYMITY_FLOOR })}
+          {t('actionPlans.next.finding.protectedNote', { survey: value.surveyTitle, scope, floor: value.floor })}
         </span>
         {openLink}
       </div>
@@ -700,7 +700,7 @@ function MoveLine({ move }: { move: Settled<PlanMove> }) {
   }
   if (value.status === 'protected') {
     return (
-      <span className="text-sm text-fg-tertiary">{t('actionPlans.next.finding.moveProtected', { code: value.code, floor: ANONYMITY_FLOOR })}</span>
+      <span className="text-sm text-fg-tertiary">{t('actionPlans.next.finding.moveProtected', { code: value.code, floor: value.floor })}</span>
     )
   }
   const delta = value.to - value.from
@@ -822,7 +822,7 @@ function MeasuresCard({ model }: { model: ActionPlanDetailModel }) {
  * the date moves to a small line above the entry and the entry takes the row beside the mark.
  */
 const LOG_ROW =
-  'grid grid-cols-[28px_minmax(0,1fr)] items-start gap-x-3 gap-y-0.5 border-t border-line-light py-2.5 sm:grid-cols-[96px_28px_minmax(0,1fr)] sm:gap-3'
+  'grid grid-cols-[--spacing(7)_minmax(0,1fr)] items-start gap-x-3 gap-y-0.5 border-t border-line-light py-2.5 sm:grid-cols-[--spacing(24)_--spacing(7)_minmax(0,1fr)] sm:gap-3'
 const LOG_DATE = 'col-start-2 row-start-1 text-sm tabular-nums text-fg-tertiary sm:col-start-1 sm:pt-1.5'
 const LOG_MARK =
   'col-start-1 row-span-2 row-start-1 inline-flex size-7 items-center justify-center rounded-full border border-line-default bg-surface-icon-box text-fg-secondary sm:col-start-2 sm:row-span-1'

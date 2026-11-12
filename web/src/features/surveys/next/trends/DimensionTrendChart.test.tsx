@@ -74,8 +74,8 @@ describe('DimensionTrendChart', () => {
     // Colour is never alone: each area is named on the chart (in a corner no point covers).
     // In sentence case: capitals are the eyebrow's alone.
     const names = [...container.querySelectorAll('[data-slot="trend-zone-label"]')].map((label) => label.textContent)
-    const short = en.resultBands.short
-    expect(names).toEqual([short.strength, short.opportunity, short.critical].filter((name) => names.includes(name)))
+    const full = en.resultBands.name
+    expect(names).toEqual([full.strength, full.opportunity, full.critical].filter((name) => names.includes(name)))
     expect(names.length).toBeGreaterThanOrEqual(2)
     const end = container.querySelector('circle[data-slot="trend-end"]')
     expect(end?.getAttribute('data-band')).toBe('opportunity')

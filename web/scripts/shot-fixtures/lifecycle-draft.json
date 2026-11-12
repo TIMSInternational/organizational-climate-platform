@@ -221,7 +221,7 @@
       "anonymous": false,
       "highestRecordableState": "completed",
       "suppressedStates": [],
-      "guarantee": "Esta encuesta no es anónima. El ciclo completo de la invitación se registra por cada persona invitada."
+      "guarantee": "Esta encuesta es anónima: su organización ve quién ha respondido, nunca qué respondió. TIMS International recibe los resultados y los analiza, y entrega a su organización únicamente resultados agrupados. El ciclo completo de la invitación se registra por cada persona invitada."
     }
   },
   "GET /surveys/dimensions": {

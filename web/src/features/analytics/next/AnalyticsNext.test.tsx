@@ -105,10 +105,10 @@ describe('sortInsights / groupSizeOf / latestClosedSurvey', () => {
 })
 
 describe('AIInsightsNextPage', () => {
-  it('heads the page with the company alone, and no proposal marker', async () => {
+  it('heads the page with its sidebar section, and no proposal marker', async () => {
     vi.mocked(listAIInsights).mockResolvedValue([])
     renderAt('/analytics/ai-insights', <AIInsightsNextPage />, '/analytics/ai-insights')
-    expect(await screen.findByText('Grupo Meridiano S.A.')).toBeTruthy()
+    expect(await screen.findByText(en.navigation.sectionAnalytics)).toBeTruthy()
     // The eyebrow used to read "PROPUESTA · <company>" on four screens a client admin
     // owns. They read real data and are not proposals; the marker was a design-time note.
     expect(screen.queryByText(/Proposal|Propuesta/)).toBeNull()
@@ -215,8 +215,9 @@ describe('AnalyticsNextPage', () => {
   it('reads each reference against the latest wave, with the cohort size from its detail', async () => {
     arrange(detail([42, 40]))
     const row = await screen.findByTestId('benchmark-row')
-    // The board's eyebrow: "GRUPO MERIDIANO S.A." (uppercased by CSS).
-    expect(screen.getByText('Grupo Meridiano S.A.')).toBeTruthy()
+    // The eyebrow is the sidebar section, as on every admin screen (review 12 Nov); the
+    // company is named once, by the shell's top bar, not again over the title.
+    expect(screen.getByText(en.navigation.sectionAnalytics)).toBeTruthy()
     expect(within(row).getByText('42')).toBeTruthy()
     expect(within(row).getByText(analyticsCopy.qualityPending)).toBeTruthy()
     expect(within(row).getByText(analyticsCopy.scopeGlobal)).toBeTruthy()

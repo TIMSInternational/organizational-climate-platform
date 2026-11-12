@@ -32,9 +32,15 @@ export default function AccountTabs() {
 
   return (
     <nav aria-label={t('profile.next.tabs.label')} className="w-full self-start sm:w-auto">
-      {/* The `.seg` of `occ.css`: a fill track with the chosen tab raised on it. Full width on a
+      {/* The `.seg` of `occ.css`, drawn as `ui/SegmentedControl` draws it (and NOT that component:
+          these are links to three routes, not a value to pick). Until 12 Nov this sat on
+          `--fill` with the chosen tab only raised and bolder, and in dark the raised card is
+          DARKER than that track — 1.30:1, measured by the review, against the 3:1 WCAG 1.4.11
+          asks of the cue that marks the selected state. Now: the recessed tile track, the
+          chosen tab edged in the control line (the 3:1 boundary `controlBoundaryContrast.test.ts`
+          holds), and weight plus ink (600 primary against 500 secondary). Full width on a
           phone, each tab sharing it, so no label wraps. */}
-      <ul className="m-0 flex list-none gap-0.5 rounded-lg bg-surface-fill p-0.5 sm:inline-flex">
+      <ul className="m-0 flex list-none gap-0.5 rounded-lg border border-line-light bg-surface-icon-box p-0.5 sm:inline-flex">
         {TABS.map(({ to, key, icon: Icon }) => (
           <li key={to} className="m-0 flex-1 sm:flex-none">
             <NavLink
@@ -42,10 +48,10 @@ export default function AccountTabs() {
               end
               className={({ isActive }) =>
                 cn(
-                  'flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-2 text-sm sm:px-3 no-underline hover:no-underline pointer-coarse:h-11',
+                  'flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border px-2 text-sm sm:px-3 no-underline hover:no-underline pointer-coarse:h-11',
                   isActive
-                    ? 'bg-surface-card font-semibold text-fg-primary shadow-sm'
-                    : 'font-medium text-fg-primary hover:bg-state-hover',
+                    ? 'border-line-control bg-surface-card font-semibold text-fg-primary shadow-sm'
+                    : 'border-transparent font-medium text-fg-secondary hover:bg-state-hover hover:text-fg-primary',
                 )
               }
             >

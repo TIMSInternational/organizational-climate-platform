@@ -129,7 +129,10 @@ export default function SystemHealthNextPage() {
   return (
     <div>
       <PageHeader
-        eyebrow={t('navigation.systemAdministration')}
+        // The header rule every admin screen follows (review 12 Nov): the eyebrow is the sidebar
+        // section the page sits in, and a top-level page carries no breadcrumb. The company in
+        // scope is named once, by the top bar, for every role.
+        eyebrow={t('navigation.sectionSystem')}
         title={t('systemHealth.title')}
         description={
           status
@@ -467,7 +470,7 @@ function Facts({ labelWidth, children }: { labelWidth: 'build' | 'database'; chi
         'm-0 grid items-center gap-x-4 gap-y-2 text-sm',
         // Under 640px the label column shares the width instead of holding its fixed board width.
         'grid-cols-[minmax(0,2fr)_minmax(0,3fr)]',
-        labelWidth === 'build' ? 'sm:grid-cols-[150px_minmax(0,1fr)]' : 'sm:grid-cols-[170px_minmax(0,1fr)]',
+        labelWidth === 'build' ? 'sm:grid-cols-[--spacing(37.5)_minmax(0,1fr)]' : 'sm:grid-cols-[--spacing(42.5)_minmax(0,1fr)]',
       )}
     >
       {children}

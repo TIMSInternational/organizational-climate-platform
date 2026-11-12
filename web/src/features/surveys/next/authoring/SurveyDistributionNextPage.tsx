@@ -51,8 +51,6 @@ import { useSurveyParticipation } from './useSurveyParticipation'
 import {
   INVITATION_COLUMNS,
   canSend,
-  dayMonth,
-  daysFrom,
   invitationCoverage,
   launchChecklist,
   readySteps,
@@ -69,6 +67,7 @@ import {
   type SendProgress,
 } from './useDistributionModel'
 import { byCount } from '../../../../i18n/plural'
+import { browserTimeZone, dayMonthIn, daysFromIn, isKnownTimeZone } from './zonedWindow'
 
 /** How many invitation rows the checklist shows before "Ver las n". */
 export const INVITATION_PREVIEW_ROWS = 4
@@ -191,7 +190,11 @@ export function DistributionView({
   const ready = readySteps(steps)
   const firstMissing = steps.find((step) => step.state === 'missing')
   const firstUnknown = steps.find((step) => step.state === 'unknown')
-  const closesIn = daysFrom(survey.endDate, now)
+  // The company's clock, as the detail page reads it (`SurveyDetailNextPage`): the tile said
+  // 28 oct in the browser's zone while the detail page said 27 oct in the company's (review
+  // 12 Nov). The browser's only when the company's zone could not be read.
+  const timeZone = isKnownTimeZone(model.timeZone) ? model.timeZone : browserTimeZone()
+  const closesIn = daysFromIn(survey.endDate, now, timeZone)
   const targets = targetedDepartments(survey.departmentIds, scoped ? departments : null)
   const stateOf = (id: string): LaunchStepState => steps.find((step) => step.id === id)?.state ?? 'missing'
   const userById = new Map(users.map((user) => [user.id, user]))
@@ -287,7 +290,7 @@ export function DistributionView({
                 : copy('closesPassed')
               : copy('closes')
           }
-          value={<Reading value={dayMonth(survey.endDate, locale)} />}
+          value={<Reading value={dayMonthIn(survey.endDate, timeZone, locale)} />}
           footnote={
             closesIn === null
               ? undefined
@@ -381,7 +384,7 @@ export function DistributionView({
                 // standing fact. The info tone (blue tint, blue glyph) and an AlertCircle, as the
                 // missing step wears, set semibold — and directly above the switch that fixes it.
                 <Note role="status" tone="info" data-testid="link-waits-for-start" icon={<AlertCircle />} className="font-semibold">
-                  {t('surveys.next.share.linkWaitsForStart', { date: dayMonth(survey.startDate, locale) })}
+                  {t('surveys.next.share.linkWaitsForStart', { date: dayMonthIn(survey.startDate, timeZone, locale) })}
                 </Note>
               ) : null}
               <SwitchField

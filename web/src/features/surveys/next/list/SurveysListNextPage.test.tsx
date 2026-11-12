@@ -152,7 +152,7 @@ describe('SurveysListNextPage', () => {
     const media = vi.spyOn(window, 'matchMedia').mockImplementation(
       (query: string) =>
         ({
-          matches: query === '(max-width: 639.98px)',
+          matches: query === '(width < 40rem)',
           media: query,
           onchange: null,
           addEventListener: () => {},

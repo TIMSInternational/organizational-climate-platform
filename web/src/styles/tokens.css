@@ -103,6 +103,7 @@
   --admin-text-reading: 1.375rem; /* 22px — a reading on a card (sparkline cards, trend charts) */
   --admin-text-kpi-lg: 1.625rem; /* 26px — the KPI reading on Clima en el tiempo and SurveyResults */
   --admin-text-kpi-hero: 1.875rem; /* 30px — the KPI reading on the Panel de Control (canvas `.kpi .v`) */
+  --admin-text-kpi-display: 2.5rem; /* 40px — the one large count on an action plan's deadline card */
   --admin-text-question: 1.0625rem; /* 17px — the question and its scale points on a respond card (RespondSurveyPhone, RespondMicroclimatePhone) */
   /* The respond surface is read by employees on their own phones and monitors, not by
      an operator in a dense console, so it does not take the admin scale. Measured on the
@@ -677,6 +678,26 @@
   --admin-chart-div-pos-1-ink: #0b2b3f;
   --admin-chart-div-pos-2-ink: #0b2b3f;
 
+  /* A NEUTRAL ramp for an ordered scale that is not a result: the answer-distribution strip
+     (`DistributionStrip`), 1 = lightest to 5 = darkest. It painted the diverging ramp until
+     12 Nov, red to grey to blue, and the review measured the clash: red is the Crítica area
+     and blue is the action and the live state, and a share of answers is neither. Greys keep
+     the order a reader needs (which end is "agree") without borrowing a meaning.
+
+     Each fill carries its paired ink (the strip prints the count inside the segment), measured
+     at AA for small text by styles/neutralInkContrast.test.ts, which reads this file. Light:
+     dark ink on the three light steps, white on the two dark ones. */
+  --admin-chart-neutral-1: #eef0f4;
+  --admin-chart-neutral-2: #d6d9e0;
+  --admin-chart-neutral-3: #aeb3bf;
+  --admin-chart-neutral-4: #666d7e;
+  --admin-chart-neutral-5: #3f4555;
+  --admin-chart-neutral-1-ink: #070f21;
+  --admin-chart-neutral-2-ink: #070f21;
+  --admin-chart-neutral-3-ink: #070f21;
+  --admin-chart-neutral-4-ink: #ffffff;
+  --admin-chart-neutral-5-ink: #ffffff;
+
   /* Chart furniture. Recessive on purpose -- grid and axes must not compete
      with the marks. The gap colour is the surface, used as the 2px spacer
      between adjacent fills. */
@@ -912,6 +933,20 @@
   --admin-chart-div-mid-ink: #f0fdfa;
   --admin-chart-div-pos-1-ink: #f0fdfa;
   --admin-chart-div-pos-2-ink: #02100f;
+
+  /* The neutral ramp in dark: 1 sits nearest the card, 5 is the lightest. Light ink on the
+     three dark steps, dark ink on the two light ones -- inverted against light, as the
+     diverging inks are. */
+  --admin-chart-neutral-1: #293042;
+  --admin-chart-neutral-2: #3b4256;
+  --admin-chart-neutral-3: #5b6276;
+  --admin-chart-neutral-4: #9aa2b5;
+  --admin-chart-neutral-5: #d2d7e2;
+  --admin-chart-neutral-1-ink: #f0f3f8;
+  --admin-chart-neutral-2-ink: #f0f3f8;
+  --admin-chart-neutral-3-ink: #f0f3f8;
+  --admin-chart-neutral-4-ink: #070f21;
+  --admin-chart-neutral-5-ink: #070f21;
 
   --admin-chart-grid: #1e2734;
   --admin-chart-axis: #74839a;

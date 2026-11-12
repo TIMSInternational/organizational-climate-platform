@@ -242,7 +242,7 @@ function ClimateTrendsNextView({
                     <span className="inline-flex flex-wrap items-center gap-2">
                       {bands.scale === 'percent' ? scaleUnitText(bands.scale, t) : t('surveys.next.trends.climateOf')}
                       {/* Printed at two decimals, so judged at two. */}
-                      {latestMean !== null && <BandChip band={bandOf(latestMean, bands, 2)} bands={bands} short />}
+                      {latestMean !== null && <BandChip band={bandOf(latestMean, bands, 2)} bands={bands} />}
                     </span>
                   }
                   locale={locale}
@@ -327,7 +327,11 @@ function ClimateTrendsNextView({
                     : t('surveys.next.trends.rangeSubOne', { group: groupName })}
                 </p>
               </div>
-              <ClimateRangeBar rows={rangeRows(model)} bands={bands} floor={model.floor} />
+              {/* One decimal, as every card and table cell under it prints the same dimension's
+                  reading (`docs/decisions/app-wide-mean.md`: on this page a dimension reads
+                  "3,3 → 3,7"). At the bar's default two decimals one dimension printed 3,79 on
+                  its bar and 3,8 on its card, and could even fall in two areas at once. */}
+              <ClimateRangeBar rows={rangeRows(model)} bands={bands} floor={model.floor} decimals={1} />
             </section>
 
             <section aria-label={t('surveys.next.trends.chartsLabel')} className="flex flex-col gap-3">
@@ -382,7 +386,7 @@ function ClimateTrendsNextView({
                     </div>
                   </>
                 )}
-                <BandLegend bands={bands} short className="ml-auto" />
+                <BandLegend bands={bands} className="ml-auto" />
               </div>
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -419,7 +423,7 @@ function ClimateTrendsNextView({
               />
               {/* The cells carry the glyph and the reading, as the dashboard map's do; the
                   areas are named once, here, under the table. */}
-              <BandLegend bands={bands} short testId="trends-table-legend" />
+              <BandLegend bands={bands} testId="trends-table-legend" />
               {/* The artboard's one line: the floor's rule, and — only while it is true of
                   every wave on the page — that the whole company is never under it. A
                   department withheld in every wave says so in its own segment, where every
@@ -468,10 +472,10 @@ function TrendCard({
       <div className="flex items-center justify-between gap-2">
         {/* A card title, so the display serif (the type ruling). */}
         <span className="min-w-0 truncate font-display text-lg font-semibold tracking-title text-fg-primary">{dimension.name}</span>
-        {/* The short name, as the chips over the range bar and the legend print it: one
-            screen, one name for an area (the review of 12 Nov). The full name stays in the
-            chip's title. */}
-        {band && <BandChip band={band} bands={bands} short className="h-6" />}
+        {/* The area's one name, the company's own, as every chip, legend and range bar in
+            the product prints it (review 12 Nov: «Oportunidad» beside «Área de oportunidad»
+            on one screen read as two areas). */}
+        {band && <BandChip band={band} bands={bands} className="h-6" />}
       </div>
       {/* `leading-normal` is the canvas's line box: the artboard sets this 22px reading in a
           body of `line-height: 1.5`, so the row is 33px and the card 254px tall

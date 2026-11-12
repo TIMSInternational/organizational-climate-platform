@@ -113,7 +113,7 @@ export default function SuperQuestionLibraryView() {
       ) : model.loading && model.categories.length === 0 ? (
         <LoadingState rows={8} label={t('common.loading')} />
       ) : (
-        <div className="grid items-start gap-5 xl:grid-cols-[270px_minmax(0,1fr)]">
+        <div className="grid items-start gap-5 xl:grid-cols-[--spacing(67.5)_minmax(0,1fr)]">
           <CategoryTreeCard model={model} onNewCategory={() => setMode('new-category')} onPick={() => setMode('item')} />
           <div className="flex min-w-0 flex-col gap-4">
             <CategoryQuestions model={model} onOpen={() => setMode('item')} />

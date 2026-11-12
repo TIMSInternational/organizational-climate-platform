@@ -151,7 +151,7 @@ export default function SurveyTemplatesNextPage() {
           // every width (HIG `segmented-controls.md`): a control that wraps stops reading as one
           // control, so at 390 it scrolls sideways inside its own box, the cut segment at the
           // edge saying there is more. The 4px pad keeps the 3px focus ring inside the scroller.
-          <div data-slot="segment-scroller" className="-m-1 min-w-0 max-w-[calc(100%+0.5rem)] overflow-x-auto p-1 [scrollbar-width:none]">
+          <div data-slot="segment-scroller" className="-m-1 min-w-0 max-w-[calc(100%+--spacing(2))] overflow-x-auto p-1 [scrollbar-width:none]">
           <SegmentedControl
             label={t(`${K}.categoriesLabel`)}
             value={category}
@@ -276,7 +276,7 @@ function TemplateCard({
       data-slot="template-card"
       aria-labelledby={`template-${template.id}`}
       // The board's `.card`: 12px radius, the panel hairline, no shadow.
-      className="grid items-center gap-5 rounded-xl border border-line-panel bg-surface-card px-5 py-4.5 lg:grid-cols-[minmax(0,5fr)_minmax(0,4fr)_90px_auto]"
+      className="grid items-center gap-5 rounded-xl border border-line-panel bg-surface-card px-5 py-4.5 lg:grid-cols-[minmax(0,5fr)_minmax(0,4fr)_--spacing(22.5)_auto]"
     >
       <div className="flex min-w-0 flex-col gap-1.5">
         <div className="flex flex-wrap items-center gap-2">

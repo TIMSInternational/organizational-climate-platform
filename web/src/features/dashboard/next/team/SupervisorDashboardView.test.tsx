@@ -150,6 +150,10 @@ describe('SupervisorDashboardView', () => {
     const coverage = card(copy.coverageHeading)
     expect(within(coverage).getByRole('img', { name: copy.respondedHiddenLabel.replace('{floor}', String(ANONYMITY_FLOOR)) })).toBeTruthy()
     expect(within(coverage).getByRole('img', { name: copy.remainingHiddenLabel.replace('{floor}', String(ANONYMITY_FLOOR)) })).toBeTruthy()
+    // The floor promise stays on this surface in visible words, not only in an accessible
+    // name: the proposal note that used to state it was removed on 12 Nov (it was design
+    // meta-copy), and this is now the sentence that tells a supervisor about the floor.
+    expect(coverage.textContent).toContain(copy.respondedHidden.replace('{floor}', String(ANONYMITY_FLOOR)))
     expect(within(coverage).queryByText('0', { exact: true })).toBeNull()
     expect(within(coverage).getByText('14')).toBeTruthy()
     expect(within(coverage).getByText(/^Encuesta de Clima Q4 · closes Oct 10$/)).toBeTruthy()

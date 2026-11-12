@@ -444,6 +444,19 @@ describe('Distribución (Distribution artboard)', () => {
     expect(guarantee.querySelector('[data-slot="guarantee-shield"]')).not.toBeNull()
   })
 
+  it("prints the close date in the company's zone, as the detail page does, never the browser's", () => {
+    // 03:00 UTC on 28 Oct is still the 27th in Costa Rica (UTC-6) and already the 28th in Tokyo.
+    // The tile said 28 oct in the browser's zone while the detail page said 27 oct in the
+    // company's (review 12 Nov). Two zones on either side of UTC make the test independent
+    // of the zone the runner happens to be in.
+    const endDate = '2026-10-28T03:00:00Z'
+    distribution(invitationList(), 'company_admin', true, { survey: survey({ status: 'active', endDate }), timeZone: 'America/Costa_Rica' })
+    expect(screen.getByTestId('tile-closes').textContent).toMatch(/27 oct/)
+    cleanup()
+    distribution(invitationList(), 'company_admin', true, { survey: survey({ status: 'active', endDate }), timeZone: 'Asia/Tokyo' })
+    expect(screen.getByTestId('tile-closes').textContent).toMatch(/28 oct/)
+  })
+
   it('says an active survey past its date "debía cerrar", and only a closed one "cerró", as the detail page does', () => {
     // An active survey still takes responses: "CERRÓ" over its tile contradicted "Activa".
     distribution(invitationList(), 'company_admin', true, { survey: survey({ status: 'active', endDate: '2026-08-20T12:00:00Z' }) })

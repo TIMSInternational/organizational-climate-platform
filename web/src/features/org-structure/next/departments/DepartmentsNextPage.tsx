@@ -351,12 +351,12 @@ function DepartmentsView({
                     1024 every column — the actions included — is on screen. */}
                 <colgroup>
                   <col style={{ width: '18.15%' }} />
-                  <col style={{ width: '102px' }} />
+                  <col className="w-25.5" />
                   <col style={{ width: '18.15%' }} />
                   <col style={{ width: '12.45%' }} />
                   <col style={{ width: '18.15%' }} />
-                  {showInactive && <col style={{ width: '102px' }} />}
-                  <col style={{ width: '174px' }} />
+                  {showInactive && <col className="w-25.5" />}
+                  <col className="w-43.5" />
                 </colgroup>
                 <thead>
                   <tr>
@@ -504,7 +504,7 @@ function ClimateCell({
     <span className="inline-flex items-center gap-1.5">
       <span className="tabular-nums">{score(climate.mean, locale, bands)}</span>
       {band !== null && bands !== null && band !== 'strength' ? (
-        <BandChip band={band} bands={bands} short />
+        <BandChip band={band} bands={bands} />
       ) : (
         // The note is the one thing left to xl: at 1024 it would push the actions off screen.
         <span className="hidden text-fg-tertiary xl:inline">

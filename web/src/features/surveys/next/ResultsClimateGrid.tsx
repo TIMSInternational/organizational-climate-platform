@@ -26,7 +26,8 @@ import { deltaInkOf } from './tint'
  * surface behind it is this card's. `outline` is left free for the focus ring.
  */
 // The open cell is a selection, and selection is blue (Apple design ruling, 11 Nov).
-const OPEN_RING = '0 0 0 2px var(--admin-bg-card), 0 0 0 4px var(--admin-accent-blue)'
+// In steps of the spacing token (`--spacing` is 4px): a half step of gap, then one step out.
+const OPEN_RING = '0 0 0 calc(var(--spacing) * 0.5) var(--admin-bg-card), 0 0 0 var(--spacing) var(--admin-accent-blue)'
 
 /**
  * Every `th`/`td` of the grid: no padding and no hairline. `index.css` gives every

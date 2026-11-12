@@ -257,7 +257,7 @@ export default function SuperSurveysListView() {
       )}
 
       {base.status === 'error' ? (
-        <NetworkError title={t('errors.generic')} description={base.error ?? undefined} onRetry={base.reload} retryText={t('common.retry')} />
+        <NetworkError title={t('errors.loadFailed')} description={base.error ?? undefined} onRetry={base.reload} retryText={t('common.retry')} />
       ) : (
         <LoadingRegion loading={base.status === 'loading'} label={t('common.loading')}>
           {base.status === 'loading' ? (

@@ -59,7 +59,9 @@ const ACTION_KEY: Record<PrimaryActionKind, string> = {
  * the query rather than by CSS so the tree holds ONE copy of every link and menu, not a
  * hidden second one a screen reader or a test would also find.
  */
-const COMPACT_QUERY = '(max-width: 639.98px)'
+// Exactly what Tailwind's `max-sm:` variant compiles to (`--breakpoint-sm` is 40rem), rather
+// than a pixel value copied by hand from it.
+const COMPACT_QUERY = '(width < 40rem)'
 
 function subscribeCompact(onChange: () => void): () => void {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return () => {}
@@ -190,7 +192,7 @@ function SurveysListForCompany() {
             the rows already read; it never sends a request. One line at every width (HIG
             `segmented-controls.md`): at 390 it scrolls inside its own box instead of wrapping,
             and the 4px pad keeps the 3px focus ring inside the scroller. */}
-        <div data-slot="segment-scroller" className="-m-1 min-w-0 max-w-[calc(100%+0.5rem)] overflow-x-auto p-1 [scrollbar-width:none]">
+        <div data-slot="segment-scroller" className="-m-1 min-w-0 max-w-[calc(100%+--spacing(2))] overflow-x-auto p-1 [scrollbar-width:none]">
         <SegmentedControl
           label={t('surveys.filterByStatus')}
           value={state.statusFilter}
@@ -258,7 +260,7 @@ function SurveysListForCompany() {
 
       {state.status === 'error' ? (
         <NetworkError
-          title={t('errors.generic')}
+          title={t('errors.loadFailed')}
           description={state.error ?? undefined}
           onRetry={state.reload}
           retryText={t('common.retry')}

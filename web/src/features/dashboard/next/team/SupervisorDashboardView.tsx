@@ -316,7 +316,7 @@ function TasksCard({ model, t, locale }: { model: SupervisorDashboardModel; t: T
                 key={`${task.kind}-${task.id}`}
                 data-slot="supervisor-task"
                 data-kind={task.kind}
-                className="grid grid-cols-[28px_minmax(0,1fr)_auto] items-start gap-3 border-b border-line-default py-3 last:border-b-0"
+                className="grid grid-cols-[--spacing(7)_minmax(0,1fr)_auto] items-start gap-3 border-b border-line-default py-3 last:border-b-0"
               >
                 {/* A glyph for the kind of task, not a checkbox: an empty square read as a
                     control to tick by hand, and no endpoint records a tick (finding 7). */}

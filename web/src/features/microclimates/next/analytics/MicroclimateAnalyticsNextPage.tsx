@@ -57,7 +57,7 @@ function AnalyticsScreen() {
     return (
       <div>
         {header}
-        <NetworkError title={t('errors.generic')} description={state.error ?? undefined} onRetry={state.reload} retryText={t('common.retry')} />
+        <NetworkError title={t('errors.loadFailed')} description={state.error ?? undefined} onRetry={state.reload} retryText={t('common.retry')} />
       </div>
     )
   }
