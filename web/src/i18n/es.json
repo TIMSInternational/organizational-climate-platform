@@ -2762,7 +2762,8 @@
         "howInboxText": "Lo que no te llega por correo lo ves al entrar, en Notificaciones.",
         "howPushLead": "Sin push ni SMS.",
         "howPushText": "La plataforma no envía avisos al teléfono.",
-        "howConsent": "Es el único consentimiento que cambias tú; el resto de lo que consta sobre ti está en"
+        "howConsent": "Es el único consentimiento que cambias tú; el resto de lo que consta sobre ti está en",
+        "inAppFooter": "En la aplicación todos estos avisos llegan siempre: la bandeja no se apaga."
       },
       "description": "Lo que pasó y requiere que lo sepa: cierres de encuesta, planes atrasados, recordatorios enviados e informes listos.",
       "settings": "Ajustes",
@@ -3123,7 +3124,11 @@
       "aiLead": "Información de IA",
       "aiRest": " es un ajuste de cada empresa, no de la plataforma.",
       "updatedOn": "Actualizado el {date}",
-      "saveScope": "Guardar escribe solo disponibilidad y sesión; lo demás no se cambia desde aquí."
+      "saveScope": "Guardar escribe solo disponibilidad y sesión; lo demás no se cambia desde aquí.",
+      "floorRuleLead": "Umbral de privacidad: {floor} respuestas.",
+      "floorRuleRest": "Se exige a los cruces de dos o más datos, a la encuesta completa, a los enlaces públicos y a la vista de un líder sobre su propio equipo. Un solo departamento o un solo dato demográfico se muestra a los administradores desde {single} respuesta.",
+      "openTextRuleLead": "Las respuestas abiertas se leen como palabras frecuentes",
+      "openTextRuleRest": "en resultados, informes, paneles y enlaces públicos. El texto literal solo sale en el libro de respuestas que descarga un superadministrador."
     }
   },
   "shell": {

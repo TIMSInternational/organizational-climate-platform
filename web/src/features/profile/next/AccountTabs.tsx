@@ -31,23 +31,25 @@ export default function AccountTabs() {
   if (respondent) return null
 
   return (
-    <nav aria-label={t('profile.next.tabs.label')} className="self-start">
-      <ul className="m-0 inline-flex list-none gap-1 rounded-lg border border-line-default bg-surface-icon-box p-1">
+    <nav aria-label={t('profile.next.tabs.label')} className="w-full self-start sm:w-auto">
+      {/* The `.seg` of `occ.css`: a fill track with the chosen tab raised on it. Full width on a
+          phone, each tab sharing it, so no label wraps. */}
+      <ul className="m-0 flex list-none gap-0.5 rounded-lg bg-surface-fill p-0.5 sm:inline-flex">
         {TABS.map(({ to, key, icon: Icon }) => (
-          <li key={to} className="m-0">
+          <li key={to} className="m-0 flex-1 sm:flex-none">
             <NavLink
               to={to}
               end
               className={({ isActive }) =>
                 cn(
-                  'inline-flex h-7.5 items-center gap-1.5 rounded-md px-3 text-sm no-underline hover:no-underline',
+                  'flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-2 text-sm sm:px-3 no-underline hover:no-underline pointer-coarse:h-11',
                   isActive
-                    ? 'border border-line-default bg-surface-card font-semibold text-fg-primary shadow-sm'
-                    : 'border border-transparent text-fg-secondary hover:text-fg-primary',
+                    ? 'bg-surface-card font-semibold text-fg-primary shadow-sm'
+                    : 'font-medium text-fg-primary hover:bg-state-hover',
                 )
               }
             >
-              <Icon aria-hidden="true" className="size-3.5" />
+              <Icon aria-hidden="true" className="hidden size-3.5 sm:block" />
               {t(key)}
             </NavLink>
           </li>

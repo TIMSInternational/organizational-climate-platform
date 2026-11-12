@@ -2762,7 +2762,8 @@
         "howInboxText": "What does not reach you by email you see when you sign in, in Notifications.",
         "howPushLead": "No push and no SMS.",
         "howPushText": "The platform sends no notices to your phone.",
-        "howConsent": "It is the only consent you change yourself; the rest of what is recorded about you is in"
+        "howConsent": "It is the only consent you change yourself; the rest of what is recorded about you is in",
+        "inAppFooter": "In the app every one of these notices always arrives: the inbox does not switch off."
       },
       "description": "What happened that you should know: survey closings, overdue plans, reminders sent and reports ready.",
       "settings": "Settings",
@@ -3123,7 +3124,11 @@
       "aiLead": "AI insights",
       "aiRest": " is a setting of each company, not of the platform.",
       "updatedOn": "Updated on {date}",
-      "saveScope": "Save writes only availability and session; nothing else changes from here."
+      "saveScope": "Save writes only availability and session; nothing else changes from here.",
+      "floorRuleLead": "Privacy floor: {floor} responses.",
+      "floorRuleRest": "It applies to crosses of two or more fields, to the whole survey, to public links and to a leader's view of their own team. A single department or demographic value is shown to administrators from {single} response.",
+      "openTextRuleLead": "Open-text answers are read as frequent words",
+      "openTextRuleRest": "in results, reports, dashboards and public links. The verbatim text leaves only in the response workbook a super administrator downloads."
     }
   },
   "shell": {

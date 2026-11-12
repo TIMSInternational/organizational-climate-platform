@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { Bell, Check, CircleAlert, ClipboardList, FileText, Mail, Send, Settings } from 'lucide-react'
 import { useTranslation } from '../../../i18n'
-import { PageTopBar } from '../../../components/layout'
-import { Button, EmptyState, NetworkError, SkeletonText, Switch, chipVariants } from '../../../components/ui'
+import { PageHeader } from '../../../components/layout'
+import { Button, EmptyState, LoadingState, NetworkError, Switch, chipVariants } from '../../../components/ui'
 import { useViewerCapabilities } from '../../../auth/viewerCapabilities'
 import { cn } from '../../../lib/cn'
 import { CanvasChip, CanvasSelect, Panel } from '../../org-structure/next/super/parts'
@@ -14,10 +14,12 @@ import { useRespondentShell } from '../../../navigation/useRespondentShell'
 const K = 'notifications.next'
 const FACETS: readonly Facet[] = ['all', 'unread', 'surveys', 'plans', 'reports', 'other']
 
+// The kind is told by the glyph and the chip's word, in the secondary ink: green, amber and red
+// are the three result areas, and blue is action, selection and the unread mark.
 const ICONS: Record<RowIcon, { Icon: typeof Bell; tone: string }> = {
-  alert: { Icon: CircleAlert, tone: 'text-accent-red' },
-  report: { Icon: FileText, tone: 'text-accent-blue' },
-  survey: { Icon: ClipboardList, tone: 'text-accent-green-ink' },
+  alert: { Icon: CircleAlert, tone: 'text-fg-secondary' },
+  report: { Icon: FileText, tone: 'text-fg-secondary' },
+  survey: { Icon: ClipboardList, tone: 'text-fg-secondary' },
   reminder: { Icon: Send, tone: 'text-fg-secondary' },
   other: { Icon: Bell, tone: 'text-fg-secondary' },
 }
@@ -65,7 +67,7 @@ export default function NotificationsNextPage() {
 
   return (
     <div>
-      <PageTopBar
+      <PageHeader
         eyebrow={t(`${K}.eyebrow`)}
         title={t('notifications.title')}
         description={t(`${K}.description`)}
@@ -100,14 +102,14 @@ export default function NotificationsNextPage() {
       />
 
       <div className="-mt-1 grid gap-4 xl:grid-cols-[minmax(0,8fr)_minmax(0,4fr)]">
-        <section aria-label={t(`${K}.inboxLabel`)} className="min-w-0 overflow-hidden rounded-xl border border-line-default bg-surface-card shadow-sm">
+        <section aria-label={t(`${K}.inboxLabel`)} className="min-w-0 overflow-hidden rounded-xl border border-line-panel bg-surface-card">
           {state.status === 'error' ? (
             <div className="p-4">
               <NetworkError title={t('notifications.loadFailed')} description={state.error ?? undefined} onRetry={state.reload} retryText={t('common.retry')} />
             </div>
           ) : state.status === 'loading' ? (
             <div className="p-4">
-              <SkeletonText lines={6} />
+              <LoadingState rows={6} />
             </div>
           ) : empty ? (
             <div data-slot="inbox-empty" className="px-4 py-6">
@@ -126,10 +128,12 @@ export default function NotificationsNextPage() {
                         aria-pressed={selected}
                         data-slot="facet-chip"
                         onClick={() => setFacet(value)}
+                        // The chosen facet is selection, so it is blue (`chipVariants` accent), never
+                        // Crítica's red. 28px drawn, 44px under a finger.
                         className={cn(
-                          chipVariants({ tone: selected ? 'critical' : 'neutral' }),
-                          'h-6.5 cursor-pointer px-2.5 text-sm',
-                          selected ? 'border-chip-critical-ink/20' : 'bg-surface-card hover:border-line-hover',
+                          chipVariants({ tone: selected ? 'accent' : 'neutral' }),
+                          'h-7 cursor-pointer px-2.5 text-sm tabular-nums pointer-coarse:h-11',
+                          selected ? 'border-chip-accent-ink/20' : 'bg-surface-card hover:border-line-hover',
                         )}
                       >
                         {t(`${K}.facetCount`, { label: t(`${K}.facet.${value}`), count: counts[value] })}
@@ -139,7 +143,7 @@ export default function NotificationsNextPage() {
                 </div>
                 <CanvasSelect
                   aria-label={t(`${K}.periodLabel`)}
-                  className="w-37.5"
+                  className="w-44"
                   value={String(period)}
                   onChange={(event) => setPeriod(Number(event.target.value))}
                 >
@@ -161,10 +165,10 @@ export default function NotificationsNextPage() {
                     }}
                   />
                 ))}
-                {shown.length === 0 && <li className="border-t border-line-light px-4 py-3 text-xs text-fg-tertiary">{t(`${K}.nothingHere`)}</li>}
+                {shown.length === 0 && <li className="border-t border-line-default px-4 py-3 text-sm text-fg-tertiary">{t(`${K}.nothingHere`)}</li>}
               </ul>
               {oldest && (
-                <p className="m-0 border-t border-line-light px-4 py-2.5 text-xs text-fg-tertiary">
+                <p className="m-0 border-t border-line-default px-4 py-2.5 text-sm text-fg-tertiary">
                   {t(`${K}.nothingBefore`, { date: longDay.format(new Date(oldest)) })}
                 </p>
               )}
@@ -173,20 +177,19 @@ export default function NotificationsNextPage() {
         </section>
 
         <div className="flex min-w-0 flex-col gap-4">
-          <Panel heading={<h2 className="m-0 text-2xl">{t(`${K}.channelsHeading`)}</h2>} className="gap-3 pb-4.5">
+          <Panel heading={<h2 className="m-0 text-2xl">{t(`${K}.channelsHeading`)}</h2>} className="gap-3 border-line-panel py-4.5 shadow-none">
             {state.preferences ? (
-              <div className="flex flex-col gap-2.5 text-xs">
-                <label className="m-0 flex items-center justify-between gap-2 text-xs font-normal text-fg-primary">
+              <div className="flex flex-col gap-1 text-ui">
+                <label className="m-0 flex min-h-11 items-center justify-between gap-2 text-ui font-normal text-fg-primary">
                   {t(`${K}.channelApp`)}
-                  <Switch checked disabled className="data-[state=checked]:bg-accent-green disabled:opacity-100" aria-describedby="channel-app-note" />
+                  <Switch checked disabled className="disabled:opacity-100" aria-describedby="channel-app-note" />
                 </label>
                 <span id="channel-app-note" className="sr-only">
                   {t(`${K}.channelAppNote`)}
                 </span>
-                <label className="m-0 flex items-center justify-between gap-2 text-xs font-normal text-fg-primary">
+                <label className="m-0 flex min-h-11 items-center justify-between gap-2 text-ui font-normal text-fg-primary">
                   {t(`${K}.channelEmail`)}
                   <Switch
-                    className="data-[state=checked]:bg-accent-green"
                     checked={
                       state.preferences.emailSurveys ||
                       state.preferences.emailMicroclimates ||
@@ -205,10 +208,9 @@ export default function NotificationsNextPage() {
                     }
                   />
                 </label>
-                <label className="m-0 flex items-center justify-between gap-2 text-xs font-normal text-fg-primary">
+                <label className="m-0 flex min-h-11 items-center justify-between gap-2 text-ui font-normal text-fg-primary">
                   {t(`${K}.channelDigest`)}
                   <Switch
-                    className="data-[state=checked]:bg-accent-green"
                     checked={state.preferences.digestFrequency === 'weekly'}
                     onCheckedChange={(checked) =>
                       state.preferences && void state.savePreferences({ ...state.preferences, digestFrequency: checked ? 'weekly' : 'never' })
@@ -217,12 +219,12 @@ export default function NotificationsNextPage() {
                 </label>
               </div>
             ) : (
-              <p className="m-0 text-xs text-fg-tertiary">{t(`${K}.preferencesUnavailable`)}</p>
+              <p className="m-0 text-sm text-fg-tertiary">{t(`${K}.preferencesUnavailable`)}</p>
             )}
             {/* The artboard's link is the secondary ink (`a { color: #4a3d72 }`), not the
                 app's blue link colour the base layer gives every anchor. */}
             {respondent ? null : (
-              <Link to="/settings/notifications" data-slot="by-type-link" className="text-xs text-fg-secondary">
+              <Link to="/settings/notifications" data-slot="by-type-link" className="text-sm text-fg-secondary">
                 {t(`${K}.byType`)}
               </Link>
             )}
@@ -230,7 +232,7 @@ export default function NotificationsNextPage() {
           {localMail && (
             // The local stack's mail sender refuses `.test`, `.invalid` and `example.com`
             // recipients (`EmailNotificationSender.cs:90`), so on it a notice exists only here.
-            <p data-slot="local-mail-note" className="m-0 flex items-start gap-2.5 rounded-lg border border-line-light bg-surface-icon-box px-3.5 py-3 text-xs leading-normal text-fg-secondary">
+            <p data-slot="local-mail-note" className="m-0 flex items-start gap-3 rounded-xl bg-surface-fill-subtle px-4 py-3.5 text-sm leading-normal text-fg-secondary">
               <Mail aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
               <span>
                 <strong className="font-semibold">{t(`${K}.localMailLead`)}</strong> {t(`${K}.localMailBefore`)}{' '}
@@ -252,10 +254,11 @@ function Row({ row, date, onOpen }: { row: InboxRow; date: string; onOpen: () =>
     <li
       data-slot="notification-row"
       data-unread={row.unread}
-      className={cn('flex flex-wrap items-center gap-3.5 border-t border-line-light px-4 py-3 sm:flex-nowrap', row.unread ? 'bg-surface-card' : 'bg-surface-card-hover')}
+      className={cn('flex flex-wrap items-center gap-3.5 border-t border-line-default px-4 py-3 sm:flex-nowrap', row.unread ? 'bg-surface-card' : 'bg-surface-zebra')}
     >
-      <span aria-hidden="true" className={cn('size-2 shrink-0 rounded-full', row.unread ? 'bg-accent-red' : 'bg-transparent')} />
-      <span className="hidden size-8 shrink-0 items-center justify-center rounded-md bg-surface-icon-box sm:inline-flex">
+      {/* The unread mark is blue, as Mail draws it; red is the OCC mark and Crítica. */}
+      <span aria-hidden="true" data-slot="unread-dot" className={cn('size-2 shrink-0 rounded-full', row.unread ? 'bg-accent-blue' : 'bg-transparent')} />
+      <span className="hidden size-8 shrink-0 items-center justify-center rounded-lg bg-surface-fill-subtle sm:inline-flex">
         <Icon aria-hidden="true" className={cn('size-4', tone)} />
       </span>
       {/* Below sm the text takes the whole line after the unread dot (8px + the 14px gap);
@@ -269,7 +272,7 @@ function Row({ row, date, onOpen }: { row: InboxRow; date: string; onOpen: () =>
       </div>
       <span className="inline-flex shrink-0 items-center gap-2 pl-5.5 sm:flex-col sm:items-end sm:gap-1 sm:pl-0">
         <CanvasChip label={t(`${K}.facet.${row.kind}`)} />
-        <time dateTime={row.createdAt} className="font-mono text-2xs text-fg-tertiary">
+        <time dateTime={row.createdAt} className="text-sm tabular-nums text-fg-tertiary">
           {date}
         </time>
       </span>

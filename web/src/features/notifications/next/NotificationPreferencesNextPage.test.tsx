@@ -48,7 +48,7 @@ function renderPage() {
   )
 }
 
-const row = (key: string) => document.querySelector(`tr[data-pref="${key}"]`) as HTMLElement
+const row = (key: string) => document.querySelector(`li[data-pref="${key}"]`) as HTMLElement
 const saveButton = () => screen.getByRole('button', { name: T.save })
 const discardButton = () => screen.getByRole('button', { name: T.discard })
 

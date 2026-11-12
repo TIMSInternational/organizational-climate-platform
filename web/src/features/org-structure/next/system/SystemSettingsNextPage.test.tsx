@@ -128,20 +128,37 @@ describe('SystemSettingsNextPage', () => {
   })
 })
 
-// SystemSettings artboard: "60 minutos" on the left of the field, the unit after the digits.
-// happy-dom lays nothing out, so the placement is pinned as the offset the page computes.
+// The session timeout reads "60 minutos": the unit is its own word after the field, and it is
+// the field's description, so a screen reader hears the unit the eye sees.
 describe('SystemSettingsNextPage — the session timeout reads "60 minutos"', () => {
-  it('sets the unit right after the digits, one digit-width past them', async () => {
+  it('sets the unit after the field and names it as the field’s description', async () => {
     serve(() => new Response(JSON.stringify(settings({ sessionTimeoutMinutes: 60 })), { status: 200 }))
     renderPage()
-    const unit = await waitFor(() => {
-      const found = document.querySelector('[data-slot="timeout-unit"]') as HTMLElement | null
-      expect(found).not.toBeNull()
-      return found as HTMLElement
-    })
+    const field = await screen.findByLabelText(next.timeout)
+    const unit = document.querySelector('[data-slot="timeout-unit"]') as HTMLElement
     expect(unit.textContent).toBe(next.minutesUnit)
-    expect(unit.style.getPropertyValue('--unit-offset')).toBe('3ch')
-    expect(unit.className).toMatch(/left-\[calc\(var\(--admin-space-12\)_\+_1px_\+_var\(--unit-offset\)\)\]/)
-    expect(unit.className).not.toMatch(/right-/)
+    expect(field.getAttribute('aria-describedby')).toBe(unit.id)
+    // After the field in reading order, not inside it.
+    expect(field.compareDocumentPosition(unit) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(field.contains(unit)).toBe(false)
+  })
+})
+
+describe('SystemSettingsNextPage — the privacy card states the ruling', () => {
+  it('names both floors and the one place verbatim text leaves', async () => {
+    serve(() => new Response(JSON.stringify(settings()), { status: 200 }))
+    renderPage()
+    const card = await screen.findByRole('region', { name: next.privacyHeading })
+    expect(card.textContent).toContain(next.floorRuleLead.replace('{floor}', '3'))
+    expect(card.textContent).toContain(next.floorRuleRest.replace('{floor}', '3').replace('{single}', '1'))
+    expect(card.textContent).toContain(next.openTextRuleRest)
+  })
+
+  it('draws the switches without a green fill and the policy chips gray', async () => {
+    serve(() => new Response(JSON.stringify(settings()), { status: 200 }))
+    renderPage()
+    const login = await screen.findByRole('switch', { name: next.loginEnabled })
+    expect(login.className).not.toMatch(/green/)
+    for (const chip of document.querySelectorAll('[data-slot="chip"]')) expect(chip.className).toMatch(/bg-chip-neutral-fill/)
   })
 })

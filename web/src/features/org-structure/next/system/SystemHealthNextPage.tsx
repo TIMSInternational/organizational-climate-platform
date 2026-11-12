@@ -1,8 +1,8 @@
 import { useState, type ReactNode } from 'react'
 import { Check, ChevronDown, CircleAlert, Clock } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
-import { PageTopBar } from '../../../../components/layout'
-import { Button, Chip, NetworkError, SkeletonText, Table, type ChipTone } from '../../../../components/ui'
+import { PageHeader } from '../../../../components/layout'
+import { Button, Chip, LoadingState, NetworkError, Table } from '../../../../components/ui'
 import { useHeaderSwitcherStandDown } from '../../../../company-context/useHeaderSwitcherStandDown'
 import { cn } from '../../../../lib/cn'
 import type { SystemJobStatus, SystemStatusResponse } from '../../api/systemStatus'
@@ -54,9 +54,15 @@ function statusWord(t: TranslateFn, token: string): string {
  */
 const BOARD_CHIP = 'h-6'
 
-/** The chip for a tone, with the canvas's glyph: a tick when good, a warning mark otherwise. */
+/**
+ * The chip for a health tone. Green, amber and red are the three result areas and nothing else
+ * (product ruling 11 Nov; HIG `color.md` › Best practices: *"Avoid using the same color to mean
+ * different things"*), so a health state is a gray chip whose glyph and word carry it: a tick
+ * when correct, a warning mark (or the clock) otherwise. Only a failing state takes the danger
+ * ink, and it still has its glyph and word, so colour is never the only signal
+ * (`accessibility.md` › Color and effects).
+ */
 function StatusChip({ tone, label, glyph }: { tone: HealthTone; label: string; glyph?: 'clock' }) {
-  const chipTone: ChipTone = tone
   const icon =
     tone === 'good' ? (
       <Check className="size-3" />
@@ -65,7 +71,15 @@ function StatusChip({ tone, label, glyph }: { tone: HealthTone; label: string; g
     ) : (
       <CircleAlert className="size-3" />
     )
-  return <Chip className={BOARD_CHIP} tone={chipTone} icon={icon} label={label} />
+  return (
+    <Chip
+      data-health={tone}
+      className={cn(BOARD_CHIP, tone === 'critical' && 'text-accent-red-ink')}
+      tone="neutral"
+      icon={icon}
+      label={label}
+    />
+  )
 }
 
 /** "Cada 15 min" — the cadence as the existing catalogue says it. */
@@ -114,7 +128,7 @@ export default function SystemHealthNextPage() {
 
   return (
     <div>
-      <PageTopBar
+      <PageHeader
         eyebrow={t('navigation.systemAdministration')}
         title={t('systemHealth.title')}
         description={
@@ -140,7 +154,7 @@ export default function SystemHealthNextPage() {
         }
       />
 
-      {model.loading && status === null && <SkeletonText lines={6} />}
+      {model.loading && status === null && <LoadingState rows={6} />}
 
       {model.failed && !model.loading && (
         <NetworkError
@@ -256,8 +270,8 @@ function HealthBody({ status, email }: { status: SystemStatusResponse; email: Sy
               <Fact label={t('systemHealth.commit')}>
                 {status.build.commit === 'unknown' ? (
                   <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 xl:flex-nowrap">
-                    <span className="shrink-0 font-mono text-sm text-fg-label">{t('systemHealth.next.unknown')}</span>
-                    <span className="min-w-0 text-xs leading-normal text-fg-label">{t('systemHealth.next.commitUnknownNote')}</span>
+                    <span className="shrink-0 text-sm text-fg-tertiary">{t('systemHealth.next.unknown')}</span>
+                    <span className="min-w-0 text-sm leading-normal text-fg-tertiary">{t('systemHealth.next.commitUnknownNote')}</span>
                   </span>
                 ) : (
                   // The running commit appears nowhere else in the shell (#69).
@@ -268,13 +282,13 @@ function HealthBody({ status, email }: { status: SystemStatusResponse; email: Sy
                 {status.build.builtAt === 'unknown' || Number.isNaN(Date.parse(status.build.builtAt)) ? (
                   <span className="text-sm text-fg-label">{t('systemHealth.next.unknown')}</span>
                 ) : (
-                  <span className="font-mono text-sm tabular-nums text-fg-primary">
+                  <span className="text-base tabular-nums text-fg-primary">
                     {`${localDay(status.build.builtAt, locale)} · ${clockTime(status.build.builtAt, locale)}`}
                   </span>
                 )}
               </Fact>
               <Fact label={t('systemHealth.runtime')}>
-                <span className="font-mono text-sm text-fg-primary">{`.NET ${status.build.runtime}`}</span>
+                <span className="text-base tabular-nums text-fg-primary">{`.NET ${status.build.runtime}`}</span>
               </Fact>
               <Fact label={t('systemHealth.environment')}>
                 <Chip className={BOARD_CHIP} tone="neutral" label={status.environment} />
@@ -288,28 +302,27 @@ function HealthBody({ status, email }: { status: SystemStatusResponse; email: Sy
                 <StatusChip tone={componentTone(db.status)} label={statusWord(t, db.status)} />
               </Fact>
               <Fact label={t('systemHealth.next.latency')}>
-                <span className="font-mono text-sm tabular-nums text-fg-primary">
+                <span className="text-base tabular-nums text-fg-primary">
                   {t('systemHealth.next.latencyValue', { ms: db.latencyMs })}
                 </span>
               </Fact>
               <Fact label={t('systemHealth.next.poolerLabel')}>
                 {/* #220: the port is a fact on a page rather than a coin flip. */}
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 xl:flex-nowrap">
-                  <Chip
-                    className={BOARD_CHIP}
+                  <StatusChip
                     tone={db.usesTransactionPoolerPort ? 'critical' : 'good'}
                     label={t(
                       db.usesTransactionPoolerPort ? 'systemHealth.next.poolerTransaction' : 'systemHealth.next.poolerSession',
                       { port: db.port },
                     )}
                   />
-                  <span className="min-w-0 text-xs leading-normal text-fg-label">{t('systemHealth.next.poolerNote')}</span>
+                  <span className="min-w-0 text-sm leading-normal text-fg-tertiary">{t('systemHealth.next.poolerNote')}</span>
                 </span>
               </Fact>
               <Fact label={t('systemHealth.next.maxPool')}>
                 <span className="flex items-center gap-1.5">
-                  <span className="font-mono text-sm tabular-nums text-fg-primary">{db.maxPoolSize}</span>
-                  {db.maxPoolSizeDefaulted && <span className="text-xs leading-normal text-fg-label">{t('systemHealth.next.defaultedWord')}</span>}
+                  <span className="text-base tabular-nums text-fg-primary">{db.maxPoolSize}</span>
+                  {db.maxPoolSizeDefaulted && <span className="text-sm leading-normal text-fg-tertiary">{t('systemHealth.next.defaultedWord')}</span>}
                 </span>
               </Fact>
             </Facts>
@@ -405,14 +418,14 @@ function Tile({ eyebrow, chip, title, sub }: { eyebrow: string; chip: ReactNode;
   return (
     <div
       data-slot="health-tile"
-      className="flex min-w-0 flex-col gap-2 rounded-lg border border-line-default bg-surface-card px-4 py-3.5 shadow-xs"
+      className="flex min-w-0 flex-col gap-2 rounded-xl border border-line-panel bg-surface-card px-4.5 py-4"
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="text-2xs font-bold uppercase leading-normal tracking-tile text-fg-label">{eyebrow}</span>
+        <span className="text-2xs font-semibold uppercase leading-normal tracking-tile text-fg-label">{eyebrow}</span>
         {chip}
       </div>
-      {/* The board's tile reading is 15px, between the 14px and 16px steps of the type scale. */}
-      <span data-slot="tile-title" className="text-[15px] leading-normal font-semibold text-fg-primary">{title}</span>
+      {/* The tile's reading at the 15px body step (`text-base`), semibold, numerals tabular. */}
+      <span data-slot="tile-title" className="text-base leading-normal font-semibold tabular-nums text-fg-primary">{title}</span>
       <span className="text-sm text-fg-tertiary">{sub}</span>
     </div>
   )
@@ -422,10 +435,10 @@ function Panel({ heading, meta, id, children }: { heading: string; meta?: string
   return (
     <section
       aria-labelledby={id}
-      className="flex min-w-0 flex-col gap-3 rounded-lg border border-line-default bg-surface-card px-5 py-4 shadow-xs"
+      className="flex min-w-0 flex-col gap-3.5 rounded-xl border border-line-panel bg-surface-card px-5 py-4.5"
     >
       <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <h2 id={id} className="m-0 text-2xl">
+        <h2 id={id} className="m-0 text-2xl leading-tight">
           {heading}
         </h2>
         {meta && <span className="text-sm text-fg-tertiary">{meta}</span>}
@@ -438,10 +451,11 @@ function Panel({ heading, meta, id, children }: { heading: string; meta?: string
 function Stat({ label, value, sub }: { label: string; value: number; sub?: string }) {
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
-      {/* The board sets the queue's reading in its 1.5 body leading: a 30px line for a 20px figure. */}
-      <span className="text-2xs font-bold uppercase leading-normal tracking-label text-fg-label">{label}</span>
-      <span data-slot="queue-figure" className="font-mono text-2xl leading-normal tabular-nums text-fg-primary">{value}</span>
-      {sub && <span className="text-xs leading-normal text-fg-label">{sub}</span>}
+      {/* The `.kpi` of `occ.css`: an 11px tracked label, a 30px semibold figure in the body face
+          with tabular numerals (not a third, monospaced face), and a 13px footnote. */}
+      <span className="text-2xs font-semibold uppercase leading-normal tracking-tile text-fg-label">{label}</span>
+      <span data-slot="queue-figure" className="text-3xl leading-tight font-semibold tracking-display tabular-nums text-fg-primary">{value}</span>
+      {sub && <span className="text-sm leading-normal text-fg-tertiary">{sub}</span>}
     </div>
   )
 }
@@ -451,7 +465,9 @@ function Facts({ labelWidth, children }: { labelWidth: 'build' | 'database'; chi
     <dl
       className={cn(
         'm-0 grid items-center gap-x-4 gap-y-2 text-sm',
-        labelWidth === 'build' ? 'grid-cols-[150px_minmax(0,1fr)]' : 'grid-cols-[170px_minmax(0,1fr)]',
+        // Under 640px the label column shares the width instead of holding its fixed board width.
+        'grid-cols-[minmax(0,2fr)_minmax(0,3fr)]',
+        labelWidth === 'build' ? 'sm:grid-cols-[150px_minmax(0,1fr)]' : 'sm:grid-cols-[170px_minmax(0,1fr)]',
       )}
     >
       {children}
@@ -473,7 +489,7 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
 // the board's x (Intervalo 673, Último intento 805, Último éxito 967) and a right-aligned value
 // ends on its column's edge. The last column also pads its right edge, as the grid's padding.
 // The header row pads only its bottom (the wrapper's `pt-2` is the board's 8px above it).
-const HEAD = 'pt-0 pb-2 pl-3 pr-0 text-left text-2xs font-bold uppercase leading-normal tracking-label text-fg-label whitespace-nowrap border-b border-line-default'
+const HEAD = 'pt-0 pb-2 pl-3 pr-0 text-left text-xs font-semibold leading-normal text-fg-secondary whitespace-nowrap border-b border-line-default'
 
 function JobsDisclosure({ jobs, checkedAt }: { jobs: readonly SystemJobStatus[]; checkedAt: string }) {
   const { t, locale } = useTranslation()
@@ -488,7 +504,7 @@ function JobsDisclosure({ jobs, checkedAt }: { jobs: readonly SystemJobStatus[];
   }
 
   return (
-    <section aria-labelledby="health-jobs" className="overflow-hidden rounded-lg border border-line-default bg-surface-card shadow-xs">
+    <section aria-labelledby="health-jobs" className="overflow-hidden rounded-xl border border-line-panel bg-surface-card">
       {/* 11px, not the board's 12: the ghost toggle keeps a transparent 1px border, so its label
           still sits 12px from the edge and the bar is the board's 44px. */}
       <div data-slot="jobs-bar" className="flex flex-wrap items-center justify-between gap-3 border-b border-line-light px-4 py-2.75">
@@ -504,7 +520,7 @@ function JobsDisclosure({ jobs, checkedAt }: { jobs: readonly SystemJobStatus[];
         >
           <ChevronDown aria-hidden="true" className={cn('size-3.5 transition-transform', !open && '-rotate-90')} />
           <span id="health-jobs">{t('systemHealth.next.tileJobs')}</span>
-          <span className="font-mono text-sm font-normal tabular-nums text-fg-tertiary">{jobs.length}</span>
+          <span className="text-sm font-normal tabular-nums text-fg-tertiary">{jobs.length}</span>
         </Button>
         <span className="text-sm text-fg-tertiary">
           {offset
@@ -544,10 +560,10 @@ function JobsDisclosure({ jobs, checkedAt }: { jobs: readonly SystemJobStatus[];
                   {jobs.map((job) => (
                     <tr key={job.jobName} data-job={job.jobName} className="border-b border-line-light">
                       <td className="py-2.25 pr-0 pl-3 font-mono text-sm text-fg-primary">{job.jobName}</td>
-                      <td className="py-2.25 pr-0 pl-3 text-sm text-fg-secondary">{intervalText(t, job.intervalSeconds)}</td>
-                      <td className="py-2.25 pr-0 pl-3 font-mono text-sm tabular-nums text-fg-primary">{instant(job.lastAttemptAt)}</td>
-                      <td className="py-2.25 pr-0 pl-3 font-mono text-sm tabular-nums text-fg-primary">{instant(job.lastSuccessAt)}</td>
-                      <td className="py-2.25 pr-0 pl-3 text-right font-mono text-sm tabular-nums text-fg-tertiary">
+                      <td className="py-2.25 pr-0 pl-3 text-ui text-fg-secondary">{intervalText(t, job.intervalSeconds)}</td>
+                      <td className="py-2.25 pr-0 pl-3 text-ui tabular-nums text-fg-primary">{instant(job.lastAttemptAt)}</td>
+                      <td className="py-2.25 pr-0 pl-3 text-ui tabular-nums text-fg-primary">{instant(job.lastSuccessAt)}</td>
+                      <td className="py-2.25 pr-0 pl-3 text-right text-ui tabular-nums text-fg-secondary">
                         {job.consecutiveFailures}
                       </td>
                       <td className="px-3 py-2.25 text-right">
