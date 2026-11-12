@@ -1268,7 +1268,9 @@ describe('SurveyCreatePage audience step', () => {
       .getByText('The anonymity floor applies to what comes back, not to who is asked.')
       .closest('[data-slot="alert"]') as HTMLElement
     const floor = within(alert).getByText(String(ANONYMITY_FLOOR))
-    expect(floor.className).toContain('font-mono')
+    // A reading: tabular figures in the sans face, never a monospaced third face (11 Nov).
+    expect(floor.className).toContain('tabular-nums')
+    expect(floor.className).not.toContain('font-mono')
   })
 })
 

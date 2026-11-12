@@ -51,9 +51,11 @@ export function KpiRow({ children }: { children: React.ReactNode }) {
 const READING_MARK = '␟'
 
 /**
- * A translated sentence whose interpolated numbers are set in mono, and its prose is not.
+ * A translated sentence whose interpolated numbers are set as readings, and its prose is not.
  *
- * The thesis of the redesign is that every *reading* is `font-mono tabular-nums` and every
+ * The name is historical. Under the Apple design (11 Nov) a reading is `tabular-nums` in the
+ * UI sans face — there is no third, monospaced face — while the prose around it stays plain.
+ * The earlier thesis was that every *reading* is `font-mono tabular-nums` and every
  * piece of prose stays in the sans face — that one rule is what makes the product read as
  * a measuring device. `KpiTile` and `ClimateMap` honour it because they are handed a
  * number and render it themselves. A sentence like "{completed} completed responses from
@@ -117,7 +119,7 @@ export function MonoReadings({
         .split(READING_MARK)
         .map((piece, index) =>
           index % 2 === 1 ? (
-            <span key={index} className="font-mono tabular-nums">
+            <span key={index} data-slot="reading" className="tabular-nums">
               {readings[Number(piece)]}
             </span>
           ) : (

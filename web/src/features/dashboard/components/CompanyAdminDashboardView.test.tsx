@@ -324,8 +324,9 @@ describe('CompanyAdminDashboardView', () => {
 
     const finding = await screen.findByText(/Engineering is behind the organisation/)
     const evidence = finding.nextElementSibling as HTMLElement
+    expect(evidence.querySelector('.font-mono')).toBeNull()
     expect(
-      [...evidence.querySelectorAll('.font-mono.tabular-nums')].map((node) => node.textContent),
+      [...evidence.querySelectorAll('[data-slot="reading"].tabular-nums')].map((node) => node.textContent),
     ).toEqual(['5', '6', '83', '150'])
     // The sentence still reads as one sentence, and the marker never reaches the page.
     expect(evidence.textContent).toBe(

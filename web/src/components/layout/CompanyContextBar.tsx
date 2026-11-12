@@ -107,7 +107,7 @@ export default function CompanyContextBar({ note }: { note: string }) {
         </select>
       </span>
       {chosen ? (
-        <Chip tone="good" icon={<Check className="size-3" />} label={t('companyContext.next.active')} />
+        <Chip tone="accent" icon={<Check className="size-3" />} label={t('companyContext.next.active')} />
       ) : (
         <Chip tone="neutral" label={t('companyContext.next.unchosen')} />
       )}

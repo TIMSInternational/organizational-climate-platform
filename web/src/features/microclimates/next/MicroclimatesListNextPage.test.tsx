@@ -398,8 +398,8 @@ describe('the company’s clock', () => {
   }
 
   it.each([
-    ['America/Costa_Rica', 'abierto hasta el 11 sept a las 20:06', 'America/Costa_Rica (GMT-6)', '11 de septiembre'],
-    ['Asia/Tokyo', 'abierto hasta el 12 sept a las 11:06', 'Asia/Tokyo (GMT+9)', '12 de septiembre'],
+    ['America/Costa_Rica', 'abierto hasta el 11 sept a las 20:06', 'Costa Rica (GMT-6)', '11 de septiembre'],
+    ['Asia/Tokyo', 'abierto hasta el 12 sept a las 11:06', 'Tokyo (GMT+9)', '12 de septiembre'],
   ])('prints an open session’s close on the company’s zone (%s), whatever the browser’s, and names it', async (zone, close, label, longDate) => {
     localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
     routeWithSettings([OPEN], { m1: detailFor(OPEN, { startTime: OPENS_UTC, endTime: CLOSES_UTC }) }, { companyId: 'their-co', settings: { timezone: zone } })
@@ -427,7 +427,8 @@ describe('the company’s clock', () => {
     localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
     routeWithSettings([OPEN], { m1: detailFor(OPEN, { startTime: OPENS_UTC, endTime: CLOSES_UTC }) }, null)
     renderPage()
-    const browser = Intl.DateTimeFormat().resolvedOptions().timeZone
+    // The label names the browser zone's place (`Chicago`), not its IANA id.
+    const browser = (Intl.DateTimeFormat().resolvedOptions().timeZone.split('/').pop() ?? '').replace(/_/g, ' ')
     const text = (await meta()).textContent ?? ''
     const expected = new Intl.DateTimeFormat('es', { hour: 'numeric', minute: '2-digit' }).format(new Date(CLOSES_UTC))
     expect(text).toContain(`a las ${expected}`)

@@ -204,16 +204,17 @@
      ui/alert.tsx: `rounded-lg border px-4 py-3 text-sm` (8px radius, 16px/12px
      padding, 14px) with the `destructive` variant colouring the text. Every
      page reports failure as `<p role="alert">`, so the role carries the styling
-     and no page has to name the error colour. Deviation: the fill is the soft
-     red accent rather than `bg-card`, so an alert reads as an alert on a card.
-     The word is the red TEXT ink, not the identity red: in dark the identity
-     #ef4444 is 4.24:1 on its own soft fill over the box, the ink #ff7b7b 6.36:1;
-     in light both are the canvas's `--danger` #c4001a, 5.40:1 on the fill. 14px,
-     the canvas's `.note`, one step under the body (`--admin-text-ui`). */
+     and no page has to name the error colour. The fill is the neutral Note fill
+     (`--admin-bg-fill-subtle`) on the panel hairline, not the soft red it was:
+     Apple design ruling, 11 Nov — green, amber and red are the three result areas
+     only, and a pink panel read as «Crítica». The word stays in the red TEXT ink,
+     the one mark that says "failure" (5.75:1 light, 5.8:1 dark on the fill over the
+     box; `styles/inkContrast.test.ts` re-measures it). 14px, the canvas's `.note`,
+     one step under the body (`--admin-text-ui`). */
   [role='alert'] {
     color: var(--admin-accent-red-ink);
-    background: var(--admin-accent-bg-red);
-    border: 1px solid var(--admin-accent-border-red);
+    background: var(--admin-bg-fill-subtle);
+    border: 1px solid var(--admin-border-panel);
     border-radius: var(--admin-radius-xl);
     padding: var(--admin-space-12) var(--admin-space-16);
     font-size: var(--admin-text-ui);

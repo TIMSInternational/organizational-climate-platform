@@ -149,7 +149,7 @@ export default function DistributionStrip({
               // rightly: this is a visibility floor, not a design token.
               style={{ flexGrow: segment.count, minWidth: 3, backgroundColor: fill, color: ink }}
               className={cn(
-                'flex items-center justify-center overflow-hidden font-mono text-2xs tabular-nums',
+                'flex items-center justify-center overflow-hidden text-2xs tabular-nums',
                 !compact && 'font-semibold',
               )}
             >

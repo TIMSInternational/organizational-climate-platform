@@ -307,6 +307,8 @@
   --text-respond-lg: var(--admin-text-respond-lg);
   --text-respond-question: var(--admin-text-respond-question);
   --text-respond-question--line-height: 1.35;
+  --text-respond-display: var(--admin-text-respond-display);
+  --text-respond-display--line-height: 1.2;
 
   --leading-tight: var(--admin-leading-tight);
   --leading-snug: var(--admin-leading-snug);

@@ -16,10 +16,15 @@ import type { Department } from '../../../org-structure/api/departments'
  */
 export const INVITATION_COLUMNS = ['26.8%', '35.3%', '18.3%', '19.6%'] as const
 
-/** Share of the stated audience that answered, whole percent — or null when no audience was stated. */
+/**
+ * Share of the stated audience that answered, whole percent — or null when no audience was stated.
+ *
+ * FLOORED, never rounded: 224 of 225 rounds to «100 %» beside a person who has not started, and a
+ * percent that claims completion before it happened is the one reading this tile must not print.
+ */
 export function responseRate(responses: number, target: number | null): number | null {
   if (target === null || target <= 0) return null
-  return Math.round((responses / target) * 100)
+  return Math.floor((responses / target) * 100)
 }
 
 const DAY_MS = 86_400_000

@@ -532,8 +532,8 @@ describe('the company’s clock', () => {
   }
 
   it.each([
-    ['America/Costa_Rica', '11 de septiembre a las 20:06', '9 sept 2026, 20:06', '11 sept 2026, 20:06', /^En vivo · actualizado a las 9:00:\d\d$/, 'America/Costa_Rica (GMT-6)'],
-    ['Asia/Tokyo', '12 de septiembre a las 11:06', '10 sept 2026, 11:06', '12 sept 2026, 11:06', /^En vivo · actualizado a las 0:00:\d\d$/, 'Asia/Tokyo (GMT+9)'],
+    ['America/Costa_Rica', '11 de septiembre a las 20:06', '9 sept 2026, 20:06', '11 sept 2026, 20:06', /^En vivo · actualizado a las 9:00:\d\d$/, 'Costa Rica (GMT-6)'],
+    ['Asia/Tokyo', '12 de septiembre a las 11:06', '10 sept 2026, 11:06', '12 sept 2026, 11:06', /^En vivo · actualizado a las 0:00:\d\d$/, 'Tokyo (GMT+9)'],
   ])('prints every date and time on the company’s zone (%s) and names it', async (zone, closes, opens, closesFact, stamped, label) => {
     // 15:00 UTC on 11 Sep, so the poll's own stamp is read on the same clock as the session.
     vi.useFakeTimers({ shouldAdvanceTime: true, now: new Date('2026-09-11T15:00:00Z') })
@@ -557,7 +557,8 @@ describe('the company’s clock', () => {
   it('falls back to the browser’s zone when the company’s cannot be read, and says which', async () => {
     routeWithZone(detail(UTC_WINDOW), null)
     renderPage()
-    const browser = Intl.DateTimeFormat().resolvedOptions().timeZone
+    // The label names the browser zone's place (`Chicago`), not its IANA id.
+    const browser = (Intl.DateTimeFormat().resolvedOptions().timeZone.split('/').pop() ?? '').replace(/_/g, ' ')
     const time = new Intl.DateTimeFormat('es', { hour: 'numeric', minute: '2-digit' }).format(new Date(UTC_WINDOW.endTime))
     expect(await screen.findByText(new RegExp(`^abierta hasta el .* a las ${time}$`))).toBeTruthy()
     const note = sentences().textContent ?? ''

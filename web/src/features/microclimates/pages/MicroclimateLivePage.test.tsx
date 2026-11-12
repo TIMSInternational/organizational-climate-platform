@@ -114,8 +114,10 @@ describe('MicroclimateLivePage', () => {
 
     // `tabular-nums` is the load-bearing half: a count that ticks over every four
     // seconds must not shift width as it goes from 9 to 10.
+    // Since the Apple design (11 Nov) the figure face is the sans with tabular figures,
+    // never a monospaced third face.
     const reading = await screen.findByText('19')
-    expect(reading.className).toContain('font-mono')
+    expect(reading.className).not.toContain('font-mono')
     expect(reading.className).toContain('tabular-nums')
 
     // The label beside it stays in the sans face -- if everything is mono, nothing

@@ -571,3 +571,30 @@ describe('base ink contrast', () => {
     }
   })
 })
+
+describe('the [role=alert] box', () => {
+  /*
+   * Every page reports failure as `role="alert"` and `index.css` styles the role. Apple
+   * design ruling (11 Nov): green, amber and red are the result areas only, so the box sits
+   * on a neutral fill and only the words wear the red ink. Read out of the rule, so the
+   * assertion follows the rule rather than a token named here.
+   */
+  it('sits on a neutral fill, never a result-area tint, and its red words clear AA on it in both themes', () => {
+    const { light, dark } = palettes()
+    const index = readFileSync(join(process.cwd(), 'src', 'index.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+    const rule = /\[role='alert'\]\s*\{([^}]*)\}/.exec(index)
+    expect(rule, "index.css no longer has a [role='alert'] rule").not.toBeNull()
+    const body = rule![1]
+    expect(body).not.toMatch(/accent-(bg|border)-(red|green|amber)/)
+    const fill = /background:\s*var\((--admin-[\w-]+)\)/.exec(body)?.[1]
+    const ink = /(?:^|[;\s])color:\s*var\((--admin-[\w-]+)\)/.exec(body)?.[1]
+    expect(fill).toBe('--admin-bg-fill-subtle')
+    expect(ink, 'the alert words no longer name an ink token').toBeDefined()
+    for (const palette of [light, dark]) {
+      for (const base of ['--admin-bg-panel', '--admin-bg-card'] as const) {
+        const ground = composite(palette[fill!], palette[base])
+        expect(contrast(palette[ink!], ground), `${ink} on ${fill} over ${base}`).toBeGreaterThanOrEqual(AA_TEXT_CONTRAST)
+      }
+    }
+  })
+})

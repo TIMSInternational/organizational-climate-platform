@@ -191,7 +191,7 @@ describe('Detalle de encuesta (SurveyDetail artboard)', () => {
     const status = screen.getByTestId('tile-status')
     expect(within(status).getAllByRole('button').map((b) => b.textContent)).toEqual(['Cerrar'])
     // No directory read and no invitations: the stated target is the only audience known.
-    expect(screen.getByTestId('tile-responses').textContent).toContain('de 24 · 13 %')
+    expect(screen.getByTestId('tile-responses').textContent).toContain('de 24 · 12 %')
   })
 
   it('does not say a draft "closed", and will not open one whose window has already passed', () => {

@@ -219,8 +219,8 @@ describe('MicroclimateAnalyticsNextPage', () => {
    * TZ=America/Chicago and TZ=UTC.
    */
   it.each([
-    ['America/Costa_Rica', '9–11 sept', '9 sept', 'America/Costa_Rica (GMT-6)'],
-    ['Asia/Tokyo', '10–12 sept', '10 sept', 'Asia/Tokyo (GMT+9)'],
+    ['America/Costa_Rica', '9–11 sept', '9 sept', 'Costa Rica (GMT-6)'],
+    ['Asia/Tokyo', '10–12 sept', '10 sept', 'Tokyo (GMT+9)'],
   ])('prints every day on the company’s zone (%s) and names it', async (zone, range, day, label) => {
     vi.mocked(getCompanySettings).mockResolvedValue({ settings: { timezone: zone } } as unknown as CompanySettingsResponse)
     renderAs({ role: 'company_admin', companyId: COMPANY })
@@ -234,7 +234,8 @@ describe('MicroclimateAnalyticsNextPage', () => {
 
   it('falls back to the browser’s zone when the company’s cannot be read, and says which', async () => {
     renderAs({ role: 'company_admin', companyId: COMPANY })
-    const browser = Intl.DateTimeFormat().resolvedOptions().timeZone
+    // The label names the browser zone's place (`Chicago`), not its IANA id.
+    const browser = (Intl.DateTimeFormat().resolvedOptions().timeZone.split('/').pop() ?? '').replace(/_/g, ' ')
     const range = new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short' }).formatRange(
       new Date('2026-09-10T02:06:08.991+00:00'),
       new Date('2026-09-12T02:06:08.992+00:00'),

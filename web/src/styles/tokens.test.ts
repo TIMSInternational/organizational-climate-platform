@@ -89,10 +89,11 @@ describe('type scale', () => {
     )
     // The legacy eight, the canvas's five named steps (10 Sep) -- 11, 17, 22, 26 and 30px
     // since the Apple design (11 Nov) re-set the 9px and 28px ones -- the respond page's
-    // own four, and the Apple canvas's 14px row/control step (`--admin-text-ui`). The count
+    // own four, the Apple canvas's 14px row/control step (`--admin-text-ui`), and the
+    // Respond board's 24px serif question (`--admin-text-respond-display`). The count
     // is the tripwire: a new type token has to be declared HERE, with what it is for,
     // rather than appearing in the scale unremarked.
-    expect(sizes.length).toBe(18)
+    expect(sizes.length).toBe(19)
     expect(token('--admin-text-ui')).toBe('0.875rem')
     for (const size of sizes) expect(size).toMatch(/rem$/)
     expect([token('--admin-text-3xs'), token('--admin-text-reading'), token('--admin-text-kpi-lg'), token('--admin-text-kpi-hero')]).toEqual(
@@ -116,6 +117,10 @@ describe('type scale', () => {
     ]).toEqual(['0.8125rem', '0.9375rem', '1rem', '1.25rem'])
     expect(themeCss).toMatch(/--text-respond:\s*var\(--admin-text-respond\)\s*;/)
     expect(themeCss).toMatch(/--text-respond-question--line-height:\s*1\.35\s*;/)
+    // The Respond board's 24px serif question, as a step rather than `text-[1.5rem]`.
+    expect(token('--admin-text-respond-display')).toBe('1.5rem')
+    expect(themeCss).toMatch(/--text-respond-display:\s*var\(--admin-text-respond-display\)\s*;/)
+    expect(themeCss).toMatch(/--text-respond-display--line-height:\s*1\.2\s*;/)
   })
 
   it('does not pin the root font size', () => {
@@ -139,7 +144,7 @@ describe('type scale', () => {
     // token, read at a 16px default, must be at least 0.6875rem -- the 9px column heads and
     // the 10px eyebrows of the 10 Sep scale were the two steps under it.
     const steps = [...tokensCss.matchAll(/^\s*(--admin-text-[\w-]+):\s*([\d.]+)rem;/gm)]
-    expect(steps.length).toBe(18)
+    expect(steps.length).toBe(19)
     const under = steps.filter((m) => Number(m[2]) * 16 < 11).map((m) => `${m[1]} ${Number(m[2]) * 16}px`)
     expect(under).toEqual([])
     expect(token('--admin-text-2xs')).toBe('0.6875rem')
