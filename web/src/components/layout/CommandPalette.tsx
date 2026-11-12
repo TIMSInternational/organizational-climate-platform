@@ -369,7 +369,8 @@ export function SearchTrigger() {
       className="flex items-center gap-inline rounded-md border-none bg-transparent px-2 py-1 text-fg-tertiary hover:bg-state-hover hover:text-fg-primary"
     >
       <Search aria-hidden="true" className="size-icon" />
-      <kbd className="hidden items-center rounded-md border border-line-default bg-state-hover px-1.5 py-0.5 text-2xs font-medium text-fg-tertiary sm:inline-flex">
+      {/* The boards' `.kbd`: an outlined 11px semibold chip in the bar's label ink, no fill. */}
+      <kbd className="hidden items-center rounded-md border border-line-default bg-transparent px-1.5 py-0.5 text-2xs font-semibold text-fg-tertiary sm:inline-flex">
         {t('shell.commandKey')}
       </kbd>
     </button>

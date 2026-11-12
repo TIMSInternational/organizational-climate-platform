@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Building2 } from 'lucide-react'
+import { RailCompaniesIcon } from '../../navigation/railIcons'
 import { useCompanyContext } from '../../company-context'
 import { listCompanies, type Company } from '../../features/org-structure/api/companies'
 import { useTranslation } from '../../i18n'
@@ -77,12 +77,15 @@ export function CompanyContextSwitcher() {
 
   return (
     <div className="flex items-center gap-inline">
-      <Building2 aria-hidden="true" className="size-icon shrink-0 text-fg-tertiary" />
+      <RailCompaniesIcon aria-hidden="true" className="size-icon shrink-0 text-fg-tertiary" />
       <select
         aria-label={t('companyContext.label')}
         value={selectedCompanyId ?? ''}
         onChange={(event) => selectCompany(event.target.value || null)}
-        className="max-w-56"
+        // The boards' `.cosel`: a 256px well (the sunken navy `.on-shell` gives every input in
+        // the bar), 14px medium type, so "Ninguna empresa seleccionada" reads whole instead of
+        // being cut at the 224px it had.
+        className="min-w-64 max-w-80 text-ui font-medium"
       >
         <option value="">{t('companyContext.noneSelected')}</option>
         {companies.map((company) => (

@@ -186,12 +186,10 @@ describe('the shell is operable with a keyboard alone', () => {
 
     expect(reached.length, 'no rail row was reached at all').toBeGreaterThan(5)
     for (const href of everyHref()) {
-      // A group's own href is behind a disclosure button while expanded, so the
-      // set that must be *directly* reachable is the leaves; the group itself is
-      // covered by the disclosure assertion below.
-      if (href.startsWith(`/admin/companies/${COMPANY_ID}`) && !href.endsWith('/reports') && !href.endsWith('/analytics')) {
-        continue
-      }
+      // A group's children are behind its disclosure button while the rail is expanded
+      // (Preguntas: the bank and the library), so the set that must be *directly*
+      // reachable is every other row; the group is covered by the disclosure test below.
+      if (groupItem().sub!.some((child) => child.href === href)) continue
       expect(reached, `no rail Tab stop links to ${href} with the rail expanded`).toContain(href)
     }
   })
@@ -200,7 +198,7 @@ describe('the shell is operable with a keyboard alone', () => {
     renderShell()
     const rail = railElement()
     // The group row is a `<button aria-expanded>`, not a link that goes nowhere.
-    const group = within(rail).getByRole('button', { name: /Administración de Empresa/ })
+    const group = within(rail).getByRole('button', { name: 'Preguntas' })
     expect(group.getAttribute('aria-expanded')).toBe('false')
 
     group.focus()
@@ -282,7 +280,7 @@ describe('the shell is operable with a keyboard alone', () => {
 
   it('passes axe with a rail group open', async () => {
     const { container } = renderShell()
-    await userEvent.click(screen.getByRole('button', { name: /Administración de Empresa/ }))
+    await userEvent.click(within(railElement()).getByRole('button', { name: 'Preguntas' }))
     await expectNoAxeViolations(container, 'shell (group expanded)')
   })
 })
