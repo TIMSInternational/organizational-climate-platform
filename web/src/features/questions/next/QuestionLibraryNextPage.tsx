@@ -1,8 +1,23 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router'
-import { Check, ChevronDown, Lock, Plus, Search, X } from 'lucide-react'
-import { PageTopBar } from '../../../components/layout'
-import { Alert, AlertDescription, Button, Chip, ErrorState, Input, LoadingRegion, SkeletonText, Textarea, Table } from '../../../components/ui'
+import { Check, ChevronDown, Lock, Plus, X } from 'lucide-react'
+import { PageHeader } from '../../../components/layout'
+import {
+  Alert,
+  AlertDescription,
+  Button,
+  Chip,
+  ErrorState,
+  Input,
+  LoadingState,
+  Textarea,
+  Table,
+  TableBody,
+  TableHead,
+  TableHeader,
+  TableRow,
+  TableCell,
+} from '../../../components/ui'
 import { readViewerClaims, useViewerCapabilities } from '../../../auth/viewerCapabilities'
 import { useCompanyScope } from '../../../company-context'
 import { useCompanyName } from '../../../company-context/useCompanyName'
@@ -18,10 +33,10 @@ import {
   requiresOptions,
   updateQuestionLibraryItem,
 } from '../api/questionLibraryAdmin'
-import { Eyebrow, TABLE_CARD_CLASS, TH_CLASS } from '../../shared-next/parts'
+import { Eyebrow } from '../../shared-next/parts'
+import { Count, QSelect, SearchField, TABLE_CARD } from './parts'
 import { categoryTree, flattenTree, libraryTypeLabel, matchesSearch, parseOptions, type CategoryNode } from './model'
 import { useQuestionLibraryModel } from './useQuestionModels'
-import { SELECT_CLASS } from './QuestionBankNextPage'
 import SuperQuestionLibraryView from './super/SuperQuestionLibraryView'
 import { describeApiError } from '../../../api/describeApiError'
 
@@ -240,24 +255,22 @@ function QuestionLibraryForCompany() {
 
   return (
     <div>
-      <PageTopBar
+      <PageHeader
         eyebrow={companyName}
         title={t('questionLibrary.next.title')}
         description={t('questionLibrary.next.description', { company })}
-        actions={
+        primaryAction={
           canAuthor ? (
-            <Button type="button" variant="outline" onClick={openCreate}>
+            <Button type="button" variant="primary" onClick={openCreate}>
               <Plus aria-hidden="true" />
               {t('questionLibrary.next.newQuestion')}
             </Button>
-          ) : null
+          ) : undefined
         }
       />
 
       {state.status === 'loading' ? (
-        <LoadingRegion loading label={t('common.loading')}>
-          <SkeletonText lines={6} />
-        </LoadingRegion>
+        <LoadingState rows={6} label={t('common.loading')} />
       ) : state.status === 'failed' ? (
         <ErrorState
           title={t('questionLibrary.loadFailed')}
@@ -272,9 +285,9 @@ function QuestionLibraryForCompany() {
         // Two columns from lg. From xl an open drawer overlays the list instead of taking a third
         // column, as the board draws it (QuestionLibrary.dc.html: the drawer shares the list's
         // grid cell — `grid-area: 1 / 1; justify-self: end; width: 392px; z-index: 1`).
-        <div className="grid items-start gap-4 lg:grid-cols-[14.25rem_minmax(0,1fr)]">
-          <nav aria-label={t('questionLibrary.next.categories')} className="rounded-lg border border-line-default bg-surface-card p-4">
-            <h2 className="m-0 text-2xl">{t('questionLibrary.next.categories')}</h2>
+        <div className="grid items-start gap-4 lg:grid-cols-[17rem_minmax(0,1fr)]">
+          <nav aria-label={t('questionLibrary.next.categories')} className="rounded-xl border border-line-panel bg-surface-card p-4">
+            <h2 className="m-0 text-2xl leading-tight">{t('questionLibrary.next.categories')}</h2>
             <p className="mb-3 mt-0.5 text-sm text-fg-tertiary">
               {t('questionLibrary.next.categoriesSummary', {
                 globals: globalCategoryCount,
@@ -291,14 +304,14 @@ function QuestionLibraryForCompany() {
             <CategoryList nodes={tree.globals} selectedId={selected?.category.id ?? null} onSelect={setSelectedId} nameOf={nameOf} />
             <Eyebrow className="mb-1.5 mt-4 px-2.5 tracking-wider">{company}</Eyebrow>
             {tree.own.length === 0 ? (
-              <p className="m-0 rounded-md border border-dashed border-line-default p-2.5 text-sm text-fg-tertiary">
+              <p className="m-0 rounded-md bg-surface-fill-subtle p-2.5 text-sm text-fg-tertiary">
                 {t('questionLibrary.next.noOwnCategories')}
               </p>
             ) : (
               <CategoryList nodes={tree.own} selectedId={selected?.category.id ?? null} onSelect={setSelectedId} nameOf={nameOf} />
             )}
             {canAuthor && (
-              <div className="mt-3 border-t border-line-light pt-3">
+              <div className="mt-3 border-t border-line-default pt-3">
                 <Button
                   type="button"
                   variant="outline"
@@ -321,7 +334,7 @@ function QuestionLibraryForCompany() {
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 id="library-selected" className="m-0 flex items-baseline gap-2 text-2xl">
                     {nameOf(selected.category)}
-                    <span className="font-mono text-sm text-fg-tertiary tabular-nums">{selected.count}</span>
+                    <Count>{selected.count}</Count>
                   </h2>
                   <Chip
                     tone="neutral"
@@ -333,36 +346,32 @@ function QuestionLibraryForCompany() {
                   {descriptionOf(selected.category) ? `${descriptionOf(selected.category)} ` : ''}
                   {usageSentence(t, selected, state.data.items)}
                 </p>
-                <div className="mb-3 flex flex-wrap gap-2">
-                  <label className="relative min-w-60 flex-1">
-                    <span className="sr-only">{t('questionLibrary.next.search')}</span>
-                    <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-fg-tertiary" />
-                    {/* `max-w-none`: index.css caps every `label > input` at the field max, which
-                        left the search short of the type select (library-light.png). The board's
-                        search is `width: 100%` beside a 150px select. */}
-                    <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('questionLibrary.next.search')} className="mt-0 max-w-none pl-8" />
-                  </label>
-                  <select aria-label={t('questionBank.next.allTypes')} className={`${SELECT_CLASS} w-40`} value={type} onChange={(e) => setType(e.target.value)}>
+                <div className="mb-3 flex flex-wrap gap-3">
+                  {/* `max-w-none` on the input: index.css caps every `label > input` at the field
+                      max, which left the search short of the type select. The board's search runs
+                      the row beside a 150px select. */}
+                  <SearchField label={t('questionLibrary.next.search')} value={search} onChange={setSearch} className="min-w-60 flex-1" />
+                  <QSelect aria-label={t('questionBank.next.allTypes')} className="w-full sm:w-44" value={type} onChange={(e) => setType(e.target.value)}>
                     <option value="">{t('questionBank.next.allTypes')}</option>
                     {QUESTION_LIBRARY_TYPES.map((value) => (
                       <option key={value} value={value}>
                         {libraryTypeLabel(t, value)}
                       </option>
                     ))}
-                  </select>
+                  </QSelect>
                 </div>
-                <div className={TABLE_CARD_CLASS}>
-                  <Table className="w-full border-collapse text-base">
-                    <thead className="border-b border-line-light">
-                      <tr>
-                        <th scope="col" className={TH_CLASS}>{t('questionLibrary.next.colQuestion')}</th>
-                        <th scope="col" className={`${TH_CLASS} w-32`}>{t('questionLibrary.next.colOwner')}</th>
-                        <th scope="col" className={`${TH_CLASS} w-20`}>
+                <div className={TABLE_CARD}>
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead scope="col" className="px-4">{t('questionLibrary.next.colQuestion')}</TableHead>
+                        <TableHead scope="col" className="w-32">{t('questionLibrary.next.colOwner')}</TableHead>
+                        <TableHead scope="col" className="w-20 pr-4">
                           <span className="sr-only">{t('questionLibrary.next.colAction')}</span>
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       {itemsOf(selected.category.id).map((item) => (
                         <ItemRow key={item.id} item={item} primary={primary(item)} secondary={secondary(item)} owner={item.companyId === null ? t('questionLibrary.next.global') : company} action={canWriteRow(item) ? t('questionLibrary.next.edit') : t('questionLibrary.next.view')} onOpen={() => void openItem(item)} />
                       ))}
@@ -373,14 +382,15 @@ function QuestionLibraryForCompany() {
                           ))}
                         </ChildSection>
                       ))}
-                    </tbody>
+                    </TableBody>
                   </Table>
-                  {/* The board caps this note at 480px of text (a content-box max-width; 31.5rem here
-                      with the 12px pads), so it wraps before the drawer that overlays the list. The last
-                      row's own hairline is the separator above it, as on the board. */}
-                  <p data-testid="library-globals-note" className="m-0 max-w-[31.5rem] px-3 py-2.5 text-sm leading-normal text-fg-tertiary">
-                    {t('questionLibrary.next.globalsNote')}
-                  </p>
+                  {/* The note caps at 480px of text (31.5rem with its 16px pads), so it wraps before
+                      the drawer that overlays the list; the rule above it is the card's own. */}
+                  <div className="border-t border-line-default">
+                    <p data-testid="library-globals-note" className="m-0 max-w-[31.5rem] px-4 py-3 text-sm leading-normal text-fg-tertiary">
+                      {t('questionLibrary.next.globalsNote')}
+                    </p>
+                  </div>
                 </div>
               </>
             ) : (
@@ -394,13 +404,13 @@ function QuestionLibraryForCompany() {
               // Below xl the drawer takes a full row under the list rather than the 14rem category
               // column (library-new-light-1024.png). From xl it lies over the list's right edge in
               // the list's own cell, at the board's 392px, 3px ink edge and lifted shadow.
-              className="overflow-hidden rounded-lg border border-line-default border-l-3 border-l-fg-primary bg-surface-card shadow-md lg:col-span-2 xl:col-[2] xl:row-[1] xl:justify-self-end xl:w-[24.5rem] xl:z-1 xl:shadow-lg"
+              className="overflow-hidden rounded-xl border border-line-panel bg-surface-card lg:col-span-2 xl:col-[2] xl:row-[1] xl:justify-self-end xl:w-[24.5rem] xl:z-1 xl:shadow-lg"
             >
               {/* The board's drawer header: 14px 18px 12px, 4px from the eyebrow to the 20px title. */}
-              <div className="flex items-start justify-between gap-3 border-b border-line-light px-4.5 pb-3 pt-3.5">
+              <div className="flex items-start justify-between gap-3 border-b border-line-default px-4.5 pb-3 pt-3.5">
                 <div className="flex flex-col gap-1">
                   <Eyebrow className="tracking-wider">{company}</Eyebrow>
-                  <h2 id="library-drawer-title" className="m-0 text-2xl">
+                  <h2 id="library-drawer-title" className="m-0 text-2xl leading-tight">
                     {drawer.mode === 'category'
                       ? t('questionLibrary.next.newCategory')
                       : drawer.mode === 'create'
@@ -410,7 +420,7 @@ function QuestionLibraryForCompany() {
                           : t('questionLibrary.next.globalQuestion')}
                   </h2>
                 </div>
-                <Button type="button" size="icon" variant="outline" aria-label={t('common.close')} onClick={() => setDrawer({ mode: 'closed' })}>
+                <Button type="button" size="icon" variant="ghost" aria-label={t('common.close')} onClick={() => setDrawer({ mode: 'closed' })}>
                   <X aria-hidden="true" />
                 </Button>
               </div>
@@ -424,14 +434,14 @@ function QuestionLibraryForCompany() {
                       <Input value={category.nameEn} onChange={(e) => setCategory({ ...category, nameEn: e.target.value })} />
                     </Field>
                     <Field label={t('questionLibrary.next.parent')} hint={t('questionLibrary.next.parentHint')}>
-                      <select className={`${SELECT_CLASS} w-full`} value={category.parentId} onChange={(e) => setCategory({ ...category, parentId: e.target.value })}>
+                      <QSelect className="w-full" value={category.parentId} onChange={(e) => setCategory({ ...category, parentId: e.target.value })}>
                         <option value="">{t('questionLibrary.next.noParent')}</option>
                         {all.map((node) => (
                           <option key={node.category.id} value={node.category.id}>
                             {nameOf(node.category)}
                           </option>
                         ))}
-                      </select>
+                      </QSelect>
                     </Field>
                     {formError && <FormError message={formError} />}
                   </div>
@@ -441,13 +451,13 @@ function QuestionLibraryForCompany() {
                 <form onSubmit={(e) => void submitItem(e)}>
                   <fieldset disabled={readOnly || saving} className="m-0 flex flex-col gap-3.5 border-0 px-4.5 py-4 text-base">
                     <Field label={t('questionLibrary.next.category')} hint={t('questionLibrary.next.categoryHint')}>
-                      <select className={`${SELECT_CLASS} w-full`} value={draft.categoryId} onChange={(e) => setDraft({ ...draft, categoryId: e.target.value })}>
+                      <QSelect className="w-full" value={draft.categoryId} onChange={(e) => setDraft({ ...draft, categoryId: e.target.value })}>
                         {all.map((node) => (
                           <option key={node.category.id} value={node.category.id}>
                             {nameOf(node.category)}
                           </option>
                         ))}
-                      </select>
+                      </QSelect>
                     </Field>
                     <Field label={t('questionLibrary.next.textEs')} required>
                       <Textarea rows={2} className="min-h-[3.375rem]" value={draft.textEs} onChange={(e) => setDraft({ ...draft, textEs: e.target.value })} />
@@ -457,8 +467,8 @@ function QuestionLibraryForCompany() {
                     </Field>
                     <div className="grid grid-cols-2 gap-3">
                       <Field label={t('questionLibrary.next.type')} hint={t('questionLibrary.next.typeHint')}>
-                        <select
-                          className={`${SELECT_CLASS} w-full`}
+                        <QSelect
+                          className="w-full"
                           value={draft.type}
                           disabled={drawer.mode !== 'create'}
                           onChange={(e) => setDraft({ ...draft, type: e.target.value })}
@@ -468,7 +478,7 @@ function QuestionLibraryForCompany() {
                               {libraryTypeLabel(t, value)}
                             </option>
                           ))}
-                        </select>
+                        </QSelect>
                       </Field>
                       <Field label={t('questionLibrary.next.dimension')} hint={t('questionLibrary.next.dimensionHint')}>
                         <Input value={draft.dimension} onChange={(e) => setDraft({ ...draft, dimension: e.target.value })} />
@@ -516,7 +526,7 @@ function QuestionLibraryForCompany() {
                       </div>
                     </Field>
                     <Field label={t('questionLibrary.next.ownership')} hint={t('questionLibrary.next.ownershipHint')}>
-                      <div className="flex h-8 items-center gap-2 rounded-md border border-line-light bg-surface-icon-box px-3 text-fg-primary">
+                      <div className="flex h-9 items-center gap-2 rounded-md bg-surface-fill-subtle px-3 text-fg-secondary">
                         <Lock aria-hidden="true" className="size-3.5" />
                         {drawer.mode === 'view'
                           ? t('questionLibrary.next.global')
@@ -577,18 +587,20 @@ function CategoryList({
             aria-current={node.category.id === selectedId ? 'true' : undefined}
             onClick={() => onSelect(node.category.id)}
             className={cn(
-              'h-8 w-full justify-between gap-2 px-2.5 text-base font-normal',
+              'h-9 w-full justify-between gap-2 px-2.5 text-base font-normal',
               depth > 0 && 'pl-10',
-              node.category.id === selectedId ? 'bg-surface-icon-box font-semibold text-fg-primary' : 'text-fg-primary',
+              node.category.id === selectedId
+                ? 'bg-accent-blue-soft font-semibold text-accent-blue-ink hover:bg-accent-blue-soft'
+                : 'text-fg-primary',
             )}
           >
             <span className="flex min-w-0 items-center gap-1.5">
               {depth === 0 && (
                 <ChevronDown aria-hidden="true" className={cn('size-3.5 shrink-0', node.children.length === 0 && 'invisible')} />
               )}
-              <span className="truncate">{nameOf(node.category)}</span>
+              <span className="truncate" title={nameOf(node.category)}>{nameOf(node.category)}</span>
             </span>
-            <span className="font-mono text-xs text-fg-tertiary tabular-nums">{node.count}</span>
+            <Count className={node.category.id === selectedId ? 'text-accent-blue-ink' : undefined}>{node.count}</Count>
           </Button>
           {node.children.length > 0 && node.category.id === selectedId && (
             <CategoryList nodes={node.children} selectedId={selectedId} onSelect={onSelect} nameOf={nameOf} depth={depth + 1} />
@@ -600,26 +612,26 @@ function CategoryList({
 }
 
 function ItemRow({ item, primary, secondary, owner, action, onOpen }: { item: QuestionLibraryItem; primary: string; secondary: string; owner: string; action: string; onOpen: () => void }) {
-  const { t } = useTranslation()
+  const { t, locale } = useTranslation()
   const meta = [libraryTypeLabel(t, item.type), item.dimension ? t('questionLibrary.next.dimensionOf', { dimension: item.dimension }) : null, t('questionLibrary.next.version', { version: item.version })]
     .filter(Boolean)
     .join(' · ')
   return (
-    <tr data-testid="library-row" className="border-b border-line-light">
-      <td className="px-3 py-2.5 align-top">
+    <TableRow data-testid="library-row">
+      <TableCell className="px-4 py-3 align-top">
         <div className="font-medium text-fg-primary">{primary}</div>
-        <div className="text-sm text-fg-tertiary">{secondary}</div>
-        <div className="mt-0.5 text-xs text-fg-tertiary">{meta}</div>
-      </td>
-      <td className="px-3 py-2.5 align-top">
+        <div lang={locale === 'es' ? 'en' : 'es'} className="text-sm text-fg-secondary">{secondary}</div>
+        <div className="mt-0.5 text-sm text-fg-tertiary">{meta}</div>
+      </TableCell>
+      <TableCell className="py-3 align-top">
         <Chip tone="neutral" icon={item.companyId === null ? <Lock className="size-3" /> : undefined} label={owner} />
-      </td>
-      <td className="px-3 py-2.5 text-right align-top">
-        <Button type="button" size="sm" variant="ghost" onClick={onOpen}>
+      </TableCell>
+      <TableCell className="py-2 pr-4 text-right align-top">
+        <Button type="button" size="sm" variant="plain" onClick={onOpen}>
           {action}
         </Button>
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   )
 }
 
@@ -627,10 +639,10 @@ function ChildSection({ child, parentName, nameOf, children }: { child: Category
   const { t } = useTranslation()
   return (
     <>
-      <tr className="border-b border-line-light bg-surface-icon-box">
-        <th scope="rowgroup" colSpan={3} className="px-3 py-1.5 text-left font-normal">
-          <span className="text-2xs font-bold uppercase tracking-wider text-fg-label">{nameOf(child.category)}</span>{' '}
-          <span className="text-xs text-fg-tertiary">
+      <tr className="border-b border-line-default bg-surface-fill-subtle">
+        <th scope="rowgroup" colSpan={3} className="px-4 py-2 text-left font-normal">
+          <span className="text-2xs font-semibold uppercase tracking-eyebrow text-fg-label">{nameOf(child.category)}</span>{' '}
+          <span className="text-sm text-fg-tertiary">
             {t('questionLibrary.next.subcategoryOf', { parent: parentName, count: child.count })}
           </span>
         </th>
@@ -646,12 +658,12 @@ function ChildSection({ child, parentName, nameOf, children }: { child: Category
 function Field({ label, hint, required, children }: { label: string; hint?: string; required?: boolean; children: React.ReactNode }) {
   return (
     <label className="mb-0 flex flex-col gap-1.5 [&>input]:mt-0 [&>select]:mt-0 [&>textarea]:mt-0">
-      <span className="text-sm font-semibold text-fg-secondary">
+      <span className="text-sm font-semibold text-fg-primary">
         {label}
-        {required && <span className="text-chip-critical-ink"> *</span>}
+        {required && <span className="text-accent-red-ink"> *</span>}
       </span>
       {children}
-      {hint && <span className="text-sm leading-[1.45] text-fg-tertiary">{hint}</span>}
+      {hint && <span className="text-sm leading-[1.45] font-normal text-fg-tertiary">{hint}</span>}
     </label>
   )
 }
@@ -667,7 +679,7 @@ function FormError({ message }: { message: string }) {
 function DrawerFooter({ saving, submitLabel, onCancel }: { saving: boolean; submitLabel: string; onCancel: () => void }) {
   const { t } = useTranslation()
   return (
-    <div className="flex justify-end gap-2 border-t border-line-light bg-surface-outer px-4.5 py-3">
+    <div className="flex justify-end gap-2 border-t border-line-default bg-surface-fill-subtle px-4.5 py-3">
       <Button type="button" variant="outline" onClick={onCancel}>
         {t('common.cancel')}
       </Button>

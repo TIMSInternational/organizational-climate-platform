@@ -272,20 +272,31 @@ describe('QuestionLibraryNextPage — the artboard\'s order, names and chips', (
     expect(body.tags).toEqual([])
   })
 
-  it('draws the question table on the artboard\'s grid — Spanish 12 + 1.25fr, English the rest, each cell padded on its left only', async () => {
+  it('draws the question table with the Table primitive, the two languages sharing the free width, in a bordered card with no shadow', async () => {
     serveWithAcme()
     renderPage()
     await screen.findAllByRole('button', { name: next.editRow.replace('{text}', LIKERT.textEs) })
     const table = (document.querySelector('tr[data-library-item]') as HTMLElement).closest('table') as HTMLElement
-    expect([...table.querySelectorAll('col')].map((col) => col.className)).toEqual(['w-[31.4%]', '', 'w-24', 'w-22', 'w-24', 'w-22.5'])
+    expect(table.getAttribute('data-slot')).toBe('table')
+    expect([...table.querySelectorAll('col')].map((col) => col.className)).toEqual(['', '', 'w-26', 'w-26', 'w-26', 'w-20'])
     const cells = [...table.querySelectorAll('tbody tr:first-child td')]
     expect(cells).toHaveLength(6)
-    for (const cell of [...cells.slice(0, 5), ...table.querySelectorAll('th')].slice(0, 10)) {
-      expect(cell.className.split(/\s+/)).toEqual(expect.arrayContaining(['pl-3', 'pr-0']))
-    }
-    expect(cells[5].className.split(/\s+/)).toContain('px-3')
-    // A 31px header row: the card's 8px above the labels, 8px below, nothing on the <th>.
-    for (const head of table.querySelectorAll('th')) expect(head.className.split(/\s+/)).toEqual(expect.arrayContaining(['pt-0', 'pb-2']))
+    for (const cell of cells) expect(cell.getAttribute('data-slot')).toBe('table-cell')
+    for (const head of table.querySelectorAll('th')) expect(head.getAttribute('data-slot')).toBe('table-head')
+    const card = ((table.closest('[data-slot="table-container"]') as HTMLElement).parentElement as HTMLElement).className.split(/\s+/)
+    expect(card).toEqual(expect.arrayContaining(['rounded-xl', 'border-line-panel', 'bg-surface-card']))
+    expect(card.some((cls) => cls.startsWith('shadow'))).toBe(false)
+  })
+
+  it('marks the chosen category in the selection blue, and no other', async () => {
+    serveWithAcme()
+    renderPage()
+    await screen.findAllByRole('button', { name: next.editRow.replace('{text}', LIKERT.textEs) })
+    const rows = [...document.querySelectorAll('[data-slot="category-row"]')]
+    const chosen = rows.filter((row) => row.getAttribute('aria-pressed') === 'true')
+    expect(chosen).toHaveLength(1)
+    expect(chosen[0].className.split(/\s+/)).toEqual(expect.arrayContaining(['bg-accent-blue-soft', 'text-accent-blue-ink']))
+    for (const row of rows.filter((entry) => entry !== chosen[0])) expect(row.className).not.toMatch(/accent-blue/)
   })
 
   it('sets the editor\'s help lines on the board\'s 1.45 leading and its two buttons at the canvas\'s 34px', async () => {

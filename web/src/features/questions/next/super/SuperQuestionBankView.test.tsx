@@ -134,32 +134,46 @@ describe('QuestionBankNextPage (the old page\'s guarantees, on the redesigned sc
     expect(within(row).getByText('10')).toBeTruthy()
   })
 
-  it('sets its header row as the board does — the card\'s 8px above the labels, 8px below, 31px to the rule', async () => {
+  it('draws the bank as the list board does — the Table primitive, striped, flush in a bordered card, with no shadow', async () => {
     serve({ items: [item()], metrics: [effectiveness('q1', 40, 30)] })
     renderPage()
     await waitFor(() => expect(rowOf('q1')).not.toBeNull())
     const table = rowOf('q1').closest('table') as HTMLElement
+    expect(table.getAttribute('data-slot')).toBe('table')
+    expect(table.getAttribute('data-zebra')).toBe('true')
     const heads = [...table.querySelectorAll('th')]
     expect(heads.length).toBe(8)
-    for (const head of heads) expect(head.className.split(/\s+/)).toEqual(expect.arrayContaining(['pt-0', 'pb-2']))
-    expect((table.closest('section') as HTMLElement).className.split(/\s+/)).toContain('pt-2')
+    for (const head of heads) expect(head.getAttribute('data-slot')).toBe('table-head')
+    const card = (table.closest('section') as HTMLElement).className.split(/\s+/)
+    expect(card).toEqual(expect.arrayContaining(['rounded-xl', 'border-line-panel', 'bg-surface-card']))
+    expect(card.some((cls) => cls.startsWith('shadow'))).toBe(false)
   })
 
-  it('starts the owner, category and type columns on the board\'s column edge — right-padded only, inside <col>s that carry the gap', async () => {
+  it('right-aligns the three counts in tabular figures, head and cell alike, and never in the monospace', async () => {
     serve({ items: [item()], metrics: [effectiveness('q1', 40, 30)] })
     renderPage()
     await waitFor(() => expect(rowOf('q1')).not.toBeNull())
     const table = rowOf('q1').closest('table') as HTMLElement
-    expect([...table.querySelectorAll('col')].map((col) => col.className)).toEqual(['', 'w-33', 'w-35.5', 'w-28', 'w-25.5', 'w-25.5', 'w-23', 'w-21'])
     const heads = [...table.querySelectorAll('th')]
     const cells = [...rowOf('q1').querySelectorAll('td')]
-    for (const cell of [heads[1], heads[2], heads[3], cells[1], cells[2], cells[3]]) {
-      const classes = cell.className.split(/\s+/)
-      expect(classes).toContain('pl-0')
-      expect(classes.includes('pr-3') || classes.includes('px-3')).toBe(true)
+    for (const index of [4, 5, 6]) {
+      for (const cell of [heads[index], cells[index]]) {
+        expect(cell.getAttribute('data-numeric')).toBe('true')
+        expect(cell.className.split(/\s+/)).toEqual(expect.arrayContaining(['text-right', 'tabular-nums']))
+      }
     }
-    // The question column keeps the card's 12px on its left.
-    for (const cell of [heads[0], cells[0]]) expect(cell.className.split(/\s+/)).not.toContain('pl-0')
+    // The text columns are not numeric.
+    for (const index of [0, 1, 2, 3]) expect(cells[index].getAttribute('data-numeric')).toBeNull()
+    expect(table.querySelector('.font-mono')).toBeNull()
+  })
+
+  it('marks every row status with a neutral chip — amber, green and red are the result areas only', async () => {
+    serve({ items: [item({ isActive: false, isAiGenerated: true })], metrics: [effectiveness('q1', 40, 30)] })
+    renderPage()
+    await waitFor(() => expect(rowOf('q1')).not.toBeNull())
+    const chips = [...rowOf('q1').querySelectorAll('[data-slot="chip"]')]
+    expect(chips.length).toBeGreaterThanOrEqual(2)
+    for (const chip of chips) expect(chip.className).not.toMatch(/chip-(good|warning|critical|accent)/)
   })
 
   it('still lists the corpus when the effectiveness read fails — dashes, never zeros', async () => {
