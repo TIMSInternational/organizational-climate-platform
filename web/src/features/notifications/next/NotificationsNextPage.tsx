@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
-import { Bell, Check, CircleAlert, ClipboardList, FileText, Mail, Send, Settings } from 'lucide-react'
+import { Bell, Check, CircleAlert, ClipboardList, FileText, ListFilter, Lock, Mail, Send, Settings } from 'lucide-react'
 import { useTranslation } from '../../../i18n'
 import { PageHeader } from '../../../components/layout'
-import { Button, EmptyState, LoadingState, NetworkError, Switch, chipVariants } from '../../../components/ui'
+import { Button, Chip, EmptyState, LoadingState, NetworkError, Switch, chipVariants } from '../../../components/ui'
 import { useViewerCapabilities } from '../../../auth/viewerCapabilities'
 import { cn } from '../../../lib/cn'
 import { CanvasChip, CanvasSelect, Panel } from '../../org-structure/next/super/parts'
@@ -61,6 +61,11 @@ export default function NotificationsNextPage() {
   const shown = inPeriod.filter((row) => matchesFacet(row, facet))
   const oldest = oldestShown(inPeriod, state.notifications.length)
   const unread = rows.filter((row) => row.unread).length
+  // What the period hides: the bell counts every unread notice the inbox returned, so when
+  // all of them are older than the period the list says how many and where they are, rather
+  // than an empty list beside a bell that reads 2.
+  const olderCount = rows.length - inPeriod.length
+  const olderUnread = unread - inPeriod.filter((row) => row.unread).length
   const day = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' })
   const longDay = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' })
   const localMail = state.email !== null && /\.test$/i.test(state.email.split('@')[1] ?? '')
@@ -165,8 +170,40 @@ export default function NotificationsNextPage() {
                     }}
                   />
                 ))}
-                {shown.length === 0 && <li className="border-t border-line-default px-4 py-3 text-sm text-fg-tertiary">{t(`${K}.nothingHere`)}</li>}
               </ul>
+              {shown.length === 0 && (
+                // The shared empty block, centred in the card as every other screen draws it.
+                // Two different empties: nothing in the period at all (with the way to the
+                // older notices when there are some), or nothing of this kind in it.
+                <div data-slot="filter-empty" className="border-t border-line-default">
+                  {inPeriod.length === 0 ? (
+                    <EmptyState
+                      icon={<Bell aria-hidden="true" className="size-6" />}
+                      title={period === 0 ? t(`${K}.emptyTitle`) : t(`${K}.noneInPeriod`, { days: period })}
+                      description={
+                        olderCount > 0
+                          ? olderUnread > 0
+                            ? t(`${K}.olderWithUnread`, { count: olderCount, unread: olderUnread })
+                            : t(`${K}.older`, { count: olderCount })
+                          : t(`${K}.emptyBody`)
+                      }
+                      action={
+                        olderCount > 0 ? (
+                          <Button type="button" variant="outline" onClick={() => setPeriod(0)}>
+                            {t(`${K}.showAll`)}
+                          </Button>
+                        ) : undefined
+                      }
+                    />
+                  ) : (
+                    <EmptyState
+                      icon={<ListFilter aria-hidden="true" className="size-6" />}
+                      title={t(`${K}.nothingHere`)}
+                      description={t(`${K}.nothingHereHint`)}
+                    />
+                  )}
+                </div>
+              )}
               {oldest && (
                 <p className="m-0 border-t border-line-default px-4 py-2.5 text-sm text-fg-tertiary">
                   {t(`${K}.nothingBefore`, { date: longDay.format(new Date(oldest)) })}
@@ -180,10 +217,12 @@ export default function NotificationsNextPage() {
           <Panel heading={<h2 className="m-0 text-2xl">{t(`${K}.channelsHeading`)}</h2>} className="gap-3 border-line-panel py-4.5 shadow-none">
             {state.preferences ? (
               <div className="flex flex-col gap-1 text-ui">
-                <label className="m-0 flex min-h-11 items-center justify-between gap-2 text-ui font-normal text-fg-primary">
-                  {t(`${K}.channelApp`)}
-                  <Switch checked disabled className="disabled:opacity-100" aria-describedby="channel-app-note" />
-                </label>
+                {/* Not a switch: the in-app inbox cannot be turned off (the preferences page
+                    says so), so it is a fact with a padlock, as «Siempre se envía» is there. */}
+                <div data-slot="channel-app" className="flex min-h-11 items-center justify-between gap-2 text-ui text-fg-primary">
+                  <span>{t(`${K}.channelApp`)}</span>
+                  <Chip tone="neutral" icon={<Lock />} label={t(`${K}.channelAppAlways`)} />
+                </div>
                 <span id="channel-app-note" className="sr-only">
                   {t(`${K}.channelAppNote`)}
                 </span>

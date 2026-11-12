@@ -2835,7 +2835,13 @@
       "markAll": "Marcar todo como leído",
       "localMailDomain": ".test",
       "emptyTitle": "No tiene notificaciones",
-      "emptyBody": "Aquí aparecerán las invitaciones, los recordatorios y los informes programados que le lleguen."
+      "emptyBody": "Aquí aparecerán las invitaciones, los recordatorios y los informes programados que le lleguen.",
+      "channelAppAlways": "Siempre",
+      "noneInPeriod": "No hay avisos en los últimos {days} días",
+      "olderWithUnread": "Hay avisos anteriores: {count} en total, {unread} sin leer.",
+      "older": "Hay avisos anteriores: {count} en total, ninguno sin leer.",
+      "showAll": "Ver todo el historial",
+      "nothingHereHint": "Elija otro tipo o «Todas»."
     }
   },
   "profile": {
@@ -3161,7 +3167,10 @@
       "floorRuleLead": "Umbral de privacidad: {floor} respuestas.",
       "floorRuleRest": "Se exige a los cruces de dos o más datos, a la encuesta completa, a los enlaces públicos y a la vista de un líder sobre su propio equipo. Un solo departamento o un solo dato demográfico se muestra a los administradores desde {single} respuesta.",
       "openTextRuleLead": "Las respuestas abiertas se leen como palabras frecuentes",
-      "openTextRuleRest": "en resultados, informes, paneles y enlaces públicos. El texto literal solo sale en el libro de respuestas que descarga un superadministrador."
+      "openTextRuleRest": "en resultados, informes, paneles y enlaces públicos. El texto literal solo sale en el libro de respuestas que descarga un superadministrador.",
+      "timeoutApplied": "El tiempo de espera de sesión se aplica a todas las personas con sesión iniciada: una sesión que permanezca inactiva ese tiempo se cierra, y antes se avisa a la persona.",
+      "attemptsNotAppliedLead": "El máximo de intentos de inicio de sesión todavía no se aplica.",
+      "attemptsNotAppliedText": "Se guarda, pero hoy no bloquea ninguna cuenta, por muchos intentos fallidos que haya."
     }
   },
   "shell": {
@@ -8625,7 +8634,8 @@
       "admin__benchmark-groups__create": "Creó un grupo de referencia",
       "admin__benchmark-groups__delete": "Eliminó un grupo de referencia",
       "admin__benchmark-groups__reading__read": "Comparó una empresa con un grupo de referencia"
-    }
+    },
+    "filterAnyDay": "Cualquier día"
   },
   "ui": {
     "protected": {

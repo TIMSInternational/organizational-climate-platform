@@ -89,8 +89,9 @@ export default function PrivacyNextPage() {
     <div className="flex flex-col gap-section">
       <PageHeader
           className="mb-0"
-          eyebrow={t('privacy.eyebrow')}
-          title={t('privacy.next.title')}
+          // One title for the three account pages; the tab strip below names this one. The
+          // download is this page's one action, so it alone keeps a header primary.
+          title={t('profile.next.tabs.label')}
           description={t('privacy.next.description')}
           primaryAction={
             <Button type="button" variant="primary" disabled={downloading} onClick={() => void download()}>
