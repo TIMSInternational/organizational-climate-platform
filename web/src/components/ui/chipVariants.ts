@@ -17,23 +17,30 @@ import { cn } from '../../lib/cn'
  * `'good' | 'warning' | 'critical'`, can be handed straight to `tone` with no
  * mapping table in between.
  *
- * ## Geometry
+ * ## Geometry (the Apple design, 11 Nov)
  *
- * The approved canvas's `.chip` (10 Sep, `shell.py`, drawn on every artboard) is
- * `height:22px; border-radius:6px; padding:0 8px; gap:6px; font-size:11px;
- * font-weight:500` with a 1px border in the tone's own tint — `rgba(18,148,91,.2)`
- * on the green chip, `rgba(221,12,21,.2)` on the red, `#e0dbee` on the neutral.
- * Here: `h-5.5` (5.5 × the 4px `--spacing` token = 22px), `rounded-lg`
- * (`--admin-radius-lg`, 6px), `px-2` (8px), `gap-1.5` (6px), `text-xs`
- * (`--admin-text-xs`, 11px) and `font-medium` (500). The first cut followed an
- * earlier prototype (20px, 600, a hairline on `neutral` only); beside the
- * artboards it read as a heavier, borderless tag.
+ * `occ.css` `.chip`: `height: 22px; padding: 0 8px; border-radius: 11px; font-size: 12px;
+ * font-weight: 600` on the tone's own fill, **with no border**. Here: `h-5.5` (22px on the
+ * 4px `--spacing` unit), `px-2`, `rounded-lg` (`--admin-radius-lg`, 10px — the chip radius
+ * the token layer names), `text-xs` (12px) and `font-semibold`.
  *
- * The borders are the `accent-*-ring` tokens, which ARE the canvas's tints
- * (`--admin-accent-border-green` is `rgba(18,148,91,.2)`), and the neutral one is
- * the default hairline. A border is not text, so `chipVariantContrast.test.ts`,
- * which measures fill against ink, is unaffected by it.
+ * The 10 Sep canvas drew a 1px tinted border and 11px at 500; the Apple design drops the
+ * border — a chip is a word on a tint, not a control — and sets the word at 600 so 12px
+ * holds up on the tint. A chip that needs a border (a selectable pill) adds one at its call
+ * site.
  *
+ * ## Which tone is which colour
+ *
+ * One colour, one meaning (the user's ruling of 11 Nov):
+ *
+ * - `good` / `warning` / `critical` are the three RESULT AREAS — Fortaleza, Oportunidad,
+ *   Crítica — and nothing else. Their chip tokens carry the band values (`--admin-chip-bg-good`
+ *   is `--admin-band-str-bg`'s `#e6f4ea`, its ink `#156b32`; dark `#1c3b3f` / `#6bd68f`), so a
+ *   band chip and a band cell are the same green. A result area is never colour alone: the
+ *   band chip with its glyph and name lives in `charts/` (`BandChip`).
+ * - `accent` is the blue tint; `Chip`'s `tone="live"` draws it with the live dot, for Activa.
+ * - `neutral` is every other status: Borrador, Programada, Cerrada.
+
  * ## Why both the fill and the ink are chip tokens
  *
  * Neither half of the pair can come from the accent palette.
@@ -61,17 +68,17 @@ import { cn } from '../../lib/cn'
 export const chipVariants = cva(
   cn(
     'inline-flex h-5.5 w-fit shrink-0 items-center gap-1.5 whitespace-nowrap',
-    'rounded-lg border px-2 text-xs font-medium',
+    'rounded-lg px-2 text-xs font-semibold',
     '[&>svg]:pointer-events-none [&>svg]:size-3',
   ),
   {
     variants: {
       tone: {
-        good: 'border-accent-green-ring bg-chip-good-fill text-chip-good-ink',
-        warning: 'border-accent-amber-ring bg-chip-warning-fill text-chip-warning-ink',
-        critical: 'border-accent-red-ring bg-chip-critical-fill text-chip-critical-ink',
-        accent: 'border-accent-blue-ring bg-chip-accent-fill text-chip-accent-ink',
-        neutral: 'border-line-default bg-chip-neutral-fill text-chip-neutral-ink',
+        good: 'bg-chip-good-fill text-chip-good-ink',
+        warning: 'bg-chip-warning-fill text-chip-warning-ink',
+        critical: 'bg-chip-critical-fill text-chip-critical-ink',
+        accent: 'bg-chip-accent-fill text-chip-accent-ink',
+        neutral: 'bg-chip-neutral-fill text-chip-neutral-ink',
       },
     },
     defaultVariants: {

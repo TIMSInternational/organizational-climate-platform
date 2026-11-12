@@ -1,6 +1,14 @@
 import { ArrowDownIcon, ArrowUpDownIcon, ArrowUpIcon } from 'lucide-react'
-import type { ComponentProps, ReactNode } from 'react'
+import { createContext, useContext, type ComponentProps, type ReactNode } from 'react'
 import { cn } from '../../lib/cn'
+
+/**
+ * Whether the table stripes its body rows. A context rather than a class on the table, so
+ * the stripe lands on the `<tr>` itself, in the same rule set as its hover — a selector
+ * reaching down from the table (`[&>tbody>tr:nth-child(even)]`) out-specifies the row's
+ * `hover:` and would freeze the hover off every second row.
+ */
+const TableZebraContext = createContext(false)
 
 /**
  * Ported from `climate-project/src/components/ui/table.tsx`, plus the sort and
@@ -28,18 +36,33 @@ import { cn } from '../../lib/cn'
  * markup. The `Table*` parts below are for tables that need more than the
  * element layer gives.
  */
-export function Table({ className, ...props }: ComponentProps<'table'>) {
+export type TableProps = ComponentProps<'table'> & {
+  /**
+   * Stripe every second body row (the canvas's `.tbl tbody tr:nth-child(even)`, on
+   * `--admin-bg-zebra`, 4% grey). Off by default: a short table reads fine on its rules, and
+   * the stripe is for long, wide ones where the eye has to carry a row across. Reaches
+   * `TableRow` only — a plain `<tr>` child is not striped.
+   */
+  zebra?: boolean
+}
+
+export function Table({ className, zebra = false, ...props }: TableProps) {
   return (
     // The wrapper is what scrolls: a wide table must not make the page scroll
     // sideways. `w-full` sits on the table rather than the base layer for the
     // reason in the block above; pass `className="w-auto"` for a table that
     // should shrink-wrap instead (HeatMap does).
     <div data-slot="table-container" className="w-full overflow-x-auto">
-      <table
-        data-slot="table"
-        className={cn('w-full caption-bottom border-collapse text-base', className)}
-        {...props}
-      />
+      <TableZebraContext.Provider value={zebra}>
+        <table
+          data-slot="table"
+          data-zebra={zebra || undefined}
+          // 15px body rows (`--admin-text-base`) in tabular figures, so a column of numbers
+          // lines up digit under digit. `index.css` sets the same on a bare `table`.
+          className={cn('w-full caption-bottom border-collapse text-base tabular-nums', className)}
+          {...props}
+        />
+      </TableZebraContext.Provider>
     </div>
   )
 }
@@ -69,11 +92,15 @@ export function TableFooter({ className, ...props }: ComponentProps<'tfoot'>) {
 }
 
 export function TableRow({ className, ...props }: ComponentProps<'tr'>) {
+  const zebra = useContext(TableZebraContext)
   return (
     <tr
       data-slot="table-row"
       className={cn(
         'border-b border-line-default transition-colors',
+        // The stripe is listed before the hover so the hover (a later variant in Tailwind's
+        // order) still shows on a striped row.
+        zebra && 'even:bg-surface-zebra',
         'hover:bg-state-hover data-[state=selected]:bg-state-active',
         className,
       )}
@@ -82,13 +109,26 @@ export function TableRow({ className, ...props }: ComponentProps<'tr'>) {
   )
 }
 
-export function TableHead({ className, ...props }: ComponentProps<'th'>) {
+/**
+ * A column that holds figures: right-aligned and in tabular figures (the canvas's `.tbl .r`),
+ * so the units line up and a wider number does not push its neighbours. Set it on the head
+ * AND every cell of the column, or the head sits over the wrong edge.
+ */
+type NumericProp = { numeric?: boolean }
+
+/**
+ * The column head: the canvas's `.tbl th` — the secondary size (13px, `--admin-text-sm`),
+ * semibold, in the tertiary ink (#6c6c71, 5.22:1 on the card), not uppercase.
+ */
+export function TableHead({ className, numeric = false, ...props }: ComponentProps<'th'> & NumericProp) {
   return (
     <th
       data-slot="table-head"
+      data-numeric={numeric || undefined}
       className={cn(
-        'h-control-lg px-3 text-left align-middle text-sm font-medium text-fg-secondary',
+        'h-control-lg px-3 text-left align-middle text-sm font-semibold text-fg-tertiary',
         'whitespace-nowrap',
+        numeric && 'text-right tabular-nums',
         className,
       )}
       {...props}
@@ -96,11 +136,12 @@ export function TableHead({ className, ...props }: ComponentProps<'th'>) {
   )
 }
 
-export function TableCell({ className, ...props }: ComponentProps<'td'>) {
+export function TableCell({ className, numeric = false, ...props }: ComponentProps<'td'> & NumericProp) {
   return (
     <td
       data-slot="table-cell"
-      className={cn('px-3 py-2 align-middle', className)}
+      data-numeric={numeric || undefined}
+      className={cn('px-3 py-2 align-middle', numeric && 'text-right tabular-nums', className)}
       {...props}
     />
   )
@@ -129,19 +170,22 @@ export function TableSortHeader({
   label,
   direction,
   onSort,
+  numeric = false,
   className,
   ...props
-}: Omit<ComponentProps<'th'>, 'children'> & {
-  label: ReactNode
-  /** `undefined` means this column is not the active sort. */
-  direction?: SortDirection
-  onSort: () => void
-}) {
+}: Omit<ComponentProps<'th'>, 'children'> &
+  NumericProp & {
+    label: ReactNode
+    /** `undefined` means this column is not the active sort. */
+    direction?: SortDirection
+    onSort: () => void
+  }) {
   const Icon = direction === 'asc' ? ArrowUpIcon : direction === 'desc' ? ArrowDownIcon : ArrowUpDownIcon
 
   return (
     <TableHead
       aria-sort={direction === 'asc' ? 'ascending' : direction === 'desc' ? 'descending' : 'none'}
+      numeric={numeric}
       className={cn('p-0', className)}
       {...props}
     >
@@ -150,8 +194,9 @@ export function TableSortHeader({
         data-slot="table-sort-button"
         onClick={onSort}
         className={cn(
-          'flex h-control-lg w-full items-center gap-1 border-transparent bg-transparent px-3',
-          'text-sm font-medium text-fg-secondary',
+          'flex h-control-lg w-full items-center gap-1 rounded-none border-transparent bg-transparent px-3',
+          numeric && 'justify-end',
+          'text-sm font-semibold text-fg-tertiary',
           'hover:bg-state-hover hover:text-fg-primary',
         )}
       >

@@ -14,9 +14,17 @@ import type { ElementType } from 'react'
  * `Flex` are deliberately not ported: `<div className="flex gap-inline">` is
  * clearer than `<Flex gap="inline">` and does not need maintaining.
  */
+/*
+ * The Apple design (11 Nov): `h1` and `h2` are set in the title serif (`font-display` —
+ * New York, then the self-hosted Source Serif 4, then Georgia) with their own tracking, the
+ * canvas's `.lt` (30px, -0.015em) and `.h` (20px, -0.01em). On the variant rather than only
+ * on the element, so `<H2 as="div">` and `<Typography variant="h1" as="p">` are still titles.
+ * `h3` down stay in the UI sans: the serif is for page titles, card titles and the
+ * respondent's question, nothing else.
+ */
 export const typographyVariants = {
-  h1: 'text-3xl font-semibold leading-tight tracking-tight text-fg-primary',
-  h2: 'text-2xl font-semibold leading-tight tracking-tight text-fg-primary',
+  h1: 'font-display text-3xl font-semibold leading-tight tracking-display text-fg-primary',
+  h2: 'font-display text-2xl font-semibold leading-tight tracking-title text-fg-primary',
   h3: 'text-xl font-semibold leading-tight text-fg-primary',
   h4: 'text-lg font-semibold leading-normal text-fg-primary',
   body: 'text-base leading-normal text-fg-primary',
@@ -25,7 +33,7 @@ export const typographyVariants = {
   data: 'text-base leading-normal tabular-nums text-fg-primary',
   caption: 'text-xs leading-snug text-fg-tertiary',
   /** The all-caps section eyebrow from the legacy sidebar. */
-  sectionLabel: 'text-2xs font-medium uppercase tracking-label text-fg-label',
+  sectionLabel: 'text-2xs font-semibold uppercase tracking-label text-fg-label',
   code: 'rounded-sm bg-surface-icon-box px-1 py-0.5 font-mono text-sm text-fg-primary',
 } as const
 

@@ -62,7 +62,8 @@ export function FormLabel({ className, ...props }: ComponentProps<typeof Label>)
       data-slot="form-label"
       data-error={invalid || undefined}
       htmlFor={id}
-      className={cn('data-[error=true]:text-accent-red', className)}
+      // The danger ink (the word), not the danger fill: #ff7b7b in dark, 6.92:1 on the panel.
+      className={cn('data-[error=true]:text-accent-red-ink', className)}
       {...props}
     />
   )
@@ -119,7 +120,10 @@ export function FormMessage({ className, children, ...props }: ComponentProps<'p
       data-slot="form-message"
       id={messageId}
       role="alert"
-      className={cn('text-sm text-accent-red', className)}
+      // The canvas's `.err`: 13px in the danger ink, and nothing else. `index.css` boxes every
+      // `[role='alert']` (fill, border, padding) for page-level failures; a field's message
+      // sits under its control as a line of text, so the box is taken back off here.
+      className={cn('rounded-none border-0 bg-transparent p-0 text-sm text-accent-red-ink', className)}
       {...props}
     >
       {children}

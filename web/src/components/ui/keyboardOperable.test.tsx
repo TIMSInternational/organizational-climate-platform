@@ -19,6 +19,7 @@ import {
   PaginationPrevious,
   RadioGroup,
   RadioGroupItem,
+  SegmentedControl,
   SegmentedScale,
   SelectField,
   SkipLink,
@@ -184,6 +185,23 @@ const CONTROLS: Control[] = [
       <SegmentedScale min={1} max={5} minLabel="Nunca" maxLabel="Siempre" value={null} onChange={onAct} label="Escala" />
     ),
     activate: ' ',
+  },
+  // The first segment is the chosen one and choosing it again reports nothing, so the row
+  // starts on an unchosen value: Tab lands on "Todas" and Enter must report it.
+  {
+    name: 'SegmentedControl',
+    render: () => (
+      <SegmentedControl
+        label="Filtrar por estado"
+        value="activas"
+        options={[
+          { value: 'todas', label: 'Todas' },
+          { value: 'activas', label: 'Activas' },
+        ]}
+        onChange={onAct}
+      />
+    ),
+    activate: '{Enter}',
   },
 ]
 

@@ -69,8 +69,12 @@ export function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          'fixed top-1/2 left-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2',
-          'gap-panel-gap rounded-xl border border-line-panel bg-surface-panel p-panel',
+          // The Apple design's `.sheet`: 560px wide, the sheet radius (16px), 22px by 24px of
+          // padding and 16px between its parts, on the card ground with the large shadow — a
+          // modal sheet is the one surface inside the frame that IS lifted. Eleven twelfths
+          // wide on a phone, so it keeps a 16px gutter from each edge at 390px.
+          'fixed top-1/2 left-1/2 z-50 grid w-11/12 max-w-140 -translate-x-1/2 -translate-y-1/2 sm:w-full',
+          'gap-4 rounded-sheet border border-line-panel bg-surface-card px-6 py-5.5',
           'text-fg-primary shadow-lg',
           'data-[state=open]:animate-scale-in',
           className,
@@ -82,7 +86,8 @@ export function DialogContent({
           <DialogPrimitive.Close
             data-slot="dialog-close"
             className={cn(
-              'absolute top-3 right-3 flex size-control-sm items-center justify-center',
+              // The canvas's `.ib`: a 32px icon button (44px under a finger).
+              'absolute top-4 right-4 flex size-control-lg items-center justify-center pointer-coarse:size-11',
               'rounded-md border-transparent bg-transparent p-0 text-fg-tertiary',
               'hover:bg-state-hover hover:text-fg-primary',
             )}
@@ -110,6 +115,8 @@ export function DialogFooter({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
       data-slot="dialog-footer"
+      // `.sheet .foot`: trailing, 8px apart. On a phone the actions stack with the primary on
+      // top (HIG `alerts.md` § "Buttons": the default button "at the top in a stack").
       className={cn('flex flex-col-reverse gap-inline sm:flex-row sm:justify-end', className)}
       {...props}
     />
@@ -120,7 +127,8 @@ export function DialogTitle({ className, ...props }: ComponentProps<typeof Dialo
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn('text-xl font-semibold leading-tight', className)}
+      // The card title: the title serif at 20px (the canvas's `.h`).
+      className={cn('font-display text-2xl font-semibold leading-tight tracking-title', className)}
       {...props}
     />
   )
@@ -133,7 +141,9 @@ export function DialogDescription({
   return (
     <DialogPrimitive.Description
       data-slot="dialog-description"
-      className={cn('text-sm text-fg-tertiary', className)}
+      // The body size in the secondary ink (the canvas's `.sub`): a dialog's description is
+      // usually the consequence of the action, and it is read, not skimmed.
+      className={cn('text-base text-fg-secondary', className)}
       {...props}
     />
   )
