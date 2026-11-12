@@ -1,5 +1,5 @@
 import { Navigate } from 'react-router'
-import { Download } from 'lucide-react'
+import { ChevronDown, Download } from 'lucide-react'
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { downloadTextFile } from '../../../../lib/downloadTextFile'
 import { useTranslation } from '../../../../i18n'
@@ -48,6 +48,9 @@ import { useClimateTrendsModel } from './useClimateTrendsModel'
  * drawn as withheld. A withheld row, or a withheld first wave, draws no tick: a protected row
  * shows the padlock alone.
  */
+/** Above this many groups (the company plus its departments) the picker is a pop-up, not segments. */
+export const MAX_SEGMENTS = 5
+
 function rangeRows(model: ClimateTrendsNextModel): ClimateRangeRow[] {
   const last = model.waves.length - 1
   const first = model.waves[0]
@@ -329,22 +332,56 @@ function ClimateTrendsNextView({
 
             <section aria-label={t('surveys.next.trends.chartsLabel')} className="flex flex-col gap-3">
               <div className="flex flex-wrap items-center gap-3">
-                <span aria-hidden="true" className="text-sm font-semibold text-fg-secondary">
-                  {t('surveys.next.trends.breakDownBy')}
-                </span>
-                {/* The board's `.seg`, wrapping as `.seg` does once the departments outrun the
-                    line. Choosing a segment reads that group's series, as before. */}
-                <SegmentedControl
-                  label={t('surveys.next.trends.breakDownBy')}
-                  data-slot="trends-segments"
-                  className="max-w-full flex-wrap"
-                  value={model.selectedGroup}
-                  onChange={onSelectGroup}
-                  options={model.groups.map((group) => ({
-                    value: group.key,
-                    label: group.name ?? t('surveys.next.trends.wholeCompany'),
-                  }))}
-                />
+                {model.groups.length > MAX_SEGMENTS ? (
+                  // More departments than a segmented control holds on one line (HIG
+                  // `segmented-controls.md` > "Best practices": about five to seven in a wide
+                  // interface, fewer in a narrow one): a pop-up — a native <select>, labelled,
+                  // with the list's thin chevron. Choosing reads that group's series, as before.
+                  <label className="mb-0 flex min-w-0 max-w-full items-center gap-3">
+                    <span className="shrink-0 text-sm font-semibold text-fg-secondary">
+                      {t('surveys.next.trends.breakDownBy')}
+                    </span>
+                    <span className="relative min-w-0 w-60 max-w-full">
+                      <ChevronDown
+                        aria-hidden="true"
+                        className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-fg-label"
+                      />
+                      <select
+                        data-slot="trends-group-select"
+                        className="mt-0 block w-full appearance-none pr-8"
+                        value={model.selectedGroup}
+                        onChange={(event) => onSelectGroup(event.target.value)}
+                      >
+                        {model.groups.map((group) => (
+                          <option key={group.key} value={group.key}>
+                            {group.name ?? t('surveys.next.trends.wholeCompany')}
+                          </option>
+                        ))}
+                      </select>
+                    </span>
+                  </label>
+                ) : (
+                  <>
+                    <span aria-hidden="true" className="text-sm font-semibold text-fg-secondary">
+                      {t('surveys.next.trends.breakDownBy')}
+                    </span>
+                    {/* The board's `.seg`, on one line: at 390 it scrolls inside its own box
+                        rather than wrapping (a wrapped control stops reading as one), and the
+                        4px pad keeps the focus ring inside the scroller. */}
+                    <div data-slot="segment-scroller" className="-m-1 min-w-0 max-w-[calc(100%+0.5rem)] overflow-x-auto p-1 [scrollbar-width:none]">
+                      <SegmentedControl
+                        label={t('surveys.next.trends.breakDownBy')}
+                        data-slot="trends-segments"
+                        value={model.selectedGroup}
+                        onChange={onSelectGroup}
+                        options={model.groups.map((group) => ({
+                          value: group.key,
+                          label: group.name ?? t('surveys.next.trends.wholeCompany'),
+                        }))}
+                      />
+                    </div>
+                  </>
+                )}
                 <BandLegend bands={bands} short className="ml-auto" />
               </div>
 

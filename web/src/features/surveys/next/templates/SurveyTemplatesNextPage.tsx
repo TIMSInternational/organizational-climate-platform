@@ -147,12 +147,15 @@ export default function SurveyTemplatesNextPage() {
             company has no template. */}
         {state.status === 'ready' && (
           // The board's `.seg`: the categories as one segmented control. The chosen one is
-          // raised, never Crítica's red; it filters the templates already read.
+          // raised, never Crítica's red; it filters the templates already read. One line at
+          // every width (HIG `segmented-controls.md`): a control that wraps stops reading as one
+          // control, so at 390 it scrolls sideways inside its own box, the cut segment at the
+          // edge saying there is more. The 4px pad keeps the 3px focus ring inside the scroller.
+          <div data-slot="segment-scroller" className="-m-1 min-w-0 max-w-[calc(100%+0.5rem)] overflow-x-auto p-1 [scrollbar-width:none]">
           <SegmentedControl
             label={t(`${K}.categoriesLabel`)}
             value={category}
             onChange={setCategory}
-            className="max-w-full flex-wrap"
             options={['', ...categoriesOf(state.templates)].map((value) => ({
               value,
               label: t(`${K}.chipCount`, {
@@ -161,6 +164,7 @@ export default function SurveyTemplatesNextPage() {
               }),
             }))}
           />
+          </div>
         )}
         <div className="ml-auto flex min-w-0 max-w-full items-center gap-2">
           <Input

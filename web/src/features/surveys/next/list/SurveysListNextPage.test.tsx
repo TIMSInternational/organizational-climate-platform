@@ -147,6 +147,37 @@ describe('SurveysListNextPage', () => {
     expect(text).not.toContain('1 preguntas')
   })
 
+  it('at phone width sets each survey as one two-line row, the reading and the actions on screen, with no table behind them', async () => {
+    // happy-dom has no viewport, so the compact query is answered here; the geometry is the shot's.
+    const media = vi.spyOn(window, 'matchMedia').mockImplementation(
+      (query: string) =>
+        ({
+          matches: query === '(max-width: 639.98px)',
+          media: query,
+          onchange: null,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          addListener: () => {},
+          removeListener: () => {},
+          dispatchEvent: () => false,
+        }) as MediaQueryList,
+    )
+    try {
+      renderAs({ role: 'company_admin', companyId: 'c1' })
+      await waitFor(() => expect(document.querySelector('li[data-survey-id="q4"]')).not.toBeNull())
+      expect(document.querySelectorAll('tr[data-survey-id]')).toHaveLength(0)
+      const open = document.querySelector('li[data-survey-id="q4"]') as HTMLElement
+      const reading = open.querySelector('[data-slot="compact-reading"]')?.textContent ?? ''
+      expect(reading.startsWith(`1 ${copy.ofAudience.replace('{target}', '24')} · `)).toBe(true)
+      expect(reading).toContain(` · ${copy.closesOn.replace('{date}', '')}`)
+      // One copy of each link and menu, not a hidden second one.
+      expect(within(open).getAllByRole('link', { name: en.surveys.openNamed.replace('{title}', 'Q4') })).toHaveLength(1)
+      expect(within(open).getAllByRole('button', { name: copy.moreActions.replace('{title}', 'Q4') })).toHaveLength(1)
+    } finally {
+      media.mockRestore()
+    }
+  })
+
   it('sends no companyId and asks for the titles in the reader’s language', async () => {
     renderAs({ role: 'super_admin' })
     await screen.findByRole('heading', { name: new RegExp(copy.openHeading) })

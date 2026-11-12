@@ -59,6 +59,14 @@ export interface TrendsNumbersTableProps {
 // 11px uppercase was the eyebrow's size spent on a dimension name.
 const HEAD = 'border-0 px-1 pt-0 pb-1 align-bottom text-xs font-semibold normal-case leading-tight tracking-normal text-fg-tertiary hyphens-auto'
 
+/** The survey column, px (`w-45`). */
+const SURVEY_COL = 180
+/**
+ * The narrowest a dimension column may be, px: «OPORTUNIDAD» at 11px semibold uppercase with
+ * the label tracking, its glyph and the cell's padding measure about 112px; 128 leaves room.
+ */
+export const DIMENSION_COL_MIN = 128
+
 export default function TrendsNumbersTable({
   waves,
   withheld,
@@ -77,7 +85,14 @@ export default function TrendsNumbersTable({
     // `table-fixed` + the colgroup: a 180px survey column and six EQUAL dimension columns,
     // as the artboard's grid draws them — auto layout gave "Seguridad psicológica" twice
     // the width of "Confianza".
-    <Table data-slot="trends-table" className="min-w-180 table-fixed border-separate border-spacing-1 text-sm">
+    // The minimum width keeps every dimension column at least `DIMENSION_COL_MIN` wide, so
+    // «● OPORTUNIDAD» prints whole at 11px; narrower than that (390) the table scrolls inside
+    // its card, as `Table` provides, and the band's name is never cut to «● OPORT…».
+    <Table
+      data-slot="trends-table"
+      className="table-fixed border-separate border-spacing-1 text-sm"
+      style={{ minWidth: SURVEY_COL + dimensions.length * DIMENSION_COL_MIN + (dimensions.length + 2) * 4 }}
+    >
       <caption className="sr-only">{caption}</caption>
       <colgroup>
         <col className="w-45" />
@@ -164,7 +179,7 @@ export default function TrendsNumbersTable({
                       className="inline-flex max-w-full items-center gap-0.75 text-3xs font-semibold uppercase tracking-label"
                     >
                       <BandGlyph band={band} />
-                      <span className="truncate">{bandShortName(band, bands, t)}</span>
+                      <span className="whitespace-nowrap">{bandShortName(band, bands, t)}</span>
                     </span>
                   </span>
                 </td>

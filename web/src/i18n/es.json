@@ -4253,7 +4253,8 @@
         "closedNoteCompletion": "{percent} completadas",
         "createdOn": "creada el {date}",
         "moreActions": "Más acciones: {title}",
-        "viewSurvey": "Ver la encuesta"
+        "viewSurvey": "Ver la encuesta",
+        "closesOn": "cierra el {date}"
       },
       "authoring": {
         "title": "Editar preguntas",

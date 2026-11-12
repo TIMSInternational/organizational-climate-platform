@@ -4253,7 +4253,8 @@
         "closedNoteCompletion": "{percent} completed",
         "createdOn": "created {date}",
         "moreActions": "More actions: {title}",
-        "viewSurvey": "Open the survey"
+        "viewSurvey": "Open the survey",
+        "closesOn": "closes {date}"
       },
       "authoring": {
         "title": "Edit questions",

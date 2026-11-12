@@ -367,6 +367,36 @@ describe('ClimateTrendsNextPage', () => {
     )
   })
 
+  it('offers more than five groups as one labelled pop-up instead of segments, and choosing one redraws its series', async () => {
+    vi.mocked(getClimateTrends).mockImplementation(async (_base, query) => {
+      if (query?.groupBy !== 'department') return whole()
+      const payload = byDepartment()
+      const extra = ['Ingeniería', 'Ventas', 'Operaciones', 'Legal'].map((label, index) => ({
+        ...payload.groups[0],
+        key: `d-${index}`,
+        label,
+      }))
+      return { ...payload, groups: [...payload.groups, ...extra] }
+    })
+    renderAt('company_admin')
+    await waitFor(() => expect(document.querySelectorAll('[data-slot="trend-card"]')).toHaveLength(2))
+    expect(screen.queryByRole('group', { name: copy.breakDownBy })).toBeNull()
+    const select = screen.getByRole('combobox', { name: copy.breakDownBy }) as HTMLSelectElement
+    expect([...select.options].map((option) => option.textContent)).toEqual([
+      copy.wholeCompany,
+      'Finanzas',
+      'Ingeniería',
+      'Ventas',
+      'Operaciones',
+      'Legal',
+    ])
+    await userEvent.selectOptions(select, 'd-fin')
+    expect(select.value).toBe('d-fin')
+    const belonging = document.querySelector('[data-slot="trend-card"][data-dimension="belonging"]') as HTMLElement
+    expect(within(belonging).getByRole('img').getAttribute('aria-label')).toContain(`3.1 → ${copy.withheld} → 3.9`)
+    expect(belonging.querySelectorAll('[data-slot="trend-withheld"]')).toHaveLength(1)
+  })
+
   it('redraws from the department series when a segment is chosen, keeping the withheld wave withheld', async () => {
     renderAt('company_admin')
     await waitFor(() => expect(document.querySelectorAll('[data-slot="trend-card"]')).toHaveLength(2))

@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from 'react'
 import { Link } from 'react-router'
 import { ChevronDown, MoreHorizontal, Plus, Search } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
@@ -48,6 +49,31 @@ const ACTION_KEY: Record<PrimaryActionKind, string> = {
   distribution: 'surveys.distribution.title',
   results: 'surveys.results',
   open: 'surveys.open',
+}
+
+/**
+ * Below Tailwind's `sm` (640px) the six columns do not fit a phone, and a table that scrolls
+ * sideways hides the reading and the row's actions behind a gesture nothing suggests
+ * (HIG `layout.md` > "Best practices": adapt the layout to the width, don't make people
+ * scroll to find content). There each survey becomes a two-line row instead. Rendered by
+ * the query rather than by CSS so the tree holds ONE copy of every link and menu, not a
+ * hidden second one a screen reader or a test would also find.
+ */
+const COMPACT_QUERY = '(max-width: 639.98px)'
+
+function subscribeCompact(onChange: () => void): () => void {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return () => {}
+  const query = window.matchMedia(COMPACT_QUERY)
+  query.addEventListener('change', onChange)
+  return () => query.removeEventListener('change', onChange)
+}
+
+function readCompact(): boolean {
+  return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia(COMPACT_QUERY).matches
+}
+
+function useCompactWidth(): boolean {
+  return useSyncExternalStore(subscribeCompact, readCompact, () => false)
 }
 
 const SECTION_KEY: Record<SurveySection, string> = {
@@ -161,12 +187,14 @@ function SurveysListForCompany() {
       >
         {/* The board's `.seg`: the status filter as one segmented control, its segments only
             the statuses this company has (`visibleFacets`) — no "Borradores · 0". It filters
-            the rows already read; it never sends a request. */}
+            the rows already read; it never sends a request. One line at every width (HIG
+            `segmented-controls.md`): at 390 it scrolls inside its own box instead of wrapping,
+            and the 4px pad keeps the 3px focus ring inside the scroller. */}
+        <div data-slot="segment-scroller" className="-m-1 min-w-0 max-w-[calc(100%+0.5rem)] overflow-x-auto p-1 [scrollbar-width:none]">
         <SegmentedControl
           label={t('surveys.filterByStatus')}
           value={state.statusFilter}
           onChange={state.setStatusFilter}
-          className="max-w-full flex-wrap"
           options={facets.map((facet) => ({
             value: facet.status,
             label: t('surveys.next.list.chipCount', {
@@ -175,6 +203,7 @@ function SurveysListForCompany() {
             }),
           }))}
         />
+        </div>
         <p className="m-0 text-sm text-fg-tertiary tabular-nums sm:ml-auto">
           {t('surveys.next.list.countSummary', { count: state.model.rows.length })}
         </p>
@@ -281,6 +310,7 @@ function SurveySectionBlock({
   locale: string
 }) {
   const archived = section === 'archived'
+  const compact = useCompactWidth()
   const summary = section === 'closed' ? closedSummary(rows, readings) : null
   const note =
     section === 'open'
@@ -320,10 +350,27 @@ function SurveySectionBlock({
           archived && 'border-dashed',
         )}
       >
+        {compact ? (
+          <ul data-slot="survey-compact-list" className="m-0 list-none p-0">
+            {rows.map((row) => (
+              <SurveyCompactRow
+                key={row.id}
+                row={row}
+                t={t}
+                locale={locale}
+                capabilities={capabilities}
+                onDuplicate={onDuplicate}
+                duplicating={duplicating}
+              />
+            ))}
+          </ul>
+        ) : (
+        <>
         {/* The canvas's columns from `xl`; below it they tighten and the participation bar
             steps aside for its percentage, so at 1024 the row's actions stay on screen
             instead of behind a horizontal scroll. Narrower than that, the table scrolls
-            inside this card and never pushes the page. */}
+            inside this card and never pushes the page; below `sm` the rows are the compact
+            list above instead. */}
         <Table className="min-w-205 table-fixed lg:min-w-180 xl:min-w-240">
           <colgroup>
             <col />
@@ -367,6 +414,8 @@ function SurveySectionBlock({
             ))}
           </tbody>
         </Table>
+        </>
+        )}
       </div>
       {archived && <p className="m-0 text-sm text-fg-tertiary">{t('surveys.next.list.archivedNote')}</p>}
     </section>
@@ -529,6 +578,97 @@ function SurveyTableRow({
         </div>
       </td>
     </tr>
+  )
+}
+
+/**
+ * One survey at phone width: its name and status chip, then «3 de 24 · 13 % · cierra el
+ * 10 oct.», with the row's action and its menu trailing — the same figures the table row
+ * prints (`surveyResponseReading`, the same percentage), only set as a line.
+ */
+function SurveyCompactRow({
+  row,
+  t,
+  locale,
+  capabilities,
+  onDuplicate,
+  duplicating,
+}: {
+  row: SurveyRow
+  t: TranslateFn
+  locale: string
+  capabilities: ViewerCapabilities
+  onDuplicate: (id: string) => void
+  duplicating: string | null
+}) {
+  const section = sectionOf(row.status)
+  const archived = section === 'archived'
+  const name = row.title ?? t('surveys.untitled')
+  const counts = surveyResponseReading(row.responseCount, row.targetAudienceCount)
+  const action = primaryActionFor(row, capabilities)
+  const running = row.status === 'active'
+  const countPhrase =
+    section === 'closed'
+      ? `${counts.count} ${t('surveys.next.list.completedUnit')}`
+      : counts.target !== null
+        ? `${counts.count} ${t('surveys.next.list.ofAudience', { target: counts.target })}`
+        : String(counts.count)
+  const percentPhrase =
+    counts.percent === null
+      ? archived && counts.count === 0
+        ? t('surveys.next.list.noSubmissions')
+        : t('surveys.next.list.noInviteList')
+      : formatMetric(counts.percent, { kind: 'percentage' }, locale)
+  const datePhrase =
+    section === 'open'
+      ? t('surveys.next.list.closesOn', { date: calendarDay(Date.parse(row.endDate), locale) })
+      : section === 'upcoming'
+        ? t('surveys.next.list.opens', { date: calendarDay(Date.parse(row.startDate), locale) })
+        : archived
+          ? t('surveys.next.list.createdOn', { date: calendarDay(Date.parse(row.createdAt), locale) })
+          : t('surveys.next.list.closedOn', { date: calendarDay(Date.parse(row.endDate), locale) })
+
+  return (
+    <li
+      data-survey-id={row.id}
+      data-status={row.status}
+      className="flex items-center gap-3 border-b border-line-light px-4 py-3 last:border-b-0"
+    >
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        {/* The name takes the whole first line (beside the actions, it had room for
+            «Encues…» once the chip shared it); the chip leads the second. */}
+        <Link
+          to={`/surveys/${row.id}`}
+          aria-label={t('surveys.openNamed', { title: name })}
+          className={cn('min-w-0 truncate text-base font-semibold', archived ? 'text-fg-label' : 'text-fg-primary')}
+        >
+          {name}
+        </Link>
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+          <Chip tone={running ? 'live' : 'neutral'} label={statusLabel(t, row.status)} className="shrink-0" />
+          <span data-slot="compact-reading" className="text-sm tabular-nums text-fg-secondary">
+            {[countPhrase, percentPhrase, datePhrase].join(' · ')}
+          </span>
+        </div>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        {action && (
+          <Button asChild variant="outline">
+            <Link to={action.to} data-action={action.kind} aria-label={`${t(ACTION_KEY[action.kind])}: ${name}`}>
+              {t(ACTION_KEY[action.kind])}
+            </Link>
+          </Button>
+        )}
+        <RowMenu
+          row={row}
+          name={name}
+          capabilities={capabilities}
+          onDuplicate={onDuplicate}
+          duplicating={duplicating}
+          t={t}
+        />
+      </div>
+    </li>
   )
 }
 
