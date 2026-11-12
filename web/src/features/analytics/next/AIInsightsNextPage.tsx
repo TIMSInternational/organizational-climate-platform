@@ -82,7 +82,8 @@ function AIInsightsForCompany() {
   return (
     <div>
       <PageHeader
-        eyebrow={companyName}
+        // The sidebar section, as on every admin screen (review 12 Nov); the top bar names the company.
+        eyebrow={t('navigation.sectionAnalytics')}
         title={t('insights.next.title')}
         description={t('insights.next.description')}
       />

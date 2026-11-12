@@ -129,7 +129,10 @@ export default function SystemHealthNextPage() {
   return (
     <div>
       <PageHeader
-        eyebrow={t('navigation.systemAdministration')}
+        // The header rule every admin screen follows (review 12 Nov): the eyebrow is the sidebar
+        // section the page sits in, and a top-level page carries no breadcrumb. The company in
+        // scope is named once, by the top bar, for every role.
+        eyebrow={t('navigation.sectionSystem')}
         title={t('systemHealth.title')}
         description={
           status

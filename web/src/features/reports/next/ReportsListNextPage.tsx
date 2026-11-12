@@ -23,7 +23,7 @@ import {
   SkeletonText,
   Table,
 } from '../../../components/ui'
-import { useViewerCapabilities } from '../../../auth/viewerCapabilities'
+import { readViewerClaims, useViewerCapabilities } from '../../../auth/viewerCapabilities'
 import { calendarDay } from '../../../lib/calendarDay'
 import { cn } from '../../../lib/cn'
 import ReportForm from '../components/ReportForm'
@@ -133,18 +133,23 @@ export default function ReportsListNextPage() {
   return (
     <div>
       <PageHeader
-        // The artboard's eyebrow is the area the page belongs to, which the nav does not
-        // say: Informes sits among the work surfaces in the sidebar, under the company.
-        // The client's name when it is known: a TIMS operator moves between clients all day, and
-        // "Configuración de empresa" did not say whose reports these were (walkthrough, C).
-        eyebrow={companyName ?? t('navigation.companySettings')}
+        // The header rule every admin screen follows (review 12 Nov): the eyebrow is the sidebar
+        // section the page sits in. Informes is a top-level page for a company administrator,
+        // whose top bar names the company, so it carries no breadcrumb. For a super
+        // administrator it is a page UNDER a client — the header switcher stands down on
+        // `/admin/companies/:id/*` (`app/headerScope.ts`) — so the breadcrumb is what names
+        // whose reports these are (walkthrough, C: a TIMS operator moves between clients).
+        eyebrow={t('navigation.sectionAnalytics')}
         title={t('navigation.reports')}
         description={t('reports.next.description')}
-        // `/admin/companies/:companyId` is loadable by exactly who can load this page.
-        breadcrumbs={[
-          { label: companyName ?? t('navigation.companySettings'), href: `/admin/companies/${companyId}` },
-          { label: t('navigation.reports') },
-        ]}
+        breadcrumbs={
+          readViewerClaims().role === 'super_admin'
+            ? [
+                { label: companyName ?? t('navigation.companySettings'), href: `/admin/companies/${companyId}` },
+                { label: t('navigation.reports') },
+              ]
+            : undefined
+        }
         primaryAction={
           mayRead ? (
             <Button type="button" variant="primary" size="canvas" onClick={() => setCreating(true)}>

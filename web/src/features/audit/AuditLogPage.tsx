@@ -22,7 +22,6 @@ import {
 } from '../../components/ui'
 import { ApiError } from '../../api/authFetch'
 import { useCompanyScope } from '../../company-context'
-import { useCompanyName } from '../../company-context/useCompanyName'
 import { getCompanySettings } from '../org-structure/api/companySettings'
 import { getAuditLogs, type AuditLogPage } from './api'
 import {
@@ -60,7 +59,6 @@ type LoadState =
 export default function AuditLogPage() {
   const { t, locale } = useTranslation()
   const scope = useCompanyScope()
-  const companyName = useCompanyName()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const companyId = scope.status === 'ready' ? scope.companyId : undefined
 
@@ -115,7 +113,9 @@ export default function AuditLogPage() {
     }
   }, [baseUrl, companyId, timeZone, action, fromDay, toDay, page, attempt])
 
-  const header = { eyebrow: companyName ?? undefined, title: t('audit.title'), description: t('audit.description') }
+  // The eyebrow is the sidebar section (Sistema), as on every admin screen; the company in
+  // scope is named by the top bar (review 12 Nov).
+  const header = { eyebrow: t('navigation.sectionSystem'), title: t('audit.title'), description: t('audit.description') }
 
   if (scope.status === 'needs-selection') {
     return (
