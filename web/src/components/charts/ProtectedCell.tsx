@@ -114,8 +114,14 @@ export interface ProtectedCellProps {
    *
    * `'shield'` is the value's historical name, kept so no caller breaks; since the
    * Apple design it draws the padlock (see the glyph below).
+   *
+   * `'floor'` draws the padlock AND «Menos de {threshold}» inside the box — the
+   * ruled pattern for a withheld group. `ClimateMap` puts it on the first cell of a
+   * withheld row, so the row states its own reason without the legend; the floor is
+   * not sensitive, the group's count is never in it. Like `'word'`, it makes
+   * `showWord` redundant and ignores it.
    */
-  mark?: 'shield' | 'word'
+  mark?: 'shield' | 'word' | 'floor'
 }
 
 export default function ProtectedCell({
@@ -181,13 +187,25 @@ export default function ProtectedCell({
         <span aria-hidden="true" data-slot="protected-label" className={cn(PROTECTED_LABEL, 'text-2xs lowercase')}>
           {t('charts.protectedWord')}
         </span>
+      ) : mark === 'floor' ? (
+        // `aria-hidden`: the box's accessible name already states the floor.
+        <span
+          aria-hidden="true"
+          data-slot="protected-floor"
+          // Wraps rather than overflows: at 390 a map column is ~72px and the
+          // one-line pill spilled past both edges of its cell.
+          className={cn(PROTECTED_LABEL, 'inline-flex max-w-full items-center gap-1 text-center text-2xs leading-tight')}
+        >
+          <Lock className="size-3 shrink-0" />
+          {t('charts.protectedUnderFloor', { threshold })}
+        </span>
       ) : (
         <Lock aria-hidden="true" className="size-3" />
       )}
     </span>
   )
 
-  if (!showWord || mark === 'word') return box
+  if (!showWord || mark === 'word' || mark === 'floor') return box
 
   return (
     <span className="inline-flex items-center gap-1.5">
