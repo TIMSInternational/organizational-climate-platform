@@ -245,14 +245,16 @@ describe('QuestionBankNextPage — owners and roles', () => {
     await screen.findByText('Global row')
     expect(within(rowOf('global')).queryByRole('button')).toBeNull()
     expect(within(rowOf('own')).getByRole('button', { name: next.rowActions.replace('{text}', 'Own row') })).toBeTruthy()
-    expect(within(rowOf('global')).getByText(next.ownerGlobalChip)).toBeTruthy()
+    // Twice: the Propietario column, and the meta line that carries it below `sm`.
+    expect(within(rowOf('global')).getAllByText(next.ownerGlobalChip)).toHaveLength(2)
   })
 
   it('names each row\'s company for a super administrator, and the owner filter narrows to one', async () => {
     setToken(tokenFor({ role: 'super_admin' }))
     serve({ items: [item({ id: 'global', companyId: null, text: 'Global row' }), item({ id: 'acme-row', companyId: 'acme', text: 'Acme row' })] })
     renderPage()
-    await waitFor(() => expect(within(rowOf('acme-row')).getByText('Acme Corporation')).toBeTruthy())
+    // Twice: the Propietario column, and the meta line that carries it below `sm`.
+    await waitFor(() => expect(within(rowOf('acme-row')).getAllByText('Acme Corporation')).toHaveLength(2))
     await userEvent.selectOptions(screen.getByRole('combobox', { name: next.colOwner }), 'acme')
     expect(rowOf('global')).toBeNull()
     expect(rowOf('acme-row')).toBeTruthy()
@@ -278,7 +280,8 @@ describe('the route dispatches by role', () => {
     setToken(tokenFor({ role: 'super_admin' }))
     serve({ items: [item({ id: 'acme-row', companyId: 'acme', text: 'Acme row' })] })
     renderRoute()
-    await waitFor(() => expect(within(rowOf('acme-row')).getByText('Acme Corporation')).toBeTruthy())
+    // Twice: the Propietario column, and the meta line that carries it below `sm`.
+    await waitFor(() => expect(within(rowOf('acme-row')).getAllByText('Acme Corporation')).toHaveLength(2))
   })
 
   it('gives a company administrator the company page, never this view', async () => {

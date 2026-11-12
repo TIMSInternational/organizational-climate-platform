@@ -118,14 +118,15 @@ describe('QuestionLibraryNextPage (the old page\'s guarantees, on the redesigned
     expect(await screen.findByRole('button', { name: /Feedback/, pressed: true })).toBeTruthy()
     const row = document.querySelector('tr[data-library-item="item-1"]') as HTMLElement
     expect(within(row).getByText('Mi jefatura me da retroalimentación útil sobre mi trabajo.')).toBeTruthy()
-    expect(within(row).getByText('My manager gives me useful feedback on my work.')).toBeTruthy()
+    // Twice: the Pregunta (inglés) column, and the line under the Spanish that carries it below `sm`.
+    expect(within(row).getAllByText('My manager gives me useful feedback on my work.')).toHaveLength(2)
   })
 
   it('asks for the global rows too, by sending no companyId on either read', async () => {
     localStorage.setItem(COMPANY_CONTEXT_STORAGE_KEY, 'acme')
     serve([libraryItem()])
     renderPage()
-    await screen.findByText('My manager gives me useful feedback on my work.')
+    await screen.findAllByText('My manager gives me useful feedback on my work.')
     for (const [input] of [...requests('GET', /\/admin\/question-categories/), ...requests('GET', /\/admin\/question-library(\?|$)/)]) {
       expect(String(input)).not.toContain('companyId')
     }
@@ -167,7 +168,7 @@ describe('QuestionLibraryNextPage (the old page\'s guarantees, on the redesigned
   it('creates a new question as global for a super administrator with no company chosen', async () => {
     serve([libraryItem()])
     renderPage()
-    await screen.findByText('My manager gives me useful feedback on my work.')
+    await screen.findAllByText('My manager gives me useful feedback on my work.')
     await userEvent.click(screen.getByRole('button', { name: next.newQuestion }))
     const editor = document.querySelector('[data-slot="library-editor"]') as HTMLElement
     await userEvent.type(within(editor).getByRole('textbox', { name: next.fieldTextEs }), 'Nueva')
@@ -192,7 +193,7 @@ describe('QuestionLibraryNextPage — a company administrator', () => {
     setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
     serve([libraryItem({ companyId: OWN })], [{ ...CATEGORY, companyId: OWN }], detail({ companyId: OWN }))
     renderPage()
-    await screen.findByText('My manager gives me useful feedback on my work.')
+    await screen.findAllByText('My manager gives me useful feedback on my work.')
     await userEvent.click(screen.getByRole('button', { name: next.newQuestion }))
     const editor = document.querySelector('[data-slot="library-editor"]') as HTMLElement
     const owner = within(editor).getByRole('combobox', { name: next.fieldOwner }) as HTMLSelectElement
@@ -278,7 +279,16 @@ describe('QuestionLibraryNextPage — the artboard\'s order, names and chips', (
     await screen.findAllByRole('button', { name: next.editRow.replace('{text}', LIKERT.textEs) })
     const table = (document.querySelector('tr[data-library-item]') as HTMLElement).closest('table') as HTMLElement
     expect(table.getAttribute('data-slot')).toBe('table')
-    expect([...table.querySelectorAll('col')].map((col) => col.className)).toEqual(['', '', 'w-26', 'w-26', 'w-26', 'w-20'])
+    // Below `sm` only the Spanish and the action keep a column; the other four step out.
+    expect([...table.querySelectorAll('col')].map((col) => col.className)).toEqual([
+      '',
+      'hidden sm:table-column',
+      'hidden w-26 sm:table-column',
+      'hidden w-26 sm:table-column',
+      'hidden w-26 sm:table-column',
+      'w-20',
+    ])
+    expect(table.className.split(/\s+/)).toEqual(expect.arrayContaining(['sm:min-w-180', 'sm:table-fixed']))
     const cells = [...table.querySelectorAll('tbody tr:first-child td')]
     expect(cells).toHaveLength(6)
     for (const cell of cells) expect(cell.getAttribute('data-slot')).toBe('table-cell')

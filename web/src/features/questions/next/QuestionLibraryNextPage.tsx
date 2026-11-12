@@ -373,12 +373,12 @@ function QuestionLibraryForCompany() {
                     </TableHeader>
                     <TableBody>
                       {itemsOf(selected.category.id).map((item) => (
-                        <ItemRow key={item.id} item={item} primary={primary(item)} secondary={secondary(item)} owner={item.companyId === null ? t('questionLibrary.next.global') : company} action={canWriteRow(item) ? t('questionLibrary.next.edit') : t('questionLibrary.next.view')} onOpen={() => void openItem(item)} />
+                        <ItemRow key={item.id} item={item} primary={primary(item)} secondary={secondary(item)} owner={item.companyId === null ? t('questionLibrary.next.global') : company} action={canWriteRow(item) ? t('questionLibrary.next.edit') : t('questionLibrary.next.view')} actionLabel={t(canWriteRow(item) ? 'questionLibraryAdmin.next.editRow' : 'questionLibraryAdmin.next.viewRow', { text: primary(item) })} onOpen={() => void openItem(item)} />
                       ))}
                       {selected.children.map((child) => (
                         <ChildSection key={child.category.id} child={child} parentName={nameOf(selected.category)} nameOf={nameOf}>
                           {itemsOf(child.category.id).map((item) => (
-                            <ItemRow key={item.id} item={item} primary={primary(item)} secondary={secondary(item)} owner={item.companyId === null ? t('questionLibrary.next.global') : company} action={canWriteRow(item) ? t('questionLibrary.next.edit') : t('questionLibrary.next.view')} onOpen={() => void openItem(item)} />
+                            <ItemRow key={item.id} item={item} primary={primary(item)} secondary={secondary(item)} owner={item.companyId === null ? t('questionLibrary.next.global') : company} action={canWriteRow(item) ? t('questionLibrary.next.edit') : t('questionLibrary.next.view')} actionLabel={t(canWriteRow(item) ? 'questionLibraryAdmin.next.editRow' : 'questionLibraryAdmin.next.viewRow', { text: primary(item) })} onOpen={() => void openItem(item)} />
                           ))}
                         </ChildSection>
                       ))}
@@ -611,7 +611,9 @@ function CategoryList({
   )
 }
 
-function ItemRow({ item, primary, secondary, owner, action, onOpen }: { item: QuestionLibraryItem; primary: string; secondary: string; owner: string; action: string; onOpen: () => void }) {
+// `actionLabel` names the question the button opens («Editar: …»), as the super-admin row does:
+// a buttons list read out as «Ver, Ver, Ver» does not say which one is which (WCAG 2.4.6).
+function ItemRow({ item, primary, secondary, owner, action, actionLabel, onOpen }: { item: QuestionLibraryItem; primary: string; secondary: string; owner: string; action: string; actionLabel: string; onOpen: () => void }) {
   const { t, locale } = useTranslation()
   const meta = [libraryTypeLabel(t, item.type), item.dimension ? t('questionLibrary.next.dimensionOf', { dimension: item.dimension }) : null, t('questionLibrary.next.version', { version: item.version })]
     .filter(Boolean)
@@ -627,7 +629,7 @@ function ItemRow({ item, primary, secondary, owner, action, onOpen }: { item: Qu
         <Chip tone="neutral" icon={item.companyId === null ? <Lock className="size-3" /> : undefined} label={owner} />
       </TableCell>
       <TableCell className="py-2 pr-4 text-right align-top">
-        <Button type="button" size="sm" variant="plain" onClick={onOpen}>
+        <Button type="button" size="sm" variant="plain" aria-label={actionLabel} onClick={onOpen}>
           {action}
         </Button>
       </TableCell>

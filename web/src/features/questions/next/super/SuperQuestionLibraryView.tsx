@@ -295,24 +295,28 @@ function CategoryQuestions({ model, onOpen }: { model: QuestionLibraryModelState
         <span className="text-sm text-fg-tertiary">{meta}</span>
       </div>
       <div className={TABLE_CARD}>
-        <Table className="min-w-180 table-fixed">
+        {/* Below `sm` the table is a list: the English text and the three short columns step out
+            (`hidden sm:table-cell`, and their <col>s with them) and the Spanish cell carries them
+            under the question, so a phone keeps Editar on screen instead of scrolling it off the
+            card (lists-and-tables.md, layout.md > Adapt to the width). From `sm` up it is the board's table. */}
+        <Table className="sm:min-w-180 sm:table-fixed">
           <colgroup>
             {/* The two languages share what the four short columns leave, so neither wraps to a
                 ribbon at 1440: Tipo, Dimensión and Propietario at 104px, the action at 80. */}
             <col />
-            <col />
-            <col className="w-26" />
-            <col className="w-26" />
-            <col className="w-26" />
+            <col className="hidden sm:table-column" />
+            <col className="hidden w-26 sm:table-column" />
+            <col className="hidden w-26 sm:table-column" />
+            <col className="hidden w-26 sm:table-column" />
             <col className="w-20" />
           </colgroup>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
               <TableHead scope="col" className="pl-4">{t('questionLibraryAdmin.next.colTextEs')}</TableHead>
-              <TableHead scope="col">{t('questionLibraryAdmin.next.colTextEn')}</TableHead>
-              <TableHead scope="col">{t('questionLibraryAdmin.next.colType')}</TableHead>
-              <TableHead scope="col">{t('questionLibraryAdmin.next.colDimension')}</TableHead>
-              <TableHead scope="col">{t('questionLibraryAdmin.next.colOwner')}</TableHead>
+              <TableHead scope="col" className={WIDE}>{t('questionLibraryAdmin.next.colTextEn')}</TableHead>
+              <TableHead scope="col" className={WIDE}>{t('questionLibraryAdmin.next.colType')}</TableHead>
+              <TableHead scope="col" className={WIDE}>{t('questionLibraryAdmin.next.colDimension')}</TableHead>
+              <TableHead scope="col" className={WIDE}>{t('questionLibraryAdmin.next.colOwner')}</TableHead>
               <TableHead scope="col" className="pr-4">
                 <span className="sr-only">{t('common.actions')}</span>
               </TableHead>
@@ -384,6 +388,9 @@ function CopyNote({
   )
 }
 
+// A column only a wide screen has room for; below `sm` the row's meta line carries it.
+const WIDE = 'hidden sm:table-cell'
+
 function QuestionRow({
   item,
   model,
@@ -409,15 +416,27 @@ function QuestionRow({
     >
       <TableCell className="py-3 pl-4">
         <span className={cn('block text-base leading-snug text-fg-primary', selected ? 'font-semibold' : 'font-medium')}>{item.textEs}</span>
+        <span data-slot="library-row-meta" className="mt-1 flex flex-col gap-1 sm:hidden">
+          <span lang="en" className="block text-sm leading-snug text-fg-secondary">
+            {item.textEn}
+          </span>
+          <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-fg-tertiary">
+            <OwnerChip companyId={item.companyId} model={model} t={t} />
+            <span>
+              {t(`questionLibraryAdmin.type_${item.type}`)}
+              {item.dimension ? ` · ${item.dimension}` : ''}
+            </span>
+          </span>
+        </span>
       </TableCell>
-      <TableCell className="py-3">
+      <TableCell className={cn('py-3', WIDE)}>
         <span lang="en" className="block text-sm leading-snug text-fg-secondary">
           {item.textEn}
         </span>
       </TableCell>
-      <TableCell className="py-3 text-sm text-fg-secondary">{t(`questionLibraryAdmin.type_${item.type}`)}</TableCell>
-      <TableCell className="py-3 text-sm break-words text-fg-secondary">{item.dimension ?? '—'}</TableCell>
-      <TableCell className="py-3">
+      <TableCell className={cn('py-3 text-sm text-fg-secondary', WIDE)}>{t(`questionLibraryAdmin.type_${item.type}`)}</TableCell>
+      <TableCell className={cn('py-3 text-sm break-words text-fg-secondary', WIDE)}>{item.dimension ?? '—'}</TableCell>
+      <TableCell className={cn('py-3', WIDE)}>
         <OwnerChip companyId={item.companyId} model={model} t={t} />
       </TableCell>
       <TableCell className="py-2 pr-4 text-right">

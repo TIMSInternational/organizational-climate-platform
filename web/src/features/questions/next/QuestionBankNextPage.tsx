@@ -162,16 +162,20 @@ function QuestionBankForCompany() {
         />
       ) : (
         <section aria-label={t('questionBank.next.title')} className={TABLE_CARD}>
-          <Table zebra className="min-w-200">
+          {/* Below `sm` the table is a list: the secondary columns step out (`hidden sm:table-cell`) and
+              the question cell carries them as a meta line, so a phone reads the question at full
+              width instead of scrolling Categoría, Tipo and the counts off the card's right edge
+              (lists-and-tables.md, layout.md > Adapt to the width). From `sm` up it is the board's table. */}
+          <Table zebra className="sm:min-w-200">
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead scope="col" className="px-4">{t('questionBank.next.colQuestion')}</TableHead>
-                <TableHead scope="col" className="w-40">{t('questionBank.next.colOwner')}</TableHead>
-                <TableHead scope="col" className="w-36">{t('questionBank.next.colCategory')}</TableHead>
-                <TableHead scope="col" className="w-36">{t('questionBank.next.colType')}</TableHead>
-                <TableHead scope="col" numeric className="w-26">{t('questionBank.next.colAsked')}</TableHead>
-                <TableHead scope="col" numeric className="w-28">{t('questionBank.next.colAnswered')}</TableHead>
-                <TableHead scope="col" numeric className="w-26 pr-4">{t('questionBank.next.colSkipped')}</TableHead>
+                <TableHead scope="col" className="hidden w-40 sm:table-cell">{t('questionBank.next.colOwner')}</TableHead>
+                <TableHead scope="col" className="hidden w-36 sm:table-cell">{t('questionBank.next.colCategory')}</TableHead>
+                <TableHead scope="col" className="hidden w-36 sm:table-cell">{t('questionBank.next.colType')}</TableHead>
+                <TableHead scope="col" numeric className="hidden w-26 sm:table-cell">{t('questionBank.next.colAsked')}</TableHead>
+                <TableHead scope="col" numeric className="hidden w-28 sm:table-cell">{t('questionBank.next.colAnswered')}</TableHead>
+                <TableHead scope="col" numeric className="hidden w-26 pr-4 sm:table-cell">{t('questionBank.next.colSkipped')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -191,6 +195,26 @@ function QuestionBankForCompany() {
                   <TableRow key={row.item.id} data-testid="bank-row">
                     <TableCell className="px-4 py-3 align-top">
                       <div className="text-fg-primary">{row.item.text ?? '—'}</div>
+                      <div data-slot="bank-row-meta" className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-fg-secondary sm:hidden">
+                        <Chip
+                          tone="neutral"
+                          label={row.item.companyId === null ? t('questionBank.next.ownerGlobal') : company}
+                        />
+                        <span>
+                          {dimensionLabel(row.item.category, t)} · {questionTypeLabel(t, row.item.type)}
+                        </span>
+                        <span className="basis-full tabular-nums text-fg-tertiary">
+                          {(
+                            [
+                              [t('questionBank.next.colAsked'), row.asked],
+                              [t('questionBank.next.colAnswered'), row.answered],
+                              [t('questionBank.next.colSkipped'), row.skipped],
+                            ] satisfies Array<[string, number | null]>
+                          )
+                            .map(([label, value]) => `${label} ${value === null ? '—' : value.toLocaleString(locale)}`)
+                            .join(' · ')}
+                        </span>
+                      </div>
                       {(row.attention || !row.item.isActive || canWrite(row.item)) && (
                         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                           {/* Status words, so neutral: amber, green and red are the three result
@@ -212,16 +236,16 @@ function QuestionBankForCompany() {
                         </div>
                       )}
                     </TableCell>
-                    <TableCell className="py-3 align-top">
+                    <TableCell className="hidden py-3 align-top sm:table-cell">
                       <Chip
                         tone="neutral"
                         label={row.item.companyId === null ? t('questionBank.next.ownerGlobal') : company}
                       />
                     </TableCell>
-                    <TableCell className="py-3 align-top text-sm text-fg-secondary">{dimensionLabel(row.item.category, t)}</TableCell>
-                    <TableCell className="py-3 align-top text-sm text-fg-secondary">{questionTypeLabel(t, row.item.type)}</TableCell>
+                    <TableCell className="hidden py-3 align-top text-sm text-fg-secondary sm:table-cell">{dimensionLabel(row.item.category, t)}</TableCell>
+                    <TableCell className="hidden py-3 align-top text-sm text-fg-secondary sm:table-cell">{questionTypeLabel(t, row.item.type)}</TableCell>
                     {[row.asked, row.answered, row.skipped].map((value, index) => (
-                      <TableCell key={index} numeric className={`py-3 align-top text-fg-primary ${index === 2 ? 'pr-4' : ''}`}>
+                      <TableCell key={index} numeric className={`hidden py-3 align-top text-fg-primary sm:table-cell ${index === 2 ? 'pr-4' : ''}`}>
                         {value === null ? '—' : value.toLocaleString(locale)}
                       </TableCell>
                     ))}

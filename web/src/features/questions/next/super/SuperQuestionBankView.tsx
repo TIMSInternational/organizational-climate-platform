@@ -27,6 +27,7 @@ import {
 } from '../../../../components/ui'
 import { useCompanyScope } from '../../../../company-context'
 import { readViewerClaims } from '../../../../auth/viewerCapabilities'
+import { cn } from '../../../../lib/cn'
 import { questionTypeLabel } from '../../../surveys/surveyVocabulary'
 import { QUESTION_BANK_TYPES, type QuestionBankItem } from '../../api/questionBank'
 import { OWNER_ALL, OWNER_GLOBAL, askedAnsweredSkipped, canWriteRow, needsAttention } from './bankDerive'
@@ -228,6 +229,9 @@ function Filters({ model, t }: { model: QuestionBankModelState; t: TranslateFn }
   )
 }
 
+// A column only a wide screen has room for; below `sm` the row's meta line carries it.
+const WIDE = 'hidden sm:table-cell'
+
 function BankTable({ model, onEdit }: { model: QuestionBankModelState; onEdit: (item: QuestionBankItem) => void }) {
   const { t, locale } = useTranslation()
   const viewer = readViewerClaims()
@@ -237,26 +241,30 @@ function BankTable({ model, onEdit }: { model: QuestionBankModelState; onEdit: (
 
   return (
     <section aria-label={t('navigation.questionBank')} className={TABLE_CARD}>
-      <Table zebra className="min-w-252 table-fixed">
+      {/* Below `sm` the table is a list: the secondary columns step out (`hidden sm:table-cell`,
+          and their <col>s with them) and the question cell carries them as a meta line, so a phone
+          reads the question and keeps the row's menu on screen instead of scrolling them off the
+          card (lists-and-tables.md, layout.md > Adapt to the width). From `sm` up it is the board's table. */}
+      <Table zebra className="sm:min-w-252 sm:table-fixed">
         <colgroup>
           <col />
-          <col className="w-40" />
-          <col className="w-40" />
-          <col className="w-32" />
-          <col className="w-28" />
-          <col className="w-28" />
-          <col className="w-26" />
+          <col className="hidden w-40 sm:table-column" />
+          <col className="hidden w-40 sm:table-column" />
+          <col className="hidden w-32 sm:table-column" />
+          <col className="hidden w-28 sm:table-column" />
+          <col className="hidden w-28 sm:table-column" />
+          <col className="hidden w-26 sm:table-column" />
           <col className="w-16" />
         </colgroup>
         <TableHeader>
           <TableRow className="hover:bg-transparent">
             <TableHead scope="col" className="pl-4">{t('questionBank.next.colQuestion')}</TableHead>
-            <TableHead scope="col">{t('questionBank.next.colOwner')}</TableHead>
-            <TableHead scope="col">{t('questionBank.next.colCategory')}</TableHead>
-            <TableHead scope="col">{t('questionBank.next.colType')}</TableHead>
-            <TableHead scope="col" numeric>{t('questionBank.next.colAsked')}</TableHead>
-            <TableHead scope="col" numeric>{t('questionBank.next.colAnswered')}</TableHead>
-            <TableHead scope="col" numeric>{t('questionBank.next.colSkipped')}</TableHead>
+            <TableHead scope="col" className={WIDE}>{t('questionBank.next.colOwner')}</TableHead>
+            <TableHead scope="col" className={WIDE}>{t('questionBank.next.colCategory')}</TableHead>
+            <TableHead scope="col" className={WIDE}>{t('questionBank.next.colType')}</TableHead>
+            <TableHead scope="col" numeric className={WIDE}>{t('questionBank.next.colAsked')}</TableHead>
+            <TableHead scope="col" numeric className={WIDE}>{t('questionBank.next.colAnswered')}</TableHead>
+            <TableHead scope="col" numeric className={WIDE}>{t('questionBank.next.colSkipped')}</TableHead>
             <TableHead scope="col" className="pr-4">
               <span className="sr-only">{t('common.actions')}</span>
             </TableHead>
@@ -274,6 +282,28 @@ function BankTable({ model, onEdit }: { model: QuestionBankModelState; onEdit: (
                 <TableRow key={item.id} data-bank-item={item.id}>
                   <TableCell className="py-3 pl-4 align-top">
                     <span className="block text-base font-medium text-fg-primary">{text}</span>
+                    <span data-slot="bank-row-meta" className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-fg-secondary sm:hidden">
+                      {item.companyId === null ? (
+                        <Chip tone="neutral" label={t('questionBank.next.ownerGlobalChip')} />
+                      ) : (
+                        <span>{owner ?? t('questionBank.next.ownerOtherCompany')}</span>
+                      )}
+                      <span>
+                        {item.category}
+                        {item.subcategory ? ` · ${item.subcategory}` : ''} · {questionTypeLabel(t, item.type)}
+                      </span>
+                      <span className="basis-full tabular-nums text-fg-tertiary">
+                        {(
+                          [
+                            [t('questionBank.next.colAsked'), counts?.asked],
+                            [t('questionBank.next.colAnswered'), counts?.answered],
+                            [t('questionBank.next.colSkipped'), counts?.skipped],
+                          ] satisfies Array<[string, number | undefined]>
+                        )
+                          .map(([label, value]) => `${label} ${value === undefined ? '—' : numbers.format(value)}`)
+                          .join(' · ')}
+                      </span>
+                    </span>
                     {(!item.isActive || attention || item.isAiGenerated) && (
                       // Status words, so every chip is neutral: amber, green and red are the three
                       // result areas and nothing else, and blue is action, selection or live
@@ -285,7 +315,7 @@ function BankTable({ model, onEdit }: { model: QuestionBankModelState; onEdit: (
                       </span>
                     )}
                   </TableCell>
-                  <TableCell className="py-3 align-top">
+                  <TableCell className={cn('py-3 align-top', WIDE)}>
                     {item.companyId === null ? (
                       <Chip tone="neutral" label={t('questionBank.next.ownerGlobalChip')} />
                     ) : (
@@ -294,18 +324,18 @@ function BankTable({ model, onEdit }: { model: QuestionBankModelState; onEdit: (
                       </span>
                     )}
                   </TableCell>
-                  <TableCell className="py-3 align-top text-sm break-words text-fg-secondary">
+                  <TableCell className={cn('py-3 align-top text-sm break-words text-fg-secondary', WIDE)}>
                     {item.category}
                     {item.subcategory ? ` · ${item.subcategory}` : ''}
                   </TableCell>
-                  <TableCell className="py-3 align-top text-sm text-fg-secondary">{questionTypeLabel(t, item.type)}</TableCell>
-                  <TableCell numeric className="py-3 align-top text-fg-primary">
+                  <TableCell className={cn('py-3 align-top text-sm text-fg-secondary', WIDE)}>{questionTypeLabel(t, item.type)}</TableCell>
+                  <TableCell numeric className={cn('py-3 align-top text-fg-primary', WIDE)}>
                     {counts ? numbers.format(counts.asked) : '—'}
                   </TableCell>
-                  <TableCell numeric className="py-3 align-top text-fg-primary">
+                  <TableCell numeric className={cn('py-3 align-top text-fg-primary', WIDE)}>
                     {counts ? numbers.format(counts.answered) : '—'}
                   </TableCell>
-                  <TableCell numeric className="py-3 align-top text-fg-primary">
+                  <TableCell numeric className={cn('py-3 align-top text-fg-primary', WIDE)}>
                     {counts ? numbers.format(counts.skipped) : '—'}
                   </TableCell>
                   <TableCell className="py-2 pr-4 text-right align-top">
