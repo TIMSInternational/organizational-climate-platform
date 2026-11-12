@@ -643,7 +643,7 @@ function SparkCard({
             same reason as the map's column heads below. At 1024, where this grid drops to
             two columns, "Seguridad psicológica" was cut in three of the six cards. */}
         <span className="text-sm break-words text-fg-secondary">{dimension.name}</span>
-        <BandChip band={band} bands={bands} short className="h-4.5 shrink-0 px-1.5 text-2xs" />
+        <BandChip band={band} bands={bands} className="h-4.5 shrink-0 px-1.5 text-2xs" />
       </div>
       <div className="flex flex-wrap items-baseline gap-2">
         <span className="text-reading leading-none font-semibold tabular-nums text-fg-primary">{reading(value, locale, SPARK_DECIMALS, bands.scale)}</span>

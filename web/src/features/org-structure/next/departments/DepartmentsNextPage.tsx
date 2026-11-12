@@ -504,7 +504,7 @@ function ClimateCell({
     <span className="inline-flex items-center gap-1.5">
       <span className="tabular-nums">{score(climate.mean, locale, bands)}</span>
       {band !== null && bands !== null && band !== 'strength' ? (
-        <BandChip band={band} bands={bands} short />
+        <BandChip band={band} bands={bands} />
       ) : (
         // The note is the one thing left to xl: at 1024 it would push the actions off screen.
         <span className="hidden text-fg-tertiary xl:inline">

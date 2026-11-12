@@ -20,6 +20,14 @@ function Row({ invalid, error }: { invalid?: boolean; error?: string }) {
 }
 
 describe('FormItem wiring', () => {
+  it('gives its one column minmax(0, 1fr), so a wide control cannot push the field past its card', () => {
+    // happy-dom has no layout, so this pins the class that makes the column shrinkable: an
+    // implicit grid column sizes itself to its widest child and overflowed a 390px card.
+    const { container } = render(<Row />)
+    const item = container.querySelector('[data-slot="form-item"]')
+    expect(item?.className.split(' ')).toContain('grid-cols-1')
+  })
+
   it('connects the label to the control', () => {
     render(<Row />)
     // getByLabelText only resolves if htmlFor/id actually match.

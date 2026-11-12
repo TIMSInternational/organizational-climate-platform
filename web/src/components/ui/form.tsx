@@ -46,8 +46,11 @@ export function FormItem({ className, invalid = false, ...props }: FormItemProps
       <div
         data-slot="form-item"
         // `group/field` is what `Label`'s `group-data-[disabled=true]/field:`
-        // classes hook onto.
-        className={cn('group/field grid gap-1.5', className)}
+        // classes hook onto. `grid-cols-1` is `minmax(0, 1fr)`: without it the grid's
+        // implicit column sizes itself to its widest child, so a select whose longest option
+        // is wider than a 390px card pushed the whole field past the card's edge (review 12
+        // Nov; the builder had fixed it for its own fields only).
+        className={cn('group/field grid grid-cols-1 gap-1.5', className)}
         {...props}
       />
     </FormItemContext.Provider>

@@ -1,4 +1,4 @@
-import { AlertTriangleIcon, InboxIcon, WifiOffIcon } from 'lucide-react'
+import { AlertTriangleIcon, InboxIcon } from 'lucide-react'
 import type { ComponentProps, ReactNode } from 'react'
 import { useTranslation } from '../../i18n'
 import { cn } from '../../lib/cn'
@@ -133,10 +133,18 @@ export type NetworkErrorProps = Omit<ErrorStateProps, 'icon'> & {
   retryText?: string
 }
 
+/**
+ * A screen that could not load its data, with a way to try again.
+ *
+ * It drew a Wi-Fi-off glyph until 12 Nov. Most of its callers are not offline at all: the
+ * survey list's 404 printed «No se encontró lo que busca» under a crossed-out Wi-Fi icon,
+ * so the icon, the title and the body named three different failures (review 12 Nov). The
+ * caller's `description` says the cause, so the glyph is the failure's own triangle and the
+ * name is kept only so the twenty callers did not have to move.
+ */
 export function NetworkError({ onRetry, retryText, ...props }: NetworkErrorProps) {
   return (
     <ErrorState
-      icon={<WifiOffIcon className="size-6" />}
       action={
         onRetry && retryText ? (
           <Button type="button" variant="outline" onClick={onRetry}>

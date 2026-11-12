@@ -122,6 +122,39 @@ export const DIVERGING_INKS = [
   'var(--admin-chart-div-pos-2-ink)',
 ] as const
 
+/**
+ * Neutral ramp for an ORDERED scale that is not a result — the answer-distribution strip.
+ * Light→dark in light mode, card→light in dark. Index-aligned with {@link NEUTRAL_INKS};
+ * take both through {@link neutralPair}. See the note on the tokens in `tokens.css`.
+ */
+export const NEUTRAL_COLORS = [
+  'var(--admin-chart-neutral-1)',
+  'var(--admin-chart-neutral-2)',
+  'var(--admin-chart-neutral-3)',
+  'var(--admin-chart-neutral-4)',
+  'var(--admin-chart-neutral-5)',
+] as const
+
+/** The ink to print ON each {@link NEUTRAL_COLORS} step; measured by `styles/neutralInkContrast.test.ts`. */
+export const NEUTRAL_INKS = [
+  'var(--admin-chart-neutral-1-ink)',
+  'var(--admin-chart-neutral-2-ink)',
+  'var(--admin-chart-neutral-3-ink)',
+  'var(--admin-chart-neutral-4-ink)',
+  'var(--admin-chart-neutral-5-ink)',
+] as const
+
+/**
+ * The neutral fill and its ink for a 0..1 position along an ordered scale: 0 the lightest
+ * step, 1 the darkest. Five points of a 1–5 scale land exactly on the five steps.
+ * Returned together so a fill is never paired with another step's ink (#208).
+ */
+export function neutralPair(fraction: number): { fill: string; ink: string } {
+  const clamped = Number.isFinite(fraction) ? Math.min(1, Math.max(0, fraction)) : 0
+  const step = Math.round(clamped * (NEUTRAL_COLORS.length - 1))
+  return { fill: NEUTRAL_COLORS[step], ink: NEUTRAL_INKS[step] }
+}
+
 export const CHART_GRID = 'var(--admin-chart-grid)'
 export const CHART_AXIS = 'var(--admin-chart-axis)'
 /** The surface colour, used as the 2px spacer between adjacent or stacked fills. */

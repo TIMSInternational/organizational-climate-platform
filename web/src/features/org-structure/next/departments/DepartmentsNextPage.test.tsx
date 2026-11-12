@@ -170,7 +170,7 @@ describe('DepartmentsNextPage (/departments)', () => {
     renderAs({ role: 'company_admin', companyId: 'c1' })
     await screen.findByText('Operaciones', { selector: 'td' })
     // 2,8 is in the critical area of the company's bands: the cell names it in a chip.
-    await waitFor(() => expect(rowOf('Operaciones')!.querySelectorAll('td')[4].textContent).toBe('2.8Critical'))
+    await waitFor(() => expect(rowOf('Operaciones')!.querySelectorAll('td')[4].textContent).toBe(`2.8${en.resultBands.name.critical}`))
     expect(cardOf('Operaciones').textContent).toContain('Workload 2.4 in Q3')
   })
 

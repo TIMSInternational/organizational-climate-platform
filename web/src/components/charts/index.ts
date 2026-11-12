@@ -111,6 +111,7 @@ export {
   SERIES_COLORS,
   divergingColor,
   divergingPair,
+  neutralPair,
   sequentialColor,
   sequentialInk,
   sequentialPair,

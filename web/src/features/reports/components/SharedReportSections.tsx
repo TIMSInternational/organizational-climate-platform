@@ -14,6 +14,7 @@ import type {
   ReportDocument,
   ReportSurveySection,
 } from '../reportDocument'
+import { languageInSentence } from '../../surveys/surveyVocabulary'
 
 /**
  * The body of a shared report: one section per survey, then the insights.
@@ -124,7 +125,8 @@ function SurveySection({ section }: { section: ReportSurveySection }) {
       {section.resolvedLocale !== '' && (
         <p className="max-w-prose text-sm text-fg-secondary">
           {t('sharedReport.contentLanguage', {
-            language: contentLanguageName(t, section.resolvedLocale),
+            // Mid-sentence, so lower case in Spanish: «Impreso en inglés».
+            language: languageInSentence(t, section.resolvedLocale),
           })}
         </p>
       )}

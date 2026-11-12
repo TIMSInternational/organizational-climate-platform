@@ -15,7 +15,7 @@ import {
 import { useTranslation } from '../../../../i18n'
 import { getQuestionBankItem, listQuestionBankItems, type QuestionBankItem } from '../../../questions/api/questionBank'
 import { dimensionLabel } from '../../dimensionLabel'
-import { SURVEY_QUESTION_TYPES, languageLabel, questionTypeLabel } from '../../surveyVocabulary'
+import { SURVEY_QUESTION_TYPES, languageInSentence, questionTypeLabel } from '../../surveyVocabulary'
 import type { SurveyQuestionValues } from '../../wizardValues'
 import { bankQuestion } from './templateRows'
 
@@ -127,7 +127,7 @@ export function QuestionBankPicker({
                     <span className="flex flex-wrap items-center gap-1.5">
                       <Chip label={dimensionLabel(item.category, t)} />
                       <Chip label={questionTypeLabel(t, item.type)} />
-                      <Chip label={copy('writtenIn', { language: languageLabel(t, item.language) })} />
+                      <Chip label={copy('writtenIn', { language: languageInSentence(t, item.language) })} />
                     </span>
                   </div>
                   <Button

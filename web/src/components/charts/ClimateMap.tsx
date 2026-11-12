@@ -632,13 +632,17 @@ export default function ClimateMap({
       </Table>
 
       {bands ? (
-        <BandLegend bands={bands} short testId="climate-map-legend">
+        <BandLegend bands={bands} testId="climate-map-legend">
           <span className="inline-flex items-center gap-1.5">
             <span aria-hidden="true" className={`inline-block size-4 rounded-xs bg-surface-icon-box ${PROTECTED_HATCH}`} />
             {onSelectCell || onSelectRow
               ? t('charts.protectedLegendInert', { threshold })
               : t('charts.next.legendProtected', { threshold })}
           </span>
+          {/* A dense grid prints one decimal where the bars and tiles beside it print two
+              (the dashboard's "Clima por dimensión"); the key says so, so a 3,6 here is not
+              read as a different measurement from a 3,62 there. */}
+          {(decimals ?? 1) === 1 ? <span data-testid="climate-map-decimals">{t('charts.next.legendOneDecimal')}</span> : null}
         </BandLegend>
       ) : canvas ? (
         <CanvasLegend threshold={threshold} hasTarget={target !== null} inert={Boolean(onSelectCell || onSelectRow)} />

@@ -759,7 +759,8 @@
       "legendBelow": "bajo la meta",
       "legendOn": "en la meta",
       "legendAbove": "sobre la meta",
-      "legendProtected": "protegido, menos de {threshold} respuestas"
+      "legendProtected": "protegido, menos de {threshold} respuestas",
+      "legendOneDecimal": "Cifras con un decimal"
     },
     "range": {
       "aria": "De {low} a {high}; media {mean}",
@@ -1740,14 +1741,15 @@
     }
   },
   "errors": {
-    "generic": "Ocurrió un error. Por favor intenta nuevamente.",
-    "networkError": "Error de red. Por favor verifica tu conexión.",
-    "serverError": "Error del servidor. Por favor intenta más tarde.",
+    "generic": "Ocurrió un error. Intente de nuevo.",
+    "networkError": "Error de red. Revise su conexión.",
+    "serverError": "Error del servidor. Intente de nuevo más tarde.",
     "notFound": "Recurso no encontrado",
-    "unauthorized": "No tienes permiso para acceder a este recurso",
-    "sessionExpired": "Tu sesión ha expirado. Por favor inicia sesión nuevamente.",
-    "validationError": "Error de validación. Por favor verifica tus datos.",
+    "unauthorized": "No tiene permiso para acceder a este recurso.",
+    "sessionExpired": "Su sesión expiró. Inicie sesión de nuevo.",
+    "validationError": "Error de validación. Revise sus datos.",
     "somethingWentWrong": "Algo salió mal.",
+    "loadFailed": "No se pudo cargar esta página",
     "route": {
       "title": "No se pudo mostrar esta página",
       "body": "Ocurrió un error inesperado al abrir esta pantalla. Vuelva a intentarlo; si el problema continúa, regrese al inicio.",
@@ -1840,7 +1842,8 @@
     "switchLanguage": "Cambiar idioma",
     "selectLanguage": "Seleccionar idioma",
     "englishInSentence": "inglés",
-    "spanishInSentence": "español"
+    "spanishInSentence": "español",
+    "bothInSentence": "español e inglés"
   },
   "microclimates": {
     "eyebrow": "Sesiones en vivo",

@@ -397,7 +397,7 @@ const ADMIN_SHARED: readonly RoleCapability[] = [
   },
   {
     route: '/analytics/benchmarks',
-    labelKey: 'navigation.benchmarks',
+    labelKey: 'navigation.references',
     authorizedBy: 'GET /admin/benchmarks — BenchmarkEndpoints gates on Roles.Admin.',
     inNav: true,
   },

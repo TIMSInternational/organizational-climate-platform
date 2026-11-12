@@ -276,10 +276,10 @@ describe('LeaderDashboardView', () => {
   it('reads every cell in the company’s bands, and offers a plan only outside the strength area', () => {
     renderLeader()
 
-    // The bar's chip names each row's area in the company's bands (short names on the bar).
-    expect(within(dimensionCard('recognition')).getByText(en.resultBands.short.opportunity)).toBeTruthy()
-    expect(within(dimensionCard('workload')).getByText(en.resultBands.short.opportunity)).toBeTruthy()
-    expect(within(dimensionCard('belonging')).getByText(en.resultBands.short.strength)).toBeTruthy()
+    // The bar's chip names each row's area in the company's bands, by its one full name.
+    expect(within(dimensionCard('recognition')).getByText(en.resultBands.name.opportunity)).toBeTruthy()
+    expect(within(dimensionCard('workload')).getByText(en.resultBands.name.opportunity)).toBeTruthy()
+    expect(within(dimensionCard('belonging')).getByText(en.resultBands.name.strength)).toBeTruthy()
     // A plan is offered for exactly the two rows outside the strength area, each by name.
     const offers = [...document.querySelectorAll<HTMLElement>('[data-slot="team-plan-offer"]')]
     expect(offers.map((offer) => [offer.dataset.dimension, offer.dataset.band])).toEqual([
@@ -293,7 +293,7 @@ describe('LeaderDashboardView', () => {
 
     // A critical reading is named in the critical area, and is offered a plan.
     renderLeader({ dashboard: department({ climate: climate([4.33, 4.17, 4, 2.8, 4, 3.67]) }) })
-    expect(within(dimensionCard('recognition')).getByText(en.resultBands.short.critical)).toBeTruthy()
+    expect(within(dimensionCard('recognition')).getByText(en.resultBands.name.critical)).toBeTruthy()
     const critical = document.querySelector<HTMLElement>('[data-slot="team-plan-offer"][data-dimension="recognition"]')!
     expect(critical.dataset.band).toBe('critical')
     expect(within(critical).getByText(en.resultBands.name.critical)).toBeTruthy()
@@ -308,7 +308,7 @@ describe('LeaderDashboardView', () => {
     renderLeader({ dashboard: department({ climate: climate(Q2) }), nodoId: 'unassigned-c1', tablero: { status: 'off' } })
 
     const recognition = dimensionCard('recognition')
-    expect(within(recognition).getByText(en.resultBands.short.opportunity)).toBeTruthy()
+    expect(within(recognition).getByText(en.resultBands.name.opportunity)).toBeTruthy()
     expect(screen.queryByRole('link', { name: /^Create a plan for/ })).toBeNull()
     expect(document.querySelector('[data-slot="team-plan-offers"]')).toBeNull()
     expect(screen.queryByText(en.resultBands.leader.planRule.replace('{band}', en.resultBands.name.strength))).toBeNull()
@@ -436,7 +436,7 @@ describe('LeaderDashboardView', () => {
     // The plan rule still stands: the team's own cells are still judged, by the shared rule
     // — Q3's Reconocimiento 3,5 is inside the band, so 'on'. What matters here is that a
     // withheld organisation side does not stop the team's own cell being judged at all.
-    expect(within(dimensionCard('recognition')).getByText(en.resultBands.short.opportunity)).toBeTruthy()
+    expect(within(dimensionCard('recognition')).getByText(en.resultBands.name.opportunity)).toBeTruthy()
   })
 
   /**

@@ -1,5 +1,5 @@
 import { useTranslation } from '../../../../i18n'
-import { BAND_PAINT, RESULT_BAND_ORDER, SCALE_MAX, SCALE_MIN, bandOf, bandShortName, type ResultBandKey, type ResultBands } from '../../../../components/charts'
+import { BAND_PAINT, RESULT_BAND_ORDER, SCALE_MAX, SCALE_MIN, bandName, bandOf, type ResultBandKey, type ResultBands } from '../../../../components/charts'
 import { trendAxis, type TrendAxis } from './derive'
 
 /**
@@ -153,7 +153,7 @@ export default function DimensionTrendChart({
     const top = y(to)
     const bottom = y(from)
     // Sentence case, as every label on the screen: capitals are the eyebrow's alone.
-    const name = bandShortName(band, bands, t)
+    const name = bandName(band, bands, t)
     const box: Box = {
       x1: plotLeft + ZONE_PAD,
       x2: plotLeft + ZONE_PAD + name.length * ZONE_CHAR,

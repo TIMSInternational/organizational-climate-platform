@@ -203,7 +203,7 @@ function RangeRow({ row, bands, floor, decimals }: { row: ClimateRangeRow; bands
           <ProtectedMark floor={floor} />
         ) : (
           <>
-            <BandChip band={band} bands={bands} short />
+            <BandChip band={band} bands={bands} />
             <span className="text-lg font-semibold text-fg-primary tabular-nums">{value(mean)}</span>
           </>
         )}

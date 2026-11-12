@@ -1,35 +1,31 @@
 import { cn } from '../../lib/cn'
 import { formatMetric } from './formatMetric'
-import { divergingPair } from './palette'
+import { neutralPair } from './palette'
 
 /**
  * One question's answer distribution as a single stacked strip — the compact form
  * the survey-results redesign draws instead of a full `BarChart` per question.
  *
- * ## Why this is DIVERGING, and on the climate map's own ramp
+ * ## Why the ramp is NEUTRAL
  *
- * A Likert answer is not a magnitude, it is a **polarity**: disagree, neutral,
- * agree. The shipped page painted every distribution in the series teal, whose
- * colour said nothing, on the same screen as a climate map where red already
- * meant "below" and blue "above". One page, one meaning per colour: the strip
- * reads its fills from `divergingPair`, the exact function the map's cells use,
- * so red here is the red the reader has already learned. This is the third
- * diverging case beside `ClimateMap` and the standing chips, not a new encoding.
+ * A Likert answer is ordered — disagree, neutral, agree — so the strip needs a ramp a reader
+ * can follow from one end to the other. It painted the climate map's diverging ramp until
+ * 12 Nov, red through grey to blue, and the review measured what that cost: red is the
+ * Crítica area and blue is the action, the selection and the live state, so a share of
+ * answers borrowed two meanings it does not have. The fills now come from `neutralPair`, a
+ * grey ramp light→dark, and the end captions under the strip name which end is which.
  *
  * ## How a scale point becomes a colour
  *
- * `(position - midpoint) / (max - min)`, with the midpoint halfway between the
- * scale's configured ends. On a 1-5 scale that lands the five points exactly on
- * the five ramp steps — 1 on saturated red, 3 on the neutral gray, 5 on
- * saturated blue — which is the drawn design. The position comes from the
+ * `(position - min) / (max - min)`: on a 1-5 scale the five points land exactly on the five
+ * grey steps, 1 on the lightest and 5 on the darkest. The position comes from the
  * segment, **never from its render index**: a scale point nobody chose produces
- * no segment, and colouring by index would then paint "neutral" in disagree's
- * red. Written as one division, like the map, so the fill and its ink cannot
- * come from different steps.
+ * no segment, and colouring by index would then shift every answer after it onto the next
+ * step. Written as one division so the fill and its ink cannot come from different steps.
  *
  * ## Counts live inside the segments
  *
- * The reading is printed on the mark it measures, in the ink `divergingPair`
+ * The reading is printed on the mark it measures, in the ink `neutralPair`
  * pairs with that fill — the same #208 rule the map follows. A segment too thin
  * to hold its number keeps its tooltip and its accessible label, so the count is
  * reachable, just not painted where it cannot fit.
@@ -121,7 +117,6 @@ export default function DistributionStrip({
   // `buildClimateMap` returning null.
   if (total === 0 || !(max > min)) return null
 
-  const midpoint = (min + max) / 2
   const compact = size === 'compact'
 
   return (
@@ -134,7 +129,7 @@ export default function DistributionStrip({
       >
         {segments.map((segment) => {
           if (segment.count === 0) return null
-          const { fill, ink } = divergingPair((segment.position - midpoint) / (max - min))
+          const { fill, ink } = neutralPair((segment.position - min) / (max - min))
           const share = segment.count / total
           return (
             <span

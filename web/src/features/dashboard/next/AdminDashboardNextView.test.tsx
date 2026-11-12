@@ -128,7 +128,7 @@ describe('AdminDashboardNextView', () => {
     // The band is said in words on every card, never by colour alone.
     for (const card of cards) {
       const band = card.getAttribute('data-band') as 'strength' | 'opportunity'
-      expect(within(card).getByText(en.resultBands.short[band])).toBeTruthy()
+      expect(within(card).getByText(en.resultBands.name[band])).toBeTruthy()
     }
   })
 
