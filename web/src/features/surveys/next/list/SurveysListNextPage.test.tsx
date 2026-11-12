@@ -258,6 +258,33 @@ describe('SurveysListNextPage', () => {
     })
   })
 
+  /**
+   * One colour, one meaning (the user's ruling of 11 Nov): blue is selection and live,
+   * green / amber / red are the three result areas and nothing else. The chosen status
+   * pill used to wear the `critical` tone — Crítica's red — and the open survey's Activa
+   * chip the `good` tone — Fortaleza's green — so this screen spent two result colours on
+   * two things that are not results. The chosen pill is the blue `accent` tone, Activa the
+   * `live` chip (the blue tint with its dot), every other status the gray `neutral`.
+   */
+  it('chooses a status pill in blue and marks the open survey with the blue live chip, never a result colour', async () => {
+    renderAs({ role: 'company_admin', companyId: 'c1' })
+    await screen.findByRole('heading', { name: new RegExp(copy.openHeading) })
+    const chips = screen.getByRole('group', { name: en.surveys.filterByStatus })
+    const chosen = within(chips)
+      .getAllByRole('button')
+      .find((chip) => chip.getAttribute('aria-pressed') === 'true') as HTMLElement
+    const chosenClasses = chosen.className.split(/\s+/)
+    expect(chosenClasses).toContain('bg-chip-accent-fill')
+    expect(chosenClasses.filter((name) => /chip-(good|warning|critical)/.test(name))).toEqual([])
+
+    const live = rowOf('q4').querySelector('[data-slot="chip"]') as HTMLElement
+    expect(live.getAttribute('data-live')).toBe('true')
+    expect(live.className.split(/\s+/)).toContain('bg-chip-accent-fill')
+    const closed = rowOf('q3').querySelector('[data-slot="chip"]') as HTMLElement
+    expect(closed.getAttribute('data-live')).toBeNull()
+    expect(closed.className.split(/\s+/)).toContain('bg-chip-neutral-fill')
+  })
+
   it('stacks the open survey first, closed newest first, archived last and demoted, and names a missing invitation list', async () => {
     renderAs({ role: 'company_admin', companyId: 'c1' })
     expect(await screen.findByRole('heading', { name: new RegExp(copy.openHeading) })).toBeTruthy()

@@ -198,6 +198,23 @@ describe('LeaderDashboardView', () => {
   })
 
   /**
+   * Activa is the one blue status chip (the user's ruling of 11 Nov): blue means live, and
+   * green is Fortaleza's — a result area — so an open wave must not wear it. It used to be
+   * the `good` tone, the same green as the "Área de fortaleza" chips in the cards above it.
+   */
+  it('marks the open wave Activa with the blue live chip, not the strength area’s green', () => {
+    renderLeader()
+
+    const row = document.querySelector<HTMLElement>('[data-slot="team-open-survey"]')
+    if (!row) throw new Error('no open survey row')
+    const chip = within(row).getByText(copy.surveyActive)
+    expect(chip.getAttribute('data-live')).toBe('true')
+    const classes = chip.className.split(/\s+/)
+    expect(classes).toContain('bg-chip-accent-fill')
+    expect(classes).not.toContain('bg-chip-good-fill')
+  })
+
+  /**
    * Seguridad psicológica: the team's 4,00 against the whole company's 3,75. The raw
    * difference, 0,25, rounds to +0,3 beside two printed readings — 4,0 and 3,8 — that a reader
    * subtracts to 0,2. The page prints the difference of what it prints.

@@ -621,7 +621,7 @@ function ParticipationCard({ model, t, locale }: { model: LeaderDashboardModel; 
                   </span>
                 )}
                 <span className="col-start-2 justify-self-end sm:col-start-3">
-                  <Chip tone="good" label={t('dashboard.next.leader.surveyActive')} />
+                  <Chip tone="live" label={t('dashboard.next.leader.surveyActive')} />
                 </span>
               </li>
             ))}

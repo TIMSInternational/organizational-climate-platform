@@ -197,6 +197,20 @@ describe('the sessions', () => {
     expect([...meta.querySelectorAll('.font-mono')].map((node) => node.textContent)).toEqual(['0', '20'])
   })
 
+  /**
+   * "En vivo" is a live state, and blue means live (the user's ruling of 11 Nov); green is
+   * Fortaleza's, one of the three result areas, and a session that is open is not a result.
+   * The chip was the `good` tone; it is the `live` chip, the blue tint with its dot.
+   */
+  it('marks an open session with the blue live chip, not a result area’s green', async () => {
+    renderPage()
+    const chip = await screen.findByText(en.microclimates.next.chipLive, { selector: '[data-slot="chip"]' })
+    expect(chip.getAttribute('data-live')).toBe('true')
+    const classes = chip.className.split(/\s+/)
+    expect(classes).toContain('bg-chip-accent-fill')
+    expect(classes).not.toContain('bg-chip-good-fill')
+  })
+
   it('leaves the detail’s facts off when that read fails, rather than guessing them', async () => {
     routeFetch([OPEN], {})
     renderPage()

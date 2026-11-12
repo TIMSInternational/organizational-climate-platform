@@ -379,7 +379,7 @@ function InProgressRow({
             {title}
           </Link>
           <Chip
-            tone={isOpen ? 'good' : 'neutral'}
+            tone={isOpen ? 'live' : 'neutral'}
             label={isOpen ? t('microclimates.next.chipLive') : statusLabel(t, row.status)}
           />
         </div>

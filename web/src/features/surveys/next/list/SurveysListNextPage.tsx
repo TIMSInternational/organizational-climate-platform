@@ -189,15 +189,17 @@ function SurveysListForCompany() {
           {facets.map((facet) => {
             const selected = state.statusFilter === facet.status
             return (
-              // The canvas's chip, pressable: the red chip is the one chosen. Styled
-              // whole from `chipVariants`, so `index.css`'s bare-button card never shows.
+              // The canvas's chip, pressable: the blue chip is the one chosen — blue is
+              // selection, and red is the Crítica result area only (the user's ruling of
+              // 11 Nov). Styled whole from `chipVariants`, so `index.css`'s bare-button card
+              // never shows.
               <button
                 key={facet.status}
                 type="button"
                 data-slot="status-pill"
                 aria-pressed={selected}
                 onClick={() => state.setStatusFilter(facet.status)}
-                className={cn(chipVariants({ tone: selected ? 'critical' : 'neutral' }), 'cursor-pointer hover:border-line-hover')}
+                className={cn(chipVariants({ tone: selected ? 'accent' : 'neutral' }), 'cursor-pointer hover:border-line-hover')}
               >
                 {t('surveys.next.list.chipCount', {
                   label: FACET_KEY[facet.status] ? t(FACET_KEY[facet.status]) : statusLabel(t, facet.status),
@@ -447,7 +449,7 @@ function SurveyTableRow({
         </div>
       </td>
       <td className="px-3 py-3 xl:pl-0">
-        <Chip tone={running ? 'good' : 'neutral'} label={statusLabel(t, row.status)} className="w-full justify-start" />
+        <Chip tone={running ? 'live' : 'neutral'} label={statusLabel(t, row.status)} className="w-full justify-start" />
       </td>
       <td className="px-3 py-3 xl:pl-0 whitespace-nowrap">
         <span className={cn('font-mono text-lg tabular-nums', ink)}>{counts.count}</span>
