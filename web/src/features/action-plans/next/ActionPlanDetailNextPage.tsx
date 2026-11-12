@@ -1,9 +1,9 @@
 import { useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { ArrowRight, ChartColumn, ChevronDown, Clock, Ellipsis, Pencil, Plus, Target, Trash2 } from 'lucide-react'
+import { ArrowRight, ChartColumn, ChevronDown, Clock, Ellipsis, Pencil, Plus, Shield, Target, Trash2 } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../i18n'
-import { PageTopBar } from '../../../components/layout'
-import { CanvasCard, FactList, HatchTag, IconBox, NoteBand, PageMeta } from '../../../components/canvas'
+import { PageHeader } from '../../../components/layout'
+import { CanvasCard, FactList, IconBox, PageMeta } from '../../../components/canvas'
 import {
   Alert,
   AlertDescription,
@@ -24,11 +24,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   EmptyState,
+  ErrorState,
   LoadingRegion,
-  NetworkError,
+  Note,
   Progress,
+  ProtectedState,
   SkeletonText,
-  type ChipTone,
 } from '../../../components/ui'
 import { useCompanyScope } from '../../../company-context'
 import { useViewerCapabilities } from '../../../auth/viewerCapabilities'
@@ -73,14 +74,7 @@ export default function ActionPlanDetailNextPage() {
     return <EmptyState title={t('actionPlans.accessRestricted')} description={t('actionPlans.noPermissionMessage')} />
   }
   if (state.status === 'error') {
-    return (
-      <NetworkError
-        title={t('errors.generic')}
-        description={state.error ?? undefined}
-        onRetry={state.reload}
-        retryText={t('common.retry')}
-      />
-    )
+    return <ErrorState title={t('actionPlans.next.loadPlanFailed')} description={state.error ?? undefined} onRetry={state.reload} />
   }
   if (state.status === 'loading' || !state.model) {
     return (
@@ -100,13 +94,6 @@ const STATUS_KEY: Record<string, string> = {
   cancelled: 'actionPlans.next.status.cancelled',
 }
 
-const STATUS_TONE: Record<string, ChipTone> = {
-  not_started: 'neutral',
-  in_progress: 'accent',
-  completed: 'good',
-  overdue: 'critical',
-  cancelled: 'neutral',
-}
 
 /** The board's sentence-case status ("No iniciado"); the server's own word for one it does not know. */
 function statusWord(t: TranslateFn, status: string): string {
@@ -114,9 +101,12 @@ function statusWord(t: TranslateFn, status: string): string {
   return key ? t(key) : statusLabel(t, status)
 }
 
-function priorityTone(priority: string): ChipTone {
-  return priority === 'high' || priority === 'critical' ? 'warning' : 'neutral'
-}
+/*
+ * Every status and priority chip is gray. Blue is for what is live and what can be acted on;
+ * green, amber and red are the three result areas and nothing else (ruling of 11 Nov, HIG
+ * `color.md` › "Avoid using the same color to mean different things"). A plan's lateness is
+ * said by the due sentence beside them, in the danger ink with a clock and the words.
+ */
 
 /** A plan that is over: its due date no longer counts down. */
 const SETTLED = new Set(['completed', 'cancelled'])
@@ -199,25 +189,31 @@ function ActionPlanDetailView({ state, model }: { state: ActionPlanDetailState; 
 
   return (
     <div>
-      <PageTopBar
-        compact
+      <PageHeader
         title={plan.title}
         eyebrow={scopeName ? t('actionPlans.next.eyebrow', { scope: scopeName }) : t('actionPlans.next.eyebrowPlain')}
         breadcrumbs={[{ label: t('navigation.actionPlans'), href: '/action-plans' }, { label: plan.title }]}
         meta={
           <PageMeta>
-            <Chip label={statusWord(t, plan.status)} tone={STATUS_TONE[plan.status] ?? 'neutral'} />
-            <Chip label={t('actionPlans.next.priorityChip', { priority: priorityWord })} tone={priorityTone(plan.priority)} />
-            <span className={cn(!settled && days < 0 && 'text-accent-red-ink')}>{dueSentence}</span>
+            <Chip label={statusWord(t, plan.status)} />
+            <Chip label={t('actionPlans.next.priorityChip', { priority: priorityWord })} />
+            <span data-slot="plan-due-sentence" className={cn('inline-flex items-center gap-1', !settled && days < 0 && 'text-accent-red-ink')}>
+              {!settled && days < 0 && <Clock aria-hidden="true" className="size-3.5 shrink-0" />}
+              {dueSentence}
+            </span>
           </PageMeta>
+        }
+        primaryAction={
+          manages ? (
+            <Button variant="primary" size="canvas" onClick={() => setProgressOpen(true)}>
+              <Plus aria-hidden="true" />
+              {t('actionPlans.next.recordProgress')}
+            </Button>
+          ) : undefined
         }
         actions={
           manages ? (
             <>
-              <Button variant="primary" size="canvas" onClick={() => setProgressOpen(true)}>
-                <Plus aria-hidden="true" />
-                {t('actionPlans.next.recordProgress')}
-              </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="canvas" disabled={state.saving}>
@@ -335,26 +331,26 @@ function ActionPlanDetailView({ state, model }: { state: ActionPlanDetailState; 
                   value: plan.ownerName ? (
                     <span className="font-medium text-fg-primary">{plan.ownerName}</span>
                   ) : (
-                    // Amber, not grey: unassigned is a thing to fix before the first progress
-                    // note, which is what the list's "SIN RESPONSABLE" tile says too.
-                    <span className="text-accent-amber-ink">{t('actionPlans.next.unassigned')}</span>
+                    // In words, not amber: unassigned is a task to settle before the first
+                    // progress note (the list's "Sin responsable" tile says so), not a result area.
+                    <span className="text-fg-secondary">{t('actionPlans.next.unassigned')}</span>
                   ),
                 },
                 {
                   id: 'priority',
                   term: t('actionPlans.next.sheet.priority'),
-                  value: <Chip label={priorityLabel(t, plan.priority)} tone={priorityTone(plan.priority)} />,
+                  value: <Chip label={priorityLabel(t, plan.priority)} />,
                 },
                 {
                   id: 'status',
                   term: t('actionPlans.next.sheet.status'),
-                  value: <Chip label={statusWord(t, plan.status)} tone={STATUS_TONE[plan.status] ?? 'neutral'} />,
+                  value: <Chip label={statusWord(t, plan.status)} />,
                 },
                 {
                   id: 'created',
                   term: t('actionPlans.next.sheet.created'),
                   value: createdDay ? (
-                    <span className="font-mono tabular-nums">{dayWithYear(createdDay, locale)}</span>
+                    <span className="tabular-nums">{dayWithYear(createdDay, locale)}</span>
                   ) : (
                     <span className="text-fg-tertiary">{t('actionPlans.next.sheet.unknown')}</span>
                   ),
@@ -362,7 +358,7 @@ function ActionPlanDetailView({ state, model }: { state: ActionPlanDetailState; 
                 {
                   id: 'due',
                   term: t('actionPlans.next.sheet.due'),
-                  value: <span className="font-mono tabular-nums">{dayWithYear(due, locale)}</span>,
+                  value: <span className="tabular-nums">{dayWithYear(due, locale)}</span>,
                 },
                 {
                   id: 'template',
@@ -381,7 +377,7 @@ function ActionPlanDetailView({ state, model }: { state: ActionPlanDetailState; 
               ]}
             />
           </CanvasCard>
-          <NoteBand roomy>{t('actionPlans.next.guard')}</NoteBand>
+          <Note icon={<Shield />}>{t('actionPlans.next.guard')}</Note>
         </div>
       </div>
 
@@ -444,8 +440,8 @@ function ActionPlanDetailView({ state, model }: { state: ActionPlanDetailState; 
 
 function Box({ label, value, note }: { label: string; value: ReactNode; note: ReactNode }) {
   return (
-    <div className="flex min-w-0 flex-col gap-0.5 rounded-lg bg-surface-outer px-3 py-2.5">
-      <span className="text-2xs font-bold uppercase tracking-label text-fg-label">{label}</span>
+    <div className="flex min-w-0 flex-col gap-0.5 rounded-lg bg-surface-fill-subtle px-3 py-2.5">
+      <span className="text-2xs font-semibold uppercase tracking-tile text-fg-label">{label}</span>
       {value}
       <span className="text-sm text-fg-tertiary">{note}</span>
     </div>
@@ -490,7 +486,7 @@ function DeadlineCard({
   return (
     <CanvasCard title={t('actionPlans.next.deadline.title')}>
       <div className="flex items-end gap-5">
-        <span className={cn('shrink-0 font-mono text-[2.5rem] leading-none tabular-nums', late ? 'text-accent-red-ink' : 'text-fg-primary')}>
+        <span className={cn('shrink-0 text-[2.5rem] font-semibold leading-none tracking-display tabular-nums', late ? 'text-accent-red-ink' : 'text-fg-primary')}>
           {count}
         </span>
         <div className="flex min-w-0 flex-col gap-1 pb-1">
@@ -503,7 +499,7 @@ function DeadlineCard({
         </div>
       </div>
       <div className="flex flex-col gap-1.5">
-        <div className="relative h-2 rounded-md bg-surface-icon-box">
+        <div className="relative h-2 rounded-md bg-surface-fill">
           <div className="absolute inset-y-0 left-0 rounded-md bg-line-default" style={{ width: `${share * 100}%` }} />
           <div
             aria-hidden="true"
@@ -512,22 +508,22 @@ function DeadlineCard({
           />
           <div aria-hidden="true" className="absolute -top-1 right-0 h-4 w-0.5 bg-line-hover" />
         </div>
-        <div className="flex justify-between gap-3 text-xs text-fg-tertiary">
-          <span className="font-mono tabular-nums text-fg-primary">
+        <div className="flex justify-between gap-3 text-sm text-fg-tertiary">
+          <span className="tabular-nums text-fg-primary">
             {createdDay
               ? t(createdIsToday ? 'actionPlans.next.deadline.todayMark' : 'actionPlans.next.deadline.createdMark', {
                   date: calendarDay(Date.parse(`${createdDay}T00:00:00Z`), locale),
                 })
               : t('actionPlans.next.deadline.todayMark', { date: calendarDay(Date.parse(`${asOf}T00:00:00Z`), locale) })}
           </span>
-          <span className="font-mono tabular-nums">{t('actionPlans.next.deadline.dueMark', { date: dueShort })}</span>
+          <span className="tabular-nums">{t('actionPlans.next.deadline.dueMark', { date: dueShort })}</span>
         </div>
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Box
           label={t('actionPlans.next.deadline.createdLabel')}
           value={
-            <span className="font-mono text-lg tabular-nums text-fg-primary">
+            <span className="text-lg tabular-nums text-fg-primary">
               {createdDay ? dayWithYear(createdDay, locale) : t('actionPlans.next.sheet.unknown')}
             </span>
           }
@@ -535,7 +531,7 @@ function DeadlineCard({
         />
         <Box
           label={t('actionPlans.next.deadline.dueLabel')}
-          value={<span className="font-mono text-lg tabular-nums text-fg-primary">{dayWithYear(dueDay(plan.dueDate), locale)}</span>}
+          value={<span className="text-lg tabular-nums text-fg-primary">{dayWithYear(dueDay(plan.dueDate), locale)}</span>}
           note={inDays}
         />
         <Box
@@ -549,7 +545,9 @@ function DeadlineCard({
 }
 
 function Label({ children }: { children: ReactNode }) {
-  return <span className="pt-0.75 text-2xs font-bold uppercase tracking-label text-fg-label">{children}</span>
+  // The spec's `dl.kv` term: secondary ink at the body's step down, sentence case. Uppercase at
+  // 11px is the eyebrow's alone.
+  return <span className="pt-0.5 text-sm font-medium text-fg-tertiary">{children}</span>
 }
 
 function WhatCard({
@@ -571,7 +569,8 @@ function WhatCard({
   const proposed = model.finding.status === 'ready' && model.finding.value.status !== 'none' && model.finding.value.proposed
   return (
     <CanvasCard title={t('actionPlans.next.what.title')}>
-      <div className="grid grid-cols-[136px_minmax(0,1fr)] gap-x-4 gap-y-3 text-base">
+      {/* One column at phone width — the 136px term column left the answer ~130px at 390. */}
+      <div className="grid grid-cols-1 gap-x-4 gap-y-1.5 text-base sm:grid-cols-[136px_minmax(0,1fr)] sm:gap-y-3">
         <Label>{t('actionPlans.next.what.what')}</Label>
         <p className="m-0 text-fg-primary">{plan.title}</p>
         <Label>{t('actionPlans.next.what.why')}</Label>
@@ -584,7 +583,7 @@ function WhatCard({
               store its finding", which stopped being true when the detail response started
               carrying `sourceSurveyId` and the `dimension:` tag; a plan raised from a cell
               now shows what it recorded, and says so by not wearing this. */}
-          {proposed && <Chip label={t('actionPlans.next.proposed')} tone="warning" title={t('actionPlans.next.proposedHint')} />}
+          {proposed && <Chip label={t('actionPlans.next.proposed')} title={t('actionPlans.next.proposedHint')} />}
         </div>
         {manages ? (
           <FindingBlock finding={model.finding} move={model.move} scopeName={scopeName} />
@@ -634,7 +633,9 @@ function FindingBlock({
       <div className="flex min-w-0 flex-col gap-1.5">
         <div className="flex flex-wrap items-center gap-2">
           <Chip label={scope} />
-          <HatchTag label={t('actionPlans.next.finding.protected')} />
+          {/* The padlock and "Menos de {floor}": the floor `planFinding` withheld this group
+              under, and no number of its own. */}
+          <ProtectedState floor={ANONYMITY_FLOOR} />
         </div>
         <span className="text-sm text-fg-tertiary">
           {t('actionPlans.next.finding.protectedNote', { survey: value.surveyTitle, scope, floor: ANONYMITY_FLOOR })}
@@ -649,7 +650,9 @@ function FindingBlock({
       <div className="flex flex-wrap items-center gap-2">
         <Chip label={scope} />
         <span className="font-medium text-fg-primary">{dimensionLabel(value.dimensionKey, t)}</span>
-        <span className={cn('font-mono font-semibold tabular-nums', band === 'critical' ? 'text-chip-critical-ink' : 'text-fg-primary')}>
+        {/* The figure in the label ink; the band chip beside it carries the area's colour,
+            glyph and name, so the colour never stands alone. */}
+        <span className="font-semibold tabular-nums text-fg-primary">
           {reading(value.score, locale, 1, bands?.scale)}
         </span>
         {band !== null && bands !== null && <BandChip band={band} bands={bands} />}
@@ -697,14 +700,13 @@ function MoveLine({ move }: { move: Settled<PlanMove> }) {
     )
   }
   const delta = value.to - value.from
-  // The sign is always drawn, and the arrow never carries the direction alone: colour and
-  // glyph are both present, which is the same rule the dashboard's moves follow.
-  const rose = delta > 0
+  // The sign carries the direction, in the label ink: ▲ and ▼ are the result areas' glyphs
+  // and green and red their colours, so a move wears neither (ruling of 11 Nov).
   const flat = Math.abs(delta) < 0.05
   return (
     <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
       <span className="text-fg-secondary">{t('actionPlans.next.finding.moveLabel')}</span>
-      <span className="font-mono tabular-nums text-fg-secondary">
+      <span className="tabular-nums text-fg-secondary">
         {t('actionPlans.next.finding.moveReading', {
           fromCode: value.fromCode,
           from: reading(value.from, locale, 1, scale),
@@ -713,8 +715,8 @@ function MoveLine({ move }: { move: Settled<PlanMove> }) {
         })}
       </span>
       {!flat && (
-        <span className={cn('font-mono tabular-nums', rose ? 'text-accent-green-ink' : 'text-accent-red-ink')}>
-          {rose ? '\u25b2' : '\u25bc'} {delta > 0 ? '+' : '\u2212'}
+        <span data-slot="plan-move-delta" className="font-semibold tabular-nums text-fg-primary">
+          {delta > 0 ? '+' : '\u2212'}
           {reading(Math.abs(delta), locale, 1, scale)}
         </span>
       )}
@@ -744,11 +746,11 @@ function MeasuresCard({ model }: { model: ActionPlanDetailModel }) {
           {plan.kpis.map((kpi) => {
             const percent = kpiProgressPercent(kpi.currentValue, kpi.targetValue)
             return (
-              <li key={kpi.id} className="flex items-center gap-3">
+              <li key={kpi.id} className="flex flex-wrap items-center gap-3">
                 <IconBox>
                   <ChartColumn />
                 </IconBox>
-                <div className="flex min-w-0 flex-1 flex-col gap-1">
+                <div className="flex min-w-48 flex-1 flex-col gap-1">
                   <span className="font-semibold text-fg-primary">{kpi.name}</span>
                   <span className="text-sm text-fg-tertiary">
                     {t('actionPlans.next.measures.kpiReading', { current: kpi.currentValue, target: kpi.targetValue, unit: kpi.unit })}
@@ -757,9 +759,9 @@ function MeasuresCard({ model }: { model: ActionPlanDetailModel }) {
                 {percent === null ? (
                   <span className="text-sm text-fg-tertiary">{t('actionPlans.notApplicable')}</span>
                 ) : (
-                  <div className="flex w-40 items-center gap-2">
+                  <div className="flex w-40 items-center gap-2 max-sm:min-w-40 max-sm:flex-1">
                     <Progress value={percent} className="min-w-16 flex-1" aria-label={kpi.name} />
-                    <span className="font-mono text-sm tabular-nums text-fg-secondary">
+                    <span className="text-sm tabular-nums text-fg-secondary">
                       {t('actionPlans.percentValue', { percent: Math.round(percent) })}
                     </span>
                   </div>
@@ -782,22 +784,22 @@ function MeasuresCard({ model }: { model: ActionPlanDetailModel }) {
       ) : (
         <ul className="m-0 flex list-none flex-col gap-3 p-0">
           {plan.objectives.map((objective) => (
-            <li key={objective.id} className="flex items-center gap-3">
+            <li key={objective.id} className="flex flex-wrap items-center gap-3">
               <IconBox>
                 <Target />
               </IconBox>
-              <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <div className="flex min-w-48 flex-1 flex-col gap-1">
                 <span className="font-semibold text-fg-primary">{objective.description}</span>
                 <span className="text-sm text-fg-tertiary">{objective.successCriteria}</span>
               </div>
-              <Chip label={statusWord(t, objective.currentStatus)} tone={STATUS_TONE[objective.currentStatus] ?? 'neutral'} />
-              <div className="flex w-40 items-center gap-2">
+              <Chip label={statusWord(t, objective.currentStatus)} />
+              <div className="flex w-40 items-center gap-2 max-sm:min-w-40 max-sm:flex-1">
                 <Progress
                   value={Math.max(0, Math.min(100, objective.completionPercentage))}
                   className="min-w-16 flex-1"
                   aria-label={objective.description}
                 />
-                <span className="font-mono text-sm tabular-nums text-fg-secondary">
+                <span className="text-sm tabular-nums text-fg-secondary">
                   {t('actionPlans.percentValue', { percent: objective.completionPercentage })}
                 </span>
               </div>
@@ -841,7 +843,7 @@ function LogCard({
     >
       <ol className="m-0 flex list-none flex-col p-0">
         <li className="grid grid-cols-[96px_28px_minmax(0,1fr)] items-start gap-3 border-t border-line-light py-2.5">
-          <span className="pt-1.5 font-mono text-sm tabular-nums text-fg-tertiary">
+          <span className="pt-1.5 text-sm tabular-nums text-fg-tertiary">
             {createdDay ? calendarDay(Date.parse(`${createdDay}T00:00:00Z`), locale) : t('actionPlans.next.sheet.unknown')}
           </span>
           <span
@@ -871,7 +873,7 @@ function LogCard({
         </li>
         {history.map((update) => (
           <li key={update.id} className="grid grid-cols-[96px_28px_minmax(0,1fr)] items-start gap-3 border-t border-line-light py-2.5">
-            <span className="pt-1.5 font-mono text-sm tabular-nums text-fg-tertiary">
+            <span className="pt-1.5 text-sm tabular-nums text-fg-tertiary">
               {calendarDay(Date.parse(update.updateDate), locale)}
             </span>
             <span
@@ -901,13 +903,12 @@ function LogCard({
       {model.history.status === 'failed' && (
         <p className="m-0 text-sm text-fg-tertiary">{t('actionPlans.next.log.historyFailed')}</p>
       )}
-      <p className="m-0 flex items-center gap-3 rounded-lg border border-dashed border-line-default p-3 text-base text-fg-tertiary">
-        <Clock aria-hidden="true" className="size-4 shrink-0 text-fg-tertiary" />
+      <Note icon={<Clock />} className="text-fg-secondary">
         <span>
           {t('actionPlans.next.log.noteBefore')} <b className="font-semibold text-fg-primary">{t('actionPlans.next.log.noteAction')}</b>
           {t('actionPlans.next.log.noteAfter')}
         </span>
-      </p>
+      </Note>
     </CanvasCard>
   )
 }

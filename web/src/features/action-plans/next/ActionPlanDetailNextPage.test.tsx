@@ -329,7 +329,10 @@ describe('ActionPlanDetailNextPage', () => {
     renderAs({ role: 'company_admin', companyId: COMPANY })
     expect(await screen.findByText(copy.finding.moveLabel)).toBeTruthy()
     expect(screen.getByText('Q2 2,6 → Q3 3,1')).toBeTruthy()
-    expect(screen.getByText(/\+0,5/)).toBeTruthy()
+    const delta = screen.getByText(/\+0,5/)
+    // The sign carries the direction; ▲/▼ and green/red are the result areas' and not a move's.
+    expect(delta.textContent).not.toMatch(/[\u25b2\u25bc]/)
+    expect(delta.className).not.toMatch(/accent-(green|red)/)
   })
 
   it('withholds the move, and any number with it, when the later wave does not disclose the group', async () => {
@@ -361,7 +364,8 @@ describe('ActionPlanDetailNextPage', () => {
   it('prints no number for a department under the floor, even when the payload carries its scores', async () => {
     vi.mocked(getClimateTrends).mockResolvedValue(trendsWith({ respondentCount: ANONYMITY_FLOOR - 1, isSuppressed: false, scores: [3.2, 2.4] }))
     renderAs({ role: 'company_admin', companyId: COMPANY })
-    expect(await screen.findByText(copy.finding.protected)).toBeTruthy()
+    // The padlock and "Menos de 3" (`ProtectedState`), and no figure of the group's own.
+    expect(await screen.findByText(es.ui.protected.short.replace('{floor}', String(ANONYMITY_FLOOR)))).toBeTruthy()
     expect(screen.queryByText('2,4')).toBeNull()
     expect(screen.queryByText('Carga de trabajo')).toBeNull()
   })

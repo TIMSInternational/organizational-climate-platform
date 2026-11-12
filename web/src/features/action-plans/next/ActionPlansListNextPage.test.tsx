@@ -174,7 +174,7 @@ describe('ActionPlansListNextPage — company_admin', () => {
   it('reads the tiles off the payload: 4 open, 1 due this month, none with progress', async () => {
     renderPage()
     const open = await screen.findByText(`${next.dueThisMonthOne} · ${next.noneWithProgress}`)
-    expect(open.closest('[data-slot="kpi-tile"]')?.textContent).toContain('4')
+    expect(open.closest('[data-slot="kpi-card"]')?.textContent).toContain('4')
     expect(screen.getByText('7 planes · 4 abiertos · 3 cancelados')).toBeTruthy()
   })
 
@@ -216,7 +216,7 @@ describe('ActionPlansListNextPage — company_admin', () => {
     expect(origin[0]!.getAttribute('title')).toBe(next.openOrigin)
 
     // The entity has no owner (ActionPlan.cs), so "4 de 4 sin responsable" is a measurement.
-    const ownerTile = screen.getByText(next.tileOwner).closest('[data-slot="kpi-tile"]') as HTMLElement
+    const ownerTile = screen.getByText(next.tileOwner).closest('[data-slot="kpi-card"]') as HTMLElement
     expect(ownerTile.querySelector('[data-slot="sample-chip"]')).toBeNull()
     expect(ownerTile.textContent).toContain(next.ofTotal.replace('{total}', '4'))
     // Three of the four, now that one of them has an owner: the tile counts a real column.
@@ -262,7 +262,7 @@ describe('ActionPlansListNextPage — company_admin', () => {
     expect(within(row).getAllByText(/Ana Rojas/).length).toBeGreaterThan(0)
     expect(within(row).queryByText(next.unassigned)).toBeNull()
 
-    const ownerTile = screen.getByText(next.tileOwner).closest('[data-slot="kpi-tile"]') as HTMLElement
+    const ownerTile = screen.getByText(next.tileOwner).closest('[data-slot="kpi-card"]') as HTMLElement
     expect(ownerTile.textContent).toContain('3')
   })
 
@@ -317,12 +317,31 @@ describe('ActionPlansListNextPage — company_admin', () => {
     expect(first.getAttribute('title')).toBe('Finanzas · Reponer la reunión de handover entre turnos')
   })
 
-  it('marks the seguimiento tile with the semáforo chip itself — the octagon the tracking screens draw', async () => {
+  // Apple design, 11 Nov: lateness is the danger ink with a clock and the words, never a
+  // traffic-light chip — green, amber and red belong to the three result areas alone.
+  it('marks what is behind on the seguimiento tile with the clock and the words, in the danger ink, and no coloured chip', async () => {
     renderPage()
     const first = await screen.findByText('Finanzas · Reponer la reunión de handover entre turnos')
-    const tile = first.closest('[data-slot="kpi-tile"]') as HTMLElement
-    const chip = within(tile).getByText(es.tracking.semaforo.rojo).closest('[data-slot="chip"]') as HTMLElement
-    expect(chip.querySelector('svg')?.classList.contains('lucide-octagon-alert')).toBe(true)
+    const tile = first.closest('[data-slot="kpi-card"]') as HTMLElement
+    const line = tile.querySelector('[data-slot="seguimiento-line"]') as HTMLElement
+    expect(line.className).toContain('text-accent-red-ink')
+    expect(line.querySelector('svg.lucide-clock')?.getAttribute('aria-hidden')).toBe('true')
+    expect(within(tile).getByText(next.overdueOne, { exact: false })).toBeTruthy()
+    expect(tile.querySelector('[data-slot="chip"]')).toBeNull()
+  })
+
+  it('draws every priority as a gray chip that hugs its word', async () => {
+    renderPage()
+    await screen.findByRole('link', { name: 'Programa de reconocimiento entre pares' })
+    const words: string[] = [es.actionPlans.low, es.actionPlans.medium, es.actionPlans.high, es.actionPlans.critical]
+    const chips = [...document.querySelectorAll('[data-plan-row] [data-slot="chip"]')].filter((chip) =>
+      words.includes(chip.textContent ?? ''),
+    ) as HTMLElement[]
+    expect(chips.length).toBeGreaterThan(0)
+    for (const chip of chips) {
+      expect(chip.className).not.toMatch(/chip-(good|warning|critical)/)
+      expect(chip.className).not.toMatch(/(^|\s)w-(20|full)(\s|$)/)
+    }
   })
 
   it('labels the timeline on one line per plan: the whole title in the DOM, cut only by the room its neighbours leave', async () => {
@@ -353,6 +372,29 @@ describe('ActionPlansListNextPage — company_admin', () => {
     }
     // One row of labels: the drawing keeps the artboard's 64px.
     expect(document.querySelector('[data-slot="due-timeline"]')?.getAttribute('viewBox')).toMatch(/ 64$/)
+  })
+
+  // 11 Nov: with every plan late, four dates and names were pinned to today's mark and printed
+  // in the same pixels, under a range that read backwards ("11 nov → 9 nov").
+  it('leaves the late plans to the Vencidos table: a sentence instead of a drawing when every plan is late', async () => {
+    vi.setSystemTime(new Date(2026, 10, 11, 12, 0, 0))
+    renderPage()
+    await screen.findByRole('link', { name: 'Programa de reconocimiento entre pares' })
+    const card = screen.getByRole('heading', { name: next.timelineHeading }).closest('section') as HTMLElement
+    expect(card.querySelector('[data-slot="due-timeline"]')).toBeNull()
+    expect(card.querySelectorAll('[data-slot="due-timeline-label"]')).toHaveLength(0)
+    expect(within(card).getByText(next.timelineAllLate.replace('{count}', '4'))).toBeTruthy()
+    expect(card.textContent).not.toContain('→')
+  })
+
+  it('draws only the plans still ahead, and says how many late ones it left to the table', async () => {
+    vi.setSystemTime(new Date(2026, 9, 20, 12, 0, 0))
+    renderPage()
+    await screen.findByRole('link', { name: 'Programa de reconocimiento entre pares' })
+    const labels = [...document.querySelectorAll('[data-slot="due-timeline-label"]')].map((label) => label.getAttribute('title'))
+    expect(labels).toEqual(['Reuniones abiertas con la dirección', 'Plan de desarrollo de carrera en Ingeniería'])
+    const card = screen.getByRole('heading', { name: next.timelineHeading }).closest('section') as HTMLElement
+    expect(card.textContent).toContain(next.timelineLate.replace('{count}', '2'))
   })
 
   it('lays the timeline out at the width its card measures, so its type keeps its size at 1024', async () => {
