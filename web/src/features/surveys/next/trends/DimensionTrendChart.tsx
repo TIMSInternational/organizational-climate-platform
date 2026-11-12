@@ -5,7 +5,7 @@ import { trendAxis, type TrendAxis } from './derive'
 /**
  * One dimension across the closed waves, read in the company's result bands — the
  * canvas's chart: a 330×150 figure with the three areas laid behind the line in their
- * tints and named in their corner, a dashed rule at each boundary, a recessive 0.5-step
+ * tints and each named at the top left of its own band, a dashed rule at each boundary, a recessive 0.5-step
  * grid, a 2px line with ringed 8px markers and the value over each, the latest marker a
  * step larger and in its band's colour, and the wave under each point.
  *
@@ -65,6 +65,13 @@ const INSET = 22
 const PLOT_TOP = 16
 /** From the bottom edge: the x labels live in this band. */
 const LABEL_BAND = 26
+/** A zone name's clearance from its band's top rule and the plot's left edge, px. */
+export const ZONE_PAD = 4
+/** A zone name's line box at 11px, px, and its baseline inside that box. */
+const ZONE_LINE = 12
+const ZONE_BASELINE = 9.5
+/** An 11px semibold character, px, on average: the name's width for the collision test. */
+const ZONE_CHAR = 6.3
 
 interface Box {
   x1: number
@@ -118,13 +125,20 @@ export default function DimensionTrendChart({
     if (value !== null) lastIndex = index
   })
 
-  // The three areas, clipped to the drawn range. Each zone's name goes in a corner where
-  // it collides with no point and no value printed over one — top left, top right, then
-  // the bottom two — and is left out when the zone is too thin or every corner is taken:
-  // the legend above the charts names every area either way.
-  const taken: Box[] = values.flatMap((value, index) =>
-    value === null ? [] : [{ x1: x(index) - 16, x2: x(index) + 16, y1: y(value) - 21, y2: y(value) + 6 }],
-  )
+  // The three areas, clipped to the drawn range. Each zone's name sits at ONE fixed spot —
+  // top left, inside its own band, `ZONE_PAD` clear of the rule above it — so the six small
+  // multiples read as one set (the review of 12 Nov: the names had wandered between corners,
+  // and «Oportunidad» and «Crítica» met on the 3,0 rule). A name is left out when its band
+  // is shorter than a padded line in the drawn range, or when a point or the value printed
+  // over it would cover the spot: the legend above the charts names every area either way.
+  // What a name must not cover: every point with the value printed over it, and every
+  // withheld wave's hollow marker with its word.
+  const withheldWidth = withheldText.length * ZONE_CHAR
+  const taken: Box[] = values.flatMap((value, index) => {
+    if (value !== null) return [{ x1: x(index) - 16, x2: x(index) + 16, y1: y(value) - 21, y2: y(value) + 6 }]
+    if (!withheld?.[index]) return []
+    return [{ x1: x(index) - withheldWidth - 6, x2: x(index) + withheldWidth + 6, y1: plotBottom - 20, y2: plotBottom + 5 }]
+  })
   const plotLeft = AXIS_LEFT
   const plotRight = width - AXIS_RIGHT
   const edges: Record<ResultBandKey, [number, number]> = {
@@ -138,15 +152,18 @@ export default function DimensionTrendChart({
     if (to <= from) return []
     const top = y(to)
     const bottom = y(from)
-    const name = bandShortName(band, bands, t).toLocaleUpperCase()
-    const labelWidth = name.length * 5.4
-    const candidates = [
-      { x: plotLeft + 4, y: top + 10, anchor: 'start' as const, box: { x1: plotLeft, x2: plotLeft + 4 + labelWidth, y1: top + 1, y2: top + 12 } },
-      { x: plotRight - 4, y: top + 10, anchor: 'end' as const, box: { x1: plotRight - 4 - labelWidth, x2: plotRight, y1: top + 1, y2: top + 12 } },
-      { x: plotLeft + 4, y: bottom - 3, anchor: 'start' as const, box: { x1: plotLeft, x2: plotLeft + 4 + labelWidth, y1: bottom - 12, y2: bottom - 1 } },
-      { x: plotRight - 4, y: bottom - 3, anchor: 'end' as const, box: { x1: plotRight - 4 - labelWidth, x2: plotRight, y1: bottom - 12, y2: bottom - 1 } },
-    ]
-    const spot = bottom - top >= 13 ? candidates.find((candidate) => !taken.some((box) => overlaps(box, candidate.box))) : undefined
+    // Sentence case, as every label on the screen: capitals are the eyebrow's alone.
+    const name = bandShortName(band, bands, t)
+    const box: Box = {
+      x1: plotLeft + ZONE_PAD,
+      x2: plotLeft + ZONE_PAD + name.length * ZONE_CHAR,
+      y1: top + ZONE_PAD,
+      y2: top + ZONE_PAD + ZONE_LINE,
+    }
+    const fits = bottom - top >= ZONE_LINE + 2 * ZONE_PAD
+    const spot = fits && !taken.some((point) => overlaps(point, box))
+      ? { x: box.x1, y: box.y1 + ZONE_BASELINE, box }
+      : undefined
     return [{ band, top, bottom, name, spot }]
   })
   const boundaries = [bands.opportunityMin, bands.strengthMin].filter((value) => value > low && value < high)
@@ -218,11 +235,10 @@ export default function DimensionTrendChart({
             data-band={zone.band}
             x={zone.spot.x}
             y={zone.spot.y}
-            textAnchor={zone.spot.anchor}
+            textAnchor="start"
             fill={BAND_PAINT[zone.band].ink}
             fontSize={11}
             fontWeight={600}
-            letterSpacing="0.06em"
           >
             {zone.name}
           </text>

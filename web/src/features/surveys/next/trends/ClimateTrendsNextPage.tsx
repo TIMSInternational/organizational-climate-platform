@@ -242,7 +242,7 @@ function ClimateTrendsNextView({
                     <span className="inline-flex flex-wrap items-center gap-2">
                       {bands.scale === 'percent' ? scaleUnitText(bands.scale, t) : t('surveys.next.trends.climateOf')}
                       {/* Printed at two decimals, so judged at two. */}
-                      {latestMean !== null && <BandChip band={bandOf(latestMean, bands, 2)} bands={bands} />}
+                      {latestMean !== null && <BandChip band={bandOf(latestMean, bands, 2)} bands={bands} short />}
                     </span>
                   }
                   locale={locale}
@@ -417,11 +417,14 @@ function ClimateTrendsNextView({
                 floor={model.floor}
                 caption={t('surveys.next.trends.tableHeading')}
               />
+              {/* The cells carry the glyph and the reading, as the dashboard map's do; the
+                  areas are named once, here, under the table. */}
+              <BandLegend bands={bands} short testId="trends-table-legend" />
               {/* The artboard's one line: the floor's rule, and — only while it is true of
                   every wave on the page — that the whole company is never under it. A
                   department withheld in every wave says so in its own segment, where every
-                  cell is hatched; the bands are the company's, and the legend above
-                  already names them. */}
+                  cell is hatched; the bands are the company's, and the legend over it
+                  names them. */}
               <p data-slot="trends-footnote" className="m-0 -mt-1 text-sm leading-normal text-fg-secondary">
                 {t('surveys.next.trends.floorNote', { floor: model.floor })}
                 {!model.companyWithheld.some(Boolean) && <> {t('surveys.next.trends.companyNeverWithheld')}</>}
@@ -465,7 +468,10 @@ function TrendCard({
       <div className="flex items-center justify-between gap-2">
         {/* A card title, so the display serif (the type ruling). */}
         <span className="min-w-0 truncate font-display text-lg font-semibold tracking-title text-fg-primary">{dimension.name}</span>
-        {band && <BandChip band={band} bands={bands} className="h-6" />}
+        {/* The short name, as the chips over the range bar and the legend print it: one
+            screen, one name for an area (the review of 12 Nov). The full name stays in the
+            chip's title. */}
+        {band && <BandChip band={band} bands={bands} short className="h-6" />}
       </div>
       {/* `leading-normal` is the canvas's line box: the artboard sets this 22px reading in a
           body of `line-height: 1.5`, so the row is 33px and the card 254px tall

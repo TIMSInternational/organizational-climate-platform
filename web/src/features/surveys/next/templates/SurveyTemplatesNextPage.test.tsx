@@ -163,6 +163,24 @@ describe('SurveyTemplatesNextPage (/surveys/templates)', () => {
     expect(screen.getAllByRole('link', { name: copy.preview })).toHaveLength(2)
   })
 
+  it('lays its filter bar out as the survey list does: the segmented control, then the search on its own line, at one height', async () => {
+    renderAs({ role: 'company_admin', companyId: 'c1' })
+    await screen.findByRole('heading', { name: '2 templates' })
+    const form = screen.getByRole('search')
+    expect(form.className.split(/\s+/)).not.toContain('justify-between')
+    const scroller = form.querySelector('[data-slot="segment-scroller"]') as HTMLElement
+    const row = form.querySelector('[data-slot="templates-search-row"]') as HTMLElement
+    const order = [...form.children]
+    expect(order.indexOf(scroller)).toBeGreaterThanOrEqual(0)
+    expect(order.indexOf(row)).toBeGreaterThan(order.indexOf(scroller))
+    // A full line of its own, never pushed to the trailing edge.
+    expect(row.className.split(/\s+/)).toEqual(expect.arrayContaining(['w-full']))
+    expect(row.className.split(/\s+/)).not.toContain('ml-auto')
+    // The artboard's 32px filter row: the field at the button's `h-control-lg`.
+    expect(screen.getByRole('searchbox').className.split(/\s+/)).toContain('h-control-lg')
+    expect(row.querySelector('svg[aria-hidden="true"]')).toBeTruthy()
+  })
+
   it('pushes the search to the server as q, and filters the category on the chips', async () => {
     renderAs({ role: 'company_admin', companyId: 'c1' })
     await screen.findByRole('heading', { name: '2 templates' })
