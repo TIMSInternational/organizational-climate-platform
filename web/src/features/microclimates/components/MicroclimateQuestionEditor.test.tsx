@@ -126,3 +126,40 @@ describe('MicroclimateQuestionEditor multiple-choice options', () => {
     expect(patched.options[0]).toMatchObject({ labelEs: 'Claro!', labelEn: 'Clear' })
   })
 })
+
+/**
+ * The control grammar of the sibling `QuestionRow` (reviewer finding, 12 Nov): required is
+ * the same switch, and every remove is a real button named for what it removes, so the
+ * expanded editor and the collapsed rows beside it speak one language.
+ */
+describe('MicroclimateQuestionEditor control grammar', () => {
+  const choice: WizardQuestionValues = {
+    ...emptyQuestion('q1'),
+    textEn: 'How clear?',
+    type: 'multiple_choice',
+    required: true,
+    options: [
+      { key: 'o1', labelEn: 'Clear', labelEs: 'Claro' },
+      { key: 'o2', labelEn: 'Unclear', labelEs: 'Nada claro' },
+    ],
+  }
+
+  it('marks required with the switch, not a checkbox, and toggles the same flag', async () => {
+    const onChange = renderEditor(choice, 'en')
+
+    expect(screen.queryByRole('checkbox')).toBeNull()
+    const toggle = screen.getByRole('switch')
+    expect(toggle.getAttribute('aria-checked')).toBe('true')
+    await userEvent.click(toggle)
+    expect((onChange.mock.calls.at(-1)![0] as WizardQuestionValues).required).toBe(false)
+  })
+
+  it('names each remove button for what it removes and removes exactly that option', async () => {
+    const onChange = renderEditor(choice, 'en')
+
+    expect(screen.getByRole('button', { name: 'Remove question' })).toBeTruthy()
+    await userEvent.click(screen.getByRole('button', { name: 'Remove option 2' }))
+    const patched = onChange.mock.calls.at(-1)![0] as WizardQuestionValues
+    expect(patched.options.map((option) => option.key)).toEqual(['o1'])
+  })
+})
