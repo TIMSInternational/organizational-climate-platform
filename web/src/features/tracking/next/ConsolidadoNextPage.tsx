@@ -16,6 +16,7 @@ import { SEMAFORO_ORDER, semaforoCount, semaforoPresentation, type SemaforoEstad
 import { todayIso } from '../planDates'
 import { percentagePoints } from '../trackingUnits'
 import { joinNames, nodosIn } from './derive'
+import { StateFootnote } from './parts'
 import type { ConsolidadoModel, NodoBlock, PlanLine } from './model'
 import { useConsolidadoModel } from './useConsolidadoModel'
 import { byCount } from '../../../i18n/plural'
@@ -188,13 +189,13 @@ function StateTile({ estado, model, t, locale }: { estado: SemaforoEstado; model
       value={new Intl.NumberFormat(locale).format(count)}
       unit={count === 1 ? t('tracking.next.unitPlan') : t('tracking.next.unitPlans')}
       footnote={
-        <span className={count > 0 ? 'text-fg-primary' : 'text-fg-label'} data-state={presentation.countKey}>
-          {count > 0 && names.length > 0 ? t('tracking.next.joined', { first: sub, second: joinNames(names, locale) }) : sub}
-        </span>
+        <StateFootnote estado={estado}>
+          <span className={count > 0 ? 'text-fg-primary' : 'text-fg-label'} data-state={presentation.countKey}>
+            {count > 0 && names.length > 0 ? t('tracking.next.joined', { first: sub, second: joinNames(names, locale) }) : sub}
+          </span>
+        </StateFootnote>
       }
-    >
-      <SemaforoChip estado={estado} />
-    </KpiCard>
+    />
   )
 }
 
@@ -389,7 +390,7 @@ function PlanCode({ plan }: { plan: PlanLine }) {
   return (
     <Link
       to={`/tracking/planes/${plan.id}`}
-      className="rounded-sm bg-surface-icon-box px-1.5 py-px tabular-nums text-xs text-fg-secondary no-underline hover:underline"
+      className="whitespace-nowrap rounded-sm bg-surface-icon-box px-1.5 py-px tabular-nums text-xs text-fg-secondary no-underline hover:underline"
     >
       {plan.code}
     </Link>

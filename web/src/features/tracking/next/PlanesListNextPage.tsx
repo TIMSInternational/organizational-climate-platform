@@ -19,7 +19,7 @@ import { SEMAFORO_ORDER, semaforoPresentation, type SemaforoEstado } from '../se
 import { canCreatePlan, readTrackingClaims } from '../trackingAccess'
 import { CanvasSelect, MiniBar } from '../../org-structure/next/super/parts'
 import { joinNames } from './derive'
-import { PersonaAvatar } from './parts'
+import { PersonaAvatar, StateFootnote } from './parts'
 import { coverage, groupRows, nodoNamesOf, toRows, type ListRow } from './planesList'
 import { usePlanesListModel } from './usePlanesListModel'
 import { describeApiError } from '../../../api/describeApiError'
@@ -442,11 +442,13 @@ function Tiles({
             value={new Intl.NumberFormat(locale).format(count)}
             unit={count === 1 ? t('tracking.next.unitPlan') : t('tracking.next.unitPlans')}
             footnote={
-              <span className={count > 0 ? 'text-fg-primary' : 'text-fg-label'} data-state={presentation.countKey}>
-                {count > 0 && nodoNames.length > 0
-                  ? t('tracking.next.joined', { first: definition, second: joinNames(nodoNames, locale) })
-                  : definition}
-              </span>
+              <StateFootnote estado={estado}>
+                <span className={count > 0 ? 'text-fg-primary' : 'text-fg-label'} data-state={presentation.countKey}>
+                  {count > 0 && nodoNames.length > 0
+                    ? t('tracking.next.joined', { first: definition, second: joinNames(nodoNames, locale) })
+                    : definition}
+                </span>
+              </StateFootnote>
             }
           />
         )

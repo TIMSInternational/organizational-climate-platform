@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react'
 import { cn } from '../../../lib/cn'
 import { initials } from './derive'
+import { SemaforoGlyph } from '../components/SemaforoChip'
+import type { SemaforoEstado } from '../semaforo'
 
 /**
  * The small pieces the tablero and the plan detail both draw, as the TrackingTablero and
@@ -110,5 +112,22 @@ export function NodoTile({ label, children, aside }: { label: string; children: 
       </div>
       <div className="flex min-h-7 flex-wrap items-baseline gap-1.5">{children}</div>
     </div>
+  )
+}
+
+/**
+ * The footnote of a semáforo state tile, led by the state's shape. The tile's eyebrow
+ * already names the state in words, so the shape is the one non-text cue it carries — a
+ * second chip repeating the word under the number named the state twice. Vista
+ * consolidada and Planes de acción draw their state tiles through this one component so
+ * the two sibling screens cannot drift into two grammars again. The glyph is
+ * `aria-hidden` (`SemaforoGlyph`); the eyebrow is what a screen reader reads.
+ */
+export function StateFootnote({ estado, children }: { estado: SemaforoEstado; children: ReactNode }) {
+  return (
+    <span data-slot="state-footnote" className="inline-flex items-start gap-1.5">
+      <SemaforoGlyph estado={estado} className="mt-0.5 size-3.5 text-fg-primary" />
+      {children}
+    </span>
   )
 }

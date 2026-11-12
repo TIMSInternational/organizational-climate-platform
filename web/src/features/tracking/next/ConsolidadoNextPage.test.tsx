@@ -149,6 +149,26 @@ describe('ConsolidadoNextPage — company_admin', () => {
     expect(screen.getByText('atrasado o sin novedades').closest('[data-slot="kpi-card"]')?.textContent).toContain('0')
   })
 
+  it('draws each state tile in the same grammar as Planes de acción: shape before the footnote, no second chip', async () => {
+    renderPage()
+    await screen.findByText('vencido o sin avance · Finanzas')
+    const stateTiles = Array.from(document.querySelectorAll('[data-slot="kpi-card"]')).filter((card) =>
+      card.querySelector('[data-state]'),
+    )
+    expect(stateTiles).toHaveLength(3)
+    for (const tile of stateTiles) {
+      // The eyebrow already names the state; a chip under the number named it twice.
+      expect(tile.querySelector('[data-slot="chip"]'), tile.textContent ?? '').toBeNull()
+      expect(tile.querySelector('[data-slot="state-footnote"] svg'), tile.textContent ?? '').not.toBeNull()
+    }
+  })
+
+  it('keeps a plan code on one line inside the scrolling table', async () => {
+    renderPage()
+    const code = (await screen.findAllByText('PA-2026-00001'))[0]
+    expect(code.className).toContain('whitespace-nowrap')
+  })
+
   it('lists each plan under its own nodo with its responsable, and the total names the nodos without a plan', async () => {
     renderPage()
     const finanzas = (await screen.findByRole('link', { name: 'Finanzas' })).closest('tbody') as HTMLElement
