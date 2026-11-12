@@ -22,6 +22,9 @@ describe('analytics parts', () => {
     wrap(<ReviewNote />)
     const note = screen.getByText(en.insights.next.reviewNote).closest('[data-slot="review-note"]') as HTMLElement
     expect(note).toBeTruthy()
+    // A caution, not an action: it sits on the neutral fill like every other note in the
+    // group, never the blue tint (blue is action, selection or live).
+    expect(note.getAttribute('data-tone')).toBe('neutral')
     // No origin claim: the server stores whatever text it is sent (AIInsightEndpoints.cs).
     expect(note.textContent).not.toMatch(/\b(AI|IA)\b|generated|generad/i)
   })

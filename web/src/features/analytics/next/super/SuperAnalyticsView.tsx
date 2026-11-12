@@ -109,18 +109,18 @@ export default function SuperAnalyticsView() {
         <div className="-mb-6">
           <PageHeader
             eyebrow={t('navigation.systemAdministration')}
-            title={t('navigation.analytics')}
+            title={t('analytics.next.title')}
             description={t('superadmin.next.analytics.description')}
             breadcrumbs={[
               { label: t('navigation.companies'), href: '/admin/companies' },
               ...(company ? [{ label: company.name, href: `/admin/companies/${companyId}` }] : []),
-              { label: t('navigation.analytics') },
+              { label: t('analytics.next.title') },
             ]}
             actions={
               <Button asChild variant="outline">
                 <Link to="/analytics/benchmarks">
                   <Gauge aria-hidden="true" />
-                  {t('navigation.benchmarks')}
+                  {t('navigation.references')}
                 </Link>
               </Button>
             }
