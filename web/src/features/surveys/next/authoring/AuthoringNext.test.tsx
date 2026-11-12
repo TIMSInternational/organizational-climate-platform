@@ -1092,8 +1092,11 @@ describe('Nueva encuesta (SurveyBuilder artboard)', () => {
     expect(switches).toHaveLength(2)
     for (const toggle of switches) {
       expect(toggle.hasAttribute('disabled')).toBe(false)
-      // The artboard's bright green (#12945b, SurveyBuilder.dc.html), not the darker chip ink.
-      expect(toggle.getAttribute('class')).toContain('data-[state=checked]:bg-accent-green')
+      // Blue, never green: green is the Fortaleza result area, and the Apple-design ruling of
+      // 11 Nov makes every toggle blue. `ui/switch.tsx` applies the blue after the caller's
+      // classes, so the page's own green no longer reaches the screen.
+      expect(toggle.getAttribute('class')).toContain('data-[state=checked]:bg-accent-blue')
+      expect(toggle.getAttribute('class')).not.toContain('data-[state=checked]:bg-accent-green')
     }
     await userEvent.click(within(list).getByRole('button', { name: 'Acciones de la pregunta 1' }))
     expect((await screen.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual(['Subir', 'Bajar', 'Eliminar'])

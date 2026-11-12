@@ -70,8 +70,9 @@ export function NotificationDropdown({
               aria-hidden="true"
               className="absolute -top-1 -right-1 min-w-4 px-1 py-0 text-2xs"
             >
-              {/* Capped, and capped at the same 99 the sidebar's `.nav-badge` uses
-                  (`withUnreadBadge` in navigation/navSections.ts). Rendered in
+              {/* Capped at 99, the cap the sidebar's `.nav-badge` used while the rail
+                  still had a Notificaciones row (`withUnreadBadge`, removed in the
+                  11 Nov regroup that moved Notificaciones to this bell). Rendered in
                   Chrome at 150 unread: the rail said "99+" and this said "150",
                   two numbers for one fact a screen apart — and an uncapped
                   three-digit count on a 32px icon button overhangs the bell on
