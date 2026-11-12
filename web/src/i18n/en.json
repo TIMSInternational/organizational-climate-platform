@@ -325,7 +325,13 @@
       },
       "createOwner": "Owner",
       "createOwnerNone": "Unassigned",
-      "createOwnerHint": "Who is answerable for the plan. You can change it later."
+      "createOwnerHint": "Who is answerable for the plan. You can change it later.",
+      "timelineLate": "{count} overdue are in the table below",
+      "timelineLateOne": "1 overdue is in the table below",
+      "timelineAllLate": "All {count} open plans are past their date: they are under Overdue, below.",
+      "timelineAllLateOne": "The only open plan is past its date: it is under Overdue, below.",
+      "loadListFailed": "The action plans could not be loaded.",
+      "loadPlanFailed": "The action plan could not be loaded."
     }
   },
   "analytics": {

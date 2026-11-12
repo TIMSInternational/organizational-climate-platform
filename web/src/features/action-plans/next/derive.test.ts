@@ -186,8 +186,14 @@ describe('bindShortWords', () => {
     expect(bindShortWords('Reuniones abiertas con la dirección')).toBe(`Reuniones abiertas con${NBSP}la${NBSP}dirección`)
   })
 
+  it('ties the longer prepositions too, so the tile never stops on «entre», «sobre» or «para»', () => {
+    expect(bindShortWords('Programa de reconocimiento entre pares')).toBe(`Programa de${NBSP}reconocimiento entre${NBSP}pares`)
+    expect(bindShortWords('Talleres sobre carga para líderes')).toBe(`Talleres sobre${NBSP}carga para${NBSP}líderes`)
+    expect(bindShortWords('Entre turnos')).toBe('Entre turnos')
+  })
+
   it('leaves longer words, capitalised ones and the last word as they are, and prints the same words', () => {
-    expect(bindShortWords('Programa entre pares')).toBe('Programa entre pares')
+    expect(bindShortWords('Programa reconocido pares')).toBe('Programa reconocido pares')
     expect(bindShortWords('Plan IA de Ley')).toBe(`Plan IA de${NBSP}Ley`)
     expect(bindShortWords('Hablar con')).toBe('Hablar con')
     const title = 'Plan de desarrollo de carrera en Ingeniería'
