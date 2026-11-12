@@ -9,6 +9,20 @@ import es from '../../i18n/es.json'
 afterEach(cleanup)
 
 describe('ErrorState', () => {
+  it('puts the red ink on a failure’s icon and title only, and none on an empty state', () => {
+    // Apple design ruling (11 Nov): the box is neutral; the words and the icon carry the red.
+    const { unmount } = render(<ErrorState title="Could not load" description="Detail" />)
+    const alert = screen.getByRole('alert')
+    expect(alert.querySelector('[aria-hidden="true"]')?.className).toContain('text-accent-red-ink')
+    expect(screen.getByText('Could not load').className).toContain('text-accent-red-ink')
+    expect(screen.getByText('Detail').className).not.toContain('red')
+    unmount()
+    render(<EmptyState title="Nothing yet" />)
+    const status = screen.getByRole('status')
+    expect(status.querySelector('[aria-hidden="true"]')?.className).toContain('text-fg-tertiary')
+    expect(screen.getByText('Nothing yet').className).not.toContain('red')
+  })
+
   it('announces assertively by default', () => {
     render(<ErrorState title="Could not load" />)
     expect(screen.getByRole('alert')).toBeTruthy()

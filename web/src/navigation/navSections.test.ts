@@ -616,6 +616,25 @@ describe('activeHref', () => {
     expect(activeHref('/action-plans', buildNavSections('company_admin', 'company-1'))).toBe('/action-plans')
   })
 
+  it('lights no row, rather than the wrong one, on a destination the rail does not carry', () => {
+    // /surveys/my sits under /surveys, but it is "Mis encuestas": an administrator's rail has no
+    // such row, and lighting "Todas las encuestas" there named the wrong place (sweep, 12 Nov).
+    expect(activeHref('/surveys/my', sections)).toBeNull()
+    expect(activeHref('/surveys/my', buildNavSections('super_admin', undefined))).toBeNull()
+    expect(activeHref('/surveys/sv-1', sections)).toBe('/surveys')
+    // Where the rail does carry it, its own row lights.
+    expect(activeHref('/surveys/my', buildNavSections('employee', 'company-1'))).toBe('/surveys/my')
+    // The same for an administrator's own task list under the consolidado's /tracking.
+    const tracking = buildNavSections('company_admin', 'company-1', { trackingEnabled: true })
+    expect(activeHref('/tracking/mis-tareas', tracking)).toBeNull()
+    expect(activeHref('/tracking/tablero', tracking)).toBe('/tracking')
+    // The leader's tracking rail lights each of its three rows on its own route.
+    const leader = buildNavSections('leader', 'company-1', { trackingEnabled: true })
+    expect(activeHref('/tracking/tablero', leader)).toBe('/tracking/tablero')
+    expect(activeHref('/tracking/planes/p1', leader)).toBe('/tracking/planes')
+    expect(activeHref('/tracking/mis-tareas', leader)).toBe('/tracking/mis-tareas')
+  })
+
   it('draws the tablero with the consolidado’s table glyph, as the TrackingTablero artboard does', () => {
     const rows = buildNavSections('leader', 'company-1', { trackingEnabled: true }).flatMap((section) => section.items)
     expect(rows.find((row) => row.href === '/tracking/tablero')?.icon).toBe(RailConsolidatedIcon)

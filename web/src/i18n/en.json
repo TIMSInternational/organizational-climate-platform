@@ -1745,6 +1745,11 @@
     "sessionExpired": "Your session has expired. Please login again.",
     "validationError": "Validation error. Please check your input.",
     "somethingWentWrong": "Something went wrong.",
+    "route": {
+      "title": "This page could not be shown",
+      "body": "Something unexpected went wrong while opening this screen. Try again; if the problem continues, go back to the start.",
+      "home": "Back to home"
+    },
     "api": {
       "forbidden": "You don't have permission to do this. If you think you should, ask your administrator.",
       "notFound": "We couldn't find it. It may have been deleted; reload the page.",
@@ -1830,7 +1835,9 @@
     "english": "English",
     "spanish": "Spanish",
     "switchLanguage": "Switch Language",
-    "selectLanguage": "Select Language"
+    "selectLanguage": "Select Language",
+    "englishInSentence": "English",
+    "spanishInSentence": "Spanish"
   },
   "microclimates": {
     "eyebrow": "Live sessions",
