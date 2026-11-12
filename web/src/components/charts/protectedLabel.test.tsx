@@ -97,10 +97,6 @@ describe('the words on a hatch', () => {
     expectWordsOnThePill(container, 'protegido')
   })
 
-  it('HatchedCount prints its text on the pill', () => {
-    const { container } = render(<HatchedCount text="menos de 3 respuestas" label="Menos de 3 respuestas" />)
-    expectWordsOnThePill(container, 'menos de 3 respuestas')
-  })
 
   it('ProtectedCell prints its word on the pill', () => {
     const { container } = render(
@@ -109,5 +105,58 @@ describe('the words on a hatch', () => {
       </ProtectedCell>,
     )
     expectWordsOnThePill(container, 'Protegido')
+  })
+})
+
+/**
+ * `HatchedCount` left the hatch (dashboard lane, 12 Nov): the spec's protected state is a
+ * padlock and the words in the tertiary ink on the tile, with no striped box. The reason
+ * this file exists still holds for it — the words must read at 4.5:1 — so it is measured on
+ * the surfaces it now stands on: a card (the leader's survey list, `NodoTile`) and the
+ * `bg-surface-fill-subtle` CoverageBox laid over a card (the supervisor's tiles). Should it
+ * ever stand on the stripes again, its words must be on the pill like every other hatch.
+ */
+describe('HatchedCount, off the hatch', () => {
+  function rgba(value: string): [number, number, number, number] {
+    const hex = /^#([0-9a-f]{6})$/i.exec(value)
+    if (hex) return [0, 2, 4].map((at) => Number.parseInt(hex[1].slice(at, at + 2), 16)).concat(1) as never
+    const fn = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+)\s*)?\)$/.exec(value)
+    if (!fn) throw new Error(`${value} is neither a six-digit hex nor rgb()/rgba()`)
+    return [Number(fn[1]), Number(fn[2]), Number(fn[3]), fn[4] === undefined ? 1 : Number(fn[4])]
+  }
+  /** A translucent fill composited over an opaque one, as the browser paints it. */
+  function over(top: string, under: string): string {
+    const [r, g, b, a] = rgba(top)
+    const [r0, g0, b0] = rgba(under)
+    return `#${[r * a + r0 * (1 - a), g * a + g0 * (1 - a), b * a + b0 * (1 - a)]
+      .map((c) => Math.round(c).toString(16).padStart(2, '0'))
+      .join('')}`
+  }
+
+  function renderCount() {
+    const { container } = render(<HatchedCount text="menos de 3 respuestas" label="Menos de 3 respuestas" />)
+    const words = Array.from(container.querySelectorAll<HTMLElement>('[data-slot="protected-label"]')).find((el) =>
+      el.textContent?.includes('menos de 3 respuestas'),
+    )
+    expect(words, 'no protected-label element carries the words').toBeDefined()
+    return { container, words: words! }
+  }
+
+  it('puts its words on the pill whenever it stands on the hatch', () => {
+    const { container, words } = renderCount()
+    if (container.querySelector(`[class*="repeating-linear-gradient"]`)) expectWordsOnThePill(container, 'menos de 3 respuestas')
+    else expect(words.closest(`[class*="repeating-linear-gradient"]`)).toBeNull()
+  })
+
+  it.each(['light', 'dark'] as const)('reads at 4.5:1 on a card and on a fill-subtle tile in %s', (theme) => {
+    const { words } = renderCount()
+    if (words.closest(`[class*="repeating-linear-gradient"]`)) return // measured by the pill above
+    const owner = words.closest<HTMLElement>('[class*="text-fg-"]')
+    const inkClass = owner?.className.split(/\s+/).find((c) => c.startsWith('text-fg-'))
+    expect(inkClass, 'HatchedCount sets no text-fg-* ink').toBeDefined()
+    const ink = resolve(inkClass!, theme)
+    const card = resolve('bg-surface-card', theme)
+    expect(contrast(ink, card)).toBeGreaterThanOrEqual(4.5)
+    expect(contrast(ink, over(resolve('bg-surface-fill-subtle', theme), card))).toBeGreaterThanOrEqual(4.5)
   })
 })
