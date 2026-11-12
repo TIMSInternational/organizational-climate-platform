@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ArrowRight, Library, SquareLibrary } from 'lucide-react'
+import { ArrowRight, Library, MoreHorizontal, SquareLibrary } from 'lucide-react'
 import { Link } from 'react-router'
 import { PageHeader } from '../../../components/layout'
 import {
@@ -7,6 +7,10 @@ import {
   AlertDescription,
   Button,
   Chip,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
   ErrorState,
   LoadingState,
   Note,
@@ -23,11 +27,10 @@ import { useCompanyScope } from '../../../company-context'
 import { useCompanyName } from '../../../company-context/useCompanyName'
 import { useTranslation } from '../../../i18n'
 import { questionTypeLabel } from '../../surveys/surveyVocabulary'
-import { dimensionLabel } from '../../surveys/dimensionLabel'
 import { QUESTION_BANK_TYPES, type QuestionBankItem } from '../api/questionBank'
 import { EmptyRow } from '../../shared-next/parts'
 import { QSelect, SearchField, TABLE_CARD } from './parts'
-import { LOW_RESPONSE_RATE, MIN_ASKINGS_FOR_A_VERDICT } from './model'
+import { dimensionName, LOW_RESPONSE_RATE, MIN_ASKINGS_FOR_A_VERDICT } from './model'
 import { useQuestionBankModel } from './useQuestionModels'
 import SuperQuestionBankView from './super/SuperQuestionBankView'
 
@@ -119,7 +122,7 @@ function QuestionBankForCompany() {
           <option value="">{t('questionBank.next.allCategories')}</option>
           {categoryNames.map((name) => (
             <option key={name} value={name}>
-              {dimensionLabel(name, t)}
+              {dimensionName(name, t) ?? t('questionLibrary.dimensionUnnamed')}
             </option>
           ))}
         </QSelect>
@@ -175,13 +178,16 @@ function QuestionBankForCompany() {
                 <TableHead scope="col" className="hidden w-36 sm:table-cell">{t('questionBank.next.colType')}</TableHead>
                 <TableHead scope="col" numeric className="hidden w-26 sm:table-cell">{t('questionBank.next.colAsked')}</TableHead>
                 <TableHead scope="col" numeric className="hidden w-28 sm:table-cell">{t('questionBank.next.colAnswered')}</TableHead>
-                <TableHead scope="col" numeric className="hidden w-26 pr-4 sm:table-cell">{t('questionBank.next.colSkipped')}</TableHead>
+                <TableHead scope="col" numeric className="hidden w-26 sm:table-cell">{t('questionBank.next.colSkipped')}</TableHead>
+                <TableHead scope="col" className="w-14 pr-4">
+                  <span className="sr-only">{t('common.actions')}</span>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {state.data.rows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-0">
+                  <td colSpan={8} className="p-0">
                     <EmptyRow
                       measure="max-w-[100ch]"
                       icon={<Library />}
@@ -201,7 +207,7 @@ function QuestionBankForCompany() {
                           label={row.item.companyId === null ? t('questionBank.next.ownerGlobal') : company}
                         />
                         <span>
-                          {dimensionLabel(row.item.category, t)} · {questionTypeLabel(t, row.item.type)}
+                          {[dimensionName(row.item.category, t), questionTypeLabel(t, row.item.type)].filter(Boolean).join(' · ')}
                         </span>
                         <span className="basis-full tabular-nums text-fg-tertiary">
                           {(
@@ -215,24 +221,12 @@ function QuestionBankForCompany() {
                             .join(' · ')}
                         </span>
                       </div>
-                      {(row.attention || !row.item.isActive || canWrite(row.item)) && (
+                      {(row.attention || !row.item.isActive) && (
                         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                           {/* Status words, so neutral: amber, green and red are the three result
                               areas and nothing else (the 11 Nov ruling). */}
                           {row.attention && <Chip tone="neutral" label={t('questionBank.next.attention')} />}
                           {!row.item.isActive && <Chip tone="neutral" label={t('questionBank.next.retired')} />}
-                          {canWrite(row.item) && (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="plain"
-                              className="px-1.5"
-                              disabled={busyId !== null}
-                              onClick={() => void toggleLifecycle(row.item.id, row.item.isActive)}
-                            >
-                              {row.item.isActive ? t('questionBank.next.retire') : t('questionBank.next.reactivate')}
-                            </Button>
-                          )}
                         </div>
                       )}
                     </TableCell>
@@ -242,13 +236,38 @@ function QuestionBankForCompany() {
                         label={row.item.companyId === null ? t('questionBank.next.ownerGlobal') : company}
                       />
                     </TableCell>
-                    <TableCell className="hidden py-3 align-top text-sm text-fg-secondary sm:table-cell">{dimensionLabel(row.item.category, t)}</TableCell>
+                    <TableCell className="hidden py-3 align-top text-sm text-fg-secondary sm:table-cell">{dimensionName(row.item.category, t) ?? '—'}</TableCell>
                     <TableCell className="hidden py-3 align-top text-sm text-fg-secondary sm:table-cell">{questionTypeLabel(t, row.item.type)}</TableCell>
                     {[row.asked, row.answered, row.skipped].map((value, index) => (
-                      <TableCell key={index} numeric className={`hidden py-3 align-top text-fg-primary sm:table-cell ${index === 2 ? 'pr-4' : ''}`}>
+                      <TableCell key={index} numeric className="hidden py-3 align-top text-fg-primary sm:table-cell">
                         {value === null ? '—' : value.toLocaleString(locale)}
                       </TableCell>
                     ))}
+                    {/* Retire and reactivate change the row's state, so they sit in the trailing
+                        overflow menu as the platform bank's do, never as a link under the text. */}
+                    <TableCell className="py-2 pr-4 text-right align-top">
+                      {canWrite(row.item) && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              data-slot="bank-row-menu"
+                              aria-label={t('questionBank.next.rowActions', { text: row.item.text ?? '—' })}
+                              disabled={busyId !== null}
+                            >
+                              <MoreHorizontal aria-hidden="true" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onSelect={() => void toggleLifecycle(row.item.id, row.item.isActive)}>
+                              {row.item.isActive ? t('questionBank.next.retire') : t('questionBank.next.reactivate')}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))
               )}
