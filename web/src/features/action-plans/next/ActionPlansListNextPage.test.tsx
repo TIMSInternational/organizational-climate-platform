@@ -292,6 +292,25 @@ describe('ActionPlansListNextPage — company_admin', () => {
     expect(folded.textContent).toContain(next.ownerInline.replace('{name}', next.unassigned))
   })
 
+  it('keeps the table a table for a screen reader when its rows stack at phone width, and names Vence and Prioridad there', async () => {
+    renderPage()
+    await screen.findByRole('link', { name: 'Programa de reconocimiento entre pares' })
+    const table = section(next.groupNotStarted).querySelector('table') as HTMLTableElement
+    // Explicit roles: Safari/VoiceOver drops a table's semantics once `display` changes (`max-md:block`).
+    expect(table.getAttribute('role')).toBe('table')
+    expect(table.querySelector('thead')?.getAttribute('role')).toBe('rowgroup')
+    expect(table.querySelector('tbody')?.getAttribute('role')).toBe('rowgroup')
+    expect([...table.querySelectorAll('th')].every((th) => th.getAttribute('role') === 'columnheader')).toBe(true)
+    const row = table.querySelector('[data-plan-row="p2"]') as HTMLElement
+    expect(row.getAttribute('role')).toBe('row')
+    const cells = [...row.querySelectorAll(':scope > td')]
+    expect(cells.length).toBeGreaterThan(0)
+    expect(cells.every((td) => td.getAttribute('role') === 'cell')).toBe(true)
+    // The headings are hidden under md, so the stacked cells say their column's name, for a screen reader only.
+    const labels = [...row.querySelectorAll('.sr-only.md\\:hidden')].map((el) => el.textContent)
+    expect(labels).toEqual([next.colDue, next.colPriority])
+  })
+
   it('draws the state and priority filters as the canvas select, and they still narrow the list', async () => {
     renderPage()
     await screen.findByRole('link', { name: 'Programa de reconocimiento entre pares' })
@@ -302,18 +321,18 @@ describe('ActionPlansListNextPage — company_admin', () => {
     expect(screen.getByRole('link', { name: 'Reuniones abiertas con la dirección' })).toBeTruthy()
   })
 
-  it('prints the first plan behind on one line, cut after a whole word as the tile reads, with the whole of it in its title', async () => {
+  it('prints the first plan behind on at most two lines, cut after a whole word, with the whole of it in its title', async () => {
     renderPage()
     const first = await screen.findByText('Finanzas · Reponer la reunión de handover entre turnos')
     // The line wraps at word boundaries and shows its first line only: "…de handover", never
     // "…de handove…" (the CSS ellipsis cuts inside a word, the refuter's shot at 1440).
-    expect(first.className).toContain('max-h-[1lh]')
+    expect(first.className).toContain('max-h-[2lh]')
     expect(first.className).toMatch(/(^|\s)overflow-hidden(\s|$)/)
     expect(first.className).toMatch(/(^|\s)whitespace-normal(\s|$)/)
     expect(first.className).not.toMatch(/(^|\s)(truncate|text-ellipsis|whitespace-nowrap)(\s|$)/)
     expect(first.className).not.toContain('line-clamp')
     // "la" and "de" are tied to the next word, so the line never stops on one of them.
-    expect(first.textContent).toBe('Finanzas · Reponer la\u00A0reunión de\u00A0handover entre turnos')
+    expect(first.textContent).toBe('Finanzas · Reponer la\u00A0reunión de\u00A0handover entre\u00A0turnos')
     expect(first.getAttribute('title')).toBe('Finanzas · Reponer la reunión de handover entre turnos')
   })
 
@@ -351,7 +370,7 @@ describe('ActionPlansListNextPage — company_admin', () => {
     // The plans' own titles, each short word tied to the next by a no-break space, so a label
     // cut by its room stops at "…de trabajo" or "Reuniones abiertas", never on "en" or "la".
     expect(labels.map((label) => label.textContent)).toEqual([
-      'Programa de\u00A0reconocimiento entre pares',
+      'Programa de\u00A0reconocimiento entre\u00A0pares',
       'Reducir la\u00A0carga de\u00A0trabajo en\u00A0Operaciones',
       'Reuniones abiertas con\u00A0la\u00A0dirección',
       'Plan de\u00A0desarrollo de\u00A0carrera en\u00A0Ingeniería',

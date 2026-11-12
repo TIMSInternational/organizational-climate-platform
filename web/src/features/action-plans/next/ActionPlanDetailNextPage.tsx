@@ -812,6 +812,18 @@ function MeasuresCard({ model }: { model: ActionPlanDetailModel }) {
   )
 }
 
+/**
+ * A log row: date, mark, entry, as the artboard draws them from 640px. Under it the 96px date
+ * column left the entry ~130px at 390 ("Operaciones y / Logística · prioridad / alta"), so
+ * the date moves to a small line above the entry and the entry takes the row beside the mark.
+ */
+const LOG_ROW =
+  'grid grid-cols-[28px_minmax(0,1fr)] items-start gap-x-3 gap-y-0.5 border-t border-line-light py-2.5 sm:grid-cols-[96px_28px_minmax(0,1fr)] sm:gap-3'
+const LOG_DATE = 'col-start-2 row-start-1 text-sm tabular-nums text-fg-tertiary sm:col-start-1 sm:pt-1.5'
+const LOG_MARK =
+  'col-start-1 row-span-2 row-start-1 inline-flex size-7 items-center justify-center rounded-full border border-line-default bg-surface-icon-box text-fg-secondary sm:col-start-2 sm:row-span-1'
+const LOG_BODY = 'col-start-2 row-start-2 flex min-w-0 flex-col gap-0.5 sm:col-start-3 sm:row-start-1 sm:pt-1'
+
 function LogCard({
   model,
   author,
@@ -842,17 +854,17 @@ function LogCard({
       }
     >
       <ol className="m-0 flex list-none flex-col p-0">
-        <li className="grid grid-cols-[96px_28px_minmax(0,1fr)] items-start gap-3 border-t border-line-light py-2.5">
-          <span className="pt-1.5 text-sm tabular-nums text-fg-tertiary">
+        <li className={LOG_ROW}>
+          <span className={LOG_DATE}>
             {createdDay ? calendarDay(Date.parse(`${createdDay}T00:00:00Z`), locale) : t('actionPlans.next.sheet.unknown')}
           </span>
           <span
             aria-hidden="true"
-            className="inline-flex size-7 items-center justify-center rounded-full border border-line-default bg-surface-icon-box text-xs font-semibold text-fg-secondary"
+            className={cn(LOG_MARK, 'text-xs font-semibold')}
           >
             {author ? initials(author) : null}
           </span>
-          <div className="flex min-w-0 flex-col gap-0.5 pt-1">
+          <div className={LOG_BODY}>
             <span className="text-base text-fg-primary">
               {author ? (
                 <>
@@ -872,17 +884,17 @@ function LogCard({
           </div>
         </li>
         {history.map((update) => (
-          <li key={update.id} className="grid grid-cols-[96px_28px_minmax(0,1fr)] items-start gap-3 border-t border-line-light py-2.5">
-            <span className="pt-1.5 text-sm tabular-nums text-fg-tertiary">
+          <li key={update.id} className={LOG_ROW}>
+            <span className={LOG_DATE}>
               {calendarDay(Date.parse(update.updateDate), locale)}
             </span>
             <span
               aria-hidden="true"
-              className="inline-flex size-7 items-center justify-center rounded-full border border-line-default bg-surface-icon-box text-fg-secondary"
+              className={LOG_MARK}
             >
               <Clock className="size-3.5" />
             </span>
-            <div className="flex min-w-0 flex-col gap-0.5 pt-1">
+            <div className={LOG_BODY}>
               <span className="text-base text-fg-primary">
                 {update.updatedByName ? (
                   <>

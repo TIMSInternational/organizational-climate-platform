@@ -71,11 +71,21 @@ import { describeApiError } from '../../../api/describeApiError'
 const HEAD = 'h-auto bg-transparent pl-3 pr-0 last:pr-3 pb-2.5 pt-0 align-top text-xs font-semibold normal-case tracking-normal text-fg-label whitespace-nowrap'
 /** A heading's box — it once stacked the sample chip under the heading; nothing does now. */
 const HEAD_STACK = 'flex flex-col items-start gap-1'
-const CELL = 'pl-3 pr-0 last:pr-3 py-3 align-middle max-md:p-0 max-md:last:pr-0'
+const CELL = 'pl-3 pr-0 last:pr-3 py-3 align-middle max-md:border-0 max-md:p-0 max-md:last:pr-0'
 /**
  * Under 768px the table stops being a grid: each row becomes the spec's `.row` — the plan's
  * name and folded finding and owner on the first line, then Vence, Prioridad and Abrir on one
  * line under it. A fixed-layout table at 390 squeezed the plan's column to a letter per line.
+ *
+ * The cells drop the base layer's `td` rule (`index.css`) there, or the first cell — a block
+ * now — drew a rule across the middle of the row. Vence takes what Prioridad and the actions
+ * leave (`flex-1`, its note may wrap), so the three share one line instead of pushing Abrir
+ * onto a third.
+ *
+ * A table whose parts change `display` can lose its semantics in Safari/VoiceOver, so every
+ * part also says its role explicitly (`role="table"`, `"rowgroup"`, `"row"`, `"columnheader"`,
+ * `"cell"`), and since the headings are hidden there, Vence and Prioridad carry their column's
+ * name for a screen reader (`sr-only md:hidden`) — "Prioridad Alta", not a bare "Alta".
  */
 const ROW_STACK = 'max-md:flex max-md:flex-wrap max-md:items-center max-md:gap-x-3 max-md:gap-y-2 max-md:px-4 max-md:py-3'
 /** Shown from 1360px, where the finding and the owner have columns of their own. */
@@ -381,12 +391,13 @@ function Tiles({
             <span className="flex min-w-0 items-start gap-1.5 text-accent-red-ink" data-slot="seguimiento-line">
               <Clock aria-hidden="true" data-slot="overdue-clock" className="mt-0.75 size-3.5 shrink-0" />
               <span
-                // One line, as the artboard's tile reads ("Finanzas · Reponer la reunión de
-                // handover"): the line wraps at word boundaries and the tile shows its first line
-                // only, so the plan's title stops after the last WHOLE word the tile has room for —
-                // never "handove…", and never on a short word ("de", "la": `bindShortWords`). The
-                // whole of it is in `title`, and a screen reader reads it all.
-                className="block min-w-0 max-h-[1lh] overflow-hidden whitespace-normal"
+                // Up to two lines: at 13px with the clock, one line held only "Personas ·
+                // Programa" — no plan named (review of 12 Nov). The line wraps at word boundaries
+                // and the tile shows its first two lines, so the plan's title stops after the last
+                // WHOLE word there is room for — never "handove…", and never on a short word or a
+                // preposition ("de", "la", "entre": `bindShortWords`). The whole of it is in
+                // `title`, and a screen reader reads it all.
+                className="block min-w-0 max-h-[2lh] overflow-hidden whitespace-normal"
                 data-slot="seguimiento-first"
                 data-source={overdue.source}
                 title={overdue.first.placeName ? `${overdue.first.placeName} · ${overdue.first.name}` : overdue.first.name}
@@ -622,34 +633,34 @@ function PlanTable({
           From 1360px the finding and the owner are columns, as the artboard draws them;
           below that they fold into the plan's cell (`PlanTableRow`). Widths sit on the header cells, because a
           `<col>` would keep a hidden column's width in the fixed layout. */}
-      <Table className="table-fixed max-md:block">
-        <thead className="max-md:hidden">
-          <tr className="border-b border-line-default">
-            <th className={HEAD}>
+      <Table role="table" className="table-fixed max-md:block">
+        <thead role="rowgroup" className="max-md:hidden">
+          <tr role="row" className="border-b border-line-default">
+            <th role="columnheader" className={HEAD}>
               <span className={HEAD_STACK}>
                 {t('actionPlans.next.colPlan')}
               </span>
             </th>
-            <th className={cn(HEAD, WIDE_ONLY, 'w-[222px]')} data-col="finding">
+            <th role="columnheader" className={cn(HEAD, WIDE_ONLY, 'w-[222px]')} data-col="finding">
               <span className={HEAD_STACK}>
                 {t('actionPlans.next.colFinding')}
               </span>
             </th>
-            <th className={cn(HEAD, WIDE_ONLY, 'w-[162px]')} data-col="owner">
+            <th role="columnheader" className={cn(HEAD, WIDE_ONLY, 'w-[162px]')} data-col="owner">
               {t('actionPlans.next.colOwner')}
             </th>
-            <th className={cn(HEAD, 'w-[176px]')} data-col="due">
+            <th role="columnheader" className={cn(HEAD, 'w-[176px]')} data-col="due">
               {t('actionPlans.next.colDue')}
             </th>
-            <th className={cn(HEAD, 'w-[92px]')} data-col="priority">
+            <th role="columnheader" className={cn(HEAD, 'w-[92px]')} data-col="priority">
               {t('actionPlans.next.colPriority')}
             </th>
-            <th className={cn(HEAD, 'w-[144px]')} data-col="actions">
+            <th role="columnheader" className={cn(HEAD, 'w-[144px]')} data-col="actions">
               <span className="sr-only">{t('common.actions')}</span>
             </th>
           </tr>
         </thead>
-        <tbody className="max-md:block">
+        <tbody role="rowgroup" className="max-md:block">
           {rows.map((row) => (
             <PlanTableRow
               key={row.id}
@@ -699,8 +710,8 @@ function PlanTableRow({
   const progressNote = row.status === 'in_progress' ? t('actionPlans.next.withProgressNote') : t('actionPlans.next.noProgressNote')
 
   return (
-    <tr data-plan-row={row.id} className={cn('border-b border-line-light last:border-0', ROW_STACK)}>
-      <td className={cn(CELL, 'max-md:block max-md:basis-full')}>
+    <tr role="row" data-plan-row={row.id} className={cn('border-b border-line-light last:border-0', ROW_STACK)}>
+      <td role="cell" className={cn(CELL, 'max-md:block max-md:basis-full')}>
         <div className="flex min-w-0 flex-col">
           <Link
             to={`/action-plans/${row.id}`}
@@ -721,10 +732,10 @@ function PlanTableRow({
           </span>
         </div>
       </td>
-      <td className={cn(CELL, WIDE_ONLY)}>
+      <td role="cell" className={cn(CELL, WIDE_ONLY)}>
         <FindingCell row={row} t={t} />
       </td>
-      <td className={cn(CELL, WIDE_ONLY)}>
+      <td role="cell" className={cn(CELL, WIDE_ONLY)}>
         <div className="flex items-center gap-2">
           <span
             aria-hidden="true"
@@ -737,7 +748,8 @@ function PlanTableRow({
           </span>
         </div>
       </td>
-      <td className={cn(CELL, 'max-md:block')}>
+      <td role="cell" className={cn(CELL, 'max-md:block max-md:min-w-0 max-md:flex-1')}>
+        <span className="sr-only md:hidden">{t('actionPlans.next.colDue')}</span>
         <div className="flex flex-col">
           <span className={cn('text-base tabular-nums', late ? 'text-accent-red-ink' : 'text-fg-primary')}>
             {calendarDay(Date.parse(row.dueDate), locale)}
@@ -745,20 +757,21 @@ function PlanTableRow({
           {open && days !== null && (
             <span
               data-slot="plan-due-note"
-              className={cn('flex items-center gap-1 whitespace-nowrap text-sm', late ? 'text-accent-red-ink' : 'text-fg-tertiary')}
+              className={cn('flex items-center gap-1 whitespace-nowrap text-sm max-md:whitespace-normal', late ? 'text-accent-red-ink' : 'text-fg-tertiary')}
             >
               {late && <Clock aria-hidden="true" className="size-3.5 shrink-0" />}
-              {dueNote(t, days, isDueThisMonth(row, asOf))}
+              {bindCount(dueNote(t, days, isDueThisMonth(row, asOf)))}
             </span>
           )}
         </div>
       </td>
-      <td className={cn(CELL, 'max-md:block')}>
+      <td role="cell" className={cn(CELL, 'max-md:block max-md:shrink-0')}>
+        <span className="sr-only md:hidden">{t('actionPlans.next.colPriority')}</span>
         {/* Gray, hugging its word: a priority is not one of the three result areas, so it
             wears none of their colours, and a chip is a label, not a 80px field. */}
         <Chip label={priorityLabel(t, row.priority)} />
       </td>
-      <td className={cn(CELL, 'max-md:ml-auto max-md:block')}>
+      <td role="cell" className={cn(CELL, 'max-md:block max-md:shrink-0')}>
         <div className="flex justify-end gap-2">
           <Button asChild variant="outline">
             <Link to={`/action-plans/${row.id}`}>{t('actionPlans.next.open')}</Link>
@@ -784,6 +797,14 @@ function PlanTableRow({
       </td>
     </tr>
   )
+}
+
+/**
+ * A count tied to the words either side by no-break spaces, so where Vence's note wraps at
+ * phone width it breaks as "vencido / hace 43 días", never leaving "días" alone on a line.
+ */
+function bindCount(text: string): string {
+  return text.replace(/ (\d+) /, '\u00A0$1\u00A0')
 }
 
 function dueNote(t: TranslateFn, days: number, thisMonth: boolean): string {
