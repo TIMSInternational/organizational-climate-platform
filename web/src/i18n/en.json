@@ -2855,7 +2855,13 @@
       "markAll": "Mark all as read",
       "localMailDomain": ".test",
       "emptyTitle": "You have no notifications",
-      "emptyBody": "Invitations, reminders and scheduled reports sent to you will appear here."
+      "emptyBody": "Invitations, reminders and scheduled reports sent to you will appear here.",
+      "channelAppAlways": "Always",
+      "noneInPeriod": "No notices in the last {days} days",
+      "olderWithUnread": "There are older notices: {count} in all, {unread} unread.",
+      "older": "There are older notices: {count} in all, none unread.",
+      "showAll": "Show all history",
+      "nothingHereHint": "Choose another kind, or All."
     }
   },
   "profile": {
@@ -3183,7 +3189,10 @@
       "floorRuleLead": "Privacy floor: {floor} responses.",
       "floorRuleRest": "It applies to crosses of two or more fields, to the whole survey, to public links and to a leader's view of their own team. A single department or demographic value is shown to administrators from {single} response.",
       "openTextRuleLead": "Open-text answers are read as frequent words",
-      "openTextRuleRest": "in results, reports, dashboards and public links. The verbatim text leaves only in the response workbook a super administrator downloads."
+      "openTextRuleRest": "in results, reports, dashboards and public links. The verbatim text leaves only in the response workbook a super administrator downloads.",
+      "timeoutApplied": "Session timeout applies to everyone signed in: a session left unused for that long ends, and the reader is warned before it does.",
+      "attemptsNotAppliedLead": "Max login attempts is not applied yet.",
+      "attemptsNotAppliedText": "It is saved, but today it locks no account, however many attempts fail."
     }
   },
   "shell": {
@@ -8706,7 +8715,8 @@
       "admin__benchmark-groups__create": "Created a reference group",
       "admin__benchmark-groups__delete": "Deleted a reference group",
       "admin__benchmark-groups__reading__read": "Compared a company with a reference group"
-    }
+    },
+    "filterAnyDay": "Any day"
   },
   "ui": {
     "protected": {

@@ -207,8 +207,16 @@ function SettingsBody({
                 )}
               </Field>
             </div>
+            {/* Two facts of different weight, told apart: the timeout is applied (a plain note),
+                the attempts limit is stored and does nothing (a warning: a security setting that
+                silently locks no account). The warning is the lockout warning's own shape —
+                neutral fill, warning glyph, bold lead-in — since amber is a result area. */}
             <Note data-slot="session-note" icon={<Info />} className="text-sm text-fg-secondary">
-              {t('settings.next.notEnforced')}
+              {t('settings.next.timeoutApplied')}
+            </Note>
+            <Note data-slot="attempts-warning" data-severity="warning" icon={<TriangleAlert />}>
+              <p className="m-0 font-semibold">{t('settings.next.attemptsNotAppliedLead')}</p>
+              <p className="m-0 text-sm text-fg-secondary">{t('settings.next.attemptsNotAppliedText')}</p>
             </Note>
           </Panel>
         </div>

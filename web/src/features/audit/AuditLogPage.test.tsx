@@ -113,19 +113,38 @@ describe('AuditLogPage', () => {
   })
 
   it('a day filter asks for the company’s day, and goes back to page one', async () => {
-    setToken(tokenFor({ role: 'company_admin', companyId: COMPANY }))
-    const { mock, urls } = fetchWith(() => ok(PAGE))
-    vi.stubGlobal('fetch', mock)
-    renderPage()
-    await screen.findAllByText('Irene Solano')
+    // Only `Date` is faked, so the calendar opens on October 2026 whatever day this runs;
+    // the timers `waitFor` polls with stay real.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 9, 25, 12))
+    try {
+      setToken(tokenFor({ role: 'company_admin', companyId: COMPANY }))
+      const { mock, urls } = fetchWith(() => ok(PAGE))
+      vi.stubGlobal('fetch', mock)
+      const { baseElement } = renderPage()
+      await screen.findAllByText('Irene Solano')
 
-    fireEvent.change(screen.getByLabelText(T.filterFrom), { target: { value: '2026-10-21' } })
+      // The field speaks the screen's language: no native date input, whose «mm/dd/yyyy» the
+      // browser writes in its own locale, and an empty filter says so in Spanish.
+      expect(baseElement.querySelector('input[type="date"]')).toBeNull()
+      const from = screen.getByRole('button', { name: T.filterFrom })
+      expect(from.textContent).toBe(T.filterAnyDay)
 
-    await waitFor(() =>
-      expect(urls.some((url) => url.searchParams.get('from') === '2026-10-21T06:00:00.000Z')).toBe(true),
-    )
-    const filtered = urls.filter((url) => url.searchParams.get('from') !== null).at(-1)!
-    expect(filtered.searchParams.get('page')).toBe('1')
+      fireEvent.click(from)
+      await screen.findByRole('grid')
+      const day = baseElement.querySelector<HTMLElement>('td[data-day="2026-10-21"] button')
+      expect(day).not.toBeNull()
+      fireEvent.click(day!)
+
+      await waitFor(() =>
+        expect(urls.some((url) => url.searchParams.get('from') === '2026-10-21T06:00:00.000Z')).toBe(true),
+      )
+      const filtered = urls.filter((url) => url.searchParams.get('from') !== null).at(-1)!
+      expect(filtered.searchParams.get('page')).toBe('1')
+      expect(screen.getByRole('button', { name: T.filterFrom }).textContent).toMatch(/^21 oct 2026$/)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('says, in Spanish, that the log is not theirs when the server refuses', async () => {
