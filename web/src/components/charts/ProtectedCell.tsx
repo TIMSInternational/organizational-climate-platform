@@ -1,7 +1,7 @@
 import { Lock } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import { cn } from '../../lib/cn'
-import { ANONYMITY_FLOOR, PROTECTED_HATCH, isSuppressed } from './suppression'
+import { ANONYMITY_FLOOR, PROTECTED_HATCH, PROTECTED_LABEL, isSuppressed } from './suppression'
 
 /**
  * The anonymity floor, made visible.
@@ -177,7 +177,8 @@ export default function ProtectedCell({
           and `ProtectedMark` beside a climate bar wears the same padlock. */}
       {mark === 'word' ? (
         // `aria-hidden`: the box's own label already says it, in a full sentence.
-        <span aria-hidden="true" className="font-mono text-2xs lowercase">
+        // On a solid pill (`PROTECTED_LABEL`): the word straight on the stripes was 3.97:1.
+        <span aria-hidden="true" data-slot="protected-label" className={cn(PROTECTED_LABEL, 'text-2xs lowercase')}>
           {t('charts.protectedWord')}
         </span>
       ) : (

@@ -78,3 +78,18 @@ export function isSuppressed(responses: number, threshold = ANONYMITY_FLOOR): bo
  */
 export const PROTECTED_HATCH =
   '[background-image:repeating-linear-gradient(135deg,var(--admin-hatch-stripe)_0_4px,var(--admin-hatch-ground)_4px_8px)]'
+
+/**
+ * The words on a hatch — "menos de 3 respuestas", "protegido" — sit on a solid pill, never
+ * straight on the stripes.
+ *
+ * Measured in the render (Apple-design review, 11 Nov): the tertiary ink printed over the
+ * hatch was 3.97:1 on its light stripe (`#6c6c71` on `#e0e0e5`), under the 4.5:1 that text up
+ * to 17pt needs (HIG accessibility.md › Vision), and the moving stripes behind the glyphs
+ * make a word harder to read still (color.md › Inclusive color). The hatch keeps saying
+ * *withheld* around the pill; the pill gives the words one flat ground: the secondary ink on
+ * the card, 9.09:1 in light (`#48484d` on `#ffffff`) and 10.6:1 in dark (`#c7cddb` on
+ * `#18213a`). `protectedHatch.test.ts` resolves both halves of this class list through
+ * `theme.css` and `tokens.css` and measures them in both themes.
+ */
+export const PROTECTED_LABEL = 'rounded-md bg-surface-card px-1.5 text-fg-secondary'

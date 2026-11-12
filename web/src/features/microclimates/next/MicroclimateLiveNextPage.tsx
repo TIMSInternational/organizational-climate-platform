@@ -20,7 +20,7 @@ import {
   Progress,
   SkeletonText,
 } from '../../../components/ui'
-import { PROTECTED_HATCH } from '../../../components/charts/suppression'
+import { PROTECTED_HATCH, PROTECTED_LABEL } from '../../../components/charts/suppression'
 import { PageMetaSentences } from '../../../components/canvas'
 import { cn } from '../../../lib/cn'
 import type { LiveResults, MicroclimateDetail } from '../api/microclimates'
@@ -360,8 +360,10 @@ function WordsBlock({ live, responses }: { live: LiveResults | null; responses: 
             PROTECTED_HATCH,
           )}
         >
-          <CanvasLockIcon strokeWidth={1.6} className="size-4.5 text-fg-tertiary" />
-          <span className="text-sm text-fg-tertiary">
+          {/* The padlock and the words on one solid pill (`PROTECTED_LABEL`): straight on
+              the stripes the tertiary ink was 3.97:1. */}
+          <span data-slot="protected-label" className={cn(PROTECTED_LABEL, 'inline-flex items-center gap-1.5 px-2.5 py-1 text-sm')}>
+            <CanvasLockIcon strokeWidth={1.6} className="size-4 shrink-0 text-fg-tertiary" />
             {t('microclimates.next.live.hatchNote', { minimum: MINIMUM_RESPONDENTS })}
           </span>
         </div>

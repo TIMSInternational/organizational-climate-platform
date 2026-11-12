@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { PROTECTED_HATCH } from '../../../../components/charts/suppression'
+import { PROTECTED_HATCH, PROTECTED_LABEL } from '../../../../components/charts/suppression'
 import { cn } from '../../../../lib/cn'
 
 /**
@@ -59,12 +59,15 @@ export function HatchedCount({ text, label, className }: { text: string; label: 
       title={label}
       data-slot="hatched-count"
       className={cn(
-        'inline-flex h-8.5 min-w-0 items-center justify-center rounded bg-surface-icon-box px-3 text-xs whitespace-nowrap text-fg-tertiary',
+        'inline-flex h-8.5 min-w-0 items-center justify-center rounded bg-surface-icon-box px-3 text-xs whitespace-nowrap',
         PROTECTED_HATCH,
         className,
       )}
     >
-      <span aria-hidden="true">{text}</span>
+      {/* On a solid pill (`PROTECTED_LABEL`): straight on the stripes this was 3.97:1. */}
+      <span aria-hidden="true" data-slot="protected-label" className={cn(PROTECTED_LABEL, 'py-0.5')}>
+        {text}
+      </span>
     </span>
   )
 }

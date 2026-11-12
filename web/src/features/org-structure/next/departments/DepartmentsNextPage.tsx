@@ -4,7 +4,7 @@ import { CircleAlert, MoreHorizontal, Network, Plus, Users } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
 import { ANONYMITY_FLOOR, BandChip, bandOf, scoreText, type ResultBands } from '../../../../components/charts'
-import { PROTECTED_HATCH } from '../../../../components/charts/suppression'
+import { PROTECTED_HATCH, PROTECTED_LABEL } from '../../../../components/charts/suppression'
 import {
   Button,
   Card,
@@ -494,9 +494,10 @@ function ClimateCell({
     return (
       <span
         data-slot="protected-cell"
-        className={cn('inline-flex h-5.5 w-17.5 items-center justify-center rounded bg-surface-panel font-mono text-2xs text-fg-tertiary', PROTECTED_HATCH)}
+        className={cn('inline-flex h-5.5 w-17.5 items-center justify-center rounded bg-surface-panel text-2xs', PROTECTED_HATCH)}
       >
-        {t(`${K}.protected`)}
+        {/* On a solid pill (`PROTECTED_LABEL`): straight on the stripes this was 3.97:1. */}
+        <span data-slot="protected-label" className={PROTECTED_LABEL}>{t(`${K}.protected`)}</span>
       </span>
     )
   }

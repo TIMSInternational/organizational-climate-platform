@@ -24,7 +24,7 @@ import {
   shownDelta,
   type ResultBands,
 } from '../../../components/charts'
-import { ANONYMITY_FLOOR, PROTECTED_HATCH } from '../../../components/charts/suppression'
+import { ANONYMITY_FLOOR, PROTECTED_HATCH, PROTECTED_LABEL } from '../../../components/charts/suppression'
 import { cn } from '../../../lib/cn'
 import { listDemographicFields } from '../../org-structure/api/demographicFields'
 import { dimensionLabel } from '../dimensionLabel'
@@ -637,7 +637,7 @@ export default function SurveyCrossPanel({
                           colSpan={categories.length + 1}
                           className={cn(CROSS_CELL, PROTECTED_HATCH, 'rounded px-3 py-2 text-left')}
                         >
-                          <span className="text-sm text-fg-secondary">
+                          <span data-slot="protected-label" className={cn(PROTECTED_LABEL, 'inline-block py-0.5 text-sm')}>
                             {t('surveyResults.cross.protectedRow', { floor: result?.minimumGroupSize ?? ANONYMITY_FLOOR })}
                             {cohort.length > 1 ? ` ${t('surveyResults.cross.protectedHint')}` : ''}
                           </span>
