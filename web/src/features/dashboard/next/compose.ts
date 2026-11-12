@@ -12,6 +12,7 @@ import type {
   ComposedAdminDashboardModel,
   AttentionItem,
   DimensionSeries,
+  FailureCause,
   MapRow,
   OpenSurvey,
   PlanRef,
@@ -80,7 +81,7 @@ import type {
 /** One region's payload, or the reason it has none. */
 export type Part<T> =
   | { status: 'live'; value: T }
-  | { status: 'fallback'; reason: 'failed'; error: string | null }
+  | { status: 'fallback'; reason: 'failed'; error: string | null; cause?: FailureCause }
   | { status: 'fallback'; reason: 'empty' }
   | { status: 'off' }
 
@@ -356,7 +357,7 @@ function composeMap(
 function toRegionState(part: Part<unknown>): RegionState {
   if (part.status === 'live') return { status: 'live' }
   if (part.status === 'off') return { status: 'off' }
-  return part.reason === 'failed' ? { status: 'fallback', reason: 'failed', error: part.error } : part
+  return part.reason === 'failed' ? { status: 'fallback', reason: 'failed', error: part.error, cause: part.cause } : part
 }
 
 const EMPTY: Part<never> = { status: 'fallback', reason: 'empty' }

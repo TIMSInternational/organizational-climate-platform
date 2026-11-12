@@ -6,6 +6,8 @@ import { getSurvey, listSurveys } from '../../surveys/api/surveys'
 import { listPlanesAccion } from '../../tracking/api/trackingApi'
 import { getNodoNames, listPersonaOptions } from '../../tracking/api/trackingPickers'
 import { getCompanyAdminDashboard } from '../api/dashboard'
+import { ApiError } from '../../../api/authFetch'
+import type { FailureCause } from './model'
 import {
   composeModel,
   coveringPlan,
@@ -45,8 +47,24 @@ async function settle<T>(work: () => Promise<T>): Promise<Part<T>> {
   try {
     return { status: 'live', value: await work() }
   } catch (err) {
-    return { status: 'fallback', reason: 'failed', error: err instanceof Error ? err.message : null }
+    return { status: 'fallback', reason: 'failed', error: err instanceof Error ? err.message : null, cause: failureCause(err) }
   }
+}
+
+/**
+ * The cause a section names, from the error the client threw: `ApiError` carries the
+ * status the server answered with; `authFetch` rethrows a request that never reached it as
+ * a plain `Error` whose `cause` is the original `TypeError`.
+ */
+export function failureCause(err: unknown): FailureCause {
+  if (err instanceof ApiError) {
+    if (err.status === 401 || err.status === 403) return 'forbidden'
+    if (err.status === 404) return 'notFound'
+    if (err.status >= 500) return 'server'
+    return 'other'
+  }
+  if (err instanceof Error && err.cause instanceof TypeError) return 'network'
+  return 'other'
 }
 
 async function loadTracking(trackingBaseUrl: string, baseUrl: string, tenant: string): Promise<TrackingPart> {

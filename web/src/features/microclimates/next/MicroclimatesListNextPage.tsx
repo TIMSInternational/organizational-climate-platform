@@ -25,6 +25,9 @@ import type { Microclimate } from '../api/microclimates'
 import { MINIMUM_RESPONDENTS } from '../microclimatePrivacy'
 import { statusLabel } from '../microclimateVocabulary'
 import {
+  JOURNEY,
+  type JourneyKey,
+  type JourneyState,
   clock,
   dayMonth,
   dayMonthLong,
@@ -34,6 +37,7 @@ import {
   type SessionReference,
 } from './derive'
 import type { FlowStep, InProgressSession, MicroclimatesListNextModel } from './model'
+import { JourneySteps } from './JourneyRail'
 import { useCopyLink, type CopyOutcome } from './useCopyLink'
 import { useMicroclimatesListModel } from './useMicroclimatesListModel'
 import { displayZone, zoneNote } from './companyZone'
@@ -253,13 +257,32 @@ function pastEmptyNamed(t: TranslateFn, session: SessionReference, date: string)
 }
 
 /**
+ * Where the session in progress stands, as the journey rail's states: the steps before it
+ * done, its own step current, the rest pending. No session in progress: nothing is current.
+ */
+function flowStates(step: FlowStep | null): Record<JourneyKey, JourneyState> {
+  const states = {} as Record<JourneyKey, JourneyState>
+  JOURNEY.forEach((key, index) => {
+    const n = index + 1
+    states[key] = step === null || n > step ? 'pending' : n === step ? 'current' : 'done'
+  })
+  return states
+}
+
+/**
  * "Un microclima es un flujo corto": the four steps, and where the session in progress
- * stands. A step reached is filled; the rule after it is solid up to the current step
- * and dashed past it, as the artboard draws 1 — 2 — 3 ┄ 4 for a session at step 3.
+ * stands. Drawn with the same steps as the Crear and Detalle rail (`JourneySteps`): a step
+ * passed is a check, the current one the blue pill, a pending one a numbered gray disc.
  */
 function FlowCard({ step, session }: { step: FlowStep | null; session: SessionReference | null }) {
   const { t } = useTranslation()
-  const reached = step ?? 0
+  const titles = {} as Record<JourneyKey, string>
+  const notes = {} as Record<JourneyKey, string>
+  STEPS.forEach(({ titleKey, hintKey }, index) => {
+    const key = JOURNEY[index] as JourneyKey
+    titles[key] = t(titleKey)
+    notes[key] = t(hintKey, { minimum: MINIMUM_RESPONDENTS })
+  })
 
   return (
     <section aria-labelledby="mc-flow" className={cn(CARD, 'flex flex-col gap-3 px-5 pt-4 pb-4.5')}>
@@ -273,46 +296,7 @@ function FlowCard({ step, session }: { step: FlowStep | null; session: SessionRe
           </span>
         )}
       </div>
-      <ol className="m-0 grid list-none grid-cols-2 gap-y-4 p-0 lg:grid-cols-4 lg:gap-y-0">
-        {STEPS.map(({ step: n, titleKey, hintKey }) => (
-          <li
-            key={n}
-            data-slot="flow-step"
-            data-reached={n <= reached ? 'true' : 'false'}
-            aria-current={n === step ? 'step' : undefined}
-            className="m-0 flex min-w-0 flex-col gap-2"
-          >
-            <div className="flex items-center gap-2">
-              <span
-                aria-hidden="true"
-                // 26px outside: the artboard's 24px circle is content-box with a 1px
-                // border (measured off MicroclimatesList.png, 281-306 by 237-262).
-                className={cn(
-                  'inline-flex size-6.5 flex-none items-center justify-center rounded-full border text-xs font-bold tabular-nums',
-                  n <= reached
-                    ? 'border-accent-blue bg-accent-blue text-fg-on-accent'
-                    : 'border-line-default bg-surface-card text-fg-tertiary',
-                )}
-              >
-                {n}
-              </span>
-              {n < 4 ? (
-                <span
-                  aria-hidden="true"
-                  data-slot="flow-rule"
-                  className={cn('flex-1 border-t', n < reached ? 'border-solid border-accent-blue' : 'border-dashed border-line-hover')}
-                />
-              ) : (
-                <span aria-hidden="true" className="flex-1" />
-              )}
-            </div>
-            <div className="flex flex-col gap-0.5 pr-4">
-              <span className="text-base font-semibold text-fg-primary">{t(titleKey)}</span>
-              <span className="text-sm text-fg-tertiary">{t(hintKey, { minimum: MINIMUM_RESPONDENTS })}</span>
-            </div>
-          </li>
-        ))}
-      </ol>
+      <JourneySteps states={flowStates(step)} notes={notes} titles={titles} />
     </section>
   )
 }
@@ -392,7 +376,7 @@ function InProgressRow({
         <SessionMeta session={session} locale={locale} zone={zone} />
         {fill !== null && (
           <Progress
-            value={Math.round(fill)}
+            value={fill}
             className="max-w-80"
             aria-label={t('microclimates.liveParticipationLabel', { session: title })}
           />

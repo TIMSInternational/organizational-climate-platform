@@ -193,6 +193,54 @@ describe('MicroclimateAnalyticsNextPage', () => {
     expect(links[0]).toBe('Pulso semanal — ¿cómo fue la semana?')
   })
 
+  it('floors the participation rate: 31 of 48 reads 64 %, never a rounded 65 %', async () => {
+    const closed = session({ id: 'm3', title: 'Pulso de octubre', status: 'closed', responseCount: 31, targetParticipantCount: 48 })
+    vi.mocked(listMicroclimates).mockResolvedValue([closed])
+    vi.mocked(getLiveResults).mockResolvedValue({
+      sentimentScore: null,
+      engagementLevel: 'low',
+      responseCount: 31,
+      targetParticipantCount: 48,
+      isSuppressed: false,
+      suppressionReason: null,
+      minimumGroupSize: 5,
+      wordCloud: [],
+    })
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    const row = await waitFor(() => rowOf('Pulso de octubre'))
+    expect(within(row).getByText('64 %')).toBeTruthy()
+    expect(within(row).queryByText('65 %')).toBeNull()
+  })
+
+  it('draws each pulse point as a neutral tile with a no-figure glyph, never a dashed box with an empty circle', async () => {
+    const closed = session({ id: 'm4', title: 'Pulso de octubre', status: 'closed', responseCount: 6, createdAt: '2026-10-20T00:00:00Z' })
+    vi.mocked(listMicroclimates).mockResolvedValue([session({}), closed])
+    vi.mocked(getLiveResults).mockResolvedValue({
+      sentimentScore: null,
+      engagementLevel: 'low',
+      responseCount: 6,
+      targetParticipantCount: 20,
+      isSuppressed: false,
+      suppressionReason: null,
+      minimumGroupSize: 5,
+      wordCloud: [],
+    })
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    await waitFor(() => expect(document.querySelectorAll('[data-slot="pulse-point"]')).toHaveLength(2))
+    const points = [...document.querySelectorAll<HTMLElement>('[data-slot="pulse-point"]')]
+    for (const point of points) {
+      const classes = point.className.split(/\s+/)
+      expect(classes).toContain('bg-surface-fill-subtle')
+      expect(classes).not.toContain('border-dashed')
+      // No empty disc that reads as an unselected radio button.
+      expect(point.querySelector('.rounded-full')).toBeNull()
+    }
+    // Under the floor: the padlock. Above it, the pulse is simply not kept: an em dash.
+    const glyphs = points.map((point) => point.firstElementChild as HTMLElement)
+    expect(glyphs.some((glyph) => glyph.querySelector('svg') !== null)).toBe(true)
+    expect(glyphs.some((glyph) => glyph.textContent === '—')).toBe(true)
+  })
+
   it('asks a super administrator with no company chosen to choose one before anything is read', async () => {
     renderAs({ role: 'super_admin' })
     expect(await screen.findByText(es.companyContext.chooseACompany)).toBeTruthy()

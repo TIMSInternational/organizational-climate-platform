@@ -1803,7 +1803,7 @@
     },
     "anonymity": {
       "anonymous": true,
-      "guarantee": "no_response_link",
+      "guarantee": "Esta encuesta es anónima. El seguimiento de invitaciones registra la invitación y su apertura, sin guardar horas individuales de inicio o finalización. Cuando una persona responde con su cuenta, se registra por separado que terminó y el día, sin hora ni referencia a sus respuestas. El listado distingue quién terminó y quién falta; no distingue quién empezó y quién no entró. Una respuesta por enlace público sin cuenta no identifica quién terminó.",
       "highestRecordableState": "opened",
       "suppressedStates": [
         "started",
@@ -2997,6 +2997,7 @@
     "responseCount": 101,
     "targetAudienceCount": null,
     "departmentIds": [],
+    "userIds": [],
     "questions": [
       {
         "id": "q1",

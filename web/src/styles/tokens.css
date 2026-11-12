@@ -776,12 +776,16 @@
 
   --admin-accent-green: #10b981;
   /* The destructive FILL stays a mid red, because the white label sits on it;
-     the canvas's dark `--danger` #ff7b7b is the red as TEXT, below. */
+     the red as TEXT is `--admin-accent-red-ink`, below. */
   --admin-accent-red: #ef4444;
   --admin-accent-green-ink: #10b981;
   --admin-accent-amber-ink: #f59e0b;
-  /* The canvas's dark `--danger`: 6.92:1 on the box, 7.20:1 on the recessed tile. */
-  --admin-accent-red-ink: #ff7b7b;
+  /* The dark red as TEXT. It was the canvas's dark `--danger` #ff7b7b, 6.92:1 on the box, but
+     the word is also printed on the NEUTRAL CHIP (a «Falló» audit row, a «Sin actividad» job
+     on the system page), and #ff7b7b on the dark chip ground #323b54 is 4.43:1 — under AA for
+     a 12px label. Lifted to #ff8f8f: 5.07:1 on the chip, 8.23:1 on the recessed tile, and more
+     on the box; `inkContrast.test.ts` measures all three. */
+  --admin-accent-red-ink: #ff8f8f;
   /* The canvas's dark `--tint`: 7.71:1 on the box, 5.25:1 on a selected row. */
   --admin-accent-blue-ink: #7aaeff;
   /* The fill is the light one, #2563eb, in dark too — the app's one blue, white

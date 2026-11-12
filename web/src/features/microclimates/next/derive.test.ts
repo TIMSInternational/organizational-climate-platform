@@ -318,6 +318,11 @@ describe('fillPercent', () => {
     // An anonymous link can be answered by more people than were expected.
     expect(fillPercent(30, 20)).toBe(100)
   })
+
+  it('floors the fill, so a meter is never full before everyone has answered', () => {
+    expect(fillPercent(199, 200)).toBe(99)
+    expect(fillPercent(31, 48)).toBe(64)
+  })
 })
 
 describe('questionKinds', () => {

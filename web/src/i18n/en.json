@@ -372,7 +372,7 @@
     "insightsUnavailableDescription": "This section could not be loaded. Everything else on the page is unaffected.",
     "superAdminScopeNotice": "You are viewing one company. Platform-wide benchmarks are not included in this list.",
     "next": {
-      "title": "Analytics",
+      "title": "Analytics overview",
       "description": "Which references the company can be compared against, and how many AI findings are waiting for review. The per-dimension comparison is in Benchmarks.",
       "references": "References",
       "againstWave": "against {title} · {count} responses",
@@ -1183,7 +1183,7 @@
       "participationSub": "responses · {percent} completed",
       "participationProtected": "{group} under the floor of {floor}: protected",
       "whoAnsweredHeading": "Who answered",
-      "protectedWord": "protected",
+      "protectedWord": "Fewer than {floor}",
       "whoAnsweredNote": "One dot is one person. A group under the floor of {floor} does not draw its dots — counting them would be saying the number — and stays in the list under its name.",
       "openSurveyLabel": "Open survey · {wave}",
       "openSurveySub": "of {audience} · closes {date}",
@@ -1259,6 +1259,13 @@
       "movedLegendOne": "target {target} · one closed survey, whole company",
       "liveNamed": "{name} live",
       "unavailableReason": "Server's reason: {error}",
+      "failureForbidden": "Your account does not have access to this section.",
+      "failureNotFound": "The server did not find this section's data.",
+      "failureServer": "The server ran into an error. Reload the page in a few minutes.",
+      "failureNetwork": "The server could not be reached. Check your connection and reload the page.",
+      "failureOther": "The server did not say why.",
+      "mapScrollLabel": "Climate map by group",
+      "mapScrollHint": "Swipe sideways to see all {count} dimensions.",
       "eyebrowWave": "Latest closed survey {wave}",
       "climateLabelNoWave": "Climate",
       "participationLabelNoWave": "Participation",
@@ -1279,6 +1286,7 @@
       "lowParticipationSubNoReminderBare": "No reminder sent yet",
       "lowParticipationSubRemindersBare": "{count} reminders sent",
       "leader": {
+        "title": "Your team",
         "description": "How your team compares with the organisation, which plan is working on it and how much is left to answer.",
         "whereHeading": "Where the team stands",
         "membersLabel": "Team members",
@@ -1539,7 +1547,7 @@
     "parentLockedOnEdit": "The parent department cannot be changed after a department is created.",
     "inactiveHidesFromAssignment": "Inactive departments stay on record but are not offered when assigning people.",
     "next": {
-      "description": "Who is in each area, who leads it and which plans it has open. Administrators see a department from one response; a cross or a leader's own team from {threshold}.",
+      "description": "Who is in each area, who leads it and which plans it has open. Administrators see a department from one response; a cross or a leader's own team from {threshold} responses.",
       "importPeople": "Import people",
       "notAllowedTitle": "Departments are not yours to manage",
       "notAllowedBody": "Only the company's administration sees and changes them.",
@@ -1603,7 +1611,8 @@
       "rootPeopleMany": "{count} people",
       "meanOfOne": "· mean of {count} dimension",
       "inactiveHiddenOne": "{count} inactive department hidden. It keeps its survey history and receives no invitations.",
-      "inactiveShownOne": "{count} inactive department shown. It keeps its survey history and receives no invitations."
+      "inactiveShownOne": "{count} inactive department shown. It keeps its survey history and receives no invitations.",
+      "noteProtectedOne": "Protected in {wave}: fewer than {threshold} response"
     }
   },
   "demographicFields": {
@@ -1689,7 +1698,8 @@
         "notOfferedSub": "inactive field",
         "edit": "Edit",
         "editNamed": "Edit {label}",
-        "useNamed": "Start a new field from {label}"
+        "useNamed": "Start a new field from {label}",
+        "createFrom": "Create"
       },
       "types": {
         "heading": "Field types",
@@ -1737,6 +1747,11 @@
     "sessionExpired": "Your session has expired. Please login again.",
     "validationError": "Validation error. Please check your input.",
     "somethingWentWrong": "Something went wrong.",
+    "route": {
+      "title": "This page could not be shown",
+      "body": "Something unexpected went wrong while opening this screen. Try again; if the problem continues, go back to the start.",
+      "home": "Back to home"
+    },
     "api": {
       "forbidden": "You don't have permission to do this. If you think you should, ask your administrator.",
       "notFound": "We couldn't find it. It may have been deleted; reload the page.",
@@ -1822,7 +1837,9 @@
     "english": "English",
     "spanish": "Spanish",
     "switchLanguage": "Switch Language",
-    "selectLanguage": "Select Language"
+    "selectLanguage": "Select Language",
+    "englishInSentence": "English",
+    "spanishInSentence": "Spanish"
   },
   "microclimates": {
     "eyebrow": "Live sessions",
@@ -1987,6 +2004,9 @@
     "showingContentIn": "Showing content in {resolved} because it is not available in {requested}.",
     "authoredIn": "This microclimate is authored in {language}.",
     "fieldsFellBack": "{count} individual fields fell back to another language.",
+    "contentFallbackTitle": "Not everything is available in your language",
+    "contentFallbackBody": "This microclimate is shown in {language}, because that is the language it was written in.",
+    "contentFallbackFields": "Some parts of it are shown in the language they were written in.",
     "wizardTitle": "New microclimate",
     "wizardDescription": "A short, real-time feedback session, set up in five steps.",
     "wizardStepOf": "Step {current} of {total}",
@@ -2835,7 +2855,13 @@
       "markAll": "Mark all as read",
       "localMailDomain": ".test",
       "emptyTitle": "You have no notifications",
-      "emptyBody": "Invitations, reminders and scheduled reports sent to you will appear here."
+      "emptyBody": "Invitations, reminders and scheduled reports sent to you will appear here.",
+      "channelAppAlways": "Always",
+      "noneInPeriod": "No notices in the last {days} days",
+      "olderWithUnread": "There are older notices: {count} in all, {unread} unread.",
+      "older": "There are older notices: {count} in all, none unread.",
+      "showAll": "Show all history",
+      "nothingHereHint": "Choose another kind, or All."
     }
   },
   "profile": {
@@ -3031,6 +3057,8 @@
       "containsProtectedOne": "{group} protected",
       "containsProtectedMany": "{count} protected",
       "containsFloor": "floor of {floor} applied · no open text",
+      "containsNotRead": "Not read",
+      "containsNoDocument": "No document yet",
       "linksActiveOne": "1 active",
       "linksActiveMany": "{count} active",
       "linksExpiry": "expires {date} · {opens}",
@@ -3161,7 +3189,10 @@
       "floorRuleLead": "Privacy floor: {floor} responses.",
       "floorRuleRest": "It applies to crosses of two or more fields, to the whole survey, to public links and to a leader's view of their own team. A single department or demographic value is shown to administrators from {single} response.",
       "openTextRuleLead": "Open-text answers are read as frequent words",
-      "openTextRuleRest": "in results, reports, dashboards and public links. The verbatim text leaves only in the response workbook a super administrator downloads."
+      "openTextRuleRest": "in results, reports, dashboards and public links. The verbatim text leaves only in the response workbook a super administrator downloads.",
+      "timeoutApplied": "Session timeout applies to everyone signed in: a session left unused for that long ends, and the reader is warned before it does.",
+      "attemptsNotAppliedLead": "Max login attempts is not applied yet.",
+      "attemptsNotAppliedText": "It is saved, but today it locks no account, however many attempts fail."
     }
   },
   "shell": {
@@ -3584,7 +3615,7 @@
         "roleEmployee": "Employees · {count}",
         "allDepartments": "All departments",
         "departmentFilterLabel": "Filter by department",
-        "searchPlaceholder": "Search by name or email",
+        "searchPlaceholder": "Search name or email",
         "shown": "{shown} of {total}",
         "editTitle": "Edit {name}",
         "editMeta": "a role change applies on save, immediately",
@@ -4693,6 +4724,7 @@
         "closesInOne": "in 1 day",
         "closedAgo": "{days} days ago",
         "closedAgoOne": "1 day ago",
+        "closesPassed": "Was due to close",
         "ready": "Ready to launch",
         "readyOf": "of {count} steps",
         "missing": {
@@ -6279,6 +6311,7 @@
     "description": "Generated from this company’s own responses. Every insight names the evidence it came from and can be dismissed with a reason.",
     "insightTitle": "Title",
     "priority": "Priority",
+    "priorityUrgent": "Urgent",
     "typeTrend": "Trend",
     "typePattern": "Pattern",
     "typeRisk": "Risk",
@@ -6329,7 +6362,7 @@
       "findingsDescription": "A company's findings. Each names the evidence it comes from and is marked as reviewed.",
       "barNoteUnchosen": "Choose a company to see its findings.",
       "barNoteChosen": "The sidebar and this page are limited to this company. Changing it reloads the list.",
-      "openAnalytics": "Open the company's Analytics",
+      "openAnalytics": "Open the analytics overview",
       "chooseTitle": "Choose a company",
       "chooseBody": "Findings belong to one company and are read one at a time. Choose it here or in the bar above.",
       "chooseNote": "One company's findings are never listed beside another's.",
@@ -6353,9 +6386,9 @@
       "openNoneAll": "all already reviewed",
       "openOne": "one awaiting review",
       "openSome": "{count} awaiting review",
-      "criticalNone": "none critical",
-      "criticalOne": "one critical",
-      "criticalSome": "{count} critical",
+      "criticalNone": "none urgent",
+      "criticalOne": "one urgent",
+      "criticalSome": "{count} urgent",
       "ackBy": "by {who}, on {date}",
       "ackLatestBy": "the latest by {who}, on {date}",
       "ackNone": "none yet",
@@ -6755,6 +6788,8 @@
       "participationInvited": "{invited} invited",
       "groupsLabel": "Groups",
       "groupsSub": "of {total} readable",
+      "groupsReserved": "Withheld",
+      "groupsReservedUnit": "fewer than {floor} responses",
       "groupsProtected": "{groups} under the floor of {floor}: protected",
       "groupsWithheldCountOne": "1 group under the floor of {floor}: protected, not named",
       "groupsWithheldCountMany": "{count} groups under the floor of {floor}: protected, not named",
@@ -6843,6 +6878,7 @@
       "cellQuestions": "{count} questions in this dimension",
       "scaleEnd": "{position} · {label}",
       "stripSegment": "{position}: {percent} % of the answers",
+      "stripKey": "{position}: {percent} %",
       "companyDistributionSubWave": "{wave} · {responses} responses · {low} % answered 1 or 2",
       "doingPlanLead": "A plan already covers this group:",
       "doingPlanDue": "due {date}",
@@ -7741,6 +7777,36 @@
     }
   },
   "questionLibrary": {
+    "dimensionNames": {
+      "leadership": "Leadership",
+      "engagement": "Engagement",
+      "operations": "Operations",
+      "facilities": "Facilities",
+      "communication": "Communication",
+      "onboarding": "Onboarding",
+      "climate": "Climate",
+      "change": "Change",
+      "pulse": "Pulse",
+      "participation": "Participation",
+      "lifecycle": "Employee lifecycle",
+      "retrospective": "Retrospective",
+      "cohort": "Cohort",
+      "wellbeing": "Wellbeing",
+      "culture": "Culture",
+      "collaboration": "Collaboration",
+      "teamwork": "Teamwork",
+      "compensation": "Compensation",
+      "benefits": "Benefits",
+      "development": "Development",
+      "motivation": "Motivation",
+      "satisfaction": "Satisfaction",
+      "feedback": "Feedback",
+      "comunicacion": "Communication",
+      "condiciones_de_trabajo": "Working conditions",
+      "equilibrio": "Work-life balance",
+      "liderazgo": "Leadership"
+    },
+    "dimensionUnnamed": "Unnamed category",
     "title": "Question library",
     "description": "Reuse a question that has already been written. Picked questions are copied into this draft, so editing the library later never changes a survey that has already asked them.",
     "openButton": "Add from library",
@@ -7931,7 +7997,8 @@
     "answeredCount": "Answers",
     "averageScore": "Average score",
     "departmentsCaption": "Participation for each department, including the ones whose figures are withheld",
-    "departmentsWithheld": "{count} department(s) are withheld because each has fewer than {minimum} respondents.",
+    "departmentsWithheld": "{count} departments are withheld because each has fewer than {minimum} respondents.",
+    "departmentsWithheldOne": "1 department is withheld because it has fewer than {minimum} respondents.",
     "contentLanguage": "Printed in {language}, the language this survey was written in.",
     "questionsHeading": "Answers by question",
     "share": "Share",
@@ -7943,10 +8010,28 @@
     "wordsFrequencyOnly": "Only how often each word was used is shown. The answers themselves are never reproduced.",
     "noWords": "No word was used in enough answers to be shown.",
     "demographicsCaption": "Participation and scores for each {dimension} group, including the ones whose figures are withheld",
-    "groupsWithheld": "{count} group(s) are withheld because each has fewer than {minimum} respondents.",
+    "groupsWithheld": "{count} groups are withheld because each has fewer than {minimum} respondents.",
+    "groupsWithheldOne": "1 group is withheld because it has fewer than {minimum} respondents.",
     "benchmarksHeading": "Benchmarks",
     "benchmarkCaption": "Each reading of {benchmark}, against the same reading a period earlier",
     "benchmarkCategory": "Category: {category}",
+    "benchmarkCategoryNames": {
+      "climate": "climate",
+      "engagement": "engagement",
+      "absence": "absence",
+      "turnover": "turnover",
+      "satisfaction": "satisfaction",
+      "performance": "performance"
+    },
+    "unitNames": {
+      "milliseconds": "milliseconds",
+      "seconds": "seconds",
+      "minutes": "minutes",
+      "hours": "hours",
+      "days": "days",
+      "percent": "percent",
+      "points": "points"
+    },
     "benchmarkGlobal": "Shared across organisations",
     "metric": "Metric",
     "priorValue": "Prior period",
@@ -7974,6 +8059,8 @@
       "participationNoneNote": "The survey had no invitation list, so there is nothing to divide by.",
       "groupsLabel": "Groups",
       "groupsUnit": "of {total} readable",
+      "groupsReserved": "Withheld",
+      "groupsReservedUnit": "fewer than {floor} responses",
       "groupsAllReadable": "every group is above the floor of {floor}",
       "groupsWithheldNames": "{names} under the floor of {floor}: protected, no figure at all",
       "groupsWithheldCountOne": "1 group under the floor of {floor}: protected, with no name and no figure",
@@ -7987,7 +8074,8 @@
       "mapHeadingField": "Climate by {field} and dimension",
       "mapSub": "average of each group in each dimension · target {target}",
       "mapCaption": "Average of each {field} group in each dimension. A group with fewer than {floor} responses shows no figure in any cell.",
-      "mapUnsegmented": "{count} respondent(s) carry no {field} value and are in no group.",
+      "mapUnsegmented": "{count} respondents carry no {field} value and are in no group.",
+      "mapUnsegmentedOne": "1 respondent carries no {field} value and is in no group.",
       "departmentsHeading": "Participation by department",
       "notesLabel": "What this report does and does not carry",
       "noteTextTitle": "Free text",
@@ -8369,6 +8457,8 @@
     "description": "One workbook for your company, climate survey, questions, demographic fields and participants. The survey is left as a draft: you publish it and send the invitations from Distribution.",
     "download": "Download TIMS + NEXA template",
     "file": "Completed workbook (.xlsx, up to 10 MB)",
+    "chooseFile": "Choose file",
+    "noFileChosen": "No file chosen",
     "previewOnly": "Reviewing creates no records and sends no emails. Complete EMPRESA, DESCRIPCION, ESCALAS, PREGUNTAS and DEMOGRAFICOS.",
     "review": "Review workbook",
     "incompleteTitle": "Complete your workbook before importing",
@@ -8625,7 +8715,8 @@
       "admin__benchmark-groups__create": "Created a reference group",
       "admin__benchmark-groups__delete": "Deleted a reference group",
       "admin__benchmark-groups__reading__read": "Compared a company with a reference group"
-    }
+    },
+    "filterAnyDay": "Any day"
   },
   "ui": {
     "protected": {

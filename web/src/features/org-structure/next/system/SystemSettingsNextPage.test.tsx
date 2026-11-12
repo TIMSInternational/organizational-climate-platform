@@ -117,6 +117,19 @@ describe('SystemSettingsNextPage', () => {
     expect(warning?.getAttribute('role')).toBe('status')
   })
 
+  it('warns that the login-attempts limit is stored but locks no account, apart from the applied timeout note', async () => {
+    serve(() => new Response(JSON.stringify(settings()), { status: 200 }))
+    renderPage()
+    const lead = await screen.findByText(next.attemptsNotAppliedLead)
+    const warning = lead.closest('[data-slot="attempts-warning"]') as HTMLElement
+    expect(warning.getAttribute('data-severity')).toBe('warning')
+    expect(warning.querySelector('svg.lucide-triangle-alert')).not.toBeNull()
+    expect(lead.className).toMatch(/font-semibold/)
+    // The timeout is applied: that fact stays a plain note, without the warning glyph.
+    const note = screen.getByText(next.timeoutApplied).closest('[data-slot="session-note"]') as HTMLElement
+    expect(note.querySelector('svg.lucide-triangle-alert')).toBeNull()
+  })
+
   it('states the password policy and the stored mail settings read-only, with where they are really decided', async () => {
     serve(() => new Response(JSON.stringify(settings()), { status: 200 }))
     renderPage()

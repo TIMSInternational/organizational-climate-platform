@@ -51,7 +51,7 @@ export const CARD = 'min-w-0 rounded-xl border border-line-panel bg-surface-card
 export function ReviewNote({ className }: { className?: string }) {
   const { t } = useTranslation()
   return (
-    <Note tone="info" icon={<Info />} data-slot="review-note" className={className}>
+    <Note icon={<Info />} data-slot="review-note" className={className}>
       {t('insights.next.reviewNote')}
     </Note>
   )

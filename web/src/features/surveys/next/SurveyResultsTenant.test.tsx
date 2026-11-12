@@ -241,7 +241,11 @@ describe('the survey results on the tenant’s real payload', () => {
       '«Frente a Q2» por grupo aparece cuando la encuesta anterior tiene ese mismo grupo por encima del umbral.',
     )
     const legend = screen.getByTestId('grid-legend')
-    expect(within(legend).getByText('protegido, menos de 3 respuestas')).toBeTruthy()
+    // The tenant's withheld group arrives counted and unnamed, so no hatched row is drawn —
+    // and no swatch promises one (review 12 Nov). A drawn hatch keeps its swatch:
+    // SurveyResultsNextPage.test.tsx, 'never prints a number for a protected group'.
+    expect(within(legend).queryByText('protegido, menos de 3 respuestas')).toBeNull()
+    expect(within(legend).queryByTestId('grid-legend-protected')).toBeNull()
     for (const [name, range] of [
       ['Área de fortaleza', '4,00 a 5,00'],
       ['Área de oportunidad', '3,00 a 3,99'],

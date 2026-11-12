@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { CalendarDays, EyeOff, Link2Off, ShieldCheck } from 'lucide-react'
+import { CalendarDays, EyeOff, Link2Off, Lock, ShieldCheck } from 'lucide-react'
 import { useParams } from 'react-router'
 import { LanguageSwitcher, useTranslation } from '../../../../i18n'
+import { byCount } from '../../../../i18n/plural'
 import { BrandLockup, PoweredByNexadev, ThemeSwitcher } from '../../../../components/layout'
 import {
   Alert,
@@ -369,12 +370,25 @@ function SurveyBlock({ section, named }: { section: SharedSection; named: boolea
             note={t(`${K}.participationNoneNote`)}
           />
         )}
-        <ReadingCard
-          label={t(`${K}.groupsLabel`)}
-          value={section.groups.readable.toLocaleString(locale)}
-          unit={t(`${K}.groupsUnit`, { total: section.groups.total.toLocaleString(locale) })}
-          note={groupsNote(section, t, locale)}
-        />
+        {section.suppressed ? (
+          // The whole survey is under the floor: no figure at all. "0 de 0 legibles" read
+          // as "there are no groups" rather than "the groups are withheld" (review 12 Nov).
+          <ReadingCard
+            label={t(`${K}.groupsLabel`)}
+            value={t(`${K}.groupsReserved`)}
+            numeric={false}
+            icon={<Lock />}
+            unit={t(`${K}.groupsReservedUnit`, { floor: section.floor })}
+            note={groupsNote(section, t, locale)}
+          />
+        ) : (
+          <ReadingCard
+            label={t(`${K}.groupsLabel`)}
+            value={section.groups.readable.toLocaleString(locale)}
+            unit={t(`${K}.groupsUnit`, { total: section.groups.total.toLocaleString(locale) })}
+            note={groupsNote(section, t, locale)}
+          />
+        )}
       </div>
 
       {/* Which language the *authored* text below is in, and only when it differs from
@@ -418,10 +432,14 @@ function SurveyBlock({ section, named }: { section: SharedSection; named: boolea
                 caption={t(`${K}.mapCaption`, { field: map.field, floor: section.floor })}
                 groupHeading={t('surveyResults.next.groupHeading')}
               />
-              <ClimateMapLegend floor={section.floor} bands={section.bands} />
+              <ClimateMapLegend
+                floor={section.floor}
+                bands={section.bands}
+                showHatch={map.rows.some((row) => row.protected)}
+              />
               {map.withheldCount > 0 && (
                 <p className="m-0 max-w-prose text-xs text-fg-tertiary">
-                  {t('sharedReport.groupsWithheld', {
+                  {t(byCount(map.withheldCount, 'sharedReport.groupsWithheldOne', 'sharedReport.groupsWithheld'), {
                     count: map.withheldCount,
                     minimum: section.floor,
                   })}
@@ -429,7 +447,7 @@ function SurveyBlock({ section, named }: { section: SharedSection; named: boolea
               )}
               {map.unsegmented !== null && map.unsegmented > 0 && (
                 <p className="m-0 max-w-prose text-xs text-fg-tertiary">
-                  {t(`${K}.mapUnsegmented`, { count: map.unsegmented, field: map.field })}
+                  {t(byCount(map.unsegmented, `${K}.mapUnsegmentedOne`, `${K}.mapUnsegmented`), { count: map.unsegmented, field: map.field })}
                 </p>
               )}
             </ReportCard>
@@ -595,7 +613,7 @@ function DepartmentsCard({ section, headingId }: { section: SharedSection; headi
       </Table>
       {section.withheldDepartments !== null && section.withheldDepartments > 0 && (
         <p className="m-0 max-w-prose text-xs text-fg-tertiary">
-          {t('sharedReport.departmentsWithheld', {
+          {t(byCount(section.withheldDepartments, 'sharedReport.departmentsWithheldOne', 'sharedReport.departmentsWithheld'), {
             count: section.withheldDepartments,
             minimum: section.floor,
           })}
@@ -725,7 +743,7 @@ function BenchmarkBlock({ benchmark }: { benchmark: ReportBenchmarkComparison })
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <h3 className="m-0 text-base font-semibold text-fg-primary">{benchmark.name}</h3>
         <span className="text-xs text-fg-tertiary">
-          {t('sharedReport.benchmarkCategory', { category: benchmark.category })}
+          {t('sharedReport.benchmarkCategory', { category: benchmarkCategoryName(t, benchmark.category) })}
         </span>
         {benchmark.isGlobal && <Chip label={t('sharedReport.benchmarkGlobal')} />}
       </div>
@@ -790,8 +808,8 @@ function BenchmarkBlock({ benchmark }: { benchmark: ReportBenchmarkComparison })
                   {metric.delta === null ? (
                     <TableCell className="text-fg-secondary">
                       {t('sharedReport.unitsDiffer', {
-                        unit: metric.unit ?? t('sharedReport.notRecorded'),
-                        priorUnit: metric.priorUnit ?? t('sharedReport.notRecorded'),
+                        unit: metric.unit === null ? t('sharedReport.notRecorded') : unitName(t, metric.unit),
+                        priorUnit: metric.priorUnit === null ? t('sharedReport.notRecorded') : unitName(t, metric.priorUnit),
                       })}
                     </TableCell>
                   ) : (
@@ -913,4 +931,38 @@ function priorPeriodSentence(status: string, t: (key: string) => string): string
   if (status === 'none') return t('sharedReport.priorPeriodNone')
   if (status === 'unlinked') return t('sharedReport.priorPeriodUnlinked')
   return t('sharedReport.priorPeriodUnavailable')
+}
+
+/**
+ * The benchmark's category in the reader's words. `category` is a free string on the
+ * server; the ones this product writes have a name here, and anything else is printed as
+ * stored rather than as a catalogue key. "Categoría: engagement" was English on a Spanish
+ * public page (review 12 Nov).
+ */
+const BENCHMARK_CATEGORIES = new Set(['climate', 'engagement', 'absence', 'turnover', 'satisfaction', 'performance'])
+
+function benchmarkCategoryName(t: (key: string) => string, category: string): string {
+  const key = category.trim().toLowerCase()
+  return BENCHMARK_CATEGORIES.has(key) ? t(`sharedReport.benchmarkCategoryNames.${key}`) : category
+}
+
+/**
+ * A metric's unit as a word: "s" and "ms" printed bare inside a Spanish sentence read as
+ * code (review 12 Nov). Codes this product records have a name; anything else as stored.
+ */
+const UNIT_KEYS: Readonly<Record<string, string>> = {
+  ms: 'milliseconds',
+  s: 'seconds',
+  min: 'minutes',
+  h: 'hours',
+  d: 'days',
+  days: 'days',
+  '%': 'percent',
+  percent: 'percent',
+  points: 'points',
+}
+
+function unitName(t: (key: string) => string, unit: string): string {
+  const key = UNIT_KEYS[unit.trim().toLowerCase()] as string | undefined
+  return key === undefined ? unit : t(`sharedReport.unitNames.${key}`)
 }

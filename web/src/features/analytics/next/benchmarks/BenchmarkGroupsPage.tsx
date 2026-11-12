@@ -148,7 +148,7 @@ export default function BenchmarkGroupsPage() {
     <div>
       <PageHeader
         eyebrow={reading?.companyName ?? undefined}
-        title={t('navigation.benchmarks')}
+        title={t('navigation.references')}
         description={t('benchmarks.groups.description')}
         primaryAction={
           tab === 'groups' ? (

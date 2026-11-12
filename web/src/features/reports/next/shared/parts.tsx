@@ -71,9 +71,12 @@ export function ReadingCard({
   numeric = true,
   unit,
   note,
+  icon,
 }: {
   label: string
   value: string
+  /** A glyph before the value — the padlock of a reading the floor withholds. */
+  icon?: ReactNode
   /** Whether `value` is a figure (mono, tabular) or a sentence. */
   numeric?: boolean
   unit?: string
@@ -83,6 +86,11 @@ export function ReadingCard({
     <div className="flex min-w-0 flex-col gap-2 rounded-xl border border-line-panel bg-surface-card px-4 py-3.5">
       <span className="text-2xs font-semibold uppercase tracking-eyebrow text-fg-label">{label}</span>
       <span className="flex flex-wrap items-baseline gap-2">
+        {icon !== undefined && (
+          <span aria-hidden="true" className="inline-flex self-center text-fg-secondary [&_svg]:size-5">
+            {icon}
+          </span>
+        )}
         <span
           className={cn(
             'text-fg-primary',
@@ -322,18 +330,33 @@ export function ClimateMapGrid({
   )
 }
 
-/** The map's key: the company's three areas, then the hatch. */
-export function ClimateMapLegend({ floor, bands }: { floor: number; bands: ResultBands | null }) {
+/**
+ * The map's key: the company's three areas, by their full names as every other banded
+ * surface prints them, then the hatch — only when the map draws a hatched row. A group the
+ * server withheld unnamed has no row, and a swatch matching nothing on the page promised a
+ * cell that never appears (review 12 Nov); the sentence under the map counts those.
+ */
+export function ClimateMapLegend({
+  floor,
+  bands,
+  showHatch,
+}: {
+  floor: number
+  bands: ResultBands | null
+  showHatch: boolean
+}) {
   const { t } = useTranslation()
-  const hatch = (
-    <span className="inline-flex items-center gap-1.5">
+  const hatch = showHatch ? (
+    <span className="inline-flex items-center gap-1.5" data-testid="map-legend-protected">
       <span aria-hidden="true" className={cn('inline-block size-4 rounded-xs bg-surface-icon-box', PROTECTED_HATCH)} />
       {t('surveyResults.next.legendProtected', { floor })}
     </span>
-  )
-  if (bands === null) return <div className="flex flex-wrap items-center gap-4 text-xs text-fg-tertiary">{hatch}</div>
+  ) : null
+  if (bands === null) {
+    return hatch === null ? null : <div className="flex flex-wrap items-center gap-4 text-xs text-fg-tertiary">{hatch}</div>
+  }
   return (
-    <BandLegend bands={bands} short className="text-fg-tertiary">
+    <BandLegend bands={bands} className="text-fg-tertiary">
       {hatch}
     </BandLegend>
   )

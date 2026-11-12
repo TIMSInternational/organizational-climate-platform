@@ -52,7 +52,7 @@ describe('insight vocabulary', () => {
       'Baja',
       'Media',
       'Alta',
-      'Crítica',
+      'Urgente',
     ])
   })
 
@@ -68,8 +68,25 @@ describe('insight vocabulary', () => {
       'Low',
       'Medium',
       'High',
-      'Critical',
+      'Urgent',
     ])
+  })
+
+  /**
+   * A priority chip is gray, and green/amber/red name the three result areas only. A
+   * priority that shared a band's word ("Crítica") would read as that result area, so no
+   * priority label may equal any band name, in either language.
+   */
+  it('names no priority with the word of a result band', () => {
+    for (const [locale, t] of [['es', es], ['en', en]] as const) {
+      const short = (CATALOGUES[locale] as unknown as { resultBands: { short: Record<string, string> } })
+        .resultBands.short
+      const bands = Object.values(short).map((name) => name.toLocaleLowerCase())
+      expect(bands.length).toBeGreaterThan(0)
+      for (const p of INSIGHT_PRIORITIES) {
+        expect(bands).not.toContain(insightPriorityLabel(t, p).toLocaleLowerCase())
+      }
+    }
   })
 
   /**

@@ -179,7 +179,10 @@ function ActionPlansListBody({ ownerView }: { ownerView: boolean }) {
   return (
     <div>
       <PageHeader
-        eyebrow={model.companyName}
+        // The section, as Microclimas and its analytics say it: the two pages sit side by side
+        // under Seguimiento in the sidebar and share one header pattern. The company is
+        // already named by the active-company chip in the frame.
+        eyebrow={t('navigation.sectionFollowUp')}
         title={t('navigation.actionPlans')}
         description={t(ownerView ? 'actionPlans.next.ownerDescription' : 'actionPlans.next.description')}
         primaryAction={
@@ -388,8 +391,9 @@ function Tiles({
         unit={overdue.count === 1 ? t('actionPlans.next.overdueOne') : t('actionPlans.next.overdueMany')}
         footnote={
           overdue.first ? (
-            <span className="flex min-w-0 items-start gap-1.5 text-accent-red-ink" data-slot="seguimiento-line">
-              <Clock aria-hidden="true" data-slot="overdue-clock" className="mt-0.75 size-3.5 shrink-0" />
+            <span className="flex min-w-0 items-start gap-1.5 text-fg-secondary" data-slot="seguimiento-line">
+              {/* The clock is the tile's one red cue; the place and plan read in secondary ink. */}
+              <Clock aria-hidden="true" data-slot="overdue-clock" className="mt-0.75 size-3.5 shrink-0 text-accent-red-ink" />
               <span
                 // Up to two lines: at 13px with the clock, one line held only "Personas ·
                 // Programa" — no plan named (review of 12 Nov). The line wraps at word boundaries
@@ -751,7 +755,9 @@ function PlanTableRow({
       <td role="cell" className={cn(CELL, 'max-md:block max-md:min-w-0 max-md:flex-1')}>
         <span className="sr-only md:hidden">{t('actionPlans.next.colDue')}</span>
         <div className="flex flex-col">
-          <span className={cn('text-base tabular-nums', late ? 'text-accent-red-ink' : 'text-fg-primary')}>
+          {/* The date stays in primary ink: the row's one red cue is the clock and the words
+              under it, so a late row does not shout in two places (one colour per meaning). */}
+          <span data-slot="plan-due-date" className="text-base tabular-nums text-fg-primary">
             {calendarDay(Date.parse(row.dueDate), locale)}
           </span>
           {open && days !== null && (

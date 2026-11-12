@@ -195,6 +195,8 @@ describe('SurveysListNextPage', () => {
     // A 32px filter row, as the artboard's: index.css's 4px over a labelled select and an
     // inline select's baseline gap each made it 36px and set the search 2px low.
     expect(select.className.split(/\s+/)).toEqual(expect.arrayContaining(['block', 'mt-0']))
+    // The search beside it at the same 32px: one control height on the bar.
+    expect(screen.getByRole('searchbox').className.split(/\s+/)).toContain('h-control-lg')
     const chevron = select.closest('label')?.querySelector('svg[data-slot="type-chevron"]')
     expect(chevron?.getAttribute('aria-hidden')).toBe('true')
     // The label ink, the one that clears AA here (respondContrast.test.ts bans the tertiary).
@@ -334,6 +336,10 @@ describe('SurveysListNextPage', () => {
     expect(rowIds()).toEqual(['q4', 'q3', 'other', 'q1', 'copy'])
     const archived = document.querySelector('section[data-section="archived"]')
     expect(archived?.getAttribute('data-demoted')).toBe('true')
+    // One section head for every group: the archived block is demoted by its rows, not its heading.
+    const heads = [...document.querySelectorAll('section[data-section] h2')].map((head) => head.className)
+    expect(heads.length).toBeGreaterThanOrEqual(3)
+    expect(new Set(heads).size).toBe(1)
     const q1 = rowOf('q1')
     expect(within(q1).getByText(copy.noInviteList)).toBeTruthy()
     expect(within(q1).queryByText('—')).toBeNull()

@@ -18,14 +18,35 @@ export interface CategoryNode {
 }
 
 /**
- * The category tree, split by owner: global rows (every tenant reads them, a company never
- * writes them) and the caller's own. A child whose parent is not in the payload is shown
- * at the top level rather than dropped.
+ * What a company's library may draw: the global rows and the viewer's own company's rows.
+ * Another tenant's category or question is dropped before anything is counted or drawn —
+ * whatever the payload carries. With no company in scope only the global rows remain.
  */
-export function categoryTree(
+export function libraryForCompany(
   categories: QuestionCategory[],
   items: QuestionLibraryItem[],
+  companyId: string | undefined,
+): { categories: QuestionCategory[]; items: QuestionLibraryItem[] } {
+  const visible = (row: { companyId: string | null }) =>
+    row.companyId === null || (companyId !== undefined && companyId !== '' && row.companyId === companyId)
+  return {
+    categories: categories.filter(visible),
+    items: items.filter(visible),
+  }
+}
+
+/**
+ * The category tree, split by owner: global rows (every tenant reads them, a company never
+ * writes them) and the viewer's own company's. Rows of any other company are dropped first
+ * (`libraryForCompany`), so a rival tenant's category never reaches either list or a count. A
+ * child whose parent is not in the payload is shown at the top level rather than dropped.
+ */
+export function categoryTree(
+  allCategories: QuestionCategory[],
+  allItems: QuestionLibraryItem[],
+  companyId: string | undefined,
 ): { globals: CategoryNode[]; own: CategoryNode[] } {
+  const { categories, items } = libraryForCompany(allCategories, allItems, companyId)
   const direct = new Map<string, number>()
   for (const item of items) direct.set(item.questionCategoryId, (direct.get(item.questionCategoryId) ?? 0) + 1)
   const byId = new Map(categories.map((c) => [c.id, c]))
@@ -42,7 +63,7 @@ export function categoryTree(
   const roots = sorted.filter((c) => !c.parentCategoryId || !byId.has(c.parentCategoryId)).map(build)
   return {
     globals: roots.filter((node) => node.category.companyId === null),
-    own: roots.filter((node) => node.category.companyId !== null),
+    own: roots.filter((node) => node.category.companyId !== null && node.category.companyId === companyId),
   }
 }
 
@@ -116,4 +137,23 @@ export function parseOptions(raw: string): { labelEn: string; labelEs: string }[
     .map((line) => line.trim())
     .filter((line) => line !== '')
     .map((line) => ({ labelEn: line, labelEs: line }))
+}
+
+/**
+ * The words for a dimension or a bank category code (`psychological_safety`, `leadership`…).
+ *
+ * The product's own catalogue first (`surveyRespond.dimensions`, the one the respond form and
+ * results read), then the library's (`questionLibrary.dimensionNames`). A value the catalogues
+ * do not know is printed as authored when it reads as words (`Comunicación interna`,
+ * `Liderazgo`); when it is shaped like a machine code — lowercase ASCII, one token or
+ * snake_case — it is left out (`null`), so a Spanish screen never prints an English slug.
+ */
+export function dimensionName(code: string | null | undefined, t: (key: string) => string): string | null {
+  const value = code?.trim() ?? ''
+  if (value === '') return null
+  for (const path of [`surveyRespond.dimensions.${value}`, `questionLibrary.dimensionNames.${value}`]) {
+    const label = t(path)
+    if (label !== path) return label
+  }
+  return /^[a-z0-9]+(?:_[a-z0-9]+)*$/.test(value) ? null : value
 }

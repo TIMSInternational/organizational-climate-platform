@@ -183,8 +183,34 @@ export default function SuperSurveysListView() {
           base.apply()
         }}
       >
+        {/* The company list's filter bar, in its order (the review of 12 Nov): the board's
+            `.seg` over the statuses on the platform with the count at the trailing edge, then
+            the search and the selects, every control at the artboard's 32px. The segmented
+            control narrows the rows already read; one line at every width, scrolling in its
+            own box at 390 (the 4px pad keeps the focus ring inside the scroller). */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="relative w-full sm:w-65">
+          <div data-slot="segment-scroller" className="-m-1 min-w-0 max-w-[calc(100%+0.5rem)] overflow-x-auto p-1 [scrollbar-width:none]">
+          <SegmentedControl
+            label={t('surveys.filterByStatus')}
+            value={base.statusFilter}
+            onChange={base.setStatusFilter}
+            options={facets.map((facet) => ({
+              value: facet.status,
+              label: t('surveys.next.list.chipCount', {
+                label: FACET_KEY[facet.status] ? t(FACET_KEY[facet.status]) : statusLabel(t, facet.status),
+                count: facet.count,
+              }),
+            }))}
+          />
+          </div>
+          <p data-slot="list-summary" className="m-0 text-sm tabular-nums sm:whitespace-nowrap text-fg-secondary sm:ml-auto">
+            {companies === 1
+              ? t('surveys.next.super.summaryOneCompany', { count: model.rows.length })
+              : t('surveys.next.super.summary', { count: model.rows.length, companies })}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative w-full sm:w-75">
             <Search aria-hidden="true" className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-fg-label" />
             <Input
               type="search"
@@ -192,7 +218,7 @@ export default function SuperSurveysListView() {
               placeholder={t('surveys.next.list.searchPlaceholder')}
               value={base.draft.q}
               onChange={(event) => base.setDraft({ ...base.draft, q: event.target.value })}
-              className="pl-8"
+              className="h-control-lg pl-8"
             />
           </div>
           <FilterSelect
@@ -221,27 +247,7 @@ export default function SuperSurveysListView() {
               </option>
             ))}
           </FilterSelect>
-          <p data-slot="list-summary" className="m-0 text-sm whitespace-nowrap tabular-nums text-fg-secondary sm:ml-auto">
-            {companies === 1
-              ? t('surveys.next.super.summaryOneCompany', { count: model.rows.length })
-              : t('surveys.next.super.summary', { count: model.rows.length, companies })}
-          </p>
         </div>
-        {/* The board's `.seg`: one segmented control over the statuses that exist on the
-            platform, in the artboard's reading order. It narrows the rows already read. */}
-        <SegmentedControl
-          label={t('surveys.filterByStatus')}
-          value={base.statusFilter}
-          onChange={base.setStatusFilter}
-          className="max-w-full self-start flex-wrap"
-          options={facets.map((facet) => ({
-            value: facet.status,
-            label: t('surveys.next.list.chipCount', {
-              label: FACET_KEY[facet.status] ? t(FACET_KEY[facet.status]) : statusLabel(t, facet.status),
-              count: facet.count,
-            }),
-          }))}
-        />
       </form>
 
       {base.actionError && (
@@ -368,7 +374,7 @@ function SectionBlock({
     >
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div className="flex items-baseline gap-2.5">
-          <h2 id={`surveys-super-${section}`} className={cn('m-0', archived ? 'font-sans text-base font-semibold text-fg-label' : 'text-2xl')}>
+          <h2 id={`surveys-super-${section}`} className="m-0 text-2xl">
             {heading}
           </h2>
           <span className="text-sm tabular-nums text-fg-secondary">{rows.length}</span>

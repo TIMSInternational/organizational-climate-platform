@@ -14,9 +14,11 @@ import { BAND_PAINT, bandOf, type ResultBands } from '../../../components/charts
  * `domain` is the value range the page chose for ALL six, so their slopes are on one
  * scale; left out, the sparkline fits itself.
  *
- * Colour: the three hexes are the SVG marks only (line, below-target endpoint,
- * target rule), as the design fixes them for both themes. The baseline, the endpoint's
- * ring and the labels are theme tokens, so they follow the theme.
+ * Colour: the line and its points are the neutral secondary ink, the one the "Clima en el
+ * tiempo" charts draw the same series in (`DimensionTrendChart`'s `LINE`): blue is action,
+ * selection and live, and a blue data line competed with the links beside it. Only the
+ * last point takes a colour, its band's. The baseline, the endpoint's ring and the labels
+ * are theme tokens, so they follow the theme.
  */
 export interface TrendSparklineProps {
   values: readonly number[]
@@ -30,9 +32,13 @@ export interface TrendSparklineProps {
   domain?: readonly [number, number]
   width?: number
   height?: number
+  /** The decimals the card prints the last reading at, so the endpoint's band agrees with the chip. */
+  decimals?: number
 }
 
-const LINE = '#4d76c7'
+/** The neutral line ink, shared with the trends page's charts. Never a blue: blue is an action. */
+export const SPARK_LINE = 'var(--admin-font-secondary)'
+const LINE = SPARK_LINE
 const BOUNDARY = 'var(--admin-line-control)'
 const PAD_X = 12
 const PAD_TOP = 6
@@ -48,6 +54,7 @@ export default function TrendSparkline({
   domain,
   width = 150,
   height = 60,
+  decimals = 1,
 }: TrendSparklineProps) {
   const low = domain ? domain[0] : Math.min(...values, bands.opportunityMin) - HALF_BAND
   const high = domain ? domain[1] : Math.max(...values, bands.strengthMin) + HALF_BAND
@@ -63,7 +70,7 @@ export default function TrendSparkline({
     .join(' ')
   const last = points[points.length - 1]
   const lastValue = values[values.length - 1]
-  const band = lastValue === undefined ? null : bandOf(lastValue, bands)
+  const band = lastValue === undefined ? null : bandOf(lastValue, bands, decimals)
   // A boundary outside the drawn range is not drawn: a rule pinned to the edge would
   // claim a boundary where there is none.
   const boundaries = [bands.opportunityMin, bands.strengthMin].filter((value) => value > low && value < high)

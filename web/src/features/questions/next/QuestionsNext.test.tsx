@@ -11,8 +11,9 @@ import { listQuestionBankCategories, listQuestionBankEffectiveness, listQuestion
 import { createQuestionLibraryItem, updateQuestionLibraryItem } from '../api/questionLibraryAdmin'
 import QuestionBankNextPage from './QuestionBankNextPage'
 import QuestionLibraryNextPage from './QuestionLibraryNextPage'
-import { bankRows, categoryTree, libraryTypeLabel } from './model'
+import { bankRows, categoryTree, dimensionName, libraryTypeLabel } from './model'
 import en from '../../../i18n/en.json'
+import es from '../../../i18n/es.json'
 
 vi.mock('../api/questionLibrary', async (orig) => ({
   ...(await orig<typeof import('../api/questionLibrary')>()),
@@ -39,6 +40,7 @@ vi.mock('../../../company-context/useCompanyName', () => ({
 const bank = en.questionBank.next
 const lib = en.questionLibrary.next
 const COMPANY = 'c1'
+const RIVAL = 'c2'
 
 const cat = (over: Partial<QuestionCategory>): QuestionCategory => ({
   id: 'x', companyId: null, parentCategoryId: null, nameEn: 'X', nameEs: 'X', descriptionEn: null, descriptionEs: null,
@@ -75,9 +77,34 @@ afterEach(() => {
 
 describe('question models', () => {
   it('rolls a parent category count up over its children', () => {
-    const tree = categoryTree(categories, items)
+    const tree = categoryTree(categories, items, COMPANY)
     expect(tree.globals.map((n) => [n.category.id, n.count])).toEqual([['lead', 4], ['comm', 0]])
     expect(tree.globals[0].children[0].count).toBe(2)
+  })
+
+  // scripts/shot-fixtures/question-library.json carries a rival tenant's category: whatever the
+  // payload holds, another company's row is never drawn, never filed under this company and never
+  // counted — not as a category, and not as a question inside a global one.
+  it("drops another company's categories and questions before anything is counted", () => {
+    const tree = categoryTree(
+      [...categories, cat({ id: 'own', companyId: COMPANY, nameEn: 'Own' }), cat({ id: 'rival', companyId: RIVAL, nameEn: 'Rival' })],
+      [...items, item({ id: 'r1', questionCategoryId: 'rival', companyId: RIVAL }), item({ id: 'r2', questionCategoryId: 'lead', companyId: RIVAL })],
+      COMPANY,
+    )
+    expect(tree.own.map((n) => n.category.id)).toEqual(['own'])
+    expect(tree.globals.map((n) => [n.category.id, n.count])).toEqual([['lead', 4], ['comm', 0]])
+    // With no company in scope, only the global rows remain.
+    expect(categoryTree([cat({ id: 'own', companyId: COMPANY })], [], undefined).own).toEqual([])
+  })
+
+  it('names a dimension in words, and leaves out a code no catalogue knows', () => {
+    const tEs = (key: string) => key.split('.').reduce<unknown>((node, part) => (node as Record<string, unknown> | undefined)?.[part], es) as string ?? key
+    expect(dimensionName('psychological_safety', tEs)).toBe(es.surveyRespond.dimensions.psychological_safety)
+    expect(dimensionName('leadership', tEs)).toBe(es.questionLibrary.dimensionNames.leadership)
+    expect(dimensionName('operations', tEs)).toBe('Operaciones')
+    expect(dimensionName('some_unknown_code', tEs)).toBeNull()
+    expect(dimensionName('Comunicación interna', tEs)).toBe('Comunicación interna')
+    expect(dimensionName(null, tEs)).toBeNull()
   })
 
   it('derives skipped from asked minus answered, and a missing measurement as null — never 0', () => {
@@ -119,9 +146,13 @@ describe('QuestionBankNextPage', () => {
     vi.mocked(listQuestionLibraryItems).mockResolvedValue(items)
     renderAs(<QuestionBankNextPage />)
     const rows = await screen.findAllByTestId('bank-row')
+    // Retire changes state, so it lives in the row's trailing overflow menu, not as a link.
+    expect(within(rows[0]).queryByRole('button', { name: bank.rowActions.replace('{text}', 'Global row') })).toBeNull()
     expect(within(rows[0]).queryByRole('button', { name: bank.retire })).toBeNull()
-    expect(within(rows[1]).getByRole('button', { name: bank.retire })).toBeTruthy()
+    expect(within(rows[1]).queryByRole('button', { name: bank.retire })).toBeNull()
     expect(within(rows[0]).getAllByRole('cell')[4].textContent).toBe('—')
+    await userEvent.click(within(rows[1]).getByRole('button', { name: bank.rowActions.replace('{text}', 'Own row') }))
+    expect(await screen.findByRole('menuitem', { name: bank.retire })).toBeTruthy()
   })
 
   // happy-dom applies no media query, so this pins the classes that do the work at 390px: the
@@ -139,9 +170,11 @@ describe('QuestionBankNextPage', () => {
     renderAs(<QuestionBankNextPage />)
     const [row] = await screen.findAllByTestId('bank-row')
     const cells = within(row).getAllByRole('cell')
-    expect(cells).toHaveLength(7)
+    // Question, six secondary columns, and the trailing actions cell, which stays at every width.
+    expect(cells).toHaveLength(8)
     expect(cells[0].className).not.toContain('hidden')
-    for (const cell of cells.slice(1)) expect(cell.className.split(/\s+/)).toEqual(expect.arrayContaining(['hidden', 'sm:table-cell']))
+    expect(cells[7].className.split(/\s+/)).not.toContain('hidden')
+    for (const cell of cells.slice(1, 7)) expect(cell.className.split(/\s+/)).toEqual(expect.arrayContaining(['hidden', 'sm:table-cell']))
     const meta = row.querySelector('[data-slot="bank-row-meta"]') as HTMLElement
     expect(meta.className.split(/\s+/)).toContain('sm:hidden')
     expect(within(meta).getByText(bank.ownerGlobal)).toBeTruthy()
@@ -154,6 +187,44 @@ describe('QuestionLibraryNextPage', () => {
     vi.mocked(listQuestionCategories).mockResolvedValue(categories)
     vi.mocked(listQuestionLibraryItems).mockResolvedValue(items)
   }
+
+  it("never draws or counts another company's category, and names the rail in full", async () => {
+    vi.mocked(listQuestionCategories).mockResolvedValue([
+      ...categories,
+      cat({ id: 'own', companyId: COMPANY, nameEn: 'Own onboarding', order: 3 }),
+      cat({ id: 'rival', companyId: RIVAL, nameEn: 'RIVAL TENANT — never drawn', order: 4 }),
+    ])
+    vi.mocked(listQuestionLibraryItems).mockResolvedValue([...items, item({ id: 'r1', questionCategoryId: 'rival', companyId: RIVAL, textEn: 'Rival question' })])
+    renderAs(<QuestionLibraryNextPage />)
+    await screen.findAllByTestId('library-row')
+    expect(screen.queryByText('RIVAL TENANT — never drawn')).toBeNull()
+    expect(screen.queryByText('Rival question')).toBeNull()
+    // 3 global categories and 1 of this company's — the rival row is not the second "own" one.
+    expect(
+      screen.getByText(lib.categoriesSummary.replace('{globals}', '3').replace('{own}', lib.ownSome.replace('{count}', '1'))),
+    ).toBeTruthy()
+    // A long name wraps to two lines with its full text on hover, never a one-line ellipsis.
+    const name = screen.getByTitle('Own onboarding')
+    expect(name.className.split(' ')).toEqual(expect.arrayContaining(['line-clamp-2']))
+    expect(name.className.split(' ')).not.toContain('truncate')
+  })
+
+  it("prints a row's dimension in words, never its code", async () => {
+    vi.mocked(listQuestionCategories).mockResolvedValue(categories)
+    vi.mocked(listQuestionLibraryItems).mockResolvedValue([
+      item({ id: 'a', textEn: 'Coded dimension', dimension: 'psychological_safety' }),
+      item({ id: 'b', textEn: 'Unknown code', dimension: 'some_unknown_code' }),
+    ])
+    renderAs(<QuestionLibraryNextPage />)
+    const rows = await screen.findAllByTestId('library-row')
+    expect(rows[0].textContent).toContain(lib.dimensionOf.replace('{dimension}', en.surveyRespond.dimensions.psychological_safety))
+    expect(rows[0].textContent).not.toContain('psychological_safety')
+    expect(rows[1].textContent).not.toContain('some_unknown_code')
+    // The row's action is a bordered secondary button, not a blue text link.
+    const action = within(rows[0]).getByRole('button').className.split(' ')
+    expect(action).toContain('border-line-default')
+    expect(action).not.toContain('text-accent-blue-ink')
+  })
 
   it('opens global rows read-only for a company administrator and their own rows for editing', async () => {
     arrange()

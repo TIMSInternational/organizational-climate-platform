@@ -118,7 +118,7 @@ export interface ResultsClimateGridProps {
  * The artboard's `grid-template-columns: 140px repeat(6, minmax(0, 1fr)) 96px 96px`
  * with 4px gaps, as a fixed-layout table: a `<colgroup>` pins the label and the two
  * trailing columns, the dimension columns share the rest, and `border-spacing` is the
- * gap. Group cells are 40px tall (`h-10`), the artboard's map row height. Below the
+ * gap. Group cells are 40px tall (`h-10`), the artboard's map row height, and 44px (`pointer-coarse:h-11`) where a finger is the pointer — HIG's 44pt hit region. Below the
  * grid's minimum width `Table`'s own container scrolls it, never the page, and the
  * row labels stay pinned so a scrolled cell still says whose it is.
  */
@@ -302,7 +302,7 @@ export default function ResultsClimateGrid({
                       >
                         <span
                           data-band={band}
-                          className="flex h-10 w-full items-center justify-center gap-1 overflow-hidden rounded-md border px-1"
+                          className="flex h-10 w-full items-center justify-center gap-1 overflow-hidden rounded-md border px-1 pointer-coarse:h-11"
                           style={{ ...bandCellStyle(band), ...(cellOpen ? { boxShadow: OPEN_RING } : {}) }}
                           title={bandName(band, bands, t)}
                         >
@@ -376,10 +376,15 @@ export default function ResultsClimateGrid({
       </Table>
 
       <BandLegend bands={bands} testId="grid-legend">
-        <span className="inline-flex items-center gap-1.5">
-          <span aria-hidden="true" className={cn('inline-block size-4 rounded-xs bg-surface-icon-box', PROTECTED_HATCH)} />
-          {t('surveyResults.next.legendProtected', { floor: threshold })}
-        </span>
+        {/* Only when a hatched row is drawn: a group the server withheld unnamed has no row,
+            and a swatch that matches nothing on screen promised a cell that never appears
+            (review 12 Nov). The groups tile says how many are withheld. */}
+        {rows.some((row) => row.isProtected) && (
+          <span className="inline-flex items-center gap-1.5" data-testid="grid-legend-protected">
+            <span aria-hidden="true" className={cn('inline-block size-4 rounded-xs bg-surface-icon-box', PROTECTED_HATCH)} />
+            {t('surveyResults.next.legendProtected', { floor: threshold })}
+          </span>
+        )}
         <span className="inline-flex items-center gap-1.5">
           <span aria-hidden="true" className="inline-block size-3 rounded-xs border-2 border-accent-blue" />
           {t('surveyResults.next.legendOpen')}

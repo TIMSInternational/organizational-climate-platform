@@ -24,7 +24,7 @@ import { calendarDay, instantDay } from '../../../lib/calendarDay'
 import { cn } from '../../../lib/cn'
 import { KpiRow } from '../components/dashboardGrammar'
 import { Eyebrow, PopulationGrid } from '../../../components/signal/SignalPrimitives'
-import type { AdminDashboardModel, AttentionItem, DimensionSeries, RegionKey, RegionStatuses, Wave } from './model'
+import type { AdminDashboardModel, AttentionItem, DimensionSeries, FailureCause, RegionKey, RegionStatuses, Wave } from './model'
 import {
   closedWaveCount,
   daysBetween,
@@ -362,7 +362,17 @@ export default function AdminDashboardNextView({
             {/* No rows, no grid. An empty ClimateMap is a set of headers promising a
                 table that never arrives; the notice above has already said why. */}
             {model.map.rows.length > 0 && (
-            <div className="overflow-x-auto">
+            // On a phone the grid is wider than its card and scrolls sideways. The fade on
+            // the trailing edge and the line under it say so: a header cut mid-word at the
+            // card's edge, with nothing beside it, read as a layout bug (review, 390).
+            <div data-slot="map-scroll" className="relative">
+            <div
+              className="overflow-x-auto"
+              // A region with a name, so a keyboard can reach it and scroll it.
+              role="region"
+              aria-label={t('dashboard.next.mapScrollLabel')}
+              tabIndex={0}
+            >
               <ClimateMap
                 // The artboard's grid: whole names set small and cut by their column (the
                 // full name on hover and for AT), the grouped legend, and no ring — the deep
@@ -385,6 +395,14 @@ export default function AdminDashboardNextView({
                 threshold={floor}
               />
             </div>
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute top-0 right-0 h-full w-8 bg-linear-to-l from-surface-card sm:hidden"
+              />
+              <p data-slot="map-scroll-hint" className="m-0 mt-2 text-sm text-fg-tertiary sm:hidden">
+                {t('dashboard.next.mapScrollHint', { count: model.map.dimensionKeys.length })}
+              </p>
+            </div>
             )}
             {/* How many people are behind each row of the map above — the one thing the
                 grid does not say. A group under the floor draws a fixed band and no
@@ -401,7 +419,9 @@ export default function AdminDashboardNextView({
                     responses: row.responses,
                     isProtected: isSuppressed(row.responses, floor),
                   }))}
-                  protectedLabel={t('dashboard.next.protectedWord')}
+                  // "Menos de 3", the words the leader's and supervisor's views and the
+                  // TeamHome board print for a protected group; "protegido" said less.
+                  protectedLabel={t('dashboard.next.protectedWord', { floor })}
                 />
                 <p className="m-0 text-sm text-fg-tertiary">
                   {t('dashboard.next.whoAnsweredNote', { floor })}
@@ -460,14 +480,17 @@ export default function AdminDashboardNextView({
             {model.liveMicroclimate && (
               <div
                 data-slot="live-microclimate"
-                className="flex items-center justify-between gap-3 rounded-xl border border-line-panel bg-surface-card px-5 py-3.5"
+                // On a phone the link drops under the name, so the name has the card's width:
+                // beside it, two lines still cut the title to "How did this week's…" at 390.
+                className="flex items-center justify-between gap-3 rounded-xl border border-line-panel bg-surface-card px-5 py-3.5 max-sm:flex-col max-sm:items-start"
               >
                 <div className="flex min-w-0 flex-col gap-0.5">
                   {/* The name's head, as the artboard's "Pulso semanal en vivo"; the whole
                       name, subtitle included, is the tooltip. */}
-                  <span className="flex min-w-0 items-center gap-2">
-                    <Chip tone="live" label={t('dashboard.next.liveChip')} className="shrink-0" />
-                    <span className="truncate text-base font-semibold text-fg-primary" title={model.liveMicroclimate.name}>
+                  <span className="flex min-w-0 items-start gap-2">
+                    <Chip tone="live" label={t('dashboard.next.liveChip')} className="mt-0.5 shrink-0" />
+                    {/* Two lines before it cuts: one line left "How did thi…" at 390. */}
+                    <span className="line-clamp-2 min-w-0 break-words text-base font-semibold text-fg-primary" title={model.liveMicroclimate.name}>
                       {t('dashboard.next.liveNamed', { name: nameHead(model.liveMicroclimate.name) })}
                     </span>
                   </span>
@@ -579,6 +602,9 @@ function climateRangeRows(
   })
 }
 
+/** The decimals a trend card prints its reading and move at: the climate range bar's. */
+const SPARK_DECIMALS = 2
+
 /** One dimension's card in "Qué se movió": its name, its latest reading and move, its sparkline. */
 function SparkCard({
   dimension,
@@ -598,10 +624,13 @@ function SparkCard({
   const value = dimension.values[dimension.values.length - 1]
   const before = dimension.values[dimension.values.length - 2]
   if (value === undefined) return null
-  const band = bandOf(value, bands)
-  // The move between the two readings AS PRINTED: Confianza's 3,33 → 3,67 prints "3,3" and
-  // "3,7", so its move is "+0,4" — the raw difference printed "+0,3" beside them.
-  const move = before === undefined ? null : printedMove(value, before, 1, bands.scale)
+  // Two decimals, as the climate range bar above and the climate tile print the same
+  // reading: "Pertenencia 3,92" in the bar and "3,9" in its card read as two numbers for
+  // one fact. Judged at the decimal it prints, so the chip and the figure agree.
+  const band = bandOf(value, bands, SPARK_DECIMALS)
+  // The move between the two readings AS PRINTED, so the move and the two figures beside
+  // it always subtract: the raw difference can print one hundredth off.
+  const move = before === undefined ? null : printedMove(value, before, SPARK_DECIMALS, bands.scale)
   return (
     <div
       data-slot="trend-card"
@@ -617,14 +646,14 @@ function SparkCard({
         <BandChip band={band} bands={bands} short className="h-4.5 shrink-0 px-1.5 text-2xs" />
       </div>
       <div className="flex flex-wrap items-baseline gap-2">
-        <span className="text-reading leading-none font-semibold tabular-nums text-fg-primary">{reading(value, locale, 1, bands.scale)}</span>
+        <span className="text-reading leading-none font-semibold tabular-nums text-fg-primary">{reading(value, locale, SPARK_DECIMALS, bands.scale)}</span>
         {move !== null && (
           <span
             data-slot="trend-move"
             // The sign carries the direction; green and red are result areas, never a move.
             className="text-sm tabular-nums text-fg-secondary"
           >
-            {signedReading(move, locale, 1, bands.scale)}
+            {signedReading(move, locale, SPARK_DECIMALS, bands.scale)}
           </span>
         )}
       </div>
@@ -633,9 +662,10 @@ function SparkCard({
         bands={bands}
         labels={labels}
         domain={domain}
+        decimals={SPARK_DECIMALS}
         label={t('resultBands.dashboard.sparklineLabel', {
           dimension: dimension.name,
-          values: dimension.values.map((v) => reading(v, locale, 1, bands.scale)).join(' → '),
+          values: dimension.values.map((v) => reading(v, locale, SPARK_DECIMALS, bands.scale)).join(' → '),
           low: boundaryText(bands.opportunityMin, locale, bands.scale),
           high: boundaryText(bands.strengthMin, locale, bands.scale),
         })}
@@ -979,9 +1009,20 @@ const REGION_NAME_KEYS: Record<RegionKey, string> = {
   microclimates: 'dashboard.next.regionMicroclimates',
 }
 
+/** The sentence for each way a read can fail: what happened, in the reader's language. */
+const FAILURE_CAUSE_KEYS: Record<FailureCause, string> = {
+  forbidden: 'dashboard.next.failureForbidden',
+  notFound: 'dashboard.next.failureNotFound',
+  server: 'dashboard.next.failureServer',
+  network: 'dashboard.next.failureNetwork',
+  other: 'dashboard.next.failureOther',
+}
+
 /**
  * The honest sentence a section carries when its region is missing: which region,
- * and the server's own reason when it gave one. Drawn nowhere otherwise — a live
+ * and why, as a sentence chosen by how the read failed (`FailureCause`). The server's own
+ * text is never printed: it is English on a Spanish screen and can carry paths and ids.
+ * Drawn nowhere otherwise — a live
  * region says nothing, and neither does a deployment with no tracking service.
  */
 function RegionNotice({
@@ -999,8 +1040,8 @@ function RegionNotice({
   const failed = state.reason === 'failed'
   return (
     // A grey note, not an amber one: amber is the Oportunidad area (ruling 11 Nov). The
-    // sentence says what is missing in words a reader can act on; the server's own reason
-    // follows on a quieter line of its own, rather than spliced into the sentence.
+    // sentence says what is missing in words a reader can act on; why follows on a quieter
+    // line of its own, chosen by the failure's cause rather than copied from the server.
     <Note data-slot="region-fallback" data-region={region} role="status" icon={<Info />} className="py-2.5 text-sm">
       <span className="flex flex-col gap-0.5">
         <span data-slot="region-fallback-text">
@@ -1008,7 +1049,7 @@ function RegionNotice({
         </span>
         {failed && (
           <span data-slot="region-fallback-reason" className="text-fg-tertiary">
-            {t('dashboard.next.unavailableReason', { error: state.error ?? t('dashboard.next.fallbackNoReason') })}
+            {t(FAILURE_CAUSE_KEYS[state.cause ?? 'other'])}
           </span>
         )}
       </span>

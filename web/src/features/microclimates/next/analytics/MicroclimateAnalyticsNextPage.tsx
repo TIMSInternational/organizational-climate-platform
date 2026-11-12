@@ -1,12 +1,12 @@
 import { Link } from 'react-router'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { PageHeader } from '../../../../components/layout'
-import { CanvasCard, CanvasSectionHead, HatchField, NoteBand } from '../../../../components/canvas'
-import { Button, Chip, EmptyState, LoadingRegion, NetworkError, ProtectedState, SkeletonText, Table } from '../../../../components/ui'
+import { CanvasCard, CanvasSectionHead, NoteBand } from '../../../../components/canvas'
+import { Button, CanvasLockIcon, Chip, EmptyState, LoadingRegion, NetworkError, ProtectedState, SkeletonText, Table } from '../../../../components/ui'
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { cn } from '../../../../lib/cn'
 import { nameHead, percentReading } from '../../../dashboard/next/derive'
-import { participationPercent } from '../../microclimatePrivacy'
+import { flooredParticipationPercent } from '../../microclimatePrivacy'
 import { MicroclimateGate } from '../MicroclimateGate'
 import { FLOOR, barPosition, belowFloor, countTicks } from '../derive'
 import { dayRange, shortDay } from '../format'
@@ -223,12 +223,13 @@ function PulsePoint({ row, zone }: { row: SessionRow; zone: string }) {
   const day = sessionDay(row, locale, zone)
   const name = nameHead(session.title ?? t('microclimates.untitled'))
   return (
-    <li className="flex items-center gap-3 rounded-xl border border-dashed border-line-default px-3.5 py-3">
-      {under ? (
-        <HatchField className="size-4 shrink-0 rounded-full border border-line-default" />
-      ) : (
-        <span aria-hidden="true" className="size-4 shrink-0 rounded-full border border-line-default bg-surface-icon-box" />
-      )}
+    // A neutral tile, not a dashed box with an empty circle: that read as an unselected radio
+    // button on a row nothing can select. The glyph says "no figure" — the padlock under the
+    // floor, an em dash where the pulse is simply not kept — and the words carry the reason.
+    <li data-slot="pulse-point" className="flex items-center gap-3 rounded-xl bg-surface-fill-subtle px-3.5 py-3">
+      <span aria-hidden="true" className="inline-flex size-4 shrink-0 items-center justify-center text-fg-tertiary">
+        {under ? <CanvasLockIcon className="size-3.25" /> : '—'}
+      </span>
       <div className="flex min-w-0 flex-col gap-0.5">
         <span className="text-base text-fg-primary">
           <span className="tabular-nums">{day}</span>
@@ -299,7 +300,8 @@ function SessionsTable({ rows, zone }: { rows: readonly SessionRow[]; zone: stri
           {rows.map((row, index) => {
             const { session } = row
             const under = belowFloor(session.responseCount)
-            const share = participationPercent(session.responseCount, session.targetParticipantCount)
+            // Floored: 31 of 48 is 64,58 % and reads "64 %", never a rounded "65 %".
+            const share = flooredParticipationPercent(session.responseCount, session.targetParticipantCount)
             const last = index === rows.length - 1
             const cell = cn(CELL, last && 'border-b-0')
             return (

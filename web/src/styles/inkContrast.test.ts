@@ -598,3 +598,22 @@ describe('the [role=alert] box', () => {
     }
   })
 })
+
+describe('the red word on a neutral chip', () => {
+  /*
+   * The audit log's «Falló» and the system page's «Sin actividad» print the red TEXT ink on
+   * the neutral status chip, not on the box. The state-ink suite measures the red against the
+   * box and the recessed tile only, and at #ff7b7b the dark chip ground (#323b54) measured
+   * 4.43:1 — under AA for the chip's 12px label while every existing guard stayed green. The
+   * chip ground is opaque (`tokens.css`, status-chip block), so it is read as it is.
+   */
+  it('clears AA on --admin-chip-bg-neutral in both themes', () => {
+    const { light, dark } = palettes()
+    for (const [theme, palette] of [['light', light], ['dark', dark]] as const) {
+      const ink = palette['--admin-accent-red-ink']
+      const ground = palette['--admin-chip-bg-neutral']
+      const ratio = contrast(ink, ground)
+      expect(ratio, `${theme}: --admin-accent-red-ink (${ink}) on --admin-chip-bg-neutral (${ground}) is ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(AA_TEXT_CONTRAST)
+    }
+  })
+})

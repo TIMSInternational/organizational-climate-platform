@@ -118,6 +118,12 @@ describe('SegmentedControl', () => {
     expect(chosen).toEqual(expect.arrayContaining(['bg-surface-card', 'font-semibold', 'shadow-sm']))
     expect(other).toEqual(expect.arrayContaining(['bg-transparent', 'font-medium']))
     expect(other).not.toContain('bg-surface-card')
+    // The fills differ by ~1.1:1, so they cannot be the state cue (WCAG 1.4.11 asks 3:1): the
+    // chosen edge is the control line (3.33:1 on the light track, 4.41:1 dark) and the label
+    // steps from the secondary ink to the primary.
+    expect(chosen).toEqual(expect.arrayContaining(['border-line-control', 'text-fg-primary']))
+    expect(chosen).not.toContain('border-line-default')
+    expect(other).toContain('text-fg-secondary')
     // 28px on a desktop, 44px under a finger.
     for (const classes of [chosen, other]) {
       expect(classes).toContain('h-control-md')

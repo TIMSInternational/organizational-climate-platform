@@ -309,6 +309,20 @@ describe('QuestionLibraryNextPage — the artboard\'s order, names and chips', (
     for (const row of rows.filter((entry) => entry !== chosen[0])) expect(row.className).not.toMatch(/accent-blue/)
   })
 
+  it('wraps a long category name to two lines with the full name on hover, never a one-line cut', async () => {
+    serveWithAcme()
+    renderPage()
+    await screen.findAllByRole('button', { name: next.editRow.replace('{text}', LIKERT.textEs) })
+    const rows = [...document.querySelectorAll('[data-slot="category-row"]')]
+    expect(rows.length).toBeGreaterThan(0)
+    for (const row of rows) {
+      const name = row.querySelector('span') as HTMLElement
+      expect(name.className.split(/\s+/)).toContain('line-clamp-2')
+      expect(name.className.split(/\s+/)).not.toContain('truncate')
+      expect(name.getAttribute('title')).toBe(name.textContent)
+    }
+  })
+
   it('sets the editor\'s help lines on the board\'s 1.45 leading and its two buttons at the canvas\'s 34px', async () => {
     serveWithAcme()
     renderPage()

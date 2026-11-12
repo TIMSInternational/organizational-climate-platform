@@ -1,6 +1,6 @@
 import { useId, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, Navigate } from 'react-router'
-import { Check, CircleAlert, Clock, Info, Lock, LogOut } from 'lucide-react'
+import { Check, CircleAlert, Clock, Lock, LogOut, TriangleAlert } from 'lucide-react'
 import { PageHeader } from '../../../components/layout'
 import { Alert, AlertDescription, Button, Chip, ErrorState, Input, LoadingRegion, LoadingState, Note, Table } from '../../../components/ui'
 import { LOCALES, isLocale, useTranslation, type TranslateFn } from '../../../i18n'
@@ -104,7 +104,8 @@ export default function ProfileNextPage() {
 
   return (
     <div className="flex flex-col gap-section">
-      <PageHeader className="mb-0" eyebrow={t('profile.eyebrow')} title={t('profile.title')} description={t('profile.next.description')} />
+      {/* One title for the three account pages; the tab strip below names this one. */}
+      <PageHeader className="mb-0" title={t('profile.next.tabs.label')} description={t('profile.next.description')} />
       <AccountTabs />
       {state.status === 'error' ? (
         <ErrorState title={t('profile.loadError')} description={state.error || undefined} />
@@ -324,13 +325,15 @@ function PreferencesCard({
           </Field>
         </div>
         {preferences.language !== locale && (
-          // A neutral note with the info glyph: amber is the Oportunidad area, never a caution.
-          <Note data-slot="stored-preferences" icon={<Info />} className="text-sm text-fg-secondary">
+          // A warning, not help text: the person's emails go out in another language. The
+          // neutral fill (amber is the Oportunidad area, never a caution), told apart from a
+          // plain note by the warning glyph and the consequence as its bold lead-in.
+          <Note data-slot="stored-preferences" data-severity="warning" icon={<TriangleAlert />} className="text-sm text-fg-secondary">
             <span>
               <b className="font-semibold text-fg-primary">
-                {t('profile.next.preferences.storedLead', { language: storedName, timezone: preferences.timezone })}
+                {t('profile.next.preferences.storedDiffers', { screen: screenNoun, language: storedNoun })}
               </b>{' '}
-              {t('profile.next.preferences.storedDiffers', { screen: screenNoun, language: storedNoun })}
+              {t('profile.next.preferences.storedLead', { language: storedName, timezone: preferences.timezone })}
             </span>
           </Note>
         )}

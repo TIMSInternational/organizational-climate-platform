@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from 'react'
 import { SINGLE_SEGMENT_FLOOR } from '../../../components/charts'
 import { createTranslator, useTranslation } from '../../../i18n'
+import { describeApiError } from '../../../api/describeApiError'
 import { todayCalendarDay } from '../../../lib/calendarDay'
 import { CATALOGUES, FALLBACK_LOCALE } from '../../../i18n/locale'
 import { getTrackingApiBaseUrl, isTrackingEnabled } from '../../tracking/api/config'
@@ -64,7 +65,7 @@ export function useAdminDashboardModel(companyId?: string): AdminDashboardModelS
     [baseUrl, companyId, locale, dimensionName],
   )
 
-  const { data, loading, failed, error, reload } = useDashboardData(load)
+  const { data, loading, failed, thrown, reload } = useDashboardData(load)
   // The bands join the model here: the page is ready when both are, and a scale that could
   // not be read fails the page (with its retry) rather than painting the default.
   const bands = useResultBands()
@@ -85,7 +86,8 @@ export function useAdminDashboardModel(companyId?: string): AdminDashboardModelS
     model,
     regions: data?.regions ?? null,
     failed,
-    error,
+    // Said in the reader's words by the failure's status, never the server's own text.
+    error: failed ? describeApiError(thrown, t) : null,
     reload: reloadAll,
   }
 }

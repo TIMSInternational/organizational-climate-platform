@@ -83,11 +83,14 @@ function renderAs(claims: Record<string, unknown>) {
   )
 }
 
-/** The protected mark: a padlock and «Fewer than 3», and no other figure in the cell. */
-function expectProtected(cell: Element) {
+/**
+ * The protected mark: a padlock and «Fewer than {floor}», where the floor is the one the
+ * PAYLOAD applied (`minimumGroupSize`), and no other figure in the cell.
+ */
+function expectProtected(cell: Element, floor = trends.minimumGroupSize) {
   expect(cell.querySelector('[data-slot="protected-state"]')).not.toBeNull()
-  expect(cell.textContent).toContain(en.ui.protected.short.replace('{floor}', '3'))
-  expect((cell.textContent ?? '').replace(/3/g, '')).not.toMatch(/\d/)
+  expect(cell.textContent).toContain(en.ui.protected.short.replace('{floor}', String(floor)))
+  expect((cell.textContent ?? '').replace(new RegExp(String(floor), 'g'), '')).not.toMatch(/\d/)
 }
 const rowOf = (name: string) => document.querySelector(`tr[data-department-row="${name}"]`) as HTMLElement | null
 const cardOf = (name: string) => document.querySelector(`li[data-department="${name}"]`) as HTMLElement
@@ -143,6 +146,24 @@ describe('DepartmentsNextPage (/departments)', () => {
     expectProtected(rowOf('Ventas')!.querySelectorAll('td')[4])
     expect(rowOf('Ventas')!.textContent).not.toMatch(/4[.,]1/)
     expect(cardOf('Ventas').textContent).toContain('Protected in Q3')
+  })
+
+  it('names the floor the server applied, not a constant: at minimumGroupSize 1 no cell or card says “fewer than 3”', async () => {
+    // Since 2026-10-15 an administrator sees a single department from 1 response, which is what
+    // the header says; a protected cell reading «Fewer than 3» under it would contradict it.
+    vi.mocked(getClimateTrends).mockResolvedValue({ ...trends, minimumGroupSize: 1 })
+    renderAs({ role: 'company_admin', companyId: 'c1' })
+    await screen.findByText('Finanzas', { selector: 'td' })
+    // Finanzas is flagged by the server: protected, at the payload's floor.
+    expectProtected(rowOf('Finanzas')!.querySelectorAll('td')[4], 1)
+    expect(cardOf('Finanzas').textContent).toContain(copy.noteProtectedOne.replace('{wave}', 'Q3').replace('{threshold}', '1'))
+    // Ventas (2 respondents, not flagged) is over a floor of 1: its score is shown.
+    expect(rowOf('Ventas')!.querySelectorAll('td')[4].textContent).toMatch(/4[.,]1/)
+    const fewerThanThree = en.ui.protected.short.replace('{floor}', String(ANONYMITY_FLOOR))
+    for (const element of document.querySelectorAll('tbody, li[data-department]')) {
+      expect(element.textContent).not.toContain(fewerThanThree)
+      expect(element.textContent).not.toContain(copy.noteProtected.replace('{wave}', 'Q3').replace('{threshold}', String(ANONYMITY_FLOOR)))
+    }
   })
 
   it('reads a disclosed group as the mean of its dimensions, names its band outside the strength area, and the lowest dimension on the card', async () => {

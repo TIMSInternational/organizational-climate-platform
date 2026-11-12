@@ -472,6 +472,51 @@
  * nothing ever defined them, so they rendered as unstyled text.
  * ------------------------------------------------------------------------- */
 @layer components {
+  /* -- The chip picker (`components/layout/chipSelectStyle.ts`) -------------
+     The respond header's "Español" and "Claro". The label carries a chevron in the chip's
+     ink so the chip reads as a menu, and on a phone (under `md`, or any coarse pointer) it
+     turns the <select> into a 44px target — HIG `accessibility.md` › Mobility — without
+     growing the row: the select bleeds 11px above and below (negative margins), its own
+     ground and line go transparent, and the label draws the 22px chip behind it
+     (`::before`, inside the label's own stacking context). */
+  .chip-select {
+    position: relative;
+    isolation: isolate;
+    color: var(--admin-font-secondary);
+  }
+  .chip-select::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    right: var(--admin-space-6);
+    z-index: 1;
+    width: var(--admin-space-8);
+    height: var(--admin-space-8);
+    transform: translateY(-50%);
+    background-color: currentColor;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M1.5 3l2.5 2.5L6.5 3' fill='none' stroke='black' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+      center / contain no-repeat;
+    pointer-events: none;
+  }
+  @media (max-width: 47.99rem), (pointer: coarse) {
+    .chip-select {
+      --chip-select-height: calc(var(--admin-space-2) * 22);
+      --chip-select-bleed: calc(var(--admin-space-2) * -5.5);
+      --chip-select-ground: transparent;
+      --chip-select-line: transparent;
+    }
+    .chip-select::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      border: 1px solid var(--admin-border-default);
+      border-radius: var(--admin-radius-lg);
+      background: var(--admin-bg-icon-box);
+      pointer-events: none;
+    }
+  }
+
   /* ---------------------------------------------------------------------------
    * The shell's ink region.
    *

@@ -286,7 +286,7 @@ describe('SharedReportPage', () => {
     expect(row?.textContent).not.toContain('3')
 
     // And the count of withheld departments is stated, so the totals still reconcile.
-    expect(screen.getByText(/Se reservan 1 departamento/)).toBeTruthy()
+    expect(screen.getByText(/Se reserva 1 departamento porque/)).toBeTruthy()
   })
 
   /**

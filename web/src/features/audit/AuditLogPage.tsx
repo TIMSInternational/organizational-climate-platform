@@ -7,7 +7,9 @@ import { PageHeader } from '../../components/layout'
 import {
   Button,
   Chip,
+  DatePicker,
   EmptyState,
+  Label,
   LoadingState,
   NetworkError,
   SelectField,
@@ -17,7 +19,6 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-  TextField,
 } from '../../components/ui'
 import { ApiError } from '../../api/authFetch'
 import { useCompanyScope } from '../../company-context'
@@ -157,8 +158,8 @@ export default function AuditLogPage() {
             ...actions.map((code) => ({ value: code, label: auditActionLabel(t, code) })),
           ]}
         />
-        <TextField label={t('audit.filterFrom')} type="date" value={fromDay} onChange={resetTo(setFromDay)} />
-        <TextField label={t('audit.filterTo')} type="date" value={toDay} onChange={resetTo(setToDay)} />
+        <DayFilter label={t('audit.filterFrom')} placeholder={t('audit.filterAnyDay')} day={fromDay} onChange={resetTo(setFromDay)} />
+        <DayFilter label={t('audit.filterTo')} placeholder={t('audit.filterAnyDay')} day={toDay} onChange={resetTo(setToDay)} />
         <Button
           type="button"
           variant="outline"
@@ -265,6 +266,44 @@ export default function AuditLogPage() {
           </nav>
         </>
       )}
+    </div>
+  )
+}
+
+/** "2026-10-21" as that calendar day at local midnight, the shape the picker holds. */
+function dayToDate(day: string): Date | undefined {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day)
+  return match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : undefined
+}
+
+/** The picked calendar day back as "2026-10-21" — the day, never an instant. */
+function dateToDay(date: Date | undefined): string {
+  if (!date) return ''
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+
+/**
+ * A day filter in the screen's language. The native `type="date"` field printed the
+ * browser's own «mm/dd/yyyy» on a Spanish screen, and its `lang` attribute does not change
+ * that in Chromium (measured 12 Nov). The shared picker writes the day with the UI's locale
+ * and opens a calendar in it. The day still reaches the request as "2026-10-21", read in
+ * the company's zone by `zonedDayBoundary`, exactly as before.
+ */
+function DayFilter({ label, placeholder, day, onChange }: { label: string; placeholder: string; day: string; onChange: (day: string) => void }) {
+  return (
+    <div data-slot="day-filter" className="grid max-w-field gap-1.5">
+      {/* The trigger names itself with the same words (`aria-label`); this is the visible title. */}
+      <Label aria-hidden="true">{label}</Label>
+      {/* 36px, the height of the action select beside it on the same row (`select.tsx`). */}
+      <DatePicker
+        label={label}
+        placeholder={placeholder}
+        dateFormat="d MMM yyyy"
+        className="h-9 pointer-coarse:min-h-11"
+        value={dayToDate(day)}
+        onChange={(date) => onChange(dateToDay(date))}
+      />
     </div>
   )
 }

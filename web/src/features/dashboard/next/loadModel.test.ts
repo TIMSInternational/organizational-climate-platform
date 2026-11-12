@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { loadAdminDashboard, type LoadDeps } from './loadModel'
+import { failureCause, loadAdminDashboard, type LoadDeps } from './loadModel'
+import { ApiError } from '../../../api/authFetch'
 
 /**
  * The loader against a `fetch` answered by URL, with payloads shaped like the ones the
@@ -145,7 +146,7 @@ describe('loadAdminDashboard', () => {
 
     const { model, regions } = await loadAdminDashboard(deps())
 
-    expect(regions.microclimates).toEqual({ status: 'fallback', reason: 'failed', error: 'Service unavailable' })
+    expect(regions.microclimates).toEqual({ status: 'fallback', reason: 'failed', error: 'Service unavailable', cause: 'server' })
     expect(model.isPartial).toBe(true)
     // The failed region's field is absent, not another tenant's live session.
     expect(model.liveMicroclimate).toBeNull()
@@ -216,10 +217,10 @@ describe('loadAdminDashboard', () => {
 
     const { regions } = await loadAdminDashboard(deps())
 
-    expect(regions.company).toEqual({ status: 'fallback', reason: 'failed', error: 'Service unavailable' })
-    expect(regions.actionPlans).toEqual({ status: 'fallback', reason: 'failed', error: 'Service unavailable' })
-    expect(regions.microclimates).toEqual({ status: 'fallback', reason: 'failed', error: 'Service unavailable' })
-    expect(regions.tracking).toEqual({ status: 'fallback', reason: 'failed', error: 'Service unavailable' })
+    expect(regions.company).toEqual({ status: 'fallback', reason: 'failed', error: 'Service unavailable', cause: 'server' })
+    expect(regions.actionPlans).toEqual({ status: 'fallback', reason: 'failed', error: 'Service unavailable', cause: 'server' })
+    expect(regions.microclimates).toEqual({ status: 'fallback', reason: 'failed', error: 'Service unavailable', cause: 'server' })
+    expect(regions.tracking).toEqual({ status: 'fallback', reason: 'failed', error: 'Service unavailable', cause: 'server' })
     expect(regions.surveys).toEqual({ status: 'live' })
     expect(requested().some((url) => url.includes('/action-plans'))).toBe(false)
   })
@@ -231,5 +232,21 @@ describe('loadAdminDashboard', () => {
     expect(urls).toContain(`${API}/surveys/sv-q3?lang=es`)
     expect(urls).toContain(`${API}/surveys/sv-q4/invitations?lang=es`)
     expect(model.attention.find((item) => item.kind === 'low-participation')).toMatchObject({ remindersSent: 3 })
+  })
+})
+
+// The section prints a sentence per cause, never the server's text (English, and it can carry
+// paths and ids). So the cause is read from the status the server answered with.
+describe('failureCause', () => {
+  it('names a refusal, a missing resource, a server fault, an unreachable server and anything else', () => {
+    expect(failureCause(new ApiError(401, 'x'))).toBe('forbidden')
+    expect(failureCause(new ApiError(403, 'x'))).toBe('forbidden')
+    expect(failureCause(new ApiError(404, 'x'))).toBe('notFound')
+    expect(failureCause(new ApiError(500, 'x'))).toBe('server')
+    expect(failureCause(new ApiError(503, 'x'))).toBe('server')
+    expect(failureCause(new ApiError(409, 'x'))).toBe('other')
+    expect(failureCause(new Error('Failed to fetch', { cause: new TypeError('Failed to fetch') }))).toBe('network')
+    expect(failureCause(new Error('boom'))).toBe('other')
+    expect(failureCause('not an error')).toBe('other')
   })
 })

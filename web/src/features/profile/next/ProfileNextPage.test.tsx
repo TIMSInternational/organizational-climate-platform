@@ -184,6 +184,8 @@ describe('ProfileNextPage', () => {
       expect(await screen.findByRole('heading', { name: heading })).toBeTruthy()
     }
     expect(screen.getByRole('link', { name: es.profile.next.tabs.profile }).getAttribute('aria-current')).toBe('page')
+    // One title for the three account tabs; the tab names the page, so the title never repeats it.
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(es.profile.next.tabs.label)
     expect(screen.getByText(es.profile.next.activity.empty)).toBeTruthy()
   })
 
@@ -281,7 +283,12 @@ describe('ProfileNextPage', () => {
     // The lead names the stored language by its own name, as the board's «Guardado en tu cuenta: English y UTC».
     expect(screen.getByText(P.storedLead.replace('{language}', 'English').replace('{timezone}', 'UTC'))).toBeTruthy()
     // Mid-sentence, Spanish writes a language in lower case: «está en español, pero tus correos salen en inglés».
-    expect(screen.getByText(P.storedDiffers.replace('{screen}', 'español').replace('{language}', 'inglés'))).toBeTruthy()
+    const differs = screen.getByText(P.storedDiffers.replace('{screen}', 'español').replace('{language}', 'inglés'))
+    // A warning, not help text: the consequence is the bold lead-in of a warning-glyph note.
+    expect(differs.tagName).toBe('B')
+    const note = differs.closest('[data-slot="stored-preferences"]') as HTMLElement
+    expect(note.getAttribute('data-severity')).toBe('warning')
+    expect(note.querySelector('svg.lucide-triangle-alert')).not.toBeNull()
     // The picker offers each language by its own name, never the Spanish exonym «Inglés».
     const picker = within(region(es.profile.preferencesTitle)).getByLabelText(es.profile.language)
     expect([...picker.querySelectorAll('option')].map((option) => option.textContent)).toEqual(['English', 'Español'])

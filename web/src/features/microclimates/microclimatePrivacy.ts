@@ -95,3 +95,17 @@ export function participationPercent(responseCount: number, targetParticipantCou
   if (targetParticipantCount <= 0) return null
   return (responseCount / targetParticipantCount) * 100
 }
+
+/**
+ * Participation as a whole percentage, floored, or null when there is no denominator.
+ *
+ * Floored, never rounded: a rate is a claim about completion, and 199 of 200 rounded
+ * reads "100 %" beside a person who has not answered (the response rate is floored
+ * across the app). Computed from the counts as `responses × 100 ÷ target`, not by
+ * flooring `participationPercent`: `(29 / 100) * 100` is 28.999999999999996 in floating
+ * point and would floor to 28, while `2900 / 100` divides exactly.
+ */
+export function flooredParticipationPercent(responseCount: number, targetParticipantCount: number): number | null {
+  if (targetParticipantCount <= 0) return null
+  return Math.floor((responseCount * 100) / targetParticipantCount)
+}

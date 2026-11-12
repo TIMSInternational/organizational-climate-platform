@@ -62,7 +62,7 @@ export function FormLabel({ className, ...props }: ComponentProps<typeof Label>)
       data-slot="form-label"
       data-error={invalid || undefined}
       htmlFor={id}
-      // The danger ink (the word), not the danger fill: #ff7b7b in dark, 6.92:1 on the panel.
+      // The danger ink (the word), not the danger fill: #ff8f8f in dark, 7.92:1 on the panel.
       className={cn('data-[error=true]:text-accent-red-ink', className)}
       {...props}
     />

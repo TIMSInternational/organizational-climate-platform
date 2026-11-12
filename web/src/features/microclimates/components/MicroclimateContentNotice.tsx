@@ -1,3 +1,4 @@
+import { Info } from 'lucide-react'
 import { useTranslation } from '../../../i18n'
 import { Alert, AlertDescription, AlertTitle } from '../../../components/ui'
 import { languageLabel } from '../microclimateVocabulary'
@@ -30,13 +31,21 @@ interface MicroclimateContentNoticeProps {
  * noun or a `subject` prop threading a word through two catalogues; the keys are
  * cheaper and the Spanish is correct.
  *
- * Both signals are rendered because they say different things. A Spanish-only session
- * read with `?lang=en` fires the banner *and* lists every field; a bilingual session
- * whose third question was never translated fires only the per-field count. Keying
- * off one would hide the other.
+ * ## One sentence, on the neutral card
+ *
+ * Drawn as the survey respond page draws its own language notice: the neutral `warning`
+ * card (the gray fill, an info glyph) under "No todo está disponible en su idioma", not
+ * the blue `info` box — blue is action, selection and live, never information. It says
+ * one thing once. When the payload as a whole was served in another language, the
+ * sentence names that language; when only some fields reached for the other language,
+ * it says so. The first case already covers every field, so the field count is not
+ * repeated beneath it.
+ *
+ * Both signals are still read, because either alone hides a real case: a Spanish-only
+ * session read with `?lang=en` is substituted as a whole, and a bilingual session whose
+ * third question was never translated fires only `fallbackFields`.
  */
 export default function MicroclimateContentNotice({
-  language,
   resolvedLocale,
   fallbackFields,
 }: MicroclimateContentNoticeProps) {
@@ -47,24 +56,18 @@ export default function MicroclimateContentNotice({
     return null
   }
 
+  // Mid-sentence a Spanish language name is lower case ("en inglés"); English keeps it.
+  const resolved = languageLabel(t, resolvedLocale)
+  const named = locale === 'es' ? resolved.toLocaleLowerCase('es') : resolved
+
   return (
-    <Alert variant="info" className="mb-panel-gap">
-      <AlertTitle>{t('microclimates.contentLanguageNotice')}</AlertTitle>
+    <Alert variant="warning" className="mb-panel-gap">
+      <Info aria-hidden="true" />
+      <AlertTitle>{t('microclimates.contentFallbackTitle')}</AlertTitle>
       <AlertDescription>
-        <span className="grid gap-1">
-          {substituted && (
-            <span>
-              {t('microclimates.showingContentIn', {
-                resolved: languageLabel(t, resolvedLocale),
-                requested: languageLabel(t, locale),
-              })}
-            </span>
-          )}
-          <span>{t('microclimates.authoredIn', { language: languageLabel(t, language) })}</span>
-          {fallbackFields.length > 0 && (
-            <span>{t('microclimates.fieldsFellBack', { count: fallbackFields.length })}</span>
-          )}
-        </span>
+        {substituted
+          ? t('microclimates.contentFallbackBody', { language: named })
+          : t('microclimates.contentFallbackFields')}
       </AlertDescription>
     </Alert>
   )

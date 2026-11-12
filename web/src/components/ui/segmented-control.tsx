@@ -37,10 +37,13 @@ import { cn } from '../../lib/cn'
  * `--fill` the card ground is brighter than the track in light (#ffffff over #ececed) but
  * DARKER in dark (#18213a under #2d3549, 1.31:1 the wrong way), so the chosen segment would
  * sink into the track. On the recessed tile the card ground is the brighter of the two in
- * both themes (#ffffff over #f5f5f7; #18213a over #0f1626). The track's hairline
- * (`border-line-light`) and the chosen segment's (`border-line-default`) carry the shapes,
- * since neither fill differs from its neighbour by much more than 1.1:1 — the selection is
- * also told by weight (600 against 500), and to assistive technology by `aria-pressed`.
+ * both themes (#ffffff over #f5f5f7; #18213a over #0f1626). Neither fill differs from its
+ * neighbour by much more than 1.1:1, so the fill cannot be the cue: WCAG 1.4.11 asks 3:1 of
+ * whatever identifies the state. The chosen segment's edge is the CONTROL line
+ * (`border-line-control`, #86868b on the #f5f5f7 track light, #717d9e on #0f1626 dark — the
+ * 3:1 boundary `controlBoundaryContrast.test.ts` holds), and the state is also told by weight
+ * and ink (600 in the primary ink against 500 in the secondary), and to assistive
+ * technology by `aria-pressed`.
  *
  * Touch: under `pointer-coarse` each segment grows to 44px (HIG `buttons.md`: "a hit region
  * of at least 44x44 pt").
@@ -152,14 +155,14 @@ export function SegmentedControl<T extends string>({
               // index.css cards every bare <button>: each of these declarations replaces one
               // of that rule's (height, padding, radius, border, ground, type).
               'inline-flex h-control-md items-center justify-center whitespace-nowrap rounded-md border px-3',
-              'text-sm text-fg-primary',
+              'text-sm',
               'transition-[background-color,border-color,box-shadow] ease-out',
               'pointer-coarse:min-h-11',
               'disabled:cursor-not-allowed disabled:opacity-45',
               fullWidth && 'flex-1',
               pressed
-                ? 'border-line-default bg-surface-card font-semibold shadow-sm'
-                : 'border-transparent bg-transparent font-medium hover:not-disabled:bg-state-hover',
+                ? 'border-line-control bg-surface-card font-semibold text-fg-primary shadow-sm'
+                : 'border-transparent bg-transparent font-medium text-fg-secondary hover:not-disabled:bg-state-hover',
             )}
           >
             {option.label}

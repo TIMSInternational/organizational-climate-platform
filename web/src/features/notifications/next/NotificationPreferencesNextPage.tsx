@@ -55,8 +55,8 @@ function savedSummary(t: TranslateFn, saved: NotificationPreferences): string {
  *
  * Channel × event as one compact table: the four configurable emails with their switch, the
  * in-app inbox beside each as the thing that never turns off, the account and security mail
- * that is always sent, and the digest frequency — with one "Guardar" and "Descartar", live as
- * the artboard draws them: "Guardar" sends the table as it stands (the saved values again when
+ * that is always sent, and the digest frequency — with one "Guardar" and "Descartar" in the
+ * list's own footer (as every block of Tu perfil saves in its own), live as the artboard draws them: "Guardar" sends the table as it stands (the saved values again when
  * nothing moved, which the server stores unchanged), "Descartar" puts back what the account
  * holds, and the line under the tabs says whether anything is unsaved. Nothing is pre-filled
  * from a default: the table waits for the saved values. The platform sends no push and no SMS,
@@ -98,27 +98,9 @@ export default function NotificationPreferencesNextPage() {
 
   return (
     <div className="flex flex-col gap-section">
-      <PageHeader
-        className="mb-0"
-        eyebrow={t('notifications.preferences.eyebrow')}
-        title={t('notifications.preferences.title')}
-        description={t('notifications.next.prefs.description')}
-        actions={
-          state.status === 'ready' ? (
-            <Button type="button" variant="outline" disabled={saving} onClick={() => setDraft(state.saved)}>
-              {t('notifications.next.prefs.discard')}
-            </Button>
-          ) : undefined
-        }
-        primaryAction={
-          state.status === 'ready' ? (
-            <Button type="button" variant="primary" disabled={saving} onClick={() => void save()}>
-              <Check aria-hidden="true" />
-              {t('notifications.next.prefs.save')}
-            </Button>
-          ) : undefined
-        }
-      />
+      {/* One title for the three account pages (Tu perfil · Notificaciones · Privacidad), so
+          switching tabs moves neither the title nor the actions; the tab says which page. */}
+      <PageHeader className="mb-0" title={t('profile.next.tabs.label')} description={t('notifications.next.prefs.description')} />
       <AccountTabs />
       {state.status === 'error' ? (
         <NetworkError title={t('notifications.preferences.loadError')} description={state.error ?? undefined} onRetry={state.retry} retryText={t('common.retry')} />
@@ -143,7 +125,23 @@ export default function NotificationPreferencesNextPage() {
                 </span>
               </p>
               <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_23.5rem]">
-                <PreferencesTable draft={draft} onChange={update} />
+                <PreferencesTable
+                  draft={draft}
+                  onChange={update}
+                  footer={
+                    // Saved in the card's footer, as each block of Tu perfil is: the save
+                    // belongs to the list it saves, not to the page header.
+                    <>
+                      <Button type="button" variant="ghost" disabled={saving} onClick={() => setDraft(state.saved)}>
+                        {t('notifications.next.prefs.discard')}
+                      </Button>
+                      <Button type="button" variant="outline" disabled={saving} onClick={() => void save()}>
+                        <Check aria-hidden="true" />
+                        {t('notifications.next.prefs.save')}
+                      </Button>
+                    </>
+                  }
+                />
                 <HowItIsDecided />
               </div>
             </div>
@@ -173,7 +171,15 @@ function ListRow({ pref, children, control }: { pref?: string; children: ReactNo
  * practices; `lists-and-tables.md`). The in-app column of the old table said the same thing on
  * every row ("No se apaga"), so it is said once, under the list.
  */
-function PreferencesTable({ draft, onChange }: { draft: NotificationPreferences; onChange: (patch: Partial<NotificationPreferences>) => void }) {
+function PreferencesTable({
+  draft,
+  onChange,
+  footer,
+}: {
+  draft: NotificationPreferences
+  onChange: (patch: Partial<NotificationPreferences>) => void
+  footer: ReactNode
+}) {
   const { t } = useTranslation()
   const digestId = useId()
   return (
@@ -240,6 +246,9 @@ function PreferencesTable({ draft, onChange }: { draft: NotificationPreferences;
         <Inbox aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
         {t('notifications.next.prefs.inAppFooter')}
       </p>
+      <div data-slot="prefs-actions" className="flex flex-wrap justify-end gap-2 border-t border-line-light px-5 py-3">
+        {footer}
+      </div>
     </section>
   )
 }

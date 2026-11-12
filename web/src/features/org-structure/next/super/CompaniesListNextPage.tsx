@@ -76,6 +76,11 @@ export default function CompaniesListNextPage() {
     navigateTo(`/admin/companies/${created.id}?nueva=1`)
   }
 
+  // The Idioma column only when the list says a language for at least one tenant: an API older
+  // than the field answers none, and a column of «en el detalle» on every row carried nothing
+  // (fix round 1). The note card under the table says where the setting lives either way.
+  const showLanguage = state.rows.some((row) => knownLanguage(row.language))
+
   const header = (
     <PageHeader
       eyebrow={t('navigation.sectionOrganization')}
@@ -192,7 +197,7 @@ export default function CompaniesListNextPage() {
                   <col />
                   <col className="w-36" />
                   <col className="w-28" />
-                  <col className="w-26" />
+                  {showLanguage && <col className="w-26" />}
                   <col className="w-28" />
                   <col className="w-22" />
                   <col className="w-40" />
@@ -204,7 +209,7 @@ export default function CompaniesListNextPage() {
                     <TableHead className={TH}>{t('superadmin.next.companies.colCompany')}</TableHead>
                     <TableHead className={TH}>{t('superadmin.next.companies.colSectorSize')}</TableHead>
                     <TableHead className={TH}>{t('superadmin.next.companies.colCountry')}</TableHead>
-                    <TableHead className={TH}>{t('superadmin.next.companies.colLanguage')}</TableHead>
+                    {showLanguage && <TableHead className={TH}>{t('superadmin.next.companies.colLanguage')}</TableHead>}
                     <TableHead className={TH}>{t('superadmin.next.companies.colPlan')}</TableHead>
                     <TableHead numeric className={TH}>{t('superadmin.next.companies.colPeople')}</TableHead>
                     <TableHead className={TH}>{t('superadmin.next.companies.colActiveSurveys')}</TableHead>
@@ -216,7 +221,7 @@ export default function CompaniesListNextPage() {
                 </thead>
                 <tbody>
                   {visible.map((row) => (
-                    <CompanyRow key={row.id} row={row} />
+                    <CompanyRow key={row.id} row={row} showLanguage={showLanguage} />
                   ))}
                 </tbody>
               </Table>
@@ -253,7 +258,11 @@ function UnconfiguredExample({ row }: { row: CompanyListRow }) {
   return <>{t('superadmin.next.companies.unsetExample', { company: row.name, date: longDay(row.createdAt, locale) })}</>
 }
 
-function CompanyRow({ row }: { row: CompanyListRow }) {
+function knownLanguage(language: string | null): language is 'es' | 'en' {
+  return language === 'es' || language === 'en'
+}
+
+function CompanyRow({ row, showLanguage }: { row: CompanyListRow; showLanguage: boolean }) {
   const { t, locale } = useTranslation()
   const { selectCompany } = useCompanyContext()
   const navigate = useNavigate()
@@ -286,10 +295,11 @@ function CompanyRow({ row }: { row: CompanyListRow }) {
           </span>
         )}
       </td>
+      {showLanguage && (
       <td className={TD}>
-        {/* The list payload carries the setting since 2026-11-08. An unknown value, or an API
-            older than the field, says where to read it rather than guessing it. */}
-        {row.language === 'es' || row.language === 'en' ? (
+        {/* The list payload carries the setting since 2026-11-08 (`CompanyEndpoints.cs:45`). An
+            unknown value beside a known one says where to read it rather than guessing it. */}
+        {knownLanguage(row.language) ? (
           <span className="block truncate text-fg-primary">
             {t(row.language === 'es' ? 'superadmin.next.companies.languageEs' : 'superadmin.next.companies.languageEn')}
           </span>
@@ -297,6 +307,7 @@ function CompanyRow({ row }: { row: CompanyListRow }) {
           <span className="whitespace-nowrap text-sm text-fg-tertiary">{t('superadmin.next.companies.languageInDetail')}</span>
         )}
       </td>
+      )}
       <td className={TD}>
         {tier ? (
           <CanvasChip tone="neutral" label={tier} />

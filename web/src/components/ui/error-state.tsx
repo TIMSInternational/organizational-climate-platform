@@ -82,6 +82,7 @@ export function ErrorState({
   style,
   ...props
 }: ErrorStateProps) {
+  const failure = role === 'alert'
   return (
     <div
       data-slot="error-state"
@@ -99,7 +100,11 @@ export function ErrorState({
       style={fill ? { minHeight: 'var(--admin-size-empty-fill)', ...style } : style}
       {...props}
     >
-      <span aria-hidden="true" className="text-fg-tertiary">
+      {/* An error's icon and title wear the red TEXT ink — the one red mark a failure keeps
+          (Apple design ruling, 11 Nov: the box is neutral, only the words and the icon are red;
+          `alertVariants.ts` draws the inline alert the same way). An empty state is not a
+          failure: `role="status"` keeps the quiet tertiary icon and the primary title. */}
+      <span aria-hidden="true" className={failure ? 'text-accent-red-ink' : 'text-fg-tertiary'}>
         {icon ?? <AlertTriangleIcon className="size-6" />}
       </span>
       {/* `max-w-prose` and `justify-self-center`: the shell's panel fills the
@@ -110,7 +115,7 @@ export function ErrorState({
       <div className="grid max-w-prose justify-self-center gap-1">
         {/* 17px semibold over 15px secondary: a heading one step over the body and the
             body itself, the Apple design's `h3` over `.sub`. */}
-        <p className="m-0 text-xl font-semibold text-fg-primary">{title}</p>
+        <p className={cn('m-0 text-xl font-semibold', failure ? 'text-accent-red-ink' : 'text-fg-primary')}>{title}</p>
         {description && <p className="m-0 text-base text-fg-secondary">{description}</p>}
       </div>
       {action ??

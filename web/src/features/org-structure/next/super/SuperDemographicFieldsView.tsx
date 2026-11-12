@@ -56,7 +56,7 @@ export default function SuperDemographicFieldsView() {
     <div className="flex flex-col gap-section">
       <div className="-mb-6">
         <PageHeader
-          eyebrow={companyName ?? t('navigation.sectionOrganization')}
+          eyebrow={t('navigation.sectionOrganization')}
           title={t('navigation.demographicFields')}
           description={t('superadmin.next.demographics.description', { floor: ANONYMITY_FLOOR })}
           breadcrumbs={breadcrumbs}
@@ -162,12 +162,22 @@ const STARTER_VALUES = [
   'superadmin.next.demographics.starter.overFive',
 ] as const
 
+/** A proposed field a new one starts from: what a sample row of the catalogue shows. */
+export interface FieldSeed {
+  label: string
+  field: string
+  type: string
+  values: readonly string[]
+  required: boolean
+}
+
 export function FieldForm({
   companyId,
   field,
   people,
   nextOrder,
   seedExample = false,
+  seedFrom,
   onDone,
   onCancel,
 }: {
@@ -181,20 +191,25 @@ export function FieldForm({
    * "Crear campo"; every value can be edited or removed.
    */
   seedExample?: boolean
+  /** A new field filled from this proposal (a sample row's «Crear»); ignored when editing. */
+  seedFrom?: FieldSeed
   onDone: () => void
   onCancel: () => void
 }) {
   const { t, locale } = useTranslation()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const editing = field !== null
-  const seed = !editing && seedExample
-  const [label, setLabel] = useState(field?.label ?? (seed ? t('superadmin.next.demographics.starter.label') : ''))
-  const [key, setKey] = useState(field?.field ?? (seed ? t('superadmin.next.demographics.starter.key') : ''))
+  const from = editing ? undefined : seedFrom
+  const seed = !editing && !from && seedExample
+  const [label, setLabel] = useState(field?.label ?? from?.label ?? (seed ? t('superadmin.next.demographics.starter.label') : ''))
+  const [key, setKey] = useState(field?.field ?? from?.field ?? (seed ? t('superadmin.next.demographics.starter.key') : ''))
   const [keyTouched, setKeyTouched] = useState(editing)
-  const [type, setType] = useState(field?.type ?? 'select')
+  const [type, setType] = useState(field?.type ?? from?.type ?? 'select')
   const [order, setOrder] = useState(String(field?.order ?? nextOrder))
   const [values, setValues] = useState<ValueDraft[]>(
-    seed
+    from
+      ? from.values.map((text) => ({ text }))
+      : seed
       ? STARTER_VALUES.map((valueKey) => ({ text: t(valueKey) }))
       : [...(field?.options ?? [])]
       .sort((a, b) => a.order - b.order)
@@ -202,7 +217,7 @@ export function FieldForm({
   )
   const [adding, setAdding] = useState(false)
   const [draftValue, setDraftValue] = useState('')
-  const [required, setRequired] = useState(field?.required ?? false)
+  const [required, setRequired] = useState(field?.required ?? from?.required ?? false)
   const [isActive, setIsActive] = useState(field?.isActive ?? true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { TranslationProvider } from '../../../i18n'
 import { clearToken, setToken } from '../../../auth/token'
@@ -68,6 +68,15 @@ afterEach(() => {
 })
 
 describe('PrivacyNextPage', () => {
+  it('titles the page «Cuenta» like its sibling tabs, keeping the download as its one header action', async () => {
+    routeFetch()
+    renderPage()
+    await screen.findByText(PROFILE.email)
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(es.profile.next.tabs.label)
+    const header = document.querySelector('[data-slot="page-header"]') as HTMLElement
+    expect(within(header).getAllByRole('button').map((button) => button.textContent)).toEqual([T.download])
+  })
+
   it('reads nothing from the audited export until the reader asks for it', async () => {
     const calls = routeFetch()
     renderPage()

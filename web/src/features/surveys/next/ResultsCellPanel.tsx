@@ -12,7 +12,6 @@ import {
   bandName,
   bandOf,
   bandRangeText,
-  bandShortName,
   deltaScoreText,
   scoreText,
   shownDelta,
@@ -178,7 +177,7 @@ export default function ResultsCellPanel({
                       {question.groupScore === null ? '—' : score(question.groupScore)}
                     </span>
                     {question.groupScore !== null && (
-                      <BandChip band={bandOf(question.groupScore, bands)} bands={bands} short />
+                      <BandChip band={bandOf(question.groupScore, bands)} bands={bands} />
                     )}
                   </span>
                 </div>
@@ -204,7 +203,7 @@ export default function ResultsCellPanel({
                   </span>
                   <span className="inline-flex items-center gap-2">
                     <span className="text-lg tabular-nums text-fg-primary">{score(question.surveyScore)}</span>
-                    <BandChip band={bandOf(question.surveyScore, bands)} bands={bands} short />
+                    <BandChip band={bandOf(question.surveyScore, bands)} bands={bands} />
                   </span>
                 </div>
                 <DistributionStrip
@@ -215,6 +214,24 @@ export default function ResultsCellPanel({
                   max={question.scaleMax}
                   segments={segmentsOf(question.surveyDistribution, t)}
                 />
+                {/* Every drawn segment named in words, the thinnest included: the strip only
+                    prints a share where it fits, and an unlabelled sliver read as answers that
+                    went missing (review 12 Nov). */}
+                <ul
+                  className="m-0 flex list-none flex-wrap gap-x-3 gap-y-0.5 p-0 text-xs tabular-nums text-fg-secondary"
+                  data-testid="company-distribution-key"
+                >
+                  {question.surveyDistribution
+                    .filter((point) => point.percentage > 0)
+                    .map((point) => (
+                      <li key={point.position}>
+                        {t('surveyResults.next.stripKey', {
+                          position: point.position,
+                          percent: Math.round(point.percentage),
+                        })}
+                      </li>
+                    ))}
+                </ul>
                 <p className="m-0 text-xs text-fg-label">
                   {t('surveyResults.next.companyDistributionSubWave', {
                     wave: code,
@@ -236,7 +253,7 @@ export default function ResultsCellPanel({
           <p className={LABEL}>{t('surveyResults.next.othersHeading', { dimension })}</p>
           <ul className="m-0 flex list-none flex-col gap-1.5 p-0" data-testid="others-in-dimension">
             {detail.others.map((other) => (
-              <li key={other.id} data-testid={`other-${other.id}`} className="grid grid-cols-[1fr_10.5rem] items-center gap-2">
+              <li key={other.id} data-testid={`other-${other.id}`} className="grid grid-cols-[1fr_12rem] items-center gap-2">
                 <span className="text-sm text-fg-secondary">{other.name}</span>
                 {other.isProtected || other.score === null || other.band === null ? (
                   <ProtectedCell
@@ -259,7 +276,7 @@ export default function ResultsCellPanel({
                     <span className="sr-only">{` — ${bandName(other.band, bands, t)}`}</span>
                     <span aria-hidden="true" className="inline-flex min-w-0 items-center gap-1 text-xs font-medium">
                       <BandGlyph band={other.band} />
-                      <span className="truncate">{bandShortName(other.band, bands, t)}</span>
+                      <span className="truncate">{bandName(other.band, bands, t)}</span>
                     </span>
                   </span>
                 )}

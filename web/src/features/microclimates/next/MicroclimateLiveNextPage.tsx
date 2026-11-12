@@ -280,7 +280,7 @@ function ArrivalsCard({ model, zone }: { model: MicroclimateLiveNextModel; zone:
       {fill !== null && (
         <>
           <Progress
-            value={Math.round(fill)}
+            value={fill}
             className="h-2"
             aria-label={t('charts.participationProgress', {
               current: responses.toLocaleString(locale),

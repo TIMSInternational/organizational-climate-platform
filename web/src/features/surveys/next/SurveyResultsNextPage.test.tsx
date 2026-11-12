@@ -299,6 +299,13 @@ describe('SurveyResultsNextPage', () => {
     expect(protectedRow.textContent).not.toMatch(/\d/)
     const disclosedRow = screen.getByTestId('group-row-d-eng')
     expect(disclosedRow.textContent).toMatch(/3\.9/)
+    // A cell is a touch target: 44px where a finger is the pointer (HIG's 44pt hit region).
+    for (const cell of disclosedRow.querySelectorAll('button [data-band]')) {
+      expect(cell.className.split(/\s+/)).toContain('pointer-coarse:h-11')
+    }
+    expect(disclosedRow.querySelectorAll('button [data-band]').length).toBeGreaterThan(0)
+    // A hatched row is on screen, so the legend names the hatch.
+    expect(within(screen.getByTestId('grid-legend')).getByTestId('grid-legend-protected')).toBeTruthy()
 
     // The worst cell opens by itself; closing it and reopening it from the finding is the same panel.
     expect(screen.getByRole('heading', { level: 2, name: /Operaciones/ })).toBeTruthy()
@@ -425,6 +432,10 @@ describe('SurveyResultsNextPage', () => {
     expect(screen.queryByRole('button', { name: copy.exportCsv })).toBeNull()
     expect(screen.queryByRole('heading', { level: 2, name: copy.mapHeading })).toBeNull()
     expect(screen.queryByTestId('group-row-d-eng')).toBeNull()
+    // The groups tile prints no figure below the whole-survey floor: withheld, not "0 de 0".
+    expect(screen.getByTestId('groups-reserved').textContent).toBe(
+      en.surveyResults.next.groupsReservedUnit.replace('{floor}', '5'),
+    )
     expect(vi.mocked(fetch).mock.calls.some((call) => String(call[0]).includes('/export/pdf'))).toBe(false)
   })
 
