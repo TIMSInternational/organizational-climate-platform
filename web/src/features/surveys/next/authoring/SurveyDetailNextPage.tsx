@@ -39,7 +39,7 @@ import { EditAudienceDialog } from './EditAudienceDialog'
 import { audienceEditability } from './audienceEdit'
 import { ReopenSurveyDialog } from './ReopenSurveyDialog'
 import { EditSurveyTextDialog } from './EditSurveyTextDialog'
-import { isTextEditable } from './model'
+import { isTextEditable, QUIET_DISABLED } from './model'
 import { browserTimeZone, dayMonthIn, dayTimeIn, daysFromIn, isKnownTimeZone, yearIn, zoneLabel } from './zonedWindow'
 
 /**
@@ -422,6 +422,7 @@ export function SurveyDetailView({
                   type="button"
                   variant="outline"
                   size="sm"
+                  className={QUIET_DISABLED}
                   disabled={pending !== null || audienceFrozen}
                   aria-describedby={audienceFrozen ? 'audience-frozen-reason' : undefined}
                   onClick={() => setEditingAudience(true)}
@@ -580,6 +581,9 @@ function StatusTile({
                 type="button"
                 size="sm"
                 variant="outline"
+                // Held disabled for the reason the notice below the tiles gives, so the verb
+                // stays readable (QUIET_DISABLED) instead of fading to 2.88:1.
+                className={QUIET_DISABLED}
                 disabled={pending !== null || opensIntoThePast(status)}
                 onClick={() => (status === 'closed' ? setConfirmClose(true) : onTransition(status))}
               >
