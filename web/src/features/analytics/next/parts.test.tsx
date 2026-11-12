@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import { TranslationProvider } from '../../../i18n'
 import en from '../../../i18n/en.json'
-import { GeneratedChip, GeneratedNote, SectionHeading } from './parts'
+import { ReviewNote, SectionHeading } from './parts'
 
 afterEach(cleanup)
 
@@ -18,15 +18,11 @@ describe('analytics parts', () => {
     expect(screen.getByText('most serious first')).toBeTruthy()
   })
 
-  it('labels machine-authored content as generated, in a neutral chip and a note that it may be wrong', () => {
-    wrap(
-      <>
-        <GeneratedChip />
-        <GeneratedNote />
-      </>,
-    )
-    const chip = screen.getByText(en.insights.next.generatedLabel).closest('[data-slot="chip"]') as HTMLElement
-    expect(chip.className).not.toMatch(/chip-(good|warning|critical)/)
-    expect(screen.getByText(en.insights.next.generatedNote).closest('[data-slot="generated-note"]')).toBeTruthy()
+  it('cautions the reader to check the evidence, and claims nothing about where the text came from', () => {
+    wrap(<ReviewNote />)
+    const note = screen.getByText(en.insights.next.reviewNote).closest('[data-slot="review-note"]') as HTMLElement
+    expect(note).toBeTruthy()
+    // No origin claim: the server stores whatever text it is sent (AIInsightEndpoints.cs).
+    expect(note.textContent).not.toMatch(/\b(AI|IA)\b|generated|generad/i)
   })
 })

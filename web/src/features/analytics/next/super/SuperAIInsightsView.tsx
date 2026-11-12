@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { Link } from 'react-router'
 import { BarChart3, Check, ChevronRight, Copy, Shield } from 'lucide-react'
 import { RailInsightsIcon } from '../../../../navigation/railIcons'
@@ -11,7 +12,7 @@ import { calendarDayWithYear } from '../../../../lib/calendarDayWithYear'
 import { cn } from '../../../../lib/cn'
 import { insightPriorityLabel, insightTypeLabel } from '../../insightVocabulary'
 import { pickLine, tallyInsights, type PickLine } from './insightsDerive'
-import { CARD, GeneratedChip, GeneratedNote, SectionHeading } from '../parts'
+import { CARD, ReviewNote, SectionHeading } from '../parts'
 import type { CompanyPick, InsightRow, InsightsTally } from './insightsModel'
 import { useAIInsightsModel, type AIInsightsModelState } from './useAIInsightsModel'
 
@@ -57,8 +58,10 @@ function withScore(sentence: string, value: string) {
  * Apple design (11 Nov): `PageHeader`, `KpiCard`, bordered cards with no shadow, and every
  * chip neutral — a priority and "Revisado" are not result areas, and green, amber and red mean
  * only those. The cards lose their red and amber rails for the same reason; the priority word
- * and the sort carry the order. Findings are machine-authored, so the list and the panel say
- * so (HIG `generative-ai.md` › Transparency, and › Inputs on possible errors).
+ * and the sort carry the order. Over the list, one caution: check the evidence, the text may be
+ * wrong (HIG `generative-ai.md` › Inputs). No origin claim: the server stores whatever text it
+ * is sent and records no origin. Below lg the panel stacks under the cards, so choosing a card
+ * scrolls it into view — the result shows where the person acted (HIG `feedback.md`).
  */
 export default function SuperAIInsightsView() {
   const { t } = useTranslation()
@@ -219,6 +222,19 @@ function InsightsList({ model }: { model: AIInsightsModelState }) {
   const { t, locale } = useTranslation()
   const tally = tallyInsights(model.rows)
   const selected = model.rows.find((row) => row.item.id === model.selectedId) ?? null
+  const panelRef = useRef<HTMLDivElement>(null)
+  const chosenByTap = useRef(false)
+
+  // Only a card the person chose scrolls the panel up — never the first selection on load —
+  // and only below lg, where the panel stacks under every card instead of beside them.
+  useEffect(() => {
+    if (!chosenByTap.current) return
+    chosenByTap.current = false
+    const panel = panelRef.current
+    if (!panel || typeof window.matchMedia !== 'function' || window.matchMedia('(min-width: 64rem)').matches) return
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    panel.scrollIntoView?.({ block: 'start', behavior: reduce ? 'auto' : 'smooth' })
+  }, [model.selectedId])
 
   return (
     <div className="flex flex-col gap-6">
@@ -258,14 +274,17 @@ function InsightsList({ model }: { model: AIInsightsModelState }) {
             count={model.rows.length}
             aside={t('insights.next.listNote')}
           />
-          <GeneratedNote className="mb-1" />
+          <ReviewNote className="mb-1" />
           <ul className="m-0 flex list-none flex-col gap-2 p-0">
             {model.rows.map((row) => (
               <li key={row.item.id} className="mb-0">
                 <InsightCard
                   row={row}
                   selected={row.item.id === model.selectedId}
-                  onSelect={() => model.select(row.item.id)}
+                  onSelect={() => {
+                    chosenByTap.current = true
+                    model.select(row.item.id)
+                  }}
                   t={t}
                   locale={locale}
                 />
@@ -274,7 +293,11 @@ function InsightsList({ model }: { model: AIInsightsModelState }) {
           </ul>
         </section>
 
-        {selected && <InsightPanel row={selected} model={model} />}
+        {selected && (
+          <div ref={panelRef} data-slot="insight-panel-anchor" className="min-w-0 scroll-mt-4">
+            <InsightPanel row={selected} model={model} />
+          </div>
+        )}
       </div>
 
       <Note data-slot="insights-note" icon={<Shield />}>
@@ -387,10 +410,7 @@ function InsightPanel({ row, model }: { row: InsightRow; model: AIInsightsModelS
       <h2 id="insight-selected" className="m-0 text-2xl">
         {row.item.title}
       </h2>
-      <span className="flex flex-wrap items-center gap-1.5">
-        <InsightChips row={row} t={t} />
-        <GeneratedChip />
-      </span>
+      <InsightChips row={row} t={t} />
       {detail === null ? (
         <SkeletonText lines={3} />
       ) : (

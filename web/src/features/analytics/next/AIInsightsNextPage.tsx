@@ -24,7 +24,7 @@ import { insightCategoryLabel, insightPriorityLabel, insightTypeLabel } from '..
 import { EmptyRow } from '../../shared-next/parts'
 import { useAIInsightsModel } from './useAnalyticsModels'
 import SuperAIInsightsView from './super/SuperAIInsightsView'
-import { CARD, GeneratedNote, SectionHeading } from './parts'
+import { CARD, ReviewNote, SectionHeading } from './parts'
 
 /**
  * Información de IA, redesigned (canvas board "AIInsights").
@@ -43,9 +43,9 @@ import { CARD, GeneratedNote, SectionHeading } from './parts'
  *
  * Apple design (11 Nov): the page header is `PageHeader`; the priority chips are neutral —
  * green, amber and red are the three result areas and nothing else, and a priority is not a
- * result (the word carries it, and the list is sorted by it). Findings are machine-authored,
- * so the list says so (HIG `generative-ai.md` › Transparency) and that they may be wrong
- * (› Inputs, on hallucinations). The closing note states only what the page itself keeps:
+ * result (the word carries it, and the list is sorted by it). Over the list, one caution: check
+ * the evidence before acting, the text may be wrong. It makes no claim about where the text
+ * came from — the server stores whatever its caller sends and records no origin. The closing note states only what the page itself keeps:
  * it shows no responses. The old floor sentence promised that a finding never describes a
  * group under the floor — a check nothing on the create path makes (`AIInsightValidation.cs`),
  * and one the 15 Oct ruling does not even ask of an administrator's single department.
@@ -113,16 +113,16 @@ function AIInsightsForCompany() {
         />
       ) : (
         <div className="flex flex-col gap-3">
-          {insights.length > 0 && <GeneratedNote />}
+          {insights.length > 0 && <ReviewNote />}
           <div className={`${CARD} overflow-hidden`}>
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead scope="col" className="w-28">{t('insights.next.colPriority')}</TableHead>
+                  <TableHead scope="col" className="hidden w-28 md:table-cell">{t('insights.next.colPriority')}</TableHead>
                   <TableHead scope="col">{t('insights.next.colFinding')}</TableHead>
                   <TableHead scope="col" className="hidden w-36 md:table-cell">{t('insights.next.colType')}</TableHead>
                   <TableHead scope="col" className="hidden w-40 md:table-cell">{t('insights.next.colCategory')}</TableHead>
-                  <TableHead scope="col" className="w-12 md:w-44">
+                  <TableHead scope="col" className="hidden w-44 md:table-cell">
                     <span className="sr-only">{t('insights.next.colReview')}</span>
                   </TableHead>
                 </TableRow>
@@ -144,36 +144,40 @@ function AIInsightsForCompany() {
                 ) : (
                   insights.map((insight) => (
                     <TableRow key={insight.id} data-testid="insight-row" className="border-line-light">
-                      <TableCell className="py-3 align-top">
+                      <TableCell className="hidden py-3 align-top md:table-cell">
                         {/* Neutral: a priority is not one of the three result areas. */}
                         <Chip tone="neutral" label={insightPriorityLabel(t, insight.priority)} />
                       </TableCell>
                       <TableCell className="whitespace-normal py-3 align-top text-fg-primary">
-                        {insight.title}
-                        {/* Under md the type and category columns fold under the title, so a phone
-                            keeps the finding and its one verb on screen without scrolling sideways. */}
+                        {/* Under md the priority, type, category and review columns fold into this
+                            cell — the priority above the title, the facts and the verb under it — so
+                            the finding keeps the phone's full width (HIG layout.md). Only one copy
+                            is ever displayed: the other is display:none, out of the a11y tree. */}
+                        <span data-slot="finding-folded-priority" className="mb-1.5 flex md:hidden">
+                          <Chip tone="neutral" label={insightPriorityLabel(t, insight.priority)} />
+                        </span>
+                        <span data-slot="finding-title" className="block">{insight.title}</span>
                         <span className="mt-0.5 block text-sm text-fg-tertiary md:hidden">
                           {insightTypeLabel(t, insight.type)} · {insightCategoryLabel(t, insight.category)}
+                        </span>
+                        <span data-slot="finding-folded-review" className="mt-2 flex md:hidden">
+                          <ReviewControl
+                            acknowledged={insight.isAcknowledged}
+                            canAcknowledge={caps.canManageOrg}
+                            busy={acknowledgingId !== null}
+                            onAcknowledge={() => void acknowledge(insight.id)}
+                          />
                         </span>
                       </TableCell>
                       <TableCell className="hidden py-3 align-top text-fg-secondary md:table-cell">{insightTypeLabel(t, insight.type)}</TableCell>
                       <TableCell className="hidden py-3 align-top text-fg-secondary md:table-cell">{insightCategoryLabel(t, insight.category)}</TableCell>
-                      <TableCell className="py-2 text-right align-top">
-                        {insight.isAcknowledged ? (
-                          <Chip tone="neutral" icon={<Check />} label={t('insights.next.acknowledged')} />
-                        ) : caps.canManageOrg ? (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            disabled={acknowledgingId !== null}
-                            onClick={() => void acknowledge(insight.id)}
-                            aria-label={t('insights.next.acknowledge')}
-                          >
-                            <Check aria-hidden="true" className="md:hidden" />
-                            <span className="hidden md:inline">{t('insights.next.acknowledge')}</span>
-                          </Button>
-                        ) : null}
+                      <TableCell data-slot="finding-review" className="hidden py-2 text-right align-top md:table-cell">
+                        <ReviewControl
+                          acknowledged={insight.isAcknowledged}
+                          canAcknowledge={caps.canManageOrg}
+                          busy={acknowledgingId !== null}
+                          onAcknowledge={() => void acknowledge(insight.id)}
+                        />
                       </TableCell>
                     </TableRow>
                   ))
@@ -189,5 +193,27 @@ function AIInsightsForCompany() {
         {t('insights.next.privacyNote')}
       </Note>
     </div>
+  )
+}
+
+/** "Revisado", or the one verb with its words always visible — never an icon alone, which reads as a checkbox. */
+function ReviewControl({
+  acknowledged,
+  canAcknowledge,
+  busy,
+  onAcknowledge,
+}: {
+  acknowledged: boolean
+  canAcknowledge: boolean
+  busy: boolean
+  onAcknowledge: () => void
+}) {
+  const { t } = useTranslation()
+  if (acknowledged) return <Chip tone="neutral" icon={<Check />} label={t('insights.next.acknowledged')} />
+  if (!canAcknowledge) return null
+  return (
+    <Button type="button" size="sm" variant="outline" disabled={busy} onClick={onAcknowledge}>
+      {t('insights.next.acknowledge')}
+    </Button>
   )
 }
