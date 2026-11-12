@@ -116,8 +116,11 @@ describe('MicroclimateAnalyticsNextPage', () => {
     renderAs({ role: 'company_admin', companyId: COMPANY })
     expect(await screen.findByText(copy.underFloor.replace('{floor}', String(MINIMUM_RESPONDENTS)))).toBeTruthy()
     const row = rowOf('Pulso semanal — ¿cómo fue la semana?')
-    expect(within(row).getByText(copy.protectedOne)).toBeTruthy()
-    expect(within(row).getByText(copy.protectedMany)).toBeTruthy()
+    // The pulse and the words cells are both the ProtectedState primitive: the padlock and
+    // "Menos de 3", the floor and never a count.
+    const marks = within(row).getAllByText(es.ui.protected.short.replace('{floor}', String(MINIMUM_RESPONDENTS)))
+    expect(marks).toHaveLength(2)
+    for (const mark of marks) expect(mark.closest('[data-slot="protected-state"]')).toBeTruthy()
     expect(await within(row).findByText('2 preguntas · anónimo')).toBeTruthy()
     expect(screen.getByText(copy.pulseOne.replace('{floor}', String(MINIMUM_RESPONDENTS)))).toBeTruthy()
     // A protected session's words are not even fetched.

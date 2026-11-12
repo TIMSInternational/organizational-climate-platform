@@ -193,8 +193,10 @@ describe('the sessions', () => {
     expect(meta.textContent).toBe(
       `0 de 20 respuestas · abierto hasta el 11 sept a las 21:06 · 2 preguntas · anónimo · palabras protegidas hasta ${MINIMUM_RESPONDENTS}`,
     )
-    // The counts are readings: the figure face, and nothing else in the line.
-    expect([...meta.querySelectorAll('.font-mono')].map((node) => node.textContent)).toEqual(['0', '20'])
+    // The counts are readings: tabular figures of the UI face, and nothing else in the line.
+    expect([...meta.querySelectorAll('[data-slot="reading"]')].map((node) => node.textContent)).toEqual(['0', '20'])
+    for (const node of meta.querySelectorAll('[data-slot="reading"]')) expect(node.className).toBe('tabular-nums')
+    expect(meta.querySelector('.font-mono')).toBeNull()
   })
 
   /**

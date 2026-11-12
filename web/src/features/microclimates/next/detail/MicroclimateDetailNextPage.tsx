@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { ArrowRight, ChevronRight, Clock, Copy, Ellipsis, EyeOff, Link2, Mail, Pencil, Plus, Send } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
-import { PageTopBar } from '../../../../components/layout'
+import { PageHeader } from '../../../../components/layout'
 import { CanvasCard, FactList, IconBox, NoteBand, PageMeta, PageMetaSentences } from '../../../../components/canvas'
 import {
   Alert,
@@ -166,8 +166,7 @@ function DetailView({ state, detail }: { state: MicroclimateDetailState; detail:
 
   return (
     <div>
-      <PageTopBar
-        compact
+      <PageHeader
         title={title}
         eyebrow={t('microclimates.next.detail.eyebrow')}
         description={t('microclimates.next.detail.description')}
@@ -184,6 +183,14 @@ function DetailView({ state, detail }: { state: MicroclimateDetailState; detail:
             />
           </PageMeta>
         }
+        primaryAction={
+          isDraft && manages ? (
+            <Button variant="primary" size="canvas" disabled={state.pending !== null} onClick={state.launch}>
+              <Send aria-hidden="true" />
+              {t('microclimates.next.detail.launch')}
+            </Button>
+          ) : undefined
+        }
         actions={
           <>
             {editableDraft && (
@@ -192,12 +199,6 @@ function DetailView({ state, detail }: { state: MicroclimateDetailState; detail:
                   <Pencil aria-hidden="true" />
                   {t('microclimates.next.detail.editDraft')}
                 </Link>
-              </Button>
-            )}
-            {isDraft && manages && (
-              <Button variant="primary" size="canvas" disabled={state.pending !== null} onClick={state.launch}>
-                <Send aria-hidden="true" />
-                {t('microclimates.next.detail.launch')}
               </Button>
             )}
             {isLive && (
@@ -256,7 +257,7 @@ function DetailView({ state, detail }: { state: MicroclimateDetailState; detail:
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex h-8 min-w-0 flex-1 basis-64 items-center gap-2 rounded-md border border-line-default bg-surface-card px-2.5">
                   <Link2 aria-hidden="true" className="size-3.5 shrink-0 text-fg-tertiary" />
-                  <span className="truncate font-mono text-base text-fg-primary">{`${host}${path}`}</span>
+                  <span className="truncate font-mono text-sm text-fg-primary">{`${host}${path}`}</span>
                 </span>
                 <Button variant={isDraft ? 'outline' : 'primary'} size="canvas" onClick={() => void copyLink()}>
                   <Copy aria-hidden="true" />
@@ -308,12 +309,12 @@ function DetailView({ state, detail }: { state: MicroclimateDetailState; detail:
                   {
                     id: 'opens',
                     term: t('microclimates.next.sheet.opens'),
-                    value: <span className="font-mono tabular-nums">{instant(t, detail.startTime, locale, zone)}</span>,
+                    value: <span className="tabular-nums">{instant(t, detail.startTime, locale, zone)}</span>,
                   },
                   {
                     id: 'closes',
                     term: t('microclimates.next.sheet.closes'),
-                    value: <span className="font-mono tabular-nums">{instant(t, detail.endTime, locale, zone)}</span>,
+                    value: <span className="tabular-nums">{instant(t, detail.endTime, locale, zone)}</span>,
                   },
                   {
                     id: 'answer',
@@ -326,7 +327,7 @@ function DetailView({ state, detail }: { state: MicroclimateDetailState; detail:
                   {
                     id: 'expected',
                     term: t('microclimates.next.sheet.expected'),
-                    value: <span className="font-mono tabular-nums">{detail.targetParticipantCount}</span>,
+                    value: <span className="tabular-nums">{detail.targetParticipantCount}</span>,
                   },
                   ...(detail.description
                     ? [
@@ -347,7 +348,7 @@ function DetailView({ state, detail }: { state: MicroclimateDetailState; detail:
                   .sort((a, b) => a.order - b.order)
                   .map((question, index) => (
                     <li key={question.id} className="flex items-start gap-2.5 border-t border-line-light py-2">
-                      <span className="inline-flex size-5.5 shrink-0 items-center justify-center rounded-full bg-surface-icon-box font-mono text-xs font-semibold tabular-nums text-fg-secondary">
+                      <span className="inline-flex size-5.5 shrink-0 items-center justify-center rounded-full bg-surface-fill text-xs font-semibold tabular-nums text-fg-secondary">
                         {index + 1}
                       </span>
                       <span className="flex min-w-0 flex-col gap-0.5">
@@ -537,7 +538,7 @@ function Ladder({ list }: { list: MicroclimateInvitationList }) {
   return (
     <>
       <div className="flex flex-col gap-2">
-        <span className="text-2xs font-bold uppercase tracking-label text-fg-label">{t('microclimates.next.detail.ladderTitle')}</span>
+        <span className="text-2xs font-semibold uppercase tracking-eyebrow text-fg-label">{t('microclimates.next.detail.ladderTitle')}</span>
         <div className="flex flex-wrap items-center gap-1.5">
           {ladder.recorded.map((state, index) => (
             <span key={state} className="inline-flex items-center gap-1.5">

@@ -2165,7 +2165,7 @@
       },
       "create": {
         "title": "Nuevo microclima",
-        "eyebrow": "Espacio de trabajo · Crear",
+        "eyebrow": "Seguimiento · Crear",
         "description": "Dos preguntas, un equipo y una fecha de cierre. Al lanzarlo recibe el enlace para compartir.",
         "saveDraft": "Guardar borrador",
         "questionsTitle": "Nombre y preguntas",
@@ -2250,7 +2250,7 @@
         "timezoneBrowser": "No se pudo leer la zona horaria de la empresa: fechas y horas en la de este navegador, {zone}."
       },
       "detail": {
-        "eyebrow": "Espacio de trabajo · Compartir",
+        "eyebrow": "Seguimiento · Compartir",
         "description": "Hágalo llegar: el enlace o el código QR para quien responde sin sesión, o una invitación por correo. Después, mírelo en vivo.",
         "metaActive": "abierta hasta el {date} a las {time}",
         "metaClosed": "cerró el {date} a las {time}",
@@ -2316,7 +2316,7 @@
       },
       "analytics": {
         "title": "Analítica de microclimas",
-        "eyebrow": "Espacio de trabajo",
+        "eyebrow": "Seguimiento",
         "description": "Cuánta gente responde cada sesión y cómo se mueve el pulso de una sesión a la siguiente. Un pulso con menos de {floor} respuestas no muestra cifras, en ningún gráfico.",
         "participationTitle": "Participación por sesión",
         "participationAside": "frente a las esperadas",
@@ -2359,7 +2359,7 @@
         "note": "Cada cifra de un pulso se calcula sobre la sesión entera y solo desde {floor} respuestas. Las palabras se cuentan, nunca se citan."
       },
       "results": {
-        "eyebrow": "Espacio de trabajo · Leer",
+        "eyebrow": "Seguimiento · Leer",
         "description": "Lo que recogió esta sesión: cuántos respondieron y las palabras más dichas, desde {floor} respuestas.",
         "metaActive": "cierra el {date} a las {time}; hasta entonces las cifras pueden moverse",
         "metaClosed": "cerró el {date} a las {time}",

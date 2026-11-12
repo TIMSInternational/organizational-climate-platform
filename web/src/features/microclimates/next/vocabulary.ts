@@ -1,5 +1,5 @@
 import type { TranslateFn } from '../../../i18n'
-import type { ChipTone } from '../../../components/ui'
+import type { ChipStatusTone } from '../../../components/ui'
 import { questionTypeLabel, statusLabel } from '../microclimateVocabulary'
 
 /**
@@ -34,8 +34,12 @@ export function sessionStatusLabel(t: TranslateFn, status: string): string {
   return key ? t(key) : statusLabel(t, status)
 }
 
-export function sessionStatusTone(status: string): ChipTone {
-  return status === 'active' ? 'good' : 'neutral'
+/**
+ * A live session wears the blue `live` chip, the one status that is not gray: blue means
+ * live in this product, and green is kept for the Fortaleza result area alone.
+ */
+export function sessionStatusTone(status: string): ChipStatusTone {
+  return status === 'active' ? 'live' : 'neutral'
 }
 
 /** The invitation ladder's rungs, as the Detalle board's chips name them. */
