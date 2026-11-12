@@ -1,6 +1,7 @@
 import { useTranslation } from '../../../i18n'
+import { Info } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '../../../components/ui'
-import { languageLabel } from '../surveyVocabulary'
+import { languageInSentence } from '../surveyVocabulary'
 
 interface ContentFallbackNoticeProps {
   /** The survey's own content language: 'en' | 'es' | 'both'. */
@@ -60,19 +61,22 @@ export default function ContentFallbackNotice({
   }
 
   return (
-    <Alert variant="info" className="mb-panel-gap">
+    // The neutral notice, as the results page and the microclimate print the same fact (review 12
+    // Nov): `info` painted it blue, and blue is the action, the selection and the live state.
+    <Alert variant="warning" className="mb-panel-gap">
+      <Info aria-hidden="true" />
       <AlertTitle>{t('surveys.contentLanguageNotice')}</AlertTitle>
       <AlertDescription>
         <span className="grid gap-1">
           {substituted && (
             <span>
               {t('surveys.showingContentIn', {
-                resolved: languageLabel(t, resolvedLocale),
-                requested: languageLabel(t, locale),
+                resolved: languageInSentence(t, resolvedLocale),
+                requested: languageInSentence(t, locale),
               })}
             </span>
           )}
-          <span>{t('surveys.authoredIn', { language: languageLabel(t, language) })}</span>
+          <span>{t('surveys.authoredIn', { language: languageInSentence(t, language) })}</span>
           {fallbackFields.length > 0 && (
             <span>{t('surveys.fieldsFellBack', { count: fallbackFields.length })}</span>
           )}
