@@ -794,7 +794,7 @@ function SendOutcomePanel({
           aria-hidden="true"
           data-slot="send-outcome-mark"
           data-mark={unfinished ? 'unfinished' : 'finished'}
-          className={cn('mt-0.5 inline-flex shrink-0 [&>svg]:size-4', unfinished ? 'text-accent-blue' : 'text-fg-tertiary')}
+          className={cn('mt-0.5 inline-flex shrink-0 [&>svg]:size-4', unfinished ? 'text-accent-blue' : 'text-fg-secondary')}
         >
           {unfinished ? <AlertCircle /> : <Check />}
         </span>

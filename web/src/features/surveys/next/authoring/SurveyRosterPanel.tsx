@@ -601,7 +601,7 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
                 </select>
                 <ChevronDown
                   aria-hidden="true"
-                  className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-fg-tertiary"
+                  className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-fg-secondary"
                 />
               </span>
               </>

@@ -192,7 +192,7 @@ export default function SurveyTemplatesNextPage() {
             <h2 id="templates-count" className="m-0 text-2xl">
               {t(visible.length === 1 ? `${K}.countOne` : `${K}.count`, { count: visible.length })}
             </h2>
-            <span className="text-sm text-fg-tertiary">{t(`${K}.sortedByUse`)}</span>
+            <span className="text-sm text-fg-secondary">{t(`${K}.sortedByUse`)}</span>
           </div>
           {visible.length === 0 ? (
             <EmptyState title={t('surveys.noTemplatesFound')} description={t('surveys.tryAdjustingFilters')} />
@@ -277,7 +277,7 @@ function TemplateCard({
           </h3>
           <CanvasChip label={template.isGlobal ? t(`${K}.global`) : (template.companyName ?? t(`${K}.company`))} />
         </div>
-        <span className="text-sm tabular-nums text-fg-tertiary">{facts.join(' · ')}</span>
+        <span className="text-sm tabular-nums text-fg-secondary">{facts.join(' · ')}</span>
         <span className="text-sm text-fg-secondary">{template.description}</span>
       </div>
       <div className="flex min-w-0 flex-col gap-1.5">
@@ -288,7 +288,7 @@ function TemplateCard({
             <span key={key} className={cn('h-1.5 flex-1 rounded-sm', declared ? 'bg-fg-light' : 'bg-surface-fill')} />
           ))}
         </span>
-        <span className="text-xs leading-snug text-fg-tertiary">
+        <span className="text-xs leading-snug text-fg-secondary">
           {declared ? shape.dimensions.map((key) => dimensionName(t, key)).join(' · ') : shape ? t(`${K}.noDimensions`) : t(`${K}.dimensionsUnavailable`)}
         </span>
       </div>

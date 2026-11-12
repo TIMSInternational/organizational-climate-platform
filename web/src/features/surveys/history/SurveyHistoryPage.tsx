@@ -199,7 +199,7 @@ function EntryRow({ entry, ctx }: { entry: SurveyAuditEntry; ctx: ValueContext }
   const fields = entry.action === 'updated' ? (entry.changes?.fields ?? []) : []
   return (
     <li data-slot="history-entry" className="flex flex-col gap-1.5 border-b border-line-light py-3 first:pt-0 last:border-b-0 last:pb-0 sm:flex-row sm:gap-4">
-      <time dateTime={entry.timestamp} className="shrink-0 text-sm leading-6 text-fg-tertiary tabular-nums sm:w-48">
+      <time dateTime={entry.timestamp} className="shrink-0 text-sm leading-6 text-fg-secondary tabular-nums sm:w-48">
         {formatInstant(entry.timestamp, ctx.timeZone, ctx.locale)}
       </time>
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">

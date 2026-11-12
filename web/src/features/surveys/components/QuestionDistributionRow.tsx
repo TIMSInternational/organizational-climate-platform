@@ -102,7 +102,7 @@ export default function QuestionDistributionRow({
     <div className="flex flex-col gap-2.5 rounded-xl border border-line-panel bg-surface-card px-5 py-4">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <span className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className="text-sm font-semibold tabular-nums text-fg-tertiary">{shortLabel}</span>
+          <span className="text-sm font-semibold tabular-nums text-fg-secondary">{shortLabel}</span>
           <span className="text-base font-semibold text-fg-primary">{heading}</span>
           {/* The dimension made visible where the aggregation happens. Tone follows
               the chip rule from `SurveyList`: the tint marks the chip, the word
@@ -113,7 +113,7 @@ export default function QuestionDistributionRow({
             className={cn(
               // Neutral either way: blue is action, selection and live, and a category is none.
               'inline-flex h-5.5 items-center rounded-full bg-chip-neutral-fill px-2.5 text-xs font-medium',
-              uncategorised ? 'text-fg-tertiary' : 'text-chip-neutral-ink',
+              uncategorised ? 'text-fg-secondary' : 'text-chip-neutral-ink',
             )}
           >
             {dimensionName}
@@ -138,7 +138,7 @@ export default function QuestionDistributionRow({
           )}
           {band && bands && <BandChip band={band} bands={bands} />}
           {bands
-            ? standingLabel !== null && <span className="text-fg-tertiary">{standingLabel}</span>
+            ? standingLabel !== null && <span className="text-fg-secondary">{standingLabel}</span>
             : standings &&
               standing !== undefined && (
             <StandingChip

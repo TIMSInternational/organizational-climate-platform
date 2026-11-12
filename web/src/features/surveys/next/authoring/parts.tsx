@@ -204,9 +204,9 @@ export function PanelHeading({ title, count, aside, id }: { title: string; count
     <div className="mb-3 flex flex-wrap items-baseline justify-between gap-inline">
       <h2 id={id} className="m-0 flex items-baseline gap-2 text-2xl">
         {title}
-        {count !== undefined && <span className="font-sans text-sm font-normal tracking-normal text-fg-tertiary tabular-nums">{count}</span>}
+        {count !== undefined && <span className="font-sans text-sm font-normal tracking-normal text-fg-secondary tabular-nums">{count}</span>}
       </h2>
-      {aside && <div className="text-sm text-fg-tertiary">{aside}</div>}
+      {aside && <div className="text-sm text-fg-secondary">{aside}</div>}
     </div>
   )
 }

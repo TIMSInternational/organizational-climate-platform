@@ -204,7 +204,7 @@ function SurveysListForCompany() {
           }))}
         />
         </div>
-        <p className="m-0 text-sm text-fg-tertiary tabular-nums sm:ml-auto">
+        <p className="m-0 text-sm text-fg-secondary tabular-nums sm:ml-auto">
           {t('surveys.next.list.countSummary', { count: state.model.rows.length })}
         </p>
         <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto">
@@ -339,9 +339,9 @@ function SurveySectionBlock({
           >
             {t(SECTION_KEY[section])}
           </h2>
-          <span className="text-sm tabular-nums text-fg-tertiary">{rows.length}</span>
+          <span className="text-sm tabular-nums text-fg-secondary">{rows.length}</span>
         </div>
-        {note && <p className="m-0 text-sm text-fg-tertiary">{note}</p>}
+        {note && <p className="m-0 text-sm text-fg-secondary">{note}</p>}
       </div>
       <div
         className={cn(
@@ -417,7 +417,7 @@ function SurveySectionBlock({
         </>
         )}
       </div>
-      {archived && <p className="m-0 text-sm text-fg-tertiary">{t('surveys.next.list.archivedNote')}</p>}
+      {archived && <p className="m-0 text-sm text-fg-secondary">{t('surveys.next.list.archivedNote')}</p>}
     </section>
   )
 }
@@ -523,7 +523,7 @@ function SurveyTableRow({
             {archived && counts.count === 0 ? t('surveys.next.list.noSubmissions') : t('surveys.next.list.noInviteList')}
           </span>
         ) : archived ? (
-          <span className="text-sm tabular-nums text-fg-tertiary">
+          <span className="text-sm tabular-nums text-fg-secondary">
             {formatMetric(counts.percent, { kind: 'percentage' }, locale)}
           </span>
         ) : (

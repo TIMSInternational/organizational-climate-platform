@@ -57,7 +57,7 @@ export interface TrendsNumbersTableProps {
 // reader's `lang` (`TranslationProvider`), so the word breaks where the language breaks it.
 // The heads are the board's `.tbl th` in sentence case (12px semibold, the tertiary ink): the
 // 11px uppercase was the eyebrow's size spent on a dimension name.
-const HEAD = 'border-0 px-1 pt-0 pb-1 align-bottom text-xs font-semibold normal-case leading-tight tracking-normal text-fg-tertiary hyphens-auto'
+const HEAD = 'border-0 px-1 pt-0 pb-1 align-bottom text-xs font-semibold normal-case leading-tight tracking-normal text-fg-secondary hyphens-auto'
 
 /** The survey column, px (`w-45`). */
 const SURVEY_COL = 180
@@ -117,7 +117,7 @@ export default function TrendsNumbersTable({
           <tr key={wave.id} data-wave={wave.id}>
             <th scope="row" className="border-0 py-0 pr-2 pl-0 text-left align-middle font-normal">
               <span className="block text-base text-fg-primary">{wave.name?.trim() || wave.code}</span>
-              <span className="block text-sm tabular-nums text-fg-tertiary">
+              <span className="block text-sm tabular-nums text-fg-secondary">
                 {/* The count is the drawn GROUP's, never the survey's: "24 resp." beside
                     Ingeniería's row would be the company's figure under a department's
                     name. A withheld wave prints its date and nothing else. */}
