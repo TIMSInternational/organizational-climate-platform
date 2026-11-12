@@ -186,6 +186,9 @@ describe('Distribución — sending per-survey codes to any audience size (G9)',
     const outcome = await screen.findByTestId('send-outcome')
     expect(create).toHaveBeenCalledTimes(2)
     expect(outcome.textContent).toContain('El envío se detuvo: se enviaron 100 códigos y 517 personas siguen sin el suyo.')
+    // Unfinished is told by a glyph, not only by weight: the missing step's AlertCircle.
+    expect(outcome.querySelector('[data-slot="send-outcome-mark"]')?.getAttribute('data-mark')).toBe('unfinished')
+    expect(outcome.querySelector('[data-slot="send-outcome-mark"] svg')?.getAttribute('class')).toMatch(/circle-alert|alert-circle/)
     // The server's English never reaches the screen.
     expect(document.body.textContent).not.toContain('timed out')
 
@@ -194,6 +197,7 @@ describe('Distribución — sending per-survey codes to any audience size (G9)',
     await userEvent.click(within(outcome).getByRole('button', { name: 'Reanudar el envío' }))
     await waitFor(() => expect(screen.getByTestId('send-outcome').textContent).toContain('Se enviaron 517 códigos. Todas las personas de la audiencia tienen el suyo.'))
     expect(create).toHaveBeenCalledTimes(8)
+    expect(screen.getByTestId('send-outcome').querySelector('[data-slot="send-outcome-mark"]')?.getAttribute('data-mark')).toBe('finished')
     expect(create.mock.calls[2][2]).toEqual({ allTargeted: true })
   })
 

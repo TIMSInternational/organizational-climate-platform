@@ -369,7 +369,10 @@ export function DistributionView({
               {survey.status === 'active' &&
               new Date(survey.startDate).getTime() > now.getTime() &&
               !(distribution.accessRules?.activeOutsideSchedule ?? false) ? (
-                <Note role="status" data-testid="link-waits-for-start" icon={<Clock />} className="font-medium">
+                // The link refuses everyone until the start date: the page asking for work, not a
+                // standing fact. The info tone (blue tint, blue glyph) and an AlertCircle, as the
+                // missing step wears, set semibold — and directly above the switch that fixes it.
+                <Note role="status" tone="info" data-testid="link-waits-for-start" icon={<AlertCircle />} className="font-semibold">
                   {t('surveys.next.share.linkWaitsForStart', { date: dayMonth(survey.startDate, locale) })}
                 </Note>
               ) : null}
@@ -782,7 +785,21 @@ function SendOutcomePanel({
       data-unfinished={unfinished || undefined}
       className="flex flex-col gap-2 rounded-xl bg-surface-fill-subtle px-4 py-3"
     >
-      <p className={cn('m-0 text-sm text-fg-primary', unfinished && 'font-medium')}>{sentence}</p>
+      {/* Not amber: that is the Oportunidad area. An unfinished send is the page asking for work,
+          so it wears the missing step's mark — the AlertCircle in the action blue — and the
+          sentence goes semibold. A finished one carries a quiet check. The difference never rests
+          on weight alone. */}
+      <p className={cn('m-0 flex items-start gap-2 text-sm text-fg-primary', unfinished && 'font-semibold')}>
+        <span
+          aria-hidden="true"
+          data-slot="send-outcome-mark"
+          data-mark={unfinished ? 'unfinished' : 'finished'}
+          className={cn('mt-0.5 inline-flex shrink-0 [&>svg]:size-4', unfinished ? 'text-accent-blue' : 'text-fg-tertiary')}
+        >
+          {unfinished ? <AlertCircle /> : <Check />}
+        </span>
+        <span className="min-w-0">{sentence}</span>
+      </p>
       {outcome.failedEmails.length > 0 && (
         <div className="flex flex-col gap-1">
           <p className="m-0 text-sm font-medium text-fg-primary">{copy('send.failedTitle', { count: outcome.failedEmails.length })}</p>

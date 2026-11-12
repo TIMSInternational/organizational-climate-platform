@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { CheckCircle2, Clock, Download } from 'lucide-react'
+import { CheckCircle2, ChevronDown, Clock, Download } from 'lucide-react'
 import {
   Button,
   Card,
@@ -544,6 +544,8 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
             },
           ]
 
+  const filterOptions = filters.map((option) => ({ value: option.value, label: `${copy(option.key)} · ${option.count}` }))
+
   return (
     <section aria-label={copy('title')} className="mt-6" data-testid="survey-roster-panel">
       <Card className="px-5">
@@ -567,15 +569,43 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
             ) : null}
 
             <div className="flex flex-wrap items-center gap-3">
-              {/* The spec's `.seg`: one control, the chosen filter raised on the track. */}
+              {/* The spec's `.seg` from `sm` up: one row, the chosen filter raised on the track.
+                  Below `sm` four segments with their counts do not fit in one row, and a wrapped
+                  track stops reading as one-of-N (r390-seg.png). HIG `segmented-controls.md`
+                  § "Best practices": "keep segment size consistent"; HIG `pop-up-buttons.md`
+                  § "Best practices": "Consider using a pop-up button when space is limited". So
+                  under `sm` the same options and counts are a native pop-up. Neither is drawn
+                  when there is nothing to filter by (a survey that records no state). */}
+              {filterOptions.length > 0 && (
+              <>
               <SegmentedControl
                 label={copy('filterLabel')}
-                // Wraps like the spec's `.seg`: at 390 four segments do not fit on one line.
-                className="max-w-full flex-wrap"
+                className="hidden max-w-full sm:inline-flex"
+                data-testid="roster-filter-segmented"
                 value={filter}
-                options={filters.map((option) => ({ value: option.value, label: `${copy(option.key)} · ${option.count}` }))}
+                options={filterOptions}
                 onChange={setFilter}
               />
+              <span data-testid="roster-filter-popup" className="relative inline-flex w-full min-w-0 sm:hidden">
+                <select
+                  aria-label={copy('filterLabel')}
+                  value={filter}
+                  onChange={(event) => setFilter(event.target.value as Filter)}
+                  className="h-9 w-full min-w-0 appearance-none truncate rounded-md border border-line-control bg-surface-input py-0 pl-3 pr-8 text-base tabular-nums text-fg-primary pointer-coarse:min-h-11"
+                >
+                  {filterOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  aria-hidden="true"
+                  className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-fg-tertiary"
+                />
+              </span>
+              </>
+              )}
               <Input
                 type="search"
                 className="w-full sm:ml-auto sm:max-w-72"

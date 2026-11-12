@@ -101,6 +101,10 @@ describe('Distribución — opening the link before the start date (B2)', () => 
     open(survey(), distribution(false))
     expect(await screen.findByTestId('link-waits-for-start')).toBeTruthy()
     expect(screen.getByTestId('link-waits-for-start').textContent).toContain('5 mar')
+    // It asks for work, so it does not read like the explanatory notes around it: the blue info
+    // tone and the missing step's AlertCircle.
+    expect(screen.getByTestId('link-waits-for-start').getAttribute('data-tone')).toBe('info')
+    expect(screen.getByTestId('link-waits-for-start').querySelector('svg')?.getAttribute('class')).toMatch(/circle-alert|alert-circle/)
     expect(opensBeforeStart().getAttribute('aria-checked')).toBe('false')
 
     vi.mocked(distributionApi.updateSurveyDistribution).mockResolvedValue(distribution(true))

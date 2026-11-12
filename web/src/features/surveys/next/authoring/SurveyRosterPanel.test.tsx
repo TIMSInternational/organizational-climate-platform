@@ -222,6 +222,24 @@ describe('SurveyRosterPanel', () => {
     expect(screen.queryByText('Ana Lucía Mora')).toBeNull()
   })
 
+  it('offers the same filters, with their counts, as a pop-up for a narrow screen', async () => {
+    const payload = view()
+    vi.stubGlobal('fetch', fetchWith(payload).mock)
+    const user = userEvent.setup()
+    renderPanel(payload)
+    await screen.findByText('Marta Villalobos')
+
+    const popup = screen.getByRole('combobox', { name: T.filterLabel })
+    const segments = within(screen.getByTestId('roster-filter-segmented')).getAllByRole('button').map((b) => b.textContent)
+    expect(within(popup).getAllByRole('option').map((o) => o.textContent)).toEqual(segments)
+
+    await user.selectOptions(popup, 'started')
+    expect(screen.getByText('Hugo Peralta')).toBeTruthy()
+    expect(screen.queryByText('Marta Villalobos')).toBeNull()
+    // One state, two controls: the segmented control follows the pop-up's choice.
+    expect(screen.getByRole('button', { name: new RegExp(`^${T.filterStarted}`) }).getAttribute('aria-pressed')).toBe('true')
+  })
+
   it('shows the usuario, and offers no resend to an account that signs in by email', async () => {
     const payload = view()
     vi.stubGlobal('fetch', fetchWith(payload).mock)
