@@ -848,7 +848,9 @@ function StepForm({
           <SelectField
             // The field is a grid too: its `auto` column kept the long option's width even in a
             // shrinkable outer column, so the trigger still overran the card at 390px.
-            className="grid-cols-1"
+            // `md:col-span-2`: from md it takes the row it already sat alone on, so the option
+            // reads in full instead of truncating to one column's width.
+            className="grid-cols-1 md:col-span-2"
             label={t('surveys.serviceLabel')}
             value={values.serviceType === '' ? NO_SERVICE : values.serviceType}
             onChange={(next) => patch({ serviceType: next === NO_SERVICE ? '' : next })}
