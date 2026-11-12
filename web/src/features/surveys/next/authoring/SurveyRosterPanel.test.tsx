@@ -194,6 +194,20 @@ describe('SurveyRosterPanel', () => {
     expect(screen.getByRole('button', { name: new RegExp(`^${T.filterNotStarted}`) }).textContent).toContain('2')
   })
 
+  it('draws every participant state as a neutral chip with its word, never a result colour', async () => {
+    const payload = view()
+    vi.stubGlobal('fetch', fetchWith(payload).mock)
+    renderPanel(payload)
+
+    expect(await screen.findByText('Marta Villalobos')).toBeTruthy()
+    // Green, amber and red are the three result areas and nothing else (ruling of 11 Nov):
+    // "Terminó" and "Empezó" are states, so they wear the grey chip and a glyph beside the word.
+    for (const [who, word] of [['marta', T.statusCompleted], ['hugo', T.statusStarted], ['ana', T.statusNotStarted]] as const) {
+      const chip = within(rowOf(who)).getByText(word).closest('[data-slot="chip"]') ?? within(rowOf(who)).getByText(word).parentElement
+      expect(chip?.outerHTML).not.toMatch(/chip-good|chip-warning|chip-critical/)
+    }
+  })
+
   it('filters to just the people who started and did not finish', async () => {
     const payload = view()
     vi.stubGlobal('fetch', fetchWith(payload).mock)
