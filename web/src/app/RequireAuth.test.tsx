@@ -19,6 +19,10 @@ function renderAt(pathname: string) {
           { path: '/surveys/:id/respond', element: <h1>RESPOND</h1> },
           { path: '/surveys/my', element: <h1>MY SURVEYS</h1> },
           { path: '/profile', element: <h1>PROFILE</h1> },
+          { path: '/settings/notifications', element: <h1>PREFERENCES</h1> },
+          { path: '/tracking/mis-tareas', element: <h1>MIS TAREAS</h1> },
+          { path: '/tracking/planes', element: <h1>PLANS</h1> },
+          { path: '/tracking/planes/:id', element: <h1>PLAN</h1> },
           { path: '/admin/companies', element: <h1>ADMIN</h1> },
         ],
       },
@@ -34,7 +38,10 @@ function renderAt(pathname: string) {
 }
 
 describe('RequireAuth and the respondent surface', () => {
-  beforeEach(() => clearToken())
+  beforeEach(() => {
+    cleanup()
+    clearToken()
+  })
 
   /**
    * The one that must never break: a respondent reaching the survey they were emailed.
@@ -61,6 +68,41 @@ describe('RequireAuth and the respondent surface', () => {
       expect(screen.queryByRole('heading', { name: 'ADMIN' })).toBeNull()
       expect(screen.queryByRole('heading', { name: 'MY SURVEYS' })).toBeNull()
     }
+  })
+
+  /**
+   * G26: the two links the product itself hands an employee, followed as that employee.
+   *
+   * Every notification email's footer reads "Gestiona tus preferencias de notificación"
+   * and links to `/settings/notifications` (`NotificationEmailComposer.PreferencesPath`),
+   * and every row of Mis tareas links to `/tracking/planes/<id>`
+   * (`MisTareasNextPage.tsx`). Measured on d346a7d8 before the fix: both landed on
+   * DASHBOARD, so the opt-out link in the mail and the task's own plan were dead ends.
+   *
+   * Both are the employee's own: `GET/PUT /notifications/preferences` resolve the caller
+   * from the token and take no user id, and `GET /api/planes-accion/{id}` admits a
+   * responsable or involucrado read-only (`PlanAccessHandler`) -- the same predicate
+   * `MisTareasAsync` lists by, so every row of that list opens.
+   */
+  it('lets a respondent follow the preferences link in their notification email', () => {
+    setToken(tokenFor({ role: 'employee', companyId: 'c1' }))
+    renderAt('/settings/notifications')
+    expect(screen.getByRole('heading', { name: 'PREFERENCES' })).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: 'DASHBOARD' })).toBeNull()
+  })
+
+  it('lets an employee open the plan behind a row of Mis tareas', () => {
+    setToken(tokenFor({ role: 'employee', companyId: 'c1' }))
+    renderAt('/tracking/planes/7d1c2f7e-3b7a-4f37-9a43-6c9f3c7a1b52')
+    expect(screen.getByRole('heading', { name: 'PLAN' })).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: 'DASHBOARD' })).toBeNull()
+  })
+
+  it('still keeps a respondent off the plans LIST, which is not theirs', () => {
+    // Pattern, not prefix: admitting `/tracking/planes/:id` must not admit `/tracking/planes`.
+    setToken(tokenFor({ role: 'employee', companyId: 'c1' }))
+    renderAt('/tracking/planes')
+    expect(screen.getByRole('heading', { name: 'DASHBOARD' })).toBeTruthy()
   })
 
   /**
