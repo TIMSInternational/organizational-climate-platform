@@ -185,6 +185,53 @@ describe('AdminLayout', () => {
     expect(screen.getByRole('button', { name: 'Collapse sidebar' })).toBeTruthy()
   })
 
+  /**
+   * G27. A supervisor's sections are all per-user pages, the same shape as an employee's,
+   * and `isPerUserOnly` alone took the rail -- and with it the account menu, the bell and
+   * the drawer -- leaving a wordmark and Cerrar sesión. Measured before the fix: this test
+   * found no 'Collapse sidebar' and no account button for a supervisor.
+   *
+   * The second half is the constraint the rail has to keep: every link the supervisor's
+   * shell renders -- rail, account menu -- is a route `roleCapabilities` grants that role,
+   * so the rail cannot have come back by handing them an admin page.
+   */
+  it('gives a supervisor a rail that reaches only pages a supervisor can load', async () => {
+    stubShellFetch()
+    setToken(tokenFor({ role: 'supervisor', companyId: 'c1' }))
+    renderShell()
+
+    expect(screen.getByRole('button', { name: 'Collapse sidebar' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Notifications/i })).toBeTruthy()
+
+    await userEvent.click(screen.getAllByRole('button', { name: /Account/i })[0])
+    const menu = await screen.findByRole('menu')
+    const menuHrefs = within(menu)
+      .getAllByRole('menuitem')
+      .map((item) => item.getAttribute('href'))
+      .filter((href): href is string => href !== null)
+    expect(menuHrefs).toEqual(expect.arrayContaining(['/profile', '/settings/privacy']))
+
+    const hrefs = screen
+      .getAllByRole('link')
+      .map((a) => a.getAttribute('href'))
+      .filter((href): href is string => href !== null && href.startsWith('/'))
+    // The preferences page is the rail foot's Settings link, beside Cerrar sesión. Notificaciones
+    // is not a rail row since the 11 Nov regroup: the bell asserted above is the way there.
+    expect(hrefs).toEqual(expect.arrayContaining(['/dashboard', '/surveys/my', '/settings/notifications']))
+    for (const href of hrefs) {
+      expect(canReach('supervisor', href, true), `${href} is offered to a supervisor who cannot load it`).toBe(true)
+    }
+    expect(hrefs.some((href) => href.startsWith('/admin'))).toBe(false)
+  })
+
+  it('still gives an employee no rail', () => {
+    // The other side of G27, so "give everyone a rail" cannot pass the test above.
+    setToken(tokenFor({ role: 'employee', companyId: 'c1' }))
+    renderShell()
+    expect(screen.queryByRole('button', { name: 'Collapse sidebar' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Account/i })).toBeNull()
+  })
+
   it('collapses and expands the sidebar, and says which it will do', async () => {
     renderShell()
     const collapse = screen.getByRole('button', { name: 'Collapse sidebar' })
@@ -393,12 +440,12 @@ describe('AdminLayout', () => {
   describe('the way to the privacy page', () => {
     /**
      * The roles that still have a rail, and therefore a mobile drawer under it. `supervisor`
-     * since 2026-11-12: the owner ruled that the role that runs a team keeps the rail although
-     * its rows are all its own pages (`drawsRespondentShell`), which narrows ESPH's 18-Oct
-     * ruling to the employee.
+     * joined them with G27 (2026-10-22) and the owner's ruling of 2026-11-12: its rows are
+     * per-user, but it runs a team and is not the respondent the 2026-10-18 cull was for, and
+     * without the rail it had no way to its own pages (`drawsRespondentShell`).
      */
     const RAIL_ROLES = ['super_admin', 'company_admin', 'leader', 'supervisor'] as const
-    /** The roles `drawsRespondentShell` strips the chrome from. */
+    /** The role the shell strips the chrome from: the respondent `RequireAuth` holds. */
     const PER_USER_ROLES = ['employee'] as const
 
     beforeEach(stubShellFetch)

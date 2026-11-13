@@ -100,9 +100,11 @@ function AdminShell() {
   // `hidden` class on the aside: delete the rail without moving its footer and a
   // respondent has no way to leave.
   //
-  // An EMPLOYEE only, since 2026-11-12: a supervisor's rows are the same per-person pages, but
-  // the owner ruled that the role that runs a team keeps the rail. `drawsRespondentShell`
-  // carries the exception and the ruling it narrows.
+  // The railless shell is the EMPLOYEE's only (G27, 2026-10-22, and the owner's ruling of
+  // 2026-11-12, both carried by `drawsRespondentShell`). The
+  // `supervisor` keeps the rail: its rows are the same per-person pages, but it runs a team
+  // from `/dashboard` and is not the reader the 2026-10-18 cull was for (owner ruling
+  // 2026-11-12). `drawsRespondentShell` carries the exception and the ruling it narrows.
   const perUserOnly = drawsRespondentShell(role, sections)
 
   return (

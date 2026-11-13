@@ -83,6 +83,29 @@ describe('NotificationPreferencesNextPage', () => {
     expect(screen.getByText(T.alwaysSent)).toBeTruthy()
   })
 
+  /**
+   * On a phone (G26 follow-up, #624). The page was a 40rem table in a horizontal scroller, and at
+   * 390px every switch sat outside the card: readable, not changeable, by the employee who opened
+   * it from the footer of a notification email. Since the 11 Nov redesign it is a grouped list.
+   * The suite has no layout engine, so this pins the structure that keeps every switch on the
+   * card: nothing scrolls sideways, and each row wraps its switch under its text instead of
+   * pushing it past the card's clipped edge. Rendered 12 Nov at 390px as an employee
+   * (`npm run shot -- /settings/notifications … --role employee --width 390`): each switch sits
+   * under its text, inside the card.
+   */
+  it('keeps every switch on the card at phone width: no sideways scroller, and each row wraps', async () => {
+    routeFetch()
+    renderPage()
+    await screen.findByRole('heading', { name: T.tableHeading })
+    expect(document.querySelector('table')).toBeNull()
+    expect(document.querySelector('[class*="overflow-x-"]')).toBeNull()
+    for (const key of ['emailSurveys', 'emailMicroclimates', 'emailActionPlans', 'emailReminders']) {
+      const item = row(key)
+      expect(item.className.split(/\s+/)).toContain('flex-wrap')
+      expect(within(item).getByRole('switch')).toBeTruthy()
+    }
+  })
+
   it('titles the page «Cuenta» like its two sibling tabs and saves from the list’s own footer, not the header', async () => {
     routeFetch()
     renderPage()

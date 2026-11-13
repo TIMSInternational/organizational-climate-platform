@@ -541,6 +541,13 @@ export function isPerUserOnly(sections: NavSection[]): boolean {
  * team's page (`DepartmentAdminDashboardView`), not a respondent's welcome. An EMPLOYEE keeps
  * the railless shell exactly as ESPH asked for it.
  *
+ * G27 (#624, 2026-10-22) asked for the same outcome for the same reason -- the shell stripped
+ * a supervisor of the only way to its own pages -- and wrote it as `isRespondentRole(role) &&
+ * isPerUserOnly(sections)`. For the five roles `Roles.cs` defines the two rules agree; they
+ * differ only for a role this build does not know, which this one keeps railless (the safer
+ * wrong answer, pinned in `ProfileNextPage.test.tsx`). #624's tests in `AdminLayout.test.tsx`
+ * pin the supervisor's rail through this function.
+ *
  * A role list, and deliberately beside the computed check rather than inside it: the rows are
  * unchanged, so the hrefs cannot tell the two roles apart (`roleCapabilities.ts` gives them the
  * same list), and what differs is a decision about chrome, not a destination.
