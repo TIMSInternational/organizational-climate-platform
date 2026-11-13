@@ -4701,7 +4701,7 @@
           "gainedShared": "Quien gana acceso la ve en «Mis encuestas» al iniciar sesión mientras esté activa.",
           "gainedPerSurvey": "Esta encuesta usa una clave por persona: quien gana acceso todavía no tiene la suya. Emítala desde Distribución; ese envío sí manda correo.",
           "lostNote": "Quien pierde acceso ya no puede abrirla ni enviar una respuesta empezada. Lo que ya envió se conserva.",
-          "liveNote": "Está activa: el cambio rige en cuanto guardas.",
+          "liveNote": "Está activa: el cambio rige en cuanto guarda.",
           "publicLink": "El enlace y el QR no cambian: quien los abre sin iniciar sesión puede responder igual.",
           "directoryUnread": "No se pudo leer el directorio de la empresa, así que no se puede decir a quién afecta el cambio. Recargue la página.",
           "save": "Guardar audiencia",
