@@ -33,6 +33,12 @@ name: deploy-tracking-prod
 # three for shape, not just presence, so a placeholder fails at step 3 and touches
 # nothing.
 #
+# Plus one thing that is not a variable: the bootstrap stack, which creates the
+# climate-tracking-github-deploy-prod role "Configure AWS credentials" assumes. Climate
+# production moved to account 795965600143, us-east-2, on 2026-10-12, and on 2026-11-13
+# neither climate-tracking-api-bootstrap nor that role existed there (DescribeStacks ->
+# "does not exist", GetRole -> NoSuchEntity). It is created once, by hand -- runbook §5.2.
+#
 # Full sequence, with the exact code for each, in
 # docs/runbooks/tracking-service-provisioning.md.
 # ---------------------------------------------------------------------------------
@@ -48,7 +54,9 @@ name: deploy-tracking-prod
 #
 # | Name | Kind | Value |
 # |---|---|---|
-# | AWS_ACCOUNT_ID | variable | Already set: 747814092517 (repository variable). |
+# | AWS_ACCOUNT_ID | variable | Already set: 795965600143 (repository variable). |
+# |   | | The account climate production has run in since 2026-10-12, in the |
+# |   | | AWS_REGION below; the old 747814092517 is not used any more. |
 # | INTERNAL_API_KEY_SECRET_ARN | variable | ALREADY SET, SHARED, DO NOT DUPLICATE.
 # |   | | climate-project-api/prod/InternalApiKey. |
 # | TRACKING_JWT_SECRET_ARN | variable | ALREADY SET, SHARED, DO NOT DUPLICATE.
@@ -59,9 +67,11 @@ name: deploy-tracking-prod
 # |   | | deployments cannot call it. |
 # | TRACKING_CORS_ADDITIONAL_ALLOWED_ORIGIN | variable, optional | NEW. Second
 # |   | | exact origin; unset/empty means the template drops the slot entirely. |
-# | CLIMATE_PROJECT_BASE_URL | variable | NEW. The climate-project API's own
-# |   | | origin, https://bhgrdkd4gt.us-east-1.awsapprunner.com -- NOT the web
-# |   | | app's. This is a server-to-server call. |
+# | CLIMATE_PROJECT_BASE_URL | variable | Already set. The climate-project API's
+# |   | | own origin, https://api.climate.timsint.com -- NOT the web app's. This
+# |   | | is a server-to-server call. (The old App Runner hostname,
+# |   | | bhgrdkd4gt.us-east-1.awsapprunner.com, stopped resolving after the
+# |   | | 2026-10-12 account move.) |
 # | PROCOMER_COMPANY_ID | variable | NEW. The climate-project Company GUID this
 # |   | | deployment serves. Nobody in this repository knows it; it must be read
 # |   | | out of the production database. See the runbook. |
@@ -221,7 +231,7 @@ jobs:
           # plausible mistake that produces 404s from an HTML page, i.e. a JSON
           # parse error in CacheSyncWorker rather than anything that names the URL.
           if ! printf '%s' "$CLIMATE_PROJECT_BASE_URL" | grep -qE '^https://[^/]+$'; then
-            echo "::error::CLIMATE_PROJECT_BASE_URL must be an https origin with no trailing path or slash, e.g. https://bhgrdkd4gt.us-east-1.awsapprunner.com. ClimateProjectClient sets it as HttpClient.BaseAddress and appends /api/internal/... to it." >&2
+            echo "::error::CLIMATE_PROJECT_BASE_URL must be an https origin with no trailing path or slash, e.g. https://api.climate.timsint.com. ClimateProjectClient sets it as HttpClient.BaseAddress and appends /api/internal/... to it." >&2
             missing=1
           fi
 
