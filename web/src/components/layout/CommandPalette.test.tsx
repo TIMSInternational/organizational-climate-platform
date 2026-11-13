@@ -36,13 +36,16 @@ function serve(items: SearchResultItem[], seen: string[] = []) {
   return seen
 }
 
-/** `switcher` mounts the real language control beside the palette, in the same provider. */
-function renderPalette({ switcher = false } = {}) {
+/**
+ * `switcher` mounts the real language control beside the palette, in the same provider.
+ * `role` is the caller's claim, handed to the palette the way `AdminLayout` hands it.
+ */
+function renderPalette({ switcher = false, role = 'super_admin' } = {}) {
   return render(
     <TranslationProvider>
       {switcher && <LanguageSwitcher compact />}
       <MemoryRouter initialEntries={['/dashboard']}>
-        <CommandPalette sections={buildNavSections('super_admin', COMPANY)} />
+        <CommandPalette sections={buildNavSections(role, COMPANY)} role={role} trackingEnabled={false} />
       </MemoryRouter>
     </TranslationProvider>,
   )
@@ -109,6 +112,55 @@ describe('CommandPalette search (#135)', () => {
     await new Promise((resolve) => setTimeout(resolve, 300))
 
     expect(screen.queryByText('Ada Lovelace')).toBeNull()
+  })
+
+  /**
+   * `GET /search` answers a leader, a supervisor and an employee with the surveys they are
+   * asked to answer (`SearchEndpoints.AssignedSurveysAccess`), and a survey hit routes to
+   * `/surveys/{id}` -- the administrator's Detalle, whose `GET /surveys/{id}` is
+   * `CanAdminister`. Since 2026-11-12 the supervisor's strip carries the palette chip, so the
+   * shell itself was inviting them to a page that answers 403. A hit is offered only where
+   * `roleCapabilities.ts` says the role can load it.
+   */
+  it.each(['supervisor', 'leader', 'employee'])(
+    'does not offer a %s a hit on a page their role cannot load',
+    async (role) => {
+      setToken(tokenFor({ role, companyId: COMPANY }))
+      const seen = serve([hit()])
+      renderPalette({ role })
+      await openPalette()
+
+      await userEvent.type(screen.getByRole('combobox'), 'climate')
+      await waitFor(() => expect(seen.some((url) => url.includes('/search'))).toBe(true))
+      await new Promise((resolve) => setTimeout(resolve, 50))
+
+      expect(screen.queryByText('Q3 2026 Climate Survey')).toBeNull()
+    },
+  )
+
+  /**
+   * The other side, so "drop every hit" cannot pass: each kind `hrefForResult` routes is a
+   * page both administrator roles hold in `roleCapabilities.ts`. `action_plan` is absent
+   * because it routes only where the tracking service is not configured, which the
+   * `offered.test.ts` pair covers; a hit of every other kind must still arrive.
+   */
+  it.each(['super_admin', 'company_admin'])('still offers %s a hit of every routed kind', async (role) => {
+    setToken(tokenFor({ role, companyId: COMPANY }))
+    serve([
+      hit(),
+      hit({ type: 'question', id: 'q1', title: 'A question hit', parentId: '44444444-4444-4444-4444-444444444444' }),
+      hit({ type: 'department', id: 'd1', title: 'A department hit' }),
+      hit({ type: 'user', id: 'u1', title: 'A user hit' }),
+      hit({ type: 'report', id: 'r1', title: 'A report hit' }),
+    ])
+    renderPalette({ role })
+    await openPalette()
+
+    await userEvent.type(screen.getByRole('combobox'), 'hit')
+
+    for (const title of ['Q3 2026 Climate Survey', 'A question hit', 'A department hit', 'A user hit', 'A report hit']) {
+      expect(await screen.findByText(title)).toBeTruthy()
+    }
   })
 
   /** The nav half must keep working when the API is unreachable. */
