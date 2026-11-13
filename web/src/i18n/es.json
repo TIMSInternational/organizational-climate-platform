@@ -4424,7 +4424,21 @@
         "addOr": "o",
         "addBlankLink": "en blanco",
         "everyDimensionCovered": "Cada dimensión tiene al menos una pregunta",
-        "dimensionsWithout": "Sin pregunta: {dimensions}"
+        "dimensionsWithout": "Sin pregunta: {dimensions}",
+        "answersShown": "Cómo se ven las respuestas",
+        "answersAsNumbers": "Números del {min} al {max}",
+        "answersAsList": "Lista con texto",
+        "answersShownHint": "En lista, cada respuesta se ve en su propia línea, con su texto. Se sigue guardando como su número, así que los resultados no cambian.",
+        "answerLabelsIn": {
+          "es": "Texto de cada respuesta (español)",
+          "en": "Texto de cada respuesta (inglés)"
+        },
+        "applyToAll": "Usar estas respuestas en todas las preguntas de {min} a {max}",
+        "appliedToAll": "Listo: {count} preguntas usan ahora estas respuestas.",
+        "appliedToAllOne": "Esta es la única pregunta de {min} a {max}.",
+        "answerLabelsMissing": "Falta el texto de alguna respuesta en las preguntas {positions}.",
+        "answerLabelsMissingOne": "Falta el texto de alguna respuesta en la pregunta {positions}.",
+        "answerLabelsChip": "Respuestas en lista"
       },
       "template": {
         "eyebrow": "Plantilla de encuesta · {category}",

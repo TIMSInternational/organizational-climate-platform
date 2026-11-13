@@ -4424,7 +4424,21 @@
         "addOr": "or",
         "addBlankLink": "blank",
         "everyDimensionCovered": "Every dimension has at least one question",
-        "dimensionsWithout": "No question left for {dimensions}"
+        "dimensionsWithout": "No question left for {dimensions}",
+        "answersShown": "How the answers look",
+        "answersAsNumbers": "Numbers {min} to {max}",
+        "answersAsList": "List in words",
+        "answersShownHint": "As a list, each answer shows on its own line, in words. It is still stored as its number, so the results do not change.",
+        "answerLabelsIn": {
+          "es": "Each answer in Spanish",
+          "en": "Each answer in English"
+        },
+        "applyToAll": "Use these answers on every {min}–{max} question",
+        "appliedToAll": "Done: {count} questions now use these answers.",
+        "appliedToAllOne": "This is the only {min}–{max} question.",
+        "answerLabelsMissing": "Some answers have no words yet in questions {positions}.",
+        "answerLabelsMissingOne": "Some answers have no words yet in question {positions}.",
+        "answerLabelsChip": "Answers as a list"
       },
       "template": {
         "eyebrow": "Survey template · {category}",

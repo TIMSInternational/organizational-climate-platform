@@ -15,16 +15,23 @@ import { needsScaleLabels, statusLabel, SUGGESTED_DIMENSION_KEYS, SURVEY_QUESTIO
 import { Eyebrow, IconBox, Segmented } from '../../../shared-next/parts'
 import { Panel, PanelHeading } from './parts'
 import {
+  applyAnswerLabels,
   authoredLocales,
   blankQuestion,
+  canLabelAnswers,
   compatibleScaleTypes,
   dimensionsWithout,
+  hasAnswerLabels,
   isEditable,
   moveQuestion,
   questionFromLibraryItem,
+  questionsMissingAnswerLabels,
   removeQuestion,
   scaleName,
+  setAnswerLabel,
   summarise,
+  withAnswerLabels,
+  withoutAnswerLabels,
 } from './model'
 import { byCount } from '../../../../i18n/plural'
 import { describeApiError } from '../../../../api/describeApiError'
@@ -85,6 +92,9 @@ export default function SurveyQuestionsEditorPage() {
   const [dragFrom, setDragFrom] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
+  // «Usar estas respuestas en todas…»: which question it was pressed on and how many questions
+  // show those words afterwards, said beside the button rather than left to be counted.
+  const [applied, setApplied] = useState<{ id: string; count: number } | null>(null)
 
   if (state.status === 'loading') {
     return (
@@ -133,6 +143,14 @@ export default function SurveyQuestionsEditorPage() {
 
   async function save() {
     if (!id) return
+    // A list with an answer left blank would show the respondent a bare "3" among four words.
+    // The server would store it (the option keeps its value), so the refusal has to be here.
+    const unlabelled = questionsMissingAnswerLabels(questions, locales)
+    if (unlabelled.length > 0) {
+      setActionError(copy(unlabelled.length === 1 ? 'answerLabelsMissingOne' : 'answerLabelsMissing', { positions: unlabelled.join(', ') }))
+      setOpenIndex(unlabelled[0] - 1)
+      return
+    }
     setBusy(true)
     setActionError(null)
     try {
@@ -313,6 +331,7 @@ export default function SurveyQuestionsEditorPage() {
                           <Chip icon={<CircleAlert aria-hidden="true" className="size-3" />} label={copy('noDimension')} />
                         )}
                         <Chip tone="neutral" label={scaleChip(t, question)} />
+                        {hasAnswerLabels(question) && <Chip tone="neutral" label={copy('answerLabelsChip')} />}
                         {locked && question.commentRequired && <Chip tone="neutral" label={copy('withComment')} />}
                         <span className="inline-flex items-center gap-1 text-xs font-medium text-fg-secondary">
                           {written.length === locales.length && <Check aria-hidden="true" className="size-3" />}
@@ -378,7 +397,74 @@ export default function SurveyQuestionsEditorPage() {
                           </select>
                         </EditorField>
                       </div>
-                      {needsScaleLabels(question.type) &&
+                      {canLabelAnswers(question) && (
+                        // Not an EditorField: that is a <label>, and a label around buttons clicks
+                        // the first of them whenever its text is clicked.
+                        <EditorGroup label={copy('answersShown')} hint={copy('answersShownHint')}>
+                          <span>
+                            <Segmented
+                              label={copy('answersShown')}
+                              value={hasAnswerLabels(question) ? 'list' : 'numbers'}
+                              options={[
+                                { value: 'numbers', label: copy('answersAsNumbers', { min: question.scaleMin ?? '', max: question.scaleMax ?? '' }) },
+                                { value: 'list', label: copy('answersAsList') },
+                              ]}
+                              onChange={(shown) => {
+                                update(index, shown === 'list' ? withAnswerLabels(question) : withoutAnswerLabels(question))
+                                setApplied(null)
+                              }}
+                            />
+                          </span>
+                        </EditorGroup>
+                      )}
+                      {hasAnswerLabels(question) ? (
+                        <>
+                          {locales.map((loc) => (
+                            <EditorGroup key={loc} label={copy(`answerLabelsIn.${loc}`)}>
+                              <ol data-testid={`answer-labels-${loc}`} className="m-0 flex list-none flex-col gap-1.5 p-0">
+                                {(question.options ?? []).map((option) => (
+                                  <li key={option.value} className="flex items-center gap-2">
+                                    <span aria-hidden="true" className="w-5 shrink-0 text-right text-sm text-fg-secondary tabular-nums">
+                                      {option.value}
+                                    </span>
+                                    <Input
+                                      aria-label={`${copy(`answerLabelsIn.${loc}`)} ${option.value}`}
+                                      value={option.label[loc]?.text ?? ''}
+                                      onChange={(e) => {
+                                        const text = e.target.value
+                                        setQuestions((current) => current.map((q, i) => (i === index ? setAnswerLabel(q, option.value, loc, text) : q)))
+                                        setApplied(null)
+                                      }}
+                                    />
+                                  </li>
+                                ))}
+                              </ol>
+                            </EditorGroup>
+                          ))}
+                          <div className="flex flex-wrap items-center gap-3">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => {
+                                const { count } = applyAnswerLabels(questions, question)
+                                setQuestions((current) => applyAnswerLabels(current, current[index]).questions)
+                                setApplied({ id: question.id, count })
+                              }}
+                            >
+                              {copy('applyToAll', { min: question.scaleMin ?? '', max: question.scaleMax ?? '' })}
+                            </Button>
+                            {applied?.id === question.id && (
+                              <span role="status" data-testid="applied-to-all" className="inline-flex items-center gap-1 text-sm text-fg-secondary">
+                                <Check aria-hidden="true" className="size-3.5" />
+                                {applied.count > 1
+                                  ? copy('appliedToAll', { count: applied.count })
+                                  : copy('appliedToAllOne', { min: question.scaleMin ?? '', max: question.scaleMax ?? '' })}
+                              </span>
+                            )}
+                          </div>
+                        </>
+                      ) : (
+                        needsScaleLabels(question.type) &&
                         locales.map((loc) => (
                           <EditorField key={loc} label={copy(`endsIn.${loc}`)}>
                             <div className="grid grid-cols-2 gap-2">
@@ -386,7 +472,8 @@ export default function SurveyQuestionsEditorPage() {
                               <Input aria-label={`${copy(`endsIn.${loc}`)} 2`} value={question.scaleLabelMax[loc]?.text ?? ''} onChange={(e) => setText(index, 'scaleLabelMax', loc, e.target.value)} />
                             </div>
                           </EditorField>
-                        ))}
+                        ))
+                      )}
                       <div className="flex flex-wrap items-center gap-4 border-t border-line-light pt-3">
                         <label className="mb-0 inline-flex items-center gap-2 text-sm text-fg-secondary">
                           <Switch checked={question.required} onCheckedChange={(value) => update(index, { required: value === true })} />
@@ -545,7 +632,18 @@ export default function SurveyQuestionsEditorPage() {
                         {openQuestion.required && <span className="font-sans text-sm font-normal text-fg-secondary">{copy('requiredParen')}</span>}
                       </span>
                     </p>
-                    {openQuestion.scaleMin !== null && openQuestion.scaleMax !== null && (
+                    {hasAnswerLabels(openQuestion) ? (
+                      // The respond screen's list (`ChoiceAnswer`): one line per answer, in the
+                      // author's order. A blank answer shows its number, which is what the
+                      // respondent would read if it were saved blank.
+                      <div data-testid="preview-answers" aria-hidden="true" className="mt-3 flex flex-col gap-1.5">
+                        {(openQuestion.options ?? []).map((option) => (
+                          <span key={option.value} className="flex min-h-9 select-none items-center rounded-md bg-surface-fill-subtle px-3 py-1.5 text-base text-fg-secondary">
+                            {option.label[shownLocale]?.text || option.value}
+                          </span>
+                        ))}
+                      </div>
+                    ) : openQuestion.scaleMin !== null && openQuestion.scaleMax !== null && (
                       <>
                         <div aria-hidden="true" className="mt-3 grid gap-2" style={{ gridTemplateColumns: `repeat(${openQuestion.scaleMax - openQuestion.scaleMin + 1}, minmax(0, 1fr))` }}>
                           {Array.from({ length: openQuestion.scaleMax - openQuestion.scaleMin + 1 }, (_, i) => (
@@ -612,6 +710,17 @@ function scaleLong(t: (key: string, vars?: Record<string, string | number>) => s
   return q.scaleMin !== null && q.scaleMax !== null
     ? `${type} · ${t('surveys.next.authoring.fromTo', { min: q.scaleMin, max: q.scaleMax })}`
     : type
+}
+
+/** A titled block of several controls: `EditorField`'s look without its `<label>`. */
+function EditorGroup({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-sm font-semibold text-fg-secondary">{label}</span>
+      {children}
+      {hint && <span className="text-sm leading-[1.45] text-fg-secondary">{hint}</span>}
+    </div>
+  )
 }
 
 // `mb-0`: index.css gives every <label> a 12px bottom margin for the old stacked forms; here the

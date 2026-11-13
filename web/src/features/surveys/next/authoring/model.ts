@@ -1,9 +1,9 @@
-import type { AuthoringQuestion } from '../../api/surveyQuestionAuthoring'
+import type { AuthoringOption, AuthoringQuestion } from '../../api/surveyQuestionAuthoring'
 import type { AuthoredText } from '../../api/surveyInvitationCopy'
 import type { QuestionLibraryItemDetail } from '../../../questions/api/questionLibrary'
 import { questionTypeLabel } from '../../surveyVocabulary'
 import type { SurveyTemplateQuestion } from '../../api/surveyTemplates'
-import type { Locale } from '../../../../i18n'
+import { LOCALES, type Locale } from '../../../../i18n'
 
 /**
  * Editar preguntas and Detalle de plantilla, redesigned, as data.
@@ -143,6 +143,151 @@ export function isScaleType(type: string): boolean {
 export function compatibleScaleTypes(question: Pick<AuthoringQuestion, 'type' | 'scaleMin' | 'scaleMax'>): string[] {
   if (question.scaleMin === null || question.scaleMax === null || !isScaleType(question.type)) return [question.type]
   return ['likert', 'rating']
+}
+
+/**
+ * The most points a scale may have and still be offered a word for each answer. A five-point
+ * frequency or agreement scale is what clients label word by word (ESPH's workbook requires
+ * exactly five, `ClimateWorkbook.cs`); an eNPS 0–10 is numbers by definition, and eleven words
+ * would be a list nobody reads as a scale.
+ */
+export const MAX_LABELLED_POINTS = 7
+
+/** A scale's points, low to high; empty when the question has no range. */
+export function scalePoints(question: Pick<AuthoringQuestion, 'scaleMin' | 'scaleMax'>): number[] {
+  const { scaleMin: min, scaleMax: max } = question
+  if (min === null || max === null || max < min) return []
+  return Array.from({ length: max - min + 1 }, (_, i) => min + i)
+}
+
+/**
+ * Whether «Cómo se ven las respuestas» is offered for one question.
+ *
+ * Only a numeric scale of at most `MAX_LABELLED_POINTS` points, and only while its answers ARE
+ * its points: no option set yet, or one whose values are exactly "1".."5" (in any order -- EAGLE's
+ * instrument lists the positives first). A question whose options carry other keys (a library
+ * question keyed `nunca`/`siempre`) is not offered it, because turning it into numbers or
+ * rewriting its words here would change the key every answer is stored under.
+ */
+export function canLabelAnswers(question: Pick<AuthoringQuestion, 'type' | 'scaleMin' | 'scaleMax' | 'options'>): boolean {
+  if (!isScaleType(question.type)) return false
+  const points = scalePoints(question)
+  if (points.length < 2 || points.length > MAX_LABELLED_POINTS) return false
+  const options = question.options ?? []
+  if (options.length === 0) return true
+  const values = options.map((option) => option.value).sort()
+  const expected = points.map(String).sort()
+  return values.length === expected.length && values.every((value, i) => value === expected[i])
+}
+
+/**
+ * Whether the respondent meets this scale as a list of words rather than a row of numbers.
+ *
+ * The respond screen decides it the same way: a scale with options renders one line per option
+ * (`RespondQuestionField` → `ChoiceAnswer`), a scale without them a numbered row with the two
+ * ends under it (`ScaleAnswer`). So "words for each answer" is nothing more than an option set
+ * whose values are the points -- the exact shape ESPH's workbook import wrote.
+ */
+export function hasAnswerLabels(question: Pick<AuthoringQuestion, 'type' | 'scaleMin' | 'scaleMax' | 'options'>): boolean {
+  return canLabelAnswers(question) && (question.options?.length ?? 0) > 0
+}
+
+function blankByLocale(): Record<Locale, AuthoredText> {
+  return Object.fromEntries(LOCALES.map((locale) => [locale, { text: '', authored: false }])) as Record<Locale, AuthoredText>
+}
+
+function copyByLocale(from: Record<Locale, AuthoredText>): Record<Locale, AuthoredText> {
+  return Object.fromEntries(
+    LOCALES.map((locale) => [locale, { ...(from[locale] ?? { text: '', authored: false }) }]),
+  ) as Record<Locale, AuthoredText>
+}
+
+/**
+ * Show this scale as a list: one option per point, keyed by the point itself ("1".."5"), so
+ * every answer is stored exactly as it was as a number and the results, the mean and the
+ * comparison with earlier waves do not move. The lowest and highest answers start with the
+ * scale's two end words; the ones between start empty, for the author to write -- the editor
+ * does not invent a client's wording.
+ */
+export function withAnswerLabels(question: AuthoringQuestion): AuthoringQuestion {
+  if (hasAnswerLabels(question) || !canLabelAnswers(question)) return question
+  const points = scalePoints(question)
+  const options: AuthoringOption[] = points.map((point) => ({
+    value: String(point),
+    label:
+      point === question.scaleMin
+        ? copyByLocale(question.scaleLabelMin)
+        : point === question.scaleMax
+          ? copyByLocale(question.scaleLabelMax)
+          : blankByLocale(),
+  }))
+  return { ...question, options }
+}
+
+/** Back to a row of numbers. The two end words stay: they already hold the first and last answers' words. */
+export function withoutAnswerLabels(question: AuthoringQuestion): AuthoringQuestion {
+  if (!hasAnswerLabels(question)) return question
+  return { ...question, options: null }
+}
+
+/**
+ * One answer's words in one language. The lowest and highest answers also write the scale's
+ * two ends, which is what the workbook import stores (`scaleLabelMin` = the first answer's
+ * words): the respond screen hides ends that repeat the first and last lines, and every
+ * report that prints "1 = … 5 = …" reads them.
+ */
+export function setAnswerLabel(question: AuthoringQuestion, value: string, locale: Locale, text: string): AuthoringQuestion {
+  const entry: AuthoredText = { text, authored: text.trim() !== '' }
+  const point = Number(value)
+  return {
+    ...question,
+    options: (question.options ?? []).map((option) =>
+      option.value === value ? { ...option, label: { ...option.label, [locale]: entry } } : option,
+    ),
+    scaleLabelMin: point === question.scaleMin ? { ...question.scaleLabelMin, [locale]: entry } : question.scaleLabelMin,
+    scaleLabelMax: point === question.scaleMax ? { ...question.scaleLabelMax, [locale]: entry } : question.scaleLabelMax,
+  }
+}
+
+/**
+ * «Usar estas respuestas en todas las preguntas»: copy one question's answer words onto every
+ * question on the same range that may take them (`canLabelAnswers`). A question on another
+ * range, or whose options carry other keys, is left exactly as it was. `count` is how many
+ * questions show these words afterwards, the source included.
+ */
+export function applyAnswerLabels(questions: AuthoringQuestion[], source: AuthoringQuestion): { questions: AuthoringQuestion[]; count: number } {
+  if (!hasAnswerLabels(source)) return { questions, count: 0 }
+  let count = 0
+  const next = questions.map((question) => {
+    if (question.id === source.id) {
+      count += 1
+      return question
+    }
+    if (!canLabelAnswers(question) || question.scaleMin !== source.scaleMin || question.scaleMax !== source.scaleMax) return question
+    count += 1
+    return {
+      ...question,
+      options: (source.options ?? []).map((option) => ({ value: option.value, label: copyByLocale(option.label) })),
+      scaleLabelMin: copyByLocale(source.scaleLabelMin),
+      scaleLabelMax: copyByLocale(source.scaleLabelMax),
+    }
+  })
+  return { questions: next, count }
+}
+
+/**
+ * The 1-based positions of the questions shown as a list with an answer left without words, in
+ * a language the question itself is written in. Saved like that, the respondent would read a
+ * bare "3" among four words. A language the question's own text is not written in is the
+ * untranslated state the summary already reports, and is not demanded here either.
+ */
+export function questionsMissingAnswerLabels(questions: AuthoringQuestion[], locales: Locale[]): number[] {
+  return questions.flatMap((question, index) => {
+    if (!hasAnswerLabels(question)) return []
+    const written = authoredLocales(question, locales)
+    const blank = (question.options ?? []).some((option) => written.some((locale) => !option.label[locale]?.text.trim()))
+    return blank ? [index + 1] : []
+  })
 }
 
 /** The short name the boards print on a scale chip: "Likert 1–5", not "Escala Likert 1–5". */
