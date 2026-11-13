@@ -45,6 +45,8 @@ import {
   type Cohort,
   type CrossField,
 } from './crossOptions'
+import { actionPlansOffered } from '../../action-plans/offered'
+import { describeApiError } from '../../../api/describeApiError'
 
 /** Four cohorts beside the baseline is five columns, which still reads on a laptop. */
 const MAX_COHORTS = 4
@@ -308,7 +310,7 @@ export default function SurveyCrossPanel({
       setChosen({})
     } catch (error) {
       setResults(null)
-      setFailure(error instanceof Error ? error.message : t('surveyResults.cross.failed'))
+      setFailure(describeApiError(error, t, 'surveyResults.cross.failed'))
     } finally {
       setBusy(false)
     }
@@ -352,7 +354,7 @@ export default function SurveyCrossPanel({
     } catch (error) {
       // The cohort is not staged on a failure: a chip for a column that could not be read is
       // the same disagreement this function exists to remove.
-      setFailure(error instanceof Error ? error.message : t('surveyResults.cross.failed'))
+      setFailure(describeApiError(error, t, 'surveyResults.cross.failed'))
     } finally {
       setBusy(false)
     }
@@ -527,10 +529,16 @@ export default function SurveyCrossPanel({
 
         {created ? (
           <p className="mt-4 text-sm">
-            {t('surveyResults.cross.created', { title: created.title })}{' '}
-            <a className="underline" href={`/action-plans/${created.id}`}>
-              {t('surveyResults.cross.viewPlan')}
-            </a>
+            {t('surveyResults.cross.created', { title: created.title })}
+            {/* Linked only where the deployment offers `/action-plans` — the sidebar's rule. */}
+            {actionPlansOffered() && (
+              <>
+                {' '}
+                <a className="underline" href={`/action-plans/${created.id}`}>
+                  {t('surveyResults.cross.viewPlan')}
+                </a>
+              </>
+            )}
           </p>
         ) : null}
 

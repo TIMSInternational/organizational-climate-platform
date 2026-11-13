@@ -92,6 +92,11 @@ export interface CreateSurveyDraftInput {
   lastEditedField?: string
   /** 'en' | 'es' | 'both'. Omitted inherits the company's own language. */
   language?: string
+  /**
+   * The company the draft is for. A super administrator names the client; omitted, the author's
+   * own company (walkthrough B1, 2026-11-08: a company-less operator could not autosave at all).
+   */
+  companyId?: string
 }
 
 export interface SaveSurveyDraftInput {

@@ -47,7 +47,7 @@ public static class ComplianceReport
         new(StringComparer.Ordinal)
         {
             ["User"] = (db, c) => db.Users.Where(u => u.CompanyId == c).Cast<object>(),
-            ["Response"] = (db, c) => db.Responses.Where(r => r.CompanyId == c).Cast<object>(),
+            ["Response"] = (db, c) => db.Responses.IgnoreQueryFilters(ResponseQueryFilters.IncludeExcluded).Where(r => r.CompanyId == c).Cast<object>(),
             ["Notification"] = (db, c) => db.Notifications.Where(n => n.CompanyId == c).Cast<object>(),
             ["SurveyDraft"] = (db, c) => db.SurveyDrafts.Where(d => d.CompanyId == c).Cast<object>(),
             ["SurveyInvitation"] = (db, c) => db.SurveyInvitations.Where(i => i.CompanyId == c).Cast<object>(),

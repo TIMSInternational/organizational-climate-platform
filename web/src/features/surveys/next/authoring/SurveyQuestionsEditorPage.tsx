@@ -3,8 +3,8 @@ import { Check, Copy, GripVertical, Lock, MoreHorizontal, Plus } from 'lucide-re
 import { Link, useNavigate, useParams } from 'react-router'
 import { PageTopBar } from '../../../../components/layout'
 import { Alert, AlertDescription, Button, Chip, ErrorState, Input, LoadingRegion, SkeletonText, Switch, Textarea } from '../../../../components/ui'
-import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
-import { useCompanyScope } from '../../../../company-context'
+import { readViewerClaims, useViewerCapabilities } from '../../../../auth/viewerCapabilities'
+import { useFollowCompany } from '../../../../company-context'
 import { QuestionLibraryBrowser } from '../../../../components/questions'
 import { useTranslation, type Locale } from '../../../../i18n'
 import { cn } from '../../../../lib/cn'
@@ -26,6 +26,7 @@ import {
   summarise,
 } from './model'
 import { byCount } from '../../../../i18n/plural'
+import { describeApiError } from '../../../../api/describeApiError'
 
 /**
  * Editar preguntas, redesigned — both states of one route (canvas boards
@@ -54,7 +55,7 @@ function useSurveyQuestionsModel(id: string | undefined) {
       const [authoring, detail] = await Promise.all([getSurveyQuestionAuthoring(baseUrl, id), getSurvey(baseUrl, id, locale)])
       setState({ status: 'ready', authoring, detail })
     } catch (error) {
-      setState({ status: 'failed', message: error instanceof Error ? error.message : t('common.error') })
+      setState({ status: 'failed', message: describeApiError(error, t, 'common.error') })
     }
   }, [baseUrl, id, locale, t])
   useEffect(() => {
@@ -71,9 +72,9 @@ export default function SurveyQuestionsEditorPage() {
   const { id } = useParams<{ id: string }>()
   const { t, locale } = useTranslation()
   const caps = useViewerCapabilities()
-  const scope = useCompanyScope()
   const navigate = useNavigate()
   const { state, reload } = useSurveyQuestionsModel(id)
+  useFollowCompany(state.status === 'ready' ? state.detail.companyId : undefined)
   const [libraryOpen, setLibraryOpen] = useState(false)
   // null until the author changes something: the list on screen is the payload's until then,
   // so the first render already counts the real questions.
@@ -110,8 +111,12 @@ export default function SurveyQuestionsEditorPage() {
   const setQuestions = (change: (current: AuthoringQuestion[]) => AuthoringQuestion[]) =>
     setEdited((previous) => change(previous ?? authoring.questions))
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
-  const editable = isEditable(authoring.status, detail.responseCount) && caps.canAuthorSurveys
-  const locked = !isEditable(authoring.status, detail.responseCount)
+  // A super admin also edits an ACTIVE survey nobody has answered (ruled 2026-11-11). For a
+  // client's administrator that survey stays locked, with "Duplicar y editar" as before.
+  const operator = readViewerClaims().role === 'super_admin'
+  const editable = isEditable(authoring.status, detail.responseCount, operator) && caps.canAdministerSurvey(detail)
+  const locked = !isEditable(authoring.status, detail.responseCount, operator)
+  const live = !locked && authoring.status !== 'draft'
   // The reader's language first, as the board orders ES · EN for a Spanish reader.
   const locales = [...authoring.locales].sort((x, y) => (x === locale ? -1 : y === locale ? 1 : 0))
   const summary = summarise(questions, locales)
@@ -135,7 +140,7 @@ export default function SurveyQuestionsEditorPage() {
       await saveSurveyQuestions(baseUrl, id, questions)
       void navigate(`/surveys/${id}`)
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : t('common.error'))
+      setActionError(describeApiError(error, t, 'common.error'))
       setBusy(false)
     }
   }
@@ -148,7 +153,7 @@ export default function SurveyQuestionsEditorPage() {
       const created = await duplicateSurvey(baseUrl, id, locale)
       void navigate(`/surveys/${created.id}/questions`)
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : t('common.error'))
+      setActionError(describeApiError(error, t, 'common.error'))
       setBusy(false)
     }
   }
@@ -170,7 +175,7 @@ export default function SurveyQuestionsEditorPage() {
         ]}
         eyebrow={copy('eyebrow', { type: typeLabel(t, detail.type), status: statusLabel(t, authoring.status) })}
         title={copy('title')}
-        description={locked ? copy('descriptionLocked') : copy('descriptionDraft')}
+        description={locked ? copy('descriptionLocked') : live ? copy('descriptionLive') : copy('descriptionDraft')}
         meta={
           <>
             <Chip tone={authoring.status === 'active' ? 'good' : authoring.status === 'draft' ? 'warning' : 'neutral'} label={statusLabel(t, authoring.status)} />
@@ -188,7 +193,7 @@ export default function SurveyQuestionsEditorPage() {
               <Button asChild variant="outline">
                 <Link to={`/surveys/${id}`}>{copy('backToSurvey')}</Link>
               </Button>
-              {caps.canAuthorSurveys && (
+              {caps.canAdministerSurvey(detail) && (
                 <Button type="button" variant="primary" disabled={busy} onClick={() => void duplicateAndEdit()}>
                   <Copy aria-hidden="true" />
                   {copy('duplicateAndEdit')}
@@ -217,6 +222,14 @@ export default function SurveyQuestionsEditorPage() {
         </Alert>
       )}
 
+      {live && (
+        // Said BEFORE the first change, not after the save: these questions are already in front
+        // of the people invited, and the edit is only possible because none of them has answered.
+        <Alert variant="warning" role="note" className="mb-5" data-testid="live-banner">
+          <AlertDescription>{copy('liveEdit', { status: statusLabel(t, authoring.status).toLowerCase() })}</AlertDescription>
+        </Alert>
+      )}
+
       {locked && (
         // The board's banner: the ground tint (#f8f7fb) under a white tile, 14px by 16px, and the
         // page column's 20px to the panels (SurveyQuestionsEditorLocked.dc.html).
@@ -235,7 +248,7 @@ export default function SurveyQuestionsEditorPage() {
                     ? copy(detail.responseCount === 1 ? 'arrivedOneOf' : 'arrivedManyOf', { count: detail.responseCount, target: detail.targetAudienceCount })
                     : copy(detail.responseCount === 1 ? 'arrivedOne' : 'arrivedMany', { count: detail.responseCount })
                 } ${copy('mixing')} `}
-              {caps.canAuthorSurveys && (
+              {caps.canAdministerSurvey(detail) && (
                 <>
                   <strong className="text-fg-primary">{copy('duplicateAndEdit')}</strong>{' '}
                   {copy('duplicateCreates', { count: questions.length })}
@@ -432,7 +445,7 @@ export default function SurveyQuestionsEditorPage() {
             <QuestionLibraryBrowser
               open={libraryOpen}
               onOpenChange={setLibraryOpen}
-              companyId={scope.companyId ?? null}
+              companyId={detail.companyId}
               allowedTypes={SURVEY_QUESTION_TYPES}
               typeLabel={(type) => scaleName(t, type)}
               onAdd={(picked) => {

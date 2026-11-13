@@ -428,6 +428,15 @@ const ADMIN_SHARED: readonly RoleCapability[] = [
     inNav: true,
     requiresTracking: true,
   },
+  {
+    // G21. The audit trail had four routes (#143) and no screen.
+    route: '/admin/audit',
+    labelKey: 'audit.title',
+    authorizedBy:
+      'GET /audit/logs — AuditEndpoints.CanReadAuditTrail admits super_admin, and company_admin ' +
+      'held to their own tenant by ResolveCompanyFilter whatever companyId they send; every other role is 403.',
+    inNav: true,
+  },
 ]
 
 const SUPER_ADMIN_ONLY: readonly RoleCapability[] = [

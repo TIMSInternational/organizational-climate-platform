@@ -19,15 +19,11 @@ export type Settled<T> = { status: 'loading' } | { status: 'ready'; value: T } |
  * | created day     | `GET /action-plans` (`listActionPlans`) — the detail carries no date |
  * | template name   | `GET /action-plan-templates` (`listActionPlanTemplates`)              |
  * | finding         | `GET /surveys` + `GET /surveys/climate-trends` (`planFinding`, `planMove`) |
+ * | history         | `GET /action-plans/{id}/progress` (`listProgress`)                    |
  *
- * ## What no endpoint returns, and the screen therefore does not claim
- *
- * The plan's progress history. `POST /action-plans/{id}/progress` writes an
- * `ActionPlanProgressUpdate` row and nothing reads one back — `ActionPlanEndpoints.cs:412`
- * is the only reference to `ActionPlanProgressUpdates` in the API. So the Bitácora lists the
- * plan's creation and the progress recorded during this visit (`recorded`, from each POST's
- * response), and says so; it never prints the board's "Sin avances registrados", which the
- * server cannot confirm.
+ * The history was the one part no endpoint returned until G24: `POST .../progress` wrote the
+ * rows and nothing read them back, so the Bitácora listed only what was recorded during the
+ * visit and forgot it on reload.
  */
 export interface ActionPlanDetailModel {
   plan: ActionPlanDetail
@@ -45,6 +41,6 @@ export interface ActionPlanDetailModel {
   move: Settled<PlanMove>
   /** Who the plan can be handed to: every user of its company (`GET /admin/users`). */
   owners: Settled<readonly { id: string; name: string }[]>
-  /** Progress recorded during this visit, oldest first. */
-  recorded: readonly ProgressUpdateDetail[]
+  /** Every progress note recorded on the plan, oldest first (`GET /action-plans/{id}/progress`). */
+  history: Settled<readonly ProgressUpdateDetail[]>
 }

@@ -20,6 +20,7 @@ import {
   type RespondentTextField,
   type SurveyRespondentTexts,
 } from '../../api/surveyRespondentTexts'
+import { describeApiError } from '../../../../api/describeApiError'
 
 const baseUrl = import.meta.env.VITE_API_BASE_URL
 
@@ -82,7 +83,7 @@ export function RespondentTextsDialog({
       onSaved(t('surveys.next.respondentTexts.saved'))
       onOpenChange(false)
     } catch (cause) {
-      setSaveError(cause instanceof Error && cause.message ? cause.message : t('errors.generic'))
+      setSaveError(describeApiError(cause, t))
     } finally {
       setSaving(false)
     }

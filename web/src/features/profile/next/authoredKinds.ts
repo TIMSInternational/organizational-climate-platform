@@ -13,7 +13,8 @@
  * `PrivacyNextPage.test.tsx` recounts the calls in the .cs file and fails when a section is
  * added or removed, instead of the sentence silently going wrong.
  */
-export const AUTHORED_REFERENCE_SECTIONS = 20
+// 21 since 3 Nov 2026: BenchmarkGroup, the reference groups the reader created.
+export const AUTHORED_REFERENCE_SECTIONS = 21
 
 /** Surveys, reports and action plans: the three the row names before counting the rest. */
 export const AUTHORED_NAMED_SECTIONS = 3

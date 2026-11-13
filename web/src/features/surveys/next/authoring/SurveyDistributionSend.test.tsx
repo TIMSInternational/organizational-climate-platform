@@ -12,6 +12,7 @@ import SurveyDistributionNextPage from './SurveyDistributionNextPage'
 import * as surveysApi from '../../api/surveys'
 import * as distributionApi from '../../api/surveyDistribution'
 import * as usersApi from '../../../org-structure/api/users'
+import es from '../../../../i18n/es.json'
 
 /**
  * G9, G10 and G11 of the 2026-10-22 gap audit, through the page and its model.
@@ -133,6 +134,19 @@ afterEach(() => {
 })
 
 describe('Distribución — sending per-survey codes to any audience size (G9)', () => {
+  /**
+   * The bulk send mails everyone in the audience still without a code -- on a department-targeted
+   * survey, people the client never listed included (28 Oct 2026). Its confirmation now says so and
+   * points to the one-person send before anything leaves (walkthrough A3, 2026-11-08).
+   */
+  it('says, before sending, that it writes to everyone without a code and where the one-person send is', async () => {
+    open(survey(), list('per_survey'))
+    await userEvent.click(await screen.findByRole('button', { name: /Enviar códigos/ }))
+    const dialog = screen.getByRole('alertdialog')
+    expect(dialog.textContent).toContain(es.surveys.next.distribution.send.confirmCodesOnePerson)
+    expect(vi.mocked(distributionApi.createSurveyInvitations)).not.toHaveBeenCalled()
+  })
+
   it('repeats the same request while people remain, shows the progress, and names the address that failed', async () => {
     open(survey(), list('per_survey'))
     // 617 people. The first call reaches 99 and one address refuses; five more of 100; the

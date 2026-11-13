@@ -29,6 +29,14 @@ export function forgetResultBands(): void {
 }
 
 /**
+ * For a screen about one record: whose scale to read. `string` that company's, `null` the
+ * platform default, `undefined` not known yet (the hook reports `loading`).
+ */
+export interface ResultBandsFor {
+  companyId: string | null | undefined
+}
+
+/**
  * The company's result bands, for every screen that colours a mean.
  *
  * **No fallback to the default on a failure.** A tenant that renamed or moved its bands
@@ -38,10 +46,14 @@ export function forgetResultBands(): void {
  * case that reads the default without asking is a viewer with no company in scope — the
  * super administrator's platform view — where there is no company scale to ask for.
  */
-export function useResultBands(): ResultBandsState {
+export function useResultBands(options?: ResultBandsFor): ResultBandsState {
   const scope = useCompanyScope()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
-  const companyId = scope.status === 'ready' ? (scope.companyId ?? null) : undefined
+  const headerCompanyId = scope.status === 'ready' ? (scope.companyId ?? null) : undefined
+  // A screen about ONE record reads that record's company scale, never the header's: the results
+  // of another client's survey were coloured by whichever client the header held
+  // (docs/audits/2026-11-08-operator-ui-walkthrough.md). `undefined` there means "not known yet".
+  const companyId = options ? options.companyId : headerCompanyId
   const [state, setState] = useState<{ key: string | null | undefined; bands: ResultBands | null; failed: boolean }>({
     key: undefined,
     bands: null,

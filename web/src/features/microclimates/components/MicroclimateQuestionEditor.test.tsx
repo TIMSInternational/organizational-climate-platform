@@ -99,3 +99,30 @@ describe('MicroclimateQuestionEditor emoji scale', () => {
     expect(screen.queryByLabelText(/^Emoji 1/)).toBeNull()
   })
 })
+
+/**
+ * The multiple-choice half of the same rule (G23). Its option rows were bound to `labelEn`
+ * whatever the content language, so a Spanish-only session typed into the column
+ * `localizedFor('es', …)` never sends — and a Spanish draft read back for editing showed
+ * every option empty.
+ */
+describe('MicroclimateQuestionEditor multiple-choice options', () => {
+  it('binds a Spanish session’s option to labelEs, and writes the edit there', async () => {
+    const question: WizardQuestionValues = {
+      ...emptyQuestion('q1'),
+      textEs: '¿Qué tan claro?',
+      type: 'multiple_choice',
+      options: [
+        { key: 'o1', labelEn: 'Clear', labelEs: 'Claro' },
+        { key: 'o2', labelEn: 'Unclear', labelEs: 'Nada claro' },
+      ],
+    }
+    const onChange = renderEditor(question, 'es')
+
+    const field = screen.getByLabelText(/^Option 1/) as HTMLInputElement
+    expect(field.value).toBe('Claro')
+    await userEvent.type(field, '!')
+    const patched = onChange.mock.calls.at(-1)![0] as WizardQuestionValues
+    expect(patched.options[0]).toMatchObject({ labelEs: 'Claro!', labelEn: 'Clear' })
+  })
+})

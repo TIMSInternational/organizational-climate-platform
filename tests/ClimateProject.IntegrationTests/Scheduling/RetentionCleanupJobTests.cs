@@ -41,7 +41,7 @@ public class RetentionCleanupJobTests(PostgresContainerFixture postgres)
             .UseNpgsql(postgres.ConnectionString)
             .Options);
         await db.Database.MigrateAsync();
-        await db.Database.ExecuteSqlRawAsync("TRUNCATE TABLE companies CASCADE");
+        await db.Database.ExecuteSqlRawAsync("TRUNCATE TABLE companies, audit_logs CASCADE");
         return db;
     }
 

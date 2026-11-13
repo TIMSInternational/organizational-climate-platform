@@ -121,3 +121,44 @@ export function audienceSelection(
   }
   return selectedUserIds.length > 0 ? { userIds: [...selectedUserIds] } : null
 }
+
+/**
+ * What rewriting a survey's targets does to who may answer it: the people who GAIN access, the
+ * people who LOSE it, and whether the change crosses the "whole company" line in either
+ * direction (the detail page's "Editar audiencia", G14 follow-up).
+ *
+ * Both sides go through `estimateAudience('allTargeted', ...)`, so the rule is the one the
+ * respond gate applies (`SurveyResponseEndpoints.ResolveRespondentAsync`): a union of the
+ * departments and the named people, or EVERYONE when neither is targeted. That last clause is
+ * why this exists as a function: on a live survey aimed at people only, unticking the last of
+ * them does not leave it aimed at nobody -- it opens it to the whole company; and naming one
+ * person on a company-wide survey closes it to everybody else.
+ */
+export interface AudienceChange {
+  /** Active people who may answer now, in directory order. */
+  before: string[]
+  /** Active people who may answer after the change, in directory order. */
+  after: string[]
+  gained: string[]
+  lost: string[]
+  /** It targets something now and would target nothing: the whole company. */
+  widensToCompany: boolean
+  /** It targets nothing now (the whole company) and would target someone. */
+  narrowsFromCompany: boolean
+}
+
+export function audienceChange(users: readonly User[], current: SurveyTargets, next: SurveyTargets): AudienceChange {
+  const none = { departmentIds: [], userIds: [] }
+  const before = estimateAudience('allTargeted', users, none, current)
+  const after = estimateAudience('allTargeted', users, none, next)
+  const had = new Set(before)
+  const will = new Set(after)
+  return {
+    before,
+    after,
+    gained: after.filter((id) => !had.has(id)),
+    lost: before.filter((id) => !will.has(id)),
+    widensToCompany: !targetsWholeCompany(current) && targetsWholeCompany(next),
+    narrowsFromCompany: targetsWholeCompany(current) && !targetsWholeCompany(next),
+  }
+}

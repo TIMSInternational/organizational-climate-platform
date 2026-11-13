@@ -1,4 +1,5 @@
-import { useId, useMemo, useState } from 'react'
+import { useId, useState } from 'react'
+import { Link, useParams } from 'react-router'
 import * as RadioGroupPrimitive from '@radix-ui/react-radio-group'
 import { Clock, Ellipsis, GripVertical, Plus, Send, Users } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
@@ -19,12 +20,16 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  EmptyState,
   Input,
+  LoadingRegion,
+  NetworkError,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SkeletonText,
   Switch,
 } from '../../../../components/ui'
 import { useCompanyScope } from '../../../../company-context'
@@ -45,11 +50,14 @@ import {
 } from '../../wizardValues'
 import { JourneyRail } from '../JourneyRail'
 import { MicroclimateGate } from '../MicroclimateGate'
-import { FLOOR, typeCounts, windowLength, windowMs } from '../derive'
-import { clock, shortDay, weekdayDay, weekdayLong } from '../format'
+import { FLOOR, typeCounts, windowLength } from '../derive'
+import { zoneLabel } from '../../../surveys/next/authoring/zonedWindow'
+import { clockIn, instantIn, sessionZone, shortDayIn, weekdayDayIn, weekdayIn, zonedWindowMs } from './companyClock'
 import { canvasTypeLabel } from '../vocabulary'
 import { DateTimeField } from './DateTimeField'
 import { useMicroclimateCreateModel, type MicroclimateCreateState, type StartFrom } from './useMicroclimateCreateModel'
+import { MicroclimateSeatsNote } from '../seats/MicroclimateSeats'
+import { useMicroclimateSeats } from '../seats/useMicroclimateSeats'
 import { byCount } from '../../../../i18n/plural'
 
 /**
@@ -59,9 +67,12 @@ import { byCount } from '../../../../i18n/plural'
  * this route; that page stays in the tree, unrouted, as the wiring reference.
  */
 export default function MicroclimateCreateNextPage() {
+  // `/microclimates/:id/edit` renders this same page over a draft (G23); `/microclimates/new`
+  // has no `:id`. A draft names its own company, so editing does not need one chosen.
+  const { id } = useParams<{ id: string }>()
   return (
-    <MicroclimateGate needsCompany>
-      <CreateScreen />
+    <MicroclimateGate needsCompany={!id}>
+      <CreateScreen editId={id} />
     </MicroclimateGate>
   )
 }
@@ -79,11 +90,43 @@ function textIn(language: ContentLanguage, en: string, es: string): string {
   return language === 'es' ? es : language === 'en' ? en : es || en
 }
 
-function CreateScreen() {
+function CreateScreen({ editId }: { editId?: string }) {
+  const { t } = useTranslation()
+  const state = useMicroclimateCreateModel(editId)
+  if (state.draft.status === 'loading') {
+    return (
+      <LoadingRegion loading label={t('common.loading')}>
+        <SkeletonText lines={6} />
+      </LoadingRegion>
+    )
+  }
+  if (state.draft.status === 'failed') {
+    return <NetworkError title={t('microclimates.errorLoadingMicroclimate')} description={state.draft.error} />
+  }
+  if (state.draft.status === 'notDraft') {
+    return (
+      <EmptyState
+        title={t('microclimates.next.edit.notDraftTitle')}
+        description={t('microclimates.next.edit.notDraftBody')}
+        action={
+          <Button asChild variant="outline" size="canvas">
+            <Link to={`/microclimates/${state.draft.id}`}>{t('microclimates.next.edit.backToSession')}</Link>
+          </Button>
+        }
+      />
+    )
+  }
+  return <CreateForm state={state} editId={editId} />
+}
+
+function CreateForm({ state, editId }: { state: MicroclimateCreateState; editId?: string }) {
   const { t, locale } = useTranslation()
-  const state = useMicroclimateCreateModel()
   const { values } = state
-  const companyId = useCompanyScope().companyId
+  const scopeCompanyId = useCompanyScope().companyId
+  const companyId = state.draft.status === 'ready' ? state.draft.companyId : scopeCompanyId
+  const seats = useMicroclimateSeats(companyId)
+  const editing = Boolean(editId)
+  const pageTitle = editing ? t('microclimates.next.edit.title') : t('microclimates.next.create.title')
   const companyName = useCompanyName()
   const [libraryOpen, setLibraryOpen] = useState(false)
   const busy = state.submitting !== null
@@ -93,27 +136,42 @@ function CreateScreen() {
   const expectedId = useId()
   const startId = useId()
   const endId = useId()
-  const timezone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, [])
-  const window = windowMs(values.startTime, values.endTime)
-  const start = new Date(values.startTime)
-  const end = new Date(values.endTime)
+  // The zone Apertura and Cierre are read on: the company's, or -- unread -- the browser's,
+  // which the line under them then says (G16, as Nueva encuesta does since #630).
+  const zone = sessionZone(state.timeZone)
+  const window = zonedWindowMs(values.startTime, values.endTime, zone)
+  const start = instantIn(values.startTime, zone) ?? new Date(Number.NaN)
+  const end = instantIn(values.endTime, zone) ?? new Date(Number.NaN)
+  const zoneNote =
+    state.timeZone === undefined
+      ? null
+      : t(state.timeZone === null ? 'microclimates.next.create.timezoneBrowser' : 'microclimates.next.create.timezoneCompany', {
+          zone: zoneLabel(zone),
+        })
   const titleError = state.attempted && !textIn(values.language, values.titleEn, values.titleEs).trim()
 
   return (
     <div>
       <PageTopBar
         compact
-        title={t('microclimates.next.create.title')}
+        title={pageTitle}
         eyebrow={t('microclimates.next.create.eyebrow')}
-        description={t('microclimates.next.create.description')}
+        description={editing ? t('microclimates.next.edit.description') : t('microclimates.next.create.description')}
         breadcrumbs={[
           { label: t('navigation.microclimates'), href: '/microclimates' },
-          { label: t('microclimates.next.create.title') },
+          ...(editId ? [{ label: textIn(values.language, values.titleEn, values.titleEs) || t('microclimates.untitled'), href: `/microclimates/${editId}` }] : []),
+          { label: pageTitle },
         ]}
         actions={
           <Button variant="outline" size="canvas" disabled={busy} onClick={state.saveDraft}>
             <RailReportsIcon strokeWidth={2} />
-            {state.submitting === 'draft' ? t('common.creating') : t('microclimates.next.create.saveDraft')}
+            {state.submitting === 'draft'
+              ? editing
+                ? t('common.saving')
+                : t('common.creating')
+              : editing
+                ? t('microclimates.next.edit.save')
+                : t('microclimates.next.create.saveDraft')}
           </Button>
         }
       />
@@ -214,7 +272,7 @@ function CreateScreen() {
                 </div>
               </div>
 
-              <StartFromRow state={state} />
+              {!editing && <StartFromRow state={state} />}
 
               {state.startFrom === 'template' && state.templates.length > 0 && (
                 <Select
@@ -360,11 +418,11 @@ function CreateScreen() {
               </div>
               <p className="m-0 flex items-center gap-2 text-sm text-fg-tertiary">
                 <Clock aria-hidden="true" className="size-3.5 shrink-0" />
-                <span>
-                  {t('microclimates.next.create.timezone', { timezone })}{' '}
+                <span data-testid="microclimate-zone">
+                  {zoneNote && `${zoneNote} `}
                   {window === null
                     ? t('microclimates.validationEndAfterStart')
-                    : windowSentence(t, locale, window, start, end)}
+                    : windowSentence(t, locale, window, start, end, zone)}
                 </span>
               </p>
             </CanvasCard>
@@ -401,8 +459,8 @@ function CreateScreen() {
                         ? t('microclimates.next.create.summaryOpenUnset')
                         : t('microclimates.next.create.summaryOpenValue', {
                             length: lengthPhrase(t, window),
-                            from: weekdayDay(start, locale),
-                            to: weekdayDay(end, locale),
+                            from: weekdayDayIn(start, locale, zone),
+                            to: weekdayDayIn(end, locale, zone),
                           }),
                   },
                   {
@@ -414,11 +472,12 @@ function CreateScreen() {
                   },
                 ]}
               />
+              <MicroclimateSeatsNote state={seats} />
               <Button variant="primary" size="canvas" className="w-full" disabled={busy} onClick={state.launch}>
                 <Send aria-hidden="true" />
-                {state.submitting === 'launch' ? t('common.creating') : t('microclimates.next.create.launch')}
+                {state.submitting === 'launch' ? (editing ? t('common.saving') : t('common.creating')) : t('microclimates.next.create.launch')}
               </Button>
-              <span className="text-sm text-fg-tertiary">{launchNote(t, locale, values)}</span>
+              <span className="text-sm text-fg-tertiary">{launchNote(t, locale, values, zone)}</span>
             </CanvasCard>
           </div>
         </div>
@@ -734,9 +793,9 @@ function lengthPhrase(t: TranslateFn, ms: number): string {
 }
 
 /** "Abierto 48 horas, de lunes a miércoles." */
-function windowSentence(t: TranslateFn, locale: string, ms: number, start: Date, end: Date): string {
-  const from = weekdayLong(start, locale)
-  const to = weekdayLong(end, locale)
+function windowSentence(t: TranslateFn, locale: string, ms: number, start: Date, end: Date, zone: string): string {
+  const from = weekdayIn(start, locale, zone)
+  const to = weekdayIn(end, locale, zone)
   return from === to && ms < 24 * 3_600_000
     ? t('microclimates.next.create.openSameDay', { length: lengthPhrase(t, ms), day: from })
     : t('microclimates.next.create.openFromTo', { length: lengthPhrase(t, ms), from, to })
@@ -748,19 +807,20 @@ function windowSentence(t: TranslateFn, locale: string, ms: number, start: Date,
  * end (`MicroclimateLifecycleSchedule.cs`). A future opening time does not delay it, so the
  * line says that too instead of promising the board's "lista para abrir el 14 sept".
  */
-function launchNote(t: TranslateFn, locale: string, values: MicroclimateWizardValues): string {
-  const window = windowMs(values.startTime, values.endTime)
-  if (window === null) return t('microclimates.next.create.launchNoteUnset')
-  const start = new Date(values.startTime)
-  const end = new Date(values.endTime)
+function launchNote(t: TranslateFn, locale: string, values: MicroclimateWizardValues, zone: string): string {
+  const window = zonedWindowMs(values.startTime, values.endTime, zone)
+  const start = instantIn(values.startTime, zone)
+  const end = instantIn(values.endTime, zone)
+  if (window === null || !start || !end) return t('microclimates.next.create.launchNoteUnset')
+  // "Now" is an instant: the opening is compared as the instant it is on the company's clock.
   if (start.getTime() > Date.now() + 60_000) {
     return t('microclimates.next.create.launchNoteFuture', {
-      date: shortDay(start.toISOString(), locale),
-      time: clock(start.toISOString(), locale),
+      date: shortDayIn(start, locale, zone),
+      time: clockIn(start, locale, zone),
     })
   }
   return t('microclimates.next.create.launchNote', {
-    date: shortDay(end.toISOString(), locale),
-    time: clock(end.toISOString(), locale),
+    date: shortDayIn(end, locale, zone),
+    time: clockIn(end, locale, zone),
   })
 }

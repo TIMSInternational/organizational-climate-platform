@@ -78,21 +78,26 @@ public class InvitationShapeParityTests
             ShapeOf(typeof(MicroclimateAnonymityGuaranteeDto), Normalise));
 
     /// <summary>
-    /// The summaries differ in exactly one member, named here so the difference cannot grow
-    /// quietly: the survey summary counts <c>withCode</c>, the invitees who hold a per-survey
-    /// access code (G9/G10, 2026-10-22). A microclimate has no per-survey credential, so it has
-    /// no such count. Everything else is identical.
+    /// The summaries differ in exactly two members, both about per-survey access codes and named
+    /// here so the difference cannot grow quietly: <c>withCode</c>, the invitees who hold a code
+    /// (G9/G10, 2026-10-22), and <c>keyReminders</c>, the reminders sent on those codes
+    /// (2026-11-08). A microclimate has no per-survey credential, so it has neither. Everything
+    /// else is identical.
     /// </summary>
     [Fact]
-    public void The_two_summaries_differ_only_in_the_survey_code_count()
+    public void The_two_summaries_differ_only_in_the_survey_code_counts()
     {
-        const string SurveyOnly = "WithCode:Int32";
+        string[] surveyOnly = ["WithCode:Int32", "KeyReminders:Int32"];
         var survey = ShapeOf(typeof(SurveyInvitationSummaryDto), Normalise);
         var microclimate = ShapeOf(typeof(MicroclimateInvitationSummaryDto), Normalise);
 
-        Assert.Contains(SurveyOnly, survey);
-        Assert.DoesNotContain(SurveyOnly, microclimate);
-        Assert.Equal(survey.Where(m => m != SurveyOnly), microclimate);
+        foreach (var member in surveyOnly)
+        {
+            Assert.Contains(member, survey);
+            Assert.DoesNotContain(member, microclimate);
+        }
+
+        Assert.Equal(survey.Where(m => !surveyOnly.Contains(m)), microclimate);
     }
 
     /// <summary>

@@ -8,6 +8,7 @@ public class ClimateProjectDbContext(DbContextOptions<ClimateProjectDbContext> o
 {
     public DbSet<Company> Companies => Set<Company>();
     public DbSet<CompanyServiceLicense> CompanyServiceLicenses => Set<CompanyServiceLicense>();
+    public DbSet<CompanyLogo> CompanyLogos => Set<CompanyLogo>();
     public DbSet<SystemSettings> SystemSettings => Set<SystemSettings>();
     public DbSet<User> Users => Set<User>();
     public DbSet<Department> Departments => Set<Department>();
@@ -37,6 +38,7 @@ public class ClimateProjectDbContext(DbContextOptions<ClimateProjectDbContext> o
     public DbSet<SurveyDistribution> SurveyDistributions => Set<SurveyDistribution>();
     public DbSet<SurveyInvitation> SurveyInvitations => Set<SurveyInvitation>();
     public DbSet<SurveyCredential> SurveyCredentials => Set<SurveyCredential>();
+    public DbSet<EmailDeliveryEvent> EmailDeliveryEvents => Set<EmailDeliveryEvent>();
     public DbSet<SurveyAuditLog> SurveyAuditLogs => Set<SurveyAuditLog>();
     public DbSet<Response> Responses => Set<Response>();
     public DbSet<QuestionResponse> QuestionResponses => Set<QuestionResponse>();
@@ -65,6 +67,7 @@ public class ClimateProjectDbContext(DbContextOptions<ClimateProjectDbContext> o
     public DbSet<ReportShare> ReportShares => Set<ReportShare>();
     public DbSet<Benchmark> Benchmarks => Set<Benchmark>();
     public DbSet<BenchmarkMetric> BenchmarkMetrics => Set<BenchmarkMetric>();
+    public DbSet<BenchmarkGroup> BenchmarkGroups => Set<BenchmarkGroup>();
     public DbSet<AnalyticsInsight> AnalyticsInsights => Set<AnalyticsInsight>();
     public DbSet<AnalyticsMetricData> AnalyticsMetricData => Set<AnalyticsMetricData>();
     public DbSet<AnalyticsTimeSeries> AnalyticsTimeSeries => Set<AnalyticsTimeSeries>();

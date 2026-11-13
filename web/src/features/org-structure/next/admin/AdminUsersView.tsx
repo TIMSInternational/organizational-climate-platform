@@ -30,8 +30,11 @@ import { updateUser, type User, type UserEmailChange } from '../../api/users'
 import { EmailChangeOutcome } from '../../components/EmailChangeOutcome'
 import { updateErrorText } from '../../components/emailRefusal'
 import { ResendCredentials } from '../../components/ResendCredentials'
+import { DeactivationConfirm, PersonDetailsFields, ResetPassword } from '../../components/PersonDetails'
+import { departmentChange, usePersonDetails } from '../../components/usePersonDetails'
 import type { Department } from '../../api/departments'
 import IntakeWizard from '../../components/IntakeWizard'
+import AddPersonForm from './AddPersonForm'
 import InvitationForm, { type InvitationFormValues } from '../../components/InvitationForm'
 import ShareableLinkPanel from '../../components/ShareableLinkPanel'
 import { roleText } from '../super/labels'
@@ -59,7 +62,7 @@ const EYEBROW = 'm-0 text-2xs font-bold uppercase tracking-label text-fg-tertiar
 export const GROUP_PARAM = 'departamento'
 export const EDIT_PARAM = 'editar'
 
-type OpenPanel = 'none' | 'invite' | 'import'
+type OpenPanel = 'none' | 'invite' | 'import' | 'add'
 
 /** What saving a corrected address did, for the person it was saved on. */
 interface EmailOutcome {
@@ -156,6 +159,10 @@ export default function AdminUsersView() {
         actions={
           allowed ? (
             <>
+              <Button type="button" variant="outline" onClick={() => setOpen(open === 'add' ? 'none' : 'add')}>
+                <UserPlus aria-hidden="true" />
+                {t('users.next.add.action')}
+              </Button>
               <Button type="button" variant="outline" onClick={() => setOpen(open === 'import' ? 'none' : 'import')}>
                 <Upload aria-hidden="true" />
                 {t('users.next.bulkImport')}
@@ -203,6 +210,25 @@ export default function AdminUsersView() {
         </DialogContent>
       </Dialog>
 
+      {/* One person, typed. The importer's own route commits it, so the account is shaped
+          exactly as an imported one -- see `AddPersonForm`. */}
+      <Dialog open={open === 'add'} onOpenChange={(next) => setOpen(next ? 'add' : 'none')}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto" closeLabel={t('users.next.panel.close')}>
+          <DialogHeader>
+            <DialogTitle>{t('users.next.add.action')}</DialogTitle>
+            <DialogDescription>{t('users.next.add.meta')}</DialogDescription>
+          </DialogHeader>
+          {companyId && (
+            <AddPersonForm
+              baseUrl={baseUrl}
+              companyId={companyId}
+              departments={state.departments}
+              onAdded={state.reload}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={open === 'import'} onOpenChange={(next) => setOpen(next ? 'import' : 'none')}>
         <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto" closeLabel={t('users.next.panel.close')}>
           <DialogHeader>
@@ -240,6 +266,8 @@ export default function AdminUsersView() {
                     <EditPerson
                       key={editing.id}
                       user={editing}
+                      people={state.users}
+                      companyId={companyId}
                       departments={state.departments ?? []}
                       canAssignRoles={capabilities.canAssignRoles}
                       onClose={() => {
@@ -726,6 +754,8 @@ function Roster({
 
 function EditPerson({
   user,
+  people,
+  companyId,
   departments,
   canAssignRoles,
   onClose,
@@ -734,6 +764,8 @@ function EditPerson({
   onEmailChanged,
 }: {
   user: User
+  people: readonly User[]
+  companyId: string | undefined
   departments: readonly Department[]
   canAssignRoles: boolean
   onClose: () => void
@@ -749,6 +781,8 @@ function EditPerson({
   const [email, setEmail] = useState(user.email)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [confirmingDeactivation, setConfirmingDeactivation] = useState(false)
+  const details = usePersonDetails(baseUrl, user, companyId)
   // Set when a save changed the address: the panel then stays open to say what the change did
   // NOT do (send anything) and what is left (codes mailed to the old address).
   const emailChange = emailOutcome
@@ -756,12 +790,27 @@ function EditPerson({
   // Deactivating an administrator is the super administrator's alone (`UserEndpoints.cs:147-149`):
   // the server refuses even an unchanged `isActive` for one, so it is only ever sent when changed.
   const accountLocked = isAdminRole(user.role) && !canAssignRoles
-  // The API can move a person to a department but not out of one (`UpdateUserInput` carries a
-  // department only when set), so "none" is offered only to someone who has none.
+  // "Sin departamento" is offered to everyone: choosing it on someone who has one sends
+  // `clearDepartment` (`UpdateUserRequest.ClearDepartment`), the explicit unset a null cannot say.
   const options = departments.filter((unit) => unit.isActive || unit.id === user.departmentId)
   const created = calendarDay(Date.parse(user.createdAt), locale)
 
+  // Deactivating is confirmed first, in a dialog that says what happens to their codes (G5).
+  function requestSave() {
+    if (isActive !== user.isActive && !isActive) setConfirmingDeactivation(true)
+    else void save()
+  }
+
   async function save() {
+    const extra = details.changes()
+    if (extra.missing) {
+      setError(t('users.next.edit.demographicRequired', { field: extra.missing }))
+      return
+    }
+    if (extra.invalid) {
+      setError(t('users.next.edit.demographicNumber', { field: extra.invalid }))
+      return
+    }
     setSaving(true)
     setError(null)
     try {
@@ -770,8 +819,9 @@ function EditPerson({
       const updated = await updateUser(baseUrl, user.id, {
         name: name.trim(),
         ...(isActive !== user.isActive ? { isActive } : {}),
-        ...(departmentId && departmentId !== user.departmentId ? { departmentId } : {}),
+        ...departmentChange(user, departmentId),
         ...(nextEmail.toLowerCase() !== user.email.toLowerCase() ? { email: nextEmail } : {}),
+        ...extra.input,
       })
       if (updated.emailChange) {
         onEmailChanged({ userId: user.id, change: updated.emailChange, current: updated.email })
@@ -783,7 +833,7 @@ function EditPerson({
     } catch (err) {
       // No reload on a refusal: the API applied nothing, and a reload swaps the page for its
       // skeleton, which unmounts this panel and takes the error -- and what was typed -- with it.
-      setError(updateErrorText(t, err, t('users.next.edit.saveFailed')))
+      setError(updateErrorText(t, err, 'users.next.edit.saveFailed'))
     } finally {
       setSaving(false)
     }
@@ -841,7 +891,7 @@ function EditPerson({
         </Field>
         <Field fieldLabel={t('users.next.edit.department')} htmlFor={ids.department} helper={t('users.next.edit.departmentHelper')}>
           <CanvasSelect id={ids.department} className="w-full" value={departmentId} onChange={(event) => setDepartmentId(event.target.value)}>
-            {!user.departmentId && <option value="">{t('users.next.rail.none')}</option>}
+            <option value="">{t('users.next.rail.none')}</option>
             {options.map((unit) => (
               <option key={unit.id} value={unit.id}>
                 {unit.name}
@@ -875,12 +925,22 @@ function EditPerson({
           </span>
         </Field>
       </div>
+      <PersonDetailsFields user={user} people={people} state={details} />
       <ResendCredentials user={user} baseUrl={baseUrl} />
+      {/* An administrator's password is the super administrator's to reset: the API refuses a
+          company administrator one (`AuthEndpoints.ResetCredentialsAsync`), as it does their email. */}
+      <ResetPassword user={user} baseUrl={baseUrl} allowed={!accountLocked} details={details} />
+      <DeactivationConfirm
+        open={confirmingDeactivation}
+        name={user.name}
+        onOpenChange={setConfirmingDeactivation}
+        onConfirm={save}
+      />
       <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line-light pt-3">
         <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
           {emailChange ? t('users.next.edit.done') : t('common.cancel')}
         </Button>
-        <Button type="button" variant="outline" onClick={() => void save()} disabled={saving || !name.trim() || !email.trim()}>
+        <Button type="button" variant="outline" onClick={requestSave} disabled={saving || !name.trim() || !email.trim()}>
           <Check aria-hidden="true" />
           {t('users.next.edit.save')}
         </Button>

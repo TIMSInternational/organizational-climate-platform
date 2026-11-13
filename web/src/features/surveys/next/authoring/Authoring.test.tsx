@@ -11,7 +11,7 @@ import { duplicateSurvey, getSurvey, type SurveyDetail } from '../../api/surveys
 import { getSurveyTemplate, instantiateSurveyTemplate, type SurveyTemplateDetail } from '../../api/surveyTemplates'
 import SurveyQuestionsEditorPage from './SurveyQuestionsEditorPage'
 import TemplateDetailNextPage from './TemplateDetailNextPage'
-import { compatibleScaleTypes, isEditable, moveQuestion } from './model'
+import { compatibleScaleTypes, isEditable, isTextEditable, moveQuestion } from './model'
 import type { QuestionLibraryItemDetail } from '../../../questions/api/questionLibrary'
 import en from '../../../../i18n/en.json'
 
@@ -73,7 +73,7 @@ function q(order: number, textEn: string, category: string | null = 'trust'): Au
 
 function arrangeSurvey(status: string, responseCount: number) {
   vi.mocked(getSurveyQuestionAuthoring).mockResolvedValue({ surveyId: 's1', title: 'Q4', language: 'both', status, locales: ['en', 'es'], questions: [q(0, 'First'), q(1, 'Second', 'workload')] })
-  vi.mocked(getSurvey).mockResolvedValue({ id: 's1', title: 'Q4 Climate Survey', description: 'Wave five', type: 'periodic', status, responseCount, targetAudienceCount: 24, startDate: '2026-09-03T12:00:00Z', endDate: '2026-10-10T12:00:00Z' } as SurveyDetail)
+  vi.mocked(getSurvey).mockResolvedValue({ id: 's1', companyId: COMPANY, title: 'Q4 Climate Survey', description: 'Wave five', type: 'periodic', status, responseCount, targetAudienceCount: 24, startDate: '2026-09-03T12:00:00Z', endDate: '2026-10-10T12:00:00Z' } as SurveyDetail)
 }
 
 function renderAt(path: string, role = 'company_admin') {
@@ -105,6 +105,24 @@ describe('authoring model', () => {
     expect(isEditable('scheduled', 0)).toBe(true)
     expect(isEditable('draft', 1)).toBe(false)
     expect(isEditable('active', 0)).toBe(false)
+  })
+
+  it('lets a super admin edit the questions of an ACTIVE survey nobody has answered, and nothing more (ruled 2026-11-11)', () => {
+    expect(isEditable('active', 0, true)).toBe(true)
+    expect(isEditable('active', 1, true)).toBe(false)
+    expect(isEditable('closed', 0, true)).toBe(false)
+    expect(isEditable('archived', 0, true)).toBe(false)
+    expect(isEditable('active', 0, false)).toBe(false)
+  })
+
+  it('offers the name and description to anyone on an unanswered draft, and past draft to a super admin until archived', () => {
+    expect(isTextEditable('draft', 0, false)).toBe(true)
+    expect(isTextEditable('draft', 1, true)).toBe(false)
+    expect(isTextEditable('active', 0, false)).toBe(false)
+    expect(isTextEditable('active', 12, true)).toBe(true)
+    expect(isTextEditable('scheduled', 0, true)).toBe(true)
+    expect(isTextEditable('closed', 239, true)).toBe(true)
+    expect(isTextEditable('archived', 0, true)).toBe(false)
   })
 
   it('renumbers order after a move, because the PUT carries order', () => {
@@ -148,11 +166,44 @@ describe('SurveyQuestionsEditorPage — locked', () => {
     await waitFor(() => expect(vi.mocked(getSurveyQuestionAuthoring).mock.calls.some((call) => call[1] === 'copy1')).toBe(true))
   })
 
+  it('stays locked for the client administrator on an active survey nobody has answered', async () => {
+    arrangeSurvey('active', 0)
+    renderAt('/surveys/s1/questions', 'company_admin')
+    await screen.findByTestId('locked-banner')
+    expect(screen.queryByRole('button', { name: a.save })).toBeNull()
+    expect(screen.queryByTestId('live-banner')).toBeNull()
+  })
+
   it('offers a leader nothing to duplicate', async () => {
     arrangeSurvey('active', 1)
     renderAt('/surveys/s1/questions', 'leader')
     await screen.findByTestId('locked-banner')
     expect(screen.queryByRole('button', { name: a.duplicateAndEdit })).toBeNull()
+  })
+})
+
+describe('SurveyQuestionsEditorPage — a TIMS operator on a live survey (ruled 2026-11-11)', () => {
+  it('edits an active survey nobody has answered, after saying the change is live', async () => {
+    arrangeSurvey('active', 0)
+    vi.mocked(saveSurveyQuestions).mockResolvedValue()
+    renderAt('/surveys/s1/questions', 'super_admin')
+    const banner = await screen.findByTestId('live-banner')
+    expect(banner.textContent).toBe(a.liveEdit.replace('{status}', en.surveys.statusActive.toLowerCase()))
+    expect(screen.getByText(a.descriptionLive)).toBeTruthy()
+    expect(screen.queryByText(a.descriptionDraft)).toBeNull()
+    expect(screen.queryByTestId('locked-banner')).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: a.moveDown }))
+    await userEvent.click(screen.getByRole('button', { name: a.save }))
+    expect(vi.mocked(saveSurveyQuestions).mock.calls[0][2].map((x) => x.id)).toEqual(['q1', 'q0'])
+  })
+
+  it('is locked for the operator too once anybody has answered', async () => {
+    arrangeSurvey('active', 1)
+    renderAt('/surveys/s1/questions', 'super_admin')
+    const banner = await screen.findByTestId('locked-banner')
+    expect(within(banner).getByText(a.lockedHasResponses)).toBeTruthy()
+    expect(screen.queryByTestId('live-banner')).toBeNull()
+    expect(screen.queryByRole('button', { name: a.save })).toBeNull()
   })
 })
 

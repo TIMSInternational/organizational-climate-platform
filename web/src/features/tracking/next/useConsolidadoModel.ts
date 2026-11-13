@@ -9,6 +9,7 @@ import { byCompromiso, planLine } from './derive'
 import type { ConsolidadoModel, NodoBlock } from './model'
 import { readViewer } from './viewer'
 import { isApiStatus } from '../../../api/authFetch'
+import { describeApiError } from '../../../api/describeApiError'
 
 export interface ConsolidadoState {
   /** `restricted` for a viewer `GET /api/consolidado` would refuse — no request is made. */
@@ -82,7 +83,7 @@ export function useConsolidadoModel(): ConsolidadoState {
         setStatus('restricted')
         return
       }
-      setError(reason instanceof Error ? reason.message : t('errors.generic'))
+      setError(describeApiError(reason, t))
       setStatus('error')
       return
     }

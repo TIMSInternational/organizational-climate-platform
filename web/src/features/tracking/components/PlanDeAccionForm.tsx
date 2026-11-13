@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import {
   Alert,
   AlertDescription,
@@ -8,8 +8,9 @@ import {
   TextareaField,
 } from '../../../components/ui'
 import { useTranslation } from '../../../i18n'
+import { calendarDay } from '../../../lib/calendarDay'
 import type { CreatePlanAccionInput } from '../api/trackingApi'
-import type { NodoPickerItem, PersonaPickerItem } from '../api/trackingPickers'
+import type { HallazgoPickerItem, NodoPickerItem, PersonaPickerItem } from '../api/trackingPickers'
 import { creatableNodos, type TrackingClaims } from '../trackingAccess'
 import InvolucradosPicker from './InvolucradosPicker'
 
@@ -39,12 +40,20 @@ import InvolucradosPicker from './InvolucradosPicker'
  *
  * ## What happens when the pickers are empty
  *
- * `TrackingPickerEndpoints.CanAccessCompany` allows `super_admin` and a
- * `company_admin` on their own company and refuses everyone else — including the
- * `leader` who is allowed to create plans. When the lists come back empty (403, or
- * a company with no rows) the form does not pretend: the node and responsable
- * fields fall back to typed external ids, and the alert above says the directory
- * could not be loaded. Two empty dropdowns with no explanation would be worse.
+ * `TrackingPickerEndpoints.ScopeFor` answers an administrator with the company and a
+ * `leader` with their own nodo and its people (G25); everyone else is refused. When
+ * the lists come back empty (403, a leader who leads no real department, or a company
+ * with no rows) the form does not pretend: the node and responsable fields fall back
+ * to typed external ids, and the alert above says the directory could not be loaded.
+ * Two empty dropdowns with no explanation would be worse.
+ *
+ * ## The hallazgo is picked, not typed, when the nodo has findings
+ *
+ * `loadHallazgos` asks `GET /tracking/picker/hallazgos` for the chosen nodo's findings
+ * — each a survey's dimension for that nodo, the id climate-tracking stores — whenever
+ * the nodo changes. A nodo with none, or a refused or failed lookup, keeps the typed
+ * field, so a plan can still name a finding from a survey this deployment no longer
+ * scans. The link stays optional: "Sin hallazgo" clears it.
  */
 export interface PlanDeAccionFormValues {
   nodoExternalId: string
@@ -79,7 +88,12 @@ export interface PlanDeAccionFormProps {
   error?: string | null
   onSubmit: (input: CreatePlanAccionInput) => void
   onCancel?: () => void
+  /** The chosen nodo's findings — omitted, the hallazgo is a typed id. */
+  loadHallazgos?: (nodoExternalId: string) => Promise<readonly HallazgoPickerItem[]>
 }
+
+/** Radix `Select` refuses `''` as an item value, so "no hallazgo" needs a name of its own. */
+const NO_HALLAZGO = '__none__'
 
 export default function PlanDeAccionForm({
   claims,
@@ -90,8 +104,9 @@ export default function PlanDeAccionForm({
   error = null,
   onSubmit,
   onCancel,
+  loadHallazgos,
 }: PlanDeAccionFormProps) {
-  const { t } = useTranslation()
+  const { t, locale } = useTranslation()
   const [values, setValues] = useState<PlanDeAccionFormValues>(() => ({
     ...EMPTY_PLAN_FORM,
     // A leader creates on exactly one node, so pre-fill it rather than making them
@@ -99,11 +114,51 @@ export default function PlanDeAccionForm({
     nodoExternalId: claims && claims.role === 'leader' ? claims.nodoExternalId : '',
   }))
   const [touched, setTouched] = useState(false)
+  const [hallazgos, setHallazgos] = useState<{ nodo: string; items: readonly HallazgoPickerItem[] } | null>(null)
 
   const nodoOptions = useMemo(
     () => creatableNodos(nodos, claims).map((nodo) => ({ value: nodo.id, label: nodo.name })),
     [nodos, claims],
   )
+  // Asked only for a nodo chosen from the directory: a typed id is asked nothing, so a
+  // half-typed one is not a request per keystroke.
+  const chosenNodo = nodoOptions.length > 0 ? values.nodoExternalId.trim() : ''
+  useEffect(() => {
+    if (!loadHallazgos || chosenNodo === '') return
+    let cancelled = false
+    loadHallazgos(chosenNodo)
+      .then((items) => {
+        if (!cancelled) setHallazgos({ nodo: chosenNodo, items })
+      })
+      .catch(() => {
+        if (!cancelled) setHallazgos({ nodo: chosenNodo, items: [] })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [chosenNodo, loadHallazgos])
+
+  // Only the answer for the nodo on screen: a list fetched for the previous nodo must never
+  // offer a finding of a department this plan is no longer about.
+  const hallazgoItems = useMemo(
+    () => (hallazgos !== null && hallazgos.nodo === chosenNodo ? hallazgos.items : []),
+    [chosenNodo, hallazgos],
+  )
+  const hallazgoOptions = useMemo(
+    () => [
+      { value: NO_HALLAZGO, label: t('tracking.fields.hallazgoNone') },
+      ...hallazgoItems.map((item) => ({
+        value: item.id,
+        label: t('tracking.fields.hallazgoOption', {
+          dimension: item.dimension,
+          survey: item.surveyTitle,
+          closed: calendarDay(new Date(item.surveyClosedOn), locale),
+        }),
+      })),
+    ],
+    [hallazgoItems, locale, t],
+  )
+
   const personaOptions = useMemo(
     () =>
       personas.map((persona) => ({
@@ -168,7 +223,8 @@ export default function PlanDeAccionForm({
           placeholder={t('tracking.fields.nodoPlaceholder')}
           options={nodoOptions}
           value={values.nodoExternalId}
-          onChange={(nodoExternalId) => patch({ nodoExternalId })}
+          // A finding belongs to one nodo; a hallazgo chosen for the previous one is cleared.
+          onChange={(nodoExternalId) => patch({ nodoExternalId, hallazgoExternalId: '' })}
           disabled={submitting || nodoOptions.length === 0}
           error={requiredMissing && values.nodoExternalId === '' ? t('validation.required') : undefined}
           required
@@ -256,13 +312,25 @@ export default function PlanDeAccionForm({
         required
       />
 
-      <TextField
-        label={t('tracking.fields.hallazgo')}
-        description={t('tracking.fields.hallazgoHint')}
-        value={values.hallazgoExternalId}
-        onChange={(hallazgoExternalId) => patch({ hallazgoExternalId })}
-        disabled={submitting}
-      />
+      {hallazgoItems.length > 0 ? (
+        <SelectField
+          label={t('tracking.fields.hallazgo')}
+          description={t('tracking.fields.hallazgoPickHint')}
+          placeholder={t('tracking.fields.hallazgoPlaceholder')}
+          options={hallazgoOptions}
+          value={values.hallazgoExternalId === '' ? NO_HALLAZGO : values.hallazgoExternalId}
+          onChange={(value) => patch({ hallazgoExternalId: value === NO_HALLAZGO ? '' : value })}
+          disabled={submitting}
+        />
+      ) : (
+        <TextField
+          label={t('tracking.fields.hallazgo')}
+          description={t('tracking.fields.hallazgoHint')}
+          value={values.hallazgoExternalId}
+          onChange={(hallazgoExternalId) => patch({ hallazgoExternalId })}
+          disabled={submitting}
+        />
+      )}
 
       <InvolucradosPicker
         label={t('tracking.fields.involucrados')}

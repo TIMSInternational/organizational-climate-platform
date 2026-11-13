@@ -1,5 +1,6 @@
 import { isUnread, type NotificationDetail } from '../api/notifications'
 import { surveyRespondPathFor } from '../surveyLink'
+import { actionPlanHref } from '../../action-plans/offered'
 
 /**
  * Pure rules behind the Notifications artboard (`/notifications`): which facet a notification
@@ -74,8 +75,10 @@ export function actionOf(
     return { labelKey: 'notifications.next.actionResults', href: `/surveys/${surveyId}/results` }
   }
   const planId = idIn(data, 'actionPlanId')
-  if (PLAN_TYPES.has(notification.type) && planId) {
-    return { labelKey: 'notifications.next.actionPlan', href: `/action-plans/${planId}` }
+  // No way out where the deployment does not offer `/action-plans` — the sidebar's rule.
+  const planHref = planId ? actionPlanHref(planId) : null
+  if (PLAN_TYPES.has(notification.type) && planHref) {
+    return { labelKey: 'notifications.next.actionPlan', href: planHref }
   }
   if (kindOf(notification) === 'reports') {
     return { labelKey: 'notifications.next.actionReport', href: `/admin/companies/${notification.companyId}/reports` }

@@ -280,6 +280,15 @@ public class SubjectDataMapTests
         // 33 since 2026-10-19: survey_credentials issues one person a username and password
         // for ONE survey, so ESPH's Clima and Teletrabajo can be handed out separately. It
         // holds a credential, which is the strongest reason this census exists.
+        // 34 since 2026-11-02: email_delivery_events records the bounces SES reports for a
+        // person's mail (user_id, cascade). Declared in the map as Subject, exported in full and
+        // deleted on erasure -- see SubjectDataMap and SubjectErasure.
+        // 33 since 2026-11-08 (migration OperatorRulings): audit_logs keeps user_id but no longer
+        // has a FOREIGN KEY on it. The column, and the map's "retained in full" treatment of it,
+        // are unchanged -- erasure never touched audit rows and still does not. What changed is
+        // that deleting a company's people no longer has the database SET NULL their audit rows
+        // behind AuditLogAppendOnlyInterceptor's back. A census of FK-referring types loses it;
+        // the person's data in it is exactly what it was.
         Assert.Equal(33, nonOwnedReferrers.Count);
 
         var restricting = user.GetReferencingForeignKeys()

@@ -199,6 +199,23 @@ describe('ResultsCellPanel, when the group has a plan for another dimension', ()
     expect(within(doing).queryByRole('link', { name: new RegExp(T.openPlan) })).toBeNull()
   })
 
+  it('names the plan but links no `/action-plans` page where a tracking service replaces it in the sidebar', () => {
+    vi.stubEnv('VITE_TRACKING_API_BASE_URL', 'http://tracking.test')
+    try {
+      renderPanel(
+        cellOf('d-ops', 'Operaciones', 'workload', {
+          plan: planRef('plan-workload', 'Seguimiento para Operaciones — Carga de trabajo'),
+          cellPlan: planRef('plan-workload', 'Seguimiento para Operaciones — Carga de trabajo'),
+        }),
+      )
+      const doing = screen.getByTestId('cell-doing')
+      expect(doing.textContent).toContain('Seguimiento para Operaciones — Carga de trabajo')
+      expect(within(doing).queryByRole('link', { name: new RegExp(T.openPlan) })).toBeNull()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
   it('opens this cell’s own plan, not the group’s', () => {
     renderPanel(
       cellOf('d-ops', 'Operaciones', 'workload', {

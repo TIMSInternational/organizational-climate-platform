@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import type { Benchmark } from '../api/benchmarks'
 import { useTranslation } from '../../../i18n'
+import { describeApiError } from '../../../api/describeApiError'
 
 export interface BenchmarkFormValues {
   name: string
@@ -50,7 +51,7 @@ export default function BenchmarkForm({ variant, initialValues, submitLabel, onS
     try {
       await onSubmit(values)
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('errors.generic'))
+      setError(describeApiError(err, t))
     } finally {
       setSubmitting(false)
     }

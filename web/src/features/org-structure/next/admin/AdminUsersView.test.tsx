@@ -377,4 +377,180 @@ describe('AdminUsersView (company administrator)', () => {
 
     expect(screen.getAllByText(T.roster.username)).toHaveLength(mass.length)
   })
+
+  // ------------------------------------------------ edit after import (G6), deactivation (G5),
+  // and the admin password reset (G29)
+
+  const ADRIANA_ID = '77fbfc92-76bb-452e-8be3-8ae588464994'
+  const FIELDS = {
+    fields: [
+      {
+        id: 'f-sede',
+        companyId: MERIDIANO_ID,
+        field: 'sede',
+        label: 'Sede',
+        type: 'select',
+        options: [
+          { order: 0, value: 'heredia', label: 'Heredia' },
+          { order: 1, value: 'cartago', label: 'Cartago' },
+        ],
+        required: true,
+        order: 0,
+        isActive: true,
+        resolvedLocale: 'es',
+        fallbackFields: [],
+      },
+      {
+        id: 'f-turno',
+        companyId: MERIDIANO_ID,
+        field: 'turno',
+        label: 'Turno',
+        type: 'text',
+        options: null,
+        required: false,
+        order: 1,
+        isActive: true,
+        resolvedLocale: 'es',
+        fallbackFields: [],
+      },
+    ],
+  }
+  function luisDetail(overrides: Record<string, unknown> = {}) {
+    const luis = USERS.find((person) => person.id === LUIS_MORA_ID)!
+    return () =>
+      new Response(
+        JSON.stringify({ ...luis, companyId: MERIDIANO_ID, managerId: null, demographics: { sede: 'heredia', turno: 'mañana' }, ...overrides }),
+        { status: 200 },
+      )
+  }
+  const putBody = (mock: ReturnType<typeof fetchWith>) => {
+    const put = mock.mock.calls.find(([url, init]) => String(url).endsWith(`/admin/users/${LUIS_MORA_ID}`) && init?.method === 'PUT')
+    return put ? (JSON.parse(String(put[1]!.body)) as Record<string, unknown>) : null
+  }
+
+  it('removes a department with an explicit clear, never by sending a null', async () => {
+    const fetchMock = fetchWith({ [`GET /admin/users/${LUIS_MORA_ID}`]: luisDetail() })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    renderAt(`${ROUTE}?editar=${LUIS_MORA_ID}`)
+    await screen.findByRole('heading', { name: fill(T.edit.title, { name: 'Luis Mora' }) })
+    await user.selectOptions(screen.getByLabelText(T.edit.department), '')
+    await user.click(screen.getByRole('button', { name: T.edit.save }))
+    await waitFor(() => expect(putBody(fetchMock)).not.toBeNull())
+    expect(putBody(fetchMock)).toEqual({ name: 'Luis Mora', clearDepartment: true })
+  })
+
+  it('sets the manager and sends the full demographic set only when one was edited', async () => {
+    const fetchMock = fetchWith({
+      [`GET /admin/users/${LUIS_MORA_ID}`]: luisDetail(),
+      'GET /admin/demographic-fields': () => new Response(JSON.stringify(FIELDS), { status: 200 }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    renderAt(`${ROUTE}?editar=${LUIS_MORA_ID}`)
+    const sede = (await screen.findByLabelText(/^Sede/)) as HTMLSelectElement
+    expect(sede.value).toBe('heredia')
+    expect((screen.getByLabelText('Turno') as HTMLInputElement).value).toBe('mañana')
+    // The manager list is the company's active people, never the person themselves.
+    const manager = screen.getByLabelText(T.edit.manager) as HTMLSelectElement
+    expect([...manager.options].some((option) => option.value === LUIS_MORA_ID)).toBe(false)
+    await user.selectOptions(manager, ADRIANA_ID)
+    await user.selectOptions(sede, 'cartago')
+    await user.click(screen.getByRole('button', { name: T.edit.save }))
+    await waitFor(() => expect(putBody(fetchMock)).not.toBeNull())
+    expect(putBody(fetchMock)).toEqual({
+      name: 'Luis Mora',
+      managerId: ADRIANA_ID,
+      demographics: { sede: 'cartago', turno: 'mañana' },
+    })
+  })
+
+  it('refuses in Spanish, before sending anything, a demographic edit that empties a required field', async () => {
+    const fetchMock = fetchWith({
+      [`GET /admin/users/${LUIS_MORA_ID}`]: luisDetail(),
+      'GET /admin/demographic-fields': () => new Response(JSON.stringify(FIELDS), { status: 200 }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    renderAt(`${ROUTE}?editar=${LUIS_MORA_ID}`)
+    await user.selectOptions(await screen.findByLabelText(/^Sede/), '')
+    await user.click(screen.getByRole('button', { name: T.edit.save }))
+    expect(await screen.findByText(new RegExp(fill(T.edit.demographicRequired, { field: 'Sede' }).replace(/[«»]/g, '.')))).toBeTruthy()
+    expect(putBody(fetchMock)).toBeNull()
+  })
+
+  it('asks before deactivating, says what happens to their survey codes, and only then saves', async () => {
+    const fetchMock = fetchWith({ [`GET /admin/users/${LUIS_MORA_ID}`]: luisDetail() })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    renderAt(`${ROUTE}?editar=${LUIS_MORA_ID}`)
+    await screen.findByRole('heading', { name: fill(T.edit.title, { name: 'Luis Mora' }) })
+    await user.click(screen.getByRole('switch'))
+    await user.click(screen.getByRole('button', { name: T.edit.save }))
+    const dialog = await screen.findByRole('alertdialog')
+    expect(within(dialog).getByText(fill(T.edit.deactivateTitle, { name: 'Luis Mora' }))).toBeTruthy()
+    expect(within(dialog).getByText(T.edit.deactivateBody)).toBeTruthy()
+    expect(putBody(fetchMock)).toBeNull()
+    await user.click(within(dialog).getByRole('button', { name: T.edit.deactivateConfirm }))
+    await waitFor(() => expect(putBody(fetchMock)).toEqual({ name: 'Luis Mora', isActive: false }))
+  })
+
+  it('resets an email account’s password after a confirmation and shows it, saying no email was sent', async () => {
+    const fetchMock = fetchWith({
+      [`GET /admin/users/${LUIS_MORA_ID}`]: luisDetail(),
+      'POST /auth/admin/reset-credentials': () =>
+        new Response(JSON.stringify({ email: 'luis.mora@meridiano.test', temporaryPassword: 'Clave-Temporal-De-Prueba' }), { status: 200 }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    renderAt(`${ROUTE}?editar=${LUIS_MORA_ID}`)
+    await user.click(await screen.findByRole('button', { name: T.edit.resetPassword }))
+    const dialog = await screen.findByRole('alertdialog')
+    expect(within(dialog).getByText(fill(T.edit.resetBody, { email: 'luis.mora@meridiano.test' }))).toBeTruthy()
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('reset-credentials'))).toBe(false)
+    await user.click(within(dialog).getByRole('button', { name: T.edit.resetConfirm }))
+    expect(await screen.findByDisplayValue('Clave-Temporal-De-Prueba')).toBeTruthy()
+    expect(screen.getByText(fill(T.edit.resetDone, { name: 'Luis Mora' }))).toBeTruthy()
+    expect(screen.getByText(fill(T.edit.resetSignIn, { name: 'Luis Mora', email: 'luis.mora@meridiano.test' }))).toBeTruthy()
+    const post = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/auth/admin/reset-credentials'))!
+    expect(JSON.parse(String(post[1]!.body))).toEqual({ userId: LUIS_MORA_ID })
+  })
+
+  it('offers no reset on an administrator’s account, nor on a mass-invite account that has its own resend', async () => {
+    vi.stubGlobal('fetch', fetchWith())
+    renderAt(`${ROUTE}?editar=${ANA_ROJAS_ID}`)
+    await screen.findByRole('heading', { name: fill(T.edit.title, { name: 'Ana Rojas' }) })
+    expect(screen.queryByRole('button', { name: T.edit.resetPassword })).toBeNull()
+    cleanup()
+
+    const mass = USERS.find((person) => person.username)!
+    renderAt(`${ROUTE}?editar=${mass.id}`)
+    await screen.findByRole('heading', { name: fill(T.edit.title, { name: mass.name }) })
+    expect(screen.getByRole('button', { name: T.edit.resendCredentials })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: T.edit.resetPassword })).toBeNull()
+  })
+
+  it('offers no reset to a person who signs in only with survey codes, and says why', async () => {
+    vi.stubGlobal('fetch', fetchWith({ [`GET /admin/users/${LUIS_MORA_ID}`]: luisDetail({ surveyCodesOnly: true }) }))
+    renderAt(`${ROUTE}?editar=${LUIS_MORA_ID}`)
+    expect(await screen.findByText(T.edit.resetPerSurvey)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: T.edit.resetPassword })).toBeNull()
+  })
+
+  it('says the per-survey refusal in Spanish when the detail could not be read and the API refuses', async () => {
+    const fetchMock = fetchWith({
+      [`GET /admin/users/${LUIS_MORA_ID}`]: () => new Response(null, { status: 500 }),
+      'POST /auth/admin/reset-credentials': () =>
+        new Response(JSON.stringify({ message: 'This person signs in only with per-survey codes', code: 'per_survey_person' }), {
+          status: 400,
+        }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    renderAt(`${ROUTE}?editar=${LUIS_MORA_ID}`)
+    await user.click(await screen.findByRole('button', { name: T.edit.resetPassword }))
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: T.edit.resetConfirm }))
+    expect(await screen.findByText(T.edit.resetPerSurvey)).toBeTruthy()
+    expect(screen.queryByText(/per-survey codes/)).toBeNull()
+  })
 })

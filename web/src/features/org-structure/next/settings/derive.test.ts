@@ -39,10 +39,15 @@ describe('changesOf', () => {
     branding: { logoUrl: null, primaryColor: '#3B82F6', secondaryColor: '#1E40AF', fontFamily: 'Inter', customCss: null },
   }
 
-  it('never carries the microclimate or AI flag — the form has no control for either', () => {
+  it('holds only the settings something reads — never frequency, anonymity, retention, microclimates or AI (G18)', () => {
     const initial = draftOf(response)
-    expect(Object.keys(initial).sort()).toEqual(['anonymousSurveys', 'credentialMode', 'dataRetentionDays', 'language', 'logoUrl', 'primaryColor', 'surveyFrequency', 'timezone'])
+    expect(Object.keys(initial).sort()).toEqual(['credentialMode', 'language', 'logoUrl', 'primaryColor', 'timezone'])
     expect(changesOf(initial, { ...initial, language: 'es' })).toEqual({ language: 'es' })
+  })
+
+  it('sends a time zone change, and only it', () => {
+    const initial = draftOf(response)
+    expect(changesOf(initial, { ...initial, timezone: 'America/Costa_Rica' })).toEqual({ timezone: 'America/Costa_Rica' })
   })
 
   it('reads a null logo as an empty field, so the control has a string to hold', () => {

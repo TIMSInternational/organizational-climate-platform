@@ -178,6 +178,12 @@ describe('PlanesListNextPage', () => {
     expect(screen.getByRole('heading', { name: es.tracking.actions.createPlan })).toBeTruthy()
   })
 
+  it('leaves the sheet to the consolidado for an administrator', async () => {
+    renderPage()
+    await screen.findByText('PA-2026-00001')
+    expect(screen.queryByRole('button', { name: T.exportSheet })).toBeNull()
+  })
+
   it('offers neither to an employee, whom the service lets create nothing', async () => {
     setToken(tokenFor({ sub: 'persona-2', role: 'employee', nodoId: 'nodo-a', companyId: 'company-1' }))
     renderPage()
@@ -304,6 +310,77 @@ describe('PlanesListNextPage — the node leader board', () => {
     // Coverage is a statement about the tenant, which this reader cannot see.
     expect(screen.queryByText(/de 4 nodos/)).toBeNull()
     expect(screen.queryByText(T.planesScopeNote)).toBeTruthy()
+  })
+
+  /**
+   * G25. The pickers now answer a node leader with their own nodo and its people
+   * (`TrackingPickerEndpoints.ScopeFor`), so the create form offers those instead of asking
+   * for raw external ids — and the findings of that nodo instead of a typed hallazgo id.
+   */
+  function routeLeaderPickers() {
+    const base = vi.mocked(fetch).getMockImplementation()!
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: 200 }))
+      if (url.includes('/tracking/picker/nodos')) return json({ nodos: [{ id: 'nodo-b', name: 'Ingeniería' }] })
+      if (url.includes('/tracking/picker/personas')) {
+        return json({ personas: [{ id: 'ana', name: 'Ana Solís', email: 'ana@acme.test' }, { id: 'luis', name: 'Luis Mora', email: 'luis@acme.test' }] })
+      }
+      if (url.includes('/tracking/picker/hallazgos')) {
+        return json({
+          hallazgos: [
+            { id: 'hal-1', surveyId: 's-1', surveyTitle: 'Clima 2026', surveyClosedOn: '2026-09-30T12:00:00Z', dimension: 'Comunicación' },
+          ],
+        })
+      }
+      return base(input, init)
+    })
+  }
+
+  it('offers a leader their own nodo and its people in the create form, never raw ids', async () => {
+    routeLeaderPickers()
+    renderPage()
+    await screen.findByText('PA-2026-00001')
+    fireEvent.click(await screen.findByRole('button', { name: T.planesNewPlanIn.replace('{nodo}', 'Ingeniería') }))
+
+    // The involucrados list is the leader's nodo, by name.
+    expect(await screen.findByText('Ana Solís')).toBeTruthy()
+    // No typed-id fallbacks and no "directory unavailable" alert.
+    expect(screen.queryByText(es.tracking.fields.nodoIdHint)).toBeNull()
+    expect(screen.queryByText(es.tracking.fields.responsableIdHint)).toBeNull()
+    expect(screen.queryByText(es.tracking.form.directoryUnavailable)).toBeNull()
+    // The nodo is chosen, by name: the leader's only option, pre-filled.
+    expect(screen.getAllByRole('combobox').some((box) => box.textContent?.includes('Ingeniería'))).toBe(true)
+
+    const pickerUrls = vi.mocked(fetch).mock.calls.map(([input]) => String(input)).filter((url) => url.includes('/tracking/picker/'))
+    expect(pickerUrls.some((url) => url.includes('/tracking/picker/personas?companyId=company-1'))).toBe(true)
+  })
+
+  it('offers a leader the findings of their own nodo instead of a typed hallazgo id', async () => {
+    routeLeaderPickers()
+    renderPage()
+    await screen.findByText('PA-2026-00001')
+    fireEvent.click(await screen.findByRole('button', { name: T.planesNewPlanIn.replace('{nodo}', 'Ingeniería') }))
+
+    expect(await screen.findByText(es.tracking.fields.hallazgoPickHint)).toBeTruthy()
+    expect(screen.queryByText(es.tracking.fields.hallazgoHint)).toBeNull()
+    const hallazgoUrl = vi.mocked(fetch).mock.calls.map(([input]) => String(input)).find((url) => url.includes('/tracking/picker/hallazgos'))
+    expect(hallazgoUrl).toContain('nodoId=nodo-b')
+    expect(hallazgoUrl).toContain('companyId=company-1')
+  })
+
+  it('keeps the typed fields, and says why, when the leader pickers are refused', async () => {
+    renderPage()
+    await screen.findByText('PA-2026-00001')
+    fireEvent.click(await screen.findByRole('button', { name: T.planesNewPlanIn.replace('{nodo}', 'Ingeniería') }))
+    expect(await screen.findByText(es.tracking.form.directoryUnavailable)).toBeTruthy()
+    expect(screen.getByText(es.tracking.fields.nodoIdHint)).toBeTruthy()
+  })
+
+  it('offers a leader the seguimiento sheet of what they can see', async () => {
+    renderPage()
+    await screen.findByText('PA-2026-00001')
+    expect(await screen.findByRole('button', { name: T.exportSheet })).toBeTruthy()
   })
 
   it('falls back to the bare wording when GET /profile did not name the nodo', async () => {

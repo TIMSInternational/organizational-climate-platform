@@ -1,6 +1,9 @@
 import { useState, type FormEvent } from 'react'
 import { CompanyValidation } from './companyValidation'
 import { useTranslation } from '../../../i18n'
+import { describeApiError } from '../../../api/describeApiError'
+import { sizeText } from '../next/super/labels'
+import { countryNames } from '../next/super/countries'
 
 export interface CompanyFormValues {
   name: string
@@ -20,7 +23,7 @@ interface CompanyFormProps {
 const EMPTY_VALUES: CompanyFormValues = { name: '', emailDomain: '', industry: '', size: '', country: '', subscriptionTier: '' }
 
 export default function CompanyForm({ initialValues, submitLabel, onSubmit }: CompanyFormProps) {
-  const { t } = useTranslation()
+  const { t, locale } = useTranslation()
   const [values, setValues] = useState<CompanyFormValues>({ ...EMPTY_VALUES, ...initialValues })
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -32,7 +35,7 @@ export default function CompanyForm({ initialValues, submitLabel, onSubmit }: Co
     try {
       await onSubmit(values)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Save failed')
+      setError(describeApiError(err, t))
     } finally {
       setSubmitting(false)
     }
@@ -47,7 +50,15 @@ export default function CompanyForm({ initialValues, submitLabel, onSubmit }: Co
       </label>
       <label>
         {t('dashboard.domain')}
-        <input value={values.emailDomain} onChange={(e) => setValues({ ...values, emailDomain: e.target.value })} required />
+        <input
+          value={values.emailDomain}
+          onChange={(e) => setValues({ ...values, emailDomain: e.target.value })}
+          required
+          aria-describedby="company-domain-help"
+        />
+        {/* Said before it is typed: the domain decides where a self-registration lands, and it is
+            unique on the platform (the PROCOMER script carried this warning; the form did not). */}
+        <small id="company-domain-help">{t('superadmin.next.companies.domainHelp')}</small>
       </label>
       <label>
         {t('dashboard.industry')}
@@ -58,13 +69,19 @@ export default function CompanyForm({ initialValues, submitLabel, onSubmit }: Co
         <select value={values.size} onChange={(e) => setValues({ ...values, size: e.target.value })} required>
           <option value="">{t('dashboard.selectSize')}</option>
           {CompanyValidation.sizes.map((size) => (
-            <option key={size} value={size}>{size}</option>
+            <option key={size} value={size}>{sizeText(t, size) ?? size}</option>
           ))}
         </select>
       </label>
       <label>
         {t('dashboard.country')}
-        <input value={values.country} onChange={(e) => setValues({ ...values, country: e.target.value })} required />
+        {/* The same list the company's own page offers, so the two never disagree. */}
+        <select value={values.country} onChange={(e) => setValues({ ...values, country: e.target.value })} required>
+          <option value="">{t('dashboard.selectCountry')}</option>
+          {countryNames(locale).map((country) => (
+            <option key={country} value={country}>{country}</option>
+          ))}
+        </select>
       </label>
       <label>
         {t('dashboard.subscriptionTier')}

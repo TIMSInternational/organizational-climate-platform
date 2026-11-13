@@ -52,7 +52,7 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
     private async Task<ClimateProjectDbContext> FreshAsync()
     {
         var db = await MigratedAsync(CreateContext());
-        await db.Database.ExecuteSqlRawAsync("TRUNCATE TABLE companies CASCADE");
+        await db.Database.ExecuteSqlRawAsync("TRUNCATE TABLE companies, audit_logs CASCADE");
         return db;
     }
 
@@ -216,6 +216,38 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
         // The inbox reads `actionPlanId` (`notifications/next/derive.ts`) and the sender builds
         // the mail's button from it. Nothing wrote it before, so neither ever had a link.
         Assert.Equal(plan.Id, ActionPlanNotificationData.PlanIdOrNull(raised.Data));
+    }
+
+    [Theory]
+    // G28: recording progress and moving the date are `Roles.Admin` writes, so only an
+    // administrator owner is told to do them; anyone else is told who can.
+    [InlineData("company_admin", "Registra un avance o cambia la fecha")]
+    [InlineData("super_admin", "Registra un avance o cambia la fecha")]
+    [InlineData("leader", "Pide a quien administra la plataforma que registre un avance o cambie la fecha")]
+    [InlineData("employee", "Pide a quien administra la plataforma que registre un avance o cambie la fecha")]
+    public async Task The_due_soon_nudge_asks_its_owner_only_for_what_their_role_can_do(string role, string ask)
+    {
+        await using var db = await FreshAsync();
+
+        var company = NewCompany();
+        var owner = NewUser(company.Id, language: "es");
+        owner.Role = role;
+        db.Companies.Add(company);
+        db.Users.Add(owner);
+        await db.SaveChangesAsync();
+
+        db.ActionPlans.Add(NewPlan(company.Id, owner.Id, owner.Id, dueInDays: 3));
+        await db.SaveChangesAsync();
+
+        await SweepAsync(db);
+
+        await using var read = CreateContext();
+        var raised = await read.Notifications.SingleAsync(n => n.UserId == owner.Id);
+        Assert.Contains(ask, raised.Message);
+        if (role is "leader" or "employee")
+        {
+            Assert.DoesNotContain("Registra un avance", raised.Message);
+        }
     }
 
     [Fact]

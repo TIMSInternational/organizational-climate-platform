@@ -3,17 +3,51 @@ import { CalendarIcon, Clock } from 'lucide-react'
 import { useTranslation } from '../../../../i18n'
 import { Calendar, Input, Popover, PopoverContent, PopoverTrigger } from '../../../../components/ui'
 import { cn } from '../../../../lib/cn'
-import { toLocalInput } from '../derive'
-import { numericDayTime } from '../format'
 
 /** A 24-hour `hh:mm`; a single-digit hour is read as its two-digit self. */
 const HOURS_MINUTES = /^([01]?\d|2[0-3]):([0-5]\d)$/
 
-/** The value as `windowMs` reads it — local wall clock — or `null` when unset or unparseable. */
-function parseLocal(value: string): Date | null {
-  if (!value) return null
-  const date = new Date(value)
-  return Number.isFinite(date.getTime()) ? date : null
+const WALL_CLOCK = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/
+
+interface WallClock {
+  year: number
+  month: number
+  day: number
+  hh: string
+  mm: string
+}
+
+/**
+ * The value's fields, read off the string -- never through a `Date` in the browser's zone. The
+ * value is the COMPANY's wall clock (G16); a `Date` would move it wherever the browser's own zone
+ * has no such minute (America/Chicago at 02:30 on 8 Mar 2026), and print it one hour off.
+ */
+function parseWallClock(value: string): WallClock | null {
+  const match = WALL_CLOCK.exec(value)
+  if (!match) return null
+  const [, year, month, day, hh, mm] = match
+  return { year: Number(year), month: Number(month), day: Number(day), hh, mm }
+}
+
+const two = (n: number) => String(n).padStart(2, '0')
+
+function wallClockString(year: number, month: number, day: number, hh: string | number, mm: string | number): string {
+  return `${year}-${two(month)}-${two(day)}T${two(Number(hh))}:${two(Number(mm))}`
+}
+
+/**
+ * "14/09/2026 · 08:00" -- the numeric day in the page's locale (day first in Spanish) and the
+ * 24-hour clock, as `format.ts`'s `numericDayTime` writes them, from the wall clock's own fields:
+ * the day is formatted on UTC, where the fields were put, so no zone can shift it.
+ */
+function numericWallClock(clock: WallClock, locale: string): string {
+  const day = new Date(Date.UTC(clock.year, clock.month - 1, clock.day)).toLocaleDateString(locale, {
+    timeZone: 'UTC',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  })
+  return `${day} · ${clock.hh}:${clock.mm}`
 }
 
 /**
@@ -24,8 +58,9 @@ function parseLocal(value: string): Date | null {
  *
  * It replaced a native `datetime-local`, whose text is the browser's own locale format: the
  * refuter's en-US Chromium printed "09/10/2026, 10:30 PM" with a trailing calendar button on a
- * Spanish screen. The value it takes and gives back is still that input's string
- * (`toLocalInput`), so the model, `windowMs` and the submit path are unchanged.
+ * Spanish screen. The value it takes and gives back is still that input's string, a wall clock
+ * on the company's zone (G16): it is edited as text, and only `buildCreateInput` turns it into
+ * an instant.
  */
 export function DateTimeField({
   id,
@@ -48,32 +83,38 @@ export function DateTimeField({
   const timeHintId = useId()
   const [open, setOpen] = useState(false)
   const [time, setTime] = useState('')
-  const date = parseLocal(value)
+  const clock = parseWallClock(value)
+  // The calendar's day: a local midnight, used for its year, month and day and nothing else.
+  const date = clock ? new Date(clock.year, clock.month - 1, clock.day) : null
   // An emptied field is not yet a wrong one: the hint waits for a time typed wrong.
   const timeInvalid = time !== '' && !HOURS_MINUTES.test(time)
 
   function openChange(next: boolean) {
     // The time field starts from the value each time the picker opens, so a half-typed time
     // left behind by an earlier visit never outlives it.
-    if (next) setTime(date ? toLocalInput(date).slice(11) : '')
+    if (next) setTime(clock ? `${clock.hh}:${clock.mm}` : '')
     setOpen(next)
   }
 
   function pickDay(day: Date | undefined) {
     if (!day) return
     const match = HOURS_MINUTES.exec(time)
-    const next = new Date(day)
-    next.setHours(match ? Number(match[1]) : (date?.getHours() ?? 0), match ? Number(match[2]) : (date?.getMinutes() ?? 0), 0, 0)
-    onChange(toLocalInput(next))
+    onChange(
+      wallClockString(
+        day.getFullYear(),
+        day.getMonth() + 1,
+        day.getDate(),
+        match ? match[1] : (clock?.hh ?? 0),
+        match ? match[2] : (clock?.mm ?? 0),
+      ),
+    )
   }
 
   function typeTime(typed: string) {
     setTime(typed)
     const match = HOURS_MINUTES.exec(typed)
-    if (!match || !date) return
-    const next = new Date(date)
-    next.setHours(Number(match[1]), Number(match[2]), 0, 0)
-    onChange(toLocalInput(next))
+    if (!match || !clock) return
+    onChange(wallClockString(clock.year, clock.month, clock.day, match[1], match[2]))
   }
 
   return (
@@ -98,8 +139,8 @@ export function DateTimeField({
             )}
           >
             <CalendarIcon aria-hidden="true" className="size-3.5 shrink-0 text-fg-tertiary" />
-            <span id={valueId} className={cn('truncate', date ? 'font-mono tabular-nums' : 'text-fg-tertiary')}>
-              {date ? numericDayTime(date, locale) : t('microclimates.next.create.pickDateTime')}
+            <span id={valueId} className={cn('truncate', clock ? 'font-mono tabular-nums' : 'text-fg-tertiary')}>
+              {clock ? numericWallClock(clock, locale) : t('microclimates.next.create.pickDateTime')}
             </span>
           </button>
         </PopoverTrigger>

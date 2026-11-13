@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router'
 import { ChevronRight, Plus, Shield } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
@@ -39,6 +40,9 @@ import {
 } from './derive'
 import type { BenchmarkReference, CohortReadoutModel, ReadoutState } from './model'
 import { useBenchmarksModel } from './useBenchmarksModel'
+import BenchmarkGroupsPage from './BenchmarkGroupsPage'
+import { readViewerClaims } from '../../../../auth/viewerCapabilities'
+import { SUPER_ADMIN } from '../../benchmarkScope'
 
 // The canvas's `.label` head, as on every redesigned table.
 const HEAD =
@@ -64,6 +68,18 @@ const GAP_CELL = 'pl-0'
  * route, so they get a sentence and no request.
  */
 export default function BenchmarksNextPage() {
+  const [params] = useSearchParams()
+  // TIMS reads companies against groups computed from the platform's clients (ruled
+  // 3 Nov 2026). Those groups are super admin only, because a median over three companies
+  // is one real company's index; every other role keeps the hand-entered references, and a
+  // super admin reaches them with `?vista=referencias`.
+  if (readViewerClaims().role === SUPER_ADMIN && params.get('vista') !== 'referencias') {
+    return <BenchmarkGroupsPage />
+  }
+  return <ReferencesPage />
+}
+
+function ReferencesPage() {
   const { t, locale } = useTranslation()
   const state = useBenchmarksModel()
   const [creating, setCreating] = useState(false)

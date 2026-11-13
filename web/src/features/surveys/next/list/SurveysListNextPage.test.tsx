@@ -11,8 +11,10 @@ import { duplicateSurvey, listSurveys, type SurveyDetail, type SurveyListItem } 
 import { getClimateTrends, type ClimateTrendsResponse } from '../../api/climateTrends'
 import SurveysListNextPage from './SurveysListNextPage'
 import en from '../../../../i18n/en.json'
+import { ApiError } from '../../../../api/authFetch'
 
 const copy = en.surveys.next.list
+const pickerCopy = en.surveys.next.statusWorkbook
 
 vi.mock('../../api/surveys', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../api/surveys')>()),
@@ -227,10 +229,11 @@ describe('SurveysListNextPage', () => {
     expect(vi.mocked(listSurveys).mock.calls[2][1]).toEqual({ status: '', type: '', q: 'clima q3' })
   })
 
-  it('shows the server’s message on a failed load, with a retry that refetches', async () => {
-    vi.mocked(listSurveys).mockRejectedValueOnce(new Error('Boom'))
+  it('says a failed load in the reader’s language, with a retry that refetches', async () => {
+    vi.mocked(listSurveys).mockRejectedValueOnce(new ApiError(500, 'Boom'))
     renderAs({ role: 'company_admin', companyId: 'c1' })
-    expect(await screen.findByText('Boom')).toBeTruthy()
+    expect(await screen.findByText(en.errors.api.server)).toBeTruthy()
+    expect(screen.queryByText('Boom')).toBeNull()
     await userEvent.click(screen.getByRole('button', { name: en.common.retry }))
     expect(await screen.findByRole('heading', { name: new RegExp(copy.openHeading) })).toBeTruthy()
     expect(vi.mocked(listSurveys)).toHaveBeenCalledTimes(2)
@@ -335,13 +338,15 @@ describe('SurveysListNextPage', () => {
     expect(vi.mocked(duplicateSurvey).mock.calls[0]?.[1]).toBe('q3')
   })
 
-  it('shows the server’s refusal when a duplicate fails, and keeps the list', async () => {
-    vi.mocked(duplicateSurvey).mockRejectedValue(new Error('Survey not found'))
+  it('says why a duplicate failed, in the reader’s language, and keeps the list', async () => {
+    vi.mocked(duplicateSurvey).mockRejectedValue(new ApiError(404, 'Survey not found'))
     renderAs({ role: 'company_admin', companyId: 'c1' })
     await screen.findByRole('heading', { name: new RegExp(copy.openHeading) })
     await openMenu('q1')
     await userEvent.click(screen.getByRole('menuitem', { name: en.surveys.duplicate }))
-    expect((await screen.findByRole('alert')).textContent).toContain('Survey not found')
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain(en.errors.api.notFound)
+    expect(alert.textContent).not.toContain('Survey not found')
     expect(rowIds()).toHaveLength(5)
   })
 
@@ -389,5 +394,59 @@ describe('SurveysListNextPage', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  /**
+   * The status workbook: every distributed survey, a sheet each — the file the client is sent,
+   * which until now meant downloading each roster and running a script over them.
+   */
+  describe('the status workbook', () => {
+    it('fetches it with the bearer header and hands it over as a file', async () => {
+      const blob = new Blob(['xlsx'], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+      // Parameters declared so `mock.calls` is typed: a no-arg `vi.fn` gives an empty
+      // tuple, and `call[0]` is then a compile error rather than the URL.
+      const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(blob, { status: 200 }))
+      vi.stubGlobal('fetch', fetchMock)
+      const clicked: { name?: string } = {}
+      const createdUrl = 'blob:status'
+      vi.stubGlobal('URL', { ...URL, createObjectURL: vi.fn(() => createdUrl), revokeObjectURL: vi.fn() })
+      const realClick = HTMLAnchorElement.prototype.click
+      HTMLAnchorElement.prototype.click = function click(this: HTMLAnchorElement) {
+        clicked.name = this.download
+      }
+      try {
+        const user = userEvent.setup()
+        renderAs({ role: 'company_admin', companyId: 'c1' })
+        await screen.findByText('Q4')
+
+        await user.click(screen.getByRole('button', { name: copy.statusExport }))
+        // The button opens the picker; every survey starts ticked, so confirming it asks for
+        // the same whole-company file the button used to fetch on its own.
+        await user.click(await screen.findByRole('button', { name: pickerCopy.download }))
+
+        await waitFor(() => expect(clicked.name).toBeDefined())
+        // The company-wide route, not a per-survey one. It names the sheets that were
+        // ticked, so the path carries a `?survey=` list rather than ending at `export`.
+        const urls = fetchMock.mock.calls.map((call) => String(call[0]))
+        expect(urls.some((url) => url.includes('/admin/companies/c1/participation/export?survey='))).toBe(true)
+        expect(urls.some((url) => /\/surveys\/[^/]+\/participation/.test(url))).toBe(false)
+        // Named for the company and the day, and an .xlsx.
+        expect(clicked.name).toMatch(/\.xlsx$/)
+      } finally {
+        HTMLAnchorElement.prototype.click = realClick
+      }
+    })
+
+    it('says so when the download fails, rather than doing nothing visible', async () => {
+      vi.stubGlobal('fetch', vi.fn(async () => new Response('no', { status: 500 })))
+      const user = userEvent.setup()
+      renderAs({ role: 'company_admin', companyId: 'c1' })
+      await screen.findByText('Q4')
+
+      await user.click(screen.getByRole('button', { name: copy.statusExport }))
+      await user.click(await screen.findByRole('button', { name: pickerCopy.download }))
+
+      expect(await screen.findByText(pickerCopy.failed)).toBeTruthy()
+    })
   })
 })

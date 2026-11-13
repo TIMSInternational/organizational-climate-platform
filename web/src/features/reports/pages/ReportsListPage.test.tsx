@@ -7,6 +7,7 @@ import { TranslationProvider, LOCALE_STORAGE_KEY } from '../../../i18n'
 import { setToken } from '../../../auth/token'
 import { downloadBlobFile } from '../../../lib/downloadBlobFile'
 import type { ReportListItem } from '../api/reports'
+import es from '../../../i18n/es.json'
 
 // The real helper creates an object URL and clicks an anchor; happy-dom has neither a
 // download manager nor `URL.createObjectURL`. Mocked exactly as SurveyResultsPage.test.tsx
@@ -431,19 +432,21 @@ describe('ReportsListPage', () => {
     expect(screen.getByRole('button', { name: 'Save schedule' })).toBeTruthy()
   })
 
-  it("surfaces the server's own refusal rather than a generic message", async () => {
+  it("says a refused schedule in the reader's language, not the server's English (G30)", async () => {
+    window.localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
     vi.mocked(fetch).mockResolvedValueOnce(jsonResponse([reportRow()]))
     renderPage()
     await screen.findByText('Q3 climate summary')
 
-    await userEvent.click(screen.getByRole('button', { name: 'Schedule' }))
-    // The two refusals the endpoint can send both name what to do about them; replacing them
-    // with "Something went wrong" would throw away the only actionable part.
+    await userEvent.click(screen.getByRole('button', { name: es.reports.schedule }))
+    // The endpoint's refusals are English prose with no `code`; a Spanish admin gets the
+    // "refused, check the details" sentence rather than English.
     vi.mocked(fetch).mockResolvedValueOnce(
       jsonResponse({ message: 'The first occurrence must be in the future.' }, 400),
     )
-    await userEvent.click(screen.getByRole('button', { name: 'Save schedule' }))
+    await userEvent.click(screen.getByRole('button', { name: es.reports.scheduleSave }))
 
-    expect(await screen.findByText('The first occurrence must be in the future.')).toBeTruthy()
+    expect(await screen.findByText(es.errors.api.rejected)).toBeTruthy()
+    expect(screen.queryByText('The first occurrence must be in the future.')).toBeNull()
   })
 })

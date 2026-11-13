@@ -1,6 +1,6 @@
 import type { LocalizedInput } from './api/surveyCreate'
-import type { ContentLanguage, SurveyQuestionValues, SurveyWizardValues } from './wizardValues'
-import { CONTENT_LANGUAGES, emptyWizardValues } from './wizardValues'
+import type { AudienceChoice, ContentLanguage, SurveyQuestionValues, SurveyWizardValues } from './wizardValues'
+import { AUDIENCE_CHOICES, CONTENT_LANGUAGES, emptyWizardValues } from './wizardValues'
 
 /**
  * The survey wizard's state as it is written to and read back from
@@ -98,12 +98,27 @@ export interface SurveyDraftContent {
   startDate: string
   endDate: string
   departmentIds: string[]
+  /**
+   * Additive, without a version bump, like the question fields above (G14): the audience the
+   * author chose and the people chosen by name. A draft saved before them has neither and
+   * restores as it always did -- `departments` when it holds departments, `company` otherwise.
+   */
+  audienceMode?: AudienceChoice
+  userIds?: string[]
   targetAudienceCount: string
   anonymous: boolean
   allowPartialResponses: boolean
   showProgress: boolean
   /** `''` inherits the company's mode. Optional: a draft saved before it existed has none. */
   credentialMode?: '' | 'shared' | 'per_survey'
+  /**
+   * The builder's settings step (G16). Additive, without a version bump: a draft saved before
+   * them has none and restores with the server's own defaults (`emptyWizardValues`).
+   */
+  randomizeQuestions?: boolean
+  autoSave?: boolean
+  timeLimitMinutes?: string
+  responseLimit?: string
   questions: DraftQuestion[]
 }
 
@@ -121,11 +136,17 @@ export function toDraftContent(values: SurveyWizardValues): SurveyDraftContent {
     startDate: values.startDate,
     endDate: values.endDate,
     departmentIds: [...values.departmentIds],
+    ...(values.audienceMode ? { audienceMode: values.audienceMode } : {}),
+    ...(values.userIds ? { userIds: [...values.userIds] } : {}),
     targetAudienceCount: values.targetAudienceCount,
     anonymous: values.anonymous,
     allowPartialResponses: values.allowPartialResponses,
     showProgress: values.showProgress,
     credentialMode: values.credentialMode ?? '',
+    ...(values.randomizeQuestions !== undefined ? { randomizeQuestions: values.randomizeQuestions } : {}),
+    ...(values.autoSave !== undefined ? { autoSave: values.autoSave } : {}),
+    ...(values.timeLimitMinutes !== undefined ? { timeLimitMinutes: values.timeLimitMinutes } : {}),
+    ...(values.responseLimit !== undefined ? { responseLimit: values.responseLimit } : {}),
     questions: values.questions.map((question) => ({
       textEn: question.textEn,
       textEs: question.textEs,
@@ -268,6 +289,12 @@ export function draftValuesFrom(
     startDate: str(content, 'startDate'),
     endDate: str(content, 'endDate'),
     departmentIds: stringArray(content, 'departmentIds'),
+    // Present only when stored: absent, the audience reads from the lists (`audienceChoiceOf`)
+    // exactly as it did before G14. An unknown value is treated as absent.
+    ...((AUDIENCE_CHOICES as readonly unknown[]).includes(content.audienceMode)
+      ? { audienceMode: content.audienceMode as AudienceChoice }
+      : {}),
+    ...(Array.isArray(content.userIds) ? { userIds: stringArray(content, 'userIds') } : {}),
     targetAudienceCount: str(content, 'targetAudienceCount'),
     anonymous: bool(content, 'anonymous', defaults.anonymous),
     allowPartialResponses: bool(content, 'allowPartialResponses', defaults.allowPartialResponses),
@@ -275,6 +302,10 @@ export function draftValuesFrom(
     // Anything but a known mode restores as "inherit the company's", the safe default.
     credentialMode:
       content.credentialMode === 'shared' || content.credentialMode === 'per_survey' ? content.credentialMode : '',
+    randomizeQuestions: bool(content, 'randomizeQuestions', defaults.randomizeQuestions ?? false),
+    autoSave: bool(content, 'autoSave', defaults.autoSave ?? true),
+    timeLimitMinutes: str(content, 'timeLimitMinutes'),
+    responseLimit: str(content, 'responseLimit'),
     questions: questionsFrom(content, keyPrefix),
   }
 }
@@ -321,6 +352,7 @@ export function hasDraftableContent(values: SurveyWizardValues): boolean {
     values.endDate.length > 0 ||
     values.targetAudienceCount.trim().length > 0 ||
     values.departmentIds.length > 0 ||
+    (values.userIds ?? []).length > 0 ||
     // Choosing a template IS the survey in template mode -- there are no questions of
     // one's own to count, so leaving this out would mean a template survey with no title
     // yet was never saved and never offered back.

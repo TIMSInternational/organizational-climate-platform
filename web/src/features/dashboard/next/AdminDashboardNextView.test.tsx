@@ -354,6 +354,28 @@ describe('AdminDashboardNextView', () => {
     expect(items[2].textContent).toContain('Q3 closed at 100%')
   })
 
+  /**
+   * G24: where a tracking service replaces Action Plans in the sidebar, this card used to keep
+   * sending the reader to `/action-plans` anyway. It now follows the sidebar's rule.
+   */
+  it('sends the lowest cell to the tracking plans, and links no generic plan, where tracking replaces Action Plans', () => {
+    vi.stubEnv('VITE_TRACKING_API_BASE_URL', 'http://tracking.test')
+    try {
+      renderView()
+      const covered = document.querySelectorAll('[data-slot="attention-item"]')[0] as HTMLElement
+      expect(within(covered).queryByRole('link', { name: copy.openPlan })).toBeNull()
+      cleanup()
+
+      const attention = fullModel.attention.map((item) => (item.kind === 'lowest-cell' ? { ...item, plan: null } : item))
+      renderView({ ...fullModel, attention })
+      const uncovered = document.querySelectorAll('[data-slot="attention-item"]')[0] as HTMLElement
+      expect(within(uncovered).getByRole('link', { name: copy.createPlan }).getAttribute('href')).toBe('/tracking/planes')
+      expect(linksMatching(/^\/action-plans/)).toEqual([])
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
   it('derives the headline average and its delta from the dimension series', () => {
     renderView()
     // (4.0 + 3.8 + 3.8 + 3.7 + 3.4 + 3.3) / 6 = 3.67; Q2 was 3.35, so +0.32.

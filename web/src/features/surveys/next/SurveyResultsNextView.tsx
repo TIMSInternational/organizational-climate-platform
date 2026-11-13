@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowRight, Check, ChevronDown, Download, MoreHorizontal } from 'lucide-react'
+import { ArrowDown, ArrowRight, Check, ChevronDown, Download, MoreHorizontal } from 'lucide-react'
 import { useTranslation } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
 import {
@@ -42,6 +42,7 @@ import ResultsSuppressionNotice from '../components/ResultsSuppressionNotice'
 import type { ResultsPrevious, SurveyResultsNextModel } from './model'
 import ResultsCellPanel from './ResultsCellPanel'
 import ResultsClimateGrid from './ResultsClimateGrid'
+import ResultsCriticalAreas, { CRITICAL_SECTION_ID } from './ResultsCriticalAreas'
 import SurveyResultsQuestions from './SurveyResultsQuestions'
 import {
   cellDetail,
@@ -60,6 +61,7 @@ import {
   type ResultsFinding,
 } from './derive'
 import { deltaInkOf } from './tint'
+import { describeApiError } from '../../../api/describeApiError'
 
 /** The id the open cell's `aria-controls` names. */
 const PANEL_ID = 'results-next-cell-panel'
@@ -184,7 +186,7 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
       try {
         downloadBlobFile(fileName, await fetchFile())
       } catch (err) {
-        onError(err instanceof Error ? err.message : t('errors.generic'))
+        onError(describeApiError(err, t))
       } finally {
         setExporting(false)
       }
@@ -216,6 +218,25 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
   const criticalName = bandName('critical', bands, t)
   const criticalGroups = new Set(critical.map((cell) => cell.rowId))
   const criticalOneGroup = critical.length > 0 && criticalGroups.size === 1 ? critical[0]?.rowName : null
+  const criticalDimensions = new Set(critical.map((cell) => cell.dimensionKey))
+  // Where the cells fall, for the tile. One group (or the company alone) is already in the
+  // unit ("celdas, todas de Operaciones"), so the line names only the dimensions then.
+  const criticalSpread =
+    companyOnly || criticalGroups.size <= 1
+      ? t('resultBands.results.criticalSpreadDimensions', { dimensions: criticalDimensions.size })
+      : criticalDimensions.size === 1
+        ? t('resultBands.results.criticalSpreadOneDimension', {
+            groups: criticalGroups.size,
+            dimension: dimensionName(critical[0]?.dimensionKey ?? ''),
+          })
+        : t('resultBands.results.criticalSpread', { groups: criticalGroups.size, dimensions: criticalDimensions.size })
+  const criticalRange = t('resultBands.range.under', { value: scoreText(bands.opportunityMin, scale, locale, 2) })
+  const showCritical = () => {
+    const section = document.getElementById(CRITICAL_SECTION_ID)
+    // `?.`: the suite's DOM has no layout engine and no `scrollIntoView`.
+    section?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+    section?.querySelector<HTMLElement>('h2')?.focus({ preventScroll: true })
+  }
   const isClosed = CLOSED_STATUSES.has(model.status)
   // The closing day, off `GET /surveys/{id}`'s `endDate` — a calendar day, read in UTC.
   const closingDay = model.closesAt ? calendarDayLong(Date.parse(model.closesAt), locale) : null
@@ -433,15 +454,31 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
             sub={
               critical.length === 0 ? (
                 <span className="text-fg-label">{t('resultBands.results.criticalNone', { band: criticalName })}</span>
-              ) : (
+              ) : critical.length === 1 && critical[0] ? (
+                // One cell reads in a line. Two or more never go in the tile: joined by `·`,
+                // the mark that also joins a group to its dimension, twelve of them were a
+                // paragraph nobody could parse (ESPH Clima, 3 Nov 2026). Section below.
                 <span className="text-chip-critical-ink" data-testid="critical-cells">
-                  {critical
-                    .map((cell) =>
-                      criticalOneGroup || companyOnly
-                        ? `${dimensionName(cell.dimensionKey)} ${score(cell.score)}`
-                        : `${cell.rowName} · ${dimensionName(cell.dimensionKey)} ${score(cell.score)}`,
-                    )
-                    .join(' · ')}
+                  {criticalOneGroup || companyOnly
+                    ? `${dimensionName(critical[0].dimensionKey)} ${score(critical[0].score)}`
+                    : `${critical[0].rowName} · ${dimensionName(critical[0].dimensionKey)} ${score(critical[0].score)}`}
+                </span>
+              ) : (
+                <span className="flex flex-col items-start gap-1">
+                  <span className="text-fg-secondary" data-testid="critical-spread">
+                    {criticalSpread}
+                  </span>
+                  {climate && !model.isSuppressed && (
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="h-auto gap-1 p-0 text-sm font-normal text-fg-secondary hover:text-fg-primary"
+                      onClick={showCritical}
+                    >
+                      {t('resultBands.results.criticalSeeAll')}
+                      <ArrowDown aria-hidden="true" className="size-3 text-fg-label" />
+                    </Button>
+                  )}
                 </span>
               )
             }
@@ -532,6 +569,18 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
                   </ul>
                 )}
               </section>
+            )}
+
+            {critical.length > 1 && (
+              <ResultsCriticalAreas
+                cells={critical}
+                companyOnly={companyOnly}
+                heading={criticalName}
+                rangeText={criticalRange}
+                dimensionName={dimensionName}
+                score={score}
+                onOpen={(rowId, dimensionKey) => openCell(rowId, dimensionKey, true)}
+              />
             )}
 
             <section aria-labelledby="results-next-map" className={cn(CARD, 'flex min-w-0 flex-col gap-3 px-5 pt-4 pb-4.5')}>

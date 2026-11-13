@@ -240,8 +240,10 @@ describe('Detalle de encuesta (SurveyDetail artboard)', () => {
     expect(onTransition).not.toHaveBeenCalled()
 
     const dialog = await screen.findByRole('alertdialog')
-    // The consequence is named, not implied: it cannot be reopened.
-    expect(dialog.textContent).toContain('no se puede reabrir')
+    // The consequence is named, not implied: since the 2026-11-08 ruling a close can be undone,
+    // but not by this reader -- only a super admin, with a new close and a reason.
+    expect(dialog.textContent).toContain('Reabrirla solo lo puede hacer un super administrador')
+    expect(dialog.textContent).not.toContain('no se puede reabrir')
 
     await userEvent.click(within(dialog).getByRole('button', { name: 'Cancelar' }))
     expect(onTransition).not.toHaveBeenCalled()
@@ -380,6 +382,7 @@ describe('Detalle de encuesta (SurveyDetail artboard)', () => {
 const noop: DistributionActions = {
   invite: () => undefined,
   setOneSessionOnly: () => undefined,
+  setOpensBeforeStart: () => undefined,
   createLink: () => undefined,
   regenerateLink: () => undefined,
   revokeLink: () => undefined,
@@ -708,6 +711,36 @@ describe('Distribución — the role half of the rule, through the page model', 
     page('company_admin')
     expect(await screen.findByRole('button', { name: 'Cambiar audiencia' })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Registrar la audiencia/ })).toBeTruthy()
+  })
+
+  /**
+   * The walkthrough's A1 (docs/audits/2026-11-08-operator-ui-walkthrough.md): the survey's own
+   * company decides, never the header. A TIMS operator whose header held another client opened
+   * this page and got no roster, no per-person button and no send control, and nothing said why.
+   */
+  it("offers a super administrator whose header holds another client the survey company's controls, and moves the header there", async () => {
+    localStorage.setItem(COMPANY_CONTEXT_STORAGE_KEY, 'otra-empresa')
+    renderAs('super_admin', <SurveyDistributionNextPage />, '', '/surveys/s1/distribution', '/surveys/:surveyId/distribution')
+    expect(await screen.findByRole('button', { name: 'Cambiar audiencia' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Registrar la audiencia/ })).toBeTruthy()
+    // The directory read is the survey's company's, not the header's.
+    expect(vi.mocked(usersApi.listUsers).mock.calls.map((call) => call[1])).toEqual(['c1'])
+    await waitFor(() => expect(localStorage.getItem(COMPANY_CONTEXT_STORAGE_KEY)).toBe('c1'))
+  })
+
+  it('offers a super administrator with nothing selected the same controls', async () => {
+    renderAs('super_admin', <SurveyDistributionNextPage />, '', '/surveys/s1/distribution', '/surveys/:surveyId/distribution')
+    expect(await screen.findByRole('button', { name: 'Cambiar audiencia' })).toBeTruthy()
+    expect(usersApi.listUsers).toHaveBeenCalled()
+  })
+
+  it("offers a company administrator of another company nothing, even with the survey's company stored as a selection", async () => {
+    // The selection is consulted for a super administrator only; a company admin is their claim.
+    localStorage.setItem(COMPANY_CONTEXT_STORAGE_KEY, 'c1')
+    renderAs('company_admin', <SurveyDistributionNextPage />, 'c2', '/surveys/s1/distribution', '/surveys/:surveyId/distribution')
+    await screen.findByTestId('step-audience')
+    expect(screen.queryByRole('button', { name: 'Cambiar audiencia' })).toBeNull()
+    expect(usersApi.listUsers).not.toHaveBeenCalled()
   })
 
   it("offers a leader of the survey's own company no audience, send, reminder or link control", async () => {
@@ -1078,7 +1111,7 @@ describe('Nueva encuesta (SurveyBuilder artboard)', () => {
     const row = await screen.findByTestId('add-question')
     expect(row.textContent).toContain('· del banco, de la biblioteca o en blanco')
     await userEvent.click(within(row).getByRole('button', { name: /Agregar pregunta/ }))
-    expect((await screen.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual(['Del banco', 'De la biblioteca', 'En blanco'])
+    expect((await screen.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual(['Del banco', 'De la biblioteca', 'Pegar desde Excel', 'En blanco'])
   })
 
   it("keeps the reader's Spanish on a bilingual template, live — /use takes the language", async () => {
@@ -1228,6 +1261,8 @@ describe('Nueva encuesta (SurveyBuilder artboard)', () => {
     await within(list).findByText('Confío en la dirección.')
     await userEvent.click(within(list).getAllByRole('switch')[0])
     await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+    // Through the settings step (G16), left untouched, to the review.
+    await userEvent.click(await screen.findByRole('button', { name: 'Siguiente' }))
     await userEvent.click(await screen.findByRole('button', { name: 'Crear el borrador' }))
     await waitFor(() => expect(questionAuthoring.replaceSurveyQuestions).toHaveBeenCalledTimes(1))
     const [, id, sent] = vi.mocked(questionAuthoring.replaceSurveyQuestions).mock.calls[0]
@@ -1262,6 +1297,8 @@ describe('Nueva encuesta (SurveyBuilder artboard)', () => {
     await userEvent.keyboard('{Escape}')
     await within(screen.getByTestId('builder-questions')).findByText('Me siento escuchado.')
     await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+    // Through the settings step (G16), left untouched, to the review.
+    await userEvent.click(await screen.findByRole('button', { name: 'Siguiente' }))
     await userEvent.click(await screen.findByRole('button', { name: 'Crear el borrador' }))
     await waitFor(() => expect(creating.createSurvey).toHaveBeenCalledTimes(1))
     const sent = vi.mocked(creating.createSurvey).mock.calls[0][1]
@@ -1286,6 +1323,9 @@ describe('Nueva encuesta (SurveyBuilder artboard)', () => {
     const sent = vi.mocked(creating.createSurvey).mock.calls[0][1]
     expect(sent.title).toBe('Pulso de octubre')
     expect(sent.questions).toEqual([{ text: 'Me siento escuchado.', type: 'likert', required: true, order: 0, category: 'trust' }])
-    expect(Object.keys(sent).sort()).toEqual(Object.keys(buildCreateInput({ ...content, questions: [] } as never, 'c1')).concat('questions').filter((k, i, a) => a.indexOf(k) === i).sort())
+    // `targetAudienceCount` joins the payload deliberately (walkthrough B6, 2026-11-08): the count
+    // was left blank, so it is the audience the step chose rather than nothing at all.
+    expect(Number.isInteger(sent.targetAudienceCount) && (sent.targetAudienceCount as number) > 0).toBe(true)
+    expect(Object.keys(sent).sort()).toEqual(Object.keys(buildCreateInput({ ...content, questions: [] } as never, 'c1')).concat('questions', 'targetAudienceCount').filter((k, i, a) => a.indexOf(k) === i).sort())
   })
 })

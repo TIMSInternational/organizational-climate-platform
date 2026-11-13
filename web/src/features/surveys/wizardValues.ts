@@ -8,6 +8,7 @@ import type { InstantiateSurveyTemplateInput } from './api/surveyTemplates'
 import type { CredentialMode } from '../org-structure/api/companySettings'
 import type { QuestionLibraryItemDetail } from '../questions/api/questionLibrary'
 import { DEFAULT_SURVEY_QUESTION_TYPE, needsOptions, needsScaleLabels } from './surveyVocabulary'
+import { browserTimeZone, instantOfWallClock, isKnownTimeZone } from './next/authoring/zonedWindow'
 
 /**
  * The survey creation wizard's state, and the rules that decide when a step is done.
@@ -87,6 +88,19 @@ import { DEFAULT_SURVEY_QUESTION_TYPE, needsOptions, needsScaleLabels } from './
  */
 
 export type ContentLanguage = 'en' | 'es' | 'both'
+
+/**
+ * Who the survey goes to, as the audience step asks it (G14): the whole company, the people of
+ * some departments, or named people.
+ *
+ * The API stores departments and people as a UNION (`SurveyQueries.Audience`): both empty is the
+ * whole company. The builder offers them as alternatives -- one choice, one list sent -- so an
+ * empty list can never be mistaken for a choice: "Departamentos" or "Personas específicas" with
+ * nothing ticked is an error on the step, never a silent company-wide survey.
+ */
+export type AudienceChoice = 'company' | 'departments' | 'people'
+
+export const AUDIENCE_CHOICES: readonly AudienceChoice[] = ['company', 'departments', 'people']
 
 export const CONTENT_LANGUAGES: readonly ContentLanguage[] = ['en', 'es', 'both']
 
@@ -185,11 +199,24 @@ export interface SurveyWizardValues {
    * Separate axis from `type`: cadence vs product line.
    */
   serviceType: string
-  /** `<input type="datetime-local">` text, e.g. `2026-08-07T10:30`. Local wall clock. */
+  /**
+   * `<input type="datetime-local">` text, e.g. `2026-08-07T10:30`: the COMPANY's wall clock
+   * (its settings timezone), turned into an instant only when the request is built
+   * (`windowInstant`). Until G16 it was the browser's, which agreed only while the author sat
+   * in the company's zone.
+   */
   startDate: string
   endDate: string
   /** Empty means "every department", which is what omitting the field asks the server for. */
   departmentIds: string[]
+  /**
+   * Which of the three audiences the author chose. Optional: a draft written before G14 has
+   * none, and reads as `departments` when it holds departments and `company` otherwise
+   * (`audienceChoiceOf`) -- exactly what it meant then.
+   */
+  audienceMode?: AudienceChoice
+  /** The people chosen by name (`CreateSurveyRequest.UserIds`). Sent only in `people` mode. */
+  userIds?: string[]
   /** Text, not a number: an empty box is a real state and `NaN` is not a value. */
   targetAudienceCount: string
   anonymous: boolean
@@ -202,8 +229,63 @@ export interface SurveyWizardValues {
    * field existed restores as "inherit".
    */
   credentialMode?: '' | CredentialMode
+  /**
+   * The builder's settings step (G16). All four optional, so a draft saved before the step
+   * existed restores as the server's own defaults -- which is also what `emptyWizardValues`
+   * holds, and what `buildCreateInput` leaves unsent: a survey nobody touched the step for is
+   * byte-for-byte the request it was before.
+   *
+   * `randomizeQuestions` is ONE respondent-side promise, not two: a random order per person
+   * AND no dimension heading over any question (`respondDimensions.ts`, reversed #556 on
+   * 2026-10-18). Open questions still come last (`orderQuestions`).
+   */
+  randomizeQuestions?: boolean
+  /** Background saving on the respond form; only ever effective with `allowPartialResponses`. */
+  autoSave?: boolean
+  /** Text, as `targetAudienceCount`: blank is "no limit". Shown as a SUGGESTED time; nothing is cut off. */
+  timeLimitMinutes?: string
+  /** Text: blank is "no limit". Completed responses after which nobody new may start. */
+  responseLimit?: string
   questions: SurveyQuestionValues[]
 }
+
+/**
+ * The builder's own rail (`/surveys/new`): the wizard's five steps plus `settings`, before the
+ * review. A separate list rather than a sixth entry in `SURVEY_WIZARD_STEPS`, because the
+ * previous wizard (`SurveyCreatePage`) walks that one and has no settings step to show.
+ */
+export const SURVEY_BUILDER_STEPS = [
+  'basics',
+  'schedule',
+  'audience',
+  'questions',
+  'settings',
+  'review',
+] as const
+
+export type SurveyBuilderStepId = (typeof SURVEY_BUILDER_STEPS)[number]
+
+/**
+ * A draft's `currentStep` is stored in the FIVE-step numbering (`SURVEY_WIZARD_STEPS`, 1-based):
+ * drafts saved before the settings step existed say `5` for the review, and so does the previous
+ * wizard, which shares the draft store. So the builder writes and reads that numbering, and the
+ * settings step is saved as the questions step it follows (`4`) -- a restored draft lands one step
+ * early, never past a step it has not seen.
+ */
+export function draftStepOfBuilderIndex(index: number): number {
+  const id = SURVEY_BUILDER_STEPS[Math.min(Math.max(index, 0), SURVEY_BUILDER_STEPS.length - 1)]
+  const legacy = (SURVEY_WIZARD_STEPS as readonly string[]).indexOf(id === 'settings' ? 'questions' : id)
+  return legacy + 1
+}
+
+/** The builder's step index for a draft's stored `currentStep` (see `draftStepOfBuilderIndex`). */
+export function builderIndexOfDraftStep(step: number): number {
+  const legacy = SURVEY_WIZARD_STEPS[Math.min(Math.max(step - 1, 0), SURVEY_WIZARD_STEPS.length - 1)]
+  return SURVEY_BUILDER_STEPS.indexOf(legacy)
+}
+
+/** The largest time limit the builder accepts, in minutes: ten hours is no longer a suggestion. */
+export const MAX_TIME_LIMIT_MINUTES = 600
 
 /**
  * The same order as the microclimate wizard's, so an admin who has made one already
@@ -363,13 +445,51 @@ export function emptyWizardValues(language: ContentLanguage): SurveyWizardValues
     startDate: '',
     endDate: '',
     departmentIds: [],
+    // No `audienceMode`: unset reads from the lists (`audienceChoiceOf`), as every caller before G14 meant.
+    userIds: [],
     targetAudienceCount: '',
     anonymous: true,
     allowPartialResponses: true,
     showProgress: true,
     credentialMode: '',
+    // The entity's own defaults (`SurveySettings`), so an untouched settings step sends nothing.
+    randomizeQuestions: false,
+    autoSave: true,
+    timeLimitMinutes: '',
+    responseLimit: '',
     questions: [],
   }
+}
+
+/** The audience the author chose; a values object from before G14 reads as it did then. */
+export function audienceChoiceOf(values: Pick<SurveyWizardValues, 'audienceMode' | 'departmentIds'>): AudienceChoice {
+  if (values.audienceMode && (AUDIENCE_CHOICES as readonly string[]).includes(values.audienceMode)) return values.audienceMode
+  return values.departmentIds.length > 0 ? 'departments' : 'company'
+}
+
+/**
+ * The two target lists the request carries: only the chosen audience's. A department ticked
+ * before the author switched to named people stays in the form (switching back finds it) but is
+ * never sent beside them -- the server would read the pair as a union and widen the survey.
+ */
+export function audienceTargets(values: SurveyWizardValues): { departmentIds: string[]; userIds: string[] } {
+  const choice = audienceChoiceOf(values)
+  if (choice === 'departments') return { departmentIds: [...values.departmentIds], userIds: [] }
+  if (choice === 'people') return { departmentIds: [], userIds: [...new Set(values.userIds ?? [])] }
+  return { departmentIds: [], userIds: [] }
+}
+
+/**
+ * The instant a builder wall clock names, read on `timeZone`'s clock (G16), as ISO 8601.
+ *
+ * A zone this platform cannot read -- the company's settings not read yet, or a viewer who may
+ * not read them -- falls back to the browser's, which is what the builder always did; the
+ * schedule step says which zone it is using, so the fallback is never silent.
+ */
+export function windowInstant(wallClock: string, timeZone?: string | null): string {
+  const zone = isKnownTimeZone(timeZone) ? timeZone : browserTimeZone()
+  const at = instantOfWallClock(wallClock, zone)
+  return (at ?? new Date(wallClock)).toISOString()
 }
 
 /** True when both language columns have to be filled in. */
@@ -453,6 +573,53 @@ function scheduleErrors(values: SurveyWizardValues, t: TranslateFn): string[] {
   return end <= start ? [t('surveys.validationEndAfterStart')] : []
 }
 
+/** A typed box that is not a whole number in [min, max]; blank is never an error. */
+function badWholeNumber(raw: string | undefined, min: number, max = Number.MAX_SAFE_INTEGER): boolean {
+  if (raw === undefined || isBlank(raw)) return false
+  const value = Number(raw)
+  return !Number.isInteger(value) || value < min || value > max
+}
+
+/**
+ * The settings step (G16). Every control is optional; only a limit that was typed and is
+ * not a whole number in range is refused. The API itself accepts any integer here --
+ * `ApplySettings` writes `TimeLimitMinutes`/`ResponseLimit` unchecked -- and a response
+ * limit of 0 would turn away every respondent, so the range is held here.
+ */
+export function settingsErrors(values: SurveyWizardValues, t: TranslateFn): string[] {
+  const errors: string[] = []
+  if (badWholeNumber(values.timeLimitMinutes, 1, MAX_TIME_LIMIT_MINUTES)) {
+    errors.push(t('surveys.next.builder.settings.timeLimitInvalid', { max: MAX_TIME_LIMIT_MINUTES }))
+  }
+  if (badWholeNumber(values.responseLimit, 1)) {
+    errors.push(t('surveys.next.builder.settings.responseLimitInvalid'))
+  }
+  return errors
+}
+
+/**
+ * The settings the settings step chose, as `SurveySettingsInput` members -- and ONLY those
+ * that depart from the server's defaults. An untouched step therefore adds no key at all, so
+ * the request is the one the builder sent before the step existed.
+ */
+export function builderSettingsInput(values: SurveyWizardValues): {
+  randomizeQuestions?: boolean
+  autoSave?: boolean
+  timeLimitMinutes?: number
+  responseLimit?: number
+} {
+  const out: { randomizeQuestions?: boolean; autoSave?: boolean; timeLimitMinutes?: number; responseLimit?: number } = {}
+  if (values.randomizeQuestions === true) out.randomizeQuestions = true
+  if (values.autoSave === false) out.autoSave = false
+  if (values.timeLimitMinutes !== undefined && !isBlank(values.timeLimitMinutes) && !badWholeNumber(values.timeLimitMinutes, 1, MAX_TIME_LIMIT_MINUTES)) {
+    out.timeLimitMinutes = Number(values.timeLimitMinutes)
+  }
+  if (values.responseLimit !== undefined && !isBlank(values.responseLimit) && !badWholeNumber(values.responseLimit, 1)) {
+    out.responseLimit = Number(values.responseLimit)
+  }
+  return out
+}
+
 /**
  * The audience step is optional in the DTO and therefore optional here: no
  * departments means every department, and no target means the server does not record
@@ -460,10 +627,28 @@ function scheduleErrors(values: SurveyWizardValues, t: TranslateFn): string[] {
  * — refusing to continue because a field the admin deliberately left blank is blank
  * is the most common way a wizard becomes a maze.
  */
-function audienceErrors(values: SurveyWizardValues, t: TranslateFn): string[] {
-  if (isBlank(values.targetAudienceCount)) return []
+function audienceErrors(values: SurveyWizardValues, t: TranslateFn, activePeople?: ReadonlySet<string> | null): string[] {
+  const errors: string[] = []
+  const choice = audienceChoiceOf(values)
+  // A chosen audience with nobody in it is the one empty list that must never reach the server:
+  // there it means the WHOLE company.
+  if (choice === 'departments' && values.departmentIds.length === 0) {
+    errors.push(t('surveys.next.builder.audience.departmentsRequired'))
+  }
+  if (choice === 'people') {
+    const chosen = values.userIds ?? []
+    if (chosen.length === 0) {
+      errors.push(t('surveys.next.builder.audience.peopleRequired'))
+    } else if (activePeople) {
+      // The server's own rule (`ValidateUsersAsync`): every id an ACTIVE person of this company.
+      // A restored draft can name somebody deactivated since; the server would refuse the lot.
+      const gone = chosen.filter((id) => !activePeople.has(id)).length
+      if (gone > 0) errors.push(t('surveys.next.builder.audience.peopleInactive', { count: gone }))
+    }
+  }
+  if (isBlank(values.targetAudienceCount)) return errors
   const parsed = Number(values.targetAudienceCount)
-  return Number.isInteger(parsed) && parsed > 0 ? [] : [t('surveys.validationTargetPositive')]
+  return Number.isInteger(parsed) && parsed > 0 ? errors : [...errors, t('surveys.validationTargetPositive')]
 }
 
 /**
@@ -530,10 +715,12 @@ export function wizardStepErrors(
   values: SurveyWizardValues,
   t: TranslateFn,
   templateQuestionCount: number | null = null,
+  /** The company's active people, once read: a chosen id outside it is refused here, as the server would. */
+  activePeople: ReadonlySet<string> | null = null,
 ): Record<SurveyWizardStepId, string[]> {
   const basics = basicsErrors(values, t)
   const schedule = scheduleErrors(values, t)
-  const audience = audienceErrors(values, t)
+  const audience = audienceErrors(values, t, activePeople)
   const questions = startsFromTemplate(values)
     ? templateQuestionErrors(templateQuestionCount, t)
     : questionErrors(values, t)
@@ -543,7 +730,9 @@ export function wizardStepErrors(
     schedule,
     audience,
     questions,
-    review: [...basics, ...schedule, ...audience, ...questions],
+    // The settings step's errors join the backstop: `SURVEY_WIZARD_STEPS` has no settings
+    // step, but the builder's rail does, and nothing invalid may reach `onSubmit` either way.
+    review: [...basics, ...schedule, ...audience, ...questions, ...settingsErrors(values, t)],
   }
 }
 
@@ -705,6 +894,10 @@ export function buildQuestionInputs(values: SurveyWizardValues): CreateSurveyQue
 export function buildCreateInput(
   values: SurveyWizardValues,
   companyId: string,
+  /** The company's IANA zone: the wall clocks are read on it (G16). */
+  timeZone?: string | null,
+  /** `builderAudienceEstimate`: what a blank "Participantes previstos" stands for. */
+  audienceEstimate?: number | null,
 ): CreateSurveyInput {
   const title = localizedFor(values.language, values.titleEn, values.titleEs)
   const description = localizedFor(values.language, values.descriptionEn, values.descriptionEs)
@@ -722,8 +915,8 @@ export function buildCreateInput(
     // and stops matching what the page actually sends. AuthoringNext's key-set assertion
     // caught exactly that.
     ...(values.serviceType ? { serviceType: values.serviceType } : {}),
-    startDate: new Date(values.startDate).toISOString(),
-    endDate: new Date(values.endDate).toISOString(),
+    startDate: windowInstant(values.startDate, timeZone),
+    endDate: windowInstant(values.endDate, timeZone),
     language: values.language,
     questions,
     settings: {
@@ -732,16 +925,45 @@ export function buildCreateInput(
       showProgress: values.showProgress,
       // Omitted unless chosen: absence is how the API is told to inherit the company's mode.
       ...(values.credentialMode ? { credentialMode: values.credentialMode } : {}),
+      // The settings step (G16): only what departs from the server's defaults.
+      ...builderSettingsInput(values),
     },
   }
 
   if (description !== undefined) input.description = description
-  if (values.departmentIds.length > 0) input.departmentIds = values.departmentIds
+  const targets = audienceTargets(values)
+  if (targets.departmentIds.length > 0) input.departmentIds = targets.departmentIds
+  if (targets.userIds.length > 0) input.userIds = targets.userIds
   if (!isBlank(values.targetAudienceCount) && Number.isInteger(target) && target > 0) {
     input.targetAudienceCount = target
+  } else if (isBlank(values.targetAudienceCount) && audienceEstimate !== undefined && audienceEstimate !== null && audienceEstimate > 0) {
+    // Blank used to store no count at all, and no count means no participation rate anywhere --
+    // EAGLE read "sin lista de invitados" for that reason. Blank now means "the audience I chose",
+    // which the field said before it was left blank (walkthrough B6, 2026-11-08).
+    input.targetAudienceCount = audienceEstimate
   }
 
   return input
+}
+
+/**
+ * How many people the audience step's choice reaches, from the company's directory -- the same
+ * union `SurveyQueries.Audience` takes: the targeted departments OR the named people, and the
+ * whole active company when neither is chosen. `null` when the directory has not been read, or
+ * the choice reaches nobody: then a blank count stays undeclared, as for a link-only survey.
+ */
+export function builderAudienceEstimate(
+  values: SurveyWizardValues,
+  users: readonly { id: string; departmentId: string | null; isActive: boolean }[] | null | undefined,
+): number | null {
+  if (!users) return null
+  const active = users.filter((user) => user.isActive)
+  const targets = audienceTargets(values)
+  if (targets.departmentIds.length === 0 && targets.userIds.length === 0) return active.length > 0 ? active.length : null
+  const departments = new Set(targets.departmentIds)
+  const people = new Set(targets.userIds)
+  const reached = active.filter((user) => people.has(user.id) || (user.departmentId !== null && departments.has(user.departmentId))).length
+  return reached > 0 ? reached : null
 }
 
 /**
@@ -767,6 +989,10 @@ export function buildCreateInput(
 export function buildInstantiateInput(
   values: SurveyWizardValues,
   companyId: string,
+  /** The company's IANA zone, as for `buildCreateInput`. */
+  timeZone?: string | null,
+  /** As for `buildCreateInput`. */
+  audienceEstimate?: number | null,
 ): InstantiateSurveyTemplateInput {
   const description = localizedFor(values.language, values.descriptionEn, values.descriptionEs)
   const target = Number(values.targetAudienceCount)
@@ -780,19 +1006,29 @@ export function buildInstantiateInput(
     // (2026-10-22) this body dropped them: the server built the survey on the entity defaults.
     // Same rule as buildCreateInput — omitted when unset, never sent as ''.
     ...(values.serviceType ? { serviceType: values.serviceType } : {}),
-    startDate: new Date(values.startDate).toISOString(),
-    endDate: new Date(values.endDate).toISOString(),
+    startDate: windowInstant(values.startDate, timeZone),
+    endDate: windowInstant(values.endDate, timeZone),
     settings: {
       anonymous: values.anonymous,
       allowPartialResponses: values.allowPartialResponses,
       showProgress: values.showProgress,
+      // `/use` applies settings through the same `ApplySettings` as `POST /surveys`.
+      ...builderSettingsInput(values),
     },
   }
 
   if (description !== undefined) input.description = description
-  if (values.departmentIds.length > 0) input.departmentIds = values.departmentIds
+  // `UseSurveyTemplateRequest` has no `UserIds`: named people are written onto the copy with
+  // `PUT /surveys/{id}` right after (`useSurveyBuilderModel.submit`).
+  const targets = audienceTargets(values)
+  if (targets.departmentIds.length > 0) input.departmentIds = targets.departmentIds
   if (!isBlank(values.targetAudienceCount) && Number.isInteger(target) && target > 0) {
     input.targetAudienceCount = target
+  } else if (isBlank(values.targetAudienceCount) && audienceEstimate !== undefined && audienceEstimate !== null && audienceEstimate > 0) {
+    // Blank used to store no count at all, and no count means no participation rate anywhere --
+    // EAGLE read "sin lista de invitados" for that reason. Blank now means "the audience I chose",
+    // which the field said before it was left blank (walkthrough B6, 2026-11-08).
+    input.targetAudienceCount = audienceEstimate
   }
 
   return input

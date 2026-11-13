@@ -1,6 +1,6 @@
 import { useId, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router'
-import { ArrowRight, Check, Link2, Mail, Search, Shield, Upload, UserPlus } from 'lucide-react'
+import { ArrowRight, Check, Link2, Mail, Plus, Search, Shield, Upload, UserPlus } from 'lucide-react'
 import { useTranslation } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
 import { ANONYMITY_FLOOR } from '../../../../components/charts'
@@ -29,8 +29,12 @@ import { updateUser, updateUserRole, type User, type UserEmailChange } from '../
 import { EmailChangeOutcome } from '../../components/EmailChangeOutcome'
 import { updateErrorText } from '../../components/emailRefusal'
 import { ResendCredentials } from '../../components/ResendCredentials'
+import { DeactivationConfirm, PersonDetailsFields, ResetPassword } from '../../components/PersonDetails'
+import { ErasePerson } from '../../components/ErasePerson'
+import { departmentChange, usePersonDetails } from '../../components/usePersonDetails'
 import type { Department } from '../../api/departments'
 import IntakeWizard from '../../components/IntakeWizard'
+import AddPersonForm from '../admin/AddPersonForm'
 import InvitationForm, { type InvitationFormValues } from '../../components/InvitationForm'
 import InvitationList from '../../components/InvitationList'
 import ShareableLinkPanel from '../../components/ShareableLinkPanel'
@@ -59,7 +63,7 @@ const FACET_KEY: Readonly<Record<string, string>> = {
   employee: 'superadmin.next.users.roleEmployee',
 }
 
-type OpenPanel = 'none' | 'invite' | 'import'
+type OpenPanel = 'none' | 'invite' | 'import' | 'add'
 
 /**
  * `/admin/companies/:companyId/users` for a super administrator — the canvas's *Usuarios
@@ -158,6 +162,13 @@ export default function SuperUsersView() {
                 <Upload aria-hidden="true" />
                 {t('superadmin.next.users.bulkImport')}
               </Button>
+              {/* One person, typed, mailing nothing. A super administrator — every TIMS operator —
+                  had only the bulk import for a single new hire: the form lived in the company
+                  admin's view alone (docs/audits/2026-11-08-operator-ui-walkthrough.md, A2). */}
+              <Button type="button" variant="outline" onClick={() => setOpen(open === 'add' ? 'none' : 'add')}>
+                <Plus aria-hidden="true" />
+                {t('users.next.add.action')}
+              </Button>
               <Button type="button" variant="primary" onClick={() => setOpen(open === 'invite' ? 'none' : 'invite')}>
                 <UserPlus aria-hidden="true" />
                 {t('superadmin.next.users.invite')}
@@ -179,6 +190,20 @@ export default function SuperUsersView() {
               <InvitationForm allowCompanyAdminSetup onSubmit={handleCreateInvitation} />
               <ShareableLinkPanel onCreate={handleCreateShareableLink} />
             </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* The importer's own single-row route commits it, so the account is shaped exactly as an
+          imported one: the company's language, and keyless in a per-survey company. */}
+      <Dialog open={open === 'add'} onOpenChange={(next) => setOpen(next ? 'add' : 'none')}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto" closeLabel={t('superadmin.next.users.invitations.close')}>
+          <DialogHeader>
+            <DialogTitle>{t('users.next.add.action')}</DialogTitle>
+            <DialogDescription>{t('users.next.add.meta')}</DialogDescription>
+          </DialogHeader>
+          {companyId && (
+            <AddPersonForm baseUrl={baseUrl} companyId={companyId} departments={state.departments} onAdded={state.reload} />
           )}
         </DialogContent>
       </Dialog>
@@ -251,6 +276,8 @@ export default function SuperUsersView() {
         <EditPerson
           key={editing.id}
           user={editing}
+          people={state.users}
+          companyId={companyId}
           departments={state.departments}
           canAssignRoles={capabilities.canAssignRoles}
           onClose={() => setEditing(null)}
@@ -269,6 +296,9 @@ export default function SuperUsersView() {
         <LoadingRegion loading={state.status === 'loading'} label={t('common.loading')}>
           {state.status === 'loading' ? (
             <SkeletonText lines={6} />
+          ) : state.users.length === 0 ? (
+            // A company with nobody in it is not a filter that matched nothing.
+            <EmptyState title={t('superadmin.next.users.emptyCompany')} description={t('superadmin.next.users.emptyCompanyHint')} />
           ) : visible.length === 0 ? (
             <EmptyState title={t('superadmin.next.users.empty')} />
           ) : (
@@ -485,12 +515,16 @@ function RosterFooter({
 
 function EditPerson({
   user,
+  people,
+  companyId,
   departments,
   canAssignRoles,
   onClose,
   onReload,
 }: {
   user: User
+  people: readonly User[]
+  companyId: string | undefined
   departments: readonly Department[]
   canAssignRoles: boolean
   onClose: () => void
@@ -507,12 +541,29 @@ function EditPerson({
   const [error, setError] = useState<string | null>(null)
   // Set when a save changed the address; the panel stays open to say what that did and did not do.
   const [emailChange, setEmailChange] = useState<{ change: UserEmailChange; current: string } | null>(null)
+  const [confirmingDeactivation, setConfirmingDeactivation] = useState(false)
+  const details = usePersonDetails(baseUrl, user, companyId)
   const ids = { name: useId(), email: useId(), role: useId(), department: useId(), active: useId() }
-  // The API can move a person to a department but not out of one (`UpdateUserRequest`
-  // carries a department only when set), so "none" is offered only to someone who has none.
+  // "Sin departamento" is offered to everyone: choosing it on someone who has one sends
+  // `clearDepartment` (`UpdateUserRequest.ClearDepartment`), the explicit unset a null cannot say.
   const options = departments.filter((unit) => unit.isActive || unit.id === user.departmentId)
 
+  // Deactivating is confirmed first, in a dialog that says what happens to their codes (G5).
+  function requestSave() {
+    if (user.isActive && !isActive) setConfirmingDeactivation(true)
+    else void save()
+  }
+
   async function save() {
+    const extra = details.changes()
+    if (extra.missing) {
+      setError(t('users.next.edit.demographicRequired', { field: extra.missing }))
+      return
+    }
+    if (extra.invalid) {
+      setError(t('users.next.edit.demographicNumber', { field: extra.invalid }))
+      return
+    }
     setSaving(true)
     setError(null)
     try {
@@ -522,8 +573,9 @@ function EditPerson({
       const updated = await updateUser(baseUrl, user.id, {
         name: name.trim(),
         isActive,
-        ...(departmentId && departmentId !== user.departmentId ? { departmentId } : {}),
+        ...departmentChange(user, departmentId),
         ...(nextEmail.toLowerCase() !== user.email.toLowerCase() ? { email: nextEmail } : {}),
+        ...extra.input,
       })
       if (canAssignRoles && role !== user.role) await updateUserRole(baseUrl, user.id, role)
       if (updated.emailChange) {
@@ -533,7 +585,7 @@ function EditPerson({
         onClose()
       }
     } catch (err) {
-      setError(updateErrorText(t, err, t('superadmin.next.users.saveFailed')))
+      setError(updateErrorText(t, err, 'superadmin.next.users.saveFailed'))
     } finally {
       setSaving(false)
       onReload()
@@ -607,7 +659,7 @@ function EditPerson({
           helper={t('superadmin.next.users.departmentHelper', { floor: ANONYMITY_FLOOR })}
         >
           <CanvasSelect id={ids.department} className="w-full" value={departmentId} onChange={(event) => setDepartmentId(event.target.value)}>
-            {!user.departmentId && <option value="">{t('superadmin.next.users.noDepartment')}</option>}
+            <option value="">{t('superadmin.next.users.noDepartment')}</option>
             {options.map((unit) => (
               <option key={unit.id} value={unit.id}>
                 {unit.name}
@@ -616,7 +668,22 @@ function EditPerson({
           </CanvasSelect>
         </Field>
       </div>
+      <PersonDetailsFields user={user} people={people} state={details} />
       <ResendCredentials user={user} baseUrl={baseUrl} />
+      <ResetPassword user={user} baseUrl={baseUrl} allowed details={details} />
+      <DeactivationConfirm
+        open={confirmingDeactivation}
+        name={user.name}
+        onOpenChange={setConfirmingDeactivation}
+        onConfirm={save}
+      />
+      <ErasePerson
+        user={user}
+        onErased={() => {
+          onReload()
+          onClose()
+        }}
+      />
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-light pt-2.5">
         <label htmlFor={ids.active} className="m-0 inline-flex items-center gap-2 text-xs text-fg-secondary">
           <Switch id={ids.active} checked={isActive} onCheckedChange={setIsActive} className="data-[state=checked]:bg-accent-green" />
@@ -628,7 +695,7 @@ function EditPerson({
           <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
             {emailChange ? t('users.next.edit.done') : t('common.cancel')}
           </Button>
-          <Button type="button" variant="outline" onClick={() => void save()} disabled={saving || !name.trim() || !email.trim()}>
+          <Button type="button" variant="outline" onClick={requestSave} disabled={saving || !name.trim() || !email.trim()}>
             <Check aria-hidden="true" />
             {t('superadmin.next.users.save')}
           </Button>
