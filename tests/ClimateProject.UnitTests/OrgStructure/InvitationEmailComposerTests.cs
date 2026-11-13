@@ -36,7 +36,7 @@ public class InvitationEmailComposerTests
         var message = InvitationEmailComposer.Compose(Invitation(), AcceptUrl)!;
 
         Assert.Contains("You have been invited", message.Subject, StringComparison.Ordinal);
-        Assert.Contains("Te han invitado", message.Subject, StringComparison.Ordinal);
+        Assert.Contains("Le han invitado", message.Subject, StringComparison.Ordinal);
         Assert.Contains("Accept the invitation", message.TextBody, StringComparison.Ordinal);
         Assert.Contains("Aceptar la invitación", message.TextBody, StringComparison.Ordinal);
     }

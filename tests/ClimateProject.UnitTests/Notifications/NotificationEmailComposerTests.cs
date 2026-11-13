@@ -109,12 +109,12 @@ public class NotificationEmailComposerTests
         // "why you are receiving this" line is the chrome that still differs, so it carries
         // the assertion alone -- and it is asserted in BOTH languages rather than one, since
         // a fallback that rendered English to a Spanish recipient would otherwise pass.
-        Assert.Contains("Recibes este mensaje", spanish.TextBody, StringComparison.Ordinal);
+        Assert.Contains("Recibe este mensaje", spanish.TextBody, StringComparison.Ordinal);
         Assert.DoesNotContain("You are receiving this", spanish.TextBody, StringComparison.Ordinal);
         Assert.Contains("""<html lang="es">""", spanish.HtmlBody, StringComparison.Ordinal);
 
         Assert.Contains("You are receiving this", english.TextBody, StringComparison.Ordinal);
-        Assert.DoesNotContain("Recibes este mensaje", english.TextBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("Recibe este mensaje", english.TextBody, StringComparison.Ordinal);
     }
 
     [Fact]

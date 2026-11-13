@@ -44,51 +44,51 @@ public static class ScheduledNotificationCopy
 
     private static readonly Phrase ReminderTitle = new(
         "Reminder: your response is still pending",
-        "Recordatorio: tu respuesta sigue pendiente");
+        "Recordatorio: su respuesta sigue pendiente");
 
     private static readonly Phrase ReminderBodyNamed = new(
         "You have not yet completed \"{0}\". It closes on {1}.",
-        "Aún no has completado \"{0}\". Cierra el {1}.");
+        "Aún no ha completado \"{0}\". Cierra el {1}.");
 
     private static readonly Phrase ReminderBodyUnnamed = new(
         "You have a pending response. It closes on {0}.",
-        "Tienes una respuesta pendiente. Cierra el {0}.");
+        "Tiene una respuesta pendiente. Cierra el {0}.");
 
     private static readonly Phrase ReportReadyTitle = new(
         "Your scheduled report is ready",
-        "Tu informe programado está listo");
+        "Su informe programado está listo");
 
     private static readonly Phrase ReportReadyBodyNamed = new(
         "Your scheduled report \"{0}\" for {1} has been generated and is ready to download.",
-        "Tu informe programado \"{0}\" del {1} se ha generado y está listo para descargar.");
+        "Su informe programado \"{0}\" del {1} se ha generado y está listo para descargar.");
 
     private static readonly Phrase ReportReadyBodyUnnamed = new(
         "Your scheduled report for {0} has been generated and is ready to download.",
-        "Tu informe programado del {0} se ha generado y está listo para descargar.");
+        "Su informe programado del {0} se ha generado y está listo para descargar.");
 
     private static readonly Phrase DigestTitle = new(
         "Your activity summary",
-        "Tu resumen de actividad");
+        "Su resumen de actividad");
 
     private static readonly Phrase DigestBodySingle = new(
         "You have 1 new notification since {0}.",
-        "Tienes 1 notificación nueva desde el {0}.");
+        "Tiene 1 notificación nueva desde el {0}.");
 
     private static readonly Phrase DigestBodyMany = new(
         "You have {0} new notifications since {1}.",
-        "Tienes {0} notificaciones nuevas desde el {1}.");
+        "Tiene {0} notificaciones nuevas desde el {1}.");
 
     private static readonly Phrase PlanDueSoonTitle = new(
         "An action plan you own is due soon",
-        "Un plan de acción a tu cargo vence pronto");
+        "Un plan de acción a su cargo vence pronto");
 
     private static readonly Phrase PlanDueSoonBodyNamed = new(
         "\"{0}\" is due on {1}. Record progress or move the date before it lapses.",
-        "\"{0}\" vence el {1}. Registra un avance o cambia la fecha antes de que venza.");
+        "\"{0}\" vence el {1}. Registre un avance o cambie la fecha antes de que venza.");
 
     private static readonly Phrase PlanDueSoonBodyUnnamed = new(
         "An action plan you own is due on {0}. Record progress or move the date before it lapses.",
-        "Un plan de acción a tu cargo vence el {0}. Registra un avance o cambia la fecha antes de que venza.");
+        "Un plan de acción a su cargo vence el {0}. Registre un avance o cambie la fecha antes de que venza.");
 
     // The two above tell the owner to do it themselves, which only an administrator can:
     // recording progress and changing the date are `Roles.Admin` writes
@@ -96,15 +96,15 @@ public static class ScheduledNotificationCopy
     // told who can, rather than told to do something the next click refuses (G28).
     private static readonly Phrase PlanDueSoonBodyNamedAsk = new(
         "\"{0}\" is due on {1}. Ask whoever administers the platform to record progress or move the date before it lapses.",
-        "\"{0}\" vence el {1}. Pide a quien administra la plataforma que registre un avance o cambie la fecha antes de que venza.");
+        "\"{0}\" vence el {1}. Pida a quien administra la plataforma que registre un avance o cambie la fecha antes de que venza.");
 
     private static readonly Phrase PlanDueSoonBodyUnnamedAsk = new(
         "An action plan you own is due on {0}. Ask whoever administers the platform to record progress or move the date before it lapses.",
-        "Un plan de acción a tu cargo vence el {0}. Pide a quien administra la plataforma que registre un avance o cambie la fecha antes de que venza.");
+        "Un plan de acción a su cargo vence el {0}. Pida a quien administra la plataforma que registre un avance o cambie la fecha antes de que venza.");
 
     private static readonly Phrase PlanOverdueTitle = new(
         "An action plan you own is overdue",
-        "Un plan de acción a tu cargo está vencido");
+        "Un plan de acción a su cargo está vencido");
 
     private static readonly Phrase PlanOverdueBodyNamed = new(
         "\"{0}\" was due on {1} and has not been closed.",
@@ -112,7 +112,7 @@ public static class ScheduledNotificationCopy
 
     private static readonly Phrase PlanOverdueBodyUnnamed = new(
         "An action plan you own was due on {0} and has not been closed.",
-        "Un plan de acción a tu cargo venció el {0} y sigue abierto.");
+        "Un plan de acción a su cargo venció el {0} y sigue abierto.");
 
     /// <summary>Subject line for a due-date nudge, which reads differently once the date has passed.</summary>
     public static string PlanDueTitleFor(string? locale, bool overdue)

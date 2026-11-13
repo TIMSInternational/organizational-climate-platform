@@ -300,7 +300,7 @@ public static class CredentialsEmailComposer
         string loginUrl, EmailBrand? brand)
     {
         // The SAME line the inbox showed, not a third variant of it: somebody who clicked
-        // "Tu acceso a Teletrabajo ESPH 2026 — ESPH Ensayo" should find that sentence at the
+        // "Su acceso a Teletrabajo ESPH 2026 — ESPH Ensayo" should find that sentence at the
         // top of what opens. One builder for both, so they cannot drift apart.
         html.Append(EmailBranding.Heading(Subject(copy, survey, brand)));
         html.Append(EmailBranding.Paragraphs(Body(copy, survey)));
@@ -348,17 +348,17 @@ public static class CredentialsEmailComposer
 
     private static readonly CredentialsCopy InvitationSpanish = new(
         Spanish: true,
-        Subject: $"Tu acceso a {EmailBranding.ProductName}",
-        SubjectPrefix: "Tu acceso a",
-        Body: "Tu organización te invita a responder una encuesta. Inicia sesión con el usuario y la contraseña de abajo; tus datos organizacionales ya están en tu cuenta. Gracias por participar.",
-        SurveyBody: "Tu organización te invita a responder la encuesta \u00ab{0}\u00bb. Inicia sesión con el usuario y la contraseña de abajo; tus datos organizacionales ya están en tu cuenta.{1} Gracias por participar.",
+        Subject: $"Su acceso a {EmailBranding.ProductName}",
+        SubjectPrefix: "Su acceso a",
+        Body: "Su organización le invita a responder una encuesta. Inicie sesión con el usuario y la contraseña de abajo; sus datos organizacionales ya están en su cuenta. Gracias por participar.",
+        SurveyBody: "Su organización le invita a responder la encuesta \u00ab{0}\u00bb. Inicie sesión con el usuario y la contraseña de abajo; sus datos organizacionales ya están en su cuenta.{1} Gracias por participar.",
         ClosesOn: "La encuesta cierra el {0}.",
         UsernameLabel: "Usuario",
         PasswordLabel: "Contraseña",
         Cta: "Iniciar sesión",
-        Keep: "Guarda este mensaje: son tus datos de acceso. Si los pierdes, pide a tu administrador que te envíe unos nuevos.",
+        Keep: "Guarde este mensaje: son sus datos de acceso. Si los pierde, pida a su administrador que le envíe unos nuevos.",
         SurveyKeep: SurveyKeepSpanish,
-        Ignore: "Si no esperabas este mensaje, puedes ignorarlo.");
+        Ignore: "Si no esperaba este mensaje, puede ignorarlo.");
 
     /// <summary>
     /// The reminder, for the people the roster shows as unfinished. It asks for the one thing
@@ -382,23 +382,23 @@ public static class CredentialsEmailComposer
 
     private static readonly CredentialsCopy ReminderSpanish = new(
         Spanish: true,
-        Subject: $"Recordatorio: responde la encuesta en {EmailBranding.ProductName}",
-        SubjectPrefix: "Recordatorio: responde",
-        Body: "Te pedimos que por favor ingreses y respondas la encuesta. Abajo están de nuevo tu usuario y una contraseña nueva: la anterior deja de funcionar, así que entra con estos datos. Si ya la habías empezado, puedes continuar donde la dejaste.",
-        SurveyBody: "Te pedimos que por favor ingreses y respondas la encuesta \u00ab{0}\u00bb. Abajo están de nuevo tu usuario y una contraseña nueva: la anterior deja de funcionar, así que entra con estos datos.{1} Si ya la habías empezado, puedes continuar donde la dejaste.",
+        Subject: $"Recordatorio: responda la encuesta en {EmailBranding.ProductName}",
+        SubjectPrefix: "Recordatorio: responda",
+        Body: "Le pedimos que por favor ingrese y responda la encuesta. Abajo están de nuevo su usuario y una contraseña nueva: la anterior deja de funcionar, así que entre con estos datos. Si ya la había empezado, puede continuar donde la dejó.",
+        SurveyBody: "Le pedimos que por favor ingrese y responda la encuesta \u00ab{0}\u00bb. Abajo están de nuevo su usuario y una contraseña nueva: la anterior deja de funcionar, así que entre con estos datos.{1} Si ya la había empezado, puede continuar donde la dejó.",
         ClosesOn: "La encuesta cierra el {0}.",
         UsernameLabel: "Usuario",
         PasswordLabel: "Contraseña",
         Cta: "Iniciar sesión",
-        Keep: "Guarda este mensaje: son tus datos de acceso. Si los pierdes, pide a tu administrador que te envíe unos nuevos.",
+        Keep: "Guarde este mensaje: son sus datos de acceso. Si los pierde, pida a su administrador que le envíe unos nuevos.",
         SurveyKeep: SurveyKeepSpanish,
-        Ignore: "Si no esperabas este mensaje, puedes ignorarlo.");
+        Ignore: "Si no esperaba este mensaje, puede ignorarlo.");
 
     private const string SurveyKeepEnglish =
         "Keep this message: this username and password open this survey only. If you lose them, ask your administrator to send new ones.";
 
     private const string SurveyKeepSpanish =
-        "Guarda este mensaje: este usuario y esta contraseña abren solo esta encuesta. Si los pierdes, pide a tu administrador que te envíe unos nuevos.";
+        "Guarde este mensaje: este usuario y esta contraseña abren solo esta encuesta. Si los pierde, pida a su administrador que le envíe unos nuevos.";
 
     /// <summary>
     /// The copy one purpose reads in one language. A purpose this does not know throws rather

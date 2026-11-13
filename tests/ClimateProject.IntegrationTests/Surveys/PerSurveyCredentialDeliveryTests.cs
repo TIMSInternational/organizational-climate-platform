@@ -264,7 +264,7 @@ public class PerSurveyCredentialDeliveryTests(PostgresContainerFixture postgres,
 
     /// <summary>
     /// The requirement itself. One address, two surveys, two messages that can be told
-    /// apart -- which is the part that matters, because two "Tu acceso a OCC" carrying two
+    /// apart -- which is the part that matters, because two "Su acceso a OCC" carrying two
     /// different passwords is how somebody uses the wrong one and is told it is invalid.
     /// </summary>
     [Fact]

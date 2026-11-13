@@ -229,7 +229,7 @@ public class ActionPlanCorrectionTests : IAsyncLifetime
                 Channel = NotificationChannels.Email,
                 Priority = NotificationPriorities.Medium,
                 Status = status,
-                Title = "Un plan de acción a tu cargo vence pronto",
+                Title = "Un plan de acción a su cargo vence pronto",
                 Message = "vence pronto",
                 Data = ActionPlanNotificationData.Serialize(planId),
                 ScheduledFor = DateTimeOffset.UtcNow,

@@ -139,13 +139,13 @@ public static class MicroclimateInvitationEndpoints
     private static readonly Dictionary<string, string> DefaultSubject = new(StringComparer.Ordinal)
     {
         [ContentLanguages.English] = "You have been invited to a quick pulse",
-        [ContentLanguages.Spanish] = "Te han invitado a un pulso rápido",
+        [ContentLanguages.Spanish] = "Le han invitado a un pulso rápido",
     };
 
     private static readonly Dictionary<string, string> DefaultMessage = new(StringComparer.Ordinal)
     {
         [ContentLanguages.English] = "Your feedback has been requested. Follow the link in this message to take part; it only takes a moment.",
-        [ContentLanguages.Spanish] = "Se ha solicitado tu opinión. Sigue el enlace de este mensaje para participar; solo toma un momento.",
+        [ContentLanguages.Spanish] = "Se ha solicitado su opinión. Siga el enlace de este mensaje para participar; solo toma un momento.",
     };
 
     public static void MapMicroclimateInvitationEndpoints(this WebApplication app)

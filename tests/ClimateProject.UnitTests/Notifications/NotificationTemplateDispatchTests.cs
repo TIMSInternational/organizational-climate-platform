@@ -130,7 +130,7 @@ public class NotificationTemplateDispatchTests
     {
         var composed = Compose(Template(), recipient: Recipient(ContentLanguages.Spanish));
 
-        Assert.Contains("Recibes este mensaje", composed.Message.TextBody, StringComparison.Ordinal);
+        Assert.Contains("Recibe este mensaje", composed.Message.TextBody, StringComparison.Ordinal);
         Assert.Contains("https://app.example.com/settings/notifications", composed.Message.TextBody, StringComparison.Ordinal);
         Assert.Null(composed.Message.ToName);
     }

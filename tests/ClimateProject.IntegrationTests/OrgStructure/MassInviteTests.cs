@@ -767,7 +767,7 @@ public class MassInviteTests(PostgresContainerFixture postgres, CapturingCredent
     /// WHICH message each route sends, which is the one thing the two routes do differently.
     ///
     /// <para>
-    /// The bulk route re-sent the invitation -- *"Tu organización te invita a responder una
+    /// The bulk route re-sent the invitation -- *"Su organización le invita a responder una
     /// encuesta"* -- to people who had already read exactly that, while the client had asked for
     /// *"un correo solicitándoles que por favor ingresen y lo hagan"*. Nothing failed, because
     /// both messages carry the same username and the same freshly generated password: the
