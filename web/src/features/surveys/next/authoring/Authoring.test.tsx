@@ -11,7 +11,19 @@ import { duplicateSurvey, getSurvey, type SurveyDetail } from '../../api/surveys
 import { getSurveyTemplate, instantiateSurveyTemplate, type SurveyTemplateDetail } from '../../api/surveyTemplates'
 import SurveyQuestionsEditorPage from './SurveyQuestionsEditorPage'
 import TemplateDetailNextPage from './TemplateDetailNextPage'
-import { compatibleScaleTypes, isEditable, isTextEditable, moveQuestion } from './model'
+import {
+  applyAnswerLabels,
+  canLabelAnswers,
+  compatibleScaleTypes,
+  hasAnswerLabels,
+  isEditable,
+  isTextEditable,
+  moveQuestion,
+  questionsMissingAnswerLabels,
+  setAnswerLabel,
+  withAnswerLabels,
+  withoutAnswerLabels,
+} from './model'
 import type { QuestionLibraryItemDetail } from '../../../questions/api/questionLibrary'
 import en from '../../../../i18n/en.json'
 
@@ -327,6 +339,138 @@ describe('SurveyQuestionsEditorPage — scale, library and dimension check', () 
     renderAt('/surveys/s1/questions')
     const cards = await screen.findAllByTestId('question-card')
     expect(within(cards[0]).getByText(`${a.scaleName.likert} 1–5`)).toBeTruthy()
+  })
+})
+
+// «Cómo se ven las respuestas» (TIMS, 2026-11-13): PROCOMER's demo showed a row of numbers where
+// ESPH had shown a list of words, and the editor offered no way to choose. A list is an option set
+// whose values are the points -- what ESPH's workbook import wrote -- so the answers stay "1".."5".
+describe('SurveyQuestionsEditorPage — answers as a list in words', () => {
+  const both = (en: string, es: string) => ({ en: { text: en, authored: true }, es: { text: es, authored: true } })
+  const blankLabel = { en: { text: '', authored: false }, es: { text: '', authored: false } }
+  const FREQUENCY = [
+    ['Never', 'Nunca'],
+    ['Rarely', 'Casi nunca'],
+    ['Sometimes', 'Algunas veces'],
+    ['Often', 'Casi siempre'],
+    ['Always', 'Siempre'],
+  ] as const
+  const labelled = (order: number): AuthoringQuestion => ({
+    ...q(order, `Labelled ${order}`),
+    scaleLabelMin: both('Never', 'Nunca'),
+    scaleLabelMax: both('Always', 'Siempre'),
+    options: FREQUENCY.map(([enText, esText], i) => ({ value: String(i + 1), label: both(enText, esText) })),
+  })
+
+  it('offers words only to a short numeric scale whose answers are its points', () => {
+    expect(canLabelAnswers(q(0, 'A'))).toBe(true)
+    expect(canLabelAnswers({ ...q(0, 'eNPS'), type: 'rating', scaleMin: 0, scaleMax: 10 })).toBe(false)
+    expect(canLabelAnswers({ ...q(0, 'Open'), type: 'open_ended', scaleMin: null, scaleMax: null })).toBe(false)
+    // EAGLE lists the positives first: the order is the author's, the keys are still the points.
+    expect(canLabelAnswers({ ...labelled(0), options: [...labelled(0).options!].reverse() })).toBe(true)
+    // A library scale keyed by words: rewriting it here would repoint every stored answer.
+    expect(canLabelAnswers({ ...labelled(0), options: labelled(0).options!.map((o, i) => ({ ...o, value: `k${i}` })) })).toBe(false)
+  })
+
+  it('makes one answer per point, keyed by the point, starting from the two end words', () => {
+    const list = withAnswerLabels(q(0, 'A'))
+    expect(list.options?.map((o) => o.value)).toEqual(['1', '2', '3', '4', '5'])
+    expect(list.options?.[0].label.es).toEqual({ text: 'Muy en desacuerdo', authored: true })
+    expect(list.options?.[4].label.en).toEqual({ text: 'Strongly agree', authored: true })
+    expect(list.options?.[2].label).toEqual(blankLabel)
+    expect(hasAnswerLabels(list)).toBe(true)
+    expect(withoutAnswerLabels(list).options).toBeNull()
+  })
+
+  it("writes the lowest and highest answers' words into the scale's ends, and only those", () => {
+    const list = withAnswerLabels(q(0, 'A'))
+    const first = setAnswerLabel(list, '1', 'es', 'Nunca')
+    expect(first.scaleLabelMin.es).toEqual({ text: 'Nunca', authored: true })
+    const middle = setAnswerLabel(first, '3', 'es', 'Algunas veces')
+    expect(middle.scaleLabelMin).toEqual(first.scaleLabelMin)
+    expect(middle.scaleLabelMax).toEqual(first.scaleLabelMax)
+    expect(middle.options?.[2].label.es).toEqual({ text: 'Algunas veces', authored: true })
+  })
+
+  it('copies the words onto every question on the same range, and leaves the others exactly as they were', () => {
+    const source = labelled(0)
+    const sameRange = q(1, 'B')
+    const eNps = { ...q(2, 'C'), type: 'rating', scaleMin: 0, scaleMax: 10 }
+    const keyedByWords = { ...labelled(3), id: 'q3', options: labelled(3).options!.map((o, i) => ({ ...o, value: `k${i}` })) }
+    // A 1–7 scale may take words of its own, but not a 1–5 scale's.
+    const sevenPoint = { ...q(4, 'D'), scaleMax: 7 }
+    const { questions, count } = applyAnswerLabels([source, sameRange, eNps, keyedByWords, sevenPoint], source)
+    expect(count).toBe(2)
+    expect(questions[4]).toBe(sevenPoint)
+    expect(questions[1].options?.map((o) => [o.value, o.label.es.text])).toEqual(FREQUENCY.map(([, esText], i) => [String(i + 1), esText]))
+    expect(questions[1].scaleLabelMin.es.text).toBe('Nunca')
+    expect(questions[2]).toBe(eNps)
+    expect(questions[3]).toBe(keyedByWords)
+  })
+
+  it('names the questions shown as a list with an answer left blank in a language the question is written in', () => {
+    const spanishOnly = { ...withAnswerLabels(q(1, 'B')), text: { en: { text: '', authored: false }, es: { text: 'B', authored: true } } }
+    const filled = [1, 2, 3, 4, 5].reduce((acc, point) => setAnswerLabel(acc, String(point), 'es', `p${point}`), spanishOnly)
+    expect(questionsMissingAnswerLabels([labelled(0), withAnswerLabels(q(1, 'B')), q(2, 'C'), filled], ['en', 'es'])).toEqual([2])
+  })
+
+  it('shows a 1–5 question as a list, uses its words on every 1–5 question and saves them under the points', async () => {
+    arrangeSurvey('draft', 0)
+    vi.mocked(saveSurveyQuestions).mockResolvedValue()
+    renderAt('/surveys/s1/questions')
+    await userEvent.click(await screen.findByRole('button', { name: a.answersAsList }))
+    expect(screen.getByRole('button', { name: a.answersAsList }).getAttribute('aria-pressed')).toBe('true')
+    // The ends arrive already written; the three between are the author's.
+    expect((screen.getByRole('textbox', { name: `${a.answerLabelsIn.es} 1` }) as HTMLInputElement).value).toBe('Muy en desacuerdo')
+    for (const [point, enText, esText] of [['1', 'Never', 'Nunca'], ['2', 'Rarely', 'Casi nunca'], ['3', 'Sometimes', 'Algunas veces'], ['4', 'Often', 'Casi siempre'], ['5', 'Always', 'Siempre']]) {
+      for (const [loc, text] of [['en', enText], ['es', esText]] as const) {
+        const input = screen.getByRole('textbox', { name: `${a.answerLabelsIn[loc]} ${point}` })
+        await userEvent.clear(input)
+        await userEvent.type(input, text)
+      }
+    }
+    await userEvent.click(screen.getByRole('button', { name: a.applyToAll.replace('{min}', '1').replace('{max}', '5') }))
+    expect(screen.getByTestId('applied-to-all').textContent).toBe(a.appliedToAll.replace('{count}', '2'))
+    await userEvent.click(screen.getByRole('button', { name: a.save }))
+    const sent = vi.mocked(saveSurveyQuestions).mock.calls[0][2]
+    for (const question of sent) {
+      expect(question.options?.map((o) => [o.value, o.label.en.text, o.label.es.text])).toEqual(FREQUENCY.map(([enText, esText], i) => [String(i + 1), enText, esText]))
+      expect([question.scaleLabelMin.es.text, question.scaleLabelMax.es.text]).toEqual(['Nunca', 'Siempre'])
+      expect([question.type, question.scaleMin, question.scaleMax]).toEqual(['likert', 1, 5])
+    }
+  })
+
+  it('draws the list in the respondent preview, a blank answer as the number it would show', async () => {
+    arrangeSurvey('draft', 0)
+    renderAt('/surveys/s1/questions')
+    await userEvent.click(await screen.findByRole('button', { name: a.answersAsList }))
+    const lines = [...screen.getByTestId('preview-answers').children].map((line) => line.textContent)
+    expect(lines).toEqual(['Strongly disagree', '2', '3', '4', 'Strongly agree'])
+  })
+
+  it('refuses to save a list with an answer left without words, and names the question', async () => {
+    arrangeSurvey('draft', 0)
+    renderAt('/surveys/s1/questions')
+    await userEvent.click(await screen.findByRole('button', { name: a.answersAsList }))
+    await userEvent.click(screen.getByRole('button', { name: a.save }))
+    expect(saveSurveyQuestions).not.toHaveBeenCalled()
+    expect(screen.getByRole('alert').textContent).toBe(a.answerLabelsMissingOne.replace('{positions}', '1'))
+  })
+
+  it('opens a question that already has words as a list, and saves it back as numbers when asked', async () => {
+    vi.mocked(getSurveyQuestionAuthoring).mockResolvedValue({ surveyId: 's1', title: 'Q4', language: 'both', status: 'draft', locales: ['en', 'es'], questions: [labelled(0), q(1, 'Second')] })
+    vi.mocked(getSurvey).mockResolvedValue({ id: 's1', companyId: COMPANY, title: 'Q4 Climate Survey', description: 'Wave five', type: 'periodic', status: 'draft', responseCount: 0, targetAudienceCount: 24, startDate: '2026-09-03T12:00:00Z', endDate: '2026-10-10T12:00:00Z' } as SurveyDetail)
+    vi.mocked(saveSurveyQuestions).mockResolvedValue()
+    renderAt('/surveys/s1/questions')
+    const cards = await screen.findAllByTestId('question-card')
+    expect(within(cards[0]).getByText(a.answerLabelsChip)).toBeTruthy()
+    expect(within(cards[1]).queryByText(a.answerLabelsChip)).toBeNull()
+    expect(screen.getByRole('button', { name: a.answersAsList }).getAttribute('aria-pressed')).toBe('true')
+    await userEvent.click(screen.getByRole('button', { name: a.answersAsNumbers.replace('{min}', '1').replace('{max}', '5') }))
+    await userEvent.click(screen.getByRole('button', { name: a.save }))
+    const sent = vi.mocked(saveSurveyQuestions).mock.calls[0][2]
+    expect(sent[0].options).toBeNull()
+    expect([sent[0].scaleLabelMin.es.text, sent[0].scaleLabelMax.es.text]).toEqual(['Nunca', 'Siempre'])
   })
 })
 
