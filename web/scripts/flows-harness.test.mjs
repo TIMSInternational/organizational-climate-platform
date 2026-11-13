@@ -91,6 +91,11 @@ describe('the teardown revokes every share, and puts the rest back through the e
     expect(teardownRequests({})).toEqual([])
     expect(teardownRequests(undefined)).toEqual([])
   })
+  it('closes a microclimate the run opened, through the status route, and never leaves it live', () => {
+    expect(teardownRequests({ microclimates: ['m1'] }).map((r) => [r.kind, r.method, r.path, r.body ?? null])).toEqual([
+      ['microclimate', 'PUT', '/microclimates/m1/status', { status: 'closed' }],
+    ])
+  })
 })
 
 describe('a survey that cannot be deleted because it was answered is closed and archived, not left open', () => {
